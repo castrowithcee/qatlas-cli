@@ -34,9 +34,10 @@
 // flagged_post preference of the token's own user; the searches
 // (messages.search, files.search, channels.search) read the token's channels of the team once, see
 // reachableChannels, and drop every hit outside that set, so direct and group messages, other teams, and
-// channels outside the allow-list never show up; a message reply additionally confirms that its root post
-// belongs to the same channel before it is ever sent. Rejecting an out-of-scope channel or post never carries
-// a message's text into an error or a log.
+// channels outside the allow-list never show up, and insights.top does the same for ranked channels and
+// threads and drops ranked members and thread participants that verifyUsersScope does not prove; a message
+// reply additionally confirms that its root post belongs to the same channel before it is ever sent.
+// Rejecting an out-of-scope channel or post never carries a message's text into an error or a log.
 //
 // A file is reachable only through the post it is attached to: files.info and files.download read the file's
 // info first and bind its post_id the same way; a file without a post is refused before any content is
@@ -559,13 +560,13 @@ func Register(reg *capability.Registry) error {
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
 				"messages, single messages, threads, followed threads, unread counts, reactions, pinned and flagged messages, " +
 				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
-				"the users of the bound teams and their presence, lists the own sidebar categories, and lists the " +
-				"custom emoji of an instance-wide connection; changes nothing",
+				"the users of the bound teams and their presence, reads team activity rankings, lists the own sidebar " +
+				"categories, and lists the custom emoji of an instance-wide connection; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, flaggedList.ID, usersGet.ID, usersList.ID,
 				usersSearch.ID, usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID, usergroupsList.ID, insightsTop.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
@@ -643,6 +644,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesRemind), Handler: capability.Handler(invokeRemind)},
 		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
+		capability.Operation{Descriptor: withGroup(usergroupsList), Handler: capability.Handler(invokeUserGroupsList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
 		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
 		capability.Operation{Descriptor: withGroup(statusSet), Handler: capability.Handler(invokeStatusSet)},
@@ -684,6 +686,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(emojiCreate), Handler: capability.Handler(invokeEmojiCreate)},
 		capability.Operation{Descriptor: withGroup(emojiDelete), Handler: capability.Handler(invokeEmojiDelete)},
 		capability.Operation{Descriptor: withGroup(rolesGet), Handler: capability.Handler(invokeRolesGet)},
+		capability.Operation{Descriptor: withGroup(insightsTop), Handler: capability.Handler(invokeInsightsTop)},
 	)
 }
 

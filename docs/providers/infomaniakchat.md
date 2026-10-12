@@ -130,6 +130,7 @@ the token's channels of that team (`GET /api/v4/users/me/teams/{team_id}/channel
 inside the allow-list and never direct or group channels, sends one request, and drops every hit or thread
 outside that set, including a file hit without a `channel_id` and a thread whose root is deleted. Because the
 set comes from the token's own channels, a public channel the token has not joined yields no hit.
+`insights.top` applies it to ranked channels and threads and drops unreachable users; no thread text shows.
 
 The `bots`, `emoji`, and `roles` tools need an instance-wide connection: all token teams bound, no `channel/`
 target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`
@@ -144,13 +145,13 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 
 | Group | Reads | Confirmed changes | Only with a tools list |
 | --- | --- | --- | --- |
-| `teams` | `teams.list`, `.get`, `teammembers.list` | | `teammembers.roles` |
+| `teams` | `teams.list`, `.get`, `teammembers.list`, `insights.top` | | `teammembers.roles` |
 | `channels` | `channels.list`, `.get`, `.browse`, `.search`, `.unread`, `archivedchannels.list`, `channelmembers.list`, `categories.list` | `channels.create`, `.update`, `.markread`, `channelmembers.add`, `categories.create`, `.update`, `channelnotifications.update` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles`, `categories.delete` |
 | `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list`, `flagged.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.flag`, `.unflag`, `.remind`, `.markunread` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
 | `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
-| `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
+| `users` | `users.get`, `.list`, `.search`, `.status`, `usergroups.list` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
 | `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `roles.get` (a `POST` that changes nothing), `emoji.create` (reads a local file), `.delete` |
 
@@ -219,7 +220,7 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `channels.browse`, `archivedchannels.list`, the webhook lists, `bots.list`, `emoji.list`,
   `channelmembers.list`, `teammembers.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
   true for a full page; dropped entries can lower `count`. `users.search` takes only `limit`, one page.
-- `messages.list` pages kChat's `GetPostsForChannel`, newest first; `has_more` is kChat's `has_next`.
+- `messages.list` (`GetPostsForChannel`, newest first) and `insights.top`: `has_more` is kChat's `has_next`.
 - `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass `page` and `limit` (at most 100)
   to kChat's own paging and read no further page; `has_more` is true when kChat's page was full, and `count`
   may be lower because hits outside the reachable channels are dropped. kChat documents search paging as
@@ -246,12 +247,12 @@ Errors keep stable classes and never carry the token, a message's text, or a raw
 | --- | --- |
 | `auth` | kChat rejected the token |
 | `permission` | this token may not perform the operation; check its rights on the team or channel in kChat |
-| `not-found` | kChat does not hold the resource, or does not show it to this token |
+| `not-found` | kChat does not hold the resource, or does not show it to this token; HTTP 404 of `insights.top` means the instance offers no insights |
 | `rate-limited` | kChat rate-limited the request; Qatlas applies no proactive spacing and only honours `Retry-After` |
 | `timeout` | kChat did not answer in time |
 | `unreachable` | kChat could not be reached |
 | `invalid-provider-response` | the answer was unreadable, too large, or malformed |
-| `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one |
+| `provider-error` | every other rejection, such as HTTP 501 of `insights.top`, including a redirect on an endpoint that must not answer with one |
 
 Every refusal under [Scope](#scope), and every argument outside its fixed set, is an invalid request, never a
 provider error. It names no refused target or hook ID and carries no message text into an error or a log.
@@ -277,8 +278,8 @@ attachments, pin state, or properties.
 
 A live test against a real kChat instance checks, in order:
 
-- Team and channel listings match the allow-lists and what the token belongs to; searches show no hit from
-  a channel outside the allow-list, a direct message, or another team.
+- Listings match the allow-lists and the token's teams and channels; searches and `insights.top` show nothing
+  from a channel outside the allow-list, a direct message, or another team.
 - Channel create and update work only without a channel allow-list; member tools refuse a user only in
   another team. A disposable channel switches to private, is archived, shows in `archivedchannels.list`,
   and is restored; the default channel's refusal is a provider error class.
@@ -300,5 +301,5 @@ A live test against a real kChat instance checks, in order:
   `favorites` refuses a rename; notification changes touch only the given fields.
 - Direct and group channels open and take messages; `direct.list` shows whether kChat lists them under the
   team; a direct channel with a user only in another team is refused.
-- Operations outside the targets, or in a team the token cannot reach, are refused before anything changes;
-  which token sources an instance accepts, including a personal profile token.
+- Operations outside the targets or in an unreachable team are refused before anything changes; which token
+  sources an instance accepts, including a personal profile token.
