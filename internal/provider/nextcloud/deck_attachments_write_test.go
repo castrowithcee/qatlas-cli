@@ -60,8 +60,28 @@ func localFile(t *testing.T, name, content string) (dir, path string) {
 	return dir, path
 }
 
+// The quote case stays off the file system, since Windows forbids quotes in file names.
+func TestDeckAttachmentMultipartFrameQuotesTheName(t *testing.T) {
+	head, tail, contentType, err := multipartFrame(`my "plan".pdf`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := multipart.NewReader(strings.NewReader(string(head)+"hello"+string(tail)), params["boundary"])
+	if _, err := reader.NextPart(); err != nil {
+		t.Fatal(err)
+	}
+	part, err := reader.NextPart()
+	if err != nil || part.FormName() != "file" || part.FileName() != `my "plan".pdf` {
+		t.Fatalf("part = %+v, err = %v", part, err)
+	}
+}
+
 func TestDeckAttachmentsUploadSendsOneMultipartRequest(t *testing.T) {
-	dir, path := localFile(t, `my "plan".pdf`, "hello")
+	dir, path := localFile(t, "my plan ä.pdf", "hello")
 	var contentType string
 	var length int64
 	calls := writeServer(t, func(request *http.Request) (*http.Response, error) {
@@ -74,7 +94,7 @@ func TestDeckAttachmentsUploadSendsOneMultipartRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := result.(*DeckAttachmentUpload)
-	if !got.Uploaded || got.AttachmentID != "9" || got.Name != `my "plan".pdf` || got.Size != 5 || got.SHA256 != helloSHA {
+	if !got.Uploaded || got.AttachmentID != "9" || got.Name != "my plan ä.pdf" || got.Size != 5 || got.SHA256 != helloSHA {
 		t.Errorf("result = %+v", got)
 	}
 	if len(*calls) != 2 || (*calls)[0].url.Path != deckCardsBase {
@@ -105,7 +125,7 @@ func TestDeckAttachmentsUploadSendsOneMultipartRequest(t *testing.T) {
 			filename = part.FileName()
 		}
 	}
-	if len(fields) != 2 || fields["type"] != "deck_file" || fields["file"] != "hello" || filename != `my "plan".pdf` {
+	if len(fields) != 2 || fields["type"] != "deck_file" || fields["file"] != "hello" || filename != "my plan ä.pdf" {
 		t.Errorf("fields = %v, filename = %q", fields, filename)
 	}
 	if encoded, _ := json.Marshal(result); strings.Contains(string(encoded), "hello") {
