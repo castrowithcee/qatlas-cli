@@ -239,11 +239,11 @@ func coreConfig() *config.Config {
 			// The bot connections: "botall" binds both teams of the token, "botone" only teamA, "botch" adds a
 			// channel target, "botno" holds the permissions without listing the tools.
 			"botall": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID}, botToolIDs...)},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			"botone": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID}, botToolIDs...)},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			"botch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID}, botToolIDs...)},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			// "emojiread" has no tools list, as a read profile gives it, and binds only one of two token teams.
 			"emojiread": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead}},
@@ -327,8 +327,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 84 {
-		t.Fatalf("tools = %+v, want 84", metadata.Tools)
+	if len(metadata.Tools) != 85 {
+		t.Fatalf("tools = %+v, want 85", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
