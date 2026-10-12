@@ -412,6 +412,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckCardsUpdate, groupDeck), Handler: deckBound(invokeDeckCardsUpdate)},
 		capability.Operation{Descriptor: inGroup(deckCardsMove, groupDeck), Handler: deckBound(invokeDeckCardsMove)},
 		capability.Operation{Descriptor: inGroup(deckCardsDelete, groupDeck), Handler: deckBound(invokeDeckCardsDelete)},
+		capability.Operation{Descriptor: inGroup(deckCardsLabels, groupDeck), Handler: deckBound(invokeDeckCardsLabels)},
+		capability.Operation{Descriptor: inGroup(deckCardsAssignees, groupDeck), Handler: deckBound(invokeDeckCardsAssignees)},
 		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkRoomsCreate, groupTalk), Handler: invokeTalkRoomsCreate},

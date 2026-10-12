@@ -158,13 +158,13 @@ or request, without naming it, and listings drop unbound and deleted boards. Dec
 alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Provider text
 is untrusted, capped, and marked `truncated` when cut; comments and attachments are not read.
 
-Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
+Every change needs `confirm` and sends one request after at most two reads of the bound board; an unclear outcome is
 reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
 `deck/BOARD_ID` binding would not hold the new board. Board and stack changes refuse without the manage right; card
-changes leave the edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a
-card changed since; an archived card can only be restored. Updates keep the fields they were not given; a new stack
-or card without `order` goes last. Deck deletes boards and cards softly, but Qatlas offers no restore; a deleted
-stack takes its cards with it. All `delete` tools need a tools list.
+changes leave the edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a card
+changed since; an archived card can only be restored. Updates keep the fields they were not given; a new stack or card
+without `order` goes last. `deckcards.labels` and `deckcards.assignees` take only labels and user members of the board.
+Deck deletes softly, with no Qatlas restore; a deleted stack takes its cards. All `delete` tools need a tools list.
 
 ## Talk
 
