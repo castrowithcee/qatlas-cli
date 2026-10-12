@@ -19,22 +19,24 @@ import (
 )
 
 const (
-	wTabOther    = "77777777-0000-4000-8000-0000000000c1"
-	wTabGone     = "77777777-0000-4000-8000-0000000000c2"
-	wTabStray    = "77777777-0000-4000-8000-0000000000c3"
-	wTabList     = "77777777-0000-4000-8000-0000000000c4"
-	wTabFull     = "77777777-0000-4000-8000-0000000000c5"
-	wTabMissing  = "77777777-0000-4000-8000-0000000000c6"
-	wLayoutList  = "66666666-0000-4000-8000-0000000000b1"
-	wLayoutFull  = "66666666-0000-4000-8000-0000000000b2"
-	wNewWidget   = "88888888-0000-4000-8000-0000000000d1"
-	wWidgetOther = "88888888-0000-4000-8000-0000000000d2"
-	wWidgetGone  = "88888888-0000-4000-8000-0000000000d3"
-	wWidgetStray = "88888888-0000-4000-8000-0000000000d4"
-	wWidgetList  = "88888888-0000-4000-8000-0000000000d5"
-	wWidgetNone  = "88888888-0000-4000-8000-0000000000d6"
-	wViewKanban  = "66666666-0000-4000-8000-0000000000e1"
-	wViewDeleted = "66666666-0000-4000-8000-0000000000e2"
+	wTabOther     = "77777777-0000-4000-8000-0000000000c1"
+	wTabGone      = "77777777-0000-4000-8000-0000000000c2"
+	wTabStray     = "77777777-0000-4000-8000-0000000000c3"
+	wTabList      = "77777777-0000-4000-8000-0000000000c4"
+	wTabFull      = "77777777-0000-4000-8000-0000000000c5"
+	wTabMissing   = "77777777-0000-4000-8000-0000000000c6"
+	wLayoutList   = "66666666-0000-4000-8000-0000000000b1"
+	wLayoutFull   = "66666666-0000-4000-8000-0000000000b2"
+	wNewWidget    = "88888888-0000-4000-8000-0000000000d1"
+	wWidgetOther  = "88888888-0000-4000-8000-0000000000d2"
+	wWidgetGone   = "88888888-0000-4000-8000-0000000000d3"
+	wWidgetStray  = "88888888-0000-4000-8000-0000000000d4"
+	wWidgetList   = "88888888-0000-4000-8000-0000000000d5"
+	wWidgetNone   = "88888888-0000-4000-8000-0000000000d6"
+	wWidgetTable  = "88888888-0000-4000-8000-0000000000d7"
+	wViewKanban   = "66666666-0000-4000-8000-0000000000e1"
+	wViewDeleted  = "66666666-0000-4000-8000-0000000000e2"
+	wObjectSystem = "66666666-0000-4000-8000-0000000000e3"
 
 	wPosition = `{"row":0,"column":1,"row_span":4,"column_span":6}`
 	wGrid     = `{"layoutMode":"GRID","row":0,"column":1,"rowSpan":4,"columnSpan":6}`
@@ -77,8 +79,10 @@ func serveWidgets(t *testing.T, status int, answer string) *[]colCall {
 	vlist := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(layoutJSON(layoutID, "DASHBOARD", ""), layoutID,
 		wLayoutList), layoutTabID, wTabList), layoutWidgetD, wWidgetList)
 	vlist = strings.Replace(vlist, `"icon":"IconHome","layoutMode":"GRID"`, `"icon":"IconHome","layoutMode":"VERTICAL_LIST"`, 1)
+	dashboard := strings.Replace(layoutJSON(layoutID, "DASHBOARD", ""), `{"id":"`+layoutWidgetE+`"`,
+		`{"id":"`+wWidgetTable+`","title":"Table","type":"RECORD_TABLE"},{"id":"`+layoutWidgetE+`"`, 1)
 	layouts := map[string]string{
-		layoutID:    layoutJSON(layoutID, "DASHBOARD", ""),
+		layoutID:    dashboard,
 		layoutOther: layoutJSON(layoutOther, "RECORD_PAGE", ""),
 		wLayoutList: vlist,
 		wLayoutFull: fullLayout(wLayoutFull, wTabFull),
@@ -94,6 +98,7 @@ func serveWidgets(t *testing.T, status int, answer string) *[]colCall {
 	widgets := map[string]string{
 		layoutWidgetD: widgetWire(layoutWidgetD, layoutTabID, "Notes", "STANDALONE_RICH_TEXT", "", wGrid),
 		layoutWidgetA: widgetWire(layoutWidgetA, layoutTabID, "Pipeline", "GRAPH", metaObjID, wGrid),
+		wWidgetTable:  widgetWire(wWidgetTable, layoutTabID, "Table", "RECORD_TABLE", metaObjID, wGrid),
 		wWidgetOther:  widgetWire(wWidgetOther, wTabOther, "Other", "STANDALONE_RICH_TEXT", "", wGrid),
 		wWidgetGone: strings.Replace(widgetWire(wWidgetGone, layoutTabID, "Gone", "STANDALONE_RICH_TEXT", "", wGrid),
 			`"isActive":true`, `"isActive":true,"deletedAt":"2026-01-01T00:00:00Z"`, 1),
@@ -120,6 +125,13 @@ func serveWidgets(t *testing.T, status int, answer string) *[]colCall {
 			return jsonResponse(status, answer), nil
 		}
 		path := request.URL.Path
+		switch path {
+		case metadataObjectsPath + "/" + metaObjID:
+			return jsonResponse(http.StatusOK, filterObjectJSON), nil
+		case metadataObjectsPath + "/" + wObjectSystem:
+			return jsonResponse(http.StatusOK, strings.Replace(strings.Replace(filterObjectJSON, metaObjID, wObjectSystem, 1),
+				`"isSystem":false,"fields"`, `"isSystem":true,"fields"`, 1)), nil
+		}
 		for prefix, bodies := range map[string]map[string]string{pageLayoutsPath: layouts, pageLayoutTabsPath: tabs,
 			pageLayoutWidgetsPath: widgets, viewsPath: views} {
 			if body, ok := bodies[strings.TrimPrefix(path, prefix+"/")]; ok && strings.HasPrefix(path, prefix+"/") {
@@ -370,8 +382,9 @@ func TestPageLayoutWidgetsNeedAConnectionWithoutObjectTargets(t *testing.T) {
 		handler capability.Handler
 		args    string
 	}{
-		"create": {invokePageLayoutWidgetsCreate, richArgs("x")},
-		"update": {invokePageLayoutWidgetsUpdate, `{"id":"` + layoutWidgetD + `","title":"T"}`},
+		"create":       {invokePageLayoutWidgetsCreate, richArgs("x")},
+		"update":       {invokePageLayoutWidgetsUpdate, `{"id":"` + layoutWidgetD + `","title":"T"}`},
+		"update chart": {invokePageLayoutWidgetsUpdate, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			refuse(t)
@@ -389,8 +402,9 @@ func TestPageLayoutWidgetsNeverRepeatAfterAnUnclearResult(t *testing.T) {
 		handler capability.Handler
 		args    string
 	}{
-		"create": {invokePageLayoutWidgetsCreate, richArgs("x")},
-		"update": {invokePageLayoutWidgetsUpdate, `{"id":"` + layoutWidgetD + `","title":"T"}`},
+		"create":       {invokePageLayoutWidgetsCreate, richArgs("x")},
+		"update":       {invokePageLayoutWidgetsUpdate, `{"id":"` + layoutWidgetD + `","title":"T"}`},
+		"update chart": {invokePageLayoutWidgetsUpdate, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")},
 	} {
 		for name, tt := range map[string]struct {
 			status int
@@ -531,6 +545,7 @@ func TestPageLayoutWidgetsNeedConfirmationAndTheToolsList(t *testing.T) {
 	}{
 		{pagelayoutwidgetsCreate.ID, richArgs("x")},
 		{pagelayoutwidgetsUpdate.ID, `{"id":"` + layoutWidgetD + `","title":"T"}`},
+		{pagelayoutwidgetsUpdate.ID, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")},
 	} {
 		calls := serveWidgets(t, http.StatusCreated, `{}`)
 		cfg := coreConfig()
