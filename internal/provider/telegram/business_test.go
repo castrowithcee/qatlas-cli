@@ -64,6 +64,8 @@ func (e *businessEnv) run(tool string, args map[string]any) (any, error) {
 	switch tool {
 	case "get":
 		return invokeBusinessGetWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "send":
+		return invokeMessagesSendWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case "markread":
 		return invokeBusinessMarkReadWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	}
@@ -390,6 +392,110 @@ func TestReferenceKindValuesAreStable(t *testing.T) {
 		refJoinRequestQuery: 5, refBusinessChat: 6} {
 		if byte(kind) != want {
 			t.Errorf("reference kind %d changed its value to %d", want, kind)
+		}
+	}
+}
+
+func TestMessagesSendBusinessSendsTheExactBody(t *testing.T) {
+	ref := businessRef("business/b1", "777")
+	env := newBusinessEnv("-100", "business/b1")
+	env.body = `{"ok":true,"result":{"message_id":5,"date":1700000000}}`
+	got, err := env.run("send", map[string]any{"business": "b1", "chat": ref, "text": "hi", "parse_mode": "HTML",
+		"reply_to_message_id": 9, "disable_notification": true, "protect_content": true, "disable_link_preview": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `sendMessage {"business_connection_id":"b1","chat_id":777,"text":"hi","parse_mode":"HTML",` +
+		`"reply_parameters":{"message_id":9},"disable_notification":true,"protect_content":true,` +
+		`"link_preview_options":{"is_disabled":true}}`
+	if len(env.calls) != 1 || env.calls[0] != want {
+		t.Fatalf("calls = %q, want %q", env.calls, want)
+	}
+	if m := got.(map[string]any); m["message_id"] != int64(5) {
+		t.Errorf("got = %v", got)
+	}
+	// Without business the body carries no business_connection_id and the chat stays a string.
+	env = newBusinessEnv("-100", "business/b1")
+	env.body = `{"ok":true,"result":{"message_id":5,"date":1700000000}}`
+	if _, err := env.run("send", map[string]any{"chat": "-100", "text": "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := `sendMessage {"chat_id":"-100","text":"hi"}`; len(env.calls) != 1 || env.calls[0] != want {
+		t.Fatalf("calls = %q, want %q", env.calls, want)
+	}
+}
+
+func TestMessagesSendBusinessRejectsBeforeSecretAccess(t *testing.T) {
+	ref := businessRef("business/b1", "777")
+	both := []string{"-100", "business/b1", "business/b2"}
+	cases := map[string]struct {
+		targets []string
+		args    map[string]any
+	}{
+		"no business target":   {[]string{"-100", "bot"}, map[string]any{"business": "b1", "chat": ref, "text": "x"}},
+		"foreign business":     {both, map[string]any{"business": "FOREIGNID", "chat": ref, "text": "x"}},
+		"invalid business":     {both, map[string]any{"business": "a/b", "chat": ref, "text": "x"}},
+		"empty business":       {both, map[string]any{"business": "", "chat": ref, "text": "x"}},
+		"missing chat":         {both, map[string]any{"business": "b1", "text": "x"}},
+		"raw chat id":          {both, map[string]any{"business": "b1", "chat": "777", "text": "x"}},
+		"chat target":          {both, map[string]any{"business": "b1", "chat": "-100", "text": "x"}},
+		"bot":                  {both, map[string]any{"business": "b1", "chat": "bot", "text": "x"}},
+		"other business ref":   {both, map[string]any{"business": "b1", "chat": businessRef("business/b2", "777"), "text": "x"}},
+		"unbound business ref": {both, map[string]any{"business": "b1", "chat": businessRef("business/b3", "777"), "text": "x"}},
+		"chat bound ref":       {both, map[string]any{"business": "b1", "chat": businessRef("-100", "777"), "text": "x"}},
+		"file kind ref":        {both, map[string]any{"business": "b1", "chat": signRef(testToken, refFile, "business/b1", "777"), "text": "x"}},
+		"thread":               {both, map[string]any{"business": "b1", "chat": ref, "text": "x", "message_thread_id": 3}},
+		"keyboard":             {both, map[string]any{"business": "b1", "chat": ref, "text": "x", "inline_keyboard": [][]map[string]any{{{"text": "a", "url": "https://example.com"}}}}},
+		"ref without business": {both, map[string]any{"chat": ref, "text": "x"}},
+		"unknown argument":     {both, map[string]any{"business": "b1", "chat": ref, "text": "x", "business_connection_id": "b2"}},
+		"invalid text":         {both, map[string]any{"business": "b1", "chat": ref, "text": ""}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			env := newBusinessEnv(c.targets...)
+			_, err := env.run("send", c.args)
+			if err == nil {
+				t.Fatal("accepted")
+			}
+			if env.lookups != 0 || len(env.calls) != 0 {
+				t.Fatalf("secret lookups = %d, requests = %q", env.lookups, env.calls)
+			}
+			for _, leak := range []string{"FOREIGNID", "b2", "b3", testToken} {
+				if strings.Contains(err.Error(), leak) {
+					t.Fatalf("error leaks %q: %v", leak, err)
+				}
+			}
+		})
+	}
+}
+
+func TestMessagesSendBusinessRefusesForgedReferencesBeforeRequest(t *testing.T) {
+	for name, ref := range map[string]string{
+		"flipped tag": flipLast(businessRef("business/b1", "777")),
+		"other token": signRef("999:other-token", refBusinessChat, "business/b1", "777"),
+		"non-numeric": businessRef("business/b1", "@name"),
+	} {
+		env := newBusinessEnv("business/b1")
+		if _, err := env.run("send", map[string]any{"business": "b1", "chat": ref, "text": "x"}); err == nil || len(env.calls) != 0 {
+			t.Errorf("%s: err = %v, calls = %q", name, err, env.calls)
+		}
+	}
+}
+
+func TestMessagesSendBusinessSendsOneRequestAndReportsUncertainty(t *testing.T) {
+	args := map[string]any{"business": "b1", "chat": businessRef("business/b1", "777"), "text": "x"}
+	for name, setup := range map[string]func(*businessEnv){
+		"500":     func(e *businessEnv) { e.status = 500 },
+		"502":     func(e *businessEnv) { e.status = 502 },
+		"timeout": func(e *businessEnv) { e.fail = &timeoutError{} },
+		"object":  func(e *businessEnv) { e.body = `{"ok":true,"result":{"x":1}}` },
+	} {
+		env := newBusinessEnv("business/b1")
+		setup(env)
+		_, err := env.run("send", args)
+		if err == nil || !strings.Contains(err.Error(), "may have taken effect") ||
+			strings.Contains(err.Error(), "SECRETDESC") || len(env.calls) != 1 {
+			t.Errorf("%s: err = %v, calls = %d", name, err, len(env.calls))
 		}
 	}
 }

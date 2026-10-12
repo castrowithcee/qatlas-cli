@@ -187,8 +187,9 @@ the data class `telegram-business-content`, and are in no setup profile. `telegr
 account, status, and bot rights of one connection. `telegram.updates.list` shows business updates only for a
 bound connection, as `business/<id>` in `chat`; their chat appears only as `business_chat_ref`, a signed
 reference bound to that connection, and a business file has no `file_ref`. `telegram.business.markread`
-(`update`) marks one message in the chat of such a reference as read. `telegram.business.deletemessages`
-(`delete`, `tools` list) deletes up to 100 messages; the rights the account granted the bot decide which go,
+(`update`) marks one message in the chat of such a reference as read. `telegram.messages.send` replies with
+`business` only to such a reference, without topic or keyboard. `telegram.business.deletemessages` (`delete`,
+`tools` list) deletes up to 100 messages; the rights the account granted the bot decide which go,
 and skipped ones are not reported.
 
 ## Reading chats and members
