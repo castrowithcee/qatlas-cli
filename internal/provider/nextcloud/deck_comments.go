@@ -18,8 +18,8 @@ import (
 
 // Card comments of a bound Deck board use the OCS API of the Deck app. Its comment routes resolve a card by
 // its ID alone and ignore the board, so one read of the stacks of the bound board must show the card in the
-// named stack before anything else is sent; a comment ID is only ever appended to that card's path, where
-// Deck itself checks that the comment belongs to the card.
+// named stack before anything else is sent; a comment ID is only used after the newest comments of that card
+// list it.
 var ocsDeck = []string{"apps", "deck", "api", "v1.0"}
 
 const (
@@ -44,7 +44,7 @@ var deckCommentSchema = `{"type":"object","properties":{"comment_id":{"type":"st
 
 var (
 	deckCommentIDArgument = capability.Argument{Name: "comment_id", Required: true,
-		Description: "Own comment of this card, a comment_id reported by deckcomments.list"}
+		Description: "Own comment among the newest 100 of this card, a comment_id reported by deckcomments.list"}
 	deckCommentMessageArgument = capability.Argument{Name: "message", Required: true,
 		Description: "Comment text, 1 to 1000 characters; an @mention notifies that user"}
 	deckCommentParentArgument = capability.Argument{Name: "parent_id",
@@ -118,8 +118,9 @@ var deckCommentsUpdate = func() capability.Descriptor {
 	d := deckCommentChange("update", capability.EffectUpdate, capability.IdempotencyIdempotent, "updated",
 		"Change a Nextcloud Deck card comment",
 		"Replace the text of one own comment of one active card of a bound Deck board; Deck refuses a comment of "+
-			"another user. An @mention notifies that Nextcloud user. One read-only pre-check must show the card in "+
-			"the named stack, then exactly one request, which is never repeated",
+			"another user. An @mention notifies that Nextcloud user. Read-only pre-checks must show the card in the "+
+			"named stack and the comment among the newest 100 comments of the card, so older comments cannot be "+
+			"changed; then exactly one request, which is never repeated",
 		`,"comment_id":`+deckCommentIDShape+`,"message":`+deckCommentMessageShape, `,"comment_id","message"`,
 		deckCommentIDArgument, deckCommentMessageArgument)
 	d.Examples = []capability.Example{{Description: "Use a comment_id of deckcomments.list",
@@ -131,8 +132,9 @@ var deckCommentsDelete = func() capability.Descriptor {
 	d := deckCommentChange("delete", capability.EffectDelete, capability.IdempotencyIdempotent, "deleted",
 		"Delete a Nextcloud Deck card comment",
 		"Delete one own comment of one active card of a bound Deck board for good; Deck refuses a comment of another "+
-			"user. One read-only pre-check must show the card in the named stack, then exactly one request, which is "+
-			"never repeated",
+			"user. Read-only pre-checks must show the card in the named stack and the comment among the newest 100 "+
+			"comments of the card, so older comments cannot be deleted; then exactly one request, which is never "+
+			"repeated",
 		`,"comment_id":`+deckCommentIDShape, `,"comment_id"`, deckCommentIDArgument)
 	d.RequiresToolAllowList = true
 	d.Examples = []capability.Example{{Description: "Use a comment_id of deckcomments.list",
@@ -302,14 +304,14 @@ func validDeckCommentItem(item rawDeckComment, cardID string) bool {
 	return digitsOnly(string(item.ID)) && (item.ObjectID == "" || string(item.ObjectID) == cardID)
 }
 
-// requireParent shows the parent among the newest comments of the card, the only page that is read.
-func (c *Client) requireParent(ctx context.Context, op string, input deckCommentArguments) error {
-	items, err := c.deckCommentsOf(ctx, op, input.CardID, maxDeckCommentLimit, 0)
+// requireComment shows a comment among the newest comments of the card, the only page that is read.
+func (c *Client) requireComment(ctx context.Context, op, cardID, commentID string) error {
+	items, err := c.deckCommentsOf(ctx, op, cardID, maxDeckCommentLimit, 0)
 	if err != nil {
 		return err
 	}
 	for _, item := range items {
-		if string(item.ID) == input.ParentID && validDeckCommentItem(item, input.CardID) {
+		if string(item.ID) == commentID && validDeckCommentItem(item, cardID) {
 			return nil
 		}
 	}
@@ -322,7 +324,7 @@ func (c *Client) createDeckComment(ctx context.Context, op string, input deckCom
 	}
 	form := url.Values{"message": {input.Message}}
 	if input.ParentID != "" {
-		if err := c.requireParent(ctx, op, input); err != nil {
+		if err := c.requireComment(ctx, op, input.CardID, input.ParentID); err != nil {
 			return nil, err
 		}
 		form.Set("parentId", input.ParentID)
@@ -342,6 +344,9 @@ func (c *Client) updateDeckComment(ctx context.Context, op string, input deckCom
 	if err := c.checkedDeckCard(ctx, op, input); err != nil {
 		return nil, err
 	}
+	if err := c.requireComment(ctx, op, input.CardID, input.CommentID); err != nil {
+		return nil, err
+	}
 	_, err := c.ocsSend(ctx, op, http.MethodPut, deckCommentsRequest(input.CardID, input.CommentID),
 		url.Values{"message": {input.Message}}, uncertainDeckComment)
 	if err != nil {
@@ -352,6 +357,9 @@ func (c *Client) updateDeckComment(ctx context.Context, op string, input deckCom
 
 func (c *Client) deleteDeckComment(ctx context.Context, op string, input deckCommentArguments) (any, error) {
 	if err := c.checkedDeckCard(ctx, op, input); err != nil {
+		return nil, err
+	}
+	if err := c.requireComment(ctx, op, input.CardID, input.CommentID); err != nil {
 		return nil, err
 	}
 	_, err := c.ocsSend(ctx, op, http.MethodDelete, deckCommentsRequest(input.CardID, input.CommentID), nil,

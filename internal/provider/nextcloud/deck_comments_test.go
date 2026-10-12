@@ -46,6 +46,14 @@ func deckCommentCall(t *testing.T, operation, args string) (json.RawMessage, err
 	return response.Result, nil
 }
 
+// commentAnswer sends a list with the comment to a read and the comment itself to a change.
+func commentAnswer(request *http.Request, comment string) string {
+	if request.Method == http.MethodGet {
+		return `[` + comment + `]`
+	}
+	return comment
+}
+
 func ocsOK(data string) *http.Response { return ocsResponse(http.StatusOK, ocsData(data)) }
 
 func TestDeckCommentsListPaginatesAndMarksTheNextPage(t *testing.T) {
@@ -95,17 +103,28 @@ func TestDeckCommentsMutationsSendOneFixedRequest(t *testing.T) {
 		"delete": {"nextcloud.deckcomments.delete", `"comment_id":"42"`, http.MethodDelete, deckCommentsPath + "/42", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			calls := deckCommentServer(t, func(*http.Request) (*http.Response, error) {
-				return ocsOK(deckComment("42", "21", "x")), nil
+			calls := deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
+				return ocsOK(commentAnswer(request, deckComment("42", "21", "x"))), nil
 			})
 			result, err := deckCommentCall(t, tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(*calls) != 2 || (*calls)[0].method != http.MethodGet {
+			reads := 2
+			if name != "create" {
+				reads = 3
+			}
+			if len(*calls) != reads || (*calls)[0].method != http.MethodGet {
 				t.Fatalf("calls = %+v", *calls)
 			}
-			if c := (*calls)[1]; c.method != tc.method || c.url.Path != tc.path || c.body != tc.body {
+			if name != "create" {
+				q := (*calls)[1].url.Query()
+				if (*calls)[1].method != http.MethodGet || (*calls)[1].url.Path != deckCommentsPath ||
+					q.Get("limit") != strconv.Itoa(maxDeckCommentLimit) || q.Get("offset") != "0" {
+					t.Errorf("comment read = %+v", (*calls)[1])
+				}
+			}
+			if c := (*calls)[reads-1]; c.method != tc.method || c.url.Path != tc.path || c.body != tc.body {
 				t.Errorf("mutation = %+v", c)
 			}
 			if !strings.Contains(string(result), `"card_id":"21"`) || !strings.Contains(string(result), `"comment_id":"42"`) {
@@ -168,6 +187,32 @@ func TestDeckCommentsRefuseCardOutsideTheStackWithoutACommentRequest(t *testing.
 	}
 }
 
+func TestDeckCommentsUpdateAndDeleteNeedTheCommentAmongTheNewestOfTheCard(t *testing.T) {
+	for name, list := range map[string]string{
+		"not listed":     `[` + deckComment("8", "21", "x") + `]`,
+		"empty":          `[]`,
+		"foreign object": `[` + deckComment("42", "99", "x") + `]`,
+	} {
+		for _, tc := range []struct{ op, args string }{
+			{"update", `"comment_id":"42","message":"x"`}, {"delete", `"comment_id":"42"`},
+		} {
+			t.Run(tc.op+" "+name, func(t *testing.T) {
+				calls := deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
+					if request.Method != http.MethodGet {
+						t.Errorf("a change was sent: %s", request.Method)
+					}
+					return ocsOK(list), nil
+				})
+				_, err := deckCommentCall(t, "nextcloud.deckcomments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
+				if err == nil || !strings.Contains(err.Error(), messageDeckForeign) || len(*calls) != 2 ||
+					(*calls)[1].url.Path != deckCommentsPath {
+					t.Errorf("calls = %+v, err = %v", *calls, err)
+				}
+			})
+		}
+	}
+}
+
 func TestDeckCommentsRefuseLocallyBeforeAnyRequest(t *testing.T) {
 	serve(t, func(request *http.Request) (*http.Response, error) {
 		t.Errorf("the provider was contacted: %s", request.URL.Path)
@@ -196,14 +241,24 @@ func TestDeckCommentsForeignCommentIsRefusedWithoutProviderText(t *testing.T) {
 		"create": {"create", `"message":"x"`, "may not comment"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			deckCommentServer(t, func(*http.Request) (*http.Response, error) { return status(http.StatusForbidden), nil })
+			deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
+				if request.Method == http.MethodGet {
+					return ocsOK(`[` + deckComment("42", "21", "x") + `]`), nil
+				}
+				return status(http.StatusForbidden), nil
+			})
 			_, err := deckCommentCall(t, "nextcloud.deckcomments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
 			if err == nil || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), bodyCanary) {
 				t.Errorf("err = %v", err)
 			}
 		})
 	}
-	deckCommentServer(t, func(*http.Request) (*http.Response, error) { return status(http.StatusNotFound), nil })
+	deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
+		if request.Method == http.MethodGet {
+			return ocsOK(`[` + deckComment("42", "21", "x") + `]`), nil
+		}
+		return status(http.StatusNotFound), nil
+	})
 	_, err := deckCommentCall(t, "nextcloud.deckcomments.delete", `{`+deckCommentRef+`,"comment_id":"42"}`)
 	if err == nil || !strings.Contains(err.Error(), messageDeckForeign) || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("err = %v", err)
@@ -222,9 +277,19 @@ func TestDeckCommentsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 	for op, args := range ops {
 		for name, answer := range answers {
 			t.Run(op+" "+name, func(t *testing.T) {
-				calls := deckCommentServer(t, func(*http.Request) (*http.Response, error) { return answer() })
+				calls := deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
+					if request.Method == http.MethodGet {
+						return ocsOK(`[` + deckComment("42", "21", "x") + `]`), nil
+					}
+					return answer()
+				})
 				_, err := deckCommentCall(t, "nextcloud.deckcomments."+op, `{`+deckCommentRef+`,`+args+`}`)
-				if err == nil || len(*calls) != 2 || !strings.Contains(err.Error(), "may have been applied, check deckcomments.list") ||
+				want := 2
+				if op != "create" {
+					want = 3
+				}
+				if err == nil || len(*calls) != want ||
+					!strings.Contains(err.Error(), "may have been applied, check deckcomments.list") ||
 					strings.Contains(err.Error(), bodyCanary) {
 					t.Errorf("calls = %d, err = %v", len(*calls), err)
 				}

@@ -163,8 +163,8 @@ applied and never repeated. `deckboards.create` needs the general `deck` target.
 changes refuse without the manage right; card changes leave the edit right to Deck. `deckcards.update` refuses a card
 changed since its `last_modified`; an archived card can only be restored. Cards take only the board's labels and user
 members; `deckacl.*` shares with users and groups only and refuses team and owner entries. Comments work on active cards
-only and change only own comments. Deck deletes boards and cards softly, with no Qatlas restore; a deleted stack takes
-its cards. Every `delete` and `deckacl` tool needs a tools list.
+only; update and delete reach only own comments among the newest 100. Deck deletes boards and cards softly, with no
+Qatlas restore; a deleted stack takes its cards. Every `delete` and `deckacl` tool needs a tools list.
 
 ## Talk
 
