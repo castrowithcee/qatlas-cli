@@ -134,6 +134,14 @@ logs, or the audit trail. The result is only `message_id` and `date`. `telegram.
 moves a live location within these limits, and omitted optional values keep their setting;
 `telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only.
 
+## Games
+
+`telegram.games.send` (`create`) sends a game registered with BotFather, `telegram.games.setscore` (`update`)
+sets a player's score, and `telegram.games.highscores` (`read`) lists the scores around a player. The three
+tools are in the `games` group and in no profile; the chat must be bound as a numeric chat ID. `force` is sent
+only when given. Scores and players carry the data class `telegram-member-data` and are shown through a fixed
+list of fields; inline game messages and keyboards are not offered.
+
 ## Invite links
 
 `telegram.invitelinks.primary` (`read`) returns only the `invite_link` field of the chat, and no other chat

@@ -201,6 +201,8 @@ var toolGroups = []config.ToolGroup{
 		"direct messages chats of bound channels"},
 	{ID: groupQueries, Title: "Queries", Description: "Answer button presses on inline keyboards and inline " +
 		"queries, and decline or hand on join request queries of the bound chats"},
+	{ID: groupGames, Title: "Games", Description: "Send games registered with BotFather to the bound chats, set " +
+		"player scores, and read high scores"},
 }
 
 const groupMessages = "messages"
@@ -311,6 +313,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
+		capability.Operation{Descriptor: gamesSend, Handler: capability.Handler(invokeGamesSend)},
+		capability.Operation{Descriptor: gamesSetScore, Handler: capability.Handler(invokeGamesSetScore)},
+		capability.Operation{Descriptor: gamesHighScores, Handler: capability.Handler(invokeGamesHighScores)},
 		capability.Operation{Descriptor: topicsCreate, Handler: capability.Handler(invokeTopicsCreate)},
 		capability.Operation{Descriptor: topicsEdit, Handler: capability.Handler(invokeTopicsEdit)},
 		capability.Operation{Descriptor: topicsClose, Handler: capability.Handler(invokeTopicsClose)},
