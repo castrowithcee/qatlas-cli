@@ -71,12 +71,12 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 15 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 16 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "business" || metadata.Groups[4].ID != "chats" ||
 		metadata.Groups[5].ID != "invitelinks" || metadata.Groups[6].ID != "bot" || metadata.Groups[7].ID != "files" ||
 		metadata.Groups[8].ID != "media" || metadata.Groups[9].ID != "members" || metadata.Groups[10].ID != "interactions" ||
 		metadata.Groups[11].ID != "stickers" || metadata.Groups[12].ID != "topics" ||
-		metadata.Groups[13].ID != "suggestedposts" || metadata.Groups[14].ID != "queries" {
+		metadata.Groups[13].ID != "suggestedposts" || metadata.Groups[14].ID != "queries" || metadata.Groups[15].ID != "games" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -93,6 +93,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "members"
 		case tool.ID == callbacksAnswer.ID || tool.ID == joinrequestqueriesAnswer.ID || tool.ID == inlineAnswer.ID:
 			want = "queries"
+		case strings.HasPrefix(tool.ID, "telegram.games."):
+			want = "games"
 		case strings.HasPrefix(tool.ID, "telegram.suggestedposts."):
 			want = "suggestedposts"
 		case strings.HasPrefix(tool.ID, "telegram.topics.") && tool.ID != topicsIconStickers.ID:
@@ -125,8 +127,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 108 {
-		t.Fatalf("operation count = %d, want one hundred and eight", len(operations))
+	if len(operations) != 111 {
+		t.Fatalf("operation count = %d, want one hundred and eleven", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
