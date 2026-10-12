@@ -151,20 +151,20 @@ of the instance.
 
 ## Deck
 
-The tool group `deck` reads boards (labels, sharing, members), stacks with cards, and card attachments, and changes
-boards, stacks, cards, labels, sharing, and attachments. Profile `deck-read` holds four board reads. A `deck` target
-binds every board, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access or
-request, and listings drop unbound and deleted boards. A stack, card, label, sharing entry, or target counts only if a
-read of the bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut; comments are not
-read. Only `deck_file` attachments are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
+The tool group `deck` reads boards (labels, sharing, members), stacks with cards, card comments, and attachments, and
+changes all of them; setup profile `deck-read` holds four board reads, and no profile holds a change. A `deck` target
+binds every board, `deck/BOARD_ID` one board; an unbound board is refused locally, unnamed, before any credential access
+or request, and listings drop unbound and deleted boards. A stack, card, label, sharing entry, or target counts only if
+a read of the bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut. Only
+`deck_file` attachments are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
 
 Every change needs `confirm` and sends one request after at most two reads; an unclear outcome is reported as possibly
-applied and never repeated. `deckboards.create` needs the general `deck` target, as a `deck/BOARD_ID` binding cannot
-hold the new board. Board, stack, label, and sharing changes refuse without the manage right; card changes leave the
-edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a card changed since; an
-archived card can only be restored. Cards take only the board's labels and user members; `deckacl.*` shares with users
-and groups only and refuses team and owner entries. Deck deletes boards, cards, and attachments softly, with no Qatlas
-restore; a deleted stack takes its cards. Every `delete` and `deckacl` tool needs a tools list.
+applied and never repeated. `deckboards.create` needs the general `deck` target. Board, stack, label, and sharing
+changes refuse without the manage right; card changes leave the edit right to Deck. `deckcards.update` refuses a card
+changed since its `last_modified`; an archived card can only be restored. Cards take only the board's labels and user
+members; `deckacl.*` shares with users and groups only and refuses team and owner entries. Comments work on active cards
+only; update and delete reach only own comments among the newest 100. Deck deletes boards, cards, and attachments
+softly, with no Qatlas restore; a deleted stack takes its cards. Every `delete` and `deckacl` tool needs a tools list.
 
 ## Talk
 
