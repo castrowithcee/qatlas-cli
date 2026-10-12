@@ -151,12 +151,12 @@ of the instance.
 
 ## Deck
 
-The tool group `deck` reads boards with labels, sharing entries, and members, stacks with cards, and single cards (setup
-profile `deck-read`), and changes boards, stacks, cards, labels, and sharing (in no profile). A `deck` target binds
-every board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential
-access or request, without naming it, and listings drop unbound and deleted boards. Deck resolves objects by ID alone,
-so a stack, card, label, sharing entry, or target stack counts only when a read of the bound board shows it there.
-Provider text is untrusted, capped, and marked `truncated` when cut; comments and attachments are not read.
+The tool group `deck` reads boards with labels, sharing entries, and members, stacks with cards, and card attachments,
+and changes boards, stacks, cards, labels, and sharing. Setup profile `deck-read` holds four board reads. A `deck`
+target binds every board, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
+or request, unnamed, and listings drop unbound and deleted boards. Deck resolves objects by ID alone, so a stack, card,
+label, sharing entry, or target counts only if a read of the bound board shows it. Provider text is untrusted, capped,
+and marked `truncated` when cut; comments are not read. `deckattachments.get` downloads only a `deck_file`.
 
 Every change needs `confirm` and sends one request after at most two reads; an unclear outcome is reported as possibly
 applied and never repeated. `deckboards.create` needs the general `deck` target, as a `deck/BOARD_ID` binding cannot

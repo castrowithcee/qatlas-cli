@@ -582,17 +582,25 @@ func requireDeck(resolved *config.Resolved) (selection, error) {
 // the client. The refusal does not name the board.
 func openDeck(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	boardID string) (*Client, error) {
-	bound, err := requireDeck(resolved)
-	if err != nil {
+	if err := requireBoard(resolved, boardID); err != nil {
 		return nil, err
-	}
-	if err := checkDeckID("open", boardID); err != nil {
-		return nil, err
-	}
-	if !bound.holds(boardID) {
-		return nil, &provider.Error{Class: provider.ClassPermission, Op: "open", Message: messageDeckNotBound}
 	}
 	return open(ctx, resolved, secrets, red, false)
+}
+
+// requireBoard is the local part of openDeck: it needs neither credential nor request.
+func requireBoard(resolved *config.Resolved, boardID string) error {
+	bound, err := requireDeck(resolved)
+	if err != nil {
+		return err
+	}
+	if err := checkDeckID("open", boardID); err != nil {
+		return err
+	}
+	if !bound.holds(boardID) {
+		return &provider.Error{Class: provider.ClassPermission, Op: "open", Message: messageDeckNotBound}
+	}
+	return nil
 }
 
 type deckArguments struct {
