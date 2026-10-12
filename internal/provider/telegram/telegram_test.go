@@ -125,8 +125,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 108 {
-		t.Fatalf("operation count = %d, want one hundred and eight", len(operations))
+	if len(operations) != 111 {
+		t.Fatalf("operation count = %d, want one hundred and eleven", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -155,7 +155,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 			d.ID == updatesConfirm.ID || d.ID == locationsStopLive.ID || d.ID == topicsDelete.ID ||
 			d.ID == topicsUnpinAll.ID || d.ID == suggestedpostsDecline.ID || d.ID == commandsDelete.ID ||
 			d.ID == profileRemovePhoto.ID || d.ID == defaultAdminRightsSet.ID || d.ID == inlineAnswer.ID ||
-			d.ID == businessDeleteMessages.ID
+			d.ID == businessDeleteMessages.ID || d.ID == businessSetUsername.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}

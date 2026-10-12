@@ -66,6 +66,12 @@ func (e *businessEnv) run(tool string, args map[string]any) (any, error) {
 		return invokeBusinessGetWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case "markread":
 		return invokeBusinessMarkReadWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "setname":
+		return invokeBusinessSetNameWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "setusername":
+		return invokeBusinessSetUsernameWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "setbio":
+		return invokeBusinessSetBioWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	}
 	return invokeBusinessDeleteMessagesWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 }
