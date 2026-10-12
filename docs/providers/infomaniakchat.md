@@ -131,7 +131,7 @@ inside the allow-list and never direct or group channels, sends one request, and
 outside that set, including a file hit without a `channel_id` and a thread whose root is deleted. Because the
 set comes from the token's own channels, a public channel the token has not joined yields no hit.
 
-The `bots` and `emoji` tools need an instance-wide connection: all token teams bound, no `channel/`
+The `bots`, `emoji`, and `roles` tools need an instance-wide connection: all token teams bound, no `channel/`
 target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`
 and refuses, naming no team, on an unbound, empty, or unreadable answer, so a later-joined team locks them.
 
@@ -152,7 +152,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
-| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `emoji.create` (reads a local file), `.delete` |
+| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `roles.get` (a `POST` that changes nothing), `emoji.create` (reads a local file), `.delete` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
 and offered only to a connection whose tools list names them; the role tools alter rights, and
