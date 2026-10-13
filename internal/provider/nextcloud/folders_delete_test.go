@@ -45,7 +45,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			d.ID != talkRoomsDelete.ID && d.ID != talkParticipantsRemove.ID && d.ID != talkParticipantsModerator.ID &&
 			d.ID != eventsDelete.ID && d.ID != calendarsDelete.ID && d.ID != calendarTrashDelete.ID && d.ID != contactsDelete.ID &&
 			d.ID != tasksDelete.ID && d.ID != deckCommentsDelete.ID && d.ID != incomingDecline.ID &&
-			d.ID != notificationsDismiss.ID && d.ID != notificationsDismissAll.ID {
+			d.ID != notificationsDismiss.ID && d.ID != notificationsDismissAll.ID && d.ID != notesDelete.ID {
 			if d.RequiresToolAllowList {
 				t.Errorf("%s requires a tools list", d.ID)
 			}
@@ -58,7 +58,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
 	}
-	if found != 30 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
+	if found != 31 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
 		t.Fatalf("found = %d, versions = %d/%d", found, filesDelete.Version, foldersDelete.Version)
 	}
 	if !strings.Contains(foldersDelete.Description, "files_trashbin") || !strings.Contains(foldersDelete.Description, "together with everything") {
@@ -71,7 +71,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 				id == deckBoardsDelete.ID || id == deckACLAdd.ID || id == deckACLUpdate.ID || id == deckACLRemove.ID || id == deckStacksDelete.ID || id == talkMessagesDelete.ID ||
 				id == deckCardsDelete.ID || id == talkRoomsDelete.ID || id == talkParticipantsRemove.ID ||
 				id == talkParticipantsModerator.ID || id == talkParticipantsAdd.ID || id == eventsDelete.ID ||
-				id == deckCommentsDelete.ID || id == incomingDecline.ID || id == remoteSharesRemove.ID || id == notificationsDismiss.ID || id == notificationsDismissAll.ID || id == statusSet.ID || id == statusClear.ID || id == deckAttachmentsDelete.ID || id == calendarTrashDelete.ID || id == contactsDelete.ID || id == contactsCreate.ID || id == contactsUpdate.ID {
+				id == deckCommentsDelete.ID || id == incomingDecline.ID || id == remoteSharesRemove.ID || id == notificationsDismiss.ID || id == notificationsDismissAll.ID || id == statusSet.ID || id == statusClear.ID || id == deckAttachmentsDelete.ID || id == calendarTrashDelete.ID || id == contactsDelete.ID || id == contactsCreate.ID || id == contactsUpdate.ID || id == notesCreate.ID || id == notesUpdate.ID || id == notesDelete.ID {
 				t.Errorf("profile %s contains %s", p.ID, id)
 			}
 		}
