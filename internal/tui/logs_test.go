@@ -199,6 +199,8 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 		return append(append(lines[:3], lines[4]), []byte(`{"seq": not json`))
 	})
 	m := f.model(true, f.localToday())
+	// The size column takes room; a wider terminal keeps the unreadable line's label whole.
+	m.Update(tea.WindowSizeMsg{Width: 130, Height: 30})
 
 	view := m.View()
 	if !strings.Contains(barLine(view), "✗ altered") {
@@ -652,5 +654,56 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 	press(t, m, "n")
 	if m.screen != screenList || m.fail != noVault {
 		t.Errorf("n on Tokens = screen %v error %q", m.screen, m.fail)
+	}
+}
+
+func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
+	f := newLogFixture(t)
+	req, resp, zero := int64(100), int64(3500), int64(0)
+	base := invokelog.Fields{Path: "mcp", Effect: "read", Connection: "wiki", Result: "success",
+		Duration: 12 * time.Millisecond}
+	for _, c := range []struct {
+		op        string
+		req, resp *int64
+		result    string
+	}{
+		{"op.sized", &req, &resp, "success"},
+		{"op.zero", &zero, &zero, "success"},
+		{"op.old", nil, nil, "success"},
+		{"op.failed", &req, nil, "timeout"},
+	} {
+		fl := base
+		fl.Operation, fl.ReqBytes, fl.RespBytes, fl.Result = c.op, c.req, c.resp, c.result
+		mustNoError(t, f.logger.Append(fl))
+	}
+	m := f.model(true, f.localToday())
+
+	view := m.View()
+	if line := rowLine(t, view, "op.sized"); !strings.Contains(line, "~1000 tok") {
+		t.Errorf("sized row lacks ~1000 tok: %q", line)
+	}
+	if line := rowLine(t, view, "op.zero"); !strings.Contains(line, "~0 tok") {
+		t.Errorf("zero row lacks ~0 tok: %q", line)
+	}
+	for _, op := range []string{"op.old", "op.failed"} {
+		if line := rowLine(t, view, op); !strings.HasSuffix(strings.TrimRight(strings.TrimSuffix(strings.TrimRight(line, " "), "║"), " "), "-") ||
+			strings.Contains(line, "tok") {
+			t.Errorf("row %s does not show - for the size: %q", op, line)
+		}
+	}
+	detail := func(down int) string {
+		press(t, m, "enter")
+		v := m.View()
+		press(t, m, "esc", "down")
+		return v
+	}
+	if v := detail(0); !strings.Contains(v, "100 B (~28 tok)") || !strings.Contains(v, "3500 B (~1000 tok)") {
+		t.Errorf("detail lacks request and response bytes:\n%s", v)
+	}
+	if v := detail(1); !strings.Contains(v, "0 B (~0 tok)") {
+		t.Errorf("detail lacks 0 B:\n%s", v)
+	}
+	if v := detail(2); strings.Contains(v, "tok") {
+		t.Errorf("old row detail shows a counter:\n%s", v)
 	}
 }
