@@ -818,6 +818,13 @@ func (c *Client) updateActionsPermissions(ctx context.Context, a *actionsArgumen
 	if err := c.settingsChange(ctx, op, "permissions", body); err != nil {
 		return nil, err
 	}
+	if after.Enabled && after.AllowedActions == "" {
+		// GitHub keeps allowed_actions while Actions are off and restores it on re-enabling, so the request
+		// does not determine it. A failed read must not turn the applied change into an error.
+		if current, err := c.actionsPermissions(ctx, op); err == nil {
+			after = *current
+		}
+	}
 	return &SettingsChange[ActionsPermissions]{Before: *before, After: after}, nil
 }
 
