@@ -344,6 +344,11 @@ func (c *Client) ListBusinessGifts(ctx context.Context, id string, limit *int, o
 	if err != nil {
 		return nil, err
 	}
+	return decodeOwnedGifts(op, raw)
+}
+
+// decodeOwnedGifts maps an OwnedGifts answer to the shared gift output; it is the only gift mapping.
+func decodeOwnedGifts(op string, raw json.RawMessage) (*giftsOut, error) {
 	var got struct {
 		TotalCount int64         `json:"total_count"`
 		Gifts      []tgOwnedGift `json:"gifts"`
@@ -403,6 +408,11 @@ func (c *Client) GetBusinessStarBalance(ctx context.Context, id string) (map[str
 	if err != nil {
 		return nil, err
 	}
+	return decodeStarAmount(op, raw)
+}
+
+// decodeStarAmount maps a StarAmount answer to the shared balance output.
+func decodeStarAmount(op string, raw json.RawMessage) (map[string]any, error) {
 	var got struct {
 		Amount         int64 `json:"amount"`
 		NanostarAmount int64 `json:"nanostar_amount"`
