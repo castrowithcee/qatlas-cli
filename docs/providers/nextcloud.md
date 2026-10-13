@@ -23,9 +23,8 @@ is a clear failure that did not act on the server, and the app password only eve
 `nextcloud.files.delete` deletes one file and `nextcloud.folders.delete` one folder with everything in it, each
 bound to the ETag of the version read (`*` is refused) and confirmed. The root folder is never deletable. When
 the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
-for good; Qatlas cannot tell which applies. The trash bin is read and handled with the tools under Trash bin.
-
-Both tools require a tools list: no profile and no permission offers them, so a connection without one offers neither.
+for good; Qatlas cannot tell which applies (see Trash bin). Both tools require a tools list: no profile and no
+permission offers them.
 
 ## Trash bin
 
@@ -55,10 +54,9 @@ identity reaches) or `kind/ID`:
 The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
 IDs are literal single segments without `%`, `\`, or control characters.
 
-The single field `target` keeps its meaning as the root folder: `Reports`, `Team/Reports`, and `/` (the whole
-Files root) bind exactly as before, and a bare value in the `targets` list is read the same way. A single
-`target` whose first path segment is a kind name (for example `calendar/2026`, or a folder named `talk`) is
-refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`.
+The single field `target`, like a bare value in `targets`, names the root folder (`Reports`, `Team/Reports`, `/`).
+One whose first segment is a kind name (for example `calendar/2026`) is refused as ambiguous; write
+`folder/PATH` in `targets`.
 
 The connection test reads the bound folder, or the Files root of the identity when the connection binds none, and
 each bound calendar, or the calendar home for `calendar`; it reports no metadata.
@@ -87,10 +85,9 @@ change may have been applied and that source and target, or the folder, must be 
 
 ## Search and favorites
 
-`nextcloud.files.search` (`SEARCH`) and `nextcloud.favorites.list` (`REPORT`) belong to the profile `read`;
-`nextcloud.files.favorite` (`PROPPATCH` of `oc:favorite`, effect `update`, idempotent) needs `confirm` and the
-permission `update`. All three work on the bound folder only; the root itself is never a hit and cannot be
-marked.
+`nextcloud.files.search` and `nextcloud.favorites.list` belong to the profile `read`; `nextcloud.files.favorite`
+needs `confirm` and the permission `update`. All three work on the bound folder only; the root itself is never a
+hit and cannot be marked.
 
 The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
 literal, case-insensitive substring: Qatlas masks the wildcards of Nextcloud's `d:like`, writes the whole request
@@ -100,9 +97,9 @@ limit keeps, `truncated` says when it was reached, and the result is sorted by p
 Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
 dropped silently, and a cut list is marked `truncated`.
 
-`files.favorite` sends exactly one request without a read before it; a `207` answer with an error property status
-is a clear failure. After an unclear outcome the error says the flag may have changed and that the path must be
-stat-ed and the favorites listed before repeating; Qatlas never repeats the request.
+`files.favorite` sends exactly one request without a read before it; a refused property is a clear failure. After
+an unclear outcome the error says the flag may have changed and to stat the path and list the favorites before
+repeating; Qatlas never repeats the request.
 
 ## Shares
 
@@ -119,8 +116,9 @@ token, its link URL, or any password; `has_password` only says that one is set. 
 for `user`, `group`, `email`, `federated`, and `team` shares; a `talk` share reports only the conversation name
 and `link` and `other` shares no recipient. Recipients are personal data and untrusted.
 
-`nextcloud.sharees.search` and the three `nextcloud.incomingshares.*` tools are account-wide: they need an
-`account` target, not a folder, and without one refuse locally, before any credential access or request.
+`nextcloud.sharees.search` and the `nextcloud.incomingshares.*` and `nextcloud.remoteshares.*` tools are
+account-wide: they need an `account` target, not a folder, and without one refuse locally, before any credential
+access or request.
 `sharees.search` reports only type, identifier, and display name of possible recipients, never Talk
 conversations or unknown types (their identifier may be an access token), never uses the global lookup server,
 asks for at most 50 candidates per kind (default 10), and is in no setup profile.
@@ -133,6 +131,12 @@ again. `accept` takes internal offers only. `decline` names the origin and needs
 pending list of that origin once, refuse an ID not pending there without naming anything else, and send exactly
 one request; IDs of the two origins are independent, so `accept` refuses a federated ID like an unknown one.
 
+`remoteshares.list`, `get`, and `remove` read and remove the federated shares the identity accepted; none is
+created or accepted here. A share reports ID, owner, name, its mount point relative to the Files root, and the
+other server only as a host, never a token, password, or remote URL. An instance without federated sharing
+answers `list` with a clear error. `remove` needs a tools list, is in no profile, reads the share once, and
+refuses an unknown ID without naming a target.
+
 `nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
 confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
 the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
@@ -144,7 +148,7 @@ share the identity made below the root, whatever its type. Shares made to the id
 `update` and `delete` read the share once and refuse without a change a share outside the root, a share that
 is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
 one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
-the change may have been applied and to check the share (`shares.list`, `shares.get`, or `incomingshares.pending`)
+the change may have been applied and to check the share (`shares.get`, `incomingshares.pending`, or `remoteshares.get`)
 before repeating; Qatlas never repeats. A refusal by the instance (for example a required expiry or disabled
 sharing) is a clear error without the text of the instance. Sharing goes through the OCS API of the Sharing
 app with the same basic authentication as WebDAV; an answer counts only when its envelope reports `ok` and 200.
@@ -205,10 +209,9 @@ property Qatlas does not write; deleting needs a tools list.
 ## Versions
 
 `nextcloud.versions.list`, `nextcloud.versions.get`, and `nextcloud.versions.restore` read and restore older
-versions of one file below the connection root through the WebDAV versions endpoint of the same instance. The
-argument is always the file path; a file ID is never accepted. Qatlas stats the path first, refuses a folder, and
-addresses the versions only under the file ID of that answer. `versions.list` reports the newest first and marks a
-cut with `truncated`; a node outside that file's version folder fails the call.
+versions of one file below the connection root. The argument is always the file path, never a file ID. Qatlas
+stats the path first, refuses a folder, and addresses the versions only under the file ID of that answer.
+`versions.list` reports the newest first and marks a cut with `truncated`; a foreign node fails the call.
 
 `versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does.
 `versions.restore` needs `confirm` and the `etag` of the current file and moves the version onto the
@@ -226,13 +229,12 @@ like a missing note. Attachments stay relative to their note; `local_path` follo
 
 ## System tags
 
-`nextcloud.systemtags.list` reads the visible system tags of the instance (developer manual, WebDAV system
-tags: `remote.php/dav/systemtags`); the catalog belongs to the whole instance, so the tool needs an `account`
-target and refuses without one before any credential access. `nextcloud.filetags.list`, `filetags.add`, and
-`filetags.remove` work on one file or folder below the connection root and need a `folder` target. The
-argument is always the path, never the root itself and never a file ID: Qatlas stats the path first and
-addresses the relations (`remote.php/dav/systemtags-relations/files/<file_id>`) only under the file ID of that
-answer. A `tag_id` is digits only, as `systemtags.list` reports it.
+`nextcloud.systemtags.list` reads the visible system tags of the instance; the catalog belongs to the whole
+instance, so the tool needs an `account` target and refuses without one before any credential access.
+`nextcloud.filetags.list`, `filetags.add`, and `filetags.remove` work on one file or folder below the connection
+root and need a `folder` target. The argument is always the path, never the root itself and never a file ID:
+Qatlas stats the path first and addresses the relations only under the file ID of that answer. A `tag_id` is
+digits only, as `systemtags.list` reports it.
 
 Only visible tags are ever listed or touched, and a cut listing is marked `truncated`. `assignable` is true when
 the identity may assign the tag. The `filetags` tools only assign and remove tags; they never create, change, or
@@ -273,11 +275,9 @@ and `delete` is reachable only through a tools list.
 it is streamed, not loaded into memory. The result reports only the path, name, size, SHA-256 of the bytes
 read, ETag, and `method`: `single` for one PUT of at most 64 MiB, `chunked` above that.
 
-A chunked upload uses the chunked upload v2 of Nextcloud (developer manual, read 2026-10-06): `MKCOL` of one
-folder with a random ID below `remote.php/dav/uploads/<user>/` of the same instance, one `PUT` per chunk
-(10 MiB each, the last one smaller, at most 10000 chunks), and a final `MOVE` of `<folder>/.file` to the
-target. Every request but the cleanup carries `Destination` for the already checked target and
-`OC-Total-Length`. Each chunk is sent once. A failure before the `MOVE` removes the folder best effort and
+A chunked upload uses the chunked upload v2 of Nextcloud on the same instance: one upload folder with a random
+ID, one `PUT` per chunk (10 MiB each, at most 10000 chunks), and a final `MOVE` to the already checked target.
+Each chunk is sent once. A failure before the `MOVE` removes the folder best effort and
 leaves no file at the target. The manual documents no `If-Match` or `If-None-Match` for the `MOVE`, so Qatlas
 stats the target before the first chunk and again before the `MOVE`: `create` requires it to be absent,
 `update` requires the given `etag`. A file created or changed in the short time between that last check and

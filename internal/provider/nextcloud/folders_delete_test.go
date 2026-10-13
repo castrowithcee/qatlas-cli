@@ -40,7 +40,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 	found := 0
 	for _, d := range reg.Provider(Provider) {
 		if d.ID != filesDelete.ID && d.ID != foldersDelete.ID && d.ID != trashDelete.ID && d.ID != systemtagsDelete.ID &&
-			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID &&
+			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != remoteSharesRemove.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID &&
 			d.ID != deckStacksDelete.ID && d.ID != deckLabelsDelete.ID && d.ID != deckACLAdd.ID && d.ID != deckACLUpdate.ID && d.ID != deckACLRemove.ID && d.ID != talkMessagesDelete.ID && d.ID != deckCardsDelete.ID && d.ID != deckAttachmentsDelete.ID &&
 			d.ID != talkRoomsDelete.ID && d.ID != talkParticipantsRemove.ID && d.ID != talkParticipantsModerator.ID &&
 			d.ID != eventsDelete.ID && d.ID != calendarsDelete.ID && d.ID != calendarTrashDelete.ID && d.ID != contactsDelete.ID &&
@@ -57,7 +57,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
 	}
-	if found != 27 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
+	if found != 28 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
 		t.Fatalf("found = %d, versions = %d/%d", found, filesDelete.Version, foldersDelete.Version)
 	}
 	if !strings.Contains(foldersDelete.Description, "files_trashbin") || !strings.Contains(foldersDelete.Description, "together with everything") {
@@ -70,7 +70,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 				id == deckBoardsDelete.ID || id == deckACLAdd.ID || id == deckACLUpdate.ID || id == deckACLRemove.ID || id == deckStacksDelete.ID || id == talkMessagesDelete.ID ||
 				id == deckCardsDelete.ID || id == talkRoomsDelete.ID || id == talkParticipantsRemove.ID ||
 				id == talkParticipantsModerator.ID || id == talkParticipantsAdd.ID || id == eventsDelete.ID ||
-				id == deckCommentsDelete.ID || id == incomingDecline.ID || id == deckAttachmentsDelete.ID || id == calendarTrashDelete.ID || id == contactsDelete.ID || id == contactsCreate.ID || id == contactsUpdate.ID {
+				id == deckCommentsDelete.ID || id == incomingDecline.ID || id == remoteSharesRemove.ID || id == deckAttachmentsDelete.ID || id == calendarTrashDelete.ID || id == contactsDelete.ID || id == contactsCreate.ID || id == contactsUpdate.ID {
 				t.Errorf("profile %s contains %s", p.ID, id)
 			}
 		}
