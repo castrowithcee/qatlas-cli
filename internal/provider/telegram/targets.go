@@ -26,6 +26,8 @@ type targetSet struct {
 // reach them.
 var numericChatMethods = map[string]bool{
 	"readBusinessMessage":  true,
+	"sendChecklist":        true,
+	"editMessageChecklist": true,
 	"approveSuggestedPost": true,
 	"declineSuggestedPost": true,
 	"sendGame":             true,

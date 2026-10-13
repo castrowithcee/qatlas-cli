@@ -182,12 +182,14 @@ The tools of the groups `business` and `stories` need the target `business/<id>`
 `business`, carry the data class `telegram-business-content`, and are in no setup profile. `telegram.updates.list`
 shows business updates only for a bound connection, as `business/<id>` in `chat`; their chat appears only as
 `business_chat_ref`, a signed reference bound to that connection, and a business file has no `file_ref`. Only such a
-reference addresses a chat: `telegram.business.markread` marks a message in it as read, and `telegram.messages.send`
-with `business` replies to it, without topic or keyboard. A `tools` list is needed for
+reference addresses a chat: `telegram.business.markread` marks a message as read, `telegram.messages.send` with
+`business` replies to it and `telegram.checklists.send` and `.edit` post and replace a checklist in it; none takes
+topic or keyboard, and a repeated send can post twice. A `tools` list is needed for
 `telegram.business.deletemessages`, which does not report skipped messages, `.setusername`, as the old name can be
-lost, and `.removephoto`. `.setphoto` takes a static JPEG from `local_path`; `.gifts` and `.starbalance` only read,
-without any identifier that could move or convert a gift. `telegram.stories.post` and `.edit` take media only from
-`local_path`, `.repost` copies only between bound connections, and `.delete` needs the `tools` list.
+lost, `.removephoto`, and `telegram.stories.delete`. `telegram.business.setphoto` (a static JPEG) and
+`telegram.stories.post` and `.edit` take media only from `local_path`, and `.repost` copies only between bound
+connections; `telegram.business.gifts` and `.starbalance` only read, without any identifier to move or convert a
+gift.
 
 ## Reading chats and members
 
