@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
-  notes, calendars and events, contacts, notifications, and search, with typed targets, connection permissions, and
-  safety boundaries.
+  notes, calendars and events, contacts, account data, status, notifications, and search, with typed targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -34,8 +34,9 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring elsewhere are not offered.
 
-`restore` puts an item from `list` back to its original location and `delete` removes it for good, each after one read
-with one request; `delete` requires a tools list, and no profile contains any of the three tools.
+`restore` puts an item from `list` back to its original location and `delete` removes it for good, each after one
+read with one request; `delete` requires a tools list, and no profile contains any of the three tools. Unclear
+outcomes are handled as under Local files.
 
 ## Targets
 
@@ -47,8 +48,8 @@ identity reaches) or `kind/ID`:
 - `calendar` or `calendar/URI`, `addressbook` (never the system address book) or `addressbook/URI`,
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
   such as `Work/Plans` is allowed).
-- `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
-  directory, incoming shares, system tag catalog and its administration).
+- `account`: the account-wide and instance-wide reach of the identity (account data, status, notifications,
+  activity, search, directory, incoming shares, system tag catalog and its administration).
 - `admin`: provisioning reads; only as the sole target of a connection.
 
 The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
@@ -59,14 +60,13 @@ One whose first segment is a kind name (for example `calendar/2026`) is refused 
 `folder/PATH` in `targets`.
 
 The connection test reads the bound folder (or the Files root) and each bound calendar; it reports no metadata.
-
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
-Connection permissions independently hide and block operations; the identity's WebDAV rights stay the ceiling. An
-optional `tools` list narrows a connection further to named tools, for example `[nextcloud.files.list,
-nextcloud.files.stat]` for metadata without file content, and never admits an effect `permissions` excludes. File
-content is carried as base64 and never written to audit records. The terminal editor starts a new connection on the
-setup profile `read`, a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
-and a saved connection never follows a profile.
+Connection permissions independently hide and block operations; the identity's WebDAV rights stay the ceiling.
+An optional `tools` list narrows a connection further to named tools, for example `[nextcloud.files.list,
+nextcloud.files.stat]` for metadata without file content, and never admits an effect `permissions` excludes.
+File content is carried as base64 and never written to audit records. The terminal editor starts a new
+connection on the setup profile `read`, a visible starting selection, not a role: only the ticked `permissions`
+and `tools` are saved, and a saved connection never follows a profile.
 
 ## Organising
 
@@ -77,8 +77,7 @@ destination are paths below the root: the root itself is neither, they must diff
 itself or a descendant. Qatlas checks this locally before any credential access.
 
 Each tool sends exactly one request. A taken destination, an existing folder, or a missing parent is a clear
-failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
-change may have been applied and that source and target, or the folder, must be stat-ed before repeating.
+failure that names no path. After an unclear outcome, stat source and target, or the folder, before repeating.
 
 ## Search and favorites
 
@@ -94,8 +93,7 @@ Every answered favorite is checked against the bound folder again; a node outsid
 dropped silently, and a cut list is marked `truncated`.
 
 `files.favorite` sends exactly one request without a read before it; a refused property is a clear failure. After
-an unclear outcome the error says the flag may have changed and to stat the path and list the favorites before
-repeating; Qatlas never repeats the request.
+an unclear outcome, stat the path and list the favorites before repeating.
 
 ## Shares
 
@@ -181,7 +179,7 @@ phone, federated, or team entries. `talkrooms.create` needs the `talk` target; `
 `talkrooms.delete` need an owner or moderator. `talkparticipants.remove` and `talkparticipants.moderator` take an
 `attendee_id` of `talkparticipants.list`, spare owner and self, and need a tools list.
 
-A change needs `confirm` and sends one request after one read. After an unclear outcome check the list first
+A change needs `confirm` and sends one request after one read. Check the list before repeating an unclear outcome
 (`send`: `reference_id`). 429 is rate-limited.
 
 ## Calendar
@@ -189,10 +187,10 @@ A change needs `confirm` and sends one request after one read. After an unclear 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
 children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
 collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; profile `events` also
-creates events and replaces one by `etag`. A change needs `confirm`;
-deleting needs a tools list. Writing tasks, managing calendars, and `calendartrash.*` are in no profile; a task is
-replaced only while it holds nothing Qatlas cannot write, and the trash covers bound calendars only: an entry of
-another calendar is neither listed nor counted and is refused like a missing one; whole calendars are not restored.
+creates events and replaces one by `etag`. A change needs `confirm`; deleting needs a tools list. Writing tasks,
+managing calendars, and `calendartrash.*` are in no profile; a task is replaced only while it holds nothing Qatlas
+cannot write, and the trash covers bound calendars only: an entry of another calendar is neither listed nor counted
+and is refused like a missing one; whole calendars are not restored.
 
 ## Contacts
 
@@ -208,10 +206,10 @@ versions of one file below the connection root. The argument is always the file 
 stats the path first, refuses a folder, and addresses the versions only under the file ID of that answer.
 `versions.list` reports the newest first and marks a cut with `truncated`; a foreign node fails the call.
 
-`versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does. `versions.restore`
-needs `confirm` and the `etag` of the current file and restores the version with one request. The restore has no
-documented precondition, so a change made between the ETag check and the restore is not detected. `versions.list` is
-in the setup profiles `read` and `write`; `get` and `restore` are in none.
+`versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does.
+`versions.restore` needs `confirm` and the `etag` of the current file and restores the version with one request.
+The restore has no documented precondition, so a change made between the ETag check and the restore is not
+detected. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore` are in none.
 
 ## Notes
 
@@ -222,60 +220,62 @@ like a missing note. Attachments stay relative to their note; `local_path` follo
 
 ## System tags
 
-`nextcloud.systemtags.list` reads the visible system tags of the instance; the catalog belongs to the whole
-instance, so the tool needs an `account` target and refuses without one before any credential access.
-`nextcloud.filetags.list`, `filetags.add`, and `filetags.remove` work on one file or folder below the connection
-root and need a `folder` target. The argument is always the path, never the root itself and never a file ID:
-Qatlas stats the path first and addresses the relations only under the file ID of that answer. A `tag_id` is
-digits only, as `systemtags.list` reports it.
+`nextcloud.systemtags.list` reads the visible system tags of the instance and, like the catalog administration,
+needs an `account` target, refused locally without one. `nextcloud.filetags.list`, `filetags.add`, and
+`filetags.remove` work on one file or folder below the root and need a `folder` target. The argument is always the
+path, never the root or a file ID: Qatlas stats it and addresses the relations only under the file ID of that
+answer. A `tag_id` is digits only.
 
-Only visible tags are ever listed or touched, and a cut listing is marked `truncated`. `assignable` is true when the
-identity may assign the tag. The `filetags` tools only assign and remove tags; they never create, change, or delete
-one. `filetags.add` and `filetags.remove` need `confirm`, read the tag once after the stat, and refuse an invisible or
-non-assignable tag without a change request; then they send exactly one `PUT` or `DELETE`. A tag that is already
-assigned, or not assigned on removal, is a clear error. An unclear outcome is checked with `filetags.list`.
-`filetags.list` is in the setup profiles `read` and `write`; `systemtags.list`, `add`, and `remove` are in none.
+Only visible tags are ever listed or touched, and a cut listing is marked `truncated`; `assignable` says whether
+the identity may assign a tag. The `filetags` tools only assign and remove tags. `add` and `remove` need
+`confirm`, read the tag once after the stat, refuse an invisible or non-assignable tag, and then send exactly one
+request; a tag already assigned, or not assigned on removal, is a clear error. Unclear outcomes are checked with
+`filetags.list`. `filetags.list` is in the setup profiles `read` and `write`; the other tag tools are in none.
 
-`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need an `account`
-target and `confirm`, and are in no setup profile; `systemtags.delete` is reachable only through a tools list and
-drops every assignment of the tag on the whole instance. The rights of the identity stay the upper bound: creating or
-hiding a tag from users (`visible` or `assignable` false) needs administrator rights in Nextcloud. `create` defaults
-both to true, takes a name of at most 64 characters, and sends one `POST`; it reports the new `tag_id` only when
-Nextcloud names it as a direct child of the catalog, otherwise it reports the tag as created without an ID, to be
-found with `systemtags.list`. `update` changes name, `visible`, `assignable`, or `color` (six hex digits) with one
-`PROPPATCH`; it takes at least one field and cannot clear a color. `update` and `delete` read the tag once first and
-treat an invisible tag as missing, but, unlike `filetags.add`, also act on a tag the identity may not assign. Group
-restrictions are not offered. A taken name is a clear error on `create`; on `update` Nextcloud reports it inside the
-answer, so a refused change cannot be told apart from a missing right. An unclear outcome is checked with
-`systemtags.list`.
+`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need
+`confirm`, and are in no setup profile; `delete` needs a tools list and drops every assignment of the tag on the
+whole instance. The identity's rights stay the bound: a tag hidden from users (`visible` or `assignable` false)
+needs administrator rights. `create` defaults both to true, takes a name of at most 64 characters, and reports
+the new `tag_id` only when Nextcloud names it, otherwise the tag is found with `systemtags.list`. `update`
+changes name, `visible`, `assignable`, or `color` (six hex digits), at least one, and cannot clear a color.
+`update` and `delete` read the tag once and treat an invisible tag as missing but, unlike `filetags.add`, act on
+a non-assignable one. Group restrictions are not offered. A taken name is a clear error on `create`; on `update`
+it cannot be told apart from a missing right. Unclear outcomes are checked with `systemtags.list`.
 
-## Notifications, activity, and search
+## Account
 
-The tool group `account` reads the notifications, the activity stream, and the unified search of the identity and
-dismisses notifications. All six tools need an `account` target and refuse without one locally, before any credential
-access or request. Subjects, messages, and names are untrusted data, capped and marked `truncated` when cut.
-Links, icons, previews, and rich objects are never reported, and the links of notification actions are never
-followed: an action shows only its label and method.
+The tool group `account` reads the own account data, status, notifications, activity stream, and unified search of
+the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
+without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
+`truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
+only its label and method and is never followed.
+
+`account.get` reports only ID, display name, email, language, locale, up to 50 groups, and storage use as numbers.
+Storage paths, backend details, phone, and address are never reported. `status.get` reports type, message, icon,
+and end of the message. `status.set` takes exactly one of a `type` (`online`, `away`, `dnd`, `invisible`,
+`offline`), a `predefined_id`, or a `message` of at most 80 characters, so one call sends one request. `expires`
+(Unix seconds or RFC 3339, in the future) ends a message and is refused with `type`. `status.clear` removes the
+message and keeps the type. Both need `confirm` and are in no profile.
 
 `notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
 reported as `unchanged`. `activity.list` takes a filter from a fixed list that the instance must also offer,
 `limit` up to 100, and `since` from `next_cursor`. `notifications.dismiss` (after reading the notification) and
 `notifications.dismissall` need `confirm` and a tools list, are in no profile, and send one request. An unclear
-outcome is checked with `notifications.list`.
+outcome is checked with `notifications.list` or `status.get` before repeating.
 
-`search.providers` lists the search providers of the instance. `search.query` asks one provider for one page of up
-to 25 hits (`limit`, `term` up to 256 bytes, `cursor` from the previous `next_cursor`). The provider ID comes only
-from `search.providers` and is checked locally and against the live list, so an unoffered ID is refused without a
-search. Hits are untrusted title, subtitle, and link text only, and a link is never followed. Both are in no profile.
+`search.providers` lists the search providers of the instance; `search.query` asks one of them for one page of up
+to 25 hits (`term`, `limit`, `cursor` from the previous `next_cursor`). The provider ID is checked locally and
+against the live list, so an unoffered one is refused without a search. Hits are title, subtitle, and link as
+untrusted text; a link is never followed. Both are in no profile.
 
 ## File comments
 
 The `nextcloud.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
-target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used below
-that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs `confirm`,
-sends exactly one request after the stat, and is open-world because a mention notifies that user; Nextcloud lets an
-identity change or delete only its own comments. `comments.list` is in the `read` and `write` profiles, `create` and
-`update` in none, and `delete` is reachable only through a tools list.
+target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
+below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
+`confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
+Nextcloud lets an identity change or delete only its own comments. `comments.list` is in the `read` and `write`
+profiles, `create` and `update` in none, and `delete` is reachable only through a tools list.
 
 ## Local files
 
@@ -290,9 +290,9 @@ the result to the target at the end; a failure before that removes the upload be
 The final move has no documented precondition, so Qatlas stats the target before the first chunk and again
 before the move (`create`: absent, `update`: the given `etag`); a change in between is not detected.
 
-If the outcome of any change is unclear (timeout, aborted connection, a 5xx answer), the error says the change may
-have been applied, names the read to check it first (for a file: stat), and Qatlas never repeats it. A refusal by
-Nextcloud (4xx) or a redirect is a clear failure.
+Every change of this provider that ends unclear (timeout, aborted connection, 5xx, unreadable answer) is reported
+as possibly applied, to be checked with the matching read before repeating, and is never repeated by Qatlas; for a
+file, stat it. A refusal by Nextcloud (4xx) or a redirect is a clear failure.
 
 `nextcloud.files.get` reads one file below the root. With `local_path` it writes the file atomically into a
 directory released for writing (`files.write`) and reports only path, name, size, SHA-256, and ETag; an existing
