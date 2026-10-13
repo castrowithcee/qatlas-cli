@@ -17,6 +17,9 @@ var (
 	ocsRoot    = []string{"ocs", "v2.php"}
 	ocsSharing = []string{"apps", "files_sharing", "api", "v1"}
 	ocsCloud   = []string{"cloud"}
+
+	ocsNotifications = []string{"apps", "notifications", "api", "v2"}
+	ocsActivity      = []string{"apps", "activity", "api", "v2"}
 )
 
 // A successful version 2 answer repeats its 2xx HTTP status; Talk answers a created message with 201.
@@ -32,6 +35,13 @@ type ocsRequest struct {
 	// emptyOnNotModified reads a 304 answer as an empty result instead of a redirect; the Talk chat API
 	// answers a page without messages that way.
 	emptyOnNotModified bool
+	// ifNoneMatch is a validated opaque ETag sent as a precondition; the caller sets it only with
+	// emptyOnNotModified and reads notModified to tell a 304 from an answer without data.
+	ifNoneMatch string
+	notModified *bool
+	// emptyOnNoContent reads a 204 answer as an empty result; the notifications and activity lists answer
+	// that way when there is nothing to report.
+	emptyOnNoContent bool
 }
 
 // ocsEnvelope is the answer shape every OCS endpoint shares.
@@ -88,6 +98,9 @@ func (c *Client) ocsDo(ctx context.Context, op, method string, request ocsReques
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("OCS-APIRequest", "true")
 	req.Header.Set("Accept", "application/json")
+	if request.ifNoneMatch != "" {
+		req.Header.Set("If-None-Match", request.ifNoneMatch)
+	}
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -100,7 +113,13 @@ func (c *Client) ocsDo(ctx context.Context, op, method string, request ocsReques
 		return nil, nil, provider.Transport(op, "Nextcloud", err)
 	}
 	defer response.Body.Close()
+	if request.emptyOnNoContent && response.StatusCode == http.StatusNoContent {
+		return nil, response.Header, nil
+	}
 	if request.emptyOnNotModified && response.StatusCode == http.StatusNotModified {
+		if request.notModified != nil {
+			*request.notModified = true
+		}
 		return nil, response.Header, nil
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

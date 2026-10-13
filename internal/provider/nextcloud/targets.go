@@ -33,6 +33,9 @@ const (
 // groupFiles is the tool group of the Files tools.
 const groupFiles = "files"
 
+// groupAccount is the tool group of the account-wide notification and activity tools.
+const groupAccount = "account"
+
 // groupShares is the tool group of the sharing tools.
 const groupShares = "shares"
 
@@ -57,6 +60,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupContacts, Title: "Contacts",
 	Description: "Address books the connection binds and their contacts",
+}, {
+	ID: groupAccount, Title: "Account",
+	Description: "Notifications and the activity stream of the identity; the account target binds them",
 }}
 
 var targetKinds = []config.TargetKind{{
