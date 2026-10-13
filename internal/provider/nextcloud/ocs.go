@@ -20,6 +20,7 @@ var (
 
 	ocsNotifications = []string{"apps", "notifications", "api", "v2"}
 	ocsActivity      = []string{"apps", "activity", "api", "v2"}
+	ocsUserStatus    = []string{"apps", "user_status", "api", "v1"}
 )
 
 // A successful version 2 answer repeats its 2xx HTTP status; Talk answers a created message with 201.
