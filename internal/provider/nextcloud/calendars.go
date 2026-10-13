@@ -39,8 +39,9 @@ const (
 
 // calendarsBody asks for exactly the properties the calendar listing is built from.
 const calendarsBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>` +
+	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
 	`<d:displayname/><d:resourcetype/><d:current-user-privilege-set/><c:supported-calendar-component-set/>` +
+	`<oc:invite/>` +
 	`</d:prop></d:propfind>`
 
 // calendarProbeBody is the connection test: only the resource type, to tell a calendar from another node.
@@ -69,7 +70,8 @@ var calendarRisk = capability.Risk{
 }
 
 const calendarSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"read_only":{"type":"boolean"},"components":{"type":"array","items":{"type":"string"}}},` +
+	`"read_only":{"type":"boolean"},"components":{"type":"array","items":{"type":"string"}},` +
+	`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
 	`"required":["id","name","read_only","components"],"additionalProperties":false}`
 
 const personSchema = `{"type":"object","properties":{"address":{"type":"string"},"name":{"type":"string"},` +
@@ -127,6 +129,9 @@ var calendarsList = capability.Descriptor{
 		{Name: "name", Description: "Display name, untrusted data"},
 		{Name: "read_only", Description: "True unless the identity may create and change events in the calendar"},
 		{Name: "components", Description: "Supported component types, VEVENT and VTODO"},
+		{Name: "shares", Description: "At most 50 users and groups the calendar is shared with, untrusted data; " +
+			"other recipients are typed other without id or name"},
+		{Name: "shares_truncated", Description: "True when the calendar has more shares than reported"},
 		{Name: "count", Description: "Number of reported calendars"},
 		{Name: "truncated", Description: "True when more calendars match than one listing reports"},
 	},
@@ -182,10 +187,12 @@ var eventsGet = capability.Descriptor{
 
 // Calendar is one bound calendar.
 type Calendar struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	ReadOnly   bool     `json:"read_only"`
-	Components []string `json:"components"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	ReadOnly        bool              `json:"read_only"`
+	Components      []string          `json:"components"`
+	Shares          []CollectionShare `json:"shares,omitempty"`
+	SharesTruncated bool              `json:"shares_truncated,omitempty"`
 }
 
 // CalendarsResult is the result of the calendars list.
@@ -416,12 +423,14 @@ func (c *Client) listCalendars(ctx context.Context, bound selection) (*Calendars
 			continue
 		}
 		seen[uri] = true
-		result.Calendars = append(result.Calendars, Calendar{
+		calendar := Calendar{
 			ID:         uri,
 			Name:       dav.Clean(resources[i].Text[dav.KeyName], maxCalendarName),
 			ReadOnly:   !writable(resources[i].Privileges),
 			Components: componentsOf(resources[i].Components),
-		})
+		}
+		calendar.Shares, calendar.SharesTruncated = davSharesOf(resources[i].Invites, resources[i].InvitesTruncated)
+		result.Calendars = append(result.Calendars, calendar)
 	}
 	sort.Slice(result.Calendars, func(i, j int) bool { return result.Calendars[i].ID < result.Calendars[j].ID })
 	if len(result.Calendars) > maxCalendars {

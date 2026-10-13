@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Nextcloud
@@ -185,12 +185,13 @@ A change needs `confirm` and sends one request after one read. Check the list be
 ## Calendar
 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
-children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
-collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; profile `events` also
-creates events and replaces one by `etag`. A change needs `confirm`; deleting needs a tools list. Writing tasks,
-managing calendars, and `calendartrash.*` are in no profile; a task is replaced only while it holds nothing Qatlas
-cannot write, and the trash covers bound calendars only: an entry of another calendar is neither listed nor counted
-and is refused like a missing one; whole calendars are not restored.
+children of the calendar home and of a bound calendar count, never subscriptions, scheduling, or trash collections.
+Profile `calendar` reads events and tasks; `events` adds creating events and replacing one by `etag`. Changes need
+`confirm`, deleting and sharing a tools list. Writing tasks, calendar management and sharing, and `calendartrash.*` are
+in no profile. A task is replaced only if Qatlas can write all of it. The trash covers bound calendars only: another
+calendar's entry is neither listed nor counted, and refused like a missing one; whole calendars are not restored.
+Sharing gives one user or group access to an own calendar, never by link, e-mail, or team; Nextcloud ignores an
+unknown recipient, so check `shares` of `calendars.list`.
 
 ## Contacts
 
