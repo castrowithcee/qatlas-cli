@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # Telegram
@@ -164,11 +164,10 @@ the confirmed updates or competes for the offset. The result contains only `conf
 Identifiers that belong to no chat (a file, a callback query, a join request query) are returned only as signed
 references, never as Telegram's raw identifier; `join_request_ref` appears only for a join request that carries a
 query. A reference is bound to its target and the bot token, so rotating the token invalidates earlier ones; it is
-signed, not secret. A tool that accepts one checks format and target before the credential is read and the
-signature before any request.
-
-`telegram.callbacks.answer` answers a `callback_ref`, and `telegram.joinrequestqueries.answer` declines or queues
-a `join_request_ref`; Telegram expects the answers right after the press and within 10 seconds respectively.
+signed, not secret. A tool that accepts one checks format and target before the credential is read and the signature
+before any request. `telegram.callbacks.answer` answers a `callback_ref`, and `telegram.joinrequestqueries.answer`
+declines or queues a `join_request_ref`; Telegram expects the answers right after the press and within 10 seconds
+respectively.
 
 `inline_query` and `chosen_inline_result` updates appear only with the target `bot`; only an `inline_query` has
 an `inline_ref`, and a location is never shown. `telegram.inline.answer` (`create`, `tools` list) needs `bot` and
@@ -202,6 +201,14 @@ member of the bound chat and refuses a non-member before the actual request. Pro
 `file_ref` bound to that chat. `.chatboosts` needs administrator rights of the bot. Membership is checked on issue
 only: a `file_ref` stays redeemable through `telegram.files.get` and `.download` after the user leaves.
 
+## Stars and gifts
+
+`telegram.payments.starbalance`, `.startransactions`, `telegram.gifts.available`, `.chat`, and `.user` (`read`)
+only read. The first three need the `bot` target, `.chat` follows the rules for `chat`, and `.user` checks
+membership first, as `telegram.users.*` do. They carry the data class `telegram-financial`; a transaction partner
+shows only its type and, for a user or chat, its numeric ID, and no gift identifier that could transfer, upgrade, or
+convert a gift is returned. Tools that pay, refund, send gifts, or convert Stars are not offered.
+
 ## Changing chat settings and leaving
 
 `telegram.chats.settitle`, `telegram.chats.setdescription` (an empty string removes the description),
@@ -210,20 +217,17 @@ data of a bound group or channel; Telegram refuses private chats. `setphoto` tak
 `file_ref` or URL, and repeating it has an unknown effect.
 
 `telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
-`telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
-or unknown field is refused before any request, and all are sent explicitly with independent permissions.
-`telegram.chats.setstickerset` sets the group sticker set by name, never a URL; as a narrower reading than
-Telegram, the name must be 1 through 64 letters, digits, or underscores, checked before the credential is
-read. `telegram.chats.deletestickerset` (`delete`) removes it.
-
-`telegram.chats.leave` (`delete`) makes the bot leave a bound chat; only a human can add it again. It and
-`telegram.chats.deletestickerset` require a `tools` list.
+`telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing or
+unknown field is refused before any request, and all are sent explicitly with independent permissions.
+`telegram.chats.setstickerset` sets the group sticker set by name, never a URL; as a narrower reading than Telegram,
+the name must be 1 through 64 letters, digits, or underscores, checked before the credential is read.
+`telegram.chats.deletestickerset` (`delete`, `tools` list) removes it. `telegram.chats.leave` (`delete`, `tools`
+list) makes the bot leave a bound chat; only a human can add it again.
 
 ## Bot identity and settings
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token. It runs on every connection, since it
 concerns only the connection's own token; every other tool of this section needs the `bot` target.
-
 `telegram.webhook.get` (`read`) shows whether a webhook is active, the number of waiting updates, and the time of
 the last delivery error, never the webhook URL.
 
@@ -245,11 +249,10 @@ added, every right given explicitly.
 `telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download` (`read`)
 writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`: a raw file
 identifier and a reference of another target, token, or kind are refused.
-
 `telegram.files.download` replaces an existing file only with confirmation, and a failed or incomplete transfer
 leaves no file. The result carries size and SHA-256, never the content. Files above 20 MB are refused before the
-download, and a longer response than reported is rejected. The download URL carries the bot token; it and
-Telegram's `file_path` appear in no output, error, or log, and a redirect is never followed.
+download, and a longer response than reported is rejected. The download URL carries the bot token; it and Telegram's
+`file_path` appear in no output, error, or log, and a redirect is never followed.
 
 ## Sending media
 
@@ -257,13 +260,12 @@ Telegram's `file_path` appear in no output, error, or log, and a redirect is nev
 `telegram.videonotes.send`, `telegram.audio.send`, `telegram.voice.send`, and `telegram.mediagroups.send` (`create`)
 send one file of that kind or an album of 2 through 10 items. Photos and videos may be mixed in an album, with an
 optional `type` per item; documents and audio files form albums of their own, and a voice message is never part of
-one. Each file comes from exactly one of `local_path` or `file_ref`, an album chooses per item, and a URL is never a
-source. The options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`,
+one. Each file comes from exactly one of `local_path` or `file_ref`, an album takes the choice per item, and a URL
+is never a source. The options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`,
 `message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024
-characters, which an album shows on its first item; a video note takes no caption or `parse_mode`.
-
-A `file_ref` must come from the selected chat itself; any other one, as under Files, is refused before the
-credential is read, even from another bound chat. Its size is not known locally; Telegram enforces the limits.
+characters, which an album shows on its first item; a video note takes neither caption nor `parse_mode`. A
+`file_ref` must come from the selected chat itself; any other one, as under Files, is refused before the credential
+is read, even from another bound chat. Its size is not known locally; Telegram enforces the limits.
 
 `telegram.richmessages.send` (`create`) sends one rich message of the modeled block types, which its schema lists.
 Files come only from `local_path` or a `file_ref` of the selected chat, never a URL; buttons follow the inline
@@ -299,6 +301,6 @@ and an omitted mask position or thumbnail or an empty keyword list removes the v
 The terminal editor starts a new connection on the setup profile `send` (`[create]`, `[telegram.messages.send]`):
 the read tools expose incoming message content, while a send reaches only a bound chat after confirmation. The
 profiles `read`, `messaging` (also `telegram.messages.delete`), `pins`, `media`, `moderation` (only
-`telegram.members.unban`), and `chat-admin` tick the tools their titles name. Every other Telegram tool is in no
-profile. A profile is only a visible starting selection: every tick can be changed before saving, and a saved
-connection never follows a profile.
+`telegram.members.unban`), `chat-admin`, and `payments-read` (the Stars and gifts tools) tick the tools their titles
+name. Every other Telegram tool is in no profile. A profile is only a visible starting selection: every tick can be
+changed before saving, and a saved connection never follows a profile.
