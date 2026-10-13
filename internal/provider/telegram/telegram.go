@@ -193,6 +193,7 @@ var toolGroups = []config.ToolGroup{
 		"notes, audio files, voice messages, and albums to the bound chats"},
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, restrict, and promote members of the bound " +
 		"chats, ban and unban sender chats, set administrator titles and member tags, and decline join requests"},
+	{ID: groupUsers, Title: "Users", Description: "Read profile media, chat boosts, and personal chat messages of members of bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
@@ -370,6 +371,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: chatsAdministrators, Handler: capability.Handler(invokeChatsAdministrators)},
 		capability.Operation{Descriptor: chatsMemberCount, Handler: capability.Handler(invokeChatsMemberCount)},
 		capability.Operation{Descriptor: chatsMember, Handler: capability.Handler(invokeChatsMember)},
+		capability.Operation{Descriptor: usersProfilePhotos, Handler: capability.Handler(invokeUsersProfilePhotos)},
+		capability.Operation{Descriptor: usersProfileAudios, Handler: capability.Handler(invokeUsersProfileAudios)},
+		capability.Operation{Descriptor: usersChatBoosts, Handler: capability.Handler(invokeUsersChatBoosts)},
+		capability.Operation{Descriptor: usersPersonalChatMessages, Handler: capability.Handler(invokeUsersPersonalChatMessages)},
 		capability.Operation{Descriptor: chatsSetTitle, Handler: capability.Handler(invokeChatsSetTitle)},
 		capability.Operation{Descriptor: chatsSetDescription, Handler: capability.Handler(invokeChatsSetDescription)},
 		capability.Operation{Descriptor: chatsSetPhoto, Handler: capability.Handler(invokeChatsSetPhoto)},
