@@ -1,6 +1,7 @@
 // The Logs section (section 8, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
-// connection, effect, and result in a picker; / searches the text of the rows; enter opens one entry. Every
+// connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
+// response sizes summed up per tool and connection; enter opens one entry. Every
 // row and the bar carry the status the hash chain and the check values give it, found by the same walk
 // 'qatlas vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
 // a command, never on the event loop, and never ask for a passphrase: a locked vault leaves the check values
@@ -97,6 +98,14 @@ var logColumns = []column{
 	{title: "dur.", optional: true}, {title: "resp.", optional: true},
 }
 
+// logStatColumns are the columns of the summary s shows. The count leads and is never cut; the sizes are
+// token estimates (invokelog.EstimateTokens), and the bytes and the missing counters go in a narrow terminal.
+var logStatColumns = []column{
+	{title: "calls"}, {title: "tool", flex: true}, {title: "connection", optional: true},
+	{title: "~tok"}, {title: "max"}, {title: "p50", optional: true}, {title: "p95"},
+	{title: "bytes", optional: true}, {title: "no size", optional: true},
+}
+
 // maxLogText bounds one field of a log line on screen; a well-formed entry never comes close.
 const maxLogText = 256
 
@@ -139,6 +148,8 @@ type logView struct {
 	layout      layout
 	layoutWidth int
 
+	// stats shows the summary of the shown rows instead of the rows themselves.
+	stats  bool
 	dialog *logDateDialog
 	pick   *logPick
 	// detail is the index of the row the detail screen shows.
@@ -243,17 +254,7 @@ func (m *Model) loadLogs() tea.Cmd {
 }
 
 // logUTCFileBounds selects every UTC day file that can overlap the chosen local days.
-func logUTCFileBounds(from, to string) (string, string) {
-	if from != "" {
-		day, _ := time.ParseInLocation(logDateLayout, from, time.Local)
-		from = day.UTC().Format(logDateLayout)
-	}
-	if to != "" {
-		day, _ := time.ParseInLocation(logDateLayout, to, time.Local)
-		to = day.AddDate(0, 0, 1).Add(-time.Nanosecond).UTC().Format(logDateLayout)
-	}
-	return from, to
-}
+func logUTCFileBounds(from, to string) (string, string) { return invokelog.UTCFileBounds(from, to) }
 
 // logChecker returns what checks the log's check values of v, the same way 'qatlas vault logs verify' does:
 // the key of a vault unlocked in this process; else a running vault process, which only ever answers
@@ -473,7 +474,7 @@ func (m *Model) openLogs() tea.Cmd {
 	m.testName, m.editing, m.confirmRole = "", "", ""
 	m.clearMessages()
 	lv := m.logs
-	lv.focus, lv.dialog, lv.pick = logFocusRows, nil, nil
+	lv.focus, lv.dialog, lv.pick, lv.stats = logFocusRows, nil, nil, false
 	m.screen = screenLogs
 	return m.loadLogs()
 }
@@ -505,6 +506,10 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 	case "q":
 		return m.quit()
 	case "esc":
+		if lv.stats {
+			lv.stats = false
+			return nil
+		}
 		if lv.list.query() != "" {
 			lv.list.clearFilter()
 			return nil
@@ -530,12 +535,14 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 				m.focusNav()
 			}
 		}
+	case "s":
+		lv.stats = !lv.stats
 	case "enter":
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
 		case logFocusRows:
-			if row, ok := lv.list.selected(); ok {
+			if row, ok := lv.list.selected(); ok && !lv.stats {
 				lv.detail, _ = strconv.Atoi(row)
 				m.screen = screenLogDetail
 				m.clearMessages()
@@ -772,6 +779,11 @@ func (m *Model) logsView() string {
 	head, foot := m.logsFrame()
 	var b strings.Builder
 	b.WriteString(head)
+	if lv.stats && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
+		b.WriteString(m.logStatLines(m.logStats(), m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1))
+		b.WriteString(foot)
+		return b.String()
+	}
 	start, end := m.logsWindow()
 	l := m.logLayout()
 	for i := start; i < end; i++ {
@@ -892,6 +904,11 @@ func (m *Model) logsFrame() (string, string) {
 	case shown == 0:
 		body = append(body, m.wrapped(hintStyle,
 			"No entry matches the filters and the search. f changes the filters, esc clears the search."))
+	case lv.stats:
+		stats := m.logStats()
+		body = append(body, m.wrapped(hintStyle, "Response sizes of the invokes shown, as estimated tokens (3.5 bytes per "+
+			"token): the sum (~tok), the largest, p50, and p95. no size counts invokes without a recorded size."))
+		body = append(body, hintStyle.Render(clipCells("  "+stats.table.header(stats.layout), width)))
 	default:
 		body = append(body, hintStyle.Render(clipCells("  "+lv.table.header(m.logLayout()), width)))
 	}
@@ -916,7 +933,7 @@ func (m *Model) logsFrame() (string, string) {
 			return strings.Join(lines, "\n") + "\n", strings.TrimPrefix(keys, "\n") + m.notes()
 		}
 		foot := keys
-		if shown > 0 && focused {
+		if shown > 0 && focused && !lv.stats {
 			foot = withPosition(foot, fmt.Sprintf("%d/%d · %d%%", lv.list.cursor+1, shown,
 				(lv.list.cursor+1)*100/shown), width)
 		}
@@ -959,16 +976,21 @@ func (m *Model) logKeys() string {
 	if m.screen != screenNav && m.usable(0) < 60 {
 		// The short form names the same keys with shorter words.
 		switch {
+		case lv.stats && !lv.list.editing:
+			return "s rows · f filter · / search · 1-8 section · ? help · q quit"
 		case lv.list.editing:
 			return "type to search · up/down move · enter keep · esc clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+			return "left/right mode · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+			return "enter date · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 		case len(lv.list.matches) == 0:
-			return "tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+			return "tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 		}
-		return "enter detail · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "enter detail · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+	}
+	if lv.stats && m.screen != screenNav && !lv.list.editing {
+		return "s or esc back to the rows · f filter · / search · 1-8 section · ? help · q quit"
 	}
 	switch {
 	case m.screen == screenNav:
@@ -976,13 +998,13 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · esc clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next field · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "left/right change mode · tab next field · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next field · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "enter or left/right change the date · tab next field · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 	case len(lv.list.matches) == 0:
-		return "tab next field · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "tab next field · left/right change · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 	}
-	keys := "enter details · tab next field · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
+	keys := "enter details · tab next field · left/right change · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "esc back", "esc clear search", 1)
 	}
@@ -1001,6 +1023,58 @@ func withPosition(keys, pos string, width int) string {
 		return strings.Join(lines, "\n")
 	}
 	return keys + "\n" + hintStyle.Render(truncateCells(pos, width))
+}
+
+// logStats is the summary of the rows the filters and the search keep: the table with a row per group and
+// its layout for the workspace.
+type logStats struct {
+	table  table
+	layout layout
+	groups []invokelog.SizeGroup
+}
+
+func (m *Model) logStats() logStats {
+	lv := m.logs
+	entries := make([]invokelog.Entry, 0, len(lv.list.matches))
+	for _, name := range lv.list.matches {
+		if row := lv.row(name); row != nil && row.line.Parsed {
+			entries = append(entries, row.line.Entry)
+		}
+	}
+	s := logStats{groups: invokelog.Summarize(entries), table: table{columns: logStatColumns, rows: map[string][]string{}}}
+	num := func(n int64) string { return strconv.FormatInt(n, 10) }
+	for i, g := range s.groups {
+		cells := []string{strconv.Itoa(g.Calls), m.logText(g.Operation), orDash(m.logText(g.Connection)),
+			num(invokelog.EstimateTokens(g.Bytes)), num(invokelog.EstimateTokens(g.Max)),
+			num(invokelog.EstimateTokens(g.P50)), num(invokelog.EstimateTokens(g.P95)), num(g.Bytes),
+			strconv.Itoa(g.NoCounter)}
+		if g.Counted() == 0 {
+			// No invoke of the group has a recorded size; that is not a size of 0.
+			for k := 3; k <= 7; k++ {
+				cells[k] = "-"
+			}
+		}
+		s.table.rows[strconv.Itoa(i)] = cells
+	}
+	_, width := m.fit("  ")
+	s.layout = s.table.layout(width)
+	return s
+}
+
+// logStatLines draws the groups of s as many lines as fit in room; a last line says how many it left out.
+func (m *Model) logStatLines(s logStats, room int) string {
+	if len(s.groups) > room {
+		room = max(room-1, 0)
+	}
+	var b strings.Builder
+	for i := range s.groups {
+		if i == room {
+			b.WriteString(hintStyle.Render(fmt.Sprintf("  ... %d more", len(s.groups)-i)) + "\n")
+			break
+		}
+		b.WriteString(m.listRow(false, i%2 == 1, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
+	}
+	return b.String()
 }
 
 // logsWindow is the range of shown rows that fits between the frame of the Logs screen; each row is one line.

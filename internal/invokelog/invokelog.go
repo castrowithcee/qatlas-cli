@@ -151,6 +151,21 @@ const (
 	OperationConnectionDelete = "config.connection.delete"
 )
 
+// The operations the vault process logs for its own decisions, which are not invokes: an approval with an
+// agent token, a lock it decides on itself, and the outcome of a handover.
+const (
+	OperationApprove  = "vault.approve"
+	OperationLock     = "vault.lock"
+	OperationHandover = "vault.handover"
+)
+
+// managementOperations holds every operation an entry can carry that is not an invoke; IsInvoke excludes
+// them, so a new one is added here.
+var managementOperations = map[string]bool{
+	OperationApprove: true, OperationLock: true, OperationHandover: true,
+	OperationConnectionCreate: true, OperationConnectionChange: true, OperationConnectionDelete: true,
+}
+
 // connectionOperations maps each connection operation to the effect it must carry.
 var connectionOperations = map[string]string{
 	OperationConnectionCreate: "create",
