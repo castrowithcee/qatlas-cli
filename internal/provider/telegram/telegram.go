@@ -209,6 +209,8 @@ var toolGroups = []config.ToolGroup{
 		"queries, and decline or hand on join request queries of the bound chats"},
 	{ID: groupGames, Title: "Games", Description: "Send games registered with BotFather to the bound chats, set " +
 		"player scores, and read high scores"},
+	{ID: groupPayments, Title: "Stars and gifts", Description: "Read the Star balance and Star transactions of the bot, " +
+		"the gift catalog, and the gifts of bound chats and their members; nothing is paid, sent, or converted"},
 }
 
 const groupMessages = "messages"
@@ -275,6 +277,12 @@ func Register(reg *capability.Registry) error {
 			ID: "moderation", Title: "Unban members",
 			Description: "lifts bans in the bound chats; a user who is not banned is left untouched",
 			Tools:       []string{membersUnban.ID},
+		}, {
+			ID: "payments-read", Title: "Read Stars and gifts",
+			Description: "reads the Star balance and transactions of the bot, the gift catalog, and the gifts of " +
+				"bound chats and their members; nothing is paid, sent, or converted",
+			Tools: []string{paymentsStarBalance.ID, paymentsStarTransactions.ID, giftsAvailable.ID, giftsChat.ID,
+				giftsUser.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -340,6 +348,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: businessRemovePhoto, Handler: capability.Handler(invokeBusinessRemovePhoto)},
 		capability.Operation{Descriptor: businessGifts, Handler: capability.Handler(invokeBusinessGifts)},
 		capability.Operation{Descriptor: businessStarBalance, Handler: capability.Handler(invokeBusinessStarBalance)},
+		capability.Operation{Descriptor: paymentsStarBalance, Handler: capability.Handler(invokePaymentsStarBalance)},
+		capability.Operation{Descriptor: paymentsStarTransactions, Handler: capability.Handler(invokePaymentsStarTransactions)},
+		capability.Operation{Descriptor: giftsAvailable, Handler: capability.Handler(invokeGiftsAvailable)},
+		capability.Operation{Descriptor: giftsChat, Handler: capability.Handler(invokeGiftsChat)},
+		capability.Operation{Descriptor: giftsUser, Handler: capability.Handler(invokeGiftsUser)},
 		capability.Operation{Descriptor: storiesPost, Handler: capability.Handler(invokeStoriesPost)},
 		capability.Operation{Descriptor: storiesEdit, Handler: capability.Handler(invokeStoriesEdit)},
 		capability.Operation{Descriptor: storiesRepost, Handler: capability.Handler(invokeStoriesRepost)},
