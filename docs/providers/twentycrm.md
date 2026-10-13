@@ -2,12 +2,12 @@
 description: >
   Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
   operations, note and task links, attachment read, download, and upload, workflow read and control, member,
-  role, AI agent and skill, view, dashboard, and data model read and write, webhooks, object targets,
-  connection permissions, and safety boundaries.
+  role, AI agent, skill, and logic function, view, dashboard, and data model read and write, webhooks,
+  object targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # Twenty CRM
@@ -133,9 +133,9 @@ are replaced as a whole. All need "Roles", so use a key of its own; no profile t
 
 ## Logic functions and AI agents (read-only)
 
-`agents.list`, `agents.get`, `skills.list`, and `skills.get` (`read`) are workspace-wide and need the Twenty
-right "AI". Prompts, skill content, and the instructions and settings of agent triggers are never read out;
-a trigger shows only its kind.
+`agents.list`, `agents.get`, `skills.list`, `skills.get` (Twenty right "AI"), `logicfunctions.list`, and
+`logicfunctions.get` (no right) are workspace-wide `read` tools. Prompts, skill content, code, handler paths,
+logs, and the instructions and settings of triggers are never read out; a trigger shows only its kind.
 
 ## Data model
 
