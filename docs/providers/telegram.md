@@ -21,11 +21,11 @@ confirmation, and Telegram's own restrictions still apply.
 link with a host, or a `tg://` link) or `callback_data`. Web-app, login, pay, and `switch_inline_query` buttons
 and reply keyboards are not offered. The limits are checked before the credential is read.
 
-`telegram.messages.edit` takes no reply, topic, silent, or protect option; an edit without `inline_keyboard` removes
-an existing keyboard, as does `telegram.messages.editreplymarkup` without one. `telegram.messages.editcaption`
-(`update`) removes the caption when it is empty. `telegram.messages.editmedia` (`update`) replaces the media with a
-photo, video, animation, or document from `local_path` or `file_ref` under the rules of the media send tools and
-returns the new `file_ref`.
+`telegram.messages.edit` takes no reply, topic, silent, or protect option; an edit or
+`telegram.messages.editreplymarkup` without `inline_keyboard` removes an existing keyboard.
+`telegram.messages.editcaption` (`update`) with an empty caption removes it. `telegram.messages.editmedia`
+(`update`) replaces the media with a photo, video, animation, or document from `local_path` or `file_ref` as the
+media send tools do and returns the new `file_ref`.
 
 The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
 bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
@@ -43,8 +43,8 @@ rejects any other base URL. Errors never carry Telegram's own error text.
 
 A tool that takes a `local_path` is offered only on a connection that releases a directory for it (`files`): for
 reading to upload, for writing to download. A path outside it is refused before the credential is read, and an
-upload's size is checked before the file is read. A local file is sent under a neutral name, so neither path nor
-file name leaves the machine.
+upload's size is checked before the file is read. A local file is sent under a neutral name, so path and file
+name stay local.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes; they do
 not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further to named tools,
@@ -65,8 +65,7 @@ bound chats that follow the rule for `chat` above and may be the same. The sourc
 to the original, and its `caption` replaces the caption of a single message and is refused with `message_ids`.
 Telegram skips sources it cannot transfer without notice, so the list can be shorter than the request.
 
-`telegram.pins.unpinall` unpins every pinned message of the chat and requires a `tools` list; topic-specific
-unpinning is not offered.
+`telegram.pins.unpinall` unpins all pinned messages of the chat, requires a `tools` list, and has no topic form.
 
 ## Moderating members
 
@@ -79,11 +78,10 @@ request, and permissions are independent (`use_independent_chat_permissions`). `
 (`delete`, `tools` list) and `telegram.senderchats.unban` (`update`) act on a channel as sender; it is only the
 object of the call, never the target.
 
-`telegram.joinrequests.decline` (`update`) declines the pending join request of `user_id` for a bound chat;
-joining is never approved by any tool. `telegram.suggestedposts.approve` (`create`) and
-`telegram.suggestedposts.decline` (`update`, `tools` list only, final) decide a suggested post in the direct
-messages chat of a channel. That chat must be bound by its numeric ID; an `@username` target is refused locally.
-No price is ever sent.
+`telegram.joinrequests.decline` (`update`) declines the pending join request of `user_id` for a bound chat; joining
+is never approved by any tool. `telegram.suggestedposts.approve` (`create`) and `telegram.suggestedposts.decline`
+(`update`, `tools` list only, final) decide a suggested post in the direct messages chat of a channel. That chat
+must be bound by numeric ID; an `@username` is refused locally. No price is ever sent.
 
 `telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
 existing member the way `restrict` sets permissions; all `false` demotes. Membership is checked with
@@ -188,8 +186,7 @@ topic or keyboard, and a repeated send can post twice. A `tools` list is needed 
 `telegram.business.deletemessages`, which does not report skipped messages, `.setusername`, as the old name can be
 lost, `.removephoto`, and `telegram.stories.delete`. `telegram.business.setphoto` (a static JPEG) and
 `telegram.stories.post` and `.edit` take media only from `local_path`, and `.repost` copies only between bound
-connections; `telegram.business.gifts` and `.starbalance` only read, without any identifier to move or convert a
-gift.
+connections; `telegram.business.gifts` and `.starbalance` only read, with no identifier to move or convert a gift.
 
 ## Reading chats and members
 
@@ -202,9 +199,8 @@ The four chat read tools address a bound chat through `chat` as above and return
 `telegram.users.profilephotos`, `.profileaudios`, `.chatboosts`, and `.personalchatmessages` read profile and boost
 data of a `user_id`, at most 20 entries. Each call first checks with `getChatMember` that the user is a current
 member of the bound chat and refuses a non-member before the actual request. Profile files appear only as a
-`file_ref` bound to that chat. `.chatboosts` needs administrator rights of the bot. Membership is checked on
-issue, not on redemption: a `file_ref` stays redeemable through `telegram.files.get` and `.download` after the
-user leaves.
+`file_ref` bound to that chat. `.chatboosts` needs administrator rights of the bot. Membership is checked on issue
+only: a `file_ref` stays redeemable through `telegram.files.get` and `.download` after the user leaves.
 
 ## Changing chat settings and leaving
 
@@ -246,10 +242,9 @@ added, every right given explicitly.
 
 ## Files
 
-`telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
-(`read`) writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`:
-a raw file identifier, a reference bound to another target, one signed with another token, or one of another
-kind is refused.
+`telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download` (`read`)
+writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`: a raw file
+identifier and a reference of another target, token, or kind are refused.
 
 `telegram.files.download` replaces an existing file only with confirmation, and a failed or incomplete transfer
 leaves no file. The result carries size and SHA-256, never the content. Files above 20 MB are refused before the
@@ -259,17 +254,20 @@ Telegram's `file_path` appear in no output, error, or log, and a redirect is nev
 ## Sending media
 
 `telegram.photos.send`, `telegram.documents.send`, `telegram.videos.send`, `telegram.animations.send`,
-`telegram.videonotes.send`, `telegram.audio.send`, `telegram.voice.send`, and `telegram.mediagroups.send`
-(`create`) send one file of that kind or an album of 2 through 10 items. Photos and videos may be mixed in an
-album, with an optional `type` per item; documents and audio files form albums of their own, and a voice message
-is never part of one. Each file comes from exactly one of `local_path` or `file_ref`, an album takes the choice
-per item, and a URL is never a source. The options of `telegram.messages.send` that apply (`parse_mode`,
-`reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a
-`caption` of at most 1024 characters, which an album shows on its first item; a video note takes neither caption
-nor `parse_mode`.
+`telegram.videonotes.send`, `telegram.audio.send`, `telegram.voice.send`, and `telegram.mediagroups.send` (`create`)
+send one file of that kind or an album of 2 through 10 items. Photos and videos may be mixed in an album, with an
+optional `type` per item; documents and audio files form albums of their own, and a voice message is never part of
+one. Each file comes from exactly one of `local_path` or `file_ref`, an album chooses per item, and a URL is never a
+source. The options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`,
+`message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024
+characters, which an album shows on its first item; a video note takes no caption or `parse_mode`.
 
 A `file_ref` must come from the selected chat itself; any other one, as under Files, is refused before the
 credential is read, even from another bound chat. Its size is not known locally; Telegram enforces the limits.
+
+`telegram.richmessages.send` (`create`) sends one rich message of the modeled block types, which its schema lists.
+Files come only from `local_path` or a `file_ref` of the selected chat, never a URL; buttons follow the inline
+keyboard rules, with no web-app or login targets, and drafts are not offered. A repeated send can post twice.
 
 `telegram.livephotos.send` (`create`) sends a live photo: a video of at most 10 seconds and 10 MB from
 `local_path` or `file_ref`, and its still image of up to 10 MB from `photo_local_path` or `photo_file_ref`. Both
