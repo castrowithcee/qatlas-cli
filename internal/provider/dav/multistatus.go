@@ -45,6 +45,11 @@ var (
 	PropCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
 	PropBookHome     = xml.Name{Space: carddavN, Local: "addressbook-home-set"}
 	PropOwner        = xml.Name{Space: ownerNS, Local: "owner-principal"}
+	propInvite       = xml.Name{Space: ownerNS, Local: "invite"}
+	elemInviteUser   = xml.Name{Space: ownerNS, Local: "user"}
+	elemInviteOrg    = xml.Name{Space: ownerNS, Local: "organizer"}
+	elemInviteName   = xml.Name{Space: ownerNS, Local: "common-name"}
+	elemInviteAccess = xml.Name{Space: ownerNS, Local: "access"}
 	propCalendarData = xml.Name{Space: caldavNS, Local: "calendar-data"}
 	propAddressData  = xml.Name{Space: carddavN, Local: "address-data"}
 	typeCalendar     = xml.Name{Space: caldavNS, Local: "calendar"}
@@ -90,6 +95,7 @@ const (
 	maxTextBytes     = 4 << 10
 	MaxEventBytes    = 64 << 10
 	maxLinks         = 8
+	maxInvites       = 50
 	maxFlags         = 32
 	maxSegments      = 16
 	maxSegmentLen    = 255
@@ -109,7 +115,16 @@ type Resource struct {
 	// Privileges are the DAV: privilege names of current-user-privilege-set; Components are the names of
 	// supported-calendar-component-set. Both are empty when the property was not asked for or not granted.
 	Privileges, Components []string
+	// Invites are the users and groups an oc:invite property lists, without the organizer; InvitesTruncated
+	// marks a list cut at the cap.
+	Invites          []Invite
+	InvitesTruncated bool
 }
+
+// Invite is one recipient of an oc:invite property. Href is the principal as the server reports it and Name
+// its common name; both are untrusted. Access is "read" or "read-write" and Status "accepted", "declined",
+// or "pending", each empty when the server did not say.
+type Invite struct{ Href, Name, Access, Status string }
 
 // ParseMultiStatus reads a 207 answer with a bounded token walk. Depth, element count, and text length are
 // capped, and a document that does not match the documented shape is refused before any value is used.
@@ -123,6 +138,7 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 		current   *Resource
 		pending   *Resource
 		status    string
+		invite    *Invite
 		text      strings.Builder
 	)
 	for {
@@ -166,6 +182,20 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 						pending.Components = append(pending.Components, attr.Value)
 					}
 				}
+			case len(stack) == 6 && pending != nil && stack[4] == propInvite &&
+				(element.Name == elemInviteUser || element.Name == elemInviteOrg):
+				invite = nil
+				if element.Name == elemInviteUser {
+					invite = &Invite{}
+				}
+			case len(stack) == 8 && invite != nil && stack[6] == elemInviteAccess && element.Name.Space == ownerNS &&
+				(element.Name.Local == "read" || element.Name.Local == "read-write"):
+				invite.Access = element.Name.Local
+			case len(stack) == 7 && invite != nil && element.Name.Space == ownerNS && strings.HasPrefix(element.Name.Local, "invite-"):
+				invite.Status = strings.TrimPrefix(element.Name.Local, "invite-")
+				if invite.Status == "noresponse" {
+					invite.Status = "pending"
+				}
 			case len(stack) == 6 && pending != nil && stack[4] == elemResourceType:
 				switch element.Name {
 				case typeCalendar:
@@ -202,11 +232,24 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 					for key, value := range pending.Text {
 						current.Text[key] = value
 					}
+					current.Invites = append(current.Invites, pending.Invites...)
+					current.InvitesTruncated = current.InvitesTruncated || pending.InvitesTruncated
 					for key, values := range pending.Links {
 						current.Links[key] = append(current.Links[key], values...)
 					}
 				}
 				pending = nil
+			case len(stack) == 7 && invite != nil && element.Name == elemHref:
+				invite.Href = strings.TrimSpace(text.String())
+			case len(stack) == 7 && invite != nil && element.Name == elemInviteName:
+				invite.Name = strings.TrimSpace(text.String())
+			case len(stack) == 6 && pending != nil && stack[4] == propInvite && element.Name == elemInviteUser:
+				if invite != nil && len(pending.Invites) >= maxInvites {
+					pending.InvitesTruncated = true
+				} else if invite != nil {
+					pending.Invites = append(pending.Invites, *invite)
+				}
+				invite = nil
 			case len(stack) == 6 && pending != nil && element.Name == elemHref && stack[3] == elemProp:
 				name := stack[4]
 				if name == PropPrincipal || name == PropCalHome || name == PropBookHome || name == PropOwner {

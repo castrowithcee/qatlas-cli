@@ -474,6 +474,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(calendarsCreate, groupCalendar), Handler: calendarBound(invokeCalendarsCreate)},
 		capability.Operation{Descriptor: inGroup(calendarsUpdate, groupCalendar), Handler: calendarBound(invokeCalendarsUpdate)},
 		capability.Operation{Descriptor: inGroup(calendarsDelete, groupCalendar), Handler: calendarBound(invokeCalendarsDelete)},
+		capability.Operation{Descriptor: inGroup(calendarsShare, groupCalendar), Handler: calendarBound(invokeCalendarsShare)},
+		capability.Operation{Descriptor: inGroup(calendarsUnshare, groupCalendar), Handler: calendarBound(invokeCalendarsUnshare)},
 		capability.Operation{Descriptor: inGroup(calendarTrashList, groupCalendar), Handler: calendarBound(invokeCalendarTrashList)},
 		capability.Operation{Descriptor: inGroup(calendarTrashRestore, groupCalendar), Handler: calendarBound(invokeCalendarTrashRestore)},
 		capability.Operation{Descriptor: inGroup(calendarTrashDelete, groupCalendar), Handler: calendarBound(invokeCalendarTrashDelete)},
