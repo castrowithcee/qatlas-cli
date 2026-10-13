@@ -289,6 +289,20 @@ func TestMissingEntriesAreCounted(t *testing.T) {
 	}
 }
 
+func int64Ptr(v int64) *int64 { return &v }
+
+func TestValidateAcceptsSizeCountersAtTheirBounds(t *testing.T) {
+	f := Fields{Path: "cli", Operation: "wiki.pages.list", Effect: "read", Result: "success",
+		ReqBytes: int64Ptr(MaxReqBytes), RespBytes: int64Ptr(MaxRespBytes)}
+	if err := f.Validate(); err != nil {
+		t.Fatalf("Validate(max counters) = %v", err)
+	}
+	f.ReqBytes, f.RespBytes = int64Ptr(0), int64Ptr(0)
+	if err := f.Validate(); err != nil {
+		t.Fatalf("Validate(zero counters) = %v", err)
+	}
+}
+
 func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 	good := Fields{Path: "mcp", Client: &ClientInfo{Name: "client", Version: "1.0"}, Operation: "wiki.pages.list",
 		Version: 1, Connection: "wiki", Effect: "read", Result: "success", Duration: time.Second}
@@ -309,6 +323,15 @@ func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 		"invalid UTF-8":          func(f *Fields) { f.Connection = "wiki\xff" },
 		"control in client name": func(f *Fields) { f.Client = &ClientInfo{Name: "a\x00b"} },
 		"overlong client":        func(f *Fields) { f.Client = &ClientInfo{Version: strings.Repeat("1", maxClientLength+1)} },
+		"negative req_bytes":     func(f *Fields) { f.ReqBytes = int64Ptr(-1) },
+		"huge req_bytes":         func(f *Fields) { f.ReqBytes = int64Ptr(MaxReqBytes + 1) },
+		"negative resp_bytes":    func(f *Fields) { f.RespBytes = int64Ptr(-1) },
+		"huge resp_bytes":        func(f *Fields) { f.RespBytes = int64Ptr(MaxRespBytes + 1) },
+		"resp_bytes on failure":  func(f *Fields) { f.RespBytes = int64Ptr(5); f.Result = "not-found" },
+		"counter on a connection change": func(f *Fields) {
+			f.Path, f.Operation, f.Effect, f.Connection = "web", OperationConnectionCreate, "create", "wiki"
+			f.ReqBytes = int64Ptr(0)
+		},
 	}
 	for name, change := range bad {
 		f := good

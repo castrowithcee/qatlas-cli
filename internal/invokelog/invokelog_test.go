@@ -459,6 +459,7 @@ func TestAppendNeverWritesArgumentsOrSecrets(t *testing.T) {
 	if err := logger.Append(Fields{
 		Path: "cli", Operation: "github.search_issues", Version: 1, Connection: "personal",
 		Effect: "read", Result: "success", Duration: time.Millisecond,
+		ReqBytes: int64Ptr(int64(len(canary))), RespBytes: int64Ptr(3),
 	}); err != nil {
 		t.Fatalf("Append() error = %v", err)
 	}
@@ -472,6 +473,49 @@ func TestAppendNeverWritesArgumentsOrSecrets(t *testing.T) {
 	}
 	if strings.Contains(string(data), canary) {
 		t.Fatalf("log file contains the canary: %s", data)
+	}
+	if !strings.Contains(string(data), `"req_bytes":39,"resp_bytes":3,`) {
+		t.Fatalf("log line = %s, want only the two size counters", data)
+	}
+}
+
+func TestSizeCountersAreAdditive(t *testing.T) {
+	dir := t.TempDir()
+	logger := New(dir, 90)
+	// An old line without counters, then new ones: a recorded 0 stays on the line, a missing counter does not.
+	mustAppend(t, logger, "old.op")
+	for _, f := range []Fields{
+		{Path: "cli", Operation: "new.op", Effect: "read", Result: "success", ReqBytes: int64Ptr(0), RespBytes: int64Ptr(0)},
+		{Path: "cli", Operation: "bad.op", Effect: "read", Result: "not-found", ReqBytes: int64Ptr(17)},
+	} {
+		if err := logger.Append(f); err != nil {
+			t.Fatalf("Append() error = %v", err)
+		}
+	}
+	files, _ := dayFiles(logger.logsDir())
+	lines := readLines(t, filepath.Join(logger.logsDir(), files[0]))
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3", len(lines))
+	}
+	if bytes.Contains(lines[0], []byte("_bytes")) {
+		t.Fatalf("old line carries a counter: %s", lines[0])
+	}
+	if !bytes.Contains(lines[1], []byte(`"req_bytes":0,"resp_bytes":0,"prev_hash"`)) {
+		t.Fatalf("line = %s, want zero counters before prev_hash", lines[1])
+	}
+	if !bytes.Contains(lines[2], []byte(`"req_bytes":17`)) || bytes.Contains(lines[2], []byte("resp_bytes")) {
+		t.Fatalf("failure line = %s, want req_bytes only", lines[2])
+	}
+	if report := verifyWith(t, dir, nil); report.Broken || report.Days[0].Entries != 3 {
+		t.Fatalf("report = %+v, want an intact chain over mixed lines", report)
+	}
+	var e Entry
+	if err := json.Unmarshal(lines[1], &e); err != nil || e.ReqBytes == nil || *e.ReqBytes != 0 || e.RespBytes == nil {
+		t.Fatalf("entry = %+v, %v, want recorded zero counters", e, err)
+	}
+	e = Entry{}
+	if err := json.Unmarshal(lines[0], &e); err != nil || e.ReqBytes != nil || e.RespBytes != nil {
+		t.Fatalf("old entry = %+v, %v, want no counters", e, err)
 	}
 }
 

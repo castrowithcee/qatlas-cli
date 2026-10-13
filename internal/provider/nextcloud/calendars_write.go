@@ -353,26 +353,37 @@ func (c *Client) ownCalendar(ctx context.Context, op, calendar string) error {
 	if !node.Calendar {
 		return invalidResponse(op, "Nextcloud did not answer with a calendar")
 	}
+	return c.ownedByIdentity(op, node, "calendar")
+}
+
+// ownedByIdentity refuses a node whose owner is not reported as the identity itself. A shared node reports
+// its sharer as owner; an unreported owner counts as foreign.
+func (c *Client) ownedByIdentity(op string, node *dav.Resource, noun string) error {
 	owners := node.Links[dav.PropOwner]
 	if len(owners) != 1 {
 		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "the owner of this calendar is not confirmed to be this identity, nothing was changed"}
+			Message: "the owner of this " + noun + " is not confirmed to be this identity, nothing was changed"}
 	}
 	segments, err := c.davServer().Segments(op, owners[0])
 	if err != nil || len(segments) < 3 || segments[len(segments)-3] != "principals" ||
 		segments[len(segments)-2] != "users" || segments[len(segments)-1] != c.user {
 		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this calendar belongs to someone else, nothing was changed"}
+			Message: "this " + noun + " belongs to someone else, nothing was changed"}
 	}
 	return nil
 }
 
-// calendarSend is the single write path of the calendar tools. It sends exactly one request and never
-// repeats it. A failure that leaves the outcome open carries calendarUncertain; a refusal or a redirect is
-// clear. refusals maps client error statuses to their own clear message. The body of a success is read
-// only up to the response limit.
 func (c *Client) calendarSend(ctx context.Context, op, method string, segments []string, body string,
 	refusals map[int]string) (int, []byte, error) {
+	return c.collectionSend(ctx, op, method, segments, body, refusals, calendarUncertain)
+}
+
+// collectionSend is the single write path of the calendar and address book management tools. It sends
+// exactly one request and never repeats it. A failure that leaves the outcome open carries hint; a refusal
+// or a redirect is clear. refusals maps client error statuses to their own clear message. The body of a
+// success is read only up to the response limit.
+func (c *Client) collectionSend(ctx context.Context, op, method string, segments []string, body string,
+	refusals map[int]string, hint string) (int, []byte, error) {
 	var reader io.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
@@ -387,7 +398,7 @@ func (c *Client) calendarSend(ctx context.Context, op, method string, segments [
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return 0, nil, sentTransportError(op, err, calendarUncertain)
+		return 0, nil, sentTransportError(op, err, hint)
 	}
 	defer response.Body.Close()
 	status := response.StatusCode
@@ -395,41 +406,50 @@ func (c *Client) calendarSend(ctx context.Context, op, method string, segments [
 		return 0, nil, providerError(op, message)
 	}
 	if status < 200 || status >= 300 {
-		return 0, nil, sentStatusError(op, status, calendarUncertain)
+		return 0, nil, sentStatusError(op, status, hint)
 	}
 	if status != http.StatusMultiStatus {
 		return status, nil, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, dav.MaxResponseBytes+1))
 	if err != nil || int64(len(data)) > dav.MaxResponseBytes {
-		return 0, nil, invalidResponse(op, "the Nextcloud response could not be read within the size limit"+calendarUncertain)
+		return 0, nil, invalidResponse(op, "the Nextcloud response could not be read within the size limit"+hint)
 	}
 	return status, data, nil
 }
 
-// proppatchResult checks the per-property answer of a PROPPATCH. The parser keeps only properties of a
-// successful propstat, so a requested property that is missing was refused.
+// proppatchResult checks the per-property answer of a calendar PROPPATCH.
 func (c *Client) proppatchResult(op string, data []byte, path []string, name, color bool) error {
+	return c.patchResult(op, calendarUncertain, data, path, []patchProp{
+		{name, dav.KeyName, "name"}, {color, dav.KeyColor, "color"}})
+}
+
+// patchProp is one property a PROPPATCH asked to set.
+type patchProp struct {
+	asked bool
+	key   string
+	label string
+}
+
+// patchResult checks the per-property answer of a PROPPATCH. The parser keeps only properties of a
+// successful propstat, so a requested property that is missing was refused.
+func (c *Client) patchResult(op, hint string, data []byte, path []string, props []patchProp) error {
 	resources, err := c.davServer().ParseMultiStatus(op, data)
 	if err != nil {
-		return withUncertainty(err, calendarUncertain)
+		return withUncertainty(err, hint)
 	}
 	if len(resources) != 1 {
-		return invalidResponse(op, "Nextcloud did not answer with the requested node"+calendarUncertain)
+		return invalidResponse(op, "Nextcloud did not answer with the requested node"+hint)
 	}
 	found, err := c.davServer().Segments(op, resources[0].Href)
 	if err != nil || !equalSegments(found, path) {
-		return invalidResponse(op, "Nextcloud did not answer with the requested node"+calendarUncertain)
+		return invalidResponse(op, "Nextcloud did not answer with the requested node"+hint)
 	}
-	_, nameDone := resources[0].Text[dav.KeyName]
-	_, colorDone := resources[0].Text[dav.KeyColor]
 	var failed, applied []string
-	for _, p := range []struct {
-		asked, done bool
-		label       string
-	}{{name, nameDone, "name"}, {color, colorDone, "color"}} {
+	for _, p := range props {
+		_, done := resources[0].Text[p.key]
 		switch {
-		case p.asked && p.done:
+		case p.asked && done:
 			applied = append(applied, p.label)
 		case p.asked:
 			failed = append(failed, p.label)
