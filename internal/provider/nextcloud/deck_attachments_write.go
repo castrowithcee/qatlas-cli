@@ -98,13 +98,16 @@ func attachmentFileName(op, name string) error {
 	return nil
 }
 
-// multipartFrame is the multipart body around a file of known size: fields type and file. The file content
-// streams between head and tail, so the memory use does not grow with the file.
-func multipartFrame(name string) (head, tail []byte, contentType string, err error) {
+// multipartFrame is the multipart body around a file of known size: field file, preceded by the Deck field
+// type when withType is set. The file content streams between head and tail, so the memory use does not grow
+// with the file.
+func multipartFrame(name string, withType bool) (head, tail []byte, contentType string, err error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	if err = w.WriteField("type", attachmentDeckFile); err != nil {
-		return
+	if withType {
+		if err = w.WriteField("type", attachmentDeckFile); err != nil {
+			return
+		}
 	}
 	if _, err = w.CreateFormFile("file", name); err != nil {
 		return
@@ -127,7 +130,7 @@ func (c *Client) UploadDeckAttachment(ctx context.Context, input deckAttachmentA
 	if _, err := cardIn(op, stacks, input.StackID, input.CardID); err != nil {
 		return nil, err
 	}
-	head, tail, contentType, err := multipartFrame(upload.Name)
+	head, tail, contentType, err := multipartFrame(upload.Name, true)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
