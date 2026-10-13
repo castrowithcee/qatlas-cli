@@ -94,7 +94,7 @@ var (
 var logColumns = []column{
 	{title: "status"}, {title: "time"}, {title: "way"}, {title: "client", optional: true},
 	{title: "tool", flex: true}, {title: "connection", optional: true}, {title: "result"},
-	{title: "dur.", optional: true},
+	{title: "dur.", optional: true}, {title: "resp.", optional: true},
 }
 
 // maxLogText bounds one field of a log line on screen; a well-formed entry never comes close.
@@ -350,7 +350,7 @@ func statusOf(line invokelog.LineResult) logStatus {
 func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) logRow {
 	row := logRow{date: date, line: line, status: statusOf(line)}
 	e := line.Entry
-	when, way, client, tool, conn, effect, result, dur := "UTC file "+date, "-", "-", "-", "-", "-", "-", ""
+	when, way, client, tool, conn, effect, result, dur, size := "UTC file "+date, "-", "-", "-", "-", "-", "-", "", "-"
 	switch {
 	case !line.Parsed:
 		tool = "(unreadable line)"
@@ -378,8 +378,11 @@ func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) 
 			result = "ok"
 		}
 		dur = formatDuration(e.DurationMS)
+		if e.RespBytes != nil {
+			size = estimateTokens(*e.RespBytes)
+		}
 	}
-	row.cells = []string{row.status.label(), when, way, client, tool, conn, result, dur}
+	row.cells = []string{row.status.label(), when, way, client, tool, conn, result, dur, size}
 	row.values = [logFilterCount]string{way, client, tool, conn, effect, result}
 	return row
 }
@@ -406,6 +409,19 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// estimateTokens approximates the tokens of a payload of n bytes at 3.5 bytes per token.
+func estimateTokens(n int64) string {
+	return fmt.Sprintf("~%d tok", n*2/7)
+}
+
+// formatBytes shows a byte counter with its token estimate; a nil counter was not recorded.
+func formatBytes(n *int64) string {
+	if n == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%d B (%s)", *n, estimateTokens(*n))
 }
 
 func formatDuration(ms int64) string {
@@ -1037,6 +1053,8 @@ func (m *Model) logDetailView() string {
 		field("effect", row.values[logFilterEffect])
 		field("result", orDash(m.logText(e.Result)))
 		field("duration", formatDuration(e.DurationMS))
+		field("request", formatBytes(e.ReqBytes))
+		field("response", formatBytes(e.RespBytes))
 	}
 	b.WriteString(m.keyHint("esc back · 1-8 section · ? help"))
 	return b.String()
