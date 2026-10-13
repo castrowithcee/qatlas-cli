@@ -87,7 +87,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "updates"
 		case strings.HasPrefix(tool.ID, "telegram.pins."):
 			want = "pins"
-		case strings.HasPrefix(tool.ID, "telegram.business."):
+		case strings.HasPrefix(tool.ID, "telegram.business.") || strings.HasPrefix(tool.ID, "telegram.checklists."):
 			want = "business"
 		case strings.HasPrefix(tool.ID, "telegram.stories."):
 			want = "stories"
@@ -132,8 +132,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 126 {
-		t.Fatalf("operation count = %d, want one hundred and twenty-six", len(operations))
+	if len(operations) != 128 {
+		t.Fatalf("operation count = %d, want one hundred and twenty-eight", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
