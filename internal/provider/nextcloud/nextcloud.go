@@ -391,6 +391,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: notificationsDismiss, Handler: accountBound(invokeNotificationsDismiss)},
 		capability.Operation{Descriptor: notificationsDismissAll, Handler: accountBound(invokeNotificationsDismissAll)},
 		capability.Operation{Descriptor: activityList, Handler: accountBound(invokeActivityList)},
+		capability.Operation{Descriptor: searchProvidersTool, Handler: accountBound(invokeSearchProviders)},
+		capability.Operation{Descriptor: searchQueryTool, Handler: accountBound(invokeSearchQuery)},
 		capability.Operation{Descriptor: grouped(systemtagsList), Handler: accountBound(invokeSystemTagsList)},
 		capability.Operation{Descriptor: grouped(systemtagsCreate), Handler: accountBound(invokeSystemTagsCreate)},
 		capability.Operation{Descriptor: grouped(systemtagsUpdate), Handler: accountBound(invokeSystemTagsUpdate)},

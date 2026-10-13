@@ -62,7 +62,7 @@ var toolGroups = []config.ToolGroup{{
 	Description: "Address books the connection binds and their contacts",
 }, {
 	ID: groupAccount, Title: "Account",
-	Description: "Notifications and the activity stream of the identity; the account target binds them",
+	Description: "Notifications, the activity stream, and the unified search of the identity; the account target binds them",
 }}
 
 var targetKinds = []config.TargetKind{{
