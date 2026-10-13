@@ -71,13 +71,13 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 18 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 19 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "business" || metadata.Groups[4].ID != "stories" ||
 		metadata.Groups[5].ID != "chats" || metadata.Groups[6].ID != "invitelinks" || metadata.Groups[7].ID != "bot" ||
 		metadata.Groups[8].ID != "files" || metadata.Groups[9].ID != "media" || metadata.Groups[10].ID != "members" ||
 		metadata.Groups[11].ID != "users" || metadata.Groups[12].ID != "interactions" || metadata.Groups[13].ID != "stickers" ||
 		metadata.Groups[14].ID != "topics" || metadata.Groups[15].ID != "suggestedposts" ||
-		metadata.Groups[16].ID != "queries" || metadata.Groups[17].ID != "games" {
+		metadata.Groups[16].ID != "queries" || metadata.Groups[17].ID != "games" || metadata.Groups[18].ID != "payments" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -96,6 +96,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "members"
 		case strings.HasPrefix(tool.ID, "telegram.users."):
 			want = "users"
+		case strings.HasPrefix(tool.ID, "telegram.payments.") || strings.HasPrefix(tool.ID, "telegram.gifts."):
+			want = "payments"
 		case tool.ID == callbacksAnswer.ID || tool.ID == joinrequestqueriesAnswer.ID || tool.ID == inlineAnswer.ID:
 			want = "queries"
 		case strings.HasPrefix(tool.ID, "telegram.games."):
@@ -132,8 +134,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 128 {
-		t.Fatalf("operation count = %d, want one hundred and twenty-eight", len(operations))
+	if len(operations) != 133 {
+		t.Fatalf("operation count = %d, want one hundred and thirty-three", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
