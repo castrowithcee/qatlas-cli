@@ -2,6 +2,7 @@ package vaultproc
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -84,6 +85,61 @@ func TestServerSignsTheLogItKeeps(t *testing.T) {
 	}
 }
 
+func int64Ptr(v int64) *int64 { return &v }
+
+func TestServerLogsSizeCounters(t *testing.T) {
+	dir := t.TempDir()
+	s := testServer()
+	s.KeepLog(dir, 90)
+	c := testClient()
+
+	ok := goodEntry()
+	ok.ReqBytes, ok.RespBytes = int64Ptr(10), int64Ptr(0)
+	failed := goodEntry()
+	failed.Result, failed.ReqBytes = "unknown-operation", int64Ptr(2)
+	for _, e := range []*logEntry{goodEntry(), ok, failed} {
+		if _, err := exchangeOverPipe(t, s, c, request{Op: opLog, Entry: e}); err != nil {
+			t.Fatalf("log error = %v", err)
+		}
+	}
+	lines := logLines(t, dir)
+	if len(lines) != 3 {
+		t.Fatalf("the log holds %d lines, want 3", len(lines))
+	}
+	if bytes.Contains(lines[0], []byte("_bytes")) {
+		t.Errorf("line without counters carries one: %s", lines[0])
+	}
+	if !bytes.Contains(lines[1], []byte(`"req_bytes":10,"resp_bytes":0,`)) {
+		t.Errorf("line = %s, want both counters", lines[1])
+	}
+	if !bytes.Contains(lines[2], []byte(`"req_bytes":2,`)) || bytes.Contains(lines[2], []byte("resp_bytes")) {
+		t.Errorf("failure line = %s, want req_bytes only", lines[2])
+	}
+	report, err := invokelog.VerifyWith(dir, testLogKey(t))
+	if err != nil || report.Broken || report.Days[0].Entries != 3 || report.Days[0].Unverified != 0 {
+		t.Fatalf("VerifyWith() = %+v, %v, want an intact signed chain", report, err)
+	}
+}
+
+// TestLogEntryDecodesAcrossVersions covers a client of the same protocol version that predates the
+// counters, and one that adds fields this server does not know.
+func TestLogEntryDecodesAcrossVersions(t *testing.T) {
+	var old logEntry
+	if err := json.Unmarshal([]byte(`{"path":"cli","operation":"a.b","result":"success","duration_ms":3}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if f := old.fields(); f.Validate() != nil || f.ReqBytes != nil || f.RespBytes != nil {
+		t.Fatalf("old entry fields = %+v, want a valid entry without counters", f)
+	}
+	var newer logEntry
+	if err := json.Unmarshal([]byte(`{"path":"cli","result":"success","req_bytes":4,"resp_bytes":5,"later_field":[1]}`), &newer); err != nil {
+		t.Fatal(err)
+	}
+	if f := newer.fields(); f.ReqBytes == nil || *f.ReqBytes != 4 || *f.RespBytes != 5 {
+		t.Fatalf("newer entry fields = %+v", f)
+	}
+}
+
 func TestServerRefusesInvalidLogFields(t *testing.T) {
 	dir := t.TempDir()
 	s := testServer()
@@ -101,6 +157,11 @@ func TestServerRefusesInvalidLogFields(t *testing.T) {
 		"negative duration":    func(e *logEntry) { e.DurationMS = -1 },
 		"overflowing duration": func(e *logEntry) { e.DurationMS = 1 << 62 },
 		"negative version":     func(e *logEntry) { e.Version = -3 },
+		"negative req_bytes":   func(e *logEntry) { e.ReqBytes = int64Ptr(-1) },
+		"huge req_bytes":       func(e *logEntry) { e.ReqBytes = int64Ptr(invokelog.MaxReqBytes + 1) },
+		"negative resp_bytes":  func(e *logEntry) { e.RespBytes = int64Ptr(-1) },
+		"huge resp_bytes":      func(e *logEntry) { e.RespBytes = int64Ptr(invokelog.MaxRespBytes + 1) },
+		"resp_bytes on error":  func(e *logEntry) { e.Result = "not-found"; e.RespBytes = int64Ptr(1) },
 	}
 	for name, change := range bad {
 		entry := goodEntry()
