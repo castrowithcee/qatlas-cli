@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
-  notes, calendars and events, contacts, account data, status, and notifications, with typed targets, connection
-  permissions, and safety boundaries.
+  notes, calendars and events, contacts, account data, status, notifications, and search, with typed targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -220,40 +220,35 @@ like a missing note. Attachments stay relative to their note; `local_path` follo
 
 ## System tags
 
-`nextcloud.systemtags.list` reads the visible system tags of the instance; the catalog belongs to the whole
-instance, so the tool needs an `account` target and refuses without one before any credential access.
-`nextcloud.filetags.list`, `filetags.add`, and `filetags.remove` work on one file or folder below the connection
-root and need a `folder` target. The argument is always the path, never the root itself and never a file ID:
-Qatlas stats the path first and addresses the relations only under the file ID of that answer. A `tag_id` is
-digits only, as `systemtags.list` reports it.
+`nextcloud.systemtags.list` reads the visible system tags of the instance and, like the catalog administration,
+needs an `account` target, refused locally without one. `nextcloud.filetags.list`, `filetags.add`, and
+`filetags.remove` work on one file or folder below the root and need a `folder` target. The argument is always the
+path, never the root or a file ID: Qatlas stats it and addresses the relations only under the file ID of that
+answer. A `tag_id` is digits only.
 
-Only visible tags are ever listed or touched, and a cut listing is marked `truncated`. `assignable` is true when
-the identity may assign the tag. The `filetags` tools only assign and remove tags; they never create, change, or
-delete one. `filetags.add` and `filetags.remove` need `confirm`, read the tag once after the stat, and refuse an
-invisible or non-assignable tag without a change request; then they send exactly one `PUT` or `DELETE`. A tag that
-is already assigned, or not assigned on removal, is a clear error. Unclear outcomes are checked with
+Only visible tags are ever listed or touched, and a cut listing is marked `truncated`; `assignable` says whether
+the identity may assign a tag. The `filetags` tools only assign and remove tags. `add` and `remove` need
+`confirm`, read the tag once after the stat, refuse an invisible or non-assignable tag, and then send exactly one
+request; a tag already assigned, or not assigned on removal, is a clear error. Unclear outcomes are checked with
 `filetags.list`. `filetags.list` is in the setup profiles `read` and `write`; the other tag tools are in none.
 
-`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need an
-`account` target and `confirm`, and are in no setup profile; `systemtags.delete` is reachable only through a
-tools list and drops every assignment of the tag on the whole instance. The rights of the identity stay the
-upper bound: creating or hiding a tag from users (`visible` or `assignable` false) needs administrator rights in
-Nextcloud. `create` defaults both to true, takes a name of at most 64 characters, and sends one `POST`; it
-reports the new `tag_id` only when Nextcloud names it as a direct child of the catalog, otherwise it reports
-the tag as created without an ID, to be found with `systemtags.list`. `update` changes name, `visible`,
-`assignable`, or `color` (six hex digits) with one `PROPPATCH`; it takes at least one field and cannot clear a
-color. `update` and `delete` read the tag once first and treat an invisible tag as missing, but, unlike
-`filetags.add`, also act on a tag the identity may not assign. Group restrictions are not offered. A taken
-name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
-cannot be told apart from a missing right. Unclear outcomes are checked with `systemtags.list`.
+`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need
+`confirm`, and are in no setup profile; `delete` needs a tools list and drops every assignment of the tag on the
+whole instance. The identity's rights stay the bound: a tag hidden from users (`visible` or `assignable` false)
+needs administrator rights. `create` defaults both to true, takes a name of at most 64 characters, and reports
+the new `tag_id` only when Nextcloud names it, otherwise the tag is found with `systemtags.list`. `update`
+changes name, `visible`, `assignable`, or `color` (six hex digits), at least one, and cannot clear a color.
+`update` and `delete` read the tag once and treat an invisible tag as missing but, unlike `filetags.add`, act on
+a non-assignable one. Group restrictions are not offered. A taken name is a clear error on `create`; on `update`
+it cannot be told apart from a missing right. Unclear outcomes are checked with `systemtags.list`.
 
 ## Account
 
-The tool group `account` reads the own account data, status, notifications, and activity stream of the identity,
-changes the status, and dismisses notifications. All its tools need an `account` target and refuse without one
-locally, before any credential access or request. Provider text is untrusted data, capped and marked `truncated`
-when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows only its
-label and method and is never followed.
+The tool group `account` reads the own account data, status, notifications, activity stream, and unified search of
+the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
+without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
+`truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
+only its label and method and is never followed.
 
 `account.get` reports only ID, display name, email, language, locale, up to 50 groups, and storage use as numbers.
 Storage paths, backend details, phone, and address are never reported. `status.get` reports type, message, icon,
@@ -267,6 +262,11 @@ reported as `unchanged`. `activity.list` takes a filter from a fixed list that t
 `limit` up to 100, and `since` from `next_cursor`. `notifications.dismiss` (after reading the notification) and
 `notifications.dismissall` need `confirm` and a tools list, are in no profile, and send one request. An unclear
 outcome is checked with `notifications.list` or `status.get` before repeating.
+
+`search.providers` lists the search providers of the instance; `search.query` asks one of them for one page of up
+to 25 hits (`term`, `limit`, `cursor` from the previous `next_cursor`). The provider ID is checked locally and
+against the live list, so an unoffered one is refused without a search. Hits are title, subtitle, and link as
+untrusted text; a link is never followed. Both are in no profile.
 
 ## File comments
 

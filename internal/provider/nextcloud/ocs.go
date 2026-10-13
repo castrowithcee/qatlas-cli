@@ -17,6 +17,7 @@ var (
 	ocsRoot    = []string{"ocs", "v2.php"}
 	ocsSharing = []string{"apps", "files_sharing", "api", "v1"}
 	ocsCloud   = []string{"cloud"}
+	ocsSearch  = []string{"search"}
 
 	ocsNotifications = []string{"apps", "notifications", "api", "v2"}
 	ocsActivity      = []string{"apps", "activity", "api", "v2"}
