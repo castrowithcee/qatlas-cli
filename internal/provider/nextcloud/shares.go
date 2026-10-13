@@ -153,6 +153,7 @@ func (f *flexString) UnmarshalJSON(data []byte) error {
 // Nextcloud puts the password hash into share_with, so that member is never reported for one.
 type rawShare struct {
 	ID           flexString  `json:"id"`
+	STime        json.Number `json:"stime"`
 	ShareType    json.Number `json:"share_type"`
 	Permissions  json.Number `json:"permissions"`
 	UIDOwner     string      `json:"uid_owner"`

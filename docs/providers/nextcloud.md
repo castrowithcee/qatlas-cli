@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-10
+updated: 2026-10-13
 ---
 
 # Nextcloud
@@ -106,48 +106,48 @@ stat-ed and the favorites listed before repeating; Qatlas never repeats the requ
 
 ## Shares
 
-The tool group `shares` reads and manages sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
-`write`) need a `folder` target. A share counts only when its item lies at or below the root: the `path` of a
-share the identity owns, or the `file_target` of an incoming one (`shared_with_me`) in the Files tree of the
-identity. `list` drops every other share; `get` answers one outside the root exactly like a missing one. A share
-the identity passed on without owning it is neither own nor incoming and is not reported. Without `path`, `list`
-reads all shares and filters them, so the whole subtree below the root is covered; with `path` it reads that
-node, and with `subfiles` the items of that folder.
+The tool group `shares` reads and manages sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles
+`read` and `write`) need a `folder` target. A share counts only when its item lies at or below the root: the
+`path` of a share the identity owns, or the `file_target` of an incoming one (`shared_with_me`). `list` drops
+every other share; `get` answers one outside the root like a missing one. A share the identity passed on without
+owning it is neither own nor incoming and is not reported. Without `path`, `list` reads and filters all shares;
+with `path` it reads that node, with `subfiles` the items of that folder.
 
 All share types are reported with a stable type name (`user`, `group`, `link`, `email`, `federated`, `team`,
 `talk`, other types as `other`), rights as flags, expiry, note, and label. A share never reports its link
 token, its link URL, or any password; `has_password` only says that one is set. The recipient ID is reported
-for `user`, `group`, `email`, `federated`, and `team` shares; a `talk` share reports only the conversation name,
-because its identifier is the conversation token, and `link` and `other` shares report no recipient. Recipients
-are personal data and untrusted, like every provider string.
+for `user`, `group`, `email`, `federated`, and `team` shares; a `talk` share reports only the conversation name
+and `link` and `other` shares no recipient. Recipients are personal data and untrusted.
 
-`nextcloud.sharees.search` searches the possible recipients of the whole instance and needs an `account`
-target, not a folder. It reports only type, identifier, and display name, and never Talk conversations or
-unknown types, whose identifier may be an access token. It asks for at most 50 candidates per kind (default
-10), never uses the global lookup server, and is in no setup profile. Without an `account` target it refuses
-locally, before any credential access or request.
+`nextcloud.sharees.search` and the three `nextcloud.incomingshares.*` tools are account-wide: they need an
+`account` target, not a folder, and without one refuse locally, before any credential access or request.
+`sharees.search` reports only type, identifier, and display name of possible recipients, never Talk
+conversations or unknown types (their identifier may be an access token), never uses the global lookup server,
+asks for at most 50 candidates per kind (default 10), and is in no setup profile.
+
+`incomingshares.pending` lists the offers the identity has not accepted, from other users of the instance
+(internal) and from federated servers (host only), with origin, sender, name, and type. Two limits come from the
+API: a federated offer carries no share time (its `mtime` is a file time), so none is reported; an internal one
+carries its share time but no status, so offers declined earlier are listed like open ones and can be accepted
+again. `accept` takes internal offers only. `decline` names the origin and needs a tools list. Both read the
+pending list of that origin once, refuse an ID not pending there without naming anything else, and send exactly
+one request; IDs of the two origins are independent, so `accept` refuses a federated ID like an unknown one.
 
 `nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
 confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
 the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
-Reading is always granted; `update`, `create`, `delete`, and `share` are flags that default to false and
-Qatlas turns into the permission bitmask. Optional are `expires_at` (a date) and `note`. Links, e-mail, federated,
-team, and Talk shares cannot be created or changed, and no password or label is set. `update` changes the
-rights, expiry, or note of a `user` or `group` share the identity made; rights not given keep their value.
-`delete` revokes any share the identity made below the root, whatever its type. Shares made to the identity
-are neither changed nor revoked.
+Reading is always granted; the other rights are flags that default to false. Links, e-mail, federated, team, and
+Talk shares cannot be created or changed, and no password or label is set. `update` changes the rights, expiry,
+or note of a `user` or `group` share the identity made; rights not given keep their value. `delete` revokes any
+share the identity made below the root, whatever its type. Shares made to the identity stay untouched.
 
 `update` and `delete` read the share once and refuse without a change a share outside the root, a share that
 is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
 one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
-the change may have been applied and to check `shares.list` or `shares.get` before repeating; Qatlas never
-repeats. A refusal by the instance (for example a required expiry or disabled sharing) is a clear error
-without the text of the instance.
-
-Sharing is read and changed through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
-basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
-typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
-of the instance.
+the change may have been applied and to check the share (`shares.list`, `shares.get`, or `incomingshares.pending`)
+before repeating; Qatlas never repeats. A refusal by the instance (for example a required expiry or disabled
+sharing) is a clear error without the text of the instance. Sharing goes through the OCS API of the Sharing
+app with the same basic authentication as WebDAV; an answer counts only when its envelope reports `ok` and 200.
 
 ## Deck
 
