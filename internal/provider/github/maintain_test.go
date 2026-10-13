@@ -708,6 +708,34 @@ func TestWorkflowStatesAndSettingsReportBeforeAndAfter(t *testing.T) {
 	if read, err := c.actionsPermissions(ctx, "get"); err != nil || read.Enabled {
 		t.Errorf("read after switching off = %+v, %v", read, err)
 	}
+	on := true
+	actions, err = c.updateActionsPermissions(ctx, &actionsArguments{Enabled: &on})
+	if err != nil || actions.After != (ActionsPermissions{Enabled: true, AllowedActions: "local_only"}) {
+		t.Errorf("switching back on = %+v, %v, want the allowed actions GitHub restored", actions, err)
+	}
+	// A failed read after the change keeps the change a success with the computed state.
+	if _, err := c.updateActionsPermissions(ctx, &actionsArguments{Enabled: &off}); err != nil {
+		t.Fatalf("switching off again: %v", err)
+	}
+	readRoute := f.failure
+	reads := 0
+	f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/actions/permissions") {
+			if reads++; reads == 2 {
+				w.WriteHeader(http.StatusBadGateway)
+				return true
+			}
+		}
+		return readRoute(w, r)
+	}
+	actions, err = c.updateActionsPermissions(ctx, &actionsArguments{Enabled: &on})
+	f.failure = readRoute
+	if err != nil || actions.After != (ActionsPermissions{Enabled: true}) {
+		t.Errorf("switching on with a failed read = %+v, %v, want success with the computed state", actions, err)
+	}
+	if _, err := c.updateActionsPermissions(ctx, &actionsArguments{Enabled: &off}); err != nil {
+		t.Fatalf("switching off for the next check: %v", err)
+	}
 	// Allowed actions of disabled Actions would be dropped by GitHub, so they are refused before the change.
 	_, _, rest := split(f.recorded())
 	putsBefore := rest[http.MethodPut]
