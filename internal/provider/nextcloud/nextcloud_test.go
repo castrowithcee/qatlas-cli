@@ -243,7 +243,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 126 || descriptors[86].ID != "nextcloud.search.providers" || descriptors[87].ID != "nextcloud.search.query" || descriptors[94].ID != "nextcloud.status.clear" || descriptors[95].ID != "nextcloud.status.get" || descriptors[96].ID != "nextcloud.status.set" || descriptors[1].ID != "nextcloud.activity.list" || descriptors[80].ID != "nextcloud.notifications.dismiss" || descriptors[81].ID != "nextcloud.notifications.dismissall" || descriptors[82].ID != "nextcloud.notifications.list" || descriptors[2].ID != "nextcloud.addressbooks.create" || descriptors[3].ID != "nextcloud.addressbooks.delete" || descriptors[4].ID != "nextcloud.addressbooks.list" || descriptors[5].ID != "nextcloud.addressbooks.update" || descriptors[6].ID != "nextcloud.calendars.create" || descriptors[7].ID != "nextcloud.calendars.delete" || descriptors[8].ID != "nextcloud.calendars.list" || descriptors[9].ID != "nextcloud.calendars.update" || descriptors[10].ID != "nextcloud.calendartrash.delete" || descriptors[11].ID != "nextcloud.calendartrash.list" || descriptors[12].ID != "nextcloud.calendartrash.restore" || descriptors[13].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 129 || descriptors[89].ID != "nextcloud.search.providers" || descriptors[90].ID != "nextcloud.search.query" || descriptors[97].ID != "nextcloud.status.clear" || descriptors[98].ID != "nextcloud.status.get" || descriptors[99].ID != "nextcloud.status.set" || descriptors[1].ID != "nextcloud.activity.list" || descriptors[83].ID != "nextcloud.notifications.dismiss" || descriptors[84].ID != "nextcloud.notifications.dismissall" || descriptors[85].ID != "nextcloud.notifications.list" || descriptors[2].ID != "nextcloud.addressbooks.create" || descriptors[3].ID != "nextcloud.addressbooks.delete" || descriptors[4].ID != "nextcloud.addressbooks.list" || descriptors[5].ID != "nextcloud.addressbooks.update" || descriptors[6].ID != "nextcloud.calendars.create" || descriptors[7].ID != "nextcloud.calendars.delete" || descriptors[8].ID != "nextcloud.calendars.list" || descriptors[9].ID != "nextcloud.calendars.update" || descriptors[10].ID != "nextcloud.calendartrash.delete" || descriptors[11].ID != "nextcloud.calendartrash.list" || descriptors[12].ID != "nextcloud.calendartrash.restore" || descriptors[13].ID != "nextcloud.comments.create" ||
 		descriptors[15].ID != "nextcloud.comments.list" || descriptors[17].ID != "nextcloud.contacts.create" || descriptors[18].ID != "nextcloud.contacts.delete" ||
 		descriptors[19].ID != "nextcloud.contacts.get" ||
 		descriptors[20].ID != "nextcloud.contacts.list" ||
@@ -264,22 +264,22 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[61].ID != "nextcloud.files.favorite" || descriptors[65].ID != "nextcloud.files.search" ||
 		descriptors[68].ID != "nextcloud.filetags.add" || descriptors[70].ID != "nextcloud.filetags.remove" ||
 		descriptors[72].ID != "nextcloud.folders.delete" || descriptors[73].ID != "nextcloud.incomingshares.accept" || descriptors[74].ID != "nextcloud.incomingshares.decline" || descriptors[75].ID != "nextcloud.incomingshares.pending" || descriptors[76].ID != "nextcloud.noteattachments.get" ||
-		descriptors[78].ID != "nextcloud.notes.list" || descriptors[79].ID != "nextcloud.notesettings.get" || descriptors[83].ID != "nextcloud.remoteshares.get" || descriptors[84].ID != "nextcloud.remoteshares.list" || descriptors[85].ID != "nextcloud.remoteshares.remove" ||
-		descriptors[89].ID != "nextcloud.shares.create" ||
-		descriptors[92].ID != "nextcloud.shares.list" || descriptors[93].ID != "nextcloud.shares.update" ||
-		descriptors[97].ID != "nextcloud.systemtags.create" || descriptors[99].ID != "nextcloud.systemtags.list" ||
-		descriptors[100].ID != "nextcloud.systemtags.update" || descriptors[101].ID != "nextcloud.talkmessages.delete" ||
-		descriptors[102].ID != "nextcloud.talkmessages.edit" || descriptors[103].ID != "nextcloud.talkmessages.list" ||
-		descriptors[104].ID != "nextcloud.talkmessages.send" || descriptors[105].ID != "nextcloud.talkparticipants.add" ||
-		descriptors[106].ID != "nextcloud.talkparticipants.list" || descriptors[107].ID != "nextcloud.talkparticipants.moderator" ||
-		descriptors[108].ID != "nextcloud.talkparticipants.remove" || descriptors[109].ID != "nextcloud.talkreactions.set" ||
-		descriptors[110].ID != "nextcloud.talkrooms.create" || descriptors[111].ID != "nextcloud.talkrooms.delete" ||
-		descriptors[113].ID != "nextcloud.talkrooms.list" || descriptors[114].ID != "nextcloud.talkrooms.update" ||
-		descriptors[115].ID != "nextcloud.tasks.create" || descriptors[116].ID != "nextcloud.tasks.delete" ||
-		descriptors[117].ID != "nextcloud.tasks.get" || descriptors[118].ID != "nextcloud.tasks.list" ||
-		descriptors[119].ID != "nextcloud.tasks.update" ||
-		descriptors[120].ID != "nextcloud.trash.delete" || descriptors[122].ID != "nextcloud.trash.restore" ||
-		descriptors[123].ID != "nextcloud.versions.get" || descriptors[125].ID != "nextcloud.versions.restore" {
+		descriptors[80].ID != "nextcloud.notes.list" || descriptors[77].ID != "nextcloud.notes.create" || descriptors[78].ID != "nextcloud.notes.delete" || descriptors[81].ID != "nextcloud.notes.update" || descriptors[82].ID != "nextcloud.notesettings.get" || descriptors[86].ID != "nextcloud.remoteshares.get" || descriptors[87].ID != "nextcloud.remoteshares.list" || descriptors[88].ID != "nextcloud.remoteshares.remove" ||
+		descriptors[92].ID != "nextcloud.shares.create" ||
+		descriptors[95].ID != "nextcloud.shares.list" || descriptors[96].ID != "nextcloud.shares.update" ||
+		descriptors[100].ID != "nextcloud.systemtags.create" || descriptors[102].ID != "nextcloud.systemtags.list" ||
+		descriptors[103].ID != "nextcloud.systemtags.update" || descriptors[104].ID != "nextcloud.talkmessages.delete" ||
+		descriptors[105].ID != "nextcloud.talkmessages.edit" || descriptors[106].ID != "nextcloud.talkmessages.list" ||
+		descriptors[107].ID != "nextcloud.talkmessages.send" || descriptors[108].ID != "nextcloud.talkparticipants.add" ||
+		descriptors[109].ID != "nextcloud.talkparticipants.list" || descriptors[110].ID != "nextcloud.talkparticipants.moderator" ||
+		descriptors[111].ID != "nextcloud.talkparticipants.remove" || descriptors[112].ID != "nextcloud.talkreactions.set" ||
+		descriptors[113].ID != "nextcloud.talkrooms.create" || descriptors[114].ID != "nextcloud.talkrooms.delete" ||
+		descriptors[116].ID != "nextcloud.talkrooms.list" || descriptors[117].ID != "nextcloud.talkrooms.update" ||
+		descriptors[118].ID != "nextcloud.tasks.create" || descriptors[119].ID != "nextcloud.tasks.delete" ||
+		descriptors[120].ID != "nextcloud.tasks.get" || descriptors[121].ID != "nextcloud.tasks.list" ||
+		descriptors[122].ID != "nextcloud.tasks.update" ||
+		descriptors[123].ID != "nextcloud.trash.delete" || descriptors[125].ID != "nextcloud.trash.restore" ||
+		descriptors[126].ID != "nextcloud.versions.get" || descriptors[128].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
