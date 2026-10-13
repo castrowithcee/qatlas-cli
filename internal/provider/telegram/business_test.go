@@ -66,6 +66,10 @@ func (e *businessEnv) run(tool string, args map[string]any) (any, error) {
 		return invokeBusinessGetWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case "send":
 		return invokeMessagesSendWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "checklistsend":
+		return invokeChecklistsSendWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
+	case "checklistedit":
+		return invokeChecklistsEditWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case "markread":
 		return invokeBusinessMarkReadWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case "setname":
