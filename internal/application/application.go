@@ -1024,9 +1024,11 @@ type InvokeResponse struct {
 // call below can still log the operation ID and the connection an earlier failure never reached.
 func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response InvokeResponse, err error) {
 	start := time.Now()
+	// Measured before an empty argument object is filled in below, so the log counts what the caller sent.
+	reqBytes := int64(len(request.Arguments))
 	var descriptor capability.Descriptor
 	var resolved *config.Resolved
-	defer func() { c.logInvoke(request, descriptor, resolved, start, err) }()
+	defer func() { c.logInvoke(request, reqBytes, response, descriptor, resolved, start, err) }()
 	c.scope()
 
 	descriptor, rawHandler, err := c.operation(request.Operation, request.Version)
@@ -1127,14 +1129,20 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 // MCP broker already flush to their stderr, and never changes err or response themselves; so is an entry
 // written without a check value only because the writer that would have signed it failed (see
 // invokelog.UnsignedError).
-func (c *Core) logInvoke(request InvokeRequest, descriptor capability.Descriptor, resolved *config.Resolved,
-	start time.Time, err error) {
+func (c *Core) logInvoke(request InvokeRequest, reqBytes int64, response InvokeResponse,
+	descriptor capability.Descriptor, resolved *config.Resolved, start time.Time, err error) {
 	if c.invokeLog == nil {
 		return
 	}
 	fields := invokelog.Fields{
 		Path: c.invokePath, Client: c.invokeClient, Operation: request.Operation, Version: request.Version,
 		Connection: request.Connection, Result: auditResult(err), Duration: time.Since(start),
+	}
+	// Sizes only, never content. An error leaves resp_bytes out: its code is already the result.
+	fields.ReqBytes = &reqBytes
+	if err == nil {
+		respBytes := int64(len(response.Result))
+		fields.RespBytes = &respBytes
 	}
 	if descriptor.ID != "" {
 		fields.Operation, fields.Version, fields.Effect = descriptor.ID, descriptor.Version, string(descriptor.Risk.Effect)
