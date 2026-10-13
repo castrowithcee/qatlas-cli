@@ -195,9 +195,11 @@ and is refused like a missing one; whole calendars are not restored.
 ## Contacts
 
 The group `contacts` (profile `contacts`) reads address books and contacts; contact fields are untrusted personal data
-and photos are never requested. The system address book needs its own `addressbook/URI` target and is read-only.
-Writing contacts is in no profile: an update replaces by `etag` and refuses a card with a photo, group kind, or other
-property Qatlas does not write; deleting needs a tools list.
+and photos are never requested. The system address book needs its own `addressbook/URI` target and is read-only: it is
+never changed or deleted. Writing is in no profile. A contact update replaces by `etag` and refuses a card with a photo,
+group kind, or other property Qatlas does not write. Creating an address book needs the general `addressbook` target;
+changing or deleting one needs it bound and owned by the identity, never shared. Deleting a contact or an address book
+(with all its contacts) needs a tools list.
 
 ## Versions
 
