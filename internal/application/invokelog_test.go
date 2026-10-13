@@ -61,6 +61,9 @@ func TestInvokeWritesTheInvocationLog(t *testing.T) {
 	if strings.Contains(string(data), canary) {
 		t.Fatalf("invocation log contains the argument canary: %s", data)
 	}
+	if strings.Contains(string(data), `{"id"`) {
+		t.Fatalf("invocation log contains argument bytes: %s", data)
+	}
 	var entry invokelog.Entry
 	if err := json.Unmarshal(data[:len(data)-1], &entry); err != nil {
 		t.Fatalf("Unmarshal(%s) error = %v", data, err)
@@ -146,4 +149,49 @@ func latestDayFile(t *testing.T, vaultDir string) string {
 	}
 	t.Fatal("no day file found")
 	return ""
+}
+
+// TestInvokeLogsSizeCounters checks the exact byte counts of arguments and result, and that a failed call
+// and an empty argument object are told apart from a missing counter.
+func TestInvokeLogsSizeCounters(t *testing.T) {
+	dir := t.TempDir()
+	core, _ := testCore(t, []string{"primary"}, nil, true)
+	core.SetInvokeLog(invokelog.New(dir, 90), "cli", nil)
+	ctx := context.Background()
+
+	args := json.RawMessage(`{"id":"7"}`)
+	response, err := core.Invoke(ctx, InvokeRequest{Operation: "fake.pages.get", Connection: "primary", Arguments: args})
+	if err != nil {
+		t.Fatalf("Invoke() error = %v", err)
+	}
+	if _, err := core.Invoke(ctx, InvokeRequest{Operation: "fake.nope", Arguments: args}); err == nil {
+		t.Fatal("Invoke(unknown operation) succeeded")
+	}
+	_, _ = core.Invoke(ctx, InvokeRequest{Operation: "fake.pages.get", Connection: "primary"})
+
+	data, err := os.ReadFile(latestDayFile(t, dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entries []invokelog.Entry
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		var e invokelog.Entry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, e)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("got %d entries, want 3", len(entries))
+	}
+	if e := entries[0]; e.ReqBytes == nil || *e.ReqBytes != int64(len(args)) ||
+		e.RespBytes == nil || *e.RespBytes != int64(len(response.Result)) {
+		t.Fatalf("success entry = %+v, want req_bytes %d and resp_bytes %d", e, len(args), len(response.Result))
+	}
+	if e := entries[1]; e.Result != "unknown-operation" || e.ReqBytes == nil || *e.ReqBytes != int64(len(args)) || e.RespBytes != nil {
+		t.Fatalf("failure entry = %+v, want req_bytes only", e)
+	}
+	if e := entries[2]; e.ReqBytes == nil || *e.ReqBytes != 0 {
+		t.Fatalf("empty-argument entry = %+v, want a recorded req_bytes of 0", e)
+	}
 }

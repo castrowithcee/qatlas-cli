@@ -320,10 +320,11 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"directory, vault/logs/YYYY-MM-DD.jsonl, named by its UTC date: the time, whether it came over cli\n" +
 			"or mcp and, over mcp, the client's name and version from its initialize request, the tool ID and\n" +
 			"version, the connection, the tool's effect, the result (success or the error code the diagnostic\n" +
-			"leads with), and how long it took. No argument, result, secret, target, or URL query ever reaches\n" +
-			"it, and an entry is written even where the vault does not exist yet, is locked, or is unencrypted;\n" +
-			"a logging failure, such as an unwritable directory, is a warning beside the invoke's own result,\n" +
-			"never a reason to change it.\n\n" +
+			"leads with), how long it took, and the byte sizes of the arguments (req_bytes) and of a\n" +
+			"successful result (resp_bytes), absent where not recorded. No argument, result, secret, target,\n" +
+			"or URL query ever reaches it, and an entry is written even where the vault does not exist yet,\n" +
+			"is locked, or is unencrypted; a logging failure, such as an unwritable directory, is a warning\n" +
+			"beside the invoke's own result, never a reason to change it.\n\n" +
 			"Entries are linked by a SHA-256 hash chain that spans day boundaries, so a changed or deleted\n" +
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
 			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +

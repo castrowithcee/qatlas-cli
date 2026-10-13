@@ -83,6 +83,10 @@ type Entry struct {
 	Effect     string      `json:"effect,omitempty"`
 	Result     string      `json:"result,omitempty"`
 	DurationMS int64       `json:"duration_ms,omitempty"`
+	// ReqBytes and RespBytes are the exact sizes of an invoke's arguments and successful result; nil
+	// means not recorded, which is different from a recorded 0.
+	ReqBytes  *int64 `json:"req_bytes,omitempty"`
+	RespBytes *int64 `json:"resp_bytes,omitempty"`
 	// Token is the name of the agent token an approval was made with, never its value; empty otherwise.
 	Token    string `json:"token,omitempty"`
 	Cut      *Cut   `json:"cut,omitempty"`
@@ -104,6 +108,10 @@ type Fields struct {
 	// Result is "success" or the failure's error code, the same value application.auditResult uses.
 	Result   string
 	Duration time.Duration
+	// ReqBytes is the size of the invoke's arguments and RespBytes the size of its compact result, nil
+	// where not recorded: RespBytes stays nil for a failed invoke, both for anything but an invoke.
+	ReqBytes  *int64
+	RespBytes *int64
 	// Token names the agent token an approval of a connection change was made with, never its value; empty
 	// for an invoke.
 	Token string
@@ -114,6 +122,13 @@ const (
 	maxTextLength   = 256
 	maxClientLength = 128
 	maxVersion      = 1 << 20
+)
+
+// MaxReqBytes and MaxRespBytes bound the size counters Validate accepts. The request bound is the CLI's
+// limit for one agent request, which this package cannot import.
+const (
+	MaxReqBytes  int64 = 8 << 20
+	MaxRespBytes int64 = 1 << 30
 )
 
 // MaxDuration is the longest duration Validate accepts for one invoke.
@@ -172,6 +187,20 @@ func (f Fields) Validate() error {
 	}
 	if f.Duration < 0 || f.Duration > MaxDuration {
 		return errors.New("duration is out of range")
+	}
+	if f.ReqBytes != nil || f.RespBytes != nil {
+		if connectionOperations[f.Operation] != "" {
+			return errors.New("a connection change has no size counters")
+		}
+		if f.RespBytes != nil && f.Result != "success" {
+			return errors.New("resp_bytes needs a successful result")
+		}
+	}
+	if f.ReqBytes != nil && (*f.ReqBytes < 0 || *f.ReqBytes > MaxReqBytes) {
+		return errors.New("req_bytes is out of range")
+	}
+	if f.RespBytes != nil && (*f.RespBytes < 0 || *f.RespBytes > MaxRespBytes) {
+		return errors.New("resp_bytes is out of range")
 	}
 	if err := checkText("operation", f.Operation, maxTextLength); err != nil {
 		return err
@@ -307,7 +336,7 @@ func (l *Logger) Append(f Fields) error {
 	entry := Entry{
 		Seq: seq, Time: now, Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version,
 		Connection: f.Connection, Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
-		Token: f.Token, PrevHash: prevHash,
+		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Token: f.Token, PrevHash: prevHash,
 	}
 	raw, err := l.encode(entry)
 	if err != nil {
