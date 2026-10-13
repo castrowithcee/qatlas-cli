@@ -289,6 +289,7 @@ func Register(reg *capability.Registry) error {
 	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
+		capability.Operation{Descriptor: richMessagesSend, Handler: capability.Handler(invokeRichMessagesSend)},
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesEditCaption, Handler: capability.Handler(invokeMessagesEditCaption)},
