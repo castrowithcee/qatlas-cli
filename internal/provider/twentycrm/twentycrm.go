@@ -294,6 +294,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(agentsGet, aiGroup), Handler: capability.Handler(invokeAgentsGet)},
 		capability.Operation{Descriptor: inGroup(skillsList, aiGroup), Handler: capability.Handler(invokeSkillsList)},
 		capability.Operation{Descriptor: inGroup(skillsGet, aiGroup), Handler: capability.Handler(invokeSkillsGet)},
+		capability.Operation{Descriptor: inGroup(logicFunctionsList, logicFunctionsGroup), Handler: capability.Handler(invokeLogicFunctionsList)},
+		capability.Operation{Descriptor: inGroup(logicFunctionsGet, logicFunctionsGroup), Handler: capability.Handler(invokeLogicFunctionsGet)},
 		capability.Operation{Descriptor: inGroup(rolesList, membersGroup), Handler: capability.Handler(invokeRolesList)},
 		capability.Operation{Descriptor: inGroup(rolesCreate, membersGroup), Handler: capability.Handler(invokeRolesCreate)},
 		capability.Operation{Descriptor: inGroup(rolesUpdate, membersGroup), Handler: capability.Handler(invokeRolesUpdate)},

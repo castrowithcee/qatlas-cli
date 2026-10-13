@@ -161,14 +161,14 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
-	if len(metadata.Groups) != 12 {
+	if len(metadata.Groups) != 13 {
 		t.Fatalf("groups = %+v", metadata.Groups)
 	}
 	got := map[string]string{}
 	for _, tool := range metadata.Tools {
 		got[tool.ID] = tool.Group
 	}
-	if len(got) != 87 {
+	if len(got) != 89 {
 		t.Fatalf("tools = %v", got)
 	}
 	for id, group := range got {
@@ -196,6 +196,9 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 		}
 		if strings.HasPrefix(id, Provider+".agents.") || strings.HasPrefix(id, Provider+".skills.") {
 			want = aiGroup
+		}
+		if strings.HasPrefix(id, Provider+".logicfunctions.") {
+			want = logicFunctionsGroup
 		}
 		if strings.HasPrefix(id, Provider+".meta") {
 			want = metadataGroup

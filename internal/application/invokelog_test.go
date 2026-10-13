@@ -3,12 +3,17 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 // TestInvokeWritesTheInvocationLog covers the invocation log's part that lives in Core.Invoke: every call
@@ -149,6 +154,52 @@ func latestDayFile(t *testing.T, vaultDir string) string {
 	}
 	t.Fatal("no day file found")
 	return ""
+}
+
+// Provider text in a result or an error never reaches the invocation log: the entry holds only the
+// operation, connection, effect, result code and duration, whether the call succeeds, fails in the
+// provider, or returns a result the output schema refuses.
+func TestInvokeLogNeverHoldsProviderResultOrErrorText(t *testing.T) {
+	const canary = "canary-trigger-content-must-not-be-logged"
+	answers := map[string]capability.Handler{
+		"fake.pages.get": func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error) {
+			return map[string]any{"ok": true, "trigger": canary}, nil
+		},
+		"fake.pages.list": func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error) {
+			return nil, errors.New(canary)
+		},
+	}
+	registry := capability.NewRegistry()
+	for id, handler := range answers {
+		if err := registry.Register("fake", capability.Operation{
+			Descriptor: testDescriptor(id, capability.EffectRead, capability.ConfirmationNone), Handler: handler}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.New()
+	cfg.Services["s"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["c"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"}}
+	cfg.Connections["primary"] = config.Connection{Service: "s", Credential: "c",
+		Permissions: []config.Permission{config.PermissionRead}}
+	redactor := &redact.Redactor{}
+	dir := t.TempDir()
+	core := New(registry, cfg, secret.NewWith(func(string) string { return "test-token" }, nil, nil, redactor), redactor)
+	core.SetInvokeLog(invokelog.New(dir, 90), "cli", nil)
+
+	for id := range answers {
+		_, err := core.Invoke(context.Background(), InvokeRequest{
+			Operation: id, Connection: "primary", Arguments: json.RawMessage(`{"id":"1"}`)})
+		if err == nil {
+			t.Fatalf("%s succeeded, want a failure", id)
+		}
+	}
+	data, err := os.ReadFile(latestDayFile(t, dir))
+	if err != nil || strings.Count(string(data), "\n") != 2 {
+		t.Fatalf("log = %q, %v, want two entries", data, err)
+	}
+	if strings.Contains(string(data), canary) {
+		t.Fatalf("invocation log contains provider text: %s", data)
+	}
 }
 
 // TestInvokeLogsSizeCounters checks the exact byte counts of arguments and result, and that a failed call
