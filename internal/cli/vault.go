@@ -327,6 +327,7 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"beside the invoke's own result, never a reason to change it.\n\n" +
 			"Entries are linked by a SHA-256 hash chain that spans day boundaries, so a changed or deleted\n" +
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
+			"'vault logs stats' sums up the response sizes per tool and connection.\n" +
 			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +
 			"an older day is removed on the next invoke, and the entry written right after names what was\n" +
 			"removed, so the cut is never mistaken for a gap.\n\n" +
@@ -337,7 +338,7 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
-	cmd.AddCommand(newVaultLogsVerifyCommand(opts))
+	cmd.AddCommand(newVaultLogsVerifyCommand(opts), newVaultLogsStatsCommand(opts))
 	return cmd
 }
 
@@ -381,6 +382,101 @@ func newVaultLogsVerifyCommand(opts *Options) *cobra.Command {
 			return runVaultLogsVerify(c, opts)
 		},
 	}
+}
+
+func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
+	var from, to string
+	cmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Sum up the response sizes of invokes per tool and connection",
+		Long: "Stats shows how much agent context each tool and connection produces: it reads the invocation\n" +
+			"log and groups the invokes by tool ID (operation) and connection. Retention cuts, connection\n" +
+			"changes, and approvals are not invokes and are left out.\n\n" +
+			"Each group has calls (invokes), no_counter (invokes without a recorded resp_bytes: a failed invoke\n" +
+			"or an entry written before the counter existed; they are never counted as 0 and are left out of\n" +
+			"every size below), resp_bytes_total, resp_bytes_max, resp_bytes_p50 and resp_bytes_p95 (nearest-rank\n" +
+			"percentiles of the recorded sizes), and the same four as est_tokens_*. A group without any recorded\n" +
+			"size has only operation, connection, calls, and no_counter. The token figures are an\n" +
+			"approximation of 3.5 bytes per token, not a tokenizer count. A recorded 0 counts as a size. The\n" +
+			"groups come largest resp_bytes_total first, then most calls, then by operation and connection.\n\n" +
+			"--from and --to (YYYY-MM-DD, both inclusive, local days like the editor's Logs section) narrow\n" +
+			"the entries; either one left out leaves that end open, and without both every recorded day counts.\n\n" +
+			"It only reads the log, without checking its chain or check values (see 'vault logs verify'), and\n" +
+			"shows no argument, result, or secret: no terminal, no passphrase, and no provider are needed, and\n" +
+			"it runs the same way against a vault that does not exist yet, is locked, or is unencrypted.\n\n" +
+			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
+			"JSON.",
+		Args: noArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			return runVaultLogsStats(c, opts, from, to)
+		},
+	}
+	cmd.Flags().StringVar(&from, "from", "", "first local day to count, YYYY-MM-DD; default: the first recorded day")
+	cmd.Flags().StringVar(&to, "to", "", "last local day to count, YYYY-MM-DD; default: the last recorded day")
+	return cmd
+}
+
+// logsStatsGroup holds the sizes as pointers: a group without a single recorded size leaves them out
+// rather than report 0.
+type logsStatsGroup struct {
+	Operation      string `json:"operation"`
+	Connection     string `json:"connection"`
+	Calls          int    `json:"calls"`
+	NoCounter      int    `json:"no_counter"`
+	RespBytesTotal *int64 `json:"resp_bytes_total,omitempty"`
+	RespBytesMax   *int64 `json:"resp_bytes_max,omitempty"`
+	RespBytesP50   *int64 `json:"resp_bytes_p50,omitempty"`
+	RespBytesP95   *int64 `json:"resp_bytes_p95,omitempty"`
+	EstTokensTotal *int64 `json:"est_tokens_total,omitempty"`
+	EstTokensMax   *int64 `json:"est_tokens_max,omitempty"`
+	EstTokensP50   *int64 `json:"est_tokens_p50,omitempty"`
+	EstTokensP95   *int64 `json:"est_tokens_p95,omitempty"`
+}
+
+type logsStatsDocument struct {
+	From   string           `json:"from,omitempty"`
+	To     string           `json:"to,omitempty"`
+	Groups []logsStatsGroup `json:"groups"`
+}
+
+func runVaultLogsStats(c *cobra.Command, opts *Options, from, to string) error {
+	format, err := discoveryFormat(c, opts)
+	if err != nil {
+		return err
+	}
+	for _, f := range []struct{ name, value string }{{"from", from}, {"to", to}} {
+		if _, err := time.Parse(invokelog.DateLayout, f.value); f.value != "" && err != nil {
+			return &UsageError{fmt.Errorf("--%s must be a day as YYYY-MM-DD, not %q", f.name, f.value)}
+		}
+	}
+	if from != "" && to != "" && from > to {
+		return &UsageError{fmt.Errorf("--from %s is after --to %s", from, to)}
+	}
+	configPath, err := config.Path(opts.Config)
+	if err != nil {
+		return err
+	}
+	utcFrom, utcTo := invokelog.UTCFileBounds(from, to)
+	days, err := invokelog.VerifyLines(vault.New(filepath.Dir(configPath)).Dir(), nil, utcFrom, utcTo)
+	if err != nil {
+		return err
+	}
+	return emitDocument(c, format, logsStatsResponse(invokelog.Summarize(invokelog.LocalDayEntries(days, from, to)), from, to))
+}
+
+func logsStatsResponse(groups []invokelog.SizeGroup, from, to string) logsStatsDocument {
+	doc := logsStatsDocument{From: from, To: to, Groups: make([]logsStatsGroup, len(groups))}
+	for i, g := range groups {
+		out := logsStatsGroup{Operation: g.Operation, Connection: g.Connection, Calls: g.Calls, NoCounter: g.NoCounter}
+		if g.Counted() > 0 {
+			p := func(n int64) *int64 { return &n }
+			out.RespBytesTotal, out.RespBytesMax, out.RespBytesP50, out.RespBytesP95 = p(g.Bytes), p(g.Max), p(g.P50), p(g.P95)
+			out.EstTokensTotal, out.EstTokensMax = p(invokelog.EstimateTokens(g.Bytes)), p(invokelog.EstimateTokens(g.Max))
+			out.EstTokensP50, out.EstTokensP95 = p(invokelog.EstimateTokens(g.P50)), p(invokelog.EstimateTokens(g.P95))
+		}
+		doc.Groups[i] = out
+	}
+	return doc
 }
 
 // The mac_check values of 'vault logs verify'.

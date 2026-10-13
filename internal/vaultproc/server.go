@@ -532,7 +532,7 @@ func (s *Server) answerLog(req request) response {
 }
 
 // approveOperation is the operation a token approval is logged under.
-const approveOperation = "vault.approve"
+const approveOperation = invokelog.OperationApprove
 
 // answerToken carries out one checked approve-token request. Like answerLog it holds s.mu only to take what
 // it needs and, at the end, to adopt the vault's new bindings, never while it reads or writes a file; tokenMu

@@ -707,3 +707,73 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 		t.Errorf("old row detail shows a counter:\n%s", v)
 	}
 }
+
+func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
+	f := newLogFixture(t)
+	n := func(v int64) *int64 { return &v }
+	base := invokelog.Fields{Path: "mcp", Effect: "read", Result: "success", Duration: time.Millisecond}
+	for _, c := range []struct {
+		op, conn string
+		resp     *int64
+		result   string
+	}{
+		{"wiki.pages.get", "wiki", n(3500), "success"},
+		{"wiki.pages.get", "wiki", n(7000), "success"},
+		{"wiki.pages.get", "wiki", nil, "timeout"},
+		{"chat.send", "alerts", n(70), "success"},
+	} {
+		fl := base
+		fl.Operation, fl.Connection, fl.RespBytes, fl.Result = c.op, c.conn, c.resp, c.result
+		mustNoError(t, f.logger.Append(fl))
+	}
+	m := f.model(true, f.localToday())
+
+	press(t, m, "s")
+	view := m.View()
+	if !m.logs.stats || !strings.Contains(view, "p95") || !strings.Contains(view, "estimated tokens") ||
+		!strings.Contains(view, "wiki.pages.get") || !strings.Contains(view, "chat.send") {
+		t.Fatalf("s did not show the summary:\n%s", view)
+	}
+	if line := rowLine(t, view, "wiki.pages.get"); !strings.Contains(line, "3 ") || !strings.Contains(line, "3000") ||
+		!strings.Contains(line, "10500") {
+		t.Errorf("wiki row lacks calls, ~tok total, or bytes: %q", line)
+	}
+	if !strings.Contains(view, "s or esc back to the rows") {
+		t.Errorf("the key line does not name s:\n%s", view)
+	}
+
+	// A filter narrows the summary; the filter logic itself is the rows' own.
+	press(t, m, "f")
+	typeText(t, m, "connection")
+	press(t, m, "enter")
+	typeText(t, m, "alerts")
+	press(t, m, "enter")
+	view = m.View()
+	if !m.logs.stats || !strings.Contains(view, "chat.send") || strings.Contains(view, "wiki.pages.get") {
+		t.Fatalf("the summary ignores the connection filter:\n%s", view)
+	}
+
+	press(t, m, "esc")
+	if m.logs.stats || m.screen != screenLogs {
+		t.Fatalf("esc = stats %v screen %v, want the rows again", m.logs.stats, m.screen)
+	}
+	if view := m.View(); !strings.Contains(view, "chat.send") || strings.Contains(view, "p95") {
+		t.Errorf("the rows did not come back:\n%s", view)
+	}
+}
+
+func TestLogsSummaryCountsMissingSizesApart(t *testing.T) {
+	f := newLogFixture(t)
+	fl := invokelog.Fields{Path: "mcp", Effect: "read", Connection: "wiki", Operation: "op.old", Result: "success",
+		Duration: time.Millisecond}
+	mustNoError(t, f.logger.Append(fl))
+	m := f.model(true, f.localToday())
+	press(t, m, "s")
+	line := rowLine(t, m.View(), "op.old")
+	if strings.Contains(line, "0") && !strings.Contains(line, "-") {
+		t.Errorf("a group without sizes shows 0 instead of -: %q", line)
+	}
+	if !strings.Contains(line, "-") {
+		t.Errorf("a group without sizes shows no -: %q", line)
+	}
+}

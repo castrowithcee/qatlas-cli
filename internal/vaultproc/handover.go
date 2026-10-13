@@ -21,10 +21,10 @@ import (
 )
 
 // handoverOperation is the operation the outcome of a committed or failed handover is logged under.
-const handoverOperation = "vault.handover"
+const handoverOperation = invokelog.OperationHandover
 
 // lockOperation names the lock the process decides on itself.
-const lockOperation = "vault.lock"
+const lockOperation = invokelog.OperationLock
 
 // The largest release files a prepare reads, and the largest program a commit hashes.
 const (
