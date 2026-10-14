@@ -62,7 +62,7 @@ func localFile(t *testing.T, name, content string) (dir, path string) {
 
 // The quote case stays off the file system, since Windows forbids quotes in file names.
 func TestDeckAttachmentMultipartFrameQuotesTheName(t *testing.T) {
-	head, tail, contentType, err := multipartFrame(`my "plan".pdf`)
+	head, tail, contentType, err := multipartFrame(`my "plan".pdf`, true)
 	if err != nil {
 		t.Fatal(err)
 	}

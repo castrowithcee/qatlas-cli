@@ -216,12 +216,11 @@ detected. `versions.list` is in the setup profiles `read` and `write`; `get` and
 
 ## Notes
 
-The group `notes` (profile `notes-read`) needs a `notes` target; `notes/CATEGORY` binds that category and all below
-it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
-never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
-like a missing note; attachments stay relative to their note, `local_path` follows `files.get`.
-Writing notes is in no profile: create and update stay in bound categories, an update also for the category it moves
-to, and needs the `etag`; deleting needs a tools list.
+The group `notes` (profile `notes-read`) needs a `notes` target; `notes/CATEGORY` binds it and all below. The Notes API
+filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally, never shown or
+counted; a chunk may be empty despite a next cursor. A foreign note or attachment reads like a missing note; attachments
+stay note-relative, `local_path` follows `files.get`. Writes are in no profile: create, update, and
+`noteattachments.upload` need a bound category, update also its new one and the `etag`; delete needs a tools list.
 
 ## System tags
 

@@ -465,6 +465,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(notesCreate, groupNotes), Handler: notesBound(invokeNotesCreate)},
 		capability.Operation{Descriptor: inGroup(notesUpdate, groupNotes), Handler: notesBound(invokeNotesUpdate)},
 		capability.Operation{Descriptor: inGroup(notesDelete, groupNotes), Handler: notesBound(invokeNotesDelete)},
+		capability.Operation{Descriptor: inGroup(noteAttachmentsUpload, groupNotes), Handler: notesBound(invokeNoteAttachmentsUpload)},
 		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
 		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
 		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
