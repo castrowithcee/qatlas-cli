@@ -46,8 +46,8 @@ const (
 )
 
 const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:prop>` +
-	`<d:displayname/><d:resourcetype/><c:addressbook-description/></d:prop></d:propfind>`
+	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
+	`<d:displayname/><d:resourcetype/><c:addressbook-description/><oc:invite/></d:prop></d:propfind>`
 
 // contactListProps and contactGetProps name the card properties a read asks the server for. A photo or
 // any other property is never requested.
@@ -91,7 +91,8 @@ const (
 		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"}},` +
 		`"required":["id"],"additionalProperties":false}`
 	addressbookSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"description":{"type":"string"},"read_only":{"type":"boolean"}},` +
+		`"description":{"type":"string"},"read_only":{"type":"boolean"},` +
+		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
 		`"required":["id","name"],"additionalProperties":false}`
 	addressbookArgSchema = `"addressbook":{"type":"string","minLength":1,"maxLength":255}`
 )
@@ -138,6 +139,9 @@ var addressbooksList = capability.Descriptor{
 		{Name: "name", Description: "Display name, untrusted data"},
 		{Name: "description", Description: "Description, untrusted data"},
 		{Name: "read_only", Description: "True for the system address book, which is never writable"},
+		{Name: "shares", Description: "At most 50 users and groups the address book is shared with, untrusted data; " +
+			"other recipients are typed other without id or name"},
+		{Name: "shares_truncated", Description: "True when the address book has more shares than reported"},
 		{Name: "count", Description: "Number of reported address books"},
 		{Name: "truncated", Description: "True when more address books match than one listing reports"},
 	},
@@ -197,6 +201,9 @@ type Addressbook struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	ReadOnly    bool   `json:"read_only,omitempty"`
+
+	Shares          []CollectionShare `json:"shares,omitempty"`
+	SharesTruncated bool              `json:"shares_truncated,omitempty"`
 }
 
 // AddressbooksResult is the result of the address book list.
@@ -445,12 +452,14 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 			continue
 		}
 		seen[uri] = true
-		result.Addressbooks = append(result.Addressbooks, Addressbook{
+		book := Addressbook{
 			ID:          uri,
 			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxAddressbookName),
 			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxAddressbookText),
 			ReadOnly:    uri == systemAddressbook,
-		})
+		}
+		book.Shares, book.SharesTruncated = davSharesOf(resources[i].Invites, resources[i].InvitesTruncated)
+		result.Addressbooks = append(result.Addressbooks, book)
 	}
 	sort.Slice(result.Addressbooks, func(i, j int) bool { return result.Addressbooks[i].ID < result.Addressbooks[j].ID })
 	if len(result.Addressbooks) > maxAddressbooks {
