@@ -39,6 +39,10 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 	}
 	found := 0
 	for _, d := range reg.Provider(Provider) {
+		if strings.HasPrefix(d.ID, Provider+".admin") {
+			// The administration reads are allow-list only too; nextcloud_test.go checks them.
+			continue
+		}
 		if d.ID != filesDelete.ID && d.ID != foldersDelete.ID && d.ID != trashDelete.ID && d.ID != systemtagsDelete.ID &&
 			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != remoteSharesRemove.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID &&
 			d.ID != deckStacksDelete.ID && d.ID != deckLabelsDelete.ID && d.ID != deckACLAdd.ID && d.ID != deckACLUpdate.ID && d.ID != deckACLRemove.ID && d.ID != talkMessagesDelete.ID && d.ID != deckCardsDelete.ID && d.ID != deckAttachmentsDelete.ID &&
