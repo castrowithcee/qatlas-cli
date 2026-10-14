@@ -10,13 +10,14 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
 const talkWriteFeatures = `{"version":{"string":"31"},"capabilities":{"spreed":{"features":` +
-	`["chat-v2","chat-reference-id","edit-messages","reactions"]}}}`
+	`["chat-v2","chat-reference-id","edit-messages","reactions","chat-read-marker","chat-read-last"]}}}`
 
 // talkWriter is a core whose connection may change Talk and lists the write tools, the delete tool included.
 func talkWriter(t *testing.T, targets ...string) *application.Core {
@@ -27,7 +28,7 @@ func talkWriter(t *testing.T, targets ...string) *application.Core {
 	connection.Targets = targets
 	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
 		config.PermissionUpdate, config.PermissionDelete}
-	connection.Tools = []string{talkMessagesSend.ID, talkMessagesEdit.ID, talkMessagesDelete.ID, talkReactionsSet.ID}
+	connection.Tools = []string{talkMessagesSend.ID, talkMessagesEdit.ID, talkMessagesDelete.ID, talkReactionsSet.ID, talkRoomsMarkRead.ID}
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}
 	return application.New(registry(t), cfg, resolver(red), red)
@@ -50,6 +51,7 @@ func talkWriteCases() []talkWriteCase {
 		{"react", "nextcloud.talkreactions.set", `,"message_id":"42","reaction":"👍","add":true`, http.MethodPost, reaction,
 			url.Values{"reaction": {"👍"}}},
 		{"unreact", "nextcloud.talkreactions.set", `,"message_id":"42","reaction":"👍","add":false`, http.MethodDelete, reaction, nil},
+		{"markread", "nextcloud.talkrooms.markread", ``, http.MethodPost, chat + "/read", nil},
 	}
 }
 
@@ -105,7 +107,7 @@ func TestTalkWritesNeedConfirmationAndSendOneRequest(t *testing.T) {
 					t.Errorf("form %s = %q", name, form.Get(name))
 				}
 			}
-			if c.method == http.MethodDelete && c.form == nil && got.body != "" {
+			if c.form == nil && got.body != "" {
 				t.Errorf("body = %q", got.body)
 			}
 			if c.name == "unreact" && got.url.Query().Get("reaction") != "👍" {
@@ -233,6 +235,44 @@ func TestTalkWritesNeedTheirCapabilityFeature(t *testing.T) {
 		needs := c.name != "delete"
 		if needs && (err == nil || len(*calls) != 1) || !needs && len(*calls) != 2 {
 			t.Errorf("%s: err = %v, calls = %d", c.name, err, len(*calls))
+		}
+	}
+}
+
+func TestTalkMarkReadIsAnUnprofiledConfirmedUpdate(t *testing.T) {
+	risk := talkRoomsMarkRead.Risk
+	if risk.Effect != capability.EffectUpdate || risk.Idempotency != capability.IdempotencyIdempotent ||
+		risk.Confirmation != capability.ConfirmationRequired || !risk.OpenWorld || risk.DataSensitivity != talkSensitivity ||
+		talkRoomsMarkRead.RequiresToolAllowList || strings.Contains(string(talkRoomsMarkRead.InputSchema), "last") {
+		t.Errorf("risk = %+v", risk)
+	}
+	metadata, _ := registry(t).ProviderMetadata(Provider)
+	for _, profile := range metadata.Profiles {
+		for _, id := range profile.Tools {
+			if id == talkRoomsMarkRead.ID {
+				t.Errorf("profile %s offers %s", profile.ID, id)
+			}
+		}
+	}
+}
+
+func TestTalkMarkReadRefusesAnUnboundTokenLocallyAndNeedsBothFeatures(t *testing.T) {
+	refuse(t)
+	for _, token := range []string{foreignRoom, "a/b", ""} {
+		_, err := talkWriter(t, "talk/"+boundRoom).Invoke(context.Background(), application.InvokeRequest{
+			Operation: talkRoomsMarkRead.ID, Connection: "reports", Confirmed: true,
+			Arguments: json.RawMessage(talkArgs(token, "")),
+		})
+		if err == nil || token != "" && strings.Contains(err.Error(), token) {
+			t.Errorf("token %q: err = %v", token, err)
+		}
+	}
+	for _, have := range []string{`"chat-read-marker"`, `"chat-read-last"`} {
+		calls := serve(t, func(*http.Request) (*http.Response, error) {
+			return ocsResponse(http.StatusOK, ocsData(`{"capabilities":{"spreed":{"features":[`+have+`]}}}`)), nil
+		})
+		if err := talkWrite(t, talkWriteCases()[5], true); err == nil || len(*calls) != 1 {
+			t.Errorf("%s: err = %v, calls = %d", have, err, len(*calls))
 		}
 	}
 }

@@ -167,18 +167,17 @@ cards. Every `delete` and `deckacl` tool needs a tools list.
 
 The tool group `talk` uses the OCS API of Talk. Only reads are in the setup profile `talk-read`; deleting and closing a
 poll for good need a tools list. A `talk` target binds every conversation of the identity, `talk/TOKEN` one; an unbound
-or malformed token is refused locally, before any credential access or request, without naming it. A call first reads
-the `spreed` capability, or the conversation or poll it needs, and refuses a missing app or feature. Reads omit links,
-paths, previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
+or malformed token is refused locally, before credential access or any request, unnamed. Reads omit links, paths,
+previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
 
-Only internal conversations and existing users and groups are managed, never public ones, guests, e-mail, phone,
-federated, or team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and `talkrooms.delete` need
-an owner or moderator. `talkparticipants.remove` and `.moderator` take an `attendee_id` of `talkparticipants.list`,
-spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of `talkpolls.get`. `talkfiles.share`
-needs `folder`, `talk`, and a tools list, shares read-only into private conversations; `shares.delete` revokes.
-
-A change needs `confirm` and sends one request after one read. Check the list before repeating an unclear outcome
-(`send`: `reference_id`; `talkfiles.share`: `shares.list`). 429 is rate-limited.
+Only internal conversations and existing users and groups are managed: no public, guest, e-mail, phone, federated, or
+team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and `.delete` need an owner or moderator.
+Only `talkrooms.markread` moves the read marker. `talkparticipants.remove` and `.moderator` take an `attendee_id` of
+`talkparticipants.list`, spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of
+`talkpolls.get`. `talkfiles.share` needs `folder`, `talk`, a tools list and shares read-only into private
+conversations; `shares.delete` revokes. Every call first reads the `spreed` capability or the conversation or poll it
+needs and refuses a missing app or feature; a change needs `confirm` and then sends one request. Check the list before
+repeating an unclear outcome (`send`: `reference_id`; `talkfiles.share`: `shares.list`). 429 is rate-limited.
 
 ## Calendar
 

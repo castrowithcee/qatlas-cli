@@ -43,6 +43,11 @@ const (
 	uncertainRoomCreate = "; the conversation may have been created, check talkrooms.list before repeating"
 	uncertainRoomUpdate = "; the conversation may have been changed, check talkrooms.get before repeating"
 	uncertainRoomDelete = "; the conversation may have been deleted, check talkrooms.list before repeating"
+	uncertainRoomRead   = "; the conversation may have been marked as read, check talkrooms.get before repeating"
+
+	// Without lastReadMessage, Talk moves the marker to the newest message; that omission needs chat-read-last.
+	featureReadMarker = "chat-read-marker"
+	featureReadLast   = "chat-read-last"
 )
 
 var (
@@ -53,6 +58,10 @@ var (
 	talkRoomUpdateErrors = map[int]string{
 		http.StatusBadRequest: "Talk refused this change (for example the value is not accepted for this conversation)",
 		http.StatusForbidden:  "this identity may not change this Talk conversation",
+	}
+	talkRoomReadErrors = map[int]string{
+		http.StatusBadRequest: "Talk refused to mark this conversation as read",
+		http.StatusForbidden:  "this identity may not mark this Talk conversation as read",
 	}
 	talkRoomDeleteErrors = map[int]string{
 		http.StatusBadRequest: "Talk refused to delete this conversation",
@@ -71,6 +80,12 @@ type RoomUpdateResult struct {
 type RoomDeleteResult struct {
 	Deleted bool   `json:"deleted"`
 	Token   string `json:"token"`
+}
+
+// RoomReadResult reports a conversation whose read marker Nextcloud moved.
+type RoomReadResult struct {
+	Read  bool   `json:"read"`
+	Token string `json:"token"`
 }
 
 type rawRoomState struct {
@@ -180,6 +195,23 @@ func (c *Client) UpdateRoom(ctx context.Context, token string, name, description
 	return &RoomUpdateResult{Updated: true, Token: token, Field: field}, nil
 }
 
+// MarkRoomRead moves the read marker of the identity to the newest message of a conversation: one capability
+// read, then one POST without a message ID. It is the only tool that moves the marker.
+func (c *Client) MarkRoomRead(ctx context.Context, token string) (*RoomReadResult, error) {
+	const op = "mark talk conversation as read"
+	if !validTalkToken(token) {
+		return nil, providerError(op, "a conversation token is unusable")
+	}
+	if err := c.talkFeature(ctx, op, featureReadMarker, featureReadLast); err != nil {
+		return nil, err
+	}
+	if _, err := c.ocsSend(ctx, op, http.MethodPost, ocsRequest{app: ocsTalkChat, suffix: []string{token, "read"}}, nil,
+		uncertainRoomRead); err != nil {
+		return nil, talkRoomError(op, err, talkRoomReadErrors, messageTalkNoRoom)
+	}
+	return &RoomReadResult{Read: true, Token: token}, nil
+}
+
 // DeleteRoom deletes a conversation the identity moderates for all of its participants.
 func (c *Client) DeleteRoom(ctx context.Context, token string) (*RoomDeleteResult, error) {
 	const op = "delete talk conversation"
@@ -241,6 +273,23 @@ var (
 			{Name: "token", Description: "Token of the conversation"}, {Name: "field", Description: "name or description"}},
 		Examples: []capability.Example{{Description: "Rename a conversation",
 			Arguments: json.RawMessage(`{"token":"abcd1234","name":"Project Atlas"}`)}},
+	}
+
+	talkRoomsMarkRead = capability.Descriptor{
+		ID: Provider + ".talkrooms.markread", Version: 1, Title: "Mark a Nextcloud Talk conversation as read",
+		Description: "Mark a Talk conversation the connection binds as read up to its newest message. This moves the " +
+			"read marker of this identity, which other participants may see; no message is changed. One capability " +
+			"read precedes exactly one request, which is not repeated after an unclear outcome",
+		Tags:     []string{"nextcloud", "talk", "chat", "read", "ocs"},
+		Provider: Provider, Risk: talkWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"token":` + talkTokenSchema +
+			`},"required":["token"],"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"read":{"type":"boolean"},"token":{"type":"string"}},` +
+			`"required":["read","token"],"additionalProperties":false}`),
+		Arguments: []capability.Argument{talkTokenArgument},
+		Fields: []capability.Field{{Name: "read", Description: "True when Nextcloud moved the read marker"},
+			{Name: "token", Description: "Token of the conversation"}},
+		Examples: []capability.Example{{Description: "Mark a conversation as read", Arguments: json.RawMessage(`{"token":"abcd1234"}`)}},
 	}
 
 	talkRoomsDelete = capability.Descriptor{
@@ -349,4 +398,24 @@ func invokeTalkRoomsDelete(ctx context.Context, resolved *config.Resolved, secre
 		return nil, err
 	}
 	return client.DeleteRoom(ctx, input.Token)
+}
+
+func invokeTalkRoomsMarkRead(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "mark talk conversation as read"
+	input, err := readTalkRoom(op, raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireTalkToken(resolved, input.Token); err != nil {
+		return nil, err
+	}
+	if input.Kind != "" || input.Name != nil || input.User != nil || input.Description != nil {
+		return nil, providerError(op, "the conversation arguments are unusable")
+	}
+	client, err := open(ctx, resolved, secrets, red, false)
+	if err != nil {
+		return nil, err
+	}
+	return client.MarkRoomRead(ctx, input.Token)
 }
