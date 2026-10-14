@@ -63,6 +63,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupAccount, Title: "Account",
 	Description: "Account data, status, notifications, the activity stream, and the unified search of the identity; the account target binds them",
+}, {
+	ID: groupAdmin, Title: "Administration",
+	Description: "Read-only view of the users and groups of the instance for an administrator or subadmin; the admin target binds them",
 }}
 
 var targetKinds = []config.TargetKind{{

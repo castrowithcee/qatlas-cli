@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
-  notes, calendars and events, contacts, account data, status, notifications, and search, with typed targets,
-  connection permissions, and safety boundaries.
+  notes, calendars and events, contacts, account data, status, notifications, search, and read-only user and group
+  administration, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -50,7 +50,7 @@ identity reaches) or `kind/ID`:
   such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (account data, status, notifications,
   activity, search, directory, incoming shares, system tag catalog and its administration).
-- `admin`: provisioning reads; only as the sole target of a connection.
+- `admin`: the read-only administration of users and groups; only as the sole target of a connection.
 
 The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
 IDs are literal single segments without `%`, `\`, or control characters.
@@ -248,14 +248,8 @@ The tool group `account` reads the own account data, status, notifications, acti
 the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
 without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
 `truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
-only its label and method and is never followed.
-
-`account.get` reports only ID, display name, email, language, locale, up to 50 groups, and storage use as numbers.
-Storage paths, backend details, phone, and address are never reported. `status.get` reports type, message, icon,
-and end of the message. `status.set` takes exactly one of a `type` (`online`, `away`, `dnd`, `invisible`,
-`offline`), a `predefined_id`, or a `message` of at most 80 characters, so one call sends one request. `expires`
-(Unix seconds or RFC 3339, in the future) ends a message and is refused with `type`. `status.clear` removes the
-message and keeps the type. Both need `confirm` and are in no profile.
+only its label and method and is never followed. `status.set` and `status.clear` send one request, need `confirm`,
+and are in no profile.
 
 `notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
 reported as `unchanged`. `activity.list` takes a filter from a fixed list that the instance must also offer,
@@ -267,6 +261,12 @@ outcome is checked with `notifications.list` or `status.get` before repeating.
 to 25 hits (`term`, `limit`, `cursor` from the previous `next_cursor`). The provider ID is checked locally and
 against the live list, so an unoffered one is refused without a search. Hits are title, subtitle, and link as
 untrusted text; a link is never followed. Both are in no profile.
+
+## Administration
+
+`nextcloud.adminusers.*` and `nextcloud.admingroups.*` read users, groups, and members as an administrator or as a
+subadmin within its groups and need a tools list; an `admin` connection test reads one user page. Users are never
+created or invited, and no change is offered: Nextcloud demands a password confirmation an app password cannot give.
 
 ## File comments
 

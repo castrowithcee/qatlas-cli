@@ -392,6 +392,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: notificationsDismissAll, Handler: accountBound(invokeNotificationsDismissAll)},
 		capability.Operation{Descriptor: activityList, Handler: accountBound(invokeActivityList)},
 		capability.Operation{Descriptor: accountGet, Handler: accountBound(invokeAccountGet)},
+		capability.Operation{Descriptor: adminUsersList, Handler: adminBound(invokeAdminUsersList)},
+		capability.Operation{Descriptor: adminUsersGet, Handler: adminBound(invokeAdminUsersGet)},
+		capability.Operation{Descriptor: adminGroupsList, Handler: adminBound(invokeAdminGroupsList)},
+		capability.Operation{Descriptor: adminGroupsMembers, Handler: adminBound(invokeAdminGroupsMembers)},
 		capability.Operation{Descriptor: statusGet, Handler: accountBound(invokeStatusGet)},
 		capability.Operation{Descriptor: statusSet, Handler: accountBound(invokeStatusSet)},
 		capability.Operation{Descriptor: statusClear, Handler: accountBound(invokeStatusClear)},
@@ -947,6 +951,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 			return providerErr.Class, nil
 		}
 		return "", err
+	}
+	// open has parsed the targets, so the scope is valid here. An admin connection holds no Files folder
+	// to check; it proves the administrator or subadmin right instead.
+	if bound, err := scopeOf(resolved); err == nil && bound.admin {
+		return client.testAdmin(ctx)
 	}
 	class, err := client.testConnection(ctx)
 	if err != nil || class != provider.ClassOK {
