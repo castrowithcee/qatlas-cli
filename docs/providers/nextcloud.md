@@ -165,19 +165,18 @@ cards. Every `delete` and `deckacl` tool needs a tools list.
 
 ## Talk
 
-The tool group `talk` uses the OCS API of the Talk app. Read tools form the setup profile `talk-read`; change tools
-are in no profile, and deleting needs a tools list. A `talk` target binds every conversation of the identity,
-`talk/TOKEN` one; listings drop unbound conversations, and an unbound or malformed token is refused locally, before
-any credential access or request, without naming it. A call first reads the `spreed` capability, or for an existing
-conversation the conversation or its participants, and refuses a missing app or feature.
+The tool group `talk` uses the OCS API of Talk. Only reads are in the setup profile `talk-read`; deleting and closing
+a poll for good need a tools list. A `talk` target binds every conversation of the identity, `talk/TOKEN` one; an
+unbound or malformed token is refused locally, before any credential access or request, without naming it. A call
+first reads the `spreed` capability, or the conversation or poll it needs, and refuses a missing app or feature.
 
-Reading never waits for new messages, moves the read marker, or marks notifications as read. Links, paths, and
-previews of rich objects, session IDs, and phone numbers are never reported. Texts and names are untrusted data.
+Reads omit links, paths, previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
 
 Only internal conversations and existing users and groups are managed, never public conversations, guests, e-mail,
 phone, federated, or team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and
-`talkrooms.delete` need an owner or moderator. `talkparticipants.remove` and `talkparticipants.moderator` take an
-`attendee_id` of `talkparticipants.list`, spare owner and self, and need a tools list.
+`talkrooms.delete` need an owner or moderator. `talkparticipants.remove` and `.moderator` take an `attendee_id` of
+`talkparticipants.list`, spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of
+`talkpolls.get`.
 
 A change needs `confirm` and sends one request after one read. Check the list before repeating an unclear outcome
 (`send`: `reference_id`). 429 is rate-limited.
