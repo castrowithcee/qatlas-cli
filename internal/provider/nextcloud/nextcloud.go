@@ -455,6 +455,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(talkParticipantsRemove, groupTalk), Handler: invokeTalkParticipantsRemove},
 		capability.Operation{Descriptor: inGroup(talkParticipantsModerator, groupTalk), Handler: invokeTalkParticipantsModerator},
 		capability.Operation{Descriptor: inGroup(talkMessagesSend, groupTalk), Handler: invokeTalkMessagesSend},
+		capability.Operation{Descriptor: inGroup(talkFilesShare, groupTalk), Handler: invokeTalkFilesShare},
 		capability.Operation{Descriptor: inGroup(talkMessagesEdit, groupTalk), Handler: invokeTalkMessagesEdit},
 		capability.Operation{Descriptor: inGroup(talkMessagesDelete, groupTalk), Handler: invokeTalkMessagesDelete},
 		capability.Operation{Descriptor: inGroup(talkReactionsSet, groupTalk), Handler: invokeTalkReactionsSet},
