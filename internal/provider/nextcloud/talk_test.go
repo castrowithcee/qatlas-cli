@@ -330,7 +330,7 @@ func TestTalkProfileHoldsExactlyTheReadTools(t *testing.T) {
 			}
 			continue
 		}
-		want := []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID}
+		want := []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID, talkPollsGet.ID}
 		if strings.Join(profile.Tools, ",") != strings.Join(want, ",") {
 			t.Errorf("talk-read tools = %v", profile.Tools)
 		}

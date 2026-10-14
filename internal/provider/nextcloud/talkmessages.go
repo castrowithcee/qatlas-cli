@@ -329,6 +329,13 @@ type talkWriteArguments struct {
 	Source      string `json:"source"`
 	AttendeeID  string `json:"attendee_id"`
 	Moderator   *bool  `json:"moderator"`
+
+	PollID     string   `json:"poll_id"`
+	Question   string   `json:"question"`
+	Options    []string `json:"options"`
+	ResultMode string   `json:"result_mode"`
+	MaxVotes   *int     `json:"max_votes"`
+	OptionIDs  []int    `json:"option_ids"`
 }
 
 // readTalkWrite decodes strictly and binds the conversation before any credential access.

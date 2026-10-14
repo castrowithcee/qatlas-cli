@@ -337,8 +337,8 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
 		}, {
 			ID: "talk-read", Title: "Read Talk conversations",
-			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
-			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
+			Description: "lists bound Talk conversations and their participants and reads their messages and polls; changes nothing",
+			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID, talkPollsGet.ID},
 		}, {
 			ID: "notes-read", Title: "Read notes",
 			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
@@ -458,6 +458,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(talkMessagesEdit, groupTalk), Handler: invokeTalkMessagesEdit},
 		capability.Operation{Descriptor: inGroup(talkMessagesDelete, groupTalk), Handler: invokeTalkMessagesDelete},
 		capability.Operation{Descriptor: inGroup(talkReactionsSet, groupTalk), Handler: invokeTalkReactionsSet},
+		capability.Operation{Descriptor: inGroup(talkPollsGet, groupTalk), Handler: invokeTalkPollsGet},
+		capability.Operation{Descriptor: inGroup(talkPollsCreate, groupTalk), Handler: invokeTalkPollsCreate},
+		capability.Operation{Descriptor: inGroup(talkPollsVote, groupTalk), Handler: invokeTalkPollsVote},
+		capability.Operation{Descriptor: inGroup(talkPollsClose, groupTalk), Handler: invokeTalkPollsClose},
 		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
 		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
 		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
