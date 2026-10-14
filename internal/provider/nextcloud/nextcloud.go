@@ -493,6 +493,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(addressbooksCreate, groupContacts), Handler: addressbookBound(invokeAddressbooksCreate)},
 		capability.Operation{Descriptor: inGroup(addressbooksUpdate, groupContacts), Handler: addressbookBound(invokeAddressbooksUpdate)},
 		capability.Operation{Descriptor: inGroup(addressbooksDelete, groupContacts), Handler: addressbookBound(invokeAddressbooksDelete)},
+		capability.Operation{Descriptor: inGroup(addressbooksShare, groupContacts), Handler: addressbookBound(invokeAddressbooksShare)},
+		capability.Operation{Descriptor: inGroup(addressbooksUnshare, groupContacts), Handler: addressbookBound(invokeAddressbooksUnshare)},
 		capability.Operation{Descriptor: inGroup(contactsList, groupContacts), Handler: addressbookBound(invokeContactsList)},
 		capability.Operation{Descriptor: inGroup(contactsGet, groupContacts), Handler: addressbookBound(invokeContactsGet)},
 		capability.Operation{Descriptor: inGroup(contactsCreate, groupContacts), Handler: addressbookBound(invokeContactsCreate)},
