@@ -134,10 +134,10 @@ refuses an unknown ID without naming a target.
 `nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
 confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
 the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
-Reading is always granted; the other rights are flags that default to false. Links, e-mail, federated, team, and
-Talk shares cannot be created or changed, and no password or label is set. `update` changes the rights, expiry,
-or note of a `user` or `group` share the identity made; rights not given keep their value. `delete` revokes any
-share the identity made below the root, whatever its type. Shares made to the identity stay untouched.
+Reading is always granted; the other rights are flags that default to false. Links, e-mail, federated, and team
+shares cannot be created or changed, Talk shares only by `talkfiles.share`; no password or label is set. `update`
+changes rights, expiry, or note of a `user` or `group` share the identity made; rights not given keep their value.
+`delete` revokes any share the identity made below the root, whatever its type; shares made to it stay untouched.
 
 `update` and `delete` read the share once and refuse without a change a share outside the root, a share that
 is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
@@ -165,21 +165,20 @@ cards. Every `delete` and `deckacl` tool needs a tools list.
 
 ## Talk
 
-The tool group `talk` uses the OCS API of Talk. Only reads are in the setup profile `talk-read`; deleting and closing
-a poll for good need a tools list. A `talk` target binds every conversation of the identity, `talk/TOKEN` one; an
-unbound or malformed token is refused locally, before any credential access or request, without naming it. A call
-first reads the `spreed` capability, or the conversation or poll it needs, and refuses a missing app or feature.
+The tool group `talk` uses the OCS API of Talk. Only reads are in the setup profile `talk-read`; deleting and closing a
+poll for good need a tools list. A `talk` target binds every conversation of the identity, `talk/TOKEN` one; an unbound
+or malformed token is refused locally, before any credential access or request, without naming it. A call first reads
+the `spreed` capability, or the conversation or poll it needs, and refuses a missing app or feature. Reads omit links,
+paths, previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
 
-Reads omit links, paths, previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
-
-Only internal conversations and existing users and groups are managed, never public conversations, guests, e-mail,
-phone, federated, or team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and
-`talkrooms.delete` need an owner or moderator. `talkparticipants.remove` and `.moderator` take an `attendee_id` of
-`talkparticipants.list`, spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of
-`talkpolls.get`.
+Only internal conversations and existing users and groups are managed, never public ones, guests, e-mail, phone,
+federated, or team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and `talkrooms.delete` need
+an owner or moderator. `talkparticipants.remove` and `.moderator` take an `attendee_id` of `talkparticipants.list`,
+spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of `talkpolls.get`. `talkfiles.share`
+needs `folder`, `talk`, and a tools list, shares read-only into private conversations; `shares.delete` revokes.
 
 A change needs `confirm` and sends one request after one read. Check the list before repeating an unclear outcome
-(`send`: `reference_id`). 429 is rate-limited.
+(`send`: `reference_id`; `talkfiles.share`: `shares.list`). 429 is rate-limited.
 
 ## Calendar
 
