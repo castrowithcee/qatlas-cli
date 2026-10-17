@@ -58,8 +58,8 @@ func metaWriteRisk(effect capability.Effect, idempotency capability.Idempotency)
 
 const metaWriteNote = "Changes the data model of the whole Twenty workspace, so every user and integration of the " +
 	"workspace sees the change at once. Needs the Twenty permission \"Data model\" and a connection without object " +
-	"targets, and is offered only by a connection whose tools list names it. Changing an existing standard object " +
-	"or field accepts label changes only; changing system objects and fields and relation fields is refused. Sent " +
+	"targets, and is offered only by a connection whose tools list names it. Changing an existing object or field " +
+	"covers standard and system ones too and passes on what Twenty accepts; relation fields cannot be changed. Sent " +
 	"once; after an unclear result read before repeating. Names, labels, descriptions, and options are untrusted workspace data"
 
 const (
@@ -111,8 +111,8 @@ var metaObjectsUpdate = capability.Descriptor{
 	ID: Provider + ".metaobjects.update", Version: 1, Title: "Update a Twenty CRM object",
 	Description: "Change labels, description, or the active state of one object of the Twenty workspace of a " +
 		"connection; API names never change. Deactivating an object hides it and its records from every user and " +
-		"integration of the workspace; activating it again shows it. A standard object accepts label changes only. " +
-		metaWriteNote,
+		"integration of the workspace; activating it again shows it. Standard and system objects are changed like " +
+		"custom ones; Twenty refuses what it does not allow there. " + metaWriteNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "objects", "update"},
 	Risk:     metaWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -162,10 +162,12 @@ var metaFieldsUpdate = capability.Descriptor{
 	ID: Provider + ".metafields.update", Version: 1, Title: "Update a Twenty CRM field",
 	Description: "Change label, description, options, or the active state of one non-relational field of the " +
 		"Twenty workspace of a connection; the API name and type never change. Options replace the whole list: " +
-		"records keep only values that are still listed, every removed option clears that value in all records. " +
-		"Pass the id of an existing option, as returned by twentycrm.metafields.get, to keep it. Deactivating a " +
-		"field hides it and its values from every user and integration of the workspace; activating it again " +
-		"shows it. A standard field accepts label changes only. " + metaWriteNote,
+		"records keep only values that are still listed, every removed option clears that value in all records " +
+		"of the workspace. On a standard field such as the stage of an opportunity this also affects pipelines, " +
+		"views, and workflow filters. Pass the id of an existing option, as returned by twentycrm.metafields.get, " +
+		"to keep it. Deactivating a field hides it and its values from every user and integration of the " +
+		"workspace; activating it again shows it. Standard and system fields are changed like custom ones; " +
+		"Twenty refuses what it does not allow there. " + metaWriteNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "fields", "update"},
 	Risk:     metaWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -275,7 +277,6 @@ type metaWriteChange struct {
 	id      string // object or field to change; empty on create
 	owner   string // object that receives a new field
 	payload map[string]any
-	labels  bool // true when nothing but labels changes
 	options bool // true when options are replaced
 	create  struct{ name, kind string }
 }
@@ -318,14 +319,13 @@ func newMetaObjectUpdate(args *metaWriteArgs) (*metaWriteChange, error) {
 	if args.LabelPlural != nil {
 		payload["labelPlural"] = *args.LabelPlural
 	}
-	labels := args.Description == nil && args.IsActive == nil
 	if args.Description != nil {
 		payload["description"] = *args.Description
 	}
 	if args.IsActive != nil {
 		payload["isActive"] = *args.IsActive
 	}
-	change := &metaWriteChange{id: args.ID, payload: payload, labels: labels}
+	change := &metaWriteChange{id: args.ID, payload: payload}
 	return change, requireUpdateContent(change)
 }
 
@@ -371,14 +371,13 @@ func newMetaFieldUpdate(args *metaWriteArgs) (*metaWriteChange, error) {
 	if args.Label != nil {
 		payload["label"] = *args.Label
 	}
-	labels := args.Description == nil && args.IsActive == nil && args.Options == nil
 	if args.Description != nil {
 		payload["description"] = *args.Description
 	}
 	if args.IsActive != nil {
 		payload["isActive"] = *args.IsActive
 	}
-	change := &metaWriteChange{id: args.ID, payload: payload, labels: labels}
+	change := &metaWriteChange{id: args.ID, payload: payload}
 	if args.Options != nil {
 		options, err := metaOptionsPayload(*args.Options)
 		if err != nil {
@@ -482,12 +481,6 @@ func (c *Client) UpdateMetaObject(ctx context.Context, change *metaWriteChange) 
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different object than the requested one")
 	}
-	if isTrue(current.IsSystem) {
-		return nil, invalidRequest("system objects cannot be changed through Qatlas")
-	}
-	if !isTrue(current.IsCustom) && !change.labels {
-		return nil, invalidRequest("a standard object accepts label changes only")
-	}
 	entity, err := c.metaChange(ctx, op, metaObjectUncertain, http.MethodPatch, path, "updateOneObject", change.payload)
 	if err != nil {
 		return nil, err
@@ -535,12 +528,8 @@ func (c *Client) UpdateMetaField(ctx context.Context, change *metaWriteChange) (
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different field than the requested one")
 	}
-	if isTrue(current.IsSystem) || !contains(metaFieldTypes, current.Type) || current.Type == "RELATION" ||
-		current.Type == "MORPH_RELATION" {
-		return nil, invalidRequest("system fields and relation fields cannot be changed through Qatlas")
-	}
-	if !isTrue(current.IsCustom) && !change.labels {
-		return nil, invalidRequest("a standard field accepts label changes only")
+	if current.Type == "RELATION" || current.Type == "MORPH_RELATION" {
+		return nil, invalidRequest("relation fields cannot be changed through Qatlas")
 	}
 	if change.options && current.Type != "SELECT" && current.Type != "MULTI_SELECT" {
 		return nil, invalidRequest("options can only be changed on a SELECT or MULTI_SELECT field")
