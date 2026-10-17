@@ -16,8 +16,8 @@ import (
 
 const metaDeleteNote = "Deletes for good, and for every user and integration of the workspace at once. Needs the " +
 	"Twenty permission \"Data model\" and a connection without object targets, and is offered only by a " +
-	"connection whose tools list names it. Only custom, non-relational targets that are deactivated first " +
-	"(update with is_active false) are accepted; standard and system targets and relation fields are refused. " +
+	"connection whose tools list names it. Only custom targets that are deactivated first (update with " +
+	"is_active false) are accepted; standard and system targets and morph relation fields are refused. " +
 	"Sent once; after an unclear result read before repeating"
 
 const metaDeleteResult = `{"type":"object","properties":{"id":` + uuidSchema +
@@ -41,8 +41,10 @@ var metaObjectsDelete = capability.Descriptor{
 
 var metaFieldsDelete = capability.Descriptor{
 	ID: Provider + ".metafields.delete", Version: 1, Title: "Delete a Twenty CRM custom field",
-	Description: "Permanently delete one custom non-relational field of the Twenty workspace of a connection " +
-		"together with its values in all records; the loss is final and cannot be undone. " + metaDeleteNote,
+	Description: "Permanently delete one custom field, a relation field included, of the Twenty workspace of a " +
+		"connection together with its values in all records; the loss is final and cannot be undone. Deleting a " +
+		"relation field also deletes the counterpart field on the other object, and the links of all records " +
+		"through this relation are lost. " + metaRelationNote + metaDeleteNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "fields", "delete"},
 	Risk:     metaWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -65,7 +67,7 @@ func newMetaDelete(args *metaWriteArgs) (*metaWriteChange, error) {
 	if !validUUID(args.ID) || args.ObjectID != "" || args.Type != "" || args.NameSingular != nil ||
 		args.NamePlural != nil || args.Name != nil || args.LabelSingular != nil || args.LabelPlural != nil ||
 		args.Label != nil || args.Description != nil || args.IsActive != nil || args.IsNullable != nil ||
-		args.Options != nil {
+		args.Options != nil || args.hasRelationArgs() {
 		return nil, invalidRequest(errMetaArguments)
 	}
 	return &metaWriteChange{id: args.ID}, nil
@@ -129,8 +131,8 @@ func (c *Client) DeleteMetaField(ctx context.Context, change *metaWriteChange) (
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different field than the requested one")
 	}
 	if !isTrue(current.IsCustom) || isTrue(current.IsSystem) || !contains(metaFieldTypes, current.Type) ||
-		current.Type == "RELATION" || current.Type == "MORPH_RELATION" {
-		return nil, invalidRequest("only custom non-relational fields can be deleted through Qatlas")
+		current.Type == "MORPH_RELATION" {
+		return nil, invalidRequest("only custom fields other than morph relations can be deleted through Qatlas")
 	}
 	if current.IsActive == nil || *current.IsActive {
 		return nil, invalidRequest("deactivate the field first with twentycrm.metafields.update and is_active false")

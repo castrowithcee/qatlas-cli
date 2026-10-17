@@ -27,6 +27,8 @@ func TestMetaDeleteSendsOneDelete(t *testing.T) {
 			inactive(metaObjectBody(metaObjID, true, false)), `{"data":{"deleteOneObject":{"id":"` + metaObjID + `"}}}`, metaObjID},
 		"field": {invokeMetaFieldsDelete, metadataFieldsPath + "/" + metaFieldID,
 			inactive(metaFieldBody("TEXT", true, false)), `{"data":{"deleteOneField":{"id":"` + metaFieldID + `"}}}`, metaFieldID},
+		"relation field": {invokeMetaFieldsDelete, metadataFieldsPath + "/" + metaFieldID,
+			inactive(metaFieldBody("RELATION", true, false)), `{"data":{"deleteOneField":{"id":"` + metaFieldID + `"}}}`, metaFieldID},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := serveMetaWrite(t, map[string]string{test.path: test.read}, metaAnswer(test.answer))
@@ -52,15 +54,16 @@ func TestMetaDeleteRefusesBeforeDelete(t *testing.T) {
 		read    string
 		id      string
 	}{
-		"standard object": {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaObjID, false, false)), metaObjID},
-		"system object":   {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaObjID, true, true)), metaObjID},
-		"active object":   {invokeMetaObjectsDelete, objPath, metaObjectBody(metaObjID, true, false), metaObjID},
-		"other object":    {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaOtherID, true, false)), metaObjID},
-		"standard field":  {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("TEXT", false, false)), metaFieldID},
-		"system field":    {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("TEXT", true, true)), metaFieldID},
-		"relation field":  {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("RELATION", true, false)), metaFieldID},
-		"morph field":     {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("MORPH_RELATION", true, false)), metaFieldID},
-		"active field":    {invokeMetaFieldsDelete, fieldPath, metaFieldBody("TEXT", true, false), metaFieldID},
+		"standard object":   {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaObjID, false, false)), metaObjID},
+		"system object":     {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaObjID, true, true)), metaObjID},
+		"active object":     {invokeMetaObjectsDelete, objPath, metaObjectBody(metaObjID, true, false), metaObjID},
+		"other object":      {invokeMetaObjectsDelete, objPath, inactive(metaObjectBody(metaOtherID, true, false)), metaObjID},
+		"standard field":    {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("TEXT", false, false)), metaFieldID},
+		"system field":      {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("TEXT", true, true)), metaFieldID},
+		"standard relation": {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("RELATION", false, false)), metaFieldID},
+		"active relation":   {invokeMetaFieldsDelete, fieldPath, metaFieldBody("RELATION", true, false), metaFieldID},
+		"morph field":       {invokeMetaFieldsDelete, fieldPath, inactive(metaFieldBody("MORPH_RELATION", true, false)), metaFieldID},
+		"active field":      {invokeMetaFieldsDelete, fieldPath, metaFieldBody("TEXT", true, false), metaFieldID},
 		"unknown state object": {invokeMetaObjectsDelete, objPath,
 			strings.Replace(metaObjectBody(metaObjID, true, false), `"isActive":true,`, "", 1), metaObjID},
 		"unknown state field": {invokeMetaFieldsDelete, fieldPath,
@@ -143,6 +146,11 @@ func TestMetaDeleteNeedsWorkspaceScopeAndMapsPermission(t *testing.T) {
 }
 
 func TestMetaDeleteDescriptorsAreGuarded(t *testing.T) {
+	for _, want := range []string{"counterpart field on the other object", "links of all records", "both objects"} {
+		if !strings.Contains(metaFieldsDelete.Description, want) {
+			t.Errorf("metafields.delete omits %q", want)
+		}
+	}
 	for _, d := range []capability.Descriptor{metaObjectsDelete, metaFieldsDelete} {
 		risk := d.Risk
 		if !d.RequiresToolAllowList || risk.Effect != capability.EffectDelete ||

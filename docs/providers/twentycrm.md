@@ -148,8 +148,14 @@ connection with an API key of its own. The writers need a `tools` entry; no prof
 `metafields.create` adds a field to any object Twenty accepts, standard or custom; Twenty decides, Qatlas
 does not pre-check the object. A field added to a standard object is a custom field.
 `metaobjects.update` and `metafields.update` change standard and system objects and fields too, with every
-argument Twenty accepts there; Twenty refuses the rest. Relation fields cannot be changed. Replacing the
-options of a field, a standard one included, clears every removed value in all records.
+argument Twenty accepts there; Twenty refuses the rest. Replacing the options of a field, a standard one
+included, clears every removed value in all records.
+
+`metafields.create` with the type `RELATION` links two objects and creates one field on each, so it changes the
+schema of both; the target may be any object Twenty accepts, workspace members included. `metafields.update`
+changes label, description, and active state of a relation field; `metafields.delete` removes a deactivated
+custom relation field together with its counterpart on the other object and the links of all records. Morph
+relations cannot be created, changed, or deleted.
 
 ## Views
 
