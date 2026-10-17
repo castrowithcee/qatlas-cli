@@ -130,33 +130,42 @@ func TestMetaObjectsUpdateReadsOnceAndPatches(t *testing.T) {
 	}
 }
 
-func TestMetaObjectsUpdateKeepsStandardAndSystemObjectsToLabels(t *testing.T) {
+func TestMetaObjectsUpdateReachesStandardAndSystemObjects(t *testing.T) {
 	path := metadataObjectsPath + "/" + metaObjID
-	t.Run("standard object, label only", func(t *testing.T) {
-		calls := serveMetaWrite(t, map[string]string{path: metaObjectBody(metaObjID, false, false)},
-			metaAnswer(metaObjectBody(metaObjID, false, false)))
-		if _, err := runMetaWrite(invokeMetaObjectsUpdate, `{"id":"`+metaObjID+`","label_plural":"Offers"}`); err != nil {
-			t.Fatal(err)
-		}
-		if len(metaWrites(calls)) != 1 {
-			t.Errorf("writes = %+v", metaWrites(calls))
-		}
-	})
 	for name, test := range map[string]struct {
-		system bool
-		args   string
+		custom, system bool
+		args           string
+		want           map[string]any
 	}{
-		"standard object, deactivate":   {false, `{"id":"` + metaObjID + `","is_active":false}`},
-		"standard object, description":  {false, `{"id":"` + metaObjID + `","description":"x"}`},
-		"system object, label":          {true, `{"id":"` + metaObjID + `","label_plural":"x"}`},
-		"custom system object, disable": {true, `{"id":"` + metaObjID + `","is_active":false}`},
+		"standard object, description and is_active": {false, false,
+			`{"id":"` + metaObjID + `","description":"x","is_active":false}`,
+			map[string]any{"description": "x", "isActive": false}},
+		"standard object, labels": {false, false, `{"id":"` + metaObjID + `","label_plural":"Offers"}`,
+			map[string]any{"labelPlural": "Offers"}},
+		"system object, label": {false, true, `{"id":"` + metaObjID + `","label_plural":"x"}`,
+			map[string]any{"labelPlural": "x"}},
+		"system object, is_active": {false, true, `{"id":"` + metaObjID + `","is_active":false}`,
+			map[string]any{"isActive": false}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			calls := serveMetaWrite(t, map[string]string{path: metaObjectBody(metaObjID, test.system, test.system)},
-				metaAnswer(`{}`))
-			_, err := runMetaWrite(invokeMetaObjectsUpdate, test.args)
-			if !asInvalidOK(err) || len(metaWrites(calls)) != 0 {
-				t.Errorf("err = %v, writes = %+v", err, metaWrites(calls))
+			calls := serveMetaWrite(t, map[string]string{path: metaObjectBody(metaObjID, test.custom, test.system)},
+				metaAnswer(metaObjectBody(metaObjID, test.custom, test.system)))
+			if _, err := runMetaWrite(invokeMetaObjectsUpdate, test.args); err != nil {
+				t.Fatal(err)
+			}
+			sent := metaWrites(calls)
+			if len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != path {
+				t.Fatalf("writes = %+v", sent)
+			}
+			var body map[string]any
+			_ = json.Unmarshal([]byte(sent[0].Body), &body)
+			if len(body) != len(test.want) {
+				t.Errorf("body = %s", sent[0].Body)
+			}
+			for key, want := range test.want {
+				if body[key] != want {
+					t.Errorf("body = %s", sent[0].Body)
+				}
 			}
 		})
 	}
@@ -351,14 +360,12 @@ func TestMetaFieldsUpdateReadsOnceAndPatches(t *testing.T) {
 func TestMetaFieldsUpdateRefusals(t *testing.T) {
 	path := metadataFieldsPath + "/" + metaFieldID
 	for name, test := range map[string]struct{ field, args string }{
-		"relation":         {metaFieldBody("RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
-		"morph relation":   {metaFieldBody("MORPH_RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
-		"system":           {metaFieldBody("TEXT", true, true), `{"id":"` + metaFieldID + `","label":"x"}`},
-		"unknown type":     {metaFieldBody(metaTypeCn, true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
-		"standard options": {metaFieldBody("SELECT", false, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
-		"standard disable": {metaFieldBody("TEXT", false, false), `{"id":"` + metaFieldID + `","is_active":false}`},
-		"options on text":  {metaFieldBody("TEXT", true, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
-		"other id":         {strings.Replace(metaFieldBody("TEXT", true, false), metaFieldID, metaOtherID, 1), `{"id":"` + metaFieldID + `","label":"x"}`},
+		"relation":                 {metaFieldBody("RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
+		"morph relation":           {metaFieldBody("MORPH_RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
+		"standard relation":        {metaFieldBody("RELATION", false, false), `{"id":"` + metaFieldID + `","is_active":false}`},
+		"options on text":          {metaFieldBody("TEXT", true, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
+		"options on standard text": {metaFieldBody("TEXT", false, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
+		"other id":                 {strings.Replace(metaFieldBody("TEXT", true, false), metaFieldID, metaOtherID, 1), `{"id":"` + metaFieldID + `","label":"x"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := serveMetaWrite(t, map[string]string{path: test.field}, metaAnswer(`{}`))
@@ -368,14 +375,79 @@ func TestMetaFieldsUpdateRefusals(t *testing.T) {
 			}
 		})
 	}
-	t.Run("standard field label", func(t *testing.T) {
-		calls := serveMetaWrite(t, map[string]string{path: metaFieldBody("TEXT", false, false)},
-			metaAnswer(metaFieldBody("TEXT", false, false)))
-		if _, err := runMetaWrite(invokeMetaFieldsUpdate, `{"id":"`+metaFieldID+`","label":"x"}`); err != nil ||
-			len(metaWrites(calls)) != 1 {
-			t.Errorf("err = %v", err)
+}
+
+func TestMetaFieldsUpdateReachesStandardAndSystemFields(t *testing.T) {
+	path := metadataFieldsPath + "/" + metaFieldID
+	oneWrite := func(t *testing.T, field, args string) map[string]any {
+		t.Helper()
+		calls := serveMetaWrite(t, map[string]string{path: field}, metaAnswer(field))
+		if _, err := runMetaWrite(invokeMetaFieldsUpdate, args); err != nil {
+			t.Fatal(err)
+		}
+		sent := metaWrites(calls)
+		if len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != path {
+			t.Fatalf("writes = %+v", sent)
+		}
+		var body map[string]any
+		_ = json.Unmarshal([]byte(sent[0].Body), &body)
+		return body
+	}
+	t.Run("standard select, options as complete list", func(t *testing.T) {
+		body := oneWrite(t, metaFieldBody("SELECT", false, false), `{"id":"`+metaFieldID+`","options":[`+
+			`{"id":"`+metaOptID+`","label":"Open","value":"OPEN"},{"label":"Won","value":"WON","color":"green"}]}`)
+		options, _ := body["options"].([]any)
+		first, _ := options[0].(map[string]any)
+		second, _ := options[1].(map[string]any)
+		if len(body) != 1 || len(options) != 2 || first["id"] != metaOptID || first["value"] != "OPEN" ||
+			second["value"] != "WON" || second["color"] != "green" {
+			t.Errorf("body = %v", body)
 		}
 	})
+	t.Run("standard field, description and is_active", func(t *testing.T) {
+		body := oneWrite(t, metaFieldBody("TEXT", false, false),
+			`{"id":"`+metaFieldID+`","description":"d","is_active":false}`)
+		if len(body) != 2 || body["description"] != "d" || body["isActive"] != false {
+			t.Errorf("body = %v", body)
+		}
+	})
+	t.Run("system field, is_active", func(t *testing.T) {
+		body := oneWrite(t, metaFieldBody("TEXT", false, true), `{"id":"`+metaFieldID+`","is_active":false}`)
+		if len(body) != 1 || body["isActive"] != false {
+			t.Errorf("body = %v", body)
+		}
+	})
+	t.Run("unknown type is left to Twenty", func(t *testing.T) {
+		body := oneWrite(t, metaFieldBody(metaTypeCn, true, false), `{"id":"`+metaFieldID+`","label":"x"}`)
+		if len(body) != 1 || body["label"] != "x" {
+			t.Errorf("body = %v", body)
+		}
+	})
+}
+
+func TestMetaUpdatesHideTwentyRefusalText(t *testing.T) {
+	objPath := metadataObjectsPath + "/" + metaObjID
+	fieldPath := metadataFieldsPath + "/" + metaFieldID
+	for name, test := range map[string]struct {
+		handler capability.Handler
+		args    string
+	}{
+		"object": {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","is_active":false}`},
+		"field":  {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","label":"x"}`},
+	} {
+		for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+			t.Run(name+" "+http.StatusText(status), func(t *testing.T) {
+				calls := serveMetaWrite(t, map[string]string{objPath: metaObjectBody(metaObjID, false, true),
+					fieldPath: metaFieldBody("TEXT", false, true)}, func() (*http.Response, error) {
+					return jsonResponse(status, `{"message":"`+metaWriteCn+`"}`), nil
+				})
+				_, err := runMetaWrite(test.handler, test.args)
+				if err == nil || strings.Contains(err.Error(), metaWriteCn) || len(metaWrites(calls)) != 1 {
+					t.Errorf("err = %v, writes = %+v", err, metaWrites(calls))
+				}
+			})
+		}
+	}
 }
 
 func metaWriteInvocations() map[string]struct {
@@ -473,6 +545,7 @@ func TestMetaWriteDescriptorsAreGuarded(t *testing.T) {
 	}
 	if !strings.Contains(metaObjectsCreate.Description, "never does itself") ||
 		!strings.Contains(metaFieldsUpdate.Description, "clears that value") ||
+		!strings.Contains(metaFieldsUpdate.Description, "workflow filters") ||
 		!strings.Contains(metaObjectsUpdate.Description, "hides it") {
 		t.Error("descriptions omit the target, option, or visibility consequence")
 	}
