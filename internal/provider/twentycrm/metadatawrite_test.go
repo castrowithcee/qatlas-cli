@@ -163,13 +163,12 @@ func TestMetaObjectsUpdateKeepsStandardAndSystemObjectsToLabels(t *testing.T) {
 }
 
 func TestMetaFieldsCreateSendsOneFixedRequest(t *testing.T) {
-	owner := metadataObjectsPath + "/" + metaObjID
 	for name, body := range map[string]string{
 		"new":    metaFieldBody("SELECT", true, false),
 		"legacy": `{"data":{"createOneField":` + metaFieldBody("SELECT", true, false) + `}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			calls := serveMetaWrite(t, map[string]string{owner: metaObjectBody(metaObjID, true, false)}, metaAnswer(body))
+			calls := serveMetaWrite(t, nil, metaAnswer(body))
 			out, err := runMetaWrite(invokeMetaFieldsCreate, `{"object_id":"`+metaObjID+`","type":"SELECT",`+
 				`"name":"stage","label":"Stage","is_nullable":false,"options":[`+
 				`{"label":"Open","value":"OPEN","color":"red"},{"label":"Done","value":"DONE"}]}`)
@@ -202,11 +201,9 @@ func TestMetaFieldsCreateSendsOneFixedRequest(t *testing.T) {
 }
 
 func TestMetaFieldsCreateAcceptsEveryAllowedType(t *testing.T) {
-	owner := metadataObjectsPath + "/" + metaObjID
 	for _, kind := range metaCreatableTypes {
 		t.Run(kind, func(t *testing.T) {
-			calls := serveMetaWrite(t, map[string]string{owner: metaObjectBody(metaObjID, true, false)},
-				metaAnswer(metaFieldBody(kind, true, false)))
+			calls := serveMetaWrite(t, nil, metaAnswer(metaFieldBody(kind, true, false)))
 			args := `{"object_id":"` + metaObjID + `","type":"` + kind + `","name":"stage","label":"Stage"`
 			if kind == "SELECT" || kind == "MULTI_SELECT" {
 				args += `,"options":[{"label":"Open","value":"OPEN"}]`
@@ -299,18 +296,27 @@ func TestMetaObjectWritesRefuseInvalidInputBeforeAnyRequest(t *testing.T) {
 	}
 }
 
-func TestMetaFieldsCreateOnlyOnCustomObjects(t *testing.T) {
-	owner := metadataObjectsPath + "/" + metaObjID
-	for name, body := range map[string]string{
-		"standard": metaObjectBody(metaObjID, false, false),
-		"system":   metaObjectBody(metaObjID, true, true),
-		"other id": metaObjectBody(metaOtherID, true, false),
-	} {
+func TestMetaFieldsCreateLeavesObjectAcceptanceToTwenty(t *testing.T) {
+	for name, status := range map[string]int{"accepted": http.StatusOK, "400": http.StatusBadRequest,
+		"422": http.StatusUnprocessableEntity} {
 		t.Run(name, func(t *testing.T) {
-			calls := serveMetaWrite(t, map[string]string{owner: body}, metaAnswer(`{}`))
-			_, err := runMetaWrite(invokeMetaFieldsCreate, `{"object_id":"`+metaObjID+`","type":"TEXT","name":"a","label":"A"}`)
-			if err == nil || len(metaWrites(calls)) != 0 {
-				t.Errorf("err = %v, writes = %+v", err, metaWrites(calls))
+			calls := serveMetaWrite(t, nil, func() (*http.Response, error) {
+				if status != http.StatusOK {
+					return jsonResponse(status, `{"message":"`+metaWriteCn+`"}`), nil
+				}
+				return jsonResponse(status, metaFieldBody("TEXT", true, false)), nil
+			})
+			_, err := runMetaWrite(invokeMetaFieldsCreate, `{"object_id":"`+metaObjID+`","type":"TEXT","name":"stage","label":"Stage"}`)
+			sent := metaWrites(calls)
+			if len(*calls) != 1 || len(sent) != 1 || sent[0].Method != http.MethodPost || sent[0].Path != metadataFieldsPath {
+				t.Fatalf("calls = %+v", *calls)
+			}
+			if status == http.StatusOK {
+				if err != nil {
+					t.Error(err)
+				}
+			} else if err == nil || strings.Contains(err.Error(), metaWriteCn) {
+				t.Errorf("err = %v", err)
 			}
 		})
 	}
@@ -386,8 +392,7 @@ func metaWriteInvocations() map[string]struct {
 		"objects create": {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deals","label_singular":"a","label_plural":"b"}`, nil},
 		"objects update": {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","label_plural":"b"}`,
 			map[string]string{metadataObjectsPath + "/" + metaObjID: metaObjectBody(metaObjID, true, false)}},
-		"fields create": {invokeMetaFieldsCreate, `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"A"}`,
-			map[string]string{metadataObjectsPath + "/" + metaObjID: metaObjectBody(metaObjID, true, false)}},
+		"fields create": {invokeMetaFieldsCreate, `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"A"}`, nil},
 		"fields update": {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","label":"x"}`,
 			map[string]string{metadataFieldsPath + "/" + metaFieldID: metaFieldBody("TEXT", true, false)}},
 	}

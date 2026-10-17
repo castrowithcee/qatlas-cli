@@ -145,6 +145,8 @@ metadata API for all objects and fields; default values, settings, and relation 
 `metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` change the schema for
 every user and integration of the workspace. All nine tools need the Twenty right "Data model": use a
 connection with an API key of its own. The writers need a `tools` entry; no profile ticks them.
+`metafields.create` adds a field to any object Twenty accepts, standard or custom; Twenty decides, Qatlas
+does not pre-check the object. A field added to a standard object is a custom field.
 
 ## Views
 
