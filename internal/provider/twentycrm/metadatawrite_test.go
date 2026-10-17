@@ -235,29 +235,32 @@ func TestMetaFieldsCreateRefusesBeforeAnyRequest(t *testing.T) {
 	}
 	base := `"object_id":"` + metaObjID + `","name":"stage","label":"Stage"`
 	for name, args := range map[string]string{
-		"relation":            `{` + base + `,"type":"RELATION"}`,
-		"morph relation":      `{` + base + `,"type":"MORPH_RELATION"}`,
-		"unlisted type":       `{` + base + `,"type":"ACTOR"}`,
-		"lowercase type":      `{` + base + `,"type":"text"}`,
-		"uppercase name":      `{"object_id":"` + metaObjID + `","type":"TEXT","name":"Stage","label":"x"}`,
-		"digit first":         `{"object_id":"` + metaObjID + `","type":"TEXT","name":"1st","label":"x"}`,
-		"underscore name":     `{"object_id":"` + metaObjID + `","type":"TEXT","name":"my_field","label":"x"}`,
-		"long name":           `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a` + long + `","label":"x"}`,
-		"empty label":         `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":" "}`,
-		"control in label":    `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"x\u0007"}`,
-		"long label":          `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"` + strings.Repeat("x", 101) + `"}`,
-		"long description":    `{` + base + `,"type":"TEXT","description":"` + strings.Repeat("x", 501) + `"}`,
-		"bad object id":       `{"object_id":"x?y=1","type":"TEXT","name":"a","label":"x"}`,
-		"select without opts": `{` + base + `,"type":"SELECT"}`,
-		"text with options":   `{` + base + `,"type":"TEXT","options":[{"label":"a","value":"A"}]}`,
-		"101 options":         `{` + base + `,"type":"SELECT","options":` + options(101) + `}`,
-		"empty options":       `{` + base + `,"type":"SELECT","options":[]}`,
-		"duplicate value":     `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"A"},{"label":"b","value":"A"}]}`,
-		"bad option value":    `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"a b"}]}`,
-		"bad color":           `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"A","color":"pink2"}]}`,
-		"relation payload":    `{` + base + `,"type":"TEXT","relationCreationPayload":{}}`,
-		"free body":           `{` + base + `,"type":"TEXT","settings":{}}`,
-		"is_active":           `{` + base + `,"type":"TEXT","is_active":false}`,
+		"relation without args": `{` + base + `,"type":"RELATION"}`,
+		"morph relation":        `{` + base + `,"type":"MORPH_RELATION"}`,
+		"unlisted type":         `{` + base + `,"type":"ACTOR"}`,
+		"lowercase type":        `{` + base + `,"type":"text"}`,
+		"uppercase name":        `{"object_id":"` + metaObjID + `","type":"TEXT","name":"Stage","label":"x"}`,
+		"digit first":           `{"object_id":"` + metaObjID + `","type":"TEXT","name":"1st","label":"x"}`,
+		"underscore name":       `{"object_id":"` + metaObjID + `","type":"TEXT","name":"my_field","label":"x"}`,
+		"long name":             `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a` + long + `","label":"x"}`,
+		"empty label":           `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":" "}`,
+		"control in label":      `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"x\u0007"}`,
+		"long label":            `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"` + strings.Repeat("x", 101) + `"}`,
+		"long description":      `{` + base + `,"type":"TEXT","description":"` + strings.Repeat("x", 501) + `"}`,
+		"bad object id":         `{"object_id":"x?y=1","type":"TEXT","name":"a","label":"x"}`,
+		"select without opts":   `{` + base + `,"type":"SELECT"}`,
+		"text with options":     `{` + base + `,"type":"TEXT","options":[{"label":"a","value":"A"}]}`,
+		"101 options":           `{` + base + `,"type":"SELECT","options":` + options(101) + `}`,
+		"empty options":         `{` + base + `,"type":"SELECT","options":[]}`,
+		"duplicate value":       `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"A"},{"label":"b","value":"A"}]}`,
+		"bad option value":      `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"a b"}]}`,
+		"bad color":             `{` + base + `,"type":"SELECT","options":[{"label":"a","value":"A","color":"pink2"}]}`,
+		"relation payload":      `{` + base + `,"type":"TEXT","relationCreationPayload":{}}`,
+		"text with target":      `{` + base + `,"type":"TEXT","target_object_id":"` + metaOtherID + `"}`,
+		"text with rel type":    `{` + base + `,"type":"TEXT","relation_type":"MANY_TO_ONE"}`,
+		"text with target lbl":  `{` + base + `,"type":"TEXT","target_label":"x"}`,
+		"free body":             `{` + base + `,"type":"TEXT","settings":{}}`,
+		"is_active":             `{` + base + `,"type":"TEXT","is_active":false}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			refuse(t)
@@ -282,19 +285,22 @@ func TestMetaObjectWritesRefuseInvalidInputBeforeAnyRequest(t *testing.T) {
 		handler capability.Handler
 		args    string
 	}{
-		"singular name": {invokeMetaObjectsCreate, `{"name_singular":"Deal","name_plural":"deals","label_singular":"a","label_plural":"b"}`},
-		"plural name":   {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"de-als","label_singular":"a","label_plural":"b"}`},
-		"same names":    {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deal","label_singular":"a","label_plural":"b"}`},
-		"missing label": {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deals","label_singular":"a"}`},
-		"extra name":    {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","name_singular":"x","label_singular":"a"}`},
-		"empty update":  {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `"}`},
-		"bad id":        {invokeMetaObjectsUpdate, `{"id":"x?y=1","label_singular":"a"}`},
-		"field rename":  {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","name":"x"}`},
-		"field type":    {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","type":"TEXT","label":"x"}`},
-		"field empty":   {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `"}`},
-		"field bad id":  {invokeMetaFieldsUpdate, `{"id":"nope","label":"x"}`},
-		"field options": {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","options":[]}`},
-		"not json":      {invokeMetaFieldsUpdate, `[]`},
+		"singular name":      {invokeMetaObjectsCreate, `{"name_singular":"Deal","name_plural":"deals","label_singular":"a","label_plural":"b"}`},
+		"plural name":        {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"de-als","label_singular":"a","label_plural":"b"}`},
+		"same names":         {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deal","label_singular":"a","label_plural":"b"}`},
+		"missing label":      {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deals","label_singular":"a"}`},
+		"extra name":         {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","name_singular":"x","label_singular":"a"}`},
+		"empty update":       {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `"}`},
+		"bad id":             {invokeMetaObjectsUpdate, `{"id":"x?y=1","label_singular":"a"}`},
+		"field rename":       {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","name":"x"}`},
+		"field type":         {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","type":"TEXT","label":"x"}`},
+		"field empty":        {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `"}`},
+		"field bad id":       {invokeMetaFieldsUpdate, `{"id":"nope","label":"x"}`},
+		"field options":      {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","options":[]}`},
+		"not json":           {invokeMetaFieldsUpdate, `[]`},
+		"field target":       {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","label":"x","target_object_id":"` + metaOtherID + `"}`},
+		"object target":      {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","label_singular":"a","target_label":"x"}`},
+		"object create type": {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deals","label_singular":"a","label_plural":"b","relation_type":"MANY_TO_ONE"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			refuse(t)
@@ -360,9 +366,8 @@ func TestMetaFieldsUpdateReadsOnceAndPatches(t *testing.T) {
 func TestMetaFieldsUpdateRefusals(t *testing.T) {
 	path := metadataFieldsPath + "/" + metaFieldID
 	for name, test := range map[string]struct{ field, args string }{
-		"relation":                 {metaFieldBody("RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
 		"morph relation":           {metaFieldBody("MORPH_RELATION", true, false), `{"id":"` + metaFieldID + `","label":"x"}`},
-		"standard relation":        {metaFieldBody("RELATION", false, false), `{"id":"` + metaFieldID + `","is_active":false}`},
+		"options on relation":      {metaFieldBody("RELATION", true, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
 		"options on text":          {metaFieldBody("TEXT", true, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
 		"options on standard text": {metaFieldBody("TEXT", false, false), `{"id":"` + metaFieldID + `","options":[{"label":"a","value":"A"}]}`},
 		"other id":                 {strings.Replace(metaFieldBody("TEXT", true, false), metaFieldID, metaOtherID, 1), `{"id":"` + metaFieldID + `","label":"x"}`},
@@ -464,7 +469,10 @@ func metaWriteInvocations() map[string]struct {
 		"objects create": {invokeMetaObjectsCreate, `{"name_singular":"deal","name_plural":"deals","label_singular":"a","label_plural":"b"}`, nil},
 		"objects update": {invokeMetaObjectsUpdate, `{"id":"` + metaObjID + `","label_plural":"b"}`,
 			map[string]string{metadataObjectsPath + "/" + metaObjID: metaObjectBody(metaObjID, true, false)}},
-		"fields create": {invokeMetaFieldsCreate, `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"A"}`, nil},
+		"fields create":   {invokeMetaFieldsCreate, `{"object_id":"` + metaObjID + `","type":"TEXT","name":"a","label":"A"}`, nil},
+		"relation create": {invokeMetaFieldsCreate, relationCreateArgs("MANY_TO_ONE"), nil},
+		"relation update": {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","label":"x"}`,
+			map[string]string{metadataFieldsPath + "/" + metaFieldID: metaFieldBody("RELATION", true, false)}},
 		"fields update": {invokeMetaFieldsUpdate, `{"id":"` + metaFieldID + `","label":"x"}`,
 			map[string]string{metadataFieldsPath + "/" + metaFieldID: metaFieldBody("TEXT", true, false)}},
 	}
@@ -527,6 +535,12 @@ func TestMetaWritesMapPermissionAndRefusalsWithoutProviderText(t *testing.T) {
 }
 
 func TestMetaWriteDescriptorsAreGuarded(t *testing.T) {
+	for _, d := range []capability.Descriptor{metaFieldsCreate, metaFieldsUpdate} {
+		if !strings.Contains(d.Description, "one field on each of two objects") ||
+			!strings.Contains(d.Description, "both objects for the whole workspace") {
+			t.Errorf("%s omits the effect on both objects", d.ID)
+		}
+	}
 	for _, d := range []capability.Descriptor{metaObjectsCreate, metaObjectsUpdate, metaFieldsCreate, metaFieldsUpdate} {
 		wantEffect := capability.EffectUpdate
 		wantIdem := capability.IdempotencyIdempotent
@@ -548,5 +562,77 @@ func TestMetaWriteDescriptorsAreGuarded(t *testing.T) {
 		!strings.Contains(metaFieldsUpdate.Description, "workflow filters") ||
 		!strings.Contains(metaObjectsUpdate.Description, "hides it") {
 		t.Error("descriptions omit the target, option, or visibility consequence")
+	}
+}
+
+func relationCreateArgs(kind string) string {
+	return `{"object_id":"` + metaObjID + `","type":"RELATION","name":"owner","label":"Owner","relation_type":"` + kind +
+		`","target_object_id":"` + metaOtherID + `","target_label":"Owned"}`
+}
+
+func TestMetaFieldsCreateRelationSendsOneFixedRequest(t *testing.T) {
+	for _, kind := range metaRelationTypes {
+		// metaOtherID stands for any target, a system object such as the workspace member included;
+		// Qatlas neither reads nor checks it (no read is served).
+		t.Run(kind, func(t *testing.T) {
+			calls := serveMetaWrite(t, nil, metaAnswer(strings.Replace(metaFieldBody("RELATION", true, false), `"name":"stage"`, `"name":"owner"`, 1)))
+			args := strings.Replace(relationCreateArgs(kind), `"label":"Owner"`, `"label":"Owner","description":"d"`, 1)
+			out, err := runMetaWrite(invokeMetaFieldsCreate, args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := `{"description":"d","label":"Owner","name":"owner","objectMetadataId":"` + metaObjID +
+				`","relationCreationPayload":{"targetFieldIcon":"` + metaRelationIcon + `","targetFieldLabel":"Owned",` +
+				`"targetObjectMetadataId":"` + metaOtherID + `","type":"` + kind + `"},"type":"RELATION"}`
+			if len(*calls) != 1 || (*calls)[0].Method != http.MethodPost || (*calls)[0].Path != metadataFieldsPath ||
+				(*calls)[0].Body != want || !strings.Contains(out, `"type":"RELATION"`) {
+				t.Errorf("calls = %+v, want body %s, out = %s", *calls, want, out)
+			}
+		})
+	}
+}
+
+func TestMetaFieldsCreateRelationRefusesBeforeAnyRequest(t *testing.T) {
+	head := `"object_id":"` + metaObjID + `","name":"owner","label":"Owner"`
+	rel := `"relation_type":"MANY_TO_ONE","target_object_id":"` + metaOtherID + `","target_label":"Owned"`
+	for name, args := range map[string]string{
+		"no target":          `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_ONE","target_label":"x"}`,
+		"no relation type":   `{` + head + `,"type":"RELATION","target_object_id":"` + metaOtherID + `","target_label":"x"}`,
+		"no target label":    `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_ONE","target_object_id":"` + metaOtherID + `"}`,
+		"bad target":         `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_ONE","target_object_id":"x?y=1","target_label":"x"}`,
+		"many to many":       `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_MANY","target_object_id":"` + metaOtherID + `","target_label":"x"}`,
+		"morph as relation":  `{` + head + `,"type":"RELATION","relation_type":"MORPH_RELATION","target_object_id":"` + metaOtherID + `","target_label":"x"}`,
+		"blank target label": `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_ONE","target_object_id":"` + metaOtherID + `","target_label":" "}`,
+		"long target label": `{` + head + `,"type":"RELATION","relation_type":"MANY_TO_ONE","target_object_id":"` + metaOtherID +
+			`","target_label":"` + strings.Repeat("x", 101) + `"}`,
+		"options":          `{` + head + `,"type":"RELATION",` + rel + `,"options":[{"label":"a","value":"A"}]}`,
+		"is_nullable":      `{` + head + `,"type":"RELATION",` + rel + `,"is_nullable":false}`,
+		"morph relation":   `{` + head + `,"type":"MORPH_RELATION",` + rel + `}`,
+		"text with target": `{` + head + `,"type":"TEXT",` + rel + `}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			refuse(t)
+			if _, err := runMetaWrite(invokeMetaFieldsCreate, args); !asInvalidOK(err) {
+				t.Errorf("err = %v, want invalid-request", err)
+			}
+		})
+	}
+}
+
+func TestMetaFieldsUpdateChangesRelationFields(t *testing.T) {
+	path := metadataFieldsPath + "/" + metaFieldID
+	for name, test := range map[string]struct{ field, args, body string }{
+		"rename":     {metaFieldBody("RELATION", true, false), `{"id":"` + metaFieldID + `","label":"Owner"}`, `{"label":"Owner"}`},
+		"deactivate": {metaFieldBody("RELATION", false, false), `{"id":"` + metaFieldID + `","is_active":false}`, `{"isActive":false}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := serveMetaWrite(t, map[string]string{path: test.field}, metaAnswer(test.field))
+			out, err := runMetaWrite(invokeMetaFieldsUpdate, test.args)
+			sent := metaWrites(calls)
+			if err != nil || len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != path ||
+				sent[0].Body != test.body || !strings.Contains(out, `"type":"RELATION"`) {
+				t.Errorf("err = %v, writes = %+v, out = %s", err, sent, out)
+			}
+		})
 	}
 }
