@@ -19,8 +19,8 @@ import (
 // Note writes in a bound category through the Notes API: a POST creates, a PUT with If-Match changes, and a
 // DELETE removes one note. Each sends exactly one mutating request after at most one read-only pre-check.
 
-var noteKind = objectKind{"a", "note", "", "; the change may have been applied, check the note with notes.get " +
-	"or notes.list before repeating it"}
+var noteKind = objectKind{"a", "note", "", "; the change may have been applied, check the note with notes.notes.get " +
+	"or notes.notes.list before repeating it"}
 
 const (
 	// maxNoteTitle bounds a title in characters; Nextcloud derives the file name from it.
@@ -53,7 +53,7 @@ var (
 		Description: "Category; it must lie within the bound categories"}
 	noteFavoriteArgument = capability.Argument{Name: "favorite", Description: "True to mark the note as a favorite"}
 	noteETagArgument     = capability.Argument{Name: "etag", Required: true,
-		Description: "Entity tag of the note version to change, as notes.get or notes.list reports it"}
+		Description: "Entity tag of the note version to change, as notes.notes.get or notes.notes.list reports it"}
 )
 
 var noteWriteFields = []capability.Field{
@@ -68,7 +68,7 @@ var noteWriteFields = []capability.Field{
 }
 
 var notesCreate = capability.Descriptor{
-	ID: Provider + ".notes.create", Version: 1, Title: "Create a Nextcloud note",
+	ID: Provider + ".notes.notes.create", Version: 1, Title: "Create a Nextcloud note",
 	Description: "Create one new note in a category this connection binds; without category it lands in the root " +
 		"category, which a connection bound to single categories does not hold. One POST stores it, and the " +
 		"request is never repeated after an unclear result",
@@ -87,7 +87,7 @@ var notesCreate = capability.Descriptor{
 }
 
 var notesUpdate = capability.Descriptor{
-	ID: Provider + ".notes.update", Version: 1, Title: "Change a Nextcloud note",
+	ID: Provider + ".notes.notes.update", Version: 1, Title: "Change a Nextcloud note",
 	Description: "Change the title, content, category, or favorite mark of one note, bound to its etag; only the " +
 		"given fields change. The note and a new category must both lie within the categories this connection " +
 		"binds. One read-only GET of the note refuses a foreign, read-only, or changed note, then one PUT with " +
@@ -108,7 +108,7 @@ var notesUpdate = capability.Descriptor{
 }
 
 var notesDelete = capability.Descriptor{
-	ID: Provider + ".notes.delete", Version: 1, Title: "Delete a Nextcloud note",
+	ID: Provider + ".notes.notes.delete", Version: 1, Title: "Delete a Nextcloud note",
 	Description: "Delete one note in a category this connection binds. One read-only GET refuses a foreign or " +
 		"read-only note, then one DELETE follows and is never repeated after an unclear result. Nextcloud keeps " +
 		"no restore for it through Qatlas",

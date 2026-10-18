@@ -29,7 +29,7 @@ const (
 	// maxVersionNodes bounds the nodes the parser accepts for one file before the listing is cut.
 	maxVersionNodes = 5000
 	maxVersionIDLen = 20
-	versionIDSchema = `{"type":"string","minLength":1,"maxLength":20,"pattern":"^[0-9]+$","x-form":"a version_id of versions.list"}`
+	versionIDSchema = `{"type":"string","minLength":1,"maxLength":20,"pattern":"^[0-9]+$","x-form":"a version_id of files.versions.list"}`
 
 	uncertainRestore = "; the version may have been restored, stat the file before repeating"
 	messageChanged   = "the Nextcloud file changed since the given ETag was read"
@@ -39,10 +39,10 @@ var versionPathArgument = capability.Argument{Name: "path", Required: true,
 	Description: "File relative to the fixed root folder of this connection; never a folder"}
 
 var versionIDArgument = capability.Argument{Name: "version_id", Required: true,
-	Description: "Version to address, a version_id reported by versions.list for the same path"}
+	Description: "Version to address, a version_id reported by files.versions.list for the same path"}
 
 var versionsList = capability.Descriptor{
-	ID: Provider + ".versions.list", Version: 1, Title: "List Nextcloud file versions",
+	ID: Provider + ".files.versions.list", Version: 1, Title: "List Nextcloud file versions",
 	Description: "List the older versions of one file below the fixed root of a connection, newest first, at most " +
 		"100; file content is never read",
 	Tags: []string{"nextcloud", "versions", "webdav", "list"}, Risk: nextcloudReadRisk, Provider: Provider,
@@ -62,7 +62,7 @@ var versionsList = capability.Descriptor{
 }
 
 var versionsGet = capability.Descriptor{
-	ID: Provider + ".versions.get", Version: 1, Title: "Read or download a Nextcloud file version",
+	ID: Provider + ".files.versions.get", Version: 1, Title: "Read or download a Nextcloud file version",
 	Description: "Read one older version of a file below the fixed root of a connection, inline as base64 up to 4 MiB " +
 		"or written to local_path in a directory the connection releases for writing; the content of a local " +
 		"download is never returned, only its metadata. An existing local file is replaced only with confirmation",
@@ -88,7 +88,7 @@ var versionsGet = capability.Descriptor{
 }
 
 var versionsRestore = capability.Descriptor{
-	ID: Provider + ".versions.restore", Version: 1, Title: "Restore a Nextcloud file version",
+	ID: Provider + ".files.versions.restore", Version: 1, Title: "Restore a Nextcloud file version",
 	Description: "Restore one older version of a file below the fixed root of a connection as its current version, " +
 		"bound to the ETag of the current file; Nextcloud keeps the replaced content as a version",
 	Tags: []string{"nextcloud", "versions", "webdav", "restore"}, Provider: Provider, Risk: organiseRisk(capability.EffectUpdate),
@@ -98,7 +98,7 @@ var versionsRestore = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"restored":{"type":"boolean"},"path":{"type":"string"},` +
 		`"version_id":{"type":"string"}},"required":["restored"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{versionPathArgument, versionIDArgument,
-		{Name: "etag", Required: true, Description: "Entity tag of the current file, from files.stat or files.list"}},
+		{Name: "etag", Required: true, Description: "Entity tag of the current file, from files.files.stat or files.files.list"}},
 	Fields: []capability.Field{
 		{Name: "restored", Description: "True when Nextcloud applied the restore"},
 		{Name: "path", Description: "Path of the file"},
@@ -198,7 +198,7 @@ func invokeVersionsGet(ctx context.Context, resolved *config.Resolved, secrets *
 		}
 		return client.GetVersion(ctx, input.Path, rel, input.VersionID)
 	}
-	// As in files.get, the local target is prepared before the credential is resolved.
+	// As in files.files.get, the local target is prepared before the credential is resolved.
 	download, err := localfile.CreateForDownload(ctx, resolved, *input.LocalPath)
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func versionOf(id string, res *resource) Version {
 	return version
 }
 
-// GetVersion reads one version inline, up to the limit of files.get.
+// GetVersion reads one version inline, up to the limit of files.files.get.
 func (c *Client) GetVersion(ctx context.Context, path string, rel []string, versionID string) (*VersionContent, error) {
 	const op = "get version"
 	entry, err := c.versionFile(ctx, op, rel)

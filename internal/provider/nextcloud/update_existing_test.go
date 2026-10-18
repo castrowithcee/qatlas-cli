@@ -60,7 +60,7 @@ func TestUpdateSchemaRefusesStarETags(t *testing.T) {
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	for _, etag := range []string{"*", `"*"`, "", " "} {
 		_, err := core.Invoke(context.Background(), application.InvokeRequest{
-			Operation: "nextcloud.files.update", Connection: "reports", Confirmed: true,
+			Operation: "nextcloud.files.files.update", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(`{"path":"new.txt","content_base64":"aGk=","etag":` + strconv.Quote(etag) + `}`)})
 		if err == nil {
 			t.Errorf("etag %q was accepted", etag)
@@ -78,9 +78,9 @@ func TestUpdateOnlyConnectionCannotCreateAFile(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)
 	for _, request := range []application.InvokeRequest{
-		{Operation: "nextcloud.files.create", Connection: "reports", Confirmed: true,
+		{Operation: "nextcloud.files.files.create", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(`{"path":"brandnew.txt","content_base64":"aGk="}`)},
-		{Operation: "nextcloud.files.update", Connection: "reports", Confirmed: true,
+		{Operation: "nextcloud.files.files.update", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(`{"path":"brandnew.txt","content_base64":"aGk=","etag":"*"}`)},
 	} {
 		if _, err := core.Invoke(context.Background(), request); err == nil {

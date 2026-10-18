@@ -126,7 +126,7 @@ func TestSystemTagsCreateWithoutUsableContentLocationReportsNoID(t *testing.T) {
 		serve(t, func(*http.Request) (*http.Response, error) { return located(201, location), nil })
 		got, err := tagAdmin(t, invokeSystemTagsCreate, `{"name":"x"}`)
 		m, _ := got.(map[string]any)
-		if err != nil || m["created"] != true || m["tag_id"] != nil || !strings.Contains(m["note"].(string), "systemtags.list") {
+		if err != nil || m["created"] != true || m["tag_id"] != nil || !strings.Contains(m["note"].(string), "files.system-tags.list") {
 			t.Errorf("%s: got %v, %v", name, got, err)
 		}
 	}
@@ -136,7 +136,7 @@ func TestSystemTagsCreateRefusals(t *testing.T) {
 	for code, want := range map[int]string{403: messageTagAdminDenied, 409: messageTagExists, 400: messageTagVisibility} {
 		calls := serve(t, func(*http.Request) (*http.Response, error) { return status(code), nil })
 		_, err := tagAdmin(t, invokeSystemTagsCreate, `{"name":"x"}`)
-		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "check systemtags.list") || len(*calls) != 1 {
+		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "check files.system-tags.list") || len(*calls) != 1 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
 		}
 	}
@@ -156,7 +156,7 @@ func TestSystemTagAdminUnclearOutcomesAreNeverRepeated(t *testing.T) {
 		} {
 			calls, changes := tagAdminServer(t, okTag, fn)
 			_, err := tagAdmin(t, c.fn, c.args)
-			if err == nil || !strings.Contains(err.Error(), "check systemtags.list before repeating") || len(*changes) != 1 {
+			if err == nil || !strings.Contains(err.Error(), "check files.system-tags.list before repeating") || len(*changes) != 1 {
 				t.Errorf("%s %s: err = %v, changes = %v, calls = %d", tool, name, err, *changes, len(*calls))
 			}
 		}
@@ -283,7 +283,7 @@ func TestSystemTagAdminRisks(t *testing.T) {
 	}{{systemtagsCreate, capability.EffectCreate, false}, {systemtagsUpdate, capability.EffectUpdate, false}, {systemtagsDelete, capability.EffectDelete, true}} {
 		r := c.d.Risk
 		if r.Effect != c.effect || r.Idempotency == "" || r.Confirmation != capability.ConfirmationRequired || !r.OpenWorld ||
-			r.DataSensitivity != dataSensitivity || c.d.RequiresToolAllowList != c.allow || strings.Count(c.d.ID, ".") != 2 {
+			r.DataSensitivity != dataSensitivity || c.d.RequiresToolAllowList != c.allow || strings.Count(c.d.ID, ".") != 3 {
 			t.Errorf("%s = %+v", c.d.ID, c.d)
 		}
 	}
@@ -292,7 +292,7 @@ func TestSystemTagAdminRisks(t *testing.T) {
 	}
 	reg := registry(t)
 	for _, d := range reg.Provider(Provider) {
-		if strings.HasPrefix(d.ID, "nextcloud.systemtags.") && d.Group != "files" {
+		if strings.HasPrefix(d.ID, "nextcloud.files.system-tags.") && d.Group != "files" {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}
 	}

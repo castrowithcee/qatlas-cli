@@ -78,17 +78,17 @@ type pollCase struct {
 
 func pollCases() []pollCase {
 	return []pollCase{
-		{"create", "nextcloud.talkpolls.create",
+		{"create", "nextcloud.talk.polls.create",
 			talkArgs(boundRoom, `,"question":"Which day?","options":["Monday","Tuesday"],"result_mode":"hidden","max_votes":2`),
 			http.MethodPost, pollPath,
 			`maxVotes=2&options%5B%5D=Monday&options%5B%5D=Tuesday&question=Which+day%3F&resultMode=1`, 1},
-		{"create defaults", "nextcloud.talkpolls.create",
+		{"create defaults", "nextcloud.talk.polls.create",
 			talkArgs(boundRoom, `,"question":"Which day?","options":["Monday","Tuesday"]`),
 			http.MethodPost, pollPath,
 			`maxVotes=1&options%5B%5D=Monday&options%5B%5D=Tuesday&question=Which+day%3F&resultMode=0`, 1},
-		{"vote", "nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[0,2]`),
+		{"vote", "nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[0,2]`),
 			http.MethodPost, pollPath + "/7", `optionIds%5B%5D=0&optionIds%5B%5D=2`, 1},
-		{"close", "nextcloud.talkpolls.close", talkArgs(boundRoom, `,"poll_id":"7"`),
+		{"close", "nextcloud.talk.polls.close", talkArgs(boundRoom, `,"poll_id":"7"`),
 			http.MethodDelete, pollPath + "/7", ``, 1},
 	}
 }
@@ -133,7 +133,7 @@ func TestTalkPollGetReportsOptionsVotesAndVoters(t *testing.T) {
 	poll := strings.Replace(pollJSON(1, 2, ""), `"votes":[],`, "", 1)
 	poll = strings.Replace(poll, `"votedSelf":[]`, extra[1:], 1)
 	calls := pollServer(t, pollFeatures, poll, nil)
-	response, err := pollInvoke(t, "nextcloud.talkpolls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
+	response, err := pollInvoke(t, "nextcloud.talk.polls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestTalkPollGetBoundsWhatItReports(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{"id": 7, "question": strings.Repeat("q", 5000), "options": options,
 		"status": 0, "resultMode": 0, "maxVotes": 1})
 	pollServer(t, pollFeatures, string(raw), nil)
-	response, err := pollInvoke(t, "nextcloud.talkpolls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
+	response, err := pollInvoke(t, "nextcloud.talk.polls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,26 +172,26 @@ func TestTalkPollsRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 	refuse(t)
 	many := `"` + strings.Join(strings.Split(strings.Repeat("o,", 11), ",")[:11], `","`) + `"`
 	cases := map[string][2]string{
-		"unbound room":       {"nextcloud.talkpolls.create", talkArgs(foreignRoom, `,"question":"q","options":["a","b"]`)},
-		"get unbound":        {"nextcloud.talkpolls.get", talkArgs(foreignRoom, `,"poll_id":"7"`)},
-		"vote unbound":       {"nextcloud.talkpolls.vote", talkArgs(foreignRoom, `,"poll_id":"7","option_ids":[0]`)},
-		"close unbound":      {"nextcloud.talkpolls.close", talkArgs(foreignRoom, `,"poll_id":"7"`)},
-		"blank question":     {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"  ","options":["a","b"]`)},
-		"long question":      {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"`+strings.Repeat("q", 501)+`","options":["a","b"]`)},
-		"one option":         {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a"]`)},
-		"eleven options":     {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":[`+many+`]`)},
-		"blank option":       {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a"," "]`)},
-		"long option":        {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a","`+strings.Repeat("o", 201)+`"]`)},
-		"unknown mode":       {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"result_mode":"secret"`)},
-		"more votes than o":  {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"max_votes":3`)},
-		"negative max votes": {"nextcloud.talkpolls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"max_votes":-1`)},
-		"poll id":            {"nextcloud.talkpolls.get", talkArgs(boundRoom, `,"poll_id":"7/../8"`)},
-		"vote poll id":       {"nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"x","option_ids":[0]`)},
-		"no options":         {"nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[]`)},
-		"negative option":    {"nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[-1]`)},
-		"duplicate option":   {"nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[1,1]`)},
-		"option as text":     {"nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":["Monday"]`)},
-		"close poll id":      {"nextcloud.talkpolls.close", talkArgs(boundRoom, `,"poll_id":""`)},
+		"unbound room":       {"nextcloud.talk.polls.create", talkArgs(foreignRoom, `,"question":"q","options":["a","b"]`)},
+		"get unbound":        {"nextcloud.talk.polls.get", talkArgs(foreignRoom, `,"poll_id":"7"`)},
+		"vote unbound":       {"nextcloud.talk.polls.vote", talkArgs(foreignRoom, `,"poll_id":"7","option_ids":[0]`)},
+		"close unbound":      {"nextcloud.talk.polls.close", talkArgs(foreignRoom, `,"poll_id":"7"`)},
+		"blank question":     {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"  ","options":["a","b"]`)},
+		"long question":      {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"`+strings.Repeat("q", 501)+`","options":["a","b"]`)},
+		"one option":         {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a"]`)},
+		"eleven options":     {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":[`+many+`]`)},
+		"blank option":       {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a"," "]`)},
+		"long option":        {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a","`+strings.Repeat("o", 201)+`"]`)},
+		"unknown mode":       {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"result_mode":"secret"`)},
+		"more votes than o":  {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"max_votes":3`)},
+		"negative max votes": {"nextcloud.talk.polls.create", talkArgs(boundRoom, `,"question":"q","options":["a","b"],"max_votes":-1`)},
+		"poll id":            {"nextcloud.talk.polls.get", talkArgs(boundRoom, `,"poll_id":"7/../8"`)},
+		"vote poll id":       {"nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"x","option_ids":[0]`)},
+		"no options":         {"nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[]`)},
+		"negative option":    {"nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[-1]`)},
+		"duplicate option":   {"nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[1,1]`)},
+		"option as text":     {"nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":["Monday"]`)},
+		"close poll id":      {"nextcloud.talk.polls.close", talkArgs(boundRoom, `,"poll_id":""`)},
 	}
 	for name, c := range cases {
 		_, err := pollInvoke(t, c[0], c[1], true)
@@ -208,7 +208,7 @@ func TestTalkPollsRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 		cfg.Connections["reports"] = connection
 		red := &redact.Redactor{}
 		_, err := application.New(registry(t), cfg, resolver(red), red).Invoke(context.Background(), application.InvokeRequest{
-			Operation: "nextcloud.talkpolls.create", Connection: "reports", Confirmed: true,
+			Operation: "nextcloud.talk.polls.create", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(talkArgs(boundRoom, `,"question":"q","options":["a","b"]`)),
 		})
 		if err == nil || strings.Contains(err.Error(), boundRoom) {
@@ -232,7 +232,7 @@ func TestTalkPollVoteSendsOnlyOptionsOfThePoll(t *testing.T) {
 			t.Errorf("%s: sent %s %s", name, request.Method, request.URL.Path)
 			return pollOK(request)
 		})
-		_, err := pollInvoke(t, "nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":`+c.args), true)
+		_, err := pollInvoke(t, "nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":`+c.args), true)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -242,7 +242,7 @@ func TestTalkPollVoteSendsOnlyOptionsOfThePoll(t *testing.T) {
 	}
 	// A poll that allows any number of votes takes all of its options.
 	calls := pollServer(t, pollFeatures, pollJSON(0, 0, ""), pollOK)
-	if _, err := pollInvoke(t, "nextcloud.talkpolls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[0,1,2]`), true); err != nil || len(*calls) != 2 {
+	if _, err := pollInvoke(t, "nextcloud.talk.polls.vote", talkArgs(boundRoom, `,"poll_id":"7","option_ids":[0,1,2]`), true); err != nil || len(*calls) != 2 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}
 }
@@ -263,7 +263,7 @@ func TestTalkPollsNeedTheirCapabilityFeature(t *testing.T) {
 	calls := serve(t, func(request *http.Request) (*http.Response, error) {
 		return ocsResponse(http.StatusOK, ocsData(`{"capabilities":{"spreed":{"features":["chat-v2"]}}}`)), nil
 	})
-	if _, err := pollInvoke(t, "nextcloud.talkpolls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false); err == nil || len(*calls) != 1 {
+	if _, err := pollInvoke(t, "nextcloud.talk.polls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false); err == nil || len(*calls) != 1 {
 		t.Errorf("get: err = %v, calls = %d", err, len(*calls))
 	}
 }
@@ -327,7 +327,7 @@ func TestTalkPollGetReadFailuresNameNoTarget(t *testing.T) {
 			}
 			return status(code), nil
 		})
-		_, err := pollInvoke(t, "nextcloud.talkpolls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
+		_, err := pollInvoke(t, "nextcloud.talk.polls.get", talkArgs(boundRoom, `,"poll_id":"7"`), false)
 		if err == nil || strings.Contains(err.Error(), boundRoom) || strings.Contains(err.Error(), bodyCanary) {
 			t.Errorf("%d: err = %v", code, err)
 		}
@@ -338,7 +338,7 @@ func TestTalkPollCloseNeedsAToolsList(t *testing.T) {
 	refuse(t)
 	core := pollCore(t, talkPollsGet.ID, talkPollsCreate.ID, talkPollsVote.ID)
 	_, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.talkpolls.close", Connection: "reports", Confirmed: true,
+		Operation: "nextcloud.talk.polls.close", Connection: "reports", Confirmed: true,
 		Arguments: json.RawMessage(talkArgs(boundRoom, `,"poll_id":"7"`)),
 	})
 	if err == nil {

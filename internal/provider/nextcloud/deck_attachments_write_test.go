@@ -263,7 +263,7 @@ func TestDeckAttachmentsWriteUnclearOutcomeIsNeverRepeated(t *testing.T) {
 				calls := writeServer(t, func(*http.Request) (*http.Response, error) { return answer() })
 				_, err := runAttachmentWrite(op.handler, uploadConnection(dir, "deck/2"), op.args)
 				if err == nil || strings.Contains(err.Error(), bodyCanary) ||
-					!strings.Contains(err.Error(), "may have been applied, check deckattachments.list before repeating") {
+					!strings.Contains(err.Error(), "may have been applied, check deck.attachments.list before repeating") {
 					t.Errorf("err = %v", err)
 				}
 				if len(*calls) != op.reads+1 || (*calls)[op.reads].method != op.method {

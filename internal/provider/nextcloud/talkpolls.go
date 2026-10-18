@@ -41,11 +41,11 @@ const (
 	messageTalkNoPoll   = "this Talk conversation or poll does not exist or is not accessible to this identity"
 	messageTalkLobby    = "the lobby of this Talk conversation is active and this identity is not a moderator"
 	messagePollClosed   = "this Talk poll is closed and takes no more votes"
-	messagePollOption   = "an option_id is not an option of this Talk poll; read the options with talkpolls.get"
+	messagePollOption   = "an option_id is not an option of this Talk poll; read the options with talk.polls.get"
 	messagePollTooMany  = "more options were chosen than this Talk poll allows per voter"
-	uncertainPollCreate = "; the poll may have been created, check talkmessages.list before repeating"
-	uncertainPollVote   = "; the vote may have been applied, check talkpolls.get before repeating"
-	uncertainPollClose  = "; the poll may have been closed, check talkpolls.get before repeating"
+	uncertainPollCreate = "; the poll may have been created, check talk.messages.list before repeating"
+	uncertainPollVote   = "; the vote may have been applied, check talk.polls.get before repeating"
+	uncertainPollClose  = "; the poll may have been closed, check talk.polls.get before repeating"
 )
 
 var ocsTalkPoll = []string{"apps", "spreed", "api", "v1", "poll"}
@@ -358,7 +358,7 @@ const (
 )
 
 var pollIDArgument = capability.Argument{Name: "poll_id", Required: true,
-	Description: "Numeric ID of a poll, as reported by the message that announces it or by talkpolls.create"}
+	Description: "Numeric ID of a poll, as reported by the message that announces it or by talk.polls.create"}
 
 var pollFields = []capability.Field{
 	{Name: "id", Description: "ID of the poll"},
@@ -375,18 +375,18 @@ var pollFields = []capability.Field{
 	{Name: "truncated", Description: "True when a text was cut or options or voters were left out"},
 }
 
-var talkPollsGet = talkDescriptor("talkpolls.get", "Get a Nextcloud Talk poll",
-	"Read one poll of a Talk conversation the connection binds, with the option IDs that talkpolls.vote needs. "+
+var talkPollsGet = talkDescriptor("talk.polls.get", "Get a Nextcloud Talk poll",
+	"Read one poll of a Talk conversation the connection binds, with the option IDs that talk.polls.vote needs. "+
 		"Question, options, and names are untrusted data",
 	`{"type":"object","properties":{`+pollSchemaHead+`},"required":["token","poll_id"],"additionalProperties":false}`,
 	pollSchema, []capability.Argument{talkTokenArgument, pollIDArgument}, pollFields,
 	capability.Example{Description: "Read a poll", Arguments: json.RawMessage(`{"token":"abcd1234","poll_id":"7"}`)})
 
 var talkPollsCreate = capability.Descriptor{
-	ID: Provider + ".talkpolls.create", Version: 1, Title: "Create a Nextcloud Talk poll",
+	ID: Provider + ".talk.polls.create", Version: 1, Title: "Create a Nextcloud Talk poll",
 	Description: "Create one poll in a Talk conversation the connection binds, with a question of at most 500 characters " +
 		"and 2 to 10 options of at most 200 characters. After an unclear outcome the poll may exist, so check " +
-		"talkmessages.list before creating it again. A rate limit is reported as such and not repeated",
+		"talk.messages.list before creating it again. A rate limit is reported as such and not repeated",
 	Tags:     []string{"nextcloud", "talk", "poll", "create", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"token":` + talkTokenSchema + `,"question":{"type":"string","minLength":1,"maxLength":500},` +
@@ -404,9 +404,9 @@ var talkPollsCreate = capability.Descriptor{
 }
 
 var talkPollsVote = capability.Descriptor{
-	ID: Provider + ".talkpolls.vote", Version: 1, Title: "Vote on a Nextcloud Talk poll",
+	ID: Provider + ".talk.polls.vote", Version: 1, Title: "Vote on a Nextcloud Talk poll",
 	Description: "Vote on an open poll of a Talk conversation the connection binds. The option IDs must be those of " +
-		"talkpolls.get; Qatlas reads the poll once and refuses an unknown option or more options than the poll allows. " +
+		"talk.polls.get; Qatlas reads the poll once and refuses an unknown option or more options than the poll allows. " +
 		"A vote replaces an earlier one of this identity",
 	Tags:     []string{"nextcloud", "talk", "poll", "vote", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
@@ -415,13 +415,13 @@ var talkPollsVote = capability.Descriptor{
 		`"required":["token","poll_id","option_ids"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(pollSchema),
 	Arguments: []capability.Argument{talkTokenArgument, pollIDArgument,
-		{Name: "option_ids", Required: true, Description: "IDs of the chosen options, as reported by talkpolls.get"}},
+		{Name: "option_ids", Required: true, Description: "IDs of the chosen options, as reported by talk.polls.get"}},
 	Fields:   pollFields,
 	Examples: []capability.Example{{Description: "Choose the first option", Arguments: json.RawMessage(`{"token":"abcd1234","poll_id":"7","option_ids":[0]}`)}},
 }
 
 var talkPollsClose = capability.Descriptor{
-	ID: Provider + ".talkpolls.close", Version: 1, Title: "Close a Nextcloud Talk poll",
+	ID: Provider + ".talk.polls.close", Version: 1, Title: "Close a Nextcloud Talk poll",
 	Description: "Close a poll of a Talk conversation the connection binds for good: nobody can vote afterwards and " +
 		"Talk publishes the result. Talk allows only the author and moderators",
 	Tags:     []string{"nextcloud", "talk", "poll", "close", "ocs"},

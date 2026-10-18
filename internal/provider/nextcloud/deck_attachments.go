@@ -26,7 +26,7 @@ const (
 const messageAttachmentType = "only an attachment of type deck_file can be downloaded; a file reference is read with the Files tools"
 
 var deckAttachmentIDArgument = capability.Argument{
-	Name: "attachment_id", Description: "Numeric attachment ID as reported by deckattachments.list; only type deck_file",
+	Name: "attachment_id", Description: "Numeric attachment ID as reported by deck.attachments.list; only type deck_file",
 	Required: true,
 }
 
@@ -39,7 +39,7 @@ var deckAttachmentFields = []capability.Field{
 	{Name: "created_by", Description: "User ID of the uploader, untrusted data"},
 	{Name: "created_at", Description: "Creation time as Unix seconds"},
 	{Name: "last_modified", Description: "Last change as Unix seconds"},
-	{Name: "downloadable", Description: "True for type deck_file, which deckattachments.get can read"},
+	{Name: "downloadable", Description: "True for type deck_file, which deck.attachments.get can read"},
 	{Name: "truncated", Description: "True when a string was cut or the list was limited"},
 }
 
@@ -49,7 +49,7 @@ const deckAttachmentSchema = `{"type":"object","properties":{"id":{"type":"strin
 	`"downloadable":{"type":"boolean"}},"required":["id","type","name","downloadable"],"additionalProperties":false}`
 
 var deckAttachmentsList = capability.Descriptor{
-	ID: Provider + ".deckattachments.list", Version: 1, Title: "List Nextcloud Deck card attachments",
+	ID: Provider + ".deck.attachments.list", Version: 1, Title: "List Nextcloud Deck card attachments",
 	Description: "List the attachments of exactly one active card of a bound Deck board: name, size, type, and " +
 		"uploader, never content. Two reads: the stacks of the board must show the card in the named stack, then " +
 		"the attachment list of the card. Deleted attachments are left out; at most 100 are listed",
@@ -68,7 +68,7 @@ var deckAttachmentsList = capability.Descriptor{
 }
 
 var deckAttachmentsGet = capability.Descriptor{
-	ID: Provider + ".deckattachments.get", Version: 1, Title: "Read or download a Nextcloud Deck card attachment",
+	ID: Provider + ".deck.attachments.get", Version: 1, Title: "Read or download a Nextcloud Deck card attachment",
 	Description: "Read one attachment of type deck_file of an active card of a bound Deck board, inline as base64 up " +
 		"to 4 MiB or written to local_path in a directory the connection releases for writing; the content of a " +
 		"local download is never returned, only its metadata. Two reads precede the one download: the stacks of " +
@@ -259,7 +259,7 @@ func (c *Client) attachmentURL(input deckAttachmentArguments) string {
 		attachmentDeckFile, input.AttachmentID)
 }
 
-// GetDeckAttachment reads one attachment inline, up to the limit of files.get.
+// GetDeckAttachment reads one attachment inline, up to the limit of files.files.get.
 func (c *Client) GetDeckAttachment(ctx context.Context, input deckAttachmentArguments) (*DeckAttachmentContent, error) {
 	const op = "get Deck attachment"
 	item, err := c.downloadableAttachment(ctx, op, input)
@@ -358,7 +358,7 @@ func invokeDeckAttachmentsGet(ctx context.Context, resolved *config.Resolved, se
 		}
 		return client.GetDeckAttachment(ctx, input)
 	}
-	// As in files.get, the local target is prepared before the credential is resolved; the binding is checked
+	// As in files.files.get, the local target is prepared before the credential is resolved; the binding is checked
 	// first so an unbound board leaves no local file behind.
 	if err := requireBoard(resolved, input.BoardID); err != nil {
 		return nil, err

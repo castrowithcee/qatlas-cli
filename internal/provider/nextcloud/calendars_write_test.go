@@ -73,7 +73,7 @@ func noContent() (*http.Response, error) { return status(http.StatusNoContent), 
 func TestCalendarsCreateSendsOneGeneratedMkcalendar(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return status(http.StatusCreated), nil })
 	args := `{"name":"Team <A> & \"B\"","color":"#3366cc","components":["VTODO","VEVENT"]}`
-	result, err := manage(t, []string{"calendar"}, "nextcloud.calendars.create", args, true)
+	result, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.create", args, true)
 	if err != nil {
 		t.Fatalf("create = %v", err)
 	}
@@ -97,7 +97,7 @@ func TestCalendarsCreateSendsOneGeneratedMkcalendar(t *testing.T) {
 
 func TestCalendarsCreateDefaultsToBothComponentsWithoutColor(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return status(http.StatusCreated), nil })
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.create", `{"name":"Plain"}`, true); err != nil {
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.create", `{"name":"Plain"}`, true); err != nil {
 		t.Fatal(err)
 	}
 	body := (*calls)[0].body
@@ -111,11 +111,11 @@ func TestCalendarsCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 		t.Errorf("the provider was contacted: %s %s", r.Method, r.URL.Path)
 		return nil, errors.New("no request expected")
 	})
-	_, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendars.create", `{"name":"X"}`, true)
+	_, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendar.calendars.create", `{"name":"X"}`, true)
 	if classOf(err) != provider.ClassPermission {
 		t.Errorf("single binding: err = %v", err)
 	}
-	_, err = manage(t, []string{"folder/Reports"}, "nextcloud.calendars.create", `{"name":"X"}`, true)
+	_, err = manage(t, []string{"folder/Reports"}, "nextcloud.calendar.calendars.create", `{"name":"X"}`, true)
 	if classOf(err) != provider.ClassPermission {
 		t.Errorf("no calendar target: err = %v", err)
 	}
@@ -131,11 +131,11 @@ func TestCalendarsCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 		"uri argument":  `{"name":"X","calendar":"mine"}`,
 		"free field":    `{"name":"X","url":"https://evil.example.invalid"}`,
 	} {
-		if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.create", args, true); err == nil {
+		if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.create", args, true); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.create", `{"name":"X"}`, false); err == nil {
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.create", `{"name":"X"}`, false); err == nil {
 		t.Error("unconfirmed create: accepted")
 	}
 	if len(*calls) != 0 {
@@ -146,7 +146,7 @@ func TestCalendarsCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 func TestCalendarsCreateFailuresAreClear(t *testing.T) {
 	for code, want := range map[int]string{405: "already exists", 409: "cannot create", 403: "may not"} {
 		calls := serve(t, func(*http.Request) (*http.Response, error) { return status(code), nil })
-		_, err := manage(t, []string{"calendar"}, "nextcloud.calendars.create", `{"name":"X"}`, true)
+		_, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.create", `{"name":"X"}`, true)
 		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), bodyCanary) ||
 			strings.Contains(err.Error(), eventHint) || len(*calls) != 1 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
@@ -156,7 +156,7 @@ func TestCalendarsCreateFailuresAreClear(t *testing.T) {
 
 func TestCalendarsUpdateSendsOneProppatchAfterTheOwnerCheck(t *testing.T) {
 	calls := manageFixture(t, aliceUser, func() (*http.Response, error) { return calendarPatchAnswer("ok", "ok"), nil })
-	result, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendars.update",
+	result, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendar.calendars.update",
 		`{"calendar":"projects","name":"Projects <2026>","color":"#abcdef80"}`, true)
 	var got CalendarWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || got != (CalendarWriteResult{ID: "projects", Updated: true}) {
@@ -177,14 +177,14 @@ func TestCalendarsUpdateSendsOneProppatchAfterTheOwnerCheck(t *testing.T) {
 
 func TestCalendarsUpdateNeedsOneOfNameAndColor(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return nil, errors.New("no request expected") })
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.update", `{"calendar":"projects"}`, true); err == nil {
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.update", `{"calendar":"projects"}`, true); err == nil {
 		t.Error("update without a change: accepted")
 	}
 	if len(*calls) != 0 {
 		t.Errorf("requests = %d", len(*calls))
 	}
 	manageFixture(t, aliceUser, func() (*http.Response, error) { return calendarPatchAnswer("none", "ok"), nil })
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.update",
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.update",
 		`{"calendar":"projects","color":"#112233"}`, true); err != nil {
 		t.Errorf("colour only: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestCalendarsUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 		"missing":        {"ok", "none", "refused the change of color"},
 	} {
 		manageFixture(t, aliceUser, func() (*http.Response, error) { return calendarPatchAnswer(tc.name, tc.color), nil })
-		_, err := manage(t, []string{"calendar"}, "nextcloud.calendars.update", both, true)
+		_, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.update", both, true)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -207,7 +207,7 @@ func TestCalendarsUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 	manageFixture(t, aliceUser, func() (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, "<not-xml"), nil
 	})
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.update", both, true); err == nil ||
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.update", both, true); err == nil ||
 		!strings.Contains(err.Error(), eventHint) {
 		t.Errorf("unreadable answer: err = %v", err)
 	}
@@ -215,8 +215,8 @@ func TestCalendarsUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 
 func TestCalendarMutationsRefuseForeignAndUnconfirmedOwnerBeforeAnyChange(t *testing.T) {
 	for op, args := range map[string]string{
-		"nextcloud.calendars.update": `{"calendar":"projects","name":"N"}`,
-		"nextcloud.calendars.delete": `{"calendar":"projects"}`,
+		"nextcloud.calendar.calendars.update": `{"calendar":"projects","name":"N"}`,
+		"nextcloud.calendar.calendars.delete": `{"calendar":"projects"}`,
 	} {
 		for _, owner := range []string{"bob", "alice2", ""} {
 			calls := manageFixture(t, owner, func() (*http.Response, error) {
@@ -251,7 +251,7 @@ func TestCalendarMutationsRefuseUnboundBeforeAnyRequest(t *testing.T) {
 			"reserved bound": {[]string{"calendar/inbox"}, "inbox"},
 			"traversal":      {[]string{"calendar"}, "../bobby"},
 		} {
-			_, err := manage(t, tc.targets, "nextcloud.calendars."+op, `{"calendar":"`+tc.calendar+`"`+extra+`}`, true)
+			_, err := manage(t, tc.targets, "nextcloud.calendar.calendars."+op, `{"calendar":"`+tc.calendar+`"`+extra+`}`, true)
 			if classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s: err = %v", op, name, err)
 				continue
@@ -262,15 +262,15 @@ func TestCalendarMutationsRefuseUnboundBeforeAnyRequest(t *testing.T) {
 				}
 			}
 		}
-		if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars."+op, `{"calendar":"projects"`+extra+`}`, false); err == nil {
+		if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars."+op, `{"calendar":"projects"`+extra+`}`, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 	}
-	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendars.delete", `{"calendar":"projects","name":"x"}`, true); err == nil {
+	if _, err := manage(t, []string{"calendar"}, "nextcloud.calendar.calendars.delete", `{"calendar":"projects","name":"x"}`, true); err == nil {
 		t.Error("delete with extra field: accepted")
 	}
 	// Without a tools list naming it the delete is not offered.
-	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendars.delete", `{"calendar":"projects"}`, true); err == nil {
+	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendar.calendars.delete", `{"calendar":"projects"}`, true); err == nil {
 		t.Error("delete without a tools list: accepted")
 	}
 	if len(*calls) != 0 {
@@ -280,7 +280,7 @@ func TestCalendarMutationsRefuseUnboundBeforeAnyRequest(t *testing.T) {
 
 func TestCalendarsDeleteSendsOneDeleteAfterTheOwnerCheck(t *testing.T) {
 	calls := manageFixture(t, aliceUser, noContent)
-	result, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendars.delete", `{"calendar":"projects"}`, true)
+	result, err := manage(t, []string{"calendar/projects"}, "nextcloud.calendar.calendars.delete", `{"calendar":"projects"}`, true)
 	var got CalendarWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || got != (CalendarWriteResult{ID: "projects", Deleted: true}) {
 		t.Fatalf("delete = %s, %v", result, err)
@@ -300,9 +300,9 @@ func TestCalendarManagementUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T
 		answers[strconv.Itoa(code)] = func() (*http.Response, error) { return status(code), nil }
 	}
 	for op, args := range map[string]string{
-		"nextcloud.calendars.create": `{"name":"X"}`,
-		"nextcloud.calendars.update": `{"calendar":"projects","name":"N"}`,
-		"nextcloud.calendars.delete": `{"calendar":"projects"}`,
+		"nextcloud.calendar.calendars.create": `{"name":"X"}`,
+		"nextcloud.calendar.calendars.update": `{"calendar":"projects","name":"N"}`,
+		"nextcloud.calendar.calendars.delete": `{"calendar":"projects"}`,
 	} {
 		for name, answer := range answers {
 			calls := manageFixture(t, aliceUser, answer)
@@ -326,9 +326,9 @@ func TestCalendarManagementRedirectsAreClearFailuresWithoutATarget(t *testing.T)
 		return response
 	}
 	for op, args := range map[string]string{
-		"nextcloud.calendars.create": `{"name":"X"}`,
-		"nextcloud.calendars.update": `{"calendar":"projects","name":"N"}`,
-		"nextcloud.calendars.delete": `{"calendar":"projects"}`,
+		"nextcloud.calendar.calendars.create": `{"name":"X"}`,
+		"nextcloud.calendar.calendars.update": `{"calendar":"projects","name":"N"}`,
+		"nextcloud.calendar.calendars.delete": `{"calendar":"projects"}`,
 	} {
 		for _, code := range []int{301, 302, 307, 308} {
 			calls := manageFixture(t, aliceUser, func() (*http.Response, error) { return redirect(code), nil })
@@ -377,7 +377,7 @@ func TestCalendarManagementToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.calendars.") && id != calendarsList.ID {
+			if strings.HasPrefix(id, "nextcloud.calendar.calendars.") && id != calendarsList.ID {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

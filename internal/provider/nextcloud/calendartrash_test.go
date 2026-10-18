@@ -102,7 +102,7 @@ func TestCalendarTrashListFiltersToBoundCalendars(t *testing.T) {
 		"all":    {[]string{"calendar"}, "a.ics-d1 b.ics-d2 n.ics-d4 w.ics-d3", "projects projects projects work"},
 	} {
 		calls := trashListFixture(t, foreign...)
-		raw, err := calendarTrash(t, tc.targets, "nextcloud.calendartrash.list", `{}`, false)
+		raw, err := calendarTrash(t, tc.targets, "nextcloud.calendar.trash.list", `{}`, false)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -138,7 +138,7 @@ func TestCalendarTrashListCapsAndReportsTruncation(t *testing.T) {
 		nodes = append(nodes, trashNode(calTrashObjects+"e"+strconv.Itoa(1000+i)+".ics", "projects", typeEvent, ""))
 	}
 	trashListFixture(t, nodes...)
-	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.list", `{}`, false)
+	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.list", `{}`, false)
 	if got := decodeTrashList(t, raw); err != nil || got.Count != maxCalendarTrash || !got.Truncated ||
 		len(got.Entries) != maxCalendarTrash {
 		t.Errorf("count = %d, truncated = %v, err = %v", got.Count, got.Truncated, err)
@@ -152,7 +152,7 @@ func TestCalendarTrashListWithoutRetentionOmitsIt(t *testing.T) {
 		}
 		return trashListAnswer(), nil
 	})
-	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.list", `{}`, false)
+	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.list", `{}`, false)
 	if err != nil || strings.Contains(string(raw), "retention") {
 		t.Errorf("result = %s, %v", raw, err)
 	}
@@ -160,11 +160,11 @@ func TestCalendarTrashListWithoutRetentionOmitsIt(t *testing.T) {
 
 func TestCalendarTrashListRefusesWithoutCalendarTargetAndReportsMissingTrash(t *testing.T) {
 	refuse(t)
-	if _, err := calendarTrash(t, []string{"folder/Reports"}, "nextcloud.calendartrash.list", `{}`, false); err == nil {
+	if _, err := calendarTrash(t, []string{"folder/Reports"}, "nextcloud.calendar.trash.list", `{}`, false); err == nil {
 		t.Error("no calendar target: accepted")
 	}
 	serve(t, func(*http.Request) (*http.Response, error) { return status(http.StatusNotFound), nil })
-	_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.list", `{}`, false)
+	_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.list", `{}`, false)
 	if err == nil || !strings.Contains(err.Error(), "not available") || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("missing trash: err = %v", err)
 	}
@@ -191,7 +191,7 @@ func entryFixture(t *testing.T, uri string, mutate func() (*http.Response, error
 
 func TestCalendarTrashRestoreSendsOneMoveToAFixedDestination(t *testing.T) {
 	calls, headers := entryFixture(t, "projects", noContent)
-	raw, err := calendarTrash(t, []string{"calendar/projects"}, "nextcloud.calendartrash.restore", `{"id":"a.ics-d1"}`, true)
+	raw, err := calendarTrash(t, []string{"calendar/projects"}, "nextcloud.calendar.trash.restore", `{"id":"a.ics-d1"}`, true)
 	var got map[string]any
 	if err != nil || json.Unmarshal(raw, &got) != nil || got["restored"] != true || got["calendar"] != "projects" ||
 		got["id"] != "a.ics-d1" {
@@ -206,7 +206,7 @@ func TestCalendarTrashRestoreSendsOneMoveToAFixedDestination(t *testing.T) {
 
 func TestCalendarTrashDeleteSendsOneDeleteAfterThePreCheck(t *testing.T) {
 	calls, _ := entryFixture(t, "projects", noContent)
-	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.delete", `{"id":"a.ics-d1"}`, true)
+	raw, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.delete", `{"id":"a.ics-d1"}`, true)
 	var got map[string]any
 	if err != nil || json.Unmarshal(raw, &got) != nil || got["deleted"] != true || got["calendar"] != "projects" {
 		t.Fatalf("delete = %s, %v", raw, err)
@@ -241,7 +241,7 @@ func TestCalendarTrashChangeTreatsForeignAndMissingEntriesAlike(t *testing.T) {
 				return xmlResponse(http.StatusMultiStatus, calMultistatus(
 					trashNode(calTrashObjects+"a.ics-d1", uri, typeEvent, ""))), nil
 			})
-			_, err := calendarTrash(t, tc.targets, "nextcloud.calendartrash."+op, `{"id":"a.ics-d1"}`, true)
+			_, err := calendarTrash(t, tc.targets, "nextcloud.calendar.trash."+op, `{"id":"a.ics-d1"}`, true)
 			if err == nil || !strings.Contains(err.Error(), messageTrashObjectNone) || len(*calls) != 1 ||
 				strings.Contains(err.Error(), "work-secret") || strings.Contains(err.Error(), "inbox") {
 				t.Errorf("%s %s: err = %v, calls = %d", op, name, err, len(*calls))
@@ -263,7 +263,7 @@ func TestCalendarTrashChangeRefusesAnUnusableAnswerBeforeAnyMutation(t *testing.
 			}
 			return xmlResponse(http.StatusMultiStatus, body), nil
 		})
-		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.delete", `{"id":"a.ics-d1"}`, true); err == nil ||
+		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.delete", `{"id":"a.ics-d1"}`, true); err == nil ||
 			len(*calls) != 1 {
 			t.Errorf("%s: err = %v, calls = %d", name, err, len(*calls))
 		}
@@ -278,22 +278,22 @@ func TestCalendarTrashChangeRefusesInvalidIDsUnconfirmedAndUnlistedBeforeAnyRequ
 	for _, op := range []string{"restore", "delete"} {
 		for _, id := range []string{"", ".", "..", "a/b", "../x", `a\b`, "a%2fb", "a\nb", strings.Repeat("x", 256)} {
 			args, _ := json.Marshal(map[string]string{"id": id})
-			if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, string(args), true); err == nil {
+			if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, string(args), true); err == nil {
 				t.Errorf("%s id %q: accepted", op, id)
 			}
 		}
-		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, `{"id":"a.ics"}`, false); err == nil {
+		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, `{"id":"a.ics"}`, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
-		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, `{"id":"a.ics","x":1}`, true); err == nil {
+		if _, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, `{"id":"a.ics","x":1}`, true); err == nil {
 			t.Errorf("%s with extra field: accepted", op)
 		}
-		if _, err := calendarTrash(t, []string{"folder/Reports"}, "nextcloud.calendartrash."+op, `{"id":"a.ics"}`, true); err == nil {
+		if _, err := calendarTrash(t, []string{"folder/Reports"}, "nextcloud.calendar.trash."+op, `{"id":"a.ics"}`, true); err == nil {
 			t.Errorf("%s without calendar target: accepted", op)
 		}
 	}
 	// Without a tools list naming it the delete is not offered.
-	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendartrash.delete", `{"id":"a.ics"}`, true); err == nil {
+	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendar.trash.delete", `{"id":"a.ics"}`, true); err == nil {
 		t.Error("delete without a tools list: accepted")
 	}
 	if len(*calls) != 0 {
@@ -312,9 +312,9 @@ func TestCalendarTrashUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 	for _, op := range []string{"restore", "delete"} {
 		for name, answer := range answers {
 			calls, _ := entryFixture(t, "projects", answer)
-			_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, `{"id":"a.ics-d1"}`, true)
+			_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, `{"id":"a.ics-d1"}`, true)
 			if err == nil || !strings.Contains(err.Error(), "may have been applied") ||
-				!strings.Contains(err.Error(), "calendartrash.list") || strings.Contains(err.Error(), bodyCanary) ||
+				!strings.Contains(err.Error(), "calendar.trash.list") || strings.Contains(err.Error(), bodyCanary) ||
 				len(*calls) != 2 {
 				t.Errorf("%s %s: err = %v, calls = %d", op, name, err, len(*calls))
 			}
@@ -325,7 +325,7 @@ func TestCalendarTrashUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 func TestCalendarTrashRestoreConflictIsClearAndPlain(t *testing.T) {
 	for _, code := range []int{http.StatusConflict, http.StatusPreconditionFailed} {
 		calls, _ := entryFixture(t, "projects", func() (*http.Response, error) { return status(code), nil })
-		_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash.restore", `{"id":"a.ics-d1"}`, true)
+		_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash.restore", `{"id":"a.ics-d1"}`, true)
 		if err == nil || !strings.Contains(err.Error(), "nothing was changed") || strings.Contains(err.Error(), bodyCanary) ||
 			strings.Contains(err.Error(), "may have been applied") || len(*calls) != 2 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
@@ -347,7 +347,7 @@ func TestCalendarTrashRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 			if op == "list" {
 				args = `{}`
 			}
-			_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, args, op != "list")
+			_, err := calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, args, op != "list")
 			if err == nil || !strings.Contains(err.Error(), "redirect") || strings.Contains(err.Error(), "canary") || len(*calls) != 1 {
 				t.Errorf("%s %d read: err = %v, calls = %d", op, code, err, len(*calls))
 			}
@@ -355,7 +355,7 @@ func TestCalendarTrashRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 				continue
 			}
 			calls, _ = entryFixture(t, "projects", func() (*http.Response, error) { return redirect(code), nil })
-			_, err = calendarTrash(t, []string{"calendar"}, "nextcloud.calendartrash."+op, `{"id":"a.ics-d1"}`, true)
+			_, err = calendarTrash(t, []string{"calendar"}, "nextcloud.calendar.trash."+op, `{"id":"a.ics-d1"}`, true)
 			if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "redirect") ||
 				strings.Contains(err.Error(), "canary") || strings.Contains(err.Error(), "may have been applied") ||
 				len(*calls) != 2 {
@@ -387,7 +387,7 @@ func TestCalendarTrashToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.calendartrash.") {
+			if strings.HasPrefix(id, "nextcloud.calendar.trash.") {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

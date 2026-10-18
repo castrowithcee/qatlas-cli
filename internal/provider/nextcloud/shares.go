@@ -471,7 +471,7 @@ var sharesRisk = capability.Risk{
 }
 
 var sharesList = capability.Descriptor{
-	ID: Provider + ".shares.list", Version: 1, Title: "List Nextcloud shares",
+	ID: Provider + ".shares.shares.list", Version: 1, Title: "List Nextcloud shares",
 	Description: "List the shares of an explicit Nextcloud connection whose item lies below its fixed root folder: " +
 		"those the identity made, or with shared_with_me those made to it; every share type is reported " +
 		"without link token, link URL, or password",
@@ -502,7 +502,7 @@ var sharesList = capability.Descriptor{
 }
 
 var sharesGet = capability.Descriptor{
-	ID: Provider + ".shares.get", Version: 1, Title: "Get a Nextcloud share",
+	ID: Provider + ".shares.shares.get", Version: 1, Title: "Get a Nextcloud share",
 	Description: "Read one share by its ID, if its item lies below the fixed root folder of an explicit " +
 		"Nextcloud connection; any other share is reported as not found",
 	Tags:     []string{"nextcloud", "shares", "sharing", "get", "ocs"},
@@ -512,7 +512,7 @@ var sharesGet = capability.Descriptor{
 		`"required":["share_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(shareSchema),
 	Arguments: []capability.Argument{
-		{Name: "share_id", Description: "Numeric share ID as reported by shares.list", Required: true},
+		{Name: "share_id", Description: "Numeric share ID as reported by shares.shares.list", Required: true},
 	},
 	Fields: shareFields,
 	Examples: []capability.Example{{
@@ -525,7 +525,7 @@ var shareeEntrySchema = `{"type":"object","properties":{"type":{"type":"string",
 	`"name":{"type":"string"}},"required":["type","id"],"additionalProperties":false}`
 
 var shareesSearch = capability.Descriptor{
-	ID: Provider + ".sharees.search", Version: 1, Title: "Search Nextcloud recipients",
+	ID: Provider + ".shares.sharees.search", Version: 1, Title: "Search Nextcloud recipients",
 	Description: "Search the possible share recipients of the whole Nextcloud instance by name; the directory " +
 		"is instance-wide, needs an account target, and never asks the global lookup server",
 	Tags:     []string{"nextcloud", "shares", "sharing", "sharees", "search", "directory", "ocs"},

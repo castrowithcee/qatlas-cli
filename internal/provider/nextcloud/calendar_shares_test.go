@@ -37,7 +37,7 @@ func TestCalendarsShareSendsOneGoldenPostAfterTheOwnerCheck(t *testing.T) {
 			shareHead + `<o:remove><d:href>principal:principals/groups/staff</d:href></o:remove>` + shareTail},
 	} {
 		calls := manageFixture(t, aliceUser, func() (*http.Response, error) { return status(http.StatusOK), nil })
-		result, err := shareCall(t, []string{"calendar/projects"}, "nextcloud.calendars."+tc.op, tc.args, true)
+		result, err := shareCall(t, []string{"calendar/projects"}, "nextcloud.calendar.calendars."+tc.op, tc.args, true)
 		var got CalendarShareResult
 		if err != nil || json.Unmarshal(result, &got) != nil || !got.Accepted || got.Calendar != "projects" {
 			t.Fatalf("%s: %s, %v", name, result, err)
@@ -75,7 +75,7 @@ func TestCalendarShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) {
 		"recipient list":   `{"calendar":"projects","type":"users","id":["bob"],"access":"read"}`,
 		"publish":          `{"calendar":"projects","type":"public","id":"x","access":"read"}`,
 	} {
-		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendars.share", args, true); err == nil {
+		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendar.calendars.share", args, true); err == nil {
 			t.Errorf("share %s: accepted", name)
 		}
 	}
@@ -84,7 +84,7 @@ func TestCalendarShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) {
 		"mailto id":   `{"calendar":"projects","type":"groups","id":"mailto:x"}`,
 		"with access": `{"calendar":"projects","type":"users","id":"bob","access":"read"}`,
 	} {
-		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendars.unshare", args, true); err == nil {
+		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendar.calendars.unshare", args, true); err == nil {
 			t.Errorf("unshare %s: accepted", name)
 		}
 	}
@@ -95,8 +95,8 @@ func TestCalendarShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) {
 
 func TestCalendarShareRefusesForeignAndUnconfirmedOwnerAfterTheCheckOnly(t *testing.T) {
 	for op, args := range map[string]string{
-		"nextcloud.calendars.share":   `{"calendar":"projects","type":"users","id":"carol","access":"read"}`,
-		"nextcloud.calendars.unshare": `{"calendar":"projects","type":"users","id":"carol"}`,
+		"nextcloud.calendar.calendars.share":   `{"calendar":"projects","type":"users","id":"carol","access":"read"}`,
+		"nextcloud.calendar.calendars.unshare": `{"calendar":"projects","type":"users","id":"carol"}`,
 	} {
 		for _, owner := range []string{"bob", "alice2", ""} {
 			calls := manageFixture(t, owner, func() (*http.Response, error) {
@@ -131,7 +131,7 @@ func TestCalendarShareRefusesUnboundCalendarsBeforeAnyRequest(t *testing.T) {
 			"reserved":       {[]string{"calendar"}, "trashbin"},
 			"traversal":      {[]string{"calendar"}, "../bobby"},
 		} {
-			_, err := shareCall(t, tc.targets, "nextcloud.calendars."+op,
+			_, err := shareCall(t, tc.targets, "nextcloud.calendar.calendars."+op,
 				`{"calendar":"`+tc.calendar+`","type":"users","id":"bob"`+extra+`}`, true)
 			if classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s: err = %v", op, name, err)
@@ -143,12 +143,12 @@ func TestCalendarShareRefusesUnboundCalendarsBeforeAnyRequest(t *testing.T) {
 				}
 			}
 		}
-		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendars."+op,
+		if _, err := shareCall(t, []string{"calendar"}, "nextcloud.calendar.calendars."+op,
 			`{"calendar":"projects","type":"users","id":"bob"`+extra+`}`, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 		// Without a tools list naming it the tool is not offered.
-		if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendars."+op,
+		if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendar.calendars."+op,
 			`{"calendar":"projects","type":"users","id":"bob"`+extra+`}`, true); err == nil {
 			t.Errorf("%s without a tools list: accepted", op)
 		}
@@ -169,8 +169,8 @@ func TestCalendarShareUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 		answers[strconv.Itoa(code)] = func() (*http.Response, error) { return status(code), nil }
 	}
 	for op, args := range map[string]string{
-		"nextcloud.calendars.share":   `{"calendar":"projects","type":"users","id":"bob","access":"read"}`,
-		"nextcloud.calendars.unshare": `{"calendar":"projects","type":"users","id":"bob"}`,
+		"nextcloud.calendar.calendars.share":   `{"calendar":"projects","type":"users","id":"bob","access":"read"}`,
+		"nextcloud.calendar.calendars.unshare": `{"calendar":"projects","type":"users","id":"bob"}`,
 	} {
 		for name, answer := range answers {
 			calls := manageFixture(t, aliceUser, answer)
@@ -198,13 +198,13 @@ func TestCalendarShareRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 	args := `{"calendar":"projects","type":"users","id":"bob","access":"read"}`
 	for _, code := range []int{301, 302, 307, 308} {
 		calls := manageFixture(t, aliceUser, func() (*http.Response, error) { return redirect(code), nil })
-		_, err := shareCall(t, []string{"calendar"}, "nextcloud.calendars.share", args, true)
+		_, err := shareCall(t, []string{"calendar"}, "nextcloud.calendar.calendars.share", args, true)
 		if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "redirect") ||
 			strings.Contains(err.Error(), "canary") || strings.Contains(err.Error(), eventHint) || len(*calls) != 2 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
 		}
 		calls = serve(t, func(*http.Request) (*http.Response, error) { return redirect(code), nil })
-		_, err = shareCall(t, []string{"calendar"}, "nextcloud.calendars.share", args, true)
+		_, err = shareCall(t, []string{"calendar"}, "nextcloud.calendar.calendars.share", args, true)
 		if !strings.Contains(fmtErr(err), "redirect") || strings.Contains(fmtErr(err), "canary") || len(*calls) != 1 {
 			t.Errorf("%d pre-check: err = %v, calls = %d", code, err, len(*calls))
 		}
@@ -234,7 +234,7 @@ func TestCalendarsListReportsTheSharesFromInvite(t *testing.T) {
 				inviteUser("principal:principals/users/mail", "mail@example.com", "read", ``)+
 				inviteUser("principal:principals/users/a%2Fb", "x", "read", ``))), nil
 	})
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendars.list", `{}`)
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.calendars.list", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestCalendarsListCapsAndMarksTheShares(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, inviteListing(invites.String())), nil
 	})
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendars.list", `{}`)
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.calendars.list", `{}`)
 	var listed CalendarsResult
 	if err != nil || json.Unmarshal(result, &listed) != nil || len(listed.Calendars[0].Shares) != 50 ||
 		!listed.Calendars[0].SharesTruncated || listed.Calendars[0].Shares[49].ID != "u49" {
@@ -283,7 +283,7 @@ func TestCalendarsListCapsAndMarksTheShares(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, homeListing()), nil
 	})
-	result, err = calInvoke(t, []string{"calendar"}, "nextcloud.calendars.list", `{}`)
+	result, err = calInvoke(t, []string{"calendar"}, "nextcloud.calendar.calendars.list", `{}`)
 	if err != nil || strings.Contains(string(result), "shares") {
 		t.Errorf("result = %s, %v", result, err)
 	}

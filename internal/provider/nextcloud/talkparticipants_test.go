@@ -67,15 +67,15 @@ type participantCase struct {
 func participantCases() []participantCase {
 	const room = "/ocs/v2.php/apps/spreed/api/v4/room/" + boundRoom
 	return []participantCase{
-		{"add user", "nextcloud.talkparticipants.add", `,"participant":"erin","source":"users"`, http.MethodPost,
+		{"add user", "nextcloud.talk.participants.add", `,"participant":"erin","source":"users"`, http.MethodPost,
 			room + "/participants", url.Values{"newParticipant": {"erin"}, "source": {"users"}}, "/ocs/v2.php/cloud/capabilities"},
-		{"add group", "nextcloud.talkparticipants.add", `,"participant":"Team A","source":"groups"`, http.MethodPost,
+		{"add group", "nextcloud.talk.participants.add", `,"participant":"Team A","source":"groups"`, http.MethodPost,
 			room + "/participants", url.Values{"newParticipant": {"Team A"}, "source": {"groups"}}, "/ocs/v2.php/cloud/capabilities"},
-		{"remove", "nextcloud.talkparticipants.remove", `,"attendee_id":"3"`, http.MethodDelete, room + "/attendees",
+		{"remove", "nextcloud.talk.participants.remove", `,"attendee_id":"3"`, http.MethodDelete, room + "/attendees",
 			url.Values{"attendeeId": {"3"}}, participantsPath},
-		{"promote", "nextcloud.talkparticipants.moderator", `,"attendee_id":"3","moderator":true`, http.MethodPost,
+		{"promote", "nextcloud.talk.participants.moderator", `,"attendee_id":"3","moderator":true`, http.MethodPost,
 			room + "/moderators", url.Values{"attendeeId": {"3"}}, participantsPath},
-		{"demote", "nextcloud.talkparticipants.moderator", `,"attendee_id":"5","moderator":false`, http.MethodDelete,
+		{"demote", "nextcloud.talk.participants.moderator", `,"attendee_id":"5","moderator":false`, http.MethodDelete,
 			room + "/moderators", url.Values{"attendeeId": {"5"}}, participantsPath},
 	}
 }
@@ -155,7 +155,7 @@ func TestTalkParticipantChangesClassifyFailures(t *testing.T) {
 				if has := strings.Contains(text, "may have been"); has != a.uncertain {
 					t.Errorf("%s: hint present = %v in %q", name, has, text)
 				}
-				if a.uncertain && !strings.Contains(text, "talkparticipants.list") {
+				if a.uncertain && !strings.Contains(text, "talk.participants.list") {
 					t.Errorf("%s: no hint to the list in %q", name, text)
 				}
 				for _, leaked := range []string{bodyCanary, boundRoom} {
@@ -173,13 +173,13 @@ func TestTalkParticipantChangesClassifyFailures(t *testing.T) {
 
 func TestTalkParticipantChangesRefuseWithoutAMutation(t *testing.T) {
 	cases := map[string]struct{ operation, extra string }{
-		"foreign attendee":      {"nextcloud.talkparticipants.remove", `,"attendee_id":"99"`},
-		"foreign for moderator": {"nextcloud.talkparticipants.moderator", `,"attendee_id":"99","moderator":true`},
-		"remove self":           {"nextcloud.talkparticipants.remove", `,"attendee_id":"2"`},
-		"remove owner":          {"nextcloud.talkparticipants.remove", `,"attendee_id":"1"`},
-		"moderator owner":       {"nextcloud.talkparticipants.moderator", `,"attendee_id":"1","moderator":false`},
-		"moderator self":        {"nextcloud.talkparticipants.moderator", `,"attendee_id":"2","moderator":true`},
-		"moderator group":       {"nextcloud.talkparticipants.moderator", `,"attendee_id":"4","moderator":true`},
+		"foreign attendee":      {"nextcloud.talk.participants.remove", `,"attendee_id":"99"`},
+		"foreign for moderator": {"nextcloud.talk.participants.moderator", `,"attendee_id":"99","moderator":true`},
+		"remove self":           {"nextcloud.talk.participants.remove", `,"attendee_id":"2"`},
+		"remove owner":          {"nextcloud.talk.participants.remove", `,"attendee_id":"1"`},
+		"moderator owner":       {"nextcloud.talk.participants.moderator", `,"attendee_id":"1","moderator":false`},
+		"moderator self":        {"nextcloud.talk.participants.moderator", `,"attendee_id":"2","moderator":true`},
+		"moderator group":       {"nextcloud.talk.participants.moderator", `,"attendee_id":"4","moderator":true`},
 	}
 	for name, c := range cases {
 		calls := participantServer(t, func(r *http.Request) (*http.Response, error) {
@@ -201,7 +201,7 @@ func TestTalkParticipantChangesRefuseWithoutAMutation(t *testing.T) {
 
 func TestTalkParticipantListNotFound(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) { return status(404), nil })
-	err := participantInvoke(t, "nextcloud.talkparticipants.remove", talkArgs(boundRoom, `,"attendee_id":"3"`), true)
+	err := participantInvoke(t, "nextcloud.talk.participants.remove", talkArgs(boundRoom, `,"attendee_id":"3"`), true)
 	var providerErr *provider.Error
 	if !errors.As(err, &providerErr) || providerErr.Class != provider.ClassNotFound || providerErr.Message != messageTalkNoRoom {
 		t.Errorf("err = %v", err)
@@ -211,23 +211,23 @@ func TestTalkParticipantListNotFound(t *testing.T) {
 func TestTalkParticipantChangesRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 	refuse(t)
 	cases := map[string][2]string{
-		"unbound room":      {"nextcloud.talkparticipants.add", talkArgs(foreignRoom, `,"participant":"erin","source":"users"`)},
-		"source email":      {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"erin","source":"emails"`)},
-		"source federated":  {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"erin","source":"federated_users"`)},
-		"no source":         {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"erin"`)},
-		"user with space":   {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"er in","source":"users"`)},
-		"user with slash":   {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"a/b","source":"users"`)},
-		"mail as user":      {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"a b@c","source":"users"`)},
-		"group trailing":    {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"Team ","source":"groups"`)},
-		"group leading":     {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":" Team","source":"groups"`)},
-		"participant long":  {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"`+strings.Repeat("a", 65)+`","source":"users"`)},
-		"participant empty": {"nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"","source":"groups"`)},
-		"remove id letters": {"nextcloud.talkparticipants.remove", talkArgs(boundRoom, `,"attendee_id":"3x"`)},
-		"remove id empty":   {"nextcloud.talkparticipants.remove", talkArgs(boundRoom, `,"attendee_id":""`)},
-		"remove id long":    {"nextcloud.talkparticipants.remove", talkArgs(boundRoom, `,"attendee_id":"`+strings.Repeat("1", 19)+`"`)},
-		"remove unbound":    {"nextcloud.talkparticipants.remove", talkArgs(foreignRoom, `,"attendee_id":"3"`)},
-		"moderator id":      {"nextcloud.talkparticipants.moderator", talkArgs(boundRoom, `,"attendee_id":"../3","moderator":true`)},
-		"moderator missing": {"nextcloud.talkparticipants.moderator", talkArgs(boundRoom, `,"attendee_id":"3"`)},
+		"unbound room":      {"nextcloud.talk.participants.add", talkArgs(foreignRoom, `,"participant":"erin","source":"users"`)},
+		"source email":      {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"erin","source":"emails"`)},
+		"source federated":  {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"erin","source":"federated_users"`)},
+		"no source":         {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"erin"`)},
+		"user with space":   {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"er in","source":"users"`)},
+		"user with slash":   {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"a/b","source":"users"`)},
+		"mail as user":      {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"a b@c","source":"users"`)},
+		"group trailing":    {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"Team ","source":"groups"`)},
+		"group leading":     {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":" Team","source":"groups"`)},
+		"participant long":  {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"`+strings.Repeat("a", 65)+`","source":"users"`)},
+		"participant empty": {"nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"","source":"groups"`)},
+		"remove id letters": {"nextcloud.talk.participants.remove", talkArgs(boundRoom, `,"attendee_id":"3x"`)},
+		"remove id empty":   {"nextcloud.talk.participants.remove", talkArgs(boundRoom, `,"attendee_id":""`)},
+		"remove id long":    {"nextcloud.talk.participants.remove", talkArgs(boundRoom, `,"attendee_id":"`+strings.Repeat("1", 19)+`"`)},
+		"remove unbound":    {"nextcloud.talk.participants.remove", talkArgs(foreignRoom, `,"attendee_id":"3"`)},
+		"moderator id":      {"nextcloud.talk.participants.moderator", talkArgs(boundRoom, `,"attendee_id":"../3","moderator":true`)},
+		"moderator missing": {"nextcloud.talk.participants.moderator", talkArgs(boundRoom, `,"attendee_id":"3"`)},
 	}
 	for name, c := range cases {
 		err := participantInvoke(t, c[0], c[1], true)
@@ -237,7 +237,7 @@ func TestTalkParticipantChangesRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) 
 	}
 	for _, targets := range [][]string{{"folder/Reports"}, {"account"}} {
 		_, err := participantCore(t, targets...).Invoke(context.Background(), application.InvokeRequest{
-			Operation: "nextcloud.talkparticipants.remove", Connection: "reports", Confirmed: true,
+			Operation: "nextcloud.talk.participants.remove", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(talkArgs(boundRoom, `,"attendee_id":"3"`)),
 		})
 		if err == nil || strings.Contains(err.Error(), boundRoom) {
@@ -250,7 +250,7 @@ func TestTalkAddNeedsItsCapabilityFeature(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
 		return ocsResponse(http.StatusOK, ocsData(`{"capabilities":{"spreed":{"features":["chat-v2"]}}}`)), nil
 	})
-	if err := participantInvoke(t, "nextcloud.talkparticipants.add", talkArgs(boundRoom, `,"participant":"erin","source":"users"`), true); err == nil ||
+	if err := participantInvoke(t, "nextcloud.talk.participants.add", talkArgs(boundRoom, `,"participant":"erin","source":"users"`), true); err == nil ||
 		len(*calls) != 1 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}

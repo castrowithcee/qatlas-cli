@@ -56,10 +56,10 @@ func cardServer(t *testing.T, write func(*http.Request) (*http.Response, error))
 }
 
 var deckCardOps = []struct{ name, id, args, method string }{
-	{"create", "nextcloud.deckcards.create", `{"board_id":"2","stack_id":"6","title":"x"}`, http.MethodPost},
-	{"update", "nextcloud.deckcards.update", `{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"title":"x"}`, http.MethodPut},
-	{"move", "nextcloud.deckcards.move", `{"board_id":"2","stack_id":"5","card_id":"21","target_stack_id":"6"}`, http.MethodPut},
-	{"delete", "nextcloud.deckcards.delete", `{"board_id":"2","stack_id":"5","card_id":"21"}`, http.MethodDelete},
+	{"create", "nextcloud.deck.cards.create", `{"board_id":"2","stack_id":"6","title":"x"}`, http.MethodPost},
+	{"update", "nextcloud.deck.cards.update", `{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"title":"x"}`, http.MethodPut},
+	{"move", "nextcloud.deck.cards.move", `{"board_id":"2","stack_id":"5","card_id":"21","target_stack_id":"6"}`, http.MethodPut},
+	{"delete", "nextcloud.deck.cards.delete", `{"board_id":"2","stack_id":"5","card_id":"21"}`, http.MethodDelete},
 }
 
 func TestDeckCardsRefuseBeforeAnyRequest(t *testing.T) {
@@ -94,7 +94,7 @@ func TestDeckCardsRefuseBeforeAnyRequest(t *testing.T) {
 		"free parameter":      {"create", `{"board_id":"2","stack_id":"6","title":"x","path":"/y"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards."+tc.op, tc.args, true)
+			_, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards."+tc.op, tc.args, true)
 			if err == nil {
 				t.Fatal("accepted")
 			}
@@ -135,7 +135,7 @@ func TestDeckCardsRefuseObjectsOutsideTheBoardWithoutMutation(t *testing.T) {
 				t.Error("a mutation was sent")
 				return nil, errors.New("no mutation expected")
 			})
-			_, err := deckCardWrite(t, []string{"deck"}, "nextcloud.deckcards."+tc.id, tc.args, true)
+			_, err := deckCardWrite(t, []string{"deck"}, "nextcloud.deck.cards."+tc.id, tc.args, true)
 			if err == nil {
 				t.Fatal("accepted")
 			}
@@ -158,7 +158,7 @@ func TestDeckCardsRefuseObjectsOutsideTheBoardWithoutMutation(t *testing.T) {
 			return jsonResponse(http.StatusOK, `[{"id":5,"title":"Todo","order":0,"cards":[]},{"id":6,"title":"D","order":1,"cards":[]}]`), nil
 		})
 		args := `{"board_id":"2","stack_id":"5","card_id":"21"` + map[string]string{"move": `,"target_stack_id":"6"}`, "delete": `}`}[op]
-		if _, err := deckCardWrite(t, []string{"deck"}, "nextcloud.deckcards."+op, args, true); err == nil || len(*calls) != 1 {
+		if _, err := deckCardWrite(t, []string{"deck"}, "nextcloud.deck.cards."+op, args, true); err == nil || len(*calls) != 1 {
 			t.Errorf("%s of an archived card: %v, calls %d", op, err, len(*calls))
 		}
 	}
@@ -166,7 +166,7 @@ func TestDeckCardsRefuseObjectsOutsideTheBoardWithoutMutation(t *testing.T) {
 
 func TestDeckCardsChangedCardMessage(t *testing.T) {
 	cardServer(t, func(*http.Request) (*http.Response, error) { return status(500), nil })
-	_, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.update",
+	_, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.update",
 		`{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1,"title":"x"}`, true)
 	if err == nil || !strings.Contains(err.Error(), "changed since it was read") {
 		t.Errorf("err = %v", err)
@@ -177,7 +177,7 @@ func TestDeckCardsUpdateSendsTheReadState(t *testing.T) {
 	calls := cardServer(t, func(*http.Request) (*http.Response, error) {
 		return jsonResponse(http.StatusOK, fullCard("21", "5", "false")), nil
 	})
-	result, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.update",
+	result, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.update",
 		`{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"title":"New \"t\""}`, true)
 	if err != nil || !strings.Contains(string(result), `"updated":true`) || !strings.Contains(string(result), `"id":"21"`) {
 		t.Fatalf("update = %s, %v", result, err)
@@ -195,7 +195,7 @@ func TestDeckCardsUpdateSendsTheReadState(t *testing.T) {
 		t.Errorf("pre-read = %s", (*calls)[0].url.Path)
 	}
 	// description and due time change, an empty due time clears it
-	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.update",
+	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.update",
 		`{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"description":"","duedate":""}`, true); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestDeckCardsRestoreReadsTheArchive(t *testing.T) {
 	calls := cardServer(t, func(*http.Request) (*http.Response, error) {
 		return jsonResponse(http.StatusOK, fullCard("21", "5", "false")), nil
 	})
-	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.update",
+	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.update",
 		`{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"archived":false}`, true); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestDeckCardsRestoreReadsTheArchive(t *testing.T) {
 		t.Errorf("calls = %+v", *calls)
 	}
 	// archiving reads the active cards and sends true
-	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.update",
+	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.update",
 		`{"board_id":"2","stack_id":"5","card_id":"21","last_modified":1700000100,"archived":true}`, true); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestDeckCardsCreateMoveDeleteSendOneFixedRequest(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, fullCard("21", "5", "false")), nil
 	})
-	result, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.create",
+	result, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.create",
 		`{"board_id":"2","stack_id":"5","title":" Do \"it\" ","description":"a\nb","duedate":"2026-12-24T10:00:00Z"}`, true)
 	if err != nil || !strings.Contains(string(result), `"created":true`) || !strings.Contains(string(result), `"id":"30"`) {
 		t.Fatalf("create = %s, %v", result, err)
@@ -252,14 +252,14 @@ func TestDeckCardsCreateMoveDeleteSendOneFixedRequest(t *testing.T) {
 		c.body != `{"title":"Do \"it\"","type":"plain","order":3,"description":"a\nb","duedate":"2026-12-24T10:00:00Z"}` {
 		t.Errorf("create call = %+v", c)
 	}
-	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.create",
+	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.create",
 		`{"board_id":"2","stack_id":"6","title":"x","order":0}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[3].body; got != `{"title":"x","type":"plain","order":0,"description":""}` {
 		t.Errorf("explicit order body = %s", got)
 	}
-	result, err = deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.move",
+	result, err = deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.move",
 		`{"board_id":"2","stack_id":"5","card_id":"21","target_stack_id":"6"}`, true)
 	if err != nil || !strings.Contains(string(result), `"moved":true`) || !strings.Contains(string(result), `"id":"21"`) {
 		t.Fatalf("move = %s, %v", result, err)
@@ -268,7 +268,7 @@ func TestDeckCardsCreateMoveDeleteSendOneFixedRequest(t *testing.T) {
 		c.body != `{"stackId":6,"order":0}` {
 		t.Errorf("move call = %+v", c)
 	}
-	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.move",
+	if _, err := deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.move",
 		`{"board_id":"2","stack_id":"5","card_id":"21","target_stack_id":"5","order":4}`, true); err == nil {
 		// the answer holds the card in stack 6, not in the requested stack 5
 		t.Error("an answer from another stack was accepted")
@@ -276,7 +276,7 @@ func TestDeckCardsCreateMoveDeleteSendOneFixedRequest(t *testing.T) {
 	if got := (*calls)[7].body; got != `{"stackId":5,"order":4}` {
 		t.Errorf("explicit move body = %s", got)
 	}
-	result, err = deckCardWrite(t, []string{"deck/2"}, "nextcloud.deckcards.delete",
+	result, err = deckCardWrite(t, []string{"deck/2"}, "nextcloud.deck.cards.delete",
 		`{"board_id":"2","stack_id":"5","card_id":"21"}`, true)
 	if err != nil || !strings.Contains(string(result), `"deleted":true`) || !strings.Contains(string(result), `"card_id":"21"`) {
 		t.Fatalf("delete = %s, %v", result, err)
@@ -347,7 +347,7 @@ func TestDeckCardsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 			if has := strings.Contains(text, "may have been applied"); has != hint {
 				t.Errorf("hint present = %v in %q", has, text)
 			}
-			if hint && !strings.Contains(text, "deckcards.get") {
+			if hint && !strings.Contains(text, "deck.cards.get") {
 				t.Errorf("no verification advice in %q", text)
 			}
 		}
@@ -382,7 +382,7 @@ func TestDeckCardsDeleteIsAllowListOnly(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.deckcards.") && id != deckCardsGet.ID {
+			if strings.HasPrefix(id, "nextcloud.deck.cards.") && id != deckCardsGet.ID {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

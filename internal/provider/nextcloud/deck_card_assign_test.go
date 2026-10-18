@@ -40,11 +40,11 @@ func deckAssign(t *testing.T, operation, args string) error {
 
 func TestDeckAssignSendsOneFixedRequest(t *testing.T) {
 	for name, tc := range map[string]struct{ op, args, action, body string }{
-		"label assign":   {"nextcloud.deckcards.labels", `"label_id":"4","assign":true`, "assignLabel", `{"labelId":4}`},
-		"label remove":   {"nextcloud.deckcards.labels", `"label_id":"4","assign":false`, "removeLabel", `{"labelId":4}`},
-		"user assign":    {"nextcloud.deckcards.assignees", `"user_id":"emil","assign":true`, "assignUser", `{"userId":"emil","type":0}`},
-		"user unassign":  {"nextcloud.deckcards.assignees", `"user_id":"emil","assign":false`, "unassignUser", `{"userId":"emil","type":0}`},
-		"owner assigned": {"nextcloud.deckcards.assignees", `"user_id":"dora","assign":true`, "assignUser", `{"userId":"dora","type":0}`},
+		"label assign":   {"nextcloud.deck.cards.labels", `"label_id":"4","assign":true`, "assignLabel", `{"labelId":4}`},
+		"label remove":   {"nextcloud.deck.cards.labels", `"label_id":"4","assign":false`, "removeLabel", `{"labelId":4}`},
+		"user assign":    {"nextcloud.deck.cards.assignees", `"user_id":"emil","assign":true`, "assignUser", `{"userId":"emil","type":0}`},
+		"user unassign":  {"nextcloud.deck.cards.assignees", `"user_id":"emil","assign":false`, "unassignUser", `{"userId":"emil","type":0}`},
+		"owner assigned": {"nextcloud.deck.cards.assignees", `"user_id":"dora","assign":true`, "assignUser", `{"userId":"dora","type":0}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := assignServer(t, assignBoard, func(*http.Request) (*http.Response, error) {
@@ -67,13 +67,13 @@ func TestDeckAssignSendsOneFixedRequest(t *testing.T) {
 func TestDeckAssignRefusesWithoutMutation(t *testing.T) {
 	const base = `"board_id":"2","stack_id":"5","card_id":"21",`
 	for name, tc := range map[string]struct{ op, args string }{
-		"foreign label":     {"nextcloud.deckcards.labels", base + `"label_id":"9","assign":true`},
-		"foreign label out": {"nextcloud.deckcards.labels", base + `"label_id":"9","assign":false`},
-		"not a member":      {"nextcloud.deckcards.assignees", base + `"user_id":"mallory","assign":true`},
-		"group member":      {"nextcloud.deckcards.assignees", base + `"user_id":"crew","assign":true`},
-		"card in no stack":  {"nextcloud.deckcards.labels", `"board_id":"2","stack_id":"6","card_id":"21","label_id":"4","assign":true`},
-		"unknown card":      {"nextcloud.deckcards.assignees", `"board_id":"2","stack_id":"5","card_id":"99","user_id":"emil","assign":true`},
-		"deleted stack":     {"nextcloud.deckcards.labels", `"board_id":"2","stack_id":"7","card_id":"21","label_id":"4","assign":true`},
+		"foreign label":     {"nextcloud.deck.cards.labels", base + `"label_id":"9","assign":true`},
+		"foreign label out": {"nextcloud.deck.cards.labels", base + `"label_id":"9","assign":false`},
+		"not a member":      {"nextcloud.deck.cards.assignees", base + `"user_id":"mallory","assign":true`},
+		"group member":      {"nextcloud.deck.cards.assignees", base + `"user_id":"crew","assign":true`},
+		"card in no stack":  {"nextcloud.deck.cards.labels", `"board_id":"2","stack_id":"6","card_id":"21","label_id":"4","assign":true`},
+		"unknown card":      {"nextcloud.deck.cards.assignees", `"board_id":"2","stack_id":"5","card_id":"99","user_id":"emil","assign":true`},
+		"deleted stack":     {"nextcloud.deck.cards.labels", `"board_id":"2","stack_id":"7","card_id":"21","label_id":"4","assign":true`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := assignServer(t, assignBoard, func(*http.Request) (*http.Response, error) {
@@ -99,13 +99,13 @@ func TestDeckAssignRefusesBeforeAnyRequest(t *testing.T) {
 		return nil, errors.New("no request expected")
 	})
 	for name, args := range map[string]struct{ op, args string }{
-		"unbound board": {"nextcloud.deckcards.labels", `{"board_id":"9","stack_id":"5","card_id":"21","label_id":"4","assign":true}`},
-		"unbound user":  {"nextcloud.deckcards.assignees", `{"board_id":"9","stack_id":"5","card_id":"21","user_id":"emil","assign":true}`},
-		"no assign":     {"nextcloud.deckcards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4"}`},
-		"bad label":     {"nextcloud.deckcards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4/..","assign":true}`},
-		"bad user":      {"nextcloud.deckcards.assignees", `{"board_id":"2","stack_id":"5","card_id":"21","user_id":"a/b","assign":true}`},
-		"user on label": {"nextcloud.deckcards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4","user_id":"emil","assign":true}`},
-		"label on user": {"nextcloud.deckcards.assignees", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4","user_id":"emil","assign":true}`},
+		"unbound board": {"nextcloud.deck.cards.labels", `{"board_id":"9","stack_id":"5","card_id":"21","label_id":"4","assign":true}`},
+		"unbound user":  {"nextcloud.deck.cards.assignees", `{"board_id":"9","stack_id":"5","card_id":"21","user_id":"emil","assign":true}`},
+		"no assign":     {"nextcloud.deck.cards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4"}`},
+		"bad label":     {"nextcloud.deck.cards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4/..","assign":true}`},
+		"bad user":      {"nextcloud.deck.cards.assignees", `{"board_id":"2","stack_id":"5","card_id":"21","user_id":"a/b","assign":true}`},
+		"user on label": {"nextcloud.deck.cards.labels", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4","user_id":"emil","assign":true}`},
+		"label on user": {"nextcloud.deck.cards.assignees", `{"board_id":"2","stack_id":"5","card_id":"21","label_id":"4","user_id":"emil","assign":true}`},
 	} {
 		if err := deckAssign(t, args.op, args.args); err == nil {
 			t.Errorf("%s: no error", name)
@@ -123,15 +123,15 @@ func TestDeckAssignUnclearOutcomeIsNeverRepeated(t *testing.T) {
 		"garbage": func() (*http.Response, error) { return jsonResponse(http.StatusOK, `not json`), nil },
 	}
 	for _, op := range []struct{ id, args string }{
-		{"nextcloud.deckcards.labels", `"label_id":"4","assign":true`},
-		{"nextcloud.deckcards.assignees", `"user_id":"emil","assign":true`},
+		{"nextcloud.deck.cards.labels", `"label_id":"4","assign":true`},
+		{"nextcloud.deck.cards.assignees", `"user_id":"emil","assign":true`},
 	} {
 		for name, answer := range unclear {
 			t.Run(op.id+" "+name, func(t *testing.T) {
 				calls := assignServer(t, assignBoard, func(*http.Request) (*http.Response, error) { return answer() })
 				err := deckAssign(t, op.id, `{"board_id":"2","stack_id":"5","card_id":"21",`+op.args+`}`)
 				if err == nil || !strings.Contains(err.Error(), "may have been applied") ||
-					!strings.Contains(err.Error(), "deckcards.get") || len(*calls) != 3 {
+					!strings.Contains(err.Error(), "deck.cards.get") || len(*calls) != 3 {
 					t.Errorf("err = %v, calls %d", err, len(*calls))
 				}
 			})

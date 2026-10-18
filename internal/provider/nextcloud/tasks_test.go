@@ -48,7 +48,7 @@ func TestTasksListSendsOneFixedReportPerFilter(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := taskServer(t, calMultistatus(), "VTODO")
-			if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.tasks.list", tc.args); err != nil {
+			if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.tasks.list", tc.args); err != nil {
 				t.Fatalf("invoke = %v", err)
 			}
 			if len(*calls) != 2 || (*calls)[0].method != "PROPFIND" || (*calls)[0].depth != depthSelf ||
@@ -81,7 +81,7 @@ func TestTasksListReportsFieldsDropsForeignNodesAndFiltersState(t *testing.T) {
 		eventNode(base+"broken.ics", "x", "not an iCalendar object"),
 	)
 	taskServer(t, report, "VTODO")
-	result, err := calInvoke(t, []string{"calendar/tasks"}, "nextcloud.tasks.list", `{"calendar":"tasks","state":"open"}`)
+	result, err := calInvoke(t, []string{"calendar/tasks"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","state":"open"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestTasksListReportsFieldsDropsForeignNodesAndFiltersState(t *testing.T) {
 	}
 
 	// The completed filter applies again to what the server returned.
-	result, err = calInvoke(t, []string{"calendar/tasks"}, "nextcloud.tasks.list", `{"calendar":"tasks","state":"completed"}`)
+	result, err = calInvoke(t, []string{"calendar/tasks"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","state":"completed"}`)
 	if err != nil || !strings.Contains(string(result), `"count":1`) || !strings.Contains(string(result), `"completed":"2026-03-01T08:00:00Z"`) {
 		t.Errorf("completed = %s, %v", result, err)
 	}
@@ -119,7 +119,7 @@ func TestTasksListCapsCountAndReportsTruncation(t *testing.T) {
 		nodes = append(nodes, eventNode(base+id+".ics", id, todo(id, id, "")))
 	}
 	taskServer(t, calMultistatus(nodes...), "VTODO")
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","limit":2}`)
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","limit":2}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -143,7 +143,7 @@ func TestTasksGetReadsOneTaskAtAFixedPathWithCappedStrings(t *testing.T) {
 		}
 		return xmlResponse(http.StatusMultiStatus, taskCalendarProbe("VEVENT", "VTODO")), nil
 	})
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.tasks.get", `{"calendar":"tasks","id":"my task.ics"}`)
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.tasks.get", `{"calendar":"tasks","id":"my task.ics"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -164,8 +164,8 @@ func TestTasksGetReadsOneTaskAtAFixedPathWithCappedStrings(t *testing.T) {
 
 func TestTasksRefuseACalendarWithoutTaskSupport(t *testing.T) {
 	for op, args := range map[string]string{
-		"nextcloud.tasks.list": `{"calendar":"tasks"}`,
-		"nextcloud.tasks.get":  `{"calendar":"tasks","id":"a.ics"}`,
+		"nextcloud.calendar.tasks.list": `{"calendar":"tasks"}`,
+		"nextcloud.calendar.tasks.get":  `{"calendar":"tasks","id":"a.ics"}`,
 	} {
 		calls := taskServer(t, calMultistatus(), "VEVENT")
 		_, err := calInvoke(t, []string{"calendar"}, op, args)
@@ -188,18 +188,18 @@ func TestTasksAreRefusedBeforeAnyRequestWhenUnboundOrInvalid(t *testing.T) {
 		op, arg string
 		class   provider.Class
 	}{
-		"list, no calendar target": {[]string{"folder/Reports"}, "nextcloud.tasks.list", `{"calendar":"tasks"}`, provider.ClassPermission},
-		"list, other calendar":     {[]string{"calendar/work"}, "nextcloud.tasks.list", `{"calendar":"other-secret"}`, provider.ClassPermission},
-		"get, other calendar":      {[]string{"calendar/work"}, "nextcloud.tasks.get", `{"calendar":"other-secret","id":"a.ics"}`, provider.ClassPermission},
-		"reserved calendar":        {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"inbox"}`, provider.ClassPermission},
-		"traversal calendar":       {[]string{"calendar"}, "nextcloud.tasks.get", `{"calendar":"../bobby","id":"a.ics"}`, provider.ClassPermission},
-		"traversal id":             {[]string{"calendar"}, "nextcloud.tasks.get", `{"calendar":"tasks","id":"../x.ics"}`, ""},
-		"separator id":             {[]string{"calendar"}, "nextcloud.tasks.get", `{"calendar":"tasks","id":"a/b.ics"}`, ""},
-		"unknown state":            {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","state":"all"}`, ""},
-		"bad due":                  {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","due_from":"yesterday at noon"}`, ""},
-		"backwards due":            {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","due_from":"2026-02-01T00:00:00Z","due_to":"2026-01-01T00:00:00Z"}`, ""},
-		"limit":                    {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","limit":500}`, ""},
-		"free filter":              {[]string{"calendar"}, "nextcloud.tasks.list", `{"calendar":"tasks","filter":"x"}`, ""},
+		"list, no calendar target": {[]string{"folder/Reports"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks"}`, provider.ClassPermission},
+		"list, other calendar":     {[]string{"calendar/work"}, "nextcloud.calendar.tasks.list", `{"calendar":"other-secret"}`, provider.ClassPermission},
+		"get, other calendar":      {[]string{"calendar/work"}, "nextcloud.calendar.tasks.get", `{"calendar":"other-secret","id":"a.ics"}`, provider.ClassPermission},
+		"reserved calendar":        {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"inbox"}`, provider.ClassPermission},
+		"traversal calendar":       {[]string{"calendar"}, "nextcloud.calendar.tasks.get", `{"calendar":"../bobby","id":"a.ics"}`, provider.ClassPermission},
+		"traversal id":             {[]string{"calendar"}, "nextcloud.calendar.tasks.get", `{"calendar":"tasks","id":"../x.ics"}`, ""},
+		"separator id":             {[]string{"calendar"}, "nextcloud.calendar.tasks.get", `{"calendar":"tasks","id":"a/b.ics"}`, ""},
+		"unknown state":            {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","state":"all"}`, ""},
+		"bad due":                  {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","due_from":"yesterday at noon"}`, ""},
+		"backwards due":            {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","due_from":"2026-02-01T00:00:00Z","due_to":"2026-01-01T00:00:00Z"}`, ""},
+		"limit":                    {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","limit":500}`, ""},
+		"free filter":              {[]string{"calendar"}, "nextcloud.calendar.tasks.list", `{"calendar":"tasks","filter":"x"}`, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := calInvoke(t, tc.targets, tc.op, tc.arg)
@@ -227,8 +227,8 @@ func TestTaskRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 			return response, nil
 		})
 		for op, args := range map[string]string{
-			"nextcloud.tasks.list": `{"calendar":"tasks"}`,
-			"nextcloud.tasks.get":  `{"calendar":"tasks","id":"a.ics"}`,
+			"nextcloud.calendar.tasks.list": `{"calendar":"tasks"}`,
+			"nextcloud.calendar.tasks.get":  `{"calendar":"tasks","id":"a.ics"}`,
 		} {
 			_, err := calInvoke(t, []string{"calendar"}, op, args)
 			if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "redirect") ||
@@ -249,9 +249,9 @@ func TestTaskRedirectOnTheDataRequestIsAClearFailure(t *testing.T) {
 			}
 			return xmlResponse(http.StatusMultiStatus, taskCalendarProbe("VTODO")), nil
 		})
-		op, args := "nextcloud.tasks.list", `{"calendar":"tasks"}`
+		op, args := "nextcloud.calendar.tasks.list", `{"calendar":"tasks"}`
 		if method == http.MethodGet {
-			op, args = "nextcloud.tasks.get", `{"calendar":"tasks","id":"a.ics"}`
+			op, args = "nextcloud.calendar.tasks.get", `{"calendar":"tasks","id":"a.ics"}`
 		}
 		_, err := calInvoke(t, []string{"calendar"}, op, args)
 		if err == nil || !strings.Contains(err.Error(), "redirect") || strings.Contains(err.Error(), "canary") {
@@ -267,7 +267,7 @@ func TestTasksGetOfAnEventIsAClearRefusal(t *testing.T) {
 		}
 		return xmlResponse(http.StatusMultiStatus, taskCalendarProbe("VEVENT", "VTODO")), nil
 	})
-	_, err := calInvoke(t, []string{"calendar"}, "nextcloud.tasks.get", `{"calendar":"tasks","id":"ev.ics"}`)
+	_, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.tasks.get", `{"calendar":"tasks","id":"ev.ics"}`)
 	if err == nil || !strings.Contains(err.Error(), "does not name a task") || strings.Contains(err.Error(), "valid iCalendar") {
 		t.Errorf("err = %v", err)
 	}

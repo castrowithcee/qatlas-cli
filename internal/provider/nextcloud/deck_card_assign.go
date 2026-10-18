@@ -28,7 +28,7 @@ func deckAssignResult(id string) json.RawMessage {
 }
 
 var deckCardsLabels = capability.Descriptor{
-	ID: Provider + ".deckcards.labels", Version: 1, Title: "Assign or remove a Nextcloud Deck card label",
+	ID: Provider + ".deck.cards.labels", Version: 1, Title: "Assign or remove a Nextcloud Deck card label",
 	Description: "Assign a label to, or remove it from, exactly one confirmed active card of a bound Deck board; the " +
 		"identity needs the edit right on the board. Two read-only pre-checks must show the label among the labels " +
 		"of the board and the card in the named stack, then exactly one request. Labels are not created or changed",
@@ -39,19 +39,19 @@ var deckCardsLabels = capability.Descriptor{
 		`"required":["board_id","stack_id","card_id","label_id","assign"],"additionalProperties":false}`),
 	OutputSchema: deckAssignResult("label_id"),
 	Arguments: []capability.Argument{deckBoardIDArgument, deckStackOfCardArgument, deckCardIDArgument,
-		{Name: "label_id", Description: "Numeric ID of a label of this board, as reported by deckboards.get", Required: true},
+		{Name: "label_id", Description: "Numeric ID of a label of this board, as reported by deck.boards.get", Required: true},
 		{Name: "assign", Description: "True assigns the label, false removes it", Required: true}},
 	Fields: []capability.Field{
 		{Name: "assigned", Description: "Whether the label is on the card after the change"},
 		{Name: "card_id", Description: "ID of the card"},
 		{Name: "label_id", Description: "ID of the label"},
 	},
-	Examples: []capability.Example{{Description: "Assign a label from deckboards.get",
+	Examples: []capability.Example{{Description: "Assign a label from deck.boards.get",
 		Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3","card_id":"21","label_id":"4","assign":true}`)}},
 }
 
 var deckCardsAssignees = capability.Descriptor{
-	ID: Provider + ".deckcards.assignees", Version: 1, Title: "Assign or unassign a Nextcloud Deck card member",
+	ID: Provider + ".deck.cards.assignees", Version: 1, Title: "Assign or unassign a Nextcloud Deck card member",
 	Description: "Assign a member of a bound Deck board to, or remove them from, exactly one confirmed active card; the " +
 		"identity needs the edit right on the board. Two read-only pre-checks must show the user among the members " +
 		"or the owner of the board and the card in the named stack, then exactly one request. Deck may notify the " +
@@ -63,7 +63,7 @@ var deckCardsAssignees = capability.Descriptor{
 		`"required":["board_id","stack_id","card_id","user_id","assign"],"additionalProperties":false}`),
 	OutputSchema: deckAssignResult("user_id"),
 	Arguments: []capability.Argument{deckBoardIDArgument, deckStackOfCardArgument, deckCardIDArgument,
-		{Name: "user_id", Description: "Nextcloud user ID of a member of this board, as reported by deckboards.get", Required: true},
+		{Name: "user_id", Description: "Nextcloud user ID of a member of this board, as reported by deck.boards.get", Required: true},
 		{Name: "assign", Description: "True assigns the user, false removes the user", Required: true}},
 	Fields: []capability.Field{
 		{Name: "assigned", Description: "Whether the user is assigned to the card after the change"},

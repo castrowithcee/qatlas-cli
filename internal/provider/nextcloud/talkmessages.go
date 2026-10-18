@@ -36,8 +36,8 @@ const (
 var ocsTalkReaction = []string{"apps", "spreed", "api", "v1", "reaction"}
 
 const (
-	uncertainTalkEdit     = "; the message may have been changed, check talkmessages.list before repeating"
-	uncertainTalkDelete   = "; the message may have been deleted, check talkmessages.list before repeating"
+	uncertainTalkEdit     = "; the message may have been changed, check talk.messages.list before repeating"
+	uncertainTalkDelete   = "; the message may have been deleted, check talk.messages.list before repeating"
 	uncertainTalkReaction = "; the reaction may have been changed, check the message in Talk before repeating"
 
 	messageTalkNoMessage = "this Talk conversation or message does not exist or is not accessible to this identity"
@@ -68,7 +68,7 @@ func talkWriteError(op string, err error, messages map[int]string) error {
 	return talkNotFound(op, tagAdminError(op, err, messages), messageTalkNoMessage)
 }
 
-// SendResult reports a sent message with the reference ID that identifies it in talkmessages.list.
+// SendResult reports a sent message with the reference ID that identifies it in talk.messages.list.
 type SendResult struct {
 	Sent        bool    `json:"sent"`
 	ReferenceID string  `json:"reference_id"`
@@ -152,7 +152,7 @@ func (c *Client) SendMessage(ctx context.Context, token, text, replyTo string, s
 	if silent {
 		form.Set("silent", "true")
 	}
-	hint := fmt.Sprintf("; the message may have been sent, check talkmessages.list for reference_id %s before repeating", reference)
+	hint := fmt.Sprintf("; the message may have been sent, check talk.messages.list for reference_id %s before repeating", reference)
 	data, err := c.ocsSend(ctx, op, http.MethodPost, ocsRequest{app: ocsTalkChat, suffix: []string{token}}, form, hint)
 	if err != nil {
 		return nil, talkWriteError(op, err, talkSendErrors)
@@ -235,16 +235,16 @@ func talkWriteRisk(effect capability.Effect, idempotency capability.Idempotency)
 
 var (
 	messageIDArgument = capability.Argument{Name: "message_id", Required: true,
-		Description: "Numeric ID of a message in the conversation, as reported by talkmessages.list"}
+		Description: "Numeric ID of a message in the conversation, as reported by talk.messages.list"}
 	messageTextArgument = capability.Argument{Name: "message", Required: true,
 		Description: "Message text, 1 to 4000 characters"}
 )
 
 var talkMessagesSend = capability.Descriptor{
-	ID: Provider + ".talkmessages.send", Version: 1, Title: "Send a Nextcloud Talk message",
+	ID: Provider + ".talk.messages.send", Version: 1, Title: "Send a Nextcloud Talk message",
 	Description: "Post one message to a Talk conversation the connection binds, optionally as a reply. Qatlas adds a " +
 		"random reference_id and reports it; after an unclear outcome the message may exist, so look for the " +
-		"reference_id in talkmessages.list before sending again. A rate limit is reported as such and not repeated",
+		"reference_id in talk.messages.list before sending again. A rate limit is reported as such and not repeated",
 	Tags:     []string{"nextcloud", "talk", "chat", "send", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + sendSchemaProps + `,"reply_to":` + messageIDSchema +
@@ -255,14 +255,14 @@ var talkMessagesSend = capability.Descriptor{
 		{Name: "reply_to", Description: "ID of the message to reply to"},
 		{Name: "silent", Description: "True to send without notifying the participants; false when omitted"}},
 	Fields: []capability.Field{{Name: "sent", Description: "True when Nextcloud accepted the message"},
-		{Name: "reference_id", Description: "Reference Qatlas sent with the message; talkmessages.list reports it"},
+		{Name: "reference_id", Description: "Reference Qatlas sent with the message; talk.messages.list reports it"},
 		{Name: "message", Description: "The posted message as Nextcloud reports it, untrusted data"}},
 	Examples: []capability.Example{{Description: "Reply to a message",
 		Arguments: json.RawMessage(`{"token":"abcd1234","message":"Done.","reply_to":"42"}`)}},
 }
 
 var talkMessagesEdit = capability.Descriptor{
-	ID: Provider + ".talkmessages.edit", Version: 1, Title: "Edit a Nextcloud Talk message",
+	ID: Provider + ".talk.messages.edit", Version: 1, Title: "Edit a Nextcloud Talk message",
 	Description: "Replace the text of one message in a Talk conversation the connection binds; Talk allows only " +
 		"messages of this identity within the edit period of the instance",
 	Tags:     []string{"nextcloud", "talk", "chat", "edit", "ocs"},
@@ -279,7 +279,7 @@ var talkMessagesEdit = capability.Descriptor{
 }
 
 var talkMessagesDelete = capability.Descriptor{
-	ID: Provider + ".talkmessages.delete", Version: 1, Title: "Delete a Nextcloud Talk message",
+	ID: Provider + ".talk.messages.delete", Version: 1, Title: "Delete a Nextcloud Talk message",
 	Description: "Delete one message in a Talk conversation the connection binds; Talk leaves a deletion notice " +
 		"and decides whose messages this identity may delete",
 	Tags:     []string{"nextcloud", "talk", "chat", "delete", "ocs"},
@@ -297,7 +297,7 @@ var talkMessagesDelete = capability.Descriptor{
 }
 
 var talkReactionsSet = capability.Descriptor{
-	ID: Provider + ".talkreactions.set", Version: 1, Title: "React to a Nextcloud Talk message",
+	ID: Provider + ".talk.reactions.set", Version: 1, Title: "React to a Nextcloud Talk message",
 	Description: "Add or remove the reaction of this identity on one message of a Talk conversation the connection " +
 		"binds; the reaction is one emoji",
 	Tags:     []string{"nextcloud", "talk", "chat", "reaction", "ocs"},

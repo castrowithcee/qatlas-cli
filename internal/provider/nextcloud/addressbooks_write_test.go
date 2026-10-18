@@ -58,7 +58,7 @@ func bookFixture(t *testing.T, owner string, mutate func() (*http.Response, erro
 
 func TestAddressbooksCreateSendsOneGeneratedExtendedMkcol(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return status(http.StatusCreated), nil })
-	result, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.create", `{"name":"Team <A> & \"B\""}`, true)
+	result, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.create", `{"name":"Team <A> & \"B\""}`, true)
 	if err != nil {
 		t.Fatalf("create = %v", err)
 	}
@@ -85,7 +85,7 @@ func TestAddressbooksCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 		return nil, errors.New("no request expected")
 	})
 	for _, targets := range [][]string{{"addressbook/clients"}, {"folder/Reports"}, {"calendar"}} {
-		_, err := manageBooks(t, targets, "nextcloud.addressbooks.create", `{"name":"X"}`, true)
+		_, err := manageBooks(t, targets, "nextcloud.contacts.address-books.create", `{"name":"X"}`, true)
 		if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), "clients") {
 			t.Errorf("%v: err = %v", targets, err)
 		}
@@ -98,11 +98,11 @@ func TestAddressbooksCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 		"description":  `{"name":"X","description":"d"}`,
 		"free field":   `{"name":"X","url":"https://evil.example.invalid"}`,
 	} {
-		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.create", args, true); err == nil {
+		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.create", args, true); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.create", `{"name":"X"}`, false); err == nil {
+	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.create", `{"name":"X"}`, false); err == nil {
 		t.Error("unconfirmed create: accepted")
 	}
 	if len(*calls) != 0 {
@@ -113,7 +113,7 @@ func TestAddressbooksCreateNeedsTheGeneralTargetAndValidInput(t *testing.T) {
 func TestAddressbooksCreateFailuresAreClear(t *testing.T) {
 	for code, want := range map[int]string{405: "already exists", 409: "cannot create", 403: "may not"} {
 		calls := serve(t, func(*http.Request) (*http.Response, error) { return status(code), nil })
-		_, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.create", `{"name":"X"}`, true)
+		_, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.create", `{"name":"X"}`, true)
 		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), bodyCanary) ||
 			strings.Contains(err.Error(), eventHint) || len(*calls) != 1 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
@@ -123,7 +123,7 @@ func TestAddressbooksCreateFailuresAreClear(t *testing.T) {
 
 func TestAddressbooksUpdateSendsOneProppatchAfterTheOwnerCheck(t *testing.T) {
 	calls := bookFixture(t, aliceUser, func() (*http.Response, error) { return bookPatchAnswer("ok", "ok"), nil })
-	result, err := manageBooks(t, []string{"addressbook/clients"}, "nextcloud.addressbooks.update",
+	result, err := manageBooks(t, []string{"addressbook/clients"}, "nextcloud.contacts.address-books.update",
 		`{"addressbook":"clients","name":"Clients <2026>","description":"All & more"}`, true)
 	var got AddressbookWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || got != (AddressbookWriteResult{ID: "clients", Updated: true}) {
@@ -146,7 +146,7 @@ func TestAddressbooksUpdateSendsOneProppatchAfterTheOwnerCheck(t *testing.T) {
 func TestAddressbooksUpdateNeedsOneOfNameAndDescription(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return nil, errors.New("no request expected") })
 	for _, args := range []string{`{"addressbook":"clients"}`, `{"addressbook":"clients","description":"\u0007"}`} {
-		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.update", args, true); err == nil {
+		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.update", args, true); err == nil {
 			t.Errorf("%s: accepted", args)
 		}
 	}
@@ -154,7 +154,7 @@ func TestAddressbooksUpdateNeedsOneOfNameAndDescription(t *testing.T) {
 		t.Errorf("requests = %d", len(*calls))
 	}
 	bookFixture(t, aliceUser, func() (*http.Response, error) { return bookPatchAnswer("none", "ok"), nil })
-	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.update",
+	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.update",
 		`{"addressbook":"clients","description":"d"}`, true); err != nil {
 		t.Errorf("description only: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestAddressbooksUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 		"missing":             {"ok", "none", "refused the change of description"},
 	} {
 		bookFixture(t, aliceUser, func() (*http.Response, error) { return bookPatchAnswer(tc.name, tc.description), nil })
-		_, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.update", both, true)
+		_, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.update", both, true)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -177,7 +177,7 @@ func TestAddressbooksUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 	bookFixture(t, aliceUser, func() (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, "<not-xml"), nil
 	})
-	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.update", both, true); err == nil ||
+	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.update", both, true); err == nil ||
 		!strings.Contains(err.Error(), eventHint) {
 		t.Errorf("unreadable answer: err = %v", err)
 	}
@@ -185,8 +185,8 @@ func TestAddressbooksUpdateReportsPartialAndRefusedProperties(t *testing.T) {
 
 func TestAddressbookMutationsRefuseForeignAndUnconfirmedOwnerBeforeAnyChange(t *testing.T) {
 	for op, args := range map[string]string{
-		"nextcloud.addressbooks.update": `{"addressbook":"clients","name":"N"}`,
-		"nextcloud.addressbooks.delete": `{"addressbook":"clients"}`,
+		"nextcloud.contacts.address-books.update": `{"addressbook":"clients","name":"N"}`,
+		"nextcloud.contacts.address-books.delete": `{"addressbook":"clients"}`,
 	} {
 		for _, owner := range []string{"bob", "alice2", ""} {
 			calls := bookFixture(t, owner, func() (*http.Response, error) {
@@ -221,7 +221,7 @@ func TestAddressbookMutationsRefuseUnboundAndSystemBeforeAnyRequest(t *testing.T
 			"system, kind": {[]string{"addressbook"}, systemAddressbook},
 			"traversal":    {[]string{"addressbook"}, "../bobby"},
 		} {
-			_, err := manageBooks(t, tc.targets, "nextcloud.addressbooks."+op, `{"addressbook":"`+tc.book+`"`+extra+`}`, true)
+			_, err := manageBooks(t, tc.targets, "nextcloud.contacts.address-books."+op, `{"addressbook":"`+tc.book+`"`+extra+`}`, true)
 			if classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s: err = %v", op, name, err)
 				continue
@@ -232,15 +232,15 @@ func TestAddressbookMutationsRefuseUnboundAndSystemBeforeAnyRequest(t *testing.T
 				}
 			}
 		}
-		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks."+op, `{"addressbook":"clients"`+extra+`}`, false); err == nil {
+		if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books."+op, `{"addressbook":"clients"`+extra+`}`, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 	}
-	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.delete", `{"addressbook":"clients","name":"x"}`, true); err == nil {
+	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.delete", `{"addressbook":"clients","name":"x"}`, true); err == nil {
 		t.Error("delete with extra field: accepted")
 	}
 	// Without a tools list naming it the delete is not offered.
-	if _, err := eventWrite(t, nil, []string{"addressbook"}, "nextcloud.addressbooks.delete", `{"addressbook":"clients"}`, true); err == nil {
+	if _, err := eventWrite(t, nil, []string{"addressbook"}, "nextcloud.contacts.address-books.delete", `{"addressbook":"clients"}`, true); err == nil {
 		t.Error("delete without a tools list: accepted")
 	}
 	if len(*calls) != 0 {
@@ -255,7 +255,7 @@ func TestAddressbookMutationsRefuseANodeThatIsNoAddressbook(t *testing.T) {
 		}
 		return xmlResponse(http.StatusMultiStatus, bookMultistatus(bookNode(manageBookPath, "Plain", false))), nil
 	})
-	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.addressbooks.delete", `{"addressbook":"clients"}`, true); err == nil ||
+	if _, err := manageBooks(t, []string{"addressbook"}, "nextcloud.contacts.address-books.delete", `{"addressbook":"clients"}`, true); err == nil ||
 		len(*calls) != 1 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}
@@ -263,7 +263,7 @@ func TestAddressbookMutationsRefuseANodeThatIsNoAddressbook(t *testing.T) {
 
 func TestAddressbooksDeleteSendsOneDeleteAfterTheOwnerCheck(t *testing.T) {
 	calls := bookFixture(t, aliceUser, noContent)
-	result, err := manageBooks(t, []string{"addressbook/clients"}, "nextcloud.addressbooks.delete", `{"addressbook":"clients"}`, true)
+	result, err := manageBooks(t, []string{"addressbook/clients"}, "nextcloud.contacts.address-books.delete", `{"addressbook":"clients"}`, true)
 	var got AddressbookWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || got != (AddressbookWriteResult{ID: "clients", Deleted: true}) {
 		t.Fatalf("delete = %s, %v", result, err)
@@ -283,9 +283,9 @@ func TestAddressbookManagementUnclearOutcomeIsReportedAndNeverRepeated(t *testin
 		answers[strconv.Itoa(code)] = func() (*http.Response, error) { return status(code), nil }
 	}
 	for op, args := range map[string]string{
-		"nextcloud.addressbooks.create": `{"name":"X"}`,
-		"nextcloud.addressbooks.update": `{"addressbook":"clients","name":"N"}`,
-		"nextcloud.addressbooks.delete": `{"addressbook":"clients"}`,
+		"nextcloud.contacts.address-books.create": `{"name":"X"}`,
+		"nextcloud.contacts.address-books.update": `{"addressbook":"clients","name":"N"}`,
+		"nextcloud.contacts.address-books.delete": `{"addressbook":"clients"}`,
 	} {
 		for name, answer := range answers {
 			calls := bookFixture(t, aliceUser, answer)
@@ -309,9 +309,9 @@ func TestAddressbookManagementRedirectsAreClearFailuresWithoutATarget(t *testing
 		return response
 	}
 	for op, args := range map[string]string{
-		"nextcloud.addressbooks.create": `{"name":"X"}`,
-		"nextcloud.addressbooks.update": `{"addressbook":"clients","name":"N"}`,
-		"nextcloud.addressbooks.delete": `{"addressbook":"clients"}`,
+		"nextcloud.contacts.address-books.create": `{"name":"X"}`,
+		"nextcloud.contacts.address-books.update": `{"addressbook":"clients","name":"N"}`,
+		"nextcloud.contacts.address-books.delete": `{"addressbook":"clients"}`,
 	} {
 		for _, code := range []int{301, 302, 307, 308} {
 			calls := bookFixture(t, aliceUser, func() (*http.Response, error) { return redirect(code), nil })
@@ -360,7 +360,7 @@ func TestAddressbookManagementToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.addressbooks.") && id != addressbooksList.ID {
+			if strings.HasPrefix(id, "nextcloud.contacts.address-books.") && id != addressbooksList.ID {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

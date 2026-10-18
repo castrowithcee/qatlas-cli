@@ -189,8 +189,8 @@ func TestLocalDownloadIsRefusedOutsideTheRootAndTheRelease(t *testing.T) {
 
 func TestLocalFileDescriptors(t *testing.T) {
 	want := map[string]config.LocalFiles{
-		"nextcloud.files.create": config.LocalFilesRead, "nextcloud.files.update": config.LocalFilesRead,
-		"nextcloud.files.get": config.LocalFilesWrite, "nextcloud.files.list": "", "nextcloud.files.delete": "",
+		"nextcloud.files.files.create": config.LocalFilesRead, "nextcloud.files.files.update": config.LocalFilesRead,
+		"nextcloud.files.files.get": config.LocalFilesWrite, "nextcloud.files.files.list": "", "nextcloud.files.files.delete": "",
 	}
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {

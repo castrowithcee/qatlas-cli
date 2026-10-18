@@ -20,12 +20,12 @@ import (
 // through the bound ID; delete also reads the attachment list, because Deck deletes by ID alone.
 
 const (
-	uncertainDeckAttachment = "; the change may have been applied, check deckattachments.list before repeating"
+	uncertainDeckAttachment = "; the change may have been applied, check deck.attachments.list before repeating"
 	maxAttachmentNameBytes  = 255
 )
 
 var deckAttachmentsUpload = capability.Descriptor{
-	ID: Provider + ".deckattachments.upload", Version: 1, Title: "Upload a Nextcloud Deck card attachment",
+	ID: Provider + ".deck.attachments.upload", Version: 1, Title: "Upload a Nextcloud Deck card attachment",
 	Description: "Attach exactly one confirmed local file as type deck_file to an active card of a bound Deck board. " +
 		"local_path is a file up to 64 MiB in a directory the connection releases for reading; it keeps its file " +
 		"name and its content is reported by hash and size only. One read of the board stacks, which must show the " +
@@ -54,7 +54,7 @@ var deckAttachmentsUpload = capability.Descriptor{
 }
 
 var deckAttachmentsDelete = capability.Descriptor{
-	ID: Provider + ".deckattachments.delete", Version: 1, Title: "Delete a Nextcloud Deck card attachment",
+	ID: Provider + ".deck.attachments.delete", Version: 1, Title: "Delete a Nextcloud Deck card attachment",
 	Description: "Delete exactly one confirmed attachment of type deck_file of an active card of a bound Deck board; " +
 		"Deck keeps it as deleted, Qatlas does not restore it. Two reads precede exactly one request: the board " +
 		"stacks must show the card in the named stack and the attachment list of the card the attachment",
@@ -71,7 +71,7 @@ var deckAttachmentsDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Deck deleted the attachment"},
 		{Name: "attachment_id", Description: "ID of the deleted attachment"},
 	},
-	Examples: []capability.Example{{Description: "Use IDs from deckattachments.list",
+	Examples: []capability.Example{{Description: "Use IDs from deck.attachments.list",
 		Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3","card_id":"21","attachment_id":"5"}`)}},
 	RequiresToolAllowList: true,
 }

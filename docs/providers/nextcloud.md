@@ -11,8 +11,9 @@ updated: 2026-10-14
 
 # Nextcloud
 
-A connection binds one identity to typed targets (see Targets). The Files tools form the tool group `files` and
-work in the bound Files folder: they list and read metadata or up to 4 MiB of file content (`read`), create
+A connection binds one identity to typed targets (see Targets). In a tool ID such as `nextcloud.deck.cards.get`,
+the second segment is the Nextcloud service and at the same time the tool group. The Files tools form the tool
+group `files` and work in the bound Files folder: they list and read metadata or up to 4 MiB of file content (`read`), create
 files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and
 organise (see Organising). Deleting is separate (see Deleting).
 
@@ -21,7 +22,7 @@ is a clear failure that did not act on the server, and the app password only eve
 
 ## Deleting
 
-`nextcloud.files.delete` deletes one file and `nextcloud.folders.delete` one folder with everything in it, each
+`nextcloud.files.files.delete` deletes one file and `nextcloud.files.folders.delete` one folder with everything in it, each
 bound to the ETag of the version read (`*` is refused) and confirmed. The root folder is never deletable. When
 the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
 for good; Qatlas cannot tell which applies (see Trash bin). Both tools require a tools list: no profile and no
@@ -29,7 +30,7 @@ permission offers them.
 
 ## Trash bin
 
-`nextcloud.trash.list`, `nextcloud.trash.restore`, and `nextcloud.trash.delete` work on the deleted items of the
+`nextcloud.files.trash.list`, `nextcloud.files.trash.restore`, and `nextcloud.files.trash.delete` work on the deleted items of the
 identity whose original location lies below the bound root folder (`/` binds all). Everything else in the trash
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring elsewhere are not offered.
@@ -62,16 +63,16 @@ One whose first segment is a kind name (for example `calendar/2026`) is refused 
 The connection test reads the bound folder (or the Files root) and each bound calendar; it reports no metadata.
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
 Connection permissions independently hide and block operations; the identity's WebDAV rights stay the ceiling.
-An optional `tools` list narrows a connection further to named tools, for example `[nextcloud.files.list,
-nextcloud.files.stat]` for metadata without file content, and never admits an effect `permissions` excludes.
+An optional `tools` list narrows a connection further to named tools, for example `[nextcloud.files.files.list,
+nextcloud.files.files.stat]` for metadata without file content, and never admits an effect `permissions` excludes.
 File content is carried as base64 and never written to audit records. The terminal editor starts a new
 connection on the setup profile `read`, a visible starting selection, not a role: only the ticked `permissions`
 and `tools` are saved, and a saved connection never follows a profile.
 
 ## Organising
 
-`nextcloud.folders.create`, `nextcloud.files.move` (a rename is a move within one folder), and
-`nextcloud.files.copy` work on files and folders inside the bound folder and need `confirm` and the permission of
+`nextcloud.files.folders.create`, `nextcloud.files.files.move` (a rename is a move within one folder), and
+`nextcloud.files.files.copy` work on files and folders inside the bound folder and need `confirm` and the permission of
 their effect. Parent folders must already exist, and an existing destination is never overwritten. Source and
 destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go into
 itself or a descendant. Qatlas checks this locally before any credential access.
@@ -81,7 +82,7 @@ failure that names no path. After an unclear outcome, stat source and target, or
 
 ## Search and favorites
 
-`nextcloud.files.search` and `nextcloud.favorites.list` belong to the profile `read`; `nextcloud.files.favorite`
+`nextcloud.files.files.search` and `nextcloud.files.favorites.list` belong to the profile `read`; `nextcloud.files.files.favorite`
 needs `confirm` and the permission `update`. All three work on the bound folder only; the root itself is never a
 hit and cannot be marked.
 
@@ -92,12 +93,12 @@ picks which matches a limit keeps, `truncated` says when it was reached, and the
 Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
 dropped silently, and a cut list is marked `truncated`.
 
-`files.favorite` sends exactly one request without a read before it; a refused property is a clear failure. After
+`files.files.favorite` sends exactly one request without a read before it; a refused property is a clear failure. After
 an unclear outcome, stat the path and list the favorites before repeating.
 
 ## Shares
 
-The tool group `shares` reads and manages sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles
+The tool group `shares` reads and manages sharing. `nextcloud.shares.shares.list` and `nextcloud.shares.shares.get` (profiles
 `read` and `write`) need a `folder` target. A share counts only when its item lies at or below the root: the
 `path` of a share the identity owns, or the `file_target` of an incoming one (`shared_with_me`). `list` drops
 every other share; `get` answers one outside the root like a missing one. A share the identity passed on without
@@ -110,14 +111,14 @@ token, its link URL, or any password; `has_password` only says that one is set. 
 for `user`, `group`, `email`, `federated`, and `team` shares; a `talk` share reports only the conversation name
 and `link` and `other` shares no recipient. Recipients are personal data and untrusted.
 
-`nextcloud.sharees.search` and the `nextcloud.incomingshares.*` and `nextcloud.remoteshares.*` tools are
+`nextcloud.shares.sharees.search` and the `nextcloud.shares.incoming-shares.*` and `nextcloud.shares.remote-shares.*` tools are
 account-wide: they need an `account` target, not a folder, and without one refuse locally, before any credential
 access or request.
-`sharees.search` reports only type, identifier, and display name of possible recipients, never Talk
+`shares.sharees.search` reports only type, identifier, and display name of possible recipients, never Talk
 conversations or unknown types (their identifier may be an access token), never uses the global lookup server,
 asks for at most 50 candidates per kind (default 10), and is in no setup profile.
 
-`incomingshares.pending` lists the offers the identity has not accepted, from other users of the instance
+`shares.incoming-shares.pending` lists the offers the identity has not accepted, from other users of the instance
 (internal) and from federated servers (host only), with origin, sender, name, and type. Two limits come from the
 API: a federated offer carries no share time (its `mtime` is a file time), so none is reported; an internal one
 carries its share time but no status, so offers declined earlier are listed like open ones and can be accepted
@@ -125,25 +126,25 @@ again. `accept` takes internal offers only. `decline` names the origin and needs
 pending list of that origin once, refuse an ID not pending there without naming anything else, and send exactly
 one request; IDs of the two origins are independent, so `accept` refuses a federated ID like an unknown one.
 
-`remoteshares.list`, `get`, and `remove` read and remove the federated shares the identity accepted; none is
+`shares.remote-shares.list`, `get`, and `remove` read and remove the federated shares the identity accepted; none is
 created or accepted here. A share reports ID, owner, name, its mount point relative to the Files root, and the
 other server only as a host, never a token, password, or remote URL. An instance without federated sharing
 answers `list` with a clear error. `remove` needs a tools list, is in no profile, reads the share once, and
 refuses an unknown ID without naming a target.
 
-`nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
+`nextcloud.shares.shares.create`, `nextcloud.shares.shares.update`, and `nextcloud.shares.shares.delete` need a `folder` target, a
 confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
-the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
+the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `shares.sharees.search`).
 Reading is always granted; the other rights are flags that default to false. Links, e-mail, federated, and team
-shares cannot be created or changed, Talk shares only by `talkfiles.share`; no password or label is set. `update`
+shares cannot be created or changed, Talk shares only by `talk.files.share`; no password or label is set. `update`
 changes rights, expiry, or note of a `user` or `group` share the identity made; rights not given keep their value.
 `delete` revokes any share the identity made below the root, whatever its type; shares made to it stay untouched.
 
 `update` and `delete` read the share once and refuse without a change a share outside the root, a share that
 is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
 one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
-the change may have been applied and to check the share (`shares.get`, `incomingshares.pending`, or
-`remoteshares.get`) before repeating; Qatlas never repeats. A refusal by the instance (for example a required
+the change may have been applied and to check the share (`shares.shares.get`, `shares.incoming-shares.pending`, or
+`shares.remote-shares.get`) before repeating; Qatlas never repeats. A refusal by the instance (for example a required
 expiry or disabled sharing) is a clear error without the text of the instance.
 
 ## Deck
@@ -155,13 +156,13 @@ or request, and listings drop unbound and deleted boards. A stack, card, label, 
 a read of the bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut. Only
 `deck_file` attachments are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
 
-Every change needs `confirm` and sends one request after at most two reads. `deckboards.create` needs the general
+Every change needs `confirm` and sends one request after at most two reads. `deck.boards.create` needs the general
 `deck` target. Board, stack, label, and sharing changes refuse without the manage right; card changes leave the edit
-right to Deck. `deckcards.update` refuses a card changed since its `last_modified`; an archived card can only be
-restored. Cards take only the board's labels and user members; `deckacl.*` shares with users and groups only and
+right to Deck. `deck.cards.update` refuses a card changed since its `last_modified`; an archived card can only be
+restored. Cards take only the board's labels and user members; `deck.acl.*` shares with users and groups only and
 refuses team and owner entries. Comments work on active cards only; update and delete reach only own comments among
 the newest 100. Deck deletes boards, cards, and attachments softly, with no Qatlas restore; a deleted stack takes its
-cards. Every `delete` and `deckacl` tool needs a tools list.
+cards. Every `delete` and `deck.acl` tool needs a tools list.
 
 ## Talk
 
@@ -171,24 +172,24 @@ or malformed token is refused locally, before credential access or any request, 
 previews, session IDs, and phone numbers; texts, names, and questions are untrusted data.
 
 Only internal conversations and existing users and groups are managed: no public, guest, e-mail, phone, federated, or
-team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and `.delete` need an owner or moderator.
-Only `talkrooms.markread` moves the read marker. `talkparticipants.remove` and `.moderator` take an `attendee_id` of
-`talkparticipants.list`, spare owner and self, and need a tools list. `talkpolls.vote` takes option IDs of
-`talkpolls.get`. `talkfiles.share` needs `folder`, `talk`, a tools list and shares read-only into private
-conversations; `shares.delete` revokes. Every call first reads the `spreed` capability or the conversation or poll it
+team entries. `talk.rooms.create` needs the `talk` target; `talk.rooms.update` and `.delete` need an owner or moderator.
+Only `talk.rooms.mark-read` moves the read marker. `talk.participants.remove` and `.moderator` take an `attendee_id` of
+`talk.participants.list`, spare owner and self, and need a tools list. `talk.polls.vote` takes option IDs of
+`talk.polls.get`. `talk.files.share` needs `folder`, `talk`, a tools list and shares read-only into private
+conversations; `shares.shares.delete` revokes. Every call first reads the `spreed` capability or the conversation or poll it
 needs and refuses a missing app or feature; a change needs `confirm` and then sends one request. Check the list before
-repeating an unclear outcome (`send`: `reference_id`; `talkfiles.share`: `shares.list`). 429 is rate-limited.
+repeating an unclear outcome (`send`: `reference_id`; `talk.files.share`: `shares.shares.list`). 429 is rate-limited.
 
 ## Calendar
 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
 children of the calendar home and of a bound calendar count, never subscriptions, scheduling, or trash collections.
 Profile `calendar` reads events and tasks; `events` adds creating events and replacing one by `etag`. Changes need
-`confirm`, deleting and sharing a tools list. Writing tasks, calendar management and sharing, and `calendartrash.*` are
+`confirm`, deleting and sharing a tools list. Writing tasks, calendar management and sharing, and `calendar.trash.*` are
 in no profile. A task is replaced only if Qatlas can write all of it. The trash covers bound calendars only: another
 calendar's entry is neither listed nor counted, and refused like a missing one; whole calendars are not restored.
 Sharing gives one user or group access to an own calendar, never by link, e-mail, or team; Nextcloud ignores an
-unknown recipient, so check `shares` of `calendars.list`.
+unknown recipient, so check `shares` of `calendar.calendars.list`.
 
 ## Contacts
 
@@ -200,47 +201,47 @@ needs it bound and owned. Sharing: one user or group, never link, e-mail, or tea
 
 ## Versions
 
-`nextcloud.versions.list`, `nextcloud.versions.get`, and `nextcloud.versions.restore` read and restore older
+`nextcloud.files.versions.list`, `nextcloud.files.versions.get`, and `nextcloud.files.versions.restore` read and restore older
 versions of one file below the connection root. The argument is always the file path, never a file ID. Qatlas
 stats the path first, refuses a folder, and addresses the versions only under the file ID of that answer.
-`versions.list` reports the newest first and marks a cut with `truncated`; a foreign node fails the call.
+`files.versions.list` reports the newest first and marks a cut with `truncated`; a foreign node fails the call.
 
-`versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does.
-`versions.restore` needs `confirm` and the `etag` of the current file and restores the version with one request.
+`files.versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.files.get` does.
+`files.versions.restore` needs `confirm` and the `etag` of the current file and restores the version with one request.
 The restore has no documented precondition, so a change made between the ETag check and the restore is not
-detected. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore` are in none.
+detected. `files.versions.list` is in the setup profiles `read` and `write`; `get` and `restore` are in none.
 
 ## Notes
 
 The group `notes` (profile `notes-read`) needs a `notes` target; `notes/CATEGORY` binds it and all below. The Notes API
 filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally, never shown or
 counted; a chunk may be empty despite a next cursor. A foreign note or attachment reads like a missing note; attachments
-stay note-relative, `local_path` follows `files.get`. Writes are in no profile: create, update, and
-`noteattachments.upload` need a bound category, update also its new one and the `etag`; delete needs a tools list.
+stay note-relative, `local_path` follows `files.files.get`. Writes are in no profile: create, update, and
+`notes.attachments.upload` need a bound category, update also its new one and the `etag`; delete needs a tools list.
 
 ## System tags
 
-`nextcloud.systemtags.list` reads the visible system tags of the instance and, like the catalog administration,
-needs an `account` target, refused locally without one. `nextcloud.filetags.list`, `filetags.add`, and
-`filetags.remove` work on one file or folder below the root and need a `folder` target. The argument is always the
+`nextcloud.files.system-tags.list` reads the visible system tags of the instance and, like the catalog administration,
+needs an `account` target, refused locally without one. `nextcloud.files.file-tags.list`, `files.file-tags.add`, and
+`files.file-tags.remove` work on one file or folder below the root and need a `folder` target. The argument is always the
 path, never the root or a file ID: Qatlas stats it and addresses the relations only under the file ID of that
 answer. A `tag_id` is digits only.
 
 Only visible tags are ever listed or touched, and a cut listing is marked `truncated`; `assignable` says whether
-the identity may assign a tag. The `filetags` tools only assign and remove tags. `add` and `remove` need
+the identity may assign a tag. The `files.file-tags` tools only assign and remove tags. `add` and `remove` need
 `confirm`, read the tag once after the stat, refuse an invisible or non-assignable tag, and then send exactly one
 request; a tag already assigned, or not assigned on removal, is a clear error. Unclear outcomes are checked with
-`filetags.list`. `filetags.list` is in the setup profiles `read` and `write`; the other tag tools are in none.
+`files.file-tags.list`. `files.file-tags.list` is in the setup profiles `read` and `write`; the other tag tools are in none.
 
-`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need
+`nextcloud.files.system-tags.create`, `files.system-tags.update`, and `files.system-tags.delete` administer the catalog, need
 `confirm`, and are in no setup profile; `delete` needs a tools list and drops every assignment of the tag on the
 whole instance. The identity's rights stay the bound: a tag hidden from users (`visible` or `assignable` false)
 needs administrator rights. `create` defaults both to true, takes a name of at most 64 characters, and reports
-the new `tag_id` only when Nextcloud names it, otherwise the tag is found with `systemtags.list`. `update`
+the new `tag_id` only when Nextcloud names it, otherwise the tag is found with `files.system-tags.list`. `update`
 changes name, `visible`, `assignable`, or `color` (six hex digits), at least one, and cannot clear a color.
-`update` and `delete` read the tag once and treat an invisible tag as missing but, unlike `filetags.add`, act on
+`update` and `delete` read the tag once and treat an invisible tag as missing but, unlike `files.file-tags.add`, act on
 a non-assignable one. Group restrictions are not offered. A taken name is a clear error on `create`; on `update`
-it cannot be told apart from a missing right. Unclear outcomes are checked with `systemtags.list`.
+it cannot be told apart from a missing right. Unclear outcomes are checked with `files.system-tags.list`.
 
 ## Account
 
@@ -248,38 +249,38 @@ The tool group `account` reads the own account data, status, notifications, acti
 the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
 without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
 `truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
-only its label and method and is never followed. `status.set` and `status.clear` send one request, need `confirm`,
+only its label and method and is never followed. `account.status.set` and `account.status.clear` send one request, need `confirm`,
 and are in no profile.
 
-`notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
-reported as `unchanged`. `activity.list` takes a filter from a fixed list that the instance must also offer,
-`limit` up to 100, and `since` from `next_cursor`. `notifications.dismiss` (after reading the notification) and
-`notifications.dismissall` need `confirm` and a tools list, are in no profile, and send one request. An unclear
-outcome is checked with `notifications.list` or `status.get` before repeating.
+`account.notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
+reported as `unchanged`. `account.activity.list` takes a filter from a fixed list that the instance must also offer,
+`limit` up to 100, and `since` from `next_cursor`. `account.notifications.dismiss` (after reading the notification) and
+`account.notifications.dismiss-all` need `confirm` and a tools list, are in no profile, and send one request. An unclear
+outcome is checked with `account.notifications.list` or `account.status.get` before repeating.
 
-`search.providers` lists the search providers of the instance; `search.query` asks one of them for one page of up
+`account.search.providers` lists the search providers of the instance; `account.search.query` asks one of them for one page of up
 to 25 hits (`term`, `limit`, `cursor` from the previous `next_cursor`). The provider ID is checked locally and
 against the live list, so an unoffered one is refused without a search. Hits are title, subtitle, and link as
 untrusted text; a link is never followed. Both are in no profile.
 
 ## Administration
 
-`nextcloud.adminusers.*` and `nextcloud.admingroups.*` read users, groups, and members as an administrator or as a
+`nextcloud.admin.users.*` and `nextcloud.admin.groups.*` read users, groups, and members as an administrator or as a
 subadmin within its groups and need a tools list; an `admin` connection test reads one user page. Users are never
 created or invited, and no change is offered: Nextcloud demands a password confirmation an app password cannot give.
 
 ## File comments
 
-The `nextcloud.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
+The `nextcloud.files.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
 target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
 below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
 `confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
-Nextcloud lets an identity change or delete only its own comments. `comments.list` is in the `read` and `write`
+Nextcloud lets an identity change or delete only its own comments. `files.comments.list` is in the `read` and `write`
 profiles, `create` and `update` in none, and `delete` is reachable only through a tools list.
 
 ## Local files
 
-`nextcloud.files.create` and `nextcloud.files.update` take exactly one of `content_base64` (up to 4 MiB) or
+`nextcloud.files.files.create` and `nextcloud.files.files.update` take exactly one of `content_base64` (up to 4 MiB) or
 `local_path`, a file inside a directory the connection releases for reading (`files.read`), streamed. The result
 reports only path, name, size, SHA-256 of the bytes read, ETag, and `method`: `single` for one PUT of at most
 64 MiB, `chunked` above that. `update` replaces only an existing file whose `etag` is that of the version read;
@@ -294,7 +295,7 @@ Every change of this provider that ends unclear (timeout, aborted connection, 5x
 as possibly applied, to be checked with the matching read before repeating, and is never repeated by Qatlas; for a
 file, stat it. A refusal by Nextcloud (4xx) or a redirect is a clear failure.
 
-`nextcloud.files.get` reads one file below the root. With `local_path` it writes the file atomically into a
+`nextcloud.files.files.get` reads one file below the root. With `local_path` it writes the file atomically into a
 directory released for writing (`files.write`) and reports only path, name, size, SHA-256, and ETag; an existing
 local file is replaced only with confirmation, and the tool is offered only on a connection that releases a
 directory for writing. Without `local_path` it returns up to 4 MiB as `content_base64` and refuses a larger file.

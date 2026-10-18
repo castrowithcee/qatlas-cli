@@ -38,9 +38,9 @@ func labelAnswer(id, title, color string) string {
 }
 
 var deckLabelCalls = []struct{ name, id, args string }{
-	{"create", "nextcloud.decklabels.create", `{"board_id":"2","title":"x","color":"31CC7C"}`},
-	{"update", "nextcloud.decklabels.update", `{"board_id":"2","label_id":"5","title":"x"}`},
-	{"delete", "nextcloud.decklabels.delete", `{"board_id":"2","label_id":"5"}`},
+	{"create", "nextcloud.deck.labels.create", `{"board_id":"2","title":"x","color":"31CC7C"}`},
+	{"update", "nextcloud.deck.labels.update", `{"board_id":"2","label_id":"5","title":"x"}`},
+	{"delete", "nextcloud.deck.labels.delete", `{"board_id":"2","label_id":"5"}`},
 }
 
 func TestDeckLabelsRefuseBeforeAnyRequest(t *testing.T) {
@@ -68,7 +68,7 @@ func TestDeckLabelsRefuseBeforeAnyRequest(t *testing.T) {
 		"free parameter": {"create", `{"board_id":"2","title":"x","color":"31CC7C","path":"/y"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := deckLabelWrite(t, deckLabelTools, "nextcloud.decklabels."+tc.op, tc.args, true)
+			_, err := deckLabelWrite(t, deckLabelTools, "nextcloud.deck.labels."+tc.op, tc.args, true)
 			if err == nil {
 				t.Fatal("accepted")
 			}
@@ -102,8 +102,8 @@ func TestDeckLabelsRefuseWithoutMutation(t *testing.T) {
 	}
 	// A label of another board or an unknown one is refused alike, without naming it.
 	for _, op := range []struct{ id, args string }{
-		{"nextcloud.decklabels.update", `{"board_id":"2","label_id":"77","title":"x"}`},
-		{"nextcloud.decklabels.delete", `{"board_id":"2","label_id":"77"}`},
+		{"nextcloud.deck.labels.update", `{"board_id":"2","label_id":"77","title":"x"}`},
+		{"nextcloud.deck.labels.delete", `{"board_id":"2","label_id":"77"}`},
 	} {
 		calls := serve(t, func(*http.Request) (*http.Response, error) {
 			return jsonResponse(http.StatusOK, boardWithLabels(true)), nil
@@ -130,7 +130,7 @@ func TestDeckLabelsSendOneFixedRequest(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, `[]`), nil
 	})
-	result, err := deckLabelWrite(t, deckLabelTools, "nextcloud.decklabels.create", `{"board_id":"2","title":" \"New\" ","color":"31CC7C"}`, true)
+	result, err := deckLabelWrite(t, deckLabelTools, "nextcloud.deck.labels.create", `{"board_id":"2","title":" \"New\" ","color":"31CC7C"}`, true)
 	if err != nil || !strings.Contains(string(result), `"created":true`) || !strings.Contains(string(result), `"id":"8"`) {
 		t.Fatalf("create = %s, %v", result, err)
 	}
@@ -139,19 +139,19 @@ func TestDeckLabelsSendOneFixedRequest(t *testing.T) {
 		t.Fatalf("calls = %+v", *calls)
 	}
 	// update keeps what is not given
-	if _, err := deckLabelWrite(t, deckLabelTools, "nextcloud.decklabels.update", `{"board_id":"2","label_id":"5","title":"Next"}`, true); err != nil {
+	if _, err := deckLabelWrite(t, deckLabelTools, "nextcloud.deck.labels.update", `{"board_id":"2","label_id":"5","title":"Next"}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if c := (*calls)[3]; c.method != http.MethodPut || c.url.Path != deckLabelsPath+"/5" || c.body != `{"title":"Next","color":"E9322D"}` {
 		t.Errorf("title update = %+v", c)
 	}
-	if _, err := deckLabelWrite(t, deckLabelTools, "nextcloud.decklabels.update", `{"board_id":"2","label_id":"5","color":"31CC7C"}`, true); err != nil {
+	if _, err := deckLabelWrite(t, deckLabelTools, "nextcloud.deck.labels.update", `{"board_id":"2","label_id":"5","color":"31CC7C"}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[5].body; got != `{"title":"Bug","color":"31CC7C"}` {
 		t.Errorf("color update body = %s", got)
 	}
-	result, err = deckLabelWrite(t, deckLabelTools, "nextcloud.decklabels.delete", `{"board_id":"2","label_id":"5"}`, true)
+	result, err = deckLabelWrite(t, deckLabelTools, "nextcloud.deck.labels.delete", `{"board_id":"2","label_id":"5"}`, true)
 	if err != nil || !strings.Contains(string(result), `"deleted":true`) {
 		t.Fatalf("delete = %s, %v", result, err)
 	}
@@ -208,7 +208,7 @@ func TestDeckLabelsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 			if has := strings.Contains(text, "may have been applied"); has != hint {
 				t.Errorf("hint present = %v in %q", has, text)
 			}
-			if hint && !strings.Contains(text, "deckboards.get") {
+			if hint && !strings.Contains(text, "deck.boards.get") {
 				t.Errorf("no verification advice in %q", text)
 			}
 		}
@@ -243,7 +243,7 @@ func TestDeckLabelsDeleteIsAllowListOnly(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.decklabels.") {
+			if strings.HasPrefix(id, "nextcloud.deck.labels.") {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

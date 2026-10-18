@@ -80,7 +80,7 @@ func TestAddressbooksListReportsOnlyBoundBooksOfTheHome(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, bookListing()), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.addressbooks.list", `{}`)
+	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.address-books.list", `{}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestSystemAddressbookNeedsExplicitBindingAndIsReadOnly(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, bookListing()), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook/" + systemAddressbook}, "nextcloud.addressbooks.list", `{}`)
+	result, err := bookInvoke(t, []string{"addressbook/" + systemAddressbook}, "nextcloud.contacts.address-books.list", `{}`)
 	var listed AddressbooksResult
 	if err != nil || json.Unmarshal(result, &listed) != nil || listed.Count != 1 ||
 		listed.Addressbooks[0].ID != systemAddressbook || !listed.Addressbooks[0].ReadOnly {
@@ -116,8 +116,8 @@ func TestSystemAddressbookNeedsExplicitBindingAndIsReadOnly(t *testing.T) {
 	// The kind alone never reaches it, however the address book is addressed.
 	refuse(t)
 	for operation, args := range map[string]string{
-		"nextcloud.contacts.list": `{"addressbook":"` + systemAddressbook + `"}`,
-		"nextcloud.contacts.get":  `{"addressbook":"` + systemAddressbook + `","id":"x.vcf"}`,
+		"nextcloud.contacts.contacts.list": `{"addressbook":"` + systemAddressbook + `"}`,
+		"nextcloud.contacts.contacts.get":  `{"addressbook":"` + systemAddressbook + `","id":"x.vcf"}`,
 	} {
 		_, err := bookInvoke(t, []string{"addressbook"}, operation, args)
 		if err == nil || !strings.Contains(err.Error(), messageAddressbookNone) {
@@ -131,11 +131,11 @@ func TestUnboundAddressbookIsRefusedBeforeAnyRequestWithoutNamingIt(t *testing.T
 	cases := []struct{ targets []string }{{[]string{"addressbook/contacts"}}, {[]string{"account"}}}
 	for _, tc := range cases {
 		for _, call := range []struct{ operation, args string }{
-			{"nextcloud.contacts.list", `{"addressbook":"` + contactForeign + `"}`},
-			{"nextcloud.contacts.get", `{"addressbook":"` + contactForeign + `","id":"x.vcf"}`},
-			{"nextcloud.addressbooks.list", `{}`},
+			{"nextcloud.contacts.contacts.list", `{"addressbook":"` + contactForeign + `"}`},
+			{"nextcloud.contacts.contacts.get", `{"addressbook":"` + contactForeign + `","id":"x.vcf"}`},
+			{"nextcloud.contacts.address-books.list", `{}`},
 		} {
-			if call.operation == "nextcloud.addressbooks.list" && tc.targets[0] == "addressbook/contacts" {
+			if call.operation == "nextcloud.contacts.address-books.list" && tc.targets[0] == "addressbook/contacts" {
 				continue
 			}
 			_, err := bookInvoke(t, tc.targets, call.operation, call.args)
@@ -153,7 +153,7 @@ func TestContactsListEscapesTheSearchTextAndNeverAsksForPhotos(t *testing.T) {
 				"EMAIL;TYPE=work:"+contactMail("ada")+"\r\nPHOTO;ENCODING=b;TYPE=JPEG:"+contactPhoto+"\r\n")),
 		)), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.list",
+	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.list",
 		`{"addressbook":"contacts","query":"a<b & \"c\""}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -193,7 +193,7 @@ func TestContactsListWithoutQuerySendsNoFilterAndRejectsBadQueries(t *testing.T)
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, bookMultistatus()), nil
 	})
-	if _, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.list", `{"addressbook":"contacts"}`); err != nil {
+	if _, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.list", `{"addressbook":"contacts"}`); err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
 	if strings.Contains((*calls)[0].body, "filter") {
@@ -201,7 +201,7 @@ func TestContactsListWithoutQuerySendsNoFilterAndRejectsBadQueries(t *testing.T)
 	}
 	for _, query := range []string{`"  "`, `"a\u0000b"`, `"` + strings.Repeat("x", maxContactQuery+1) + `"`} {
 		before := len(*calls)
-		_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.list",
+		_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.list",
 			`{"addressbook":"contacts","query":`+query+`}`)
 		if err == nil || len(*calls) != before {
 			t.Errorf("query %.20s err = %v, calls = %d", query, err, len(*calls)-before)
@@ -224,7 +224,7 @@ func TestContactsListDropsForeignHrefsAndCapsTheResult(t *testing.T) {
 			cardNode(contactHome+"contacts/bad.vcf", "e8", "not a card"),
 		)), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.list", `{"addressbook":"contacts","limit":2}`)
+	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.list", `{"addressbook":"contacts","limit":2}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -236,7 +236,7 @@ func TestContactsListDropsForeignHrefsAndCapsTheResult(t *testing.T) {
 	if strings.Contains(string(result), contactForeign) {
 		t.Errorf("a foreign node was reported: %s", result)
 	}
-	if _, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.list",
+	if _, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.list",
 		`{"addressbook":"contacts","limit":201}`); err == nil {
 		t.Error("a limit above the maximum was accepted")
 	}
@@ -251,7 +251,7 @@ func TestContactsGetReadsOneCardThroughAFixedMultiget(t *testing.T) {
 					"\r\nPHOTO;ENCODING=b;TYPE=JPEG:"+contactPhoto+"\r\n")),
 		)), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook/contacts"}, "nextcloud.contacts.get",
+	result, err := bookInvoke(t, []string{"addressbook/contacts"}, "nextcloud.contacts.contacts.get",
 		`{"addressbook":"contacts","id":"ada l.vcf"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -280,7 +280,7 @@ func TestContactsGetRefusesUnusableIDsAndMissingCards(t *testing.T) {
 		)), nil
 	})
 	for _, id := range []string{"../x", "a/b", "%2e", ""} {
-		_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.get", `{"addressbook":"contacts","id":"`+id+`"}`)
+		_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.get", `{"addressbook":"contacts","id":"`+id+`"}`)
 		if err == nil {
 			t.Errorf("id %q was accepted", id)
 		}
@@ -288,7 +288,7 @@ func TestContactsGetRefusesUnusableIDsAndMissingCards(t *testing.T) {
 	if len(*calls) != 0 {
 		t.Errorf("requests for unusable ids: %+v", *calls)
 	}
-	_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.get", `{"addressbook":"contacts","id":"gone.vcf"}`)
+	_, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.contacts.get", `{"addressbook":"contacts","id":"gone.vcf"}`)
 	if err == nil || !strings.Contains(err.Error(), messageNotFound) {
 		t.Errorf("err = %v, want not found", err)
 	}
@@ -302,9 +302,9 @@ func TestContactReadsTreatARedirectAsAClearErrorWithoutItsTarget(t *testing.T) {
 		return response, nil
 	})
 	for _, call := range []struct{ operation, args string }{
-		{"nextcloud.addressbooks.list", `{}`},
-		{"nextcloud.contacts.list", `{"addressbook":"contacts"}`},
-		{"nextcloud.contacts.get", `{"addressbook":"contacts","id":"a.vcf"}`},
+		{"nextcloud.contacts.address-books.list", `{}`},
+		{"nextcloud.contacts.contacts.list", `{"addressbook":"contacts"}`},
+		{"nextcloud.contacts.contacts.get", `{"addressbook":"contacts","id":"a.vcf"}`},
 	} {
 		_, err := bookInvoke(t, []string{"addressbook"}, call.operation, call.args)
 		if err == nil || !strings.Contains(err.Error(), messageRedirect) ||
@@ -322,7 +322,7 @@ func TestContactsProfileHoldsExactlyTheReadTools(t *testing.T) {
 	for _, profile := range metadata.Profiles {
 		if profile.ID != "contacts" {
 			for _, id := range profile.Tools {
-				if strings.HasPrefix(id, "nextcloud.contacts.") || id == addressbooksList.ID {
+				if strings.HasPrefix(id, "nextcloud.contacts.contacts.") || id == addressbooksList.ID {
 					t.Errorf("profile %s offers %s", profile.ID, id)
 				}
 			}

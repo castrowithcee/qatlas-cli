@@ -29,7 +29,7 @@ const (
 	calendarNameSchema = `"name":{"type":"string","minLength":1,"maxLength":128}`
 	calendarColorExpr  = `^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$`
 
-	calendarUncertain = "; the change may have been applied, check the calendar with calendars.list " +
+	calendarUncertain = "; the change may have been applied, check the calendar with calendar.calendars.list " +
 		"before repeating it"
 )
 
@@ -48,7 +48,7 @@ var calendarColorArgument = capability.Argument{
 }
 
 var calendarsCreate = capability.Descriptor{
-	ID: Provider + ".calendars.create", Version: 1, Title: "Create a Nextcloud calendar",
+	ID: Provider + ".calendar.calendars.create", Version: 1, Title: "Create a Nextcloud calendar",
 	Description: "Create one calendar of the bound Nextcloud identity with a display name, an optional colour, and " +
 		"the component types it takes (events, tasks, or both). Qatlas generates the calendar id; nothing raw " +
 		"comes from an argument. It needs the general calendar target of the connection and binds the new " +
@@ -77,7 +77,7 @@ var calendarsCreate = capability.Descriptor{
 }
 
 var calendarsUpdate = capability.Descriptor{
-	ID: Provider + ".calendars.update", Version: 1, Title: "Change a Nextcloud calendar",
+	ID: Provider + ".calendar.calendars.update", Version: 1, Title: "Change a Nextcloud calendar",
 	Description: "Change the display name and/or the colour of one bound calendar that belongs to the identity; a " +
 		"calendar shared by someone else is refused. One read-only pre-check of the calendar follows, then one " +
 		"PROPPATCH; a partly refused change is reported. The request is never repeated after an unclear result",
@@ -100,7 +100,7 @@ var calendarsUpdate = capability.Descriptor{
 }
 
 var calendarsDelete = capability.Descriptor{
-	ID: Provider + ".calendars.delete", Version: 1, Title: "Delete a Nextcloud calendar",
+	ID: Provider + ".calendar.calendars.delete", Version: 1, Title: "Delete a Nextcloud calendar",
 	Description: "Delete one bound calendar that belongs to the identity, with all its events; a calendar shared " +
 		"by someone else is refused. Nextcloud moves the calendar to its calendar trash bin; Qatlas offers no " +
 		"restore. One read-only pre-check of the calendar follows, then one DELETE. The request is never " +

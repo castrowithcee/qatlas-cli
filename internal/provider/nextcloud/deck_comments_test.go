@@ -62,7 +62,7 @@ func TestDeckCommentsListPaginatesAndMarksTheNextPage(t *testing.T) {
 		return ocsOK(`[` + deckComment("3", "21", long) + `,` + deckComment("2", "21", "two") + `,` +
 			deckComment("1", "21", "one") + `]`), nil
 	})
-	result, err := deckCommentCall(t, "nextcloud.deckcomments.list", `{`+deckCommentRef+`,"limit":2,"offset":4}`)
+	result, err := deckCommentCall(t, "nextcloud.deck.comments.list", `{`+deckCommentRef+`,"limit":2,"offset":4}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDeckCommentsListLastPageHasNoMore(t *testing.T) {
 	deckCommentServer(t, func(*http.Request) (*http.Response, error) {
 		return ocsOK(`[` + deckComment("1", "21", "one") + `]`), nil
 	})
-	result, err := deckCommentCall(t, "nextcloud.deckcomments.list", `{`+deckCommentRef+`}`)
+	result, err := deckCommentCall(t, "nextcloud.deck.comments.list", `{`+deckCommentRef+`}`)
 	var list DeckCommentList
 	if err != nil || json.Unmarshal(result, &list) != nil || list.Count != 1 || list.More {
 		t.Fatalf("list = %+v, err = %v", list, err)
@@ -97,10 +97,10 @@ func TestDeckCommentsListLastPageHasNoMore(t *testing.T) {
 
 func TestDeckCommentsMutationsSendOneFixedRequest(t *testing.T) {
 	for name, tc := range map[string]struct{ op, args, method, path, body string }{
-		"create": {"nextcloud.deckcomments.create", `"message":"Hi @emil"`, http.MethodPost, deckCommentsPath, "message=Hi+%40emil"},
-		"update": {"nextcloud.deckcomments.update", `"comment_id":"42","message":"Again"`, http.MethodPut,
+		"create": {"nextcloud.deck.comments.create", `"message":"Hi @emil"`, http.MethodPost, deckCommentsPath, "message=Hi+%40emil"},
+		"update": {"nextcloud.deck.comments.update", `"comment_id":"42","message":"Again"`, http.MethodPut,
 			deckCommentsPath + "/42", "message=Again"},
-		"delete": {"nextcloud.deckcomments.delete", `"comment_id":"42"`, http.MethodDelete, deckCommentsPath + "/42", ""},
+		"delete": {"nextcloud.deck.comments.delete", `"comment_id":"42"`, http.MethodDelete, deckCommentsPath + "/42", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := deckCommentServer(t, func(request *http.Request) (*http.Response, error) {
@@ -150,7 +150,7 @@ func TestDeckCommentsCreateWithParentReadsTheNewestPageFirst(t *testing.T) {
 				}
 				return ocsOK(deckComment("42", "21", "x")), nil
 			})
-			_, err := deckCommentCall(t, "nextcloud.deckcomments.create", `{`+deckCommentRef+`,"message":"Re","parent_id":"7"}`)
+			_, err := deckCommentCall(t, "nextcloud.deck.comments.create", `{`+deckCommentRef+`,"message":"Re","parent_id":"7"}`)
 			if tc.mutates && (err != nil || len(*calls) != 3 || (*calls)[2].body != "message=Re&parentId=7") {
 				t.Fatalf("calls = %+v, err = %v", *calls, err)
 			}
@@ -179,7 +179,7 @@ func TestDeckCommentsRefuseCardOutsideTheStackWithoutACommentRequest(t *testing.
 				t.Error("a comment request was sent")
 				return nil, errors.New("no request expected")
 			})
-			_, err := deckCommentCall(t, "nextcloud.deckcomments."+args.op, `{`+args.args+`}`)
+			_, err := deckCommentCall(t, "nextcloud.deck.comments."+args.op, `{`+args.args+`}`)
 			if err == nil || len(*calls) != 1 {
 				t.Errorf("calls = %+v, err = %v", *calls, err)
 			}
@@ -203,7 +203,7 @@ func TestDeckCommentsUpdateAndDeleteNeedTheCommentAmongTheNewestOfTheCard(t *tes
 					}
 					return ocsOK(list), nil
 				})
-				_, err := deckCommentCall(t, "nextcloud.deckcomments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
+				_, err := deckCommentCall(t, "nextcloud.deck.comments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
 				if err == nil || !strings.Contains(err.Error(), messageDeckForeign) || len(*calls) != 2 ||
 					(*calls)[1].url.Path != deckCommentsPath {
 					t.Errorf("calls = %+v, err = %v", *calls, err)
@@ -228,7 +228,7 @@ func TestDeckCommentsRefuseLocallyBeforeAnyRequest(t *testing.T) {
 		"limit too big": {"list", `{` + deckCommentRef + `,"limit":101}`},
 		"unknown field": {"delete", `{` + deckCommentRef + `,"comment_id":"1","message":"x"}`},
 	} {
-		if _, err := deckCommentCall(t, "nextcloud.deckcomments."+tc.op, tc.args); err == nil {
+		if _, err := deckCommentCall(t, "nextcloud.deck.comments."+tc.op, tc.args); err == nil {
 			t.Errorf("%s: no error", name)
 		}
 	}
@@ -247,7 +247,7 @@ func TestDeckCommentsForeignCommentIsRefusedWithoutProviderText(t *testing.T) {
 				}
 				return status(http.StatusForbidden), nil
 			})
-			_, err := deckCommentCall(t, "nextcloud.deckcomments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
+			_, err := deckCommentCall(t, "nextcloud.deck.comments."+tc.op, `{`+deckCommentRef+`,`+tc.args+`}`)
 			if err == nil || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), bodyCanary) {
 				t.Errorf("err = %v", err)
 			}
@@ -259,7 +259,7 @@ func TestDeckCommentsForeignCommentIsRefusedWithoutProviderText(t *testing.T) {
 		}
 		return status(http.StatusNotFound), nil
 	})
-	_, err := deckCommentCall(t, "nextcloud.deckcomments.delete", `{`+deckCommentRef+`,"comment_id":"42"}`)
+	_, err := deckCommentCall(t, "nextcloud.deck.comments.delete", `{`+deckCommentRef+`,"comment_id":"42"}`)
 	if err == nil || !strings.Contains(err.Error(), messageDeckForeign) || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("err = %v", err)
 	}
@@ -283,13 +283,13 @@ func TestDeckCommentsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 					}
 					return answer()
 				})
-				_, err := deckCommentCall(t, "nextcloud.deckcomments."+op, `{`+deckCommentRef+`,`+args+`}`)
+				_, err := deckCommentCall(t, "nextcloud.deck.comments."+op, `{`+deckCommentRef+`,`+args+`}`)
 				want := 2
 				if op != "create" {
 					want = 3
 				}
 				if err == nil || len(*calls) != want ||
-					!strings.Contains(err.Error(), "may have been applied, check deckcomments.list") ||
+					!strings.Contains(err.Error(), "may have been applied, check deck.comments.list") ||
 					strings.Contains(err.Error(), bodyCanary) {
 					t.Errorf("calls = %d, err = %v", len(*calls), err)
 				}

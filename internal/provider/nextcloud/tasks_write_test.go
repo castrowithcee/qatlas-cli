@@ -80,7 +80,7 @@ func taskDone(code int) func() (*http.Response, error) {
 
 func TestTasksCreatePutsOneNewTaskWithIfNoneMatch(t *testing.T) {
 	calls, headers := taskFixture(t, taskStore{}, taskDone(http.StatusCreated))
-	result, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.create", taskCreateArgs, true)
+	result, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.create", taskCreateArgs, true)
 	if err != nil {
 		t.Fatalf("create = %v", err)
 	}
@@ -119,7 +119,7 @@ func TestTasksCreateWithParentQueriesTheUIDOnceAndNeedsExactlyOneMatch(t *testin
 	} {
 		calls, headers := taskFixture(t, taskStore{report: tc.report}, taskDone(http.StatusCreated))
 		args := strings.TrimSuffix(taskCreateArgs, "}") + `,"parent_uid":"mom"}`
-		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.create", args, true)
+		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.create", args, true)
 		if tc.ok {
 			report := (*calls)[0]
 			if err != nil || eventMethods(calls) != "REPORT PUT" || report.url.Path != taskCalendarPath ||
@@ -137,7 +137,7 @@ func TestTasksCreateWithParentQueriesTheUIDOnceAndNeedsExactlyOneMatch(t *testin
 
 func TestTasksUpdateCompletesBoundToTheETagAndKeepsUIDAndParent(t *testing.T) {
 	calls, headers := taskFixture(t, taskStore{}, taskDone(http.StatusNoContent))
-	result, err := eventWrite(t, taskTools, []string{"calendar/tasks"}, "nextcloud.tasks.update", taskUpdateArgs, true)
+	result, err := eventWrite(t, taskTools, []string{"calendar/tasks"}, "nextcloud.calendar.tasks.update", taskUpdateArgs, true)
 	if err != nil {
 		t.Fatalf("update = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestTasksUpdateCompletesBoundToTheETagAndKeepsUIDAndParent(t *testing.T) {
 
 func TestTasksDeleteSendsOneETagBoundDelete(t *testing.T) {
 	calls, headers := taskFixture(t, taskStore{}, taskDone(http.StatusNoContent))
-	result, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.delete", taskDeleteArgs, true)
+	result, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.delete", taskDeleteArgs, true)
 	var got TaskWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil ||
 		got != (TaskWriteResult{Calendar: "tasks", ID: "errand.ics", Deleted: true}) {
@@ -189,7 +189,7 @@ func TestTaskUpdateRefusesUnmodeledContentWithoutAMutation(t *testing.T) {
 			t.Errorf("%s: a mutation was sent", name)
 			return status(http.StatusNoContent), nil
 		})
-		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.update", taskUpdateArgs, true)
+		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.update", taskUpdateArgs, true)
 		if err == nil || !strings.Contains(err.Error(), "does not write") || eventMethods(calls) != "GET" {
 			t.Errorf("%s: err = %v, calls = %+v", name, err, *calls)
 		}
@@ -211,7 +211,7 @@ func TestTaskWritesRefuseAnEventAndAChangedETagWithoutAMutation(t *testing.T) {
 			t.Errorf("%s: a mutation was sent", tc.name)
 			return status(http.StatusNoContent), nil
 		})
-		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks."+tc.op, tc.args, true)
+		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks."+tc.op, tc.args, true)
 		if err == nil || !strings.Contains(err.Error(), tc.want) || eventMethods(calls) != "GET" {
 			t.Errorf("%s: err = %v, calls = %+v", tc.name, err, *calls)
 		}
@@ -223,7 +223,7 @@ func TestTaskCreateRefusesAReadOnlyOrTasklessCalendar(t *testing.T) {
 		t.Error("a mutation was sent")
 		return status(http.StatusNoContent), nil
 	})
-	_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.create", taskCreateArgs, true)
+	_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.create", taskCreateArgs, true)
 	if classOf(err) != provider.ClassPermission || eventMethods(calls) != "PROPFIND" {
 		t.Errorf("read-only: err = %v, calls = %+v", err, *calls)
 	}
@@ -231,7 +231,7 @@ func TestTaskCreateRefusesAReadOnlyOrTasklessCalendar(t *testing.T) {
 		return xmlResponse(http.StatusMultiStatus, calMultistatus(
 			calendarNode(taskCalendarPath, "Tasks", isCalendar, fullRights, "VEVENT"))), nil
 	})
-	if _, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks.create", taskCreateArgs, true); err == nil ||
+	if _, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks.create", taskCreateArgs, true); err == nil ||
 		eventMethods(calls) != "PROPFIND" {
 		t.Errorf("no tasks: err = %v, calls = %+v", err, *calls)
 	}
@@ -243,7 +243,7 @@ func TestTaskWriteForbiddenIsReportedClearly(t *testing.T) {
 		calls, _ := taskFixture(t, taskStore{rights: []string{"read"}}, func() (*http.Response, error) {
 			return status(http.StatusForbidden), nil
 		})
-		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks."+op, args, true)
+		_, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks."+op, args, true)
 		if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), eventHint) || len(*calls) != 2 {
 			t.Errorf("%s: err = %v, calls = %d", op, err, len(*calls))
 		}
@@ -251,13 +251,13 @@ func TestTaskWriteForbiddenIsReportedClearly(t *testing.T) {
 }
 
 var taskWrites = map[string]string{
-	"nextcloud.tasks.create": taskCreateArgs, "nextcloud.tasks.update": taskUpdateArgs, "nextcloud.tasks.delete": taskDeleteArgs,
+	"nextcloud.calendar.tasks.create": taskCreateArgs, "nextcloud.calendar.tasks.update": taskUpdateArgs, "nextcloud.calendar.tasks.delete": taskDeleteArgs,
 }
 
 func TestTaskWritePreconditionFailureIsClear(t *testing.T) {
 	for op, want := range map[string]string{
-		"nextcloud.tasks.create": "already exists", "nextcloud.tasks.update": "precondition failed",
-		"nextcloud.tasks.delete": "precondition failed",
+		"nextcloud.calendar.tasks.create": "already exists", "nextcloud.calendar.tasks.update": "precondition failed",
+		"nextcloud.calendar.tasks.delete": "precondition failed",
 	} {
 		calls, _ := taskFixture(t, taskStore{}, func() (*http.Response, error) { return status(http.StatusPreconditionFailed), nil })
 		_, err := eventWrite(t, taskTools, []string{"calendar"}, op, taskWrites[op], true)
@@ -281,7 +281,7 @@ func TestTaskWriteUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 		for name, answer := range answers {
 			calls, _ := taskFixture(t, taskStore{}, answer)
 			_, err := eventWrite(t, taskTools, []string{"calendar"}, op, args, true)
-			if err == nil || !strings.Contains(err.Error(), eventHint) || !strings.Contains(err.Error(), "tasks.list") ||
+			if err == nil || !strings.Contains(err.Error(), eventHint) || !strings.Contains(err.Error(), "calendar.tasks.list") ||
 				strings.Contains(err.Error(), bodyCanary) || len(*calls) != 2 {
 				t.Errorf("%s %s: err = %v, calls = %d", op, name, err, len(*calls))
 			}
@@ -326,7 +326,7 @@ func TestTaskWritesRefuseBeforeAnyRequest(t *testing.T) {
 		"reserved":           {[]string{"calendar"}, "create", strings.Replace(taskCreateArgs, "tasks", "inbox", 1)},
 		"traversal":          {[]string{"calendar"}, "delete", strings.Replace(taskDeleteArgs, "tasks", "../bobby", 1)},
 	} {
-		_, err := eventWrite(t, taskTools, tc.targets, "nextcloud.tasks."+tc.op, tc.arg, true)
+		_, err := eventWrite(t, taskTools, tc.targets, "nextcloud.calendar.tasks."+tc.op, tc.arg, true)
 		if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), "other-secret") {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -347,7 +347,7 @@ func TestTaskWritesRefuseBeforeAnyRequest(t *testing.T) {
 		"bad priority":    {"create", with(taskCreateArgs, `"priority":10`)},
 		"fields on del":   {"delete", with(taskDeleteArgs, `"title":"x"`)},
 	} {
-		if _, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.tasks."+tc.op, tc.args, true); err == nil {
+		if _, err := eventWrite(t, taskTools, []string{"calendar"}, "nextcloud.calendar.tasks."+tc.op, tc.args, true); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
@@ -387,7 +387,7 @@ func TestTaskWriteToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.tasks.") && id != tasksList.ID && id != tasksGet.ID {
+			if strings.HasPrefix(id, "nextcloud.calendar.tasks.") && id != tasksList.ID && id != tasksGet.ID {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

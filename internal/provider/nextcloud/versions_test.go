@@ -185,10 +185,10 @@ func TestVersionsSchemaRefusesFileIDsAndBadVersionIDs(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	for op, args := range map[string][]string{
-		"nextcloud.versions.list": {`{"path":"a","file_id":"1004"}`, `{"path":"../a"}`},
-		"nextcloud.versions.get": {`{"path":"a","version_id":"1","file_id":"1004"}`, `{"path":"a","version_id":"1a"}`,
+		"nextcloud.files.versions.list": {`{"path":"a","file_id":"1004"}`, `{"path":"../a"}`},
+		"nextcloud.files.versions.get": {`{"path":"a","version_id":"1","file_id":"1004"}`, `{"path":"a","version_id":"1a"}`,
 			`{"path":"a","version_id":"123456789012345678901"}`, `{"path":"a"}`},
-		"nextcloud.versions.restore": {`{"path":"a","version_id":"1","etag":"e","file_id":"1004"}`, `{"path":"a","version_id":"x","etag":"e"}`,
+		"nextcloud.files.versions.restore": {`{"path":"a","version_id":"1","etag":"e","file_id":"1004"}`, `{"path":"a","version_id":"x","etag":"e"}`,
 			`{"path":"a","version_id":"1"}`, `{"path":"a","version_id":"1","etag":"*"}`},
 	} {
 		for _, a := range args {
@@ -396,8 +396,8 @@ func TestVersionsNeverFollowRedirects(t *testing.T) {
 
 func TestVersionsRisksProfileAndGroup(t *testing.T) {
 	reg := registry(t)
-	want := map[string]capability.Effect{"nextcloud.versions.list": capability.EffectRead,
-		"nextcloud.versions.get": capability.EffectRead, "nextcloud.versions.restore": capability.EffectUpdate}
+	want := map[string]capability.Effect{"nextcloud.files.versions.list": capability.EffectRead,
+		"nextcloud.files.versions.get": capability.EffectRead, "nextcloud.files.versions.restore": capability.EffectUpdate}
 	for _, d := range reg.Provider(Provider) {
 		effect, ok := want[d.ID]
 		if !ok {
@@ -409,7 +409,7 @@ func TestVersionsRisksProfileAndGroup(t *testing.T) {
 			d.Group != "files" || d.RequiresToolAllowList {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
-		if d.ID == "nextcloud.versions.restore" && r.Confirmation != capability.ConfirmationRequired {
+		if d.ID == "nextcloud.files.versions.restore" && r.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("restore confirmation = %q", r.Confirmation)
 		}
 	}
@@ -426,7 +426,7 @@ func TestVersionsRisksProfileAndGroup(t *testing.T) {
 			}
 		}
 		if p.ID == "read" && !has {
-			t.Error("read profile lacks versions.list")
+			t.Error("read profile lacks files.versions.list")
 		}
 	}
 }
