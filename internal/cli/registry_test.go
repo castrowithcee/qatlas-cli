@@ -229,7 +229,7 @@ func TestProvidersListsInfomaniakProvidersUnderTheirCurrentIDs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &listed); err != nil {
 		t.Fatal(err)
 	}
-	for current, former := range map[string]string{"infomaniak.chat": "infomaniakchat", "infomaniak.drive": "infomaniakdrive", "infomaniak.mail": "infomaniakmail"} {
+	for current, former := range map[string]string{"infomaniak.chat": "infomaniakchat", "infomaniak.drive": "infomaniakdrive", "infomaniak.mail": "infomaniakmail", "infomaniak.dav": "infomaniakdav"} {
 		var hasCurrent, hasFormer bool
 		for _, p := range listed.Providers {
 			hasCurrent = hasCurrent || p.Provider == current

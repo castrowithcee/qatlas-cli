@@ -37,7 +37,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "infomaniakdav"
+const Provider = "infomaniak.dav"
 
 // The secret roles of one identity: the personal user name shown in the Infomaniak sync settings (for
 // example AB12345) and an application password created for it.
@@ -251,7 +251,7 @@ func validBaseURL(raw string) error {
 // Register adds Infomaniak DAV metadata, its connection test, and its read operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Infomaniak Calendar and Contacts", DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
+		ID: Provider, Name: "Infomaniak Calendar and Contacts", FormerIDs: []string{"infomaniakdav"}, RenamedTools: renamedTools, DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted, contacts read",
 		SecretRoles: []config.SecretRole{{
