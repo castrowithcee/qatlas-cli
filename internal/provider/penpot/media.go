@@ -104,7 +104,7 @@ var mediaUpload = capability.Descriptor{
 }
 
 var mediaFromURL = capability.Descriptor{
-	ID: Provider + ".media.fromurl", Version: 1, Title: "Add an image to a Penpot file from a URL",
+	ID: Provider + ".media.from-url", Version: 1, Title: "Add an image to a Penpot file from a URL",
 	Description: "Let Penpot fetch an image from an https URL and store it as a media object of one file of a project " +
 		"of a bound team. Qatlas accepts only an https URL with a public DNS host name on the default port, without " +
 		"user info or fragment; IP addresses, single-label names, and local or internal name suffixes are refused. " +
@@ -193,7 +193,7 @@ var filesImport = capability.Descriptor{
 		Arguments: json.RawMessage(`{"project_id":"00000000-0000-0000-0000-000000000002","name":"Landing page","local_path":"~/exports/landing.penpot"}`)}},
 }
 
-// MediaStored is the answer of media.upload and media.fromurl; Size and SHA256 are set for an upload only.
+// MediaStored is the answer of media.upload and media.from-url; Size and SHA256 are set for an upload only.
 type MediaStored struct {
 	ID        string `json:"id"`
 	MediaID   string `json:"media_id,omitempty"`

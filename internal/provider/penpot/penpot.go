@@ -444,6 +444,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Penpot", DefaultBaseURL: cloudOrigin,
 		RemovedTools:       []string{"penpot.webhooks.create", "penpot.invitations.create"},
+		RenamedTools:       renamedTools,
 		Description:        "Open-source design platform, teams, projects, and files through an access token (beta)",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
