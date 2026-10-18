@@ -1213,11 +1213,19 @@ func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approv
 		return
 	}
 	for _, field := range change.Fields {
+		if field.IsRename {
+			fmt.Fprintf(out, "  %s  renamed %s -> %s\n", field.Field, redactor.Apply(field.Before),
+				redactor.Apply(field.After))
+			continue
+		}
 		if !field.IsListChange() {
 			fmt.Fprintf(out, "  %s  %s -> %s\n", field.Field, redactor.Apply(field.Before), redactor.Apply(field.After))
 			continue
 		}
 		var counts []string
+		if len(field.Renamed) > 0 {
+			counts = append(counts, fmt.Sprintf("%d renamed", len(field.Renamed)))
+		}
 		if len(field.Added) > 0 {
 			counts = append(counts, fmt.Sprintf("%d new", len(field.Added)))
 		}
@@ -1225,6 +1233,9 @@ func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approv
 			counts = append(counts, fmt.Sprintf("%d removed", len(field.Removed)))
 		}
 		fmt.Fprintf(out, "  %s  %s\n", field.Field, strings.Join(counts, ", "))
+		for _, r := range field.Renamed {
+			fmt.Fprintf(out, "    renamed %s -> %s\n", redactor.Apply(r.Old), redactor.Apply(r.New))
+		}
 		for _, value := range field.Added {
 			fmt.Fprintf(out, "    + %s\n", redactor.Apply(value))
 		}
@@ -1301,14 +1312,22 @@ func approvalOrigins(ctx context.Context, v *vault.Vault, configPath string, cfg
 }
 
 // approvalFieldDocument is one changed field: before and after for a single value or a switch between a mode
-// and a list; added, removed, and kept, each sorted, for a list that stays a list.
+// and a list; added, removed, and kept, each sorted, for a list that stays a list. renamed lists what a
+// provider's rename tables explain as a rename, as old and new: entries of a list (left out of added,
+// removed, and kept) or, beside before and after, a single value such as the provider.
 type approvalFieldDocument struct {
-	Field   string   `json:"field"`
-	Before  *string  `json:"before,omitempty"`
-	After   *string  `json:"after,omitempty"`
-	Added   []string `json:"added,omitempty"`
-	Removed []string `json:"removed,omitempty"`
-	Kept    []string `json:"kept,omitempty"`
+	Field   string                   `json:"field"`
+	Before  *string                  `json:"before,omitempty"`
+	After   *string                  `json:"after,omitempty"`
+	Added   []string                 `json:"added,omitempty"`
+	Removed []string                 `json:"removed,omitempty"`
+	Kept    []string                 `json:"kept,omitempty"`
+	Renamed []approvalRenameDocument `json:"renamed,omitempty"`
+}
+
+type approvalRenameDocument struct {
+	Old string `json:"old"`
+	New string `json:"new"`
 }
 
 func approvalChangeJSON(redactor *redact.Redactor, change approval.Change,
@@ -1316,14 +1335,24 @@ func approvalChangeJSON(redactor *redact.Redactor, change approval.Change,
 	doc := approvalChangeDocument{Connection: redactor.Apply(change.Connection), New: change.New,
 		OriginOfChange: approvalOriginJSON(origin), Fields: []approvalFieldDocument{}}
 	for _, field := range change.Fields {
+		if field.IsRename {
+			before, after := redactor.Apply(field.Before), redactor.Apply(field.After)
+			doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field, Before: &before, After: &after,
+				Renamed: []approvalRenameDocument{{Old: before, New: after}}})
+			continue
+		}
 		if !field.IsListChange() {
 			before, after := redactor.Apply(field.Before), redactor.Apply(field.After)
 			doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field, Before: &before, After: &after})
 			continue
 		}
+		var renamed []approvalRenameDocument
+		for _, r := range field.Renamed {
+			renamed = append(renamed, approvalRenameDocument{Old: redactor.Apply(r.Old), New: redactor.Apply(r.New)})
+		}
 		doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field,
 			Added: redactEach(redactor, field.Added), Removed: redactEach(redactor, field.Removed),
-			Kept: redactEach(redactor, field.Kept)})
+			Kept: redactEach(redactor, field.Kept), Renamed: renamed})
 	}
 	return doc
 }

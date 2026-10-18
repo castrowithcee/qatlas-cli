@@ -736,7 +736,7 @@ func (s *mcpServer) list(ctx context.Context, core *application.Core, raw json.R
 	if provider != "" {
 		if _, ok := s.registry.ProviderMetadata(provider); !ok {
 			return nil, &application.InvalidRequestError{Message: fmt.Sprintf("unknown provider %q", provider) +
-				application.DidYouMean(application.Suggest(provider, application.ProviderIDs(s.registry))) +
+				application.UnknownProviderHint(s.registry, provider) +
 				"; leave the provider out to list every connection"}
 		}
 	}

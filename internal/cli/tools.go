@@ -100,8 +100,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			if len(args) == 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
 					return &UsageError{fmt.Errorf("unknown provider %q%s; run 'qatlas providers' to list the "+
-						"providers", args[0], application.DidYouMean(application.Suggest(args[0],
-						application.ProviderIDs(registry))))}
+						"providers", args[0], application.UnknownProviderHint(registry, args[0]))}
 				}
 				provider = args[0]
 			}
@@ -198,8 +197,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			if len(args) >= 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
 					return &UsageError{fmt.Errorf("unknown tool namespace %q%s; run 'qatlas providers' to list "+
-						"the namespaces", args[0], application.DidYouMean(application.Suggest(args[0],
-						application.ProviderIDs(registry))))}
+						"the namespaces", args[0], application.UnknownProviderHint(registry, args[0]))}
 				}
 				request.Provider = args[0]
 			}

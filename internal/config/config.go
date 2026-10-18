@@ -45,6 +45,7 @@ type Config struct {
 	Vault         VaultSettings         `yaml:"vault,omitempty"`
 	Logs          LogSettings           `yaml:"logs,omitempty"`
 	providers     ProviderCatalog       `yaml:"-"`
+	renamings     []Renaming            `yaml:"-"`
 }
 
 // Service is a technical API endpoint of one provider. BaseURL may be left out for a provider that declares
@@ -354,6 +355,9 @@ func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 		return nil, errors.New("the configuration file must contain exactly one document")
 	}
 
+	if err := cfg.applyRenames(); err != nil {
+		return nil, err
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -791,6 +795,10 @@ func providerCatalog(providers []ProviderCatalog) ProviderCatalog {
 	return emptyProviderCatalog{}
 }
 
+// ProviderCatalog returns the provider catalog the configuration was loaded with, an empty one when there
+// is none.
+func (c *Config) ProviderCatalog() ProviderCatalog { return c.providerCatalog() }
+
 func (c *Config) providerCatalog() ProviderCatalog {
 	if c.providers != nil {
 		return c.providers
@@ -1145,10 +1153,14 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// ToolWarnings names every tools entry that a provider has removed, one line per entry, sorted by
-// connection. Such an entry stays valid and is ignored, so an older file keeps working.
+// ToolWarnings names every former provider or tool ID that loading read as its current name, then every
+// tools entry that a provider has removed, one line per entry, removed ones sorted by connection. Such an
+// entry stays valid, so an older file keeps working.
 func (c *Config) ToolWarnings() []string {
 	var warnings []string
+	for _, renaming := range c.renamings {
+		warnings = append(warnings, renaming.warning())
+	}
 	for _, name := range sortedKeys(c.Connections) {
 		conn := c.Connections[name]
 		metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)

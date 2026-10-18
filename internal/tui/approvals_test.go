@@ -759,3 +759,23 @@ func TestApprovalDetailUnreadableLogIsUnknownAndStillApproves(t *testing.T) {
 		t.Errorf("approving with an unreadable log: fail %q", m.fail)
 	}
 }
+
+// A renamed provider and tool read as renames, and the renamed tool is not counted among new or removed.
+func TestApprovalDetailShowsRenames(t *testing.T) {
+	change := approval.Change{Connection: "gh", Fields: []approval.FieldChange{
+		{Field: approval.FieldProvider, Before: "acmechat", After: "acme.chat", IsRename: true},
+		{Field: approval.FieldTools, Before: "x", After: "y",
+			Renamed: []approval.Rename{{Old: "acmechat.messages.fetch", New: "acme.chat.messages.get"}},
+			Kept:    []string{"acme.chat.messages.list"}},
+	}}
+	got := strings.Join(approvalDetailRows(change), "\n")
+	for _, want := range []string{"provider    renamed acmechat -> acme.chat", "tools       1 renamed",
+		"renamed acmechat.messages.fetch -> acme.chat.messages.get", "unchanged: 1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("detail lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "new") || strings.Contains(got, "+ ") {
+		t.Errorf("a rename is counted as new:\n%s", got)
+	}
+}

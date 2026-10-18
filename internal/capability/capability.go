@@ -242,6 +242,9 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 		}
 		groups[group.ID] = true
 	}
+	if err := r.checkFormerIDs(metadata); err != nil {
+		return err
+	}
 	r.metadata[metadata.ID] = cloneMetadata(metadata)
 	if tester != nil {
 		r.testers[metadata.ID] = tester
@@ -308,6 +311,14 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
 	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
 	metadata.RemovedTools = append([]string(nil), metadata.RemovedTools...)
+	metadata.FormerIDs = append([]string(nil), metadata.FormerIDs...)
+	if metadata.RenamedTools != nil {
+		renamed := make(map[string]string, len(metadata.RenamedTools))
+		for old, current := range metadata.RenamedTools {
+			renamed[old] = current
+		}
+		metadata.RenamedTools = renamed
+	}
 	metadata.Profiles = append([]config.ToolProfile(nil), metadata.Profiles...)
 	metadata.Groups = append([]config.ToolGroup(nil), metadata.Groups...)
 	for i := range metadata.Profiles {
@@ -399,6 +410,106 @@ func (r *Registry) ValidateProfiles() error {
 	return nil
 }
 
+// checkFormerIDs verifies that the former IDs of one provider are not empty, repeated, or the ID of any
+// registered provider or former ID of another. It is symmetric, so the order of registration does not matter.
+func (r *Registry) checkFormerIDs(metadata config.ProviderMetadata) error {
+	seen := map[string]bool{}
+	for _, former := range metadata.FormerIDs {
+		switch {
+		case former == "":
+			return fmt.Errorf("provider %q declares an empty former provider ID", metadata.ID)
+		case seen[former]:
+			return fmt.Errorf("provider %q declares former provider ID %q twice", metadata.ID, former)
+		case former == metadata.ID:
+			return fmt.Errorf("provider %q lists its own ID as a former provider ID", metadata.ID)
+		}
+		seen[former] = true
+		if _, registered := r.metadata[former]; registered {
+			return fmt.Errorf("provider %q: former provider ID %q collides with the registered provider %q",
+				metadata.ID, former, former)
+		}
+	}
+	for id, other := range r.metadata {
+		if id == metadata.ID {
+			continue
+		}
+		if seen[id] {
+			return fmt.Errorf("provider %q: former provider ID %q collides with the registered provider %q",
+				metadata.ID, id, id)
+		}
+		for _, former := range other.FormerIDs {
+			if former == metadata.ID {
+				return fmt.Errorf("provider %q collides with the former provider ID of provider %q", metadata.ID, id)
+			}
+			if seen[former] {
+				return fmt.Errorf("provider %q: former provider ID %q is also a former ID of provider %q",
+					metadata.ID, former, id)
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateRenames checks the rename tables of every registered provider. It runs once all providers and
+// operations are registered, because a table may only point at tools that exist. Every current ID is a
+// registered tool of the declaring provider; no former ID is registered, removed, declared twice, or part of
+// a chain, so a former ID always names its replacement directly.
+func (r *Registry) ValidateRenames() error {
+	declared := map[string]string{}
+	targets := map[string]bool{}
+	declaredBy := map[string]string{}
+	for _, metadata := range r.ProviderMetadataAll() {
+		for old, current := range metadata.RenamedTools {
+			targets[current] = true
+			declaredBy[old] = metadata.ID
+		}
+	}
+	isOld := func(id string) bool { _, ok := declaredBy[id]; return ok }
+	for _, metadata := range r.ProviderMetadataAll() {
+		if err := r.checkFormerIDs(metadata); err != nil {
+			return err
+		}
+		olds := make([]string, 0, len(metadata.RenamedTools))
+		for old := range metadata.RenamedTools {
+			olds = append(olds, old)
+		}
+		sort.Strings(olds)
+		for _, old := range olds {
+			current := metadata.RenamedTools[old]
+			_, registered := r.byID[old]
+			_, own := r.byProvider[metadata.ID][current]
+			switch {
+			case old == "" || current == "":
+				return fmt.Errorf("provider %q rename table has an empty tool ID", metadata.ID)
+			case declared[old] != "":
+				return fmt.Errorf("provider %q: former tool ID %q is also renamed by provider %q",
+					metadata.ID, old, declared[old])
+			case isOld(current), targets[old]:
+				return fmt.Errorf("provider %q: former tool ID %q is the target of another rename; "+
+					"a rename may not form a chain", metadata.ID, old)
+			case registered:
+				return fmt.Errorf("provider %q: former tool ID %q is still a registered tool", metadata.ID, old)
+			case contains(metadata.RemovedTools, old):
+				return fmt.Errorf("provider %q: tool ID %q is both renamed and removed", metadata.ID, old)
+			case !own:
+				return fmt.Errorf("provider %q: renamed tool %q points at %q, which is not a registered tool "+
+					"of this provider", metadata.ID, old, current)
+			}
+			declared[old] = metadata.ID
+		}
+	}
+	return nil
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func validConfigName(name string) bool {
 	if name == "" {
 		return false
@@ -435,6 +546,12 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 		}
 		operation.Descriptor = d.clone()
 
+		// Read r.metadata directly: this runs once per operation, and ProviderMetadataAll clones every provider.
+		for _, other := range r.metadata {
+			if current, renamed := other.RenamedTools[d.ID]; renamed {
+				return fmt.Errorf("provider %q: operation %q is a former tool ID, renamed to %q", provider, d.ID, current)
+			}
+		}
 		known, ok := batch[d.ID]
 		if !ok {
 			known, ok = r.byID[d.ID]
