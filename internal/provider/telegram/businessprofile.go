@@ -45,7 +45,7 @@ func businessProfileDescriptor(name, title, desc string, list bool, props, requi
 }
 
 var (
-	businessSetName = businessProfileDescriptor("setname", "Set the Telegram business account name",
+	businessSetName = businessProfileDescriptor("set-name", "Set the Telegram business account name",
 		"Change the first and last name of the account of a bound business connection; Telegram checks the bot's rights",
 		false,
 		`"first_name":{"type":"string","minLength":1,"maxLength":64},"last_name":{"type":"string","maxLength":64}`,
@@ -54,7 +54,7 @@ var (
 			{Name: "first_name", Description: "New first name, from 1 through 64 characters", Required: true},
 			{Name: "last_name", Description: "New last name, up to 64 characters; absent or empty removes it"},
 		}, `{"business":"<connection id>","first_name":"Ann","last_name":"Example"}`)
-	businessSetUsername = businessProfileDescriptor("setusername", "Set the Telegram business account username",
+	businessSetUsername = businessProfileDescriptor("set-username", "Set the Telegram business account username",
 		"Change or remove the username of the account of a bound business connection; the old username can be lost",
 		true,
 		`"username":{"type":"string","maxLength":32,"pattern":"^([A-Za-z0-9_]{5,32})?$"}`,
@@ -62,7 +62,7 @@ var (
 		[]capability.Argument{{Name: "username", Description: "New username without @, from 5 through 32 letters, " +
 			"digits, or underscores; absent or empty removes it"}},
 		`{"business":"<connection id>","username":"example_name"}`)
-	businessSetBio = businessProfileDescriptor("setbio", "Set the Telegram business account bio",
+	businessSetBio = businessProfileDescriptor("set-bio", "Set the Telegram business account bio",
 		"Change or remove the bio of the account of a bound business connection; Telegram checks the bot's rights",
 		false,
 		`"bio":{"type":"string","maxLength":140}`,

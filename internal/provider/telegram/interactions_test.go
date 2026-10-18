@@ -209,7 +209,7 @@ func TestInteractionsRiskGroupAndAllowList(t *testing.T) {
 	for _, profile := range metadata.Profiles {
 		for _, tool := range profile.Tools {
 			if strings.HasPrefix(tool, "telegram.polls.") || strings.HasPrefix(tool, "telegram.reactions.") ||
-				strings.HasPrefix(tool, "telegram.chatactions.") {
+				strings.HasPrefix(tool, "telegram.chat-actions.") {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}

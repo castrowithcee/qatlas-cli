@@ -75,7 +75,7 @@ var membersPromote = capability.Descriptor{
 }
 
 var membersSetAdminTitle = capability.Descriptor{
-	ID:      Provider + ".members.setadmintitle",
+	ID:      Provider + ".members.set-admin-title",
 	Version: 1,
 	Title:   "Set a Telegram administrator title",
 	Description: "Set the custom title of an administrator the bot promoted in a bound supergroup of an explicit " +
@@ -100,7 +100,7 @@ var membersSetAdminTitle = capability.Descriptor{
 }
 
 var membersSetTag = capability.Descriptor{
-	ID:      Provider + ".members.settag",
+	ID:      Provider + ".members.set-tag",
 	Version: 1,
 	Title:   "Set a Telegram member tag",
 	Description: "Set the tag of a regular member in a bound group or supergroup of an explicit Telegram " +

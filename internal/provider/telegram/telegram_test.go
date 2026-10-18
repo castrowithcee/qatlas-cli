@@ -73,10 +73,10 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 	}
 	if len(metadata.Groups) != 19 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "business" || metadata.Groups[4].ID != "stories" ||
-		metadata.Groups[5].ID != "chats" || metadata.Groups[6].ID != "invitelinks" || metadata.Groups[7].ID != "bot" ||
+		metadata.Groups[5].ID != "chats" || metadata.Groups[6].ID != "invite-links" || metadata.Groups[7].ID != "bot" ||
 		metadata.Groups[8].ID != "files" || metadata.Groups[9].ID != "media" || metadata.Groups[10].ID != "members" ||
 		metadata.Groups[11].ID != "users" || metadata.Groups[12].ID != "interactions" || metadata.Groups[13].ID != "stickers" ||
-		metadata.Groups[14].ID != "topics" || metadata.Groups[15].ID != "suggestedposts" ||
+		metadata.Groups[14].ID != "topics" || metadata.Groups[15].ID != "suggested-posts" ||
 		metadata.Groups[16].ID != "queries" || metadata.Groups[17].ID != "games" || metadata.Groups[18].ID != "payments" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
@@ -91,7 +91,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "business"
 		case strings.HasPrefix(tool.ID, "telegram.stories."):
 			want = "stories"
-		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats.") ||
+		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.sender-chats.") ||
 			tool.ID == joinrequestsDecline.ID:
 			want = "members"
 		case strings.HasPrefix(tool.ID, "telegram.users."):
@@ -102,12 +102,12 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "queries"
 		case strings.HasPrefix(tool.ID, "telegram.games."):
 			want = "games"
-		case strings.HasPrefix(tool.ID, "telegram.suggestedposts."):
-			want = "suggestedposts"
+		case strings.HasPrefix(tool.ID, "telegram.suggested-posts."):
+			want = "suggested-posts"
 		case strings.HasPrefix(tool.ID, "telegram.topics.") && tool.ID != topicsIconStickers.ID:
 			want = "topics"
-		case strings.HasPrefix(tool.ID, "telegram.invitelinks."):
-			want = "invitelinks"
+		case strings.HasPrefix(tool.ID, "telegram.invite-links."):
+			want = "invite-links"
 		case strings.HasPrefix(tool.ID, "telegram.chats."):
 			want = "chats"
 		case tool.ID == filesGet.ID || tool.ID == filesDownload.ID:
@@ -117,16 +117,16 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			tool.ID == audioSend.ID || tool.ID == voiceSend.ID || tool.ID == livePhotosSend.ID:
 			want = "media"
 		case strings.HasPrefix(tool.ID, "telegram.polls.") || strings.HasPrefix(tool.ID, "telegram.reactions.") ||
-			strings.HasPrefix(tool.ID, "telegram.chatactions.") || tool.ID == locationsSend.ID ||
+			strings.HasPrefix(tool.ID, "telegram.chat-actions.") || tool.ID == locationsSend.ID ||
 			tool.ID == venuesSend.ID || tool.ID == contactsSend.ID || tool.ID == diceSend.ID ||
 			tool.ID == locationsEditLive.ID || tool.ID == locationsStopLive.ID:
 			want = "interactions"
-		case strings.HasPrefix(tool.ID, "telegram.stickers.") || strings.HasPrefix(tool.ID, "telegram.stickersets.") ||
+		case strings.HasPrefix(tool.ID, "telegram.stickers.") || strings.HasPrefix(tool.ID, "telegram.sticker-sets.") ||
 			tool.ID == topicsIconStickers.ID:
 			want = "stickers"
 		case tool.ID == botGet.ID || tool.ID == webhookGet.ID || strings.HasPrefix(tool.ID, "telegram.commands.") ||
-			strings.HasPrefix(tool.ID, "telegram.menubutton.") || strings.HasPrefix(tool.ID, "telegram.profile.") ||
-			strings.HasPrefix(tool.ID, "telegram.defaultadminrights."):
+			strings.HasPrefix(tool.ID, "telegram.menu-button.") || strings.HasPrefix(tool.ID, "telegram.profile.") ||
+			strings.HasPrefix(tool.ID, "telegram.default-admin-rights."):
 			want = "bot"
 		}
 		if tool.Group != want {

@@ -59,7 +59,7 @@ var gamesSend = capability.Descriptor{
 }
 
 var gamesSetScore = capability.Descriptor{
-	ID:      Provider + ".games.setscore",
+	ID:      Provider + ".games.set-score",
 	Version: 1,
 	Title:   "Set a Telegram game score",
 	Description: "Set the score of one player in a game message of a bound chat of an explicit Telegram connection; " +
@@ -92,7 +92,7 @@ var gamesSetScore = capability.Descriptor{
 }
 
 var gamesHighScores = capability.Descriptor{
-	ID:      Provider + ".games.highscores",
+	ID:      Provider + ".games.high-scores",
 	Version: 1,
 	Title:   "Get Telegram game high scores",
 	Description: "Read the high score table around one player for a game message of a bound chat of an explicit " +

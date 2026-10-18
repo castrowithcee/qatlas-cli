@@ -54,7 +54,7 @@ var updatedFields = []capability.Field{
 
 var (
 	stickersSetEmojiList = capability.Descriptor{
-		ID:      Provider + ".stickers.setemojilist",
+		ID:      Provider + ".stickers.set-emoji-list",
 		Version: 1,
 		Title:   "Set the emoji of a Telegram sticker",
 		Description: "Replace the emoji list of one sticker of a sticker set of the bot. The name must end in _by_ " +
@@ -75,11 +75,11 @@ var (
 		},
 		Fields: updatedFields,
 		Examples: []capability.Example{{Description: "Set the emoji of a sticker",
-			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of stickersets.get>","emoji_list":["🐱"]}`)}},
+			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of sticker-sets.get>","emoji_list":["🐱"]}`)}},
 	}
 
 	stickersSetKeywords = capability.Descriptor{
-		ID:      Provider + ".stickers.setkeywords",
+		ID:      Provider + ".stickers.set-keywords",
 		Version: 1,
 		Title:   "Set the search keywords of a Telegram sticker",
 		Description: "Replace the search keywords of one sticker of a sticker set of the bot; an empty list removes " +
@@ -100,11 +100,11 @@ var (
 		},
 		Fields: updatedFields,
 		Examples: []capability.Example{{Description: "Set the keywords of a sticker",
-			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of stickersets.get>","keywords":["cat","pet"]}`)}},
+			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of sticker-sets.get>","keywords":["cat","pet"]}`)}},
 	}
 
 	stickersSetMaskPosition = capability.Descriptor{
-		ID:      Provider + ".stickers.setmaskposition",
+		ID:      Provider + ".stickers.set-mask-position",
 		Version: 1,
 		Title:   "Set the mask position of a Telegram sticker",
 		Description: "Set or remove the mask position of one mask sticker of a sticker set of the bot. The name must " +
@@ -125,12 +125,12 @@ var (
 		},
 		Fields: updatedFields,
 		Examples: []capability.Example{{Description: "Put a mask on the eyes",
-			Arguments: json.RawMessage(`{"name":"masks_by_mybot","file_ref":"<file_ref of stickersets.get>",` +
+			Arguments: json.RawMessage(`{"name":"masks_by_mybot","file_ref":"<file_ref of sticker-sets.get>",` +
 				`"mask_position":{"point":"eyes","x_shift":0,"y_shift":0,"scale":1}}`)}},
 	}
 
 	stickersetsSetTitle = capability.Descriptor{
-		ID:      Provider + ".stickersets.settitle",
+		ID:      Provider + ".sticker-sets.set-title",
 		Version: 1,
 		Title:   "Set the title of a Telegram sticker set",
 		Description: "Change the title of a sticker set of the bot. The name must end in _by_ and the bot's username. " +
@@ -152,7 +152,7 @@ var (
 	}
 
 	stickersetsSetThumbnail = capability.Descriptor{
-		ID:      Provider + ".stickersets.setthumbnail",
+		ID:      Provider + ".sticker-sets.set-thumbnail",
 		Version: 1,
 		Title:   "Set the thumbnail of a Telegram sticker set",
 		Description: "Set the thumbnail of a sticker set of the bot from a local_path in a directory the connection " +
@@ -183,7 +183,7 @@ var (
 	}
 
 	stickersetsSetCustomEmojiThumbnail = capability.Descriptor{
-		ID:      Provider + ".stickersets.setcustomemojithumbnail",
+		ID:      Provider + ".sticker-sets.set-custom-emoji-thumbnail",
 		Version: 1,
 		Title:   "Set the thumbnail of a Telegram custom emoji set",
 		Description: "Set the thumbnail of a custom emoji sticker set of the bot to a custom emoji, or remove it by " +

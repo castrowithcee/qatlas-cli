@@ -405,7 +405,7 @@ func TestRichMessageDescriptorDeclaresRiskGroupAndNoProfile(t *testing.T) {
 	if err := reg.ValidateProfiles(); err != nil {
 		t.Fatal(err)
 	}
-	d, _, ok := reg.Lookup("telegram.richmessages.send")
+	d, _, ok := reg.Lookup("telegram.rich-messages.send")
 	if !ok {
 		t.Fatal("rich message descriptor is missing")
 	}

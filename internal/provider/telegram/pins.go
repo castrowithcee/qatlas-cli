@@ -76,7 +76,7 @@ var pinsUnpin = capability.Descriptor{
 }
 
 var pinsUnpinAll = capability.Descriptor{
-	ID:          Provider + ".pins.unpinall",
+	ID:          Provider + ".pins.unpin-all",
 	Version:     1,
 	Title:       "Unpin all Telegram messages",
 	Description: "Unpin every pinned message in a bound chat of an explicit Telegram connection",

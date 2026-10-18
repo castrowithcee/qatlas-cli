@@ -39,7 +39,7 @@ var (
 func paymentsRisk() capability.Risk { return readRisk(financialDataSensitivity) }
 
 var paymentsStarBalance = capability.Descriptor{
-	ID: Provider + ".payments.starbalance", Version: 1, Title: "Read the Star balance of the Telegram bot",
+	ID: Provider + ".payments.star-balance", Version: 1, Title: "Read the Star balance of the Telegram bot",
 	Description: "Read the Star balance of the bot; needs the bot target, and nothing can be spent or transferred",
 	Tags:        []string{"telegram", "payments", "stars", "read"}, Risk: paymentsRisk(), Provider: Provider,
 	Group: groupPayments, InputSchema: json.RawMessage(noArguments), OutputSchema: businessStarBalance.OutputSchema,
@@ -48,7 +48,7 @@ var paymentsStarBalance = capability.Descriptor{
 }
 
 var paymentsStarTransactions = capability.Descriptor{
-	ID: Provider + ".payments.startransactions", Version: 1, Title: "List the Star transactions of the Telegram bot",
+	ID: Provider + ".payments.star-transactions", Version: 1, Title: "List the Star transactions of the Telegram bot",
 	Description: "List Star transactions of the bot read-only, from 1 through 100 per page; needs the bot target. " +
 		"Counterparties show only their type and numeric identifier",
 	Tags: []string{"telegram", "payments", "stars", "read"}, Risk: paymentsRisk(), Provider: Provider,

@@ -14,7 +14,7 @@ import (
 const maxStickerSetNameLen = 64
 
 var chatsSetPermissions = capability.Descriptor{
-	ID:      Provider + ".chats.setpermissions",
+	ID:      Provider + ".chats.set-permissions",
 	Version: 1,
 	Title:   "Set the default permissions of a Telegram chat",
 	Description: "Set the complete default member permissions of a bound group or supergroup of an explicit " +
@@ -40,7 +40,7 @@ var chatsSetPermissions = capability.Descriptor{
 }
 
 var chatsSetStickerSet = capability.Descriptor{
-	ID:      Provider + ".chats.setstickerset",
+	ID:      Provider + ".chats.set-sticker-set",
 	Version: 1,
 	Title:   "Set the sticker set of a Telegram group",
 	Description: "Set the group sticker set of a bound supergroup of an explicit Telegram connection by its " +
@@ -67,7 +67,7 @@ var chatsSetStickerSet = capability.Descriptor{
 }
 
 var chatsDeleteStickerSet = capability.Descriptor{
-	ID:          Provider + ".chats.deletestickerset",
+	ID:          Provider + ".chats.delete-sticker-set",
 	Version:     1,
 	Title:       "Remove the sticker set of a Telegram group",
 	Description: "Remove the group sticker set of a bound supergroup of an explicit Telegram connection",

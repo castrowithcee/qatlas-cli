@@ -57,7 +57,7 @@ var callbacksAnswer = capability.Descriptor{
 }
 
 var joinrequestqueriesAnswer = capability.Descriptor{
-	ID:      Provider + ".joinrequestqueries.answer",
+	ID:      Provider + ".join-request-queries.answer",
 	Version: 1,
 	Title:   "Answer a Telegram join request query",
 	Description: "Decline a pending join request query of a bound chat or leave the decision to the other " +

@@ -41,7 +41,7 @@ func defaultRightsExample() string {
 }
 
 var defaultAdminRightsGet = capability.Descriptor{
-	ID:      Provider + ".defaultadminrights.get",
+	ID:      Provider + ".default-admin-rights.get",
 	Version: 1,
 	Title:   "Get the Telegram bot default administrator rights",
 	Description: "Read the administrator rights the bot requests by default when it is added as administrator to " +
@@ -63,7 +63,7 @@ var defaultAdminRightsGet = capability.Descriptor{
 }
 
 var defaultAdminRightsSet = capability.Descriptor{
-	ID:      Provider + ".defaultadminrights.set",
+	ID:      Provider + ".default-admin-rights.set",
 	Version: 1,
 	Title:   "Set the Telegram bot default administrator rights",
 	Description: "Replace the administrator rights the bot requests by default when it is added as administrator " +

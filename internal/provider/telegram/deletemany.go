@@ -13,7 +13,7 @@ import (
 const maxDeleteMessages = 100
 
 var messagesDeleteMany = capability.Descriptor{
-	ID:          Provider + ".messages.deletemany",
+	ID:          Provider + ".messages.delete-many",
 	Version:     1,
 	Title:       "Delete several Telegram messages",
 	Description: "Delete from 1 through 100 messages of a bound chat of an explicit Telegram connection in one request",

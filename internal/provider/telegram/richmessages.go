@@ -68,7 +68,7 @@ var richBlocksSchema = func() string {
 }()
 
 var richMessagesSend = capability.Descriptor{
-	ID:      Provider + ".richmessages.send",
+	ID:      Provider + ".rich-messages.send",
 	Version: 1,
 	Title:   "Send a Telegram rich message",
 	Description: "Send one structured rich message of modeled blocks (text, lists, tables, quotes, maps, buttons, " +

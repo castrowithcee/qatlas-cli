@@ -121,7 +121,7 @@ var chatsAdministrators = capability.Descriptor{
 }
 
 var chatsMemberCount = capability.Descriptor{
-	ID:          Provider + ".chats.membercount",
+	ID:          Provider + ".chats.member-count",
 	Version:     1,
 	Title:       "Get the Telegram chat member count",
 	Description: "Read the number of members of a bound chat",

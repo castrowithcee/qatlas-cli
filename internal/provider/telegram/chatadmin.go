@@ -26,7 +26,7 @@ func chatAdminRisk(effect capability.Effect, idempotency capability.Idempotency)
 }
 
 var chatsSetTitle = capability.Descriptor{
-	ID:          Provider + ".chats.settitle",
+	ID:          Provider + ".chats.set-title",
 	Version:     1,
 	Title:       "Set a Telegram chat title",
 	Description: "Change the title of a bound group or channel of an explicit Telegram connection",
@@ -50,7 +50,7 @@ var chatsSetTitle = capability.Descriptor{
 }
 
 var chatsSetDescription = capability.Descriptor{
-	ID:          Provider + ".chats.setdescription",
+	ID:          Provider + ".chats.set-description",
 	Version:     1,
 	Title:       "Set a Telegram chat description",
 	Description: "Change or remove the description of a bound group or channel of an explicit Telegram connection",
@@ -75,7 +75,7 @@ var chatsSetDescription = capability.Descriptor{
 }
 
 var chatsSetPhoto = capability.Descriptor{
-	ID:      Provider + ".chats.setphoto",
+	ID:      Provider + ".chats.set-photo",
 	Version: 1,
 	Title:   "Set a Telegram chat photo",
 	Description: "Replace the photo of a bound group or channel of an explicit Telegram connection with a local " +
@@ -104,7 +104,7 @@ var chatsSetPhoto = capability.Descriptor{
 }
 
 var chatsDeletePhoto = capability.Descriptor{
-	ID:          Provider + ".chats.deletephoto",
+	ID:          Provider + ".chats.delete-photo",
 	Version:     1,
 	Title:       "Delete a Telegram chat photo",
 	Description: "Remove the photo of a bound group or channel of an explicit Telegram connection",

@@ -42,7 +42,7 @@ var businessGet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "id", Description: "Business connection ID"},
 		{Name: "user", Description: "Account that owns the connection"},
-		{Name: "business_chat_ref", Description: "Reference to the private chat with that account, for telegram.business.markread"},
+		{Name: "business_chat_ref", Description: "Reference to the private chat with that account, for telegram.business.mark-read"},
 		{Name: "date", Description: "Unix time the connection was established"},
 		{Name: "is_enabled", Description: "Whether the connection is active"},
 		{Name: "rights", Description: "Rights the account granted the bot, each as a boolean"},
@@ -54,7 +54,7 @@ var businessGet = capability.Descriptor{
 }
 
 var businessMarkRead = capability.Descriptor{
-	ID:          Provider + ".business.markread",
+	ID:          Provider + ".business.mark-read",
 	Version:     1,
 	Title:       "Mark a Telegram business message as read",
 	Description: "Mark one incoming message of a chat of a bound business connection as read",
@@ -82,7 +82,7 @@ var businessMarkRead = capability.Descriptor{
 }
 
 var businessDeleteMessages = capability.Descriptor{
-	ID:          Provider + ".business.deletemessages",
+	ID:          Provider + ".business.delete-messages",
 	Version:     1,
 	Title:       "Delete Telegram business messages",
 	Description: "Delete from 1 through 100 messages on behalf of a bound business connection in one request",

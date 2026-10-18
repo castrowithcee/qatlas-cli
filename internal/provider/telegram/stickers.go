@@ -100,7 +100,7 @@ var stickersSend = capability.Descriptor{
 }
 
 var stickersetsGet = capability.Descriptor{
-	ID:          Provider + ".stickersets.get",
+	ID:          Provider + ".sticker-sets.get",
 	Version:     1,
 	Title:       "Read a Telegram sticker set",
 	Description: "Read the name, title, type, and stickers of one public sticker set by its name",
@@ -125,7 +125,7 @@ var stickersetsGet = capability.Descriptor{
 }
 
 var stickersCustomEmoji = capability.Descriptor{
-	ID:          Provider + ".stickers.customemoji",
+	ID:          Provider + ".stickers.custom-emoji",
 	Version:     1,
 	Title:       "Read Telegram custom emoji stickers",
 	Description: "Read up to 200 custom emoji stickers by their custom emoji identifiers",
@@ -145,7 +145,7 @@ var stickersCustomEmoji = capability.Descriptor{
 }
 
 var topicsIconStickers = capability.Descriptor{
-	ID:           Provider + ".topics.iconstickers",
+	ID:           Provider + ".topics.icon-stickers",
 	Version:      1,
 	Title:        "Read Telegram forum topic icon stickers",
 	Description:  "Read the stickers that may be used as forum topic icons",

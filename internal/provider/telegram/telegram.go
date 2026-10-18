@@ -117,7 +117,7 @@ var messagesEdit = capability.Descriptor{
 }
 
 var messagesEditReplyMarkup = capability.Descriptor{
-	ID:          Provider + ".messages.editreplymarkup",
+	ID:          Provider + ".messages.edit-reply-markup",
 	Version:     1,
 	Title:       "Edit the inline keyboard of a Telegram message",
 	Description: "Set or remove the inline keyboard of one message in a bound chat of an explicit Telegram connection",
@@ -225,6 +225,7 @@ func Register(reg *capability.Registry) error {
 		},
 		// Only groups with a registered tool are declared: the registry rejects an empty group.
 		Groups:             toolGroups,
+		RenamedTools:       renamedTools,
 		Description:        "Cloud-based instant messaging service",
 		DefaultPermissions: []config.Permission{config.PermissionCreate},
 		SecretRoles: []config.SecretRole{{

@@ -168,7 +168,7 @@ var reactionsSet = capability.Descriptor{
 }
 
 var chatActionsSend = capability.Descriptor{
-	ID:          Provider + ".chatactions.send",
+	ID:          Provider + ".chat-actions.send",
 	Version:     1,
 	Title:       "Send a Telegram chat action",
 	Description: "Show a typing or upload indicator of the bot in a bound chat",

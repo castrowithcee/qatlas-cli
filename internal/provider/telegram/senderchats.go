@@ -31,7 +31,7 @@ var optionalUserIDArgument = capability.Argument{
 const reactionActorSchema = `"user_id":{"type":"integer","minimum":1},` + actorChatIDSchema
 
 var senderchatsBan = capability.Descriptor{
-	ID:      Provider + ".senderchats.ban",
+	ID:      Provider + ".sender-chats.ban",
 	Version: 1,
 	Title:   "Ban a Telegram sender chat",
 	Description: "Ban a channel as a sender in a bound supergroup or channel of an explicit Telegram connection; " +
@@ -53,7 +53,7 @@ var senderchatsBan = capability.Descriptor{
 }
 
 var senderchatsUnban = capability.Descriptor{
-	ID:          Provider + ".senderchats.unban",
+	ID:          Provider + ".sender-chats.unban",
 	Version:     1,
 	Title:       "Unban a Telegram sender chat",
 	Description: "Lift the ban of a channel as a sender in a bound supergroup or channel of an explicit Telegram connection",
@@ -101,7 +101,7 @@ var reactionsRemove = capability.Descriptor{
 }
 
 var reactionsRemoveAll = capability.Descriptor{
-	ID:      Provider + ".reactions.removeall",
+	ID:      Provider + ".reactions.remove-all",
 	Version: 1,
 	Title:   "Remove all recent reactions of a Telegram user or chat",
 	Description: "Remove up to 10000 recent reactions of one user or one chat across all messages of a bound group or " +

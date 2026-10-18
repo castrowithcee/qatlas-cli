@@ -130,7 +130,7 @@ func TestProfileToolDescriptors(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, tool := range profile.Tools {
-			if strings.HasPrefix(tool, "telegram.profile.") || strings.HasPrefix(tool, "telegram.defaultadminrights.") {
+			if strings.HasPrefix(tool, "telegram.profile.") || strings.HasPrefix(tool, "telegram.default-admin-rights.") {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}

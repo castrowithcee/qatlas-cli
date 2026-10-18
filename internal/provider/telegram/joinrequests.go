@@ -11,7 +11,7 @@ import (
 )
 
 var joinrequestsDecline = capability.Descriptor{
-	ID:      Provider + ".joinrequests.decline",
+	ID:      Provider + ".join-requests.decline",
 	Version: 1,
 	Title:   "Decline a Telegram join request",
 	Description: "Decline the pending join request of one user for a bound chat of an explicit Telegram connection; " +

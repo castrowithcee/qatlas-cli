@@ -22,7 +22,7 @@ const userMessagesInput = `{"type":"object","properties":{` + chatSchema + `,` +
 	`,"limit":{"type":"integer","minimum":1,"maximum":20}},"required":["user_id"],"additionalProperties":false}`
 
 var usersProfilePhotos = capability.Descriptor{
-	ID: Provider + ".users.profilephotos", Version: 1, Title: "Read a chat member's profile photos",
+	ID: Provider + ".users.profile-photos", Version: 1, Title: "Read a chat member's profile photos",
 	Description: "Read up to 20 profile photos of a user verified as a member of a bound chat",
 	Tags:        []string{"telegram", "users", "read"}, Risk: readRisk(memberDataSensitivity), Provider: Provider, Group: groupUsers,
 	InputSchema: json.RawMessage(userPageInput), OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -37,7 +37,7 @@ var usersProfilePhotos = capability.Descriptor{
 }
 
 var usersProfileAudios = capability.Descriptor{
-	ID: Provider + ".users.profileaudios", Version: 1, Title: "Read a chat member's profile audios",
+	ID: Provider + ".users.profile-audios", Version: 1, Title: "Read a chat member's profile audios",
 	Description: "Read up to 20 profile audios of a user verified as a member of a bound chat",
 	Tags:        []string{"telegram", "users", "read"}, Risk: readRisk(memberDataSensitivity), Provider: Provider, Group: groupUsers,
 	InputSchema: json.RawMessage(userPageInput), OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -52,7 +52,7 @@ var usersProfileAudios = capability.Descriptor{
 }
 
 var usersChatBoosts = capability.Descriptor{
-	ID: Provider + ".users.chatboosts", Version: 1, Title: "Read a chat member's boosts",
+	ID: Provider + ".users.chat-boosts", Version: 1, Title: "Read a chat member's boosts",
 	Description: "Read boosts a verified member added to the bound chat; Telegram requires bot administrator rights",
 	Tags:        []string{"telegram", "users", "read"}, Risk: readRisk(memberDataSensitivity), Provider: Provider, Group: groupUsers,
 	InputSchema: json.RawMessage(userInput), OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -66,7 +66,7 @@ var usersChatBoosts = capability.Descriptor{
 }
 
 var usersPersonalChatMessages = capability.Descriptor{
-	ID: Provider + ".users.personalchatmessages", Version: 1, Title: "Read a chat member's personal channel messages",
+	ID: Provider + ".users.personal-chat-messages", Version: 1, Title: "Read a chat member's personal channel messages",
 	Description: "Read up to 20 recent messages of the personal chat of a verified member",
 	Tags:        []string{"telegram", "users", "read"}, Risk: readRisk(memberDataSensitivity), Provider: Provider, Group: groupUsers,
 	InputSchema: json.RawMessage(userMessagesInput), OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
