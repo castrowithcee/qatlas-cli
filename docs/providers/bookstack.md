@@ -154,14 +154,14 @@ not available.
 
 ### Cover images
 
-`bookstack.books.setcover` and `bookstack.shelves.setcover` take `id` and `local_path` and set the cover image
+`bookstack.books.set-cover` and `bookstack.shelves.set-cover` take `id` and `local_path` and set the cover image
 from a local file (png, jpg, jpeg, gif, or webp, at most 50 MiB, streamed from disk from a directory the
 connection releases for reading). The file type is checked before any secret is read or any file is opened. The
 request is a multipart `POST` with `_method=PUT` and the file in the field `image`. `books.update` and
 `shelves.update` take `remove_cover: true` to remove the cover (sent as `image: null`); it can be combined with
 the other fields and is a valid change on its own, and `false` sends nothing. On a connection bound to books the
 book `id` must be a bound book; the shelf variants are refused on such a connection. All of these require
-confirmation, are not part of any profile, send one request without retry, and `setcover` is not idempotent.
+confirmation, are not part of any profile, send one request without retry, and `set-cover` is not idempotent.
 
 ## Tags and instance information
 
@@ -180,13 +180,13 @@ content and therefore also works on a connection bound to books.
 
 ## Content permissions
 
-`bookstack.contentpermissions.get` reads the permission overrides of one `page`, `chapter`, `book`, or
+`bookstack.content-permissions.get` reads the permission overrides of one `page`, `chapter`, `book`, or
 `bookshelf` (`type` and `id`): the owner (`id`, `name`, `slug`), the role overrides (`role_id`, `display_name`,
 `view`, `create`, `update`, `delete`; at most 100, otherwise `truncated`), and the fallback permissions
 (`inheriting`, plus the four values when not inheriting) that apply to every role without an override. Owner and
 role names are personal data and untrusted provider content.
 
-`bookstack.contentpermissions.update` changes those permissions for existing roles in one request. Every
+`bookstack.content-permissions.update` changes those permissions for existing roles in one request. Every
 category is optional, but at least one is required, and BookStack applies exactly what is sent:
 
 - `owner_id`: the new owner (a positive user id).
@@ -253,14 +253,14 @@ naming it.
 
 ## Recycle bin
 
-`bookstack.recyclebin.list` lists the deleted items of the instance (`limit`, `offset`). Each entry carries `id`
+`bookstack.recycle-bin.list` lists the deleted items of the instance (`limit`, `offset`). Each entry carries `id`
 (the deletion identifier), `deleted_by`, `created_at`, `deletable_type` (`page`, `chapter`, `book`, or
 `bookshelf`), `deletable_id`, and of the deleted item only `name`, `slug`, `book_id`, `chapter_id`,
 `parent_type`, `parent_id`, `pages_count`, and `chapters_count` where BookStack reports them. Names are untrusted
 data.
 
-`bookstack.recyclebin.restore` restores one deletion by `deletion_id` and returns `restore_count`.
-`bookstack.recyclebin.destroy` destroys one deletion permanently and returns `delete_count`; this cannot be
+`bookstack.recycle-bin.restore` restores one deletion by `deletion_id` and returns `restore_count`.
+`bookstack.recycle-bin.destroy` destroys one deletion permanently and returns `delete_count`; this cannot be
 undone. BookStack requires the role permissions `settings-manage` and `restrictions-manage-all` for all three.
 The recycle bin spans the whole instance, so the tools are refused on a connection with book targets. Each
 change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
@@ -340,7 +340,7 @@ refuses, without a change, when the user is a guest user, when `roles` contains 
 role cannot be determined. `users.delete` does the same check when `migrate_ownership_id` is given and refuses
 to hand the content to a guest user. Without `roles` or `migrate_ownership_id` no role is read.
 
-`bookstack.auditlog.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
+`bookstack.audit-log.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
 of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
 the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
 `loggable_type` (`page`, `chapter`, `book`, or `bookshelf`), `loggable_id`, and `created_after`/`created_before`

@@ -796,8 +796,8 @@ func TestRegister(t *testing.T) {
 		{Provider + ".shelves.delete", shelvesDelete.Risk},
 		{Provider + ".content.export", wantRisk},
 		{Provider + ".content.download", wantRisk},
-		{Provider + ".contentpermissions.get", contentPermissionsGet.Risk},
-		{Provider + ".contentpermissions.update", contentPermissionsUpdate.Risk},
+		{Provider + ".content-permissions.get", contentPermissionsGet.Risk},
+		{Provider + ".content-permissions.update", contentPermissionsUpdate.Risk},
 	} {
 		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
 			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {
@@ -817,10 +817,10 @@ func TestRegister(t *testing.T) {
 			if descriptor.Risk != tt.risk {
 				t.Errorf("risk = %+v, want %+v", descriptor.Risk, tt.risk)
 			}
-			if descriptor.RequiresToolAllowList != (strings.HasSuffix(tt.id, ".delete") || tt.id == Provider+".contentpermissions.update") {
+			if descriptor.RequiresToolAllowList != (strings.HasSuffix(tt.id, ".delete") || tt.id == Provider+".content-permissions.update") {
 				t.Errorf("requires_tool_allow_list = %v", descriptor.RequiresToolAllowList)
 			}
-			if wantGroup := map[bool]string{true: "administration", false: "content"}[strings.Contains(tt.id, ".contentpermissions.")]; descriptor.Group != wantGroup {
+			if wantGroup := map[bool]string{true: "administration", false: "content"}[strings.Contains(tt.id, ".content-permissions.")]; descriptor.Group != wantGroup {
 				t.Errorf("group = %q, want %s", descriptor.Group, wantGroup)
 			}
 			if descriptor.Provider != Provider || descriptor.Version != 1 {

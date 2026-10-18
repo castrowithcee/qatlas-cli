@@ -56,7 +56,7 @@ var (
 	}
 
 	contentPermissionsGet = capability.Descriptor{
-		ID: Provider + ".contentpermissions.get", Version: 1, Title: "Get BookStack content permissions",
+		ID: Provider + ".content-permissions.get", Version: 1, Title: "Get BookStack content permissions",
 		Description: "Read the permission overrides of one page, chapter, book, or shelf: the owner, the permissions " +
 			"of the roles that have an override, and the fallback for all other roles. Reading needs the BookStack " +
 			"permission to manage content permissions. " + permissionsNote,
@@ -72,7 +72,7 @@ var (
 	}
 
 	contentPermissionsUpdate = capability.Descriptor{
-		ID: Provider + ".contentpermissions.update", Version: 1, Title: "Update BookStack content permissions",
+		ID: Provider + ".content-permissions.update", Version: 1, Title: "Update BookStack content permissions",
 		Description: "Change the owner, the role overrides, or the fallback permissions of one page, chapter, book, or shelf " +
 			"for existing roles, in one request. A category that is left out stays unchanged; role_permissions replaces " +
 			"all role overrides, so an empty list removes all of them; fallback_permissions needs inheriting and, when " +

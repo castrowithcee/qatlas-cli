@@ -34,7 +34,7 @@ var (
 )
 
 var auditLogList = capability.Descriptor{
-	ID: Provider + ".auditlog.list", Version: 1, Title: "List the BookStack audit log",
+	ID: Provider + ".audit-log.list", Version: 1, Title: "List the BookStack audit log",
 	Description: "List the activity entries of the instance, optionally filtered by type, user, object, and time. " +
 		"Dates are UTC; a date without a time means the start of that day. " + auditLogRoles,
 	Tags: []string{"administration", "auditlog", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,

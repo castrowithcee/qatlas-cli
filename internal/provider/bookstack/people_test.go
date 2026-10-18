@@ -148,7 +148,7 @@ func TestPeopleHandlersGateBeforeSecretAndIO(t *testing.T) {
 		"users.get":  func() error { _, e := invokeUsersGet(ctx, bound, resolver(nil), nil, []byte(`{"id":1}`)); return e },
 		"roles.list": func() error { _, e := invokeRolesList(ctx, bound, resolver(nil), nil, []byte(`{}`)); return e },
 		"roles.get":  func() error { _, e := invokeRolesGet(ctx, bound, resolver(nil), nil, []byte(`{"id":1}`)); return e },
-		"auditlog.list": func() error {
+		"audit-log.list": func() error {
 			_, e := invokeAuditLogList(ctx, bound, resolver(nil), nil, []byte(`{"type":"x"}`))
 			return e
 		},
