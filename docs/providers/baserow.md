@@ -72,9 +72,9 @@ narrow what the token itself may read, so grant the token only the rights the co
 | `baserow.rows.update` | update | required | changes the named cells of one row |
 | `baserow.rows.delete` | delete | required, tool allow-list | deletes one row |
 | `baserow.rows.move` | update | required | moves one row within its table |
-| `baserow.rows.batchcreate` | create | required | creates 1 to 200 rows in one request |
-| `baserow.rows.batchupdate` | update | required | changes the named cells of 1 to 200 rows in one request |
-| `baserow.rows.batchdelete` | delete | required, tool allow-list | deletes 1 to 200 rows in one request |
+| `baserow.rows.batch-create` | create | required | creates 1 to 200 rows in one request |
+| `baserow.rows.batch-update` | update | required | changes the named cells of 1 to 200 rows in one request |
+| `baserow.rows.batch-delete` | delete | required, tool allow-list | deletes 1 to 200 rows in one request |
 | `baserow.files.upload` | update | required | uploads a file and appends it to a file field of one row |
 | `baserow.files.get` | read | none | downloads one file of a file field, inline or to a local path |
 
@@ -144,15 +144,15 @@ Baserow's own text is never passed on.
 ## Batch changes
 
 The batch tools take `table_id` and apply the rules of the row changes: confirmation, the table boundary before
-the credential, exactly one change request, no retry, and the uncertainty message. `batchdelete` runs only for a
-connection whose `tools` list names it. The tool IDs use no underscore (`batchcreate`, not `batch_create`).
+the credential, exactly one change request, no retry, and the uncertainty message. `batch-delete` runs only for a
+connection whose `tools` list names it.
 
-- `rows.batchcreate` takes `rows`, 1 to 200 objects of cell values keyed by field name, and answers
+- `rows.batch-create` takes `rows`, 1 to 200 objects of cell values keyed by field name, and answers
   `{"rows": [...], "count": N}` with the new rows in request order, links masked.
-- `rows.batchupdate` takes `rows`, 1 to 200 objects with `row_id` and `fields` (at least one cell), and answers
-  like `batchcreate`. Row IDs must be distinct; a field named `id` is refused because the batch body uses `id`
+- `rows.batch-update` takes `rows`, 1 to 200 objects with `row_id` and `fields` (at least one cell), and answers
+  like `batch-create`. Row IDs must be distinct; a field named `id` is refused because the batch body uses `id`
   for the row.
-- `rows.batchdelete` takes `row_ids`, 1 to 200 distinct IDs, and answers `{"deleted": true, "count": N}`.
+- `rows.batch-delete` takes `row_ids`, 1 to 200 distinct IDs, and answers `{"deleted": true, "count": N}`.
 
 More than 200 rows, none, a repeated or non-positive row ID, and a body above 1 MiB are refused before any
 request. Create and update read the table's fields once and check every row like the single-row tools; one

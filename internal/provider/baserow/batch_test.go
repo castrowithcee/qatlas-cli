@@ -56,7 +56,7 @@ func TestBatchDeleteSendsOneRequestWithoutReadingFields(t *testing.T) {
 		t.Fatalf("result = %s, %v, calls = %+v, bodies = %v", result, err, calls, bodies)
 	}
 	if _, err := env.invokeConfirmed(rowsBatchDelete.ID, "writenodelete", `{"table_id":11,"row_ids":[7]}`); err == nil {
-		t.Fatal("batchdelete ran without the tool allow-list")
+		t.Fatal("batch-delete ran without the tool allow-list")
 	}
 }
 

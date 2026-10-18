@@ -247,6 +247,7 @@ func Register(reg *capability.Registry) error {
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
 		},
+		RenamedTools: renamedTools,
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
 			Description: "lists tables and fields and reads rows; changes nothing",
