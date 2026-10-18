@@ -104,7 +104,7 @@ read. A project connection reads reminders only for one named task.
 | `todoist.tasks.list` | compact active tasks with structured filters |
 | `todoist.tasks.filter` | compact active tasks that match a Todoist filter expression |
 | `todoist.tasks.get` | one active task with its description |
-| `todoist.completedtasks.list` | tasks completed between `since` and `until` |
+| `todoist.completed-tasks.list` | tasks completed between `since` and `until` |
 | `todoist.comments.list` | the comments of exactly one `task_id` or one `project_id` |
 | `todoist.reminders.list` | time-based reminders; of one `task_id` on a project connection |
 | `todoist.reminders.get` | one time-based reminder of a task of the connection |
@@ -249,10 +249,10 @@ matches a due window.
 
 A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
 `todoist.tasks.filter` as `query` (at most 1024 characters, no control characters), and for completed tasks
-by `todoist.completedtasks.list` as `query`. Their results are held to the connection's projects like every
+by `todoist.completed-tasks.list` as `query`. Their results are held to the connection's projects like every
 other list, so an expression that names another project returns nothing of it.
 
-`todoist.completedtasks.list` reads the tasks completed from `since` (inclusive) until `until` (exclusive),
+`todoist.completed-tasks.list` reads the tasks completed from `since` (inclusive) until `until` (exclusive),
 both RFC 3339 and at most three months apart, optionally narrowed by `project_id`, `section_id`, and a
 `query` that Todoist supports for completed tasks. The narrowing is passed to Todoist on every page, and the
 cursor is bound to it.

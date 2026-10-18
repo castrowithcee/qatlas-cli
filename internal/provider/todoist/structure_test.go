@@ -188,7 +188,7 @@ func TestStructureChangesAreRefusedBeforeAnyIO(t *testing.T) {
 			false, "invalid"},
 		{"a reminder offset beyond the bound", "todoist.reminders.update", "writer",
 			`{"reminder_id":"remOne","minute_offset":50000}`, false, "invalid"},
-		{"a completed-task query with a line break", "todoist.completedtasks.list", "one",
+		{"a completed-task query with a line break", "todoist.completed-tasks.list", "one",
 			`{"since":"2026-09-01T00:00:00Z","until":"2026-09-02T00:00:00Z","query":"today\n"}`, false, "invalid"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -425,7 +425,7 @@ func TestStructureChangesSendOneRequestEach(t *testing.T) {
 // or API route: every tool belongs to one of the personal resources.
 func TestNoToolReachesAccountAdministration(t *testing.T) {
 	personal := map[string]bool{"projects": true, "sections": true, "labels": true, "tasks": true,
-		"completedtasks": true, "comments": true, "reminders": true, "filters": true}
+		"completed-tasks": true, "comments": true, "reminders": true, "filters": true}
 	for _, descriptor := range registry(t).Provider(Provider) {
 		parts := strings.Split(descriptor.ID, ".")
 		if len(parts) != 3 || !personal[parts[1]] {
@@ -744,7 +744,7 @@ func TestCompletedTasksReachEveryPage(t *testing.T) {
 		if cursor != "" {
 			call = `{` + arguments + `,"cursor":"` + cursor + `"}`
 		}
-		result, err := env.invoke("todoist.completedtasks.list", "multi", call)
+		result, err := env.invoke("todoist.completed-tasks.list", "multi", call)
 		if err != nil || strings.Contains(result, foreignCanary) {
 			t.Fatalf("page %d = %s, %v", round, result, err)
 		}
@@ -785,7 +785,7 @@ func TestCompletedTasksReachEveryPage(t *testing.T) {
 		}
 	}
 	// A cursor belongs to its filter.
-	if _, err := env.invoke("todoist.completedtasks.list", "multi",
+	if _, err := env.invoke("todoist.completed-tasks.list", "multi",
 		`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z","project_id":"`+ownProject+
 			`","section_id":"sectOwn","query":"@other","limit":2,"cursor":"`+cursor+`"}`); !isInvalidRequest(err) {
 		t.Errorf("a cursor of another filter = %v, want an invalid request", err)

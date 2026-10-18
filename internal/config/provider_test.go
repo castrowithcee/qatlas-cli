@@ -148,7 +148,7 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			{ID: "todoist.comments.delete", Effect: PermissionDelete},
 			{ID: "todoist.comments.list", Effect: PermissionRead},
 			{ID: "todoist.comments.update", Effect: PermissionUpdate},
-			{ID: "todoist.completedtasks.list", Effect: PermissionRead},
+			{ID: "todoist.completed-tasks.list", Effect: PermissionRead},
 			{ID: "todoist.filters.list", Effect: PermissionRead},
 			{ID: "todoist.labels.create", Effect: PermissionCreate},
 			{ID: "todoist.labels.delete", Effect: PermissionDelete, RequiresToolAllowList: true},

@@ -231,7 +231,7 @@ var tasksGet = descriptor("tasks", "get", "Get a Todoist task",
 	},
 	[]capability.Example{{Description: "Read one task", Arguments: json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh"}`)}})
 
-var completedList = descriptor("completedtasks", "list", "List completed Todoist tasks",
+var completedList = descriptor("completed-tasks", "list", "List completed Todoist tasks",
 	"List one bounded batch of the tasks of the projects of an explicit Todoist connection completed in a time "+
 		"window of at most three months, optionally of one project or section or matching a Todoist filter "+
 		"expression; how far back Todoist answers depends on the account's plan",
@@ -325,6 +325,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Todoist", DefaultBaseURL: apiRoot,
 		Description:        "Personal task manager and to-do list service",
+		RenamedTools:       renamedTools,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
