@@ -523,9 +523,9 @@ func TestFileToolDescriptors(t *testing.T) {
 		allowList bool
 		confirm   capability.Confirmation
 	}{
-		"seatable.files.upload": {capability.EffectCreate, config.LocalFilesRead, false, capability.ConfirmationRequired},
-		"seatable.files.get":    {capability.EffectRead, config.LocalFilesWrite, false, capability.ConfirmationNone},
-		"seatable.files.delete": {capability.EffectDelete, "", true, capability.ConfirmationRequired},
+		"seatable.base.files.upload": {capability.EffectCreate, config.LocalFilesRead, false, capability.ConfirmationRequired},
+		"seatable.base.files.get":    {capability.EffectRead, config.LocalFilesWrite, false, capability.ConfirmationNone},
+		"seatable.base.files.delete": {capability.EffectDelete, "", true, capability.ConfirmationRequired},
 	}
 	seen := 0
 	for _, d := range registry(t).Provider(Provider) {
@@ -551,7 +551,7 @@ func TestFileToolDescriptors(t *testing.T) {
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, id := range profile.Tools {
-			if strings.HasPrefix(id, "seatable.files.") {
+			if strings.HasPrefix(id, "seatable.base.files.") {
 				t.Errorf("profile %s preselects %s", profile.ID, id)
 			}
 		}
@@ -739,7 +739,7 @@ func TestFileToolsThroughTheCoreNeedReleasedDirectoriesAndConfirmation(t *testin
 
 	upload := `{"row_id":"` + rowID + `","column":"Anhang","name":"hi.txt","content_base64":"aGk="}`
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.files.upload", Connection: "sales", Arguments: json.RawMessage(upload)}); err == nil ||
+		Operation: "seatable.base.files.upload", Connection: "sales", Arguments: json.RawMessage(upload)}); err == nil ||
 		application.ErrorCode(err) != "confirmation-required" {
 		t.Fatalf("unconfirmed upload: %v", err)
 	}
@@ -747,7 +747,7 @@ func TestFileToolsThroughTheCoreNeedReleasedDirectoriesAndConfirmation(t *testin
 		t.Fatal("an unconfirmed upload reached the provider")
 	}
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.files.upload", Connection: "sales", Arguments: json.RawMessage(upload), Confirmed: true})
+		Operation: "seatable.base.files.upload", Connection: "sales", Arguments: json.RawMessage(upload), Confirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,12 +756,12 @@ func TestFileToolsThroughTheCoreNeedReleasedDirectoriesAndConfirmation(t *testin
 	}
 	// A connection without a released directory is not offered the file tools.
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.files.upload", Connection: "support", Arguments: json.RawMessage(upload), Confirmed: true}); err == nil {
+		Operation: "seatable.base.files.upload", Connection: "support", Arguments: json.RawMessage(upload), Confirmed: true}); err == nil {
 		t.Error("a connection without files offered the upload")
 	}
 	// The deletion needs the tool allow-list even with write permission.
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.files.delete", Connection: "sales",
+		Operation: "seatable.base.files.delete", Connection: "sales",
 		Arguments: json.RawMessage(`{"row_id":"` + rowID + `","column":"Anhang","index":0}`), Confirmed: true}); err == nil {
 		t.Error("the deletion was offered without a tool allow-list")
 	}

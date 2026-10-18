@@ -56,9 +56,9 @@ func TestRegisterPublishesColumnToolsWithRisk(t *testing.T) {
 		effect capability.Effect
 		allow  bool
 	}{
-		"seatable.columns.create": {capability.EffectCreate, false},
-		"seatable.columns.update": {capability.EffectUpdate, false},
-		"seatable.columns.delete": {capability.EffectDelete, true},
+		"seatable.base.columns.create": {capability.EffectCreate, false},
+		"seatable.base.columns.update": {capability.EffectUpdate, false},
+		"seatable.base.columns.delete": {capability.EffectDelete, true},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {

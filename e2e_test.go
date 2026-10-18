@@ -312,8 +312,8 @@ defaults:
 			t.Errorf("bookstack = %v tools, connections and configured, want 2 and 2:\n%s", got, stdout)
 		}
 		// The first step names namespaces only: no tool ID and no route name reaches it.
-		// The dot of an Infomaniak namespace name is not a tool ID separator.
-		bare := strings.ReplaceAll(stdout, "infomaniak.", "")
+		// The dot of a vendor family namespace name is not a tool ID separator.
+		bare := strings.NewReplacer("infomaniak.", "", "seatable.", "").Replace(stdout)
 		for _, absent := range []string{".", "title", "effect", "archive", "primary"} {
 			if strings.Contains(bare, absent) {
 				t.Errorf("stdout = %q, want the namespace index without %q", stdout, absent)

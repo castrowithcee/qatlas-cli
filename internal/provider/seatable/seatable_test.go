@@ -226,13 +226,13 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
-		if descriptor.ID == "seatable.columns.list" || descriptor.ID == "seatable.tables.list" {
+		if descriptor.ID == "seatable.base.columns.list" || descriptor.ID == "seatable.base.tables.list" {
 			wantSensitivity = schemaSensitivity
 		}
-		if descriptor.ID == "seatable.rows.activities" || descriptor.ID == "seatable.base.operations" {
+		if descriptor.ID == "seatable.base.rows.activities" || descriptor.ID == "seatable.base.base.operations" {
 			wantSensitivity = historySensitivity
 		}
-		if descriptor.ID == "seatable.comments.list" || descriptor.ID == "seatable.collaborators.list" {
+		if descriptor.ID == "seatable.base.comments.list" || descriptor.ID == "seatable.base.collaborators.list" {
 			wantSensitivity = peopleSensitivity
 		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
@@ -253,7 +253,7 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.base.operations" || operations[39].ID != "seatable.views.update" {
+	if operations[0].ID != "seatable.base.base.operations" || operations[39].ID != "seatable.base.views.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1026,7 +1026,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 
 	list, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "sales", Arguments: json.RawMessage(`{"start":0,"limit":2}`),
+		Operation: "seatable.base.rows.list", Connection: "sales", Arguments: json.RawMessage(`{"start":0,"limit":2}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke list = %v", err)
@@ -1054,7 +1054,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	}
 
 	got, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.get", Connection: "sales-audit",
+		Operation: "seatable.base.rows.get", Connection: "sales-audit",
 		Arguments: json.RawMessage(`{"row_id":"` + rowID + `"}`),
 	})
 	if err != nil {
@@ -1087,8 +1087,8 @@ func TestApplicationCoreRoutesDynamicTablesInsideTheConfiguredScope(t *testing.T
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)
 	for operation, arguments := range map[string]json.RawMessage{
-		"seatable.tables.list":  json.RawMessage(`{}`),
-		"seatable.columns.list": json.RawMessage(`{"table":"id:0000"}`),
+		"seatable.base.tables.list":  json.RawMessage(`{}`),
+		"seatable.base.columns.list": json.RawMessage(`{"table":"id:0000"}`),
 	} {
 		if _, err := core.Invoke(context.Background(), application.InvokeRequest{
 			Operation: operation, Connection: "all-tables", Arguments: arguments,
@@ -1098,7 +1098,7 @@ func TestApplicationCoreRoutesDynamicTablesInsideTheConfiguredScope(t *testing.T
 	}
 
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "all-tables",
+		Operation: "seatable.base.rows.list", Connection: "all-tables",
 		Arguments: json.RawMessage(`{"table":"id:0001"}`),
 	}); err != nil {
 		t.Fatalf("wildcard invoke = %v", err)
@@ -1108,13 +1108,13 @@ func TestApplicationCoreRoutesDynamicTablesInsideTheConfiguredScope(t *testing.T
 	}
 
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "selected-tables",
+		Operation: "seatable.base.rows.list", Connection: "selected-tables",
 		Arguments: json.RawMessage(`{"table":"id:9999"}`),
 	}); err == nil {
 		t.Fatal("the core accepted a table outside the allow-list")
 	}
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "selected-tables", Arguments: json.RawMessage(`{}`),
+		Operation: "seatable.base.rows.list", Connection: "selected-tables", Arguments: json.RawMessage(`{}`),
 	}); err == nil {
 		t.Fatal("the core selected one allow-listed table silently")
 	}
@@ -1132,35 +1132,35 @@ func TestTheCoreRefusesUnsupportedRequestsBeforeProviderIO(t *testing.T) {
 		request application.InvokeRequest
 	}{
 		{"several bases without an explicit connection", application.InvokeRequest{
-			Operation: "seatable.rows.list", Arguments: json.RawMessage(`{}`)}},
+			Operation: "seatable.base.rows.list", Arguments: json.RawMessage(`{}`)}},
 		{"a table as an argument", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"table_name":"Gehaelter"}`)}},
 		{"a base as an argument", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"base_uuid":"` + supportBase + `"}`)}},
 		{"a view as an argument", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"view_name":"Alle"}`)}},
 		{"a base token as an argument", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"access_token":"` + salesBaseToken + `"}`)}},
 		{"a page size above the bound", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"limit":1000}`)}},
 		{"an offset above the bound", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"start":10001}`)}},
 		{"a negative offset", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "sales",
+			Operation: "seatable.base.rows.list", Connection: "sales",
 			Arguments: json.RawMessage(`{"start":-1}`)}},
 		{"an identifier outside the documented form", application.InvokeRequest{
-			Operation: "seatable.rows.get", Connection: "sales",
+			Operation: "seatable.base.rows.get", Connection: "sales",
 			Arguments: json.RawMessage(`{"row_id":"../../metadata/"}`)}},
 		{"a missing identifier", application.InvokeRequest{
-			Operation: "seatable.rows.get", Connection: "sales", Arguments: json.RawMessage(`{}`)}},
+			Operation: "seatable.base.rows.get", Connection: "sales", Arguments: json.RawMessage(`{}`)}},
 		{"a connection of another provider", application.InvokeRequest{
-			Operation: "seatable.rows.list", Connection: "wiki", Arguments: json.RawMessage(`{}`)}},
+			Operation: "seatable.base.rows.list", Connection: "wiki", Arguments: json.RawMessage(`{}`)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1182,7 +1182,7 @@ func TestTokensAndCellValuesNeverReachTheOutput(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "sales", Arguments: json.RawMessage(`{}`),
+		Operation: "seatable.base.rows.list", Connection: "sales", Arguments: json.RawMessage(`{}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -1206,7 +1206,7 @@ func TestTokensAndCellValuesNeverReachTheOutput(t *testing.T) {
 			`{"error_message":"`+cellCanary+` `+bodyCanary+`"}`), nil
 	})
 	_, err = core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.list", Connection: "sales", Arguments: json.RawMessage(`{}`),
+		Operation: "seatable.base.rows.list", Connection: "sales", Arguments: json.RawMessage(`{}`),
 	})
 	if err == nil {
 		t.Fatal("the failing read was reported as a result")

@@ -259,8 +259,8 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		}
 	}
 	// The first step names namespaces, not tools: no ID, no title, and no connection name reaches it.
-	// The dot of an Infomaniak namespace name is not a tool ID separator.
-	bare := strings.ReplaceAll(stdout, "infomaniak.", "")
+	// The dot of a vendor family namespace name is not a tool ID separator.
+	bare := strings.NewReplacer("infomaniak.", "", "seatable.", "").Replace(stdout)
 	for _, absent := range []string{".", "title", "effect", "wiki", "alerts"} {
 		if strings.Contains(bare, absent) {
 			t.Errorf("the namespace index published %q:\n%s", absent, stdout)
@@ -476,7 +476,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace telegram", []string{"telegram", "--query", "telegram"}, registryToolIDs(t, "telegram", nil)},
 		{"namespace lexware", []string{"lexware"}, registryToolIDs(t, "lexware", nil)},
 		{"namespace twenty-crm", []string{"twenty-crm", "--query", "twentycrm"}, registryToolIDs(t, "twenty-crm", nil)},
-		{"namespace seatable", []string{"seatable"}, registryToolIDs(t, "seatable", nil)},
+		{"namespace seatable.base", []string{"seatable.base"}, registryToolIDs(t, "seatable.base", nil)},
 		{"namespace github", []string{"github", "--query", "github"}, registryToolIDs(t, "github", nil)},
 		{"namespace nextcloud", []string{"nextcloud", "--query", "nextcloud"}, registryToolIDs(t, "nextcloud", nil)},
 		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.attachments.list", "bookstack.attachments.update", "bookstack.books.delete", "bookstack.books.get", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.content.search", "bookstack.images.delete", "bookstack.imports.get", "bookstack.recyclebin.list"}},

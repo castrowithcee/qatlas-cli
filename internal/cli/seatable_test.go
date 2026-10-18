@@ -22,10 +22,10 @@ func seatableConfig(t *testing.T) string {
 	return writeConfig(t, `version: 1
 services:
   tables-cloud:
-    provider: seatable
+    provider: seatable.base
     base_url: https://cloud.seatable.io
   tables-onprem:
-    provider: seatable
+    provider: seatable.base
     base_url: https://seatable.example.invalid
   wiki:
     provider: bookstack
@@ -109,20 +109,20 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 	path := seatableConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runSeatableCLI(t, &reads, "", "tools", "seatable", "--all", "--config", path)
+	code, stdout, stderr := runSeatableCLI(t, &reads, "", "tools", "seatable.base", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[40]{id,title,effect,requires,target,confirm,reason}:", "seatable.base.operations,List SeaTable base operations,read,", "seatable.collaborators.list,List SeaTable collaborators,read,", "seatable.columns.create,Create a SeaTable column,create,", "seatable.columns.delete,Delete a SeaTable column,delete,", "seatable.columns.list,List SeaTable columns,read,", "seatable.columns.optionsadd,Add SeaTable column options,create,", "seatable.columns.optionsdelete,Delete SeaTable column options,delete,", "seatable.columns.optionsupdate,Update SeaTable column options,update,", "seatable.columns.update,Update a SeaTable column,update,", "seatable.comments.create,Create a SeaTable row comment,create,", "seatable.comments.delete,Delete a SeaTable row comment,delete,", "seatable.comments.list,List SeaTable row comments,read,", "seatable.files.delete,Delete a SeaTable cell file,delete,", "seatable.files.get,Download a file of a SeaTable cell,read,", "seatable.files.upload,Upload a file to a SeaTable cell,create,", "seatable.links.create,Create SeaTable links,create,", "seatable.links.delete,Delete SeaTable links,delete,", "seatable.links.list,List SeaTable links,read,", "seatable.links.update,Update SeaTable links,update,", "seatable.rows.activities,List SeaTable row activities,read,", "seatable.rows.batchcreate,Create up to 100 SeaTable rows,create,", "seatable.rows.batchdelete,Delete up to 100 SeaTable rows,delete,", "seatable.rows.batchupdate,Update up to 100 SeaTable rows,update,", "seatable.rows.create,Create a SeaTable row,create,",
-		"seatable.rows.delete,Delete a SeaTable row,delete,", "seatable.rows.get,Get a SeaTable row,read,", "seatable.rows.list,List SeaTable rows,read,", "seatable.rows.search,Search SeaTable rows,read,",
-		"seatable.rows.update,Update a SeaTable row,update,", "seatable.snapshots.create,Create a SeaTable snapshot,create,", "seatable.tables.create,Create a SeaTable table,create,", "seatable.tables.delete,Delete a SeaTable table,delete,", "seatable.tables.duplicate,Duplicate a SeaTable table,create,", "seatable.tables.list,List SeaTable tables,read,", "seatable.tables.rename,Rename a SeaTable table,update,", "seatable.views.create,Create a SeaTable view,create,", "seatable.views.delete,Delete a SeaTable view,delete,", "seatable.views.get,Get a SeaTable view,read,", "seatable.views.list,List SeaTable views,read,", "seatable.views.update,Update a SeaTable view,update,",
+		"tools[40]{id,title,effect,requires,target,confirm,reason}:", "seatable.base.base.operations,List SeaTable base operations,read,", "seatable.base.collaborators.list,List SeaTable collaborators,read,", "seatable.base.columns.create,Create a SeaTable column,create,", "seatable.base.columns.delete,Delete a SeaTable column,delete,", "seatable.base.columns.list,List SeaTable columns,read,", "seatable.base.columns.options-add,Add SeaTable column options,create,", "seatable.base.columns.options-delete,Delete SeaTable column options,delete,", "seatable.base.columns.options-update,Update SeaTable column options,update,", "seatable.base.columns.update,Update a SeaTable column,update,", "seatable.base.comments.create,Create a SeaTable row comment,create,", "seatable.base.comments.delete,Delete a SeaTable row comment,delete,", "seatable.base.comments.list,List SeaTable row comments,read,", "seatable.base.files.delete,Delete a SeaTable cell file,delete,", "seatable.base.files.get,Download a file of a SeaTable cell,read,", "seatable.base.files.upload,Upload a file to a SeaTable cell,create,", "seatable.base.links.create,Create SeaTable links,create,", "seatable.base.links.delete,Delete SeaTable links,delete,", "seatable.base.links.list,List SeaTable links,read,", "seatable.base.links.update,Update SeaTable links,update,", "seatable.base.rows.activities,List SeaTable row activities,read,", "seatable.base.rows.batch-create,Create up to 100 SeaTable rows,create,", "seatable.base.rows.batch-delete,Delete up to 100 SeaTable rows,delete,", "seatable.base.rows.batch-update,Update up to 100 SeaTable rows,update,", "seatable.base.rows.create,Create a SeaTable row,create,",
+		"seatable.base.rows.delete,Delete a SeaTable row,delete,", "seatable.base.rows.get,Get a SeaTable row,read,", "seatable.base.rows.list,List SeaTable rows,read,", "seatable.base.rows.search,Search SeaTable rows,read,",
+		"seatable.base.rows.update,Update a SeaTable row,update,", "seatable.base.snapshots.create,Create a SeaTable snapshot,create,", "seatable.base.tables.create,Create a SeaTable table,create,", "seatable.base.tables.delete,Delete a SeaTable table,delete,", "seatable.base.tables.duplicate,Duplicate a SeaTable table,create,", "seatable.base.tables.list,List SeaTable tables,read,", "seatable.base.tables.rename,Rename a SeaTable table,update,", "seatable.base.views.create,Create a SeaTable view,create,", "seatable.base.views.delete,Delete a SeaTable view,delete,", "seatable.base.views.get,Get a SeaTable view,read,", "seatable.base.views.list,List SeaTable views,read,", "seatable.base.views.update,Update a SeaTable view,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 40 {
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable.base", "--all", "--config", path))); len(got) != 40 {
 		t.Errorf("seatable tools = %v, want schema discovery, all five row tools, three batch row tools, the snapshot tool, four link tools, five view tools, and the three file tools", got)
 	}
 	if reads.Load() != 0 {
@@ -135,12 +135,12 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 func TestSeaTableToolContractKeepsBaseAndCredentialsOutOfTheArguments(t *testing.T) {
 	path := seatableConfig(t)
 
-	code, stdout, stderr := runSeatableCLI(t, nil, "", "describe", "seatable.rows.list", "--config", path)
+	code, stdout, stderr := runSeatableCLI(t, nil, "", "describe", "seatable.base.rows.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"id: seatable.rows.list", "version: 1", "effect: read", "idempotency: safe",
+		"id: seatable.base.rows.list", "version: 1", "effect: read", "idempotency: safe",
 		"confirmation: none", "table", "start", "limit",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -148,7 +148,7 @@ func TestSeaTableToolContractKeepsBaseAndCredentialsOutOfTheArguments(t *testing
 		}
 	}
 
-	document := runSeatableJSON(t, "", "describe", "seatable.rows.list", "--config", path)
+	document := runSeatableJSON(t, "", "describe", "seatable.base.rows.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -186,47 +186,47 @@ func TestSeaTableInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	}{
 		{
 			name: "several connections without a default", input: `{}`,
-			args: []string{"invoke", "seatable.rows.list", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--config", path},
 			code: "connection-ambiguous",
 		},
 		{
 			name: "a table as an argument", input: `{"table_name":"Gehaelter"}`,
-			args: []string{"invoke", "seatable.rows.list", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a base as an argument", input: `{"base_uuid":"5c264e76-0e5a-448a-9f34-580b551364ca"}`,
-			args: []string{"invoke", "seatable.rows.list", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a page size beyond the bound", input: `{"limit":1000}`,
-			args: []string{"invoke", "seatable.rows.list", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "an offset beyond the bound", input: `{"start":10001}`,
-			args: []string{"invoke", "seatable.rows.list", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a row identifier outside the documented form", input: `{"row_id":"1"}`,
-			args: []string{"invoke", "seatable.rows.get", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.get", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a row identifier that traverses the route", input: `{"row_id":"../../../metadata/x"}`,
-			args: []string{"invoke", "seatable.rows.get", "--connection", "sales-rows", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.get", "--connection", "sales-rows", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a connection of another provider", input: `{"row_id":"Qtf7xPmoRaiFyQPO1aENTj"}`,
-			args: []string{"invoke", "seatable.rows.get", "--connection", "wiki", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.get", "--connection", "wiki", "--config", path},
 			code: "unsupported-capability",
 		},
 		{
 			name: "an unknown connection", input: `{}`,
-			args: []string{"invoke", "seatable.rows.list", "--connection", "absent", "--config", path},
+			args: []string{"invoke", "seatable.base.rows.list", "--connection", "absent", "--config", path},
 			code: "unknown-connection",
 		},
 	}
@@ -254,14 +254,14 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"seatable","all":true}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"seatable.base","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"seatable.rows.list","version":1}}}`,
+			`,"name":"qatlas.describe","arguments":{"operation":"seatable.base.rows.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"seatable.rows.get",` +
+			`,"name":"qatlas.invoke","arguments":{"operation":"seatable.base.rows.get",` +
 			`"connection":"sales-rows","arguments":{"row_id":"too-short"}}}}`,
 		`{"jsonrpc":"2.0","id":"ambiguous","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"seatable.rows.list","arguments":{}}}}`,
+			`,"name":"qatlas.invoke","arguments":{"operation":"seatable.base.rows.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
@@ -274,13 +274,13 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 40 || searched.Operations[0].ID != "seatable.base.operations" ||
-		searched.Operations[39].ID != "seatable.views.update" {
+	if len(searched.Operations) != 40 || searched.Operations[0].ID != "seatable.base.base.operations" ||
+		searched.Operations[39].ID != "seatable.base.views.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runSeatableJSON(t, "", "describe", "seatable.rows.list", "--config", path, "--output", "json")
+	describedByCLI := runSeatableJSON(t, "", "describe", "seatable.base.rows.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 
@@ -290,7 +290,7 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 	mcpCode, _, _ := strings.Cut(invoke.Content[0].Text, ":")
 	code, _, cliStderr := runSeatableCLI(t, nil, `{"row_id":"too-short"}`,
-		"invoke", "seatable.rows.get", "--connection", "sales-rows", "--config", path)
+		"invoke", "seatable.base.rows.get", "--connection", "sales-rows", "--config", path)
 	cliCode, _, _ := strings.Cut(strings.TrimPrefix(strings.SplitN(cliStderr, "\n", 2)[0], "qatlas: "), ":")
 	if code != exitUsage || mcpCode != cliCode || cliCode != "invalid-request" {
 		t.Fatalf("MCP code=%q CLI code=%q exit=%d", mcpCode, cliCode, code)

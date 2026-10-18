@@ -36,7 +36,7 @@ const (
 )
 
 var commentRowArguments = []capability.Argument{
-	{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
+	{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
 	{Name: "row_id", Description: "Row identifier of 22 characters; the row must exist in the selected table", Required: true},
 }
 
@@ -83,7 +83,7 @@ var commentsDelete = commentMutationDescriptor("delete", capability.EffectDelete
 		`},"required":["row_id","comment_id"],"additionalProperties":false}`,
 	`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`,
 	append(append([]capability.Argument(nil), commentRowArguments...),
-		capability.Argument{Name: "comment_id", Description: "Identifier of a comment returned by seatable.comments.list for this row", Required: true}),
+		capability.Argument{Name: "comment_id", Description: "Identifier of a comment returned by seatable.base.comments.list for this row", Required: true}),
 	json.RawMessage(`{"row_id":"Qtf7xPmoRaiFyQPO1aENTj","comment_id":12}`))
 
 func commentMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency,

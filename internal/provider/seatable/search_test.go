@@ -237,7 +237,7 @@ func TestCoreRefusesSearchOutsideTheAllowListBeforeSecretAndIO(t *testing.T) {
 	} {
 		before := reads.Load()
 		_, err := core.Invoke(context.Background(), application.InvokeRequest{
-			Operation: "seatable.rows.search", Connection: "selected", Arguments: json.RawMessage(arguments),
+			Operation: "seatable.base.rows.search", Connection: "selected", Arguments: json.RawMessage(arguments),
 		})
 		if reads.Load() != before {
 			t.Errorf("%s resolved the credential", name)
@@ -261,7 +261,7 @@ func TestCoreSearchesThroughTheApplicationCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.search", Connection: "sales",
+		Operation: "seatable.base.rows.search", Connection: "sales",
 		Arguments: json.RawMessage(`{"filters":[{"column":"Name","op":"eq","value":"Bike"}],"limit":1}`),
 	})
 	if err != nil {

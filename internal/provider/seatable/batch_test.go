@@ -56,8 +56,8 @@ func TestRegisterPublishesBatchToolsWithRisk(t *testing.T) {
 		effect capability.Effect
 		allow  bool
 	}{
-		"seatable.rows.batchcreate": {capability.EffectCreate, false}, "seatable.rows.batchupdate": {capability.EffectUpdate, false},
-		"seatable.rows.batchdelete": {capability.EffectDelete, true}, "seatable.snapshots.create": {capability.EffectCreate, false},
+		"seatable.base.rows.batch-create": {capability.EffectCreate, false}, "seatable.base.rows.batch-update": {capability.EffectUpdate, false},
+		"seatable.base.rows.batch-delete": {capability.EffectDelete, true}, "seatable.base.snapshots.create": {capability.EffectCreate, false},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {
@@ -323,7 +323,7 @@ func TestBatchAndSnapshotNeedConfirmationPermissionsAndTheToolList(t *testing.T)
 	cfg := coreConfig()
 	cfg.Connections["batch"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"},
 		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete},
-		Tools:       []string{"seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.snapshots.create"}}
+		Tools:       []string{"seatable.base.rows.batch-create", "seatable.base.rows.batch-delete", "seatable.base.snapshots.create"}}
 	cfg.Connections["batch-read"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"}}
 	cfg.Connections["batch-all"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"},
 		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}}
@@ -333,9 +333,9 @@ func TestBatchAndSnapshotNeedConfirmationPermissionsAndTheToolList(t *testing.T)
 	remove := json.RawMessage(`{"table":"Kunden","row_ids":["` + rowID + `"]}`)
 
 	for _, request := range []application.InvokeRequest{
-		{Operation: "seatable.rows.batchcreate", Connection: "batch", Arguments: create},
-		{Operation: "seatable.rows.batchdelete", Connection: "batch", Arguments: remove},
-		{Operation: "seatable.snapshots.create", Connection: "batch", Arguments: json.RawMessage(`{}`)},
+		{Operation: "seatable.base.rows.batch-create", Connection: "batch", Arguments: create},
+		{Operation: "seatable.base.rows.batch-delete", Connection: "batch", Arguments: remove},
+		{Operation: "seatable.base.snapshots.create", Connection: "batch", Arguments: json.RawMessage(`{}`)},
 	} {
 		if _, err := core.Invoke(context.Background(), request); err == nil {
 			t.Errorf("%s ran without confirm", request.Operation)
@@ -345,17 +345,17 @@ func TestBatchAndSnapshotNeedConfirmationPermissionsAndTheToolList(t *testing.T)
 		t.Fatalf("requests without confirm = %v", *calls)
 	}
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.rows.batchcreate", Connection: "batch", Arguments: create, Confirmed: true})
+		Operation: "seatable.base.rows.batch-create", Connection: "batch", Arguments: create, Confirmed: true})
 	if err != nil || string(response.Result) != `{"reported":1,"requested":1}` {
 		t.Fatalf("create = %s, %v", response.Result, err)
 	}
 	// batch delete is offered only through the tool list, and a read connection offers no mutation.
 	for _, request := range []application.InvokeRequest{
-		{Operation: "seatable.rows.batchdelete", Connection: "batch-all", Arguments: remove, Confirmed: true},
-		{Operation: "seatable.rows.batchupdate", Connection: "batch", Arguments: json.RawMessage(`{"table":"Kunden","rows":[{"row_id":"` + rowID + `","values":{"Name":"a"}}]}`), Confirmed: true},
-		{Operation: "seatable.rows.batchcreate", Connection: "batch-read", Arguments: create, Confirmed: true},
-		{Operation: "seatable.snapshots.create", Connection: "batch-read", Arguments: json.RawMessage(`{}`), Confirmed: true},
-		{Operation: "seatable.rows.batchcreate", Connection: "batch", Confirmed: true,
+		{Operation: "seatable.base.rows.batch-delete", Connection: "batch-all", Arguments: remove, Confirmed: true},
+		{Operation: "seatable.base.rows.batch-update", Connection: "batch", Arguments: json.RawMessage(`{"table":"Kunden","rows":[{"row_id":"` + rowID + `","values":{"Name":"a"}}]}`), Confirmed: true},
+		{Operation: "seatable.base.rows.batch-create", Connection: "batch-read", Arguments: create, Confirmed: true},
+		{Operation: "seatable.base.snapshots.create", Connection: "batch-read", Arguments: json.RawMessage(`{}`), Confirmed: true},
+		{Operation: "seatable.base.rows.batch-create", Connection: "batch", Confirmed: true,
 			Arguments: json.RawMessage(`{"table":"Kunden","rows":[]}`)},
 	} {
 		if _, err := core.Invoke(context.Background(), request); err == nil {
@@ -366,7 +366,7 @@ func TestBatchAndSnapshotNeedConfirmationPermissionsAndTheToolList(t *testing.T)
 		t.Errorf("requests = %d, want 1", len(*calls))
 	}
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.snapshots.create", Connection: "batch", Arguments: json.RawMessage(`{}`), Confirmed: true}); err != nil {
+		Operation: "seatable.base.snapshots.create", Connection: "batch", Arguments: json.RawMessage(`{}`), Confirmed: true}); err != nil {
 		t.Errorf("snapshot = %v", err)
 	}
 }

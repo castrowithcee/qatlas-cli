@@ -14,23 +14,23 @@ explicit table allow-list through `targets`, or to every table through the expli
 An empty target never means the whole base. A fixed table may include a view after `/`; identifiers use
 `id:TABLEID` and `id:TABLEID/id:VIEWID`.
 
-`seatable.tables.list` discovers the tables visible through the connection and returns the stable reference
-accepted by other operations. `seatable.columns.list` returns one bounded page of column keys, names, and
+`seatable.base.tables.list` discovers the tables visible through the connection and returns the stable reference
+accepted by other operations. `seatable.base.columns.list` returns one bounded page of column keys, names, and
 types. A single-table connection needs no table argument. An allow-list or wildcard connection requires the
 `table` argument returned by table discovery for column and row operations.
 
 ```sh
-qatlas invoke seatable.tables.list --connection sales-all-tables
-qatlas invoke seatable.columns.list --connection sales-all-tables --arg table=id:0000
-qatlas invoke seatable.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
+qatlas invoke seatable.base.tables.list --connection sales-all-tables
+qatlas invoke seatable.base.columns.list --connection sales-all-tables --arg table=id:0000
+qatlas invoke seatable.base.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
 echo '{"table":"id:0000","filters":[{"column":"Name","op":"like","value":"Bike%"}],"sort":[{"column":"_ctime","direction":"desc"}],"limit":25}' \
-  | qatlas invoke seatable.rows.search --connection sales-all-tables
+  | qatlas invoke seatable.base.rows.search --connection sales-all-tables
 ```
 
 ## Row search
 
-`seatable.rows.search` filters, sorts, and pages the rows of an allowed table with structured arguments.
-It is the way to reach rows beyond the 10000-row window of `seatable.rows.list`: `start` accepts offsets up
+`seatable.base.rows.search` filters, sorts, and pages the rows of an allowed table with structured arguments.
+It is the way to reach rows beyond the 10000-row window of `seatable.base.rows.list`: `start` accepts offsets up
 to 100000. Free SQL is not accepted. Qatlas builds exactly one statement shape from validated parts and
 sends every value in `parameters`, never inside the statement text:
 
@@ -45,12 +45,12 @@ SELECT * FROM `Table` WHERE `col` = ? AND `col2` IN (?, ?) ORDER BY `col` DESC L
 - `sort` (up to 3): `column` and `direction` `asc` (default) or `desc`. Without a sort the order of rows
   is not defined, so paging with `start` should sort by a stable column such as `_id` or `_ctime`.
 - `limit` is 1 to 100 (25 by default). A page is full when it holds `limit` rows; `has_more` and
-  `next_start` follow the same rule as `seatable.rows.list`.
+  `next_start` follow the same rule as `seatable.base.rows.list`.
 - Columns are checked against the table metadata before the query is sent. The system columns `_id`,
   `_ctime`, and `_mtime` are accepted. Names containing a backtick or backslash, unknown columns, and link
   columns are refused.
 - The search covers the whole table. A view on the connection target, such as `Kunden/Aktive`, narrows
-  `seatable.rows.list` but is not applied to a search.
+  `seatable.base.rows.list` but is not applied to a search.
 - The table must be inside the connection allow-list; anything else is refused before the credential is
   read and before SeaTable is contacted.
 - Link values in the result follow the same boundary as above. Link columns are recognised by their type in
@@ -62,13 +62,13 @@ A client reads the base metadata once and reuses it for column checks, link mask
 
 Link columns in row output follow the table boundary. When the linked table is outside the connection
 allow-list, or cannot be determined from the base metadata, each link entry is reduced to its `row_id` and
-carries no `display_value`. A wildcard connection keeps display values. The same applies to `seatable.rows.list`
-and `seatable.rows.get`, whichever way the table is addressed. Lookup and formula columns are returned as the
+carries no `display_value`. A wildcard connection keeps display values. The same applies to `seatable.base.rows.list`
+and `seatable.base.rows.get`, whichever way the table is addressed. Lookup and formula columns are returned as the
 provider computes them.
 
 ## Row links
 
-`seatable.links.list`, `seatable.links.create`, `seatable.links.update`, and `seatable.links.delete` read
+`seatable.base.links.list`, `seatable.base.links.create`, `seatable.base.links.update`, and `seatable.base.links.delete` read
 and change the links between rows of two tables through one link column.
 
 - The agent passes `table` and `column` (name or key of a column of type `link`). Qatlas takes the link
@@ -80,13 +80,13 @@ and change the links between rows of two tables through one link column.
   the counterpart table, Qatlas first exchanges the token and reads the base metadata; that is the only
   provider access that can precede a refusal.
 - An unknown column, or a column that is not a link column, is refused before the link request.
-- `seatable.links.list` takes 1 to 10 `row_ids`, `start` (0 to 10000), and `limit` (1 to 100, 25 by default)
+- `seatable.base.links.list` takes 1 to 10 `row_ids`, `start` (0 to 10000), and `limit` (1 to 100, 25 by default)
   per source row. Each entry carries the `row_id` and, when SeaTable sends one, a `display_value` of up to
   4096 bytes. `has_more` is true when a source row returned a full page. It is part of the `read` profile.
-- `seatable.links.create` adds links from one `row_id` to 1 to 50 `other_row_ids`. `seatable.links.update`
+- `seatable.base.links.create` adds links from one `row_id` to 1 to 50 `other_row_ids`. `seatable.base.links.update`
   replaces all links of that row in the column with the given 1 to 50 rows; an empty list is refused before
-  the credential is read, because removing links is what `seatable.links.delete` is for.
-  `seatable.links.delete` removes the listed links and is offered only by a connection whose `tools` list
+  the credential is read, because removing links is what `seatable.base.links.delete` is for.
+  `seatable.base.links.delete` removes the listed links and is offered only by a connection whose `tools` list
   names it.
 - Row identifiers are 22 characters of letters, digits, `-`, or `_`, and must not repeat in one call.
 - The three changes need the matching permission (`create`, `update`, `delete`) and `confirm`. Each sends
@@ -95,16 +95,16 @@ and change the links between rows of two tables through one link column.
   for example a duplicate link, is reported without the provider text.
 
 ```sh
-qatlas invoke seatable.links.list --connection sales-all-tables --arg table=id:0000 --arg column=Tickets \
+qatlas invoke seatable.base.links.list --connection sales-all-tables --arg table=id:0000 --arg column=Tickets \
   --arg row_ids='["Qtf7xPmoRaiFyQPO1aENTj"]'
-qatlas invoke seatable.links.create --connection sales-rw --confirm --arg table=id:0000 --arg column=Tickets \
+qatlas invoke seatable.base.links.create --connection sales-rw --confirm --arg table=id:0000 --arg column=Tickets \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg other_row_ids='["Ab12Cd34Ef56Gh78Ij90Kl"]'
 ```
 
 ## Views
 
-`seatable.views.list`, `seatable.views.get`, `seatable.views.create`, `seatable.views.update`, and
-`seatable.views.delete` manage the views of an allowed table. `views.list` and `views.get` are part of the
+`seatable.base.views.list`, `seatable.base.views.get`, `seatable.base.views.create`, `seatable.base.views.update`, and
+`seatable.base.views.delete` manage the views of an allowed table. `views.list` and `views.get` are part of the
 `read` profile; `views.delete` is in no profile and is offered only by a connection whose `tools` list
 names it.
 
@@ -134,21 +134,21 @@ names it.
   reported without the provider text.
 
 ```sh
-qatlas invoke seatable.views.list --connection sales-all-tables --arg table=id:0000
-qatlas invoke seatable.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
+qatlas invoke seatable.base.views.list --connection sales-all-tables --arg table=id:0000
+qatlas invoke seatable.base.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
   --arg hidden_columns='["Notiz"]'
 ```
 
 ## Column options
 
-`seatable.columns.optionsadd`, `seatable.columns.optionsupdate`, and `seatable.columns.optionsdelete` maintain
+`seatable.base.columns.options-add`, `seatable.base.columns.options-update`, and `seatable.base.columns.options-delete` maintain
 the options of single-select and multiple-select columns of an allowed table. They are in no profile.
-`optionsdelete` is offered only by a connection whose `tools` list names it; all three need the matching
+`options-delete` is offered only by a connection whose `tools` list names it; all three need the matching
 permission and `confirm`.
 
 - The agent passes `table` (as for rows), `column` (name or key, resolved in the base metadata), and
-  `options` (up to 50; `optionsadd`: `name`, optional `color` and `text_color` as `#RRGGBB`; `optionsupdate`:
-  existing `name` plus `new_name`, `color`, or `text_color`) or, for `optionsdelete`, `names` (up to 50).
+  `options` (up to 50; `options-add`: `name`, optional `color` and `text_color` as `#RRGGBB`; `options-update`:
+  existing `name` plus `new_name`, `color`, or `text_color`) or, for `options-delete`, `names` (up to 50).
   Names have up to 255 printable characters and may not repeat within a call.
 - Any other column type, an unknown column, an option that already exists on add, or an option that does
   not exist on update or delete is refused before the request. A table outside the allow-list, a selection
@@ -161,13 +161,13 @@ permission and `confirm`.
   SeaTable reports is reported without the provider text.
 
 ```sh
-qatlas invoke seatable.columns.optionsadd --connection sales-rw --confirm --arg table=id:0000 \
+qatlas invoke seatable.base.columns.options-add --connection sales-rw --confirm --arg table=id:0000 \
   --arg column=Status --arg options='[{"name":"Offen","color":"#FFE9A8"}]'
 ```
 
 ## Columns
 
-`seatable.columns.create`, `seatable.columns.update`, and `seatable.columns.delete` create, change, and remove
+`seatable.base.columns.create`, `seatable.base.columns.update`, and `seatable.base.columns.delete` create, change, and remove
 the columns of an allowed table. They are in no profile. `columns.delete` is offered only by a connection whose
 `tools` list names it; all three need the matching permission and `confirm`.
 
@@ -197,15 +197,15 @@ the columns of an allowed table. They are in no profile. `columns.delete` is off
   SeaTable reports is reported without the provider text.
 
 ```sh
-qatlas invoke seatable.columns.create --connection sales-rw --confirm --arg table=id:0000 \
+qatlas invoke seatable.base.columns.create --connection sales-rw --confirm --arg table=id:0000 \
   --arg name=Status --arg type=single-select --arg data='{"options":[{"name":"Offen"}]}'
-qatlas invoke seatable.columns.update --connection sales-rw --confirm --arg table=id:0000 \
+qatlas invoke seatable.base.columns.update --connection sales-rw --confirm --arg table=id:0000 \
   --arg column=Status --arg name=Stand
 ```
 
 ## Tables
 
-`seatable.tables.create`, `seatable.tables.rename`, `seatable.tables.duplicate`, and `seatable.tables.delete`
+`seatable.base.tables.create`, `seatable.base.tables.rename`, `seatable.base.tables.duplicate`, and `seatable.base.tables.delete`
 manage the tables of the base. They are in no profile. `tables.delete` is offered only by a connection whose
 `tools` list names it; all four need the matching permission and `confirm`.
 
@@ -228,13 +228,13 @@ manage the tables of the base. They are in no profile. `tables.delete` is offere
   error SeaTable reports is reported without the provider text.
 
 ```sh
-qatlas invoke seatable.tables.create --connection sales-all-tables --confirm --arg name=Angebote
-qatlas invoke seatable.tables.rename --connection sales-rw --confirm --arg table=id:0001 --arg name=Faelle
+qatlas invoke seatable.base.tables.create --connection sales-all-tables --confirm --arg name=Angebote
+qatlas invoke seatable.base.tables.rename --connection sales-rw --confirm --arg table=id:0001 --arg name=Faelle
 ```
 
 ## Change history
 
-`seatable.rows.activities` reads the change history of one row and `seatable.base.operations` reads the
+`seatable.base.rows.activities` reads the change history of one row and `seatable.base.base.operations` reads the
 operation log of the whole base. Both are read-only and in no profile, because old and new values and the
 people behind changes are sensitive. Their sensitivity class is `seatable-base-history`; values of this class
 never enter the audit trail or the invoke log.
@@ -261,15 +261,15 @@ never enter the audit trail or the invoke log.
   one call reports. Errors never carry provider text.
 
 ```sh
-qatlas invoke seatable.rows.activities --connection sales-all-tables --arg table=id:0000 \
+qatlas invoke seatable.base.rows.activities --connection sales-all-tables --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj
-qatlas invoke seatable.base.operations --connection sales-all-tables --arg page=1
+qatlas invoke seatable.base.base.operations --connection sales-all-tables --arg page=1
 ```
 
 ## Comments and collaborators
 
-`seatable.comments.list`, `seatable.comments.create`, `seatable.comments.delete`, and
-`seatable.collaborators.list` work with the comments of one row and with the people of the base. None of
+`seatable.base.comments.list`, `seatable.base.comments.create`, `seatable.base.comments.delete`, and
+`seatable.base.collaborators.list` work with the comments of one row and with the people of the base. None of
 them is in a profile. `comments.delete` is offered only by a connection whose `tools` list names it.
 
 - All three comment tools take `row_id` and `table` (as for rows). The table must be inside the connection
@@ -295,16 +295,16 @@ them is in a profile. `comments.delete` is offered only by a connection whose `t
   text. Comments across the whole base are not offered.
 
 ```sh
-qatlas invoke seatable.comments.list --connection sales-all-tables --arg table=id:0000 \
+qatlas invoke seatable.base.comments.list --connection sales-all-tables --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj
-qatlas invoke seatable.comments.create --connection sales-rw --confirm --arg table=id:0000 \
+qatlas invoke seatable.base.comments.create --connection sales-rw --confirm --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg comment="Please check this row"
-qatlas invoke seatable.collaborators.list --connection sales-all-tables
+qatlas invoke seatable.base.collaborators.list --connection sales-all-tables
 ```
 
 ## Cell files
 
-`seatable.files.upload`, `seatable.files.get`, and `seatable.files.delete` attach, read, and delete the files
+`seatable.base.files.upload`, `seatable.base.files.get`, and `seatable.base.files.delete` attach, read, and delete the files
 and images of a `file` or `image` column of one row of an allowed table. None of them is in a profile.
 `files.delete` is offered only by a connection whose `tools` list names it.
 
@@ -348,23 +348,23 @@ and images of a `file` or `image` column of one row of an allowed table. None of
   are not offered.
 
 ```sh
-qatlas invoke seatable.files.upload --connection sales-rw --confirm --arg table=id:0000 \
+qatlas invoke seatable.base.files.upload --connection sales-rw --confirm --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg local_path=~/uploads/offer.pdf
-qatlas invoke seatable.files.get --connection sales-rw --arg table=id:0000 \
+qatlas invoke seatable.base.files.get --connection sales-rw --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg name=offer.pdf --arg local_path=~/downloads/offer.pdf
 ```
 
 ## Batch rows and snapshots
 
-`seatable.rows.batchcreate`, `seatable.rows.batchupdate`, `seatable.rows.batchdelete`, and
-`seatable.snapshots.create` change several rows in one confirmed call and create a restore point before a
-mass change. None of them is in a profile. `batchdelete` is offered only by a connection whose `tools` list
+`seatable.base.rows.batch-create`, `seatable.base.rows.batch-update`, `seatable.base.rows.batch-delete`, and
+`seatable.base.snapshots.create` change several rows in one confirmed call and create a restore point before a
+mass change. None of them is in a profile. `batch-delete` is offered only by a connection whose `tools` list
 names it.
 
 - One call holds 1 to 100 rows and at most 1 MiB. Both limits, the row identifiers (22 characters), and
   duplicate identifiers are checked before the credential is read and before SeaTable is contacted.
-- `batchcreate` takes `rows`, a list of column-name-to-value objects. `batchupdate` takes `rows`, a list of
-  `row_id` plus `values`. `batchdelete` takes `row_ids`. The `table` argument works as for single rows and
+- `batch-create` takes `rows`, a list of column-name-to-value objects. `batch-update` takes `rows`, a list of
+  `row_id` plus `values`. `batch-delete` takes `row_ids`. The `table` argument works as for single rows and
   cannot leave the connection allow-list; a table outside it is refused before the credential is read.
 - Every column of every row is checked against the table metadata, because SeaTable silently ignores unknown
   columns. System and empty column names and link columns are refused; link columns are changed with the
@@ -382,9 +382,9 @@ names it.
   repeating it.
 
 ```sh
-qatlas invoke seatable.snapshots.create --connection sales-rw --confirm
+qatlas invoke seatable.base.snapshots.create --connection sales-rw --confirm
 echo '{"table":"id:0000","rows":[{"row_id":"Qtf7xPmoRaiFyQPO1aENTj","values":{"Status":"closed"}}]}' \
-  | qatlas invoke seatable.rows.batchupdate --connection sales-rw --confirm
+  | qatlas invoke seatable.base.rows.batch-update --connection sales-rw --confirm
 ```
 
 The connection can list and read rows (`read`) and create, update, or delete rows with the matching
@@ -395,9 +395,9 @@ mutation to another table.
 The credential provides `api-token`. Use provider permission `r` for read-only connections and `rw` when
 writes are intended. The local `permissions` list is a separate ceiling and cannot turn an `r` token into a
 writer. An optional `tools` list narrows a connection further to named tools, for example
-`[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
+`[seatable.base.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
-connection on the setup profile `read`, which ticks `[read]` and `[seatable.tables.list,
-seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get, seatable.links.list, seatable.views.list, seatable.views.get]`. A profile is a visible
+connection on the setup profile `read`, which ticks `[read]` and `[seatable.base.tables.list,
+seatable.base.columns.list, seatable.base.rows.list, seatable.base.rows.search, seatable.base.rows.get, seatable.base.links.list, seatable.base.views.list, seatable.base.views.get]`. A profile is a visible
 starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
 saved connection never follows a profile.
