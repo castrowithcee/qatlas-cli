@@ -48,13 +48,13 @@ const (
 )
 
 var viewArgument = capability.Argument{Name: "view", Description: "Number of the view in the project, as " +
-	"github.projectviews.list names it", Required: true}
+	"github.project-views.list names it", Required: true}
 
 var changedView = capability.Field{Name: "view", Description: "The view after the change: number, name, " +
 	"layout, filter, visible fields, and the grouping, board columns, and sorting set in GitHub, untrusted data"}
 
 var viewsList = capability.Descriptor{
-	ID:      Provider + ".projectviews.list",
+	ID:      Provider + ".project-views.list",
 	Version: 1,
 	Title:   "List the views of a GitHub project",
 	Description: "Read the views of one GitHub project a connection allows: number, name, layout, " +
@@ -76,7 +76,7 @@ var viewsList = capability.Descriptor{
 }
 
 var viewsCreate = capability.Descriptor{
-	ID:      Provider + ".projectviews.create",
+	ID:      Provider + ".project-views.create",
 	Version: 1,
 	Title:   "Create a GitHub project view",
 	Description: "Create one table, board, or roadmap view with its visible fields and filter in a GitHub " +
@@ -110,7 +110,7 @@ var viewsCreate = capability.Descriptor{
 }
 
 var viewsUpdate = capability.Descriptor{
-	ID:      Provider + ".projectviews.update",
+	ID:      Provider + ".project-views.update",
 	Version: 1,
 	Title:   "Update a GitHub project view",
 	Description: "Rename one view of a GitHub project a connection allows, or change its layout, " +
@@ -141,7 +141,7 @@ var viewsUpdate = capability.Descriptor{
 }
 
 var viewsDelete = capability.Descriptor{
-	ID:      Provider + ".projectviews.delete",
+	ID:      Provider + ".project-views.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project view",
 	Description: "Delete one view of a GitHub project a connection allows; the items and fields " +

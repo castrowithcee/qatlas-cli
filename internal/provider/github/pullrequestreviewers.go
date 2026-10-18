@@ -15,7 +15,7 @@ import (
 
 // Requested reviewers of a pull request: people and teams asked to review it, distinct from the reviews
 // they may later submit. Both tools answer with the pull request itself, the same shape
-// github.pullrequests.get reports, so requested_reviewers is read back after the change.
+// github.pull-requests.get reports, so requested_reviewers is read back after the change.
 
 const maxReviewers = 15
 
@@ -31,7 +31,7 @@ var reviewerArgumentDescriptors = []capability.Argument{
 }
 
 var pullRequestReviewersRequest = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewers.request",
+	ID:      Provider + ".pull-request-reviewers.request",
 	Version: 1,
 	Title:   "Request GitHub pull request reviewers",
 	Description: "Request the given users, teams, or both as reviewers of one pull request of a repository " +
@@ -52,7 +52,7 @@ var pullRequestReviewersRequest = capability.Descriptor{
 }
 
 var pullRequestReviewersRemove = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewers.remove",
+	ID:      Provider + ".pull-request-reviewers.remove",
 	Version: 1,
 	Title:   "Remove GitHub pull request reviewers",
 	Description: "Remove the given users, teams, or both from the requested reviewers of one pull request " +

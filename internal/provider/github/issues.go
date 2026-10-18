@@ -312,7 +312,7 @@ func (c *Client) issueDatabaseID(ctx context.Context, op string, repo target, nu
 }
 
 // issueNodeID resolves the GraphQL node identifier of one issue of the bound repository from its number, as
-// github.issuefields.set needs it to name the issue the setIssueFieldValue mutation changes; a pull request
+// github.issue-fields.set needs it to name the issue the setIssueFieldValue mutation changes; a pull request
 // of the same number is refused, the way readIssue refuses one.
 func (c *Client) issueNodeID(ctx context.Context, op string, number int) (string, error) {
 	if err := checkNumber(number); err != nil {
@@ -405,7 +405,7 @@ const (
 // Milestone and Type are admitted only by github.issues.update's own input schema, so they stay nil for
 // every other user of this shape; a positive Milestone number sets that milestone, and 0 removes the
 // current one, since GitHub itself is asked with an explicit null in that case, and a milestone number is
-// never 0; a non-empty Type sets that issue type by name, as github.issuetypes.list reports it, and an
+// never 0; a non-empty Type sets that issue type by name, as github.issue-types.list reports it, and an
 // empty Type removes the current one the same way GitHub itself is asked with an explicit null, since a
 // type name is never empty.
 type IssueContent struct {

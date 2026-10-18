@@ -1287,13 +1287,13 @@ defaults: {}
 	if !changing {
 		t.Errorf("no listed changing tool needs confirmation: %s", stdout)
 	}
-	items, listed := position["github.projectitems.list"]
+	items, listed := position["github.project-items.list"]
 	if !listed {
-		t.Fatalf("issues does not find github.projectitems.list: %v", toolIDs(t, stdout))
+		t.Fatalf("issues does not find github.project-items.list: %v", toolIDs(t, stdout))
 	}
 	for _, id := range []string{"github.issues.list", "github.issues.get"} {
 		if at, ok := position[id]; !ok || at > items {
-			t.Errorf("%s at %d, want before github.projectitems.list at %d", id, at, items)
+			t.Errorf("%s at %d, want before github.project-items.list at %d", id, at, items)
 		}
 	}
 }

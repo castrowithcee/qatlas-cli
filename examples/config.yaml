@@ -420,7 +420,7 @@ connections:
     target: orgs/octo-org/projects/7
     description: the planning project of the example repository
     permissions: [read]
-    tools: [github.projectitems.get, github.projectitems.list]
+    tools: [github.project-items.get, github.project-items.list]
 
   planning-issues:
     service: github
@@ -429,8 +429,8 @@ connections:
     permissions: [read]
     tools: [github.issues.get, github.issues.list]
 
-  # A project listed with the repositories it plans in: github.projectitems.add and
-  # github.projectissues.create check both targets, and with one project and one repository neither
+  # A project listed with the repositories it plans in: github.project-items.add and
+  # github.project-issues.create check both targets, and with one project and one repository neither
   # argument is needed.
   roadmap:
     service: github
@@ -438,8 +438,8 @@ connections:
     targets: [orgs/octo-org/projects/7, repos/octo-org/example]
     description: maintains the planning project and creates its issues
     permissions: [read, create, update]
-    tools: [github.projectitems.list, github.projectitems.get, github.projectitems.update,
-      github.projectitems.add, github.projectissues.create]
+    tools: [github.project-items.list, github.project-items.get, github.project-items.update,
+      github.project-items.add, github.project-issues.create]
 
   # Changes of single issues and their comments. repos/octo-org/* would allow every repository of the owner;
   # a call then names its repository.
@@ -459,8 +459,8 @@ connections:
     target: repos/octo-org/example
     description: diagnoses the workflow runs of the example repository
     permissions: [read]
-    tools: [github.workflows.list, github.workflows.get, github.workflowruns.list, github.workflowruns.get,
-      github.workflowjobs.list, github.workflowjobs.get, github.workflowjobs.log, github.workflowartifacts.list]
+    tools: [github.workflows.list, github.workflows.get, github.workflow-runs.list, github.workflow-runs.get,
+      github.workflow-jobs.list, github.workflow-jobs.get, github.workflow-jobs.log, github.workflow-artifacts.list]
 
   # An operator also dispatches workflows and re-runs or cancels runs. It needs execute, which no planning
   # permission implies, and every execution needs confirmation in its own invoke request.
@@ -470,9 +470,9 @@ connections:
     target: repos/octo-org/example
     description: re-runs and dispatches the workflows of the example repository
     permissions: [read, execute]
-    tools: [github.workflowruns.list, github.workflowruns.get, github.workflowjobs.list, github.workflowjobs.log,
-      github.workflows.dispatch, github.workflowruns.rerun, github.workflowruns.rerunfailed,
-      github.workflowruns.cancel]
+    tools: [github.workflow-runs.list, github.workflow-runs.get, github.workflow-jobs.list, github.workflow-jobs.log,
+      github.workflows.dispatch, github.workflow-runs.rerun, github.workflow-runs.rerun-failed,
+      github.workflow-runs.cancel]
 
   # A workflow maintainer reads, creates, and updates files directly below .github/workflows/ and enables or
   # disables workflows. These tools are listed only: no connection offers them unless its tools list names
@@ -484,8 +484,8 @@ connections:
     target: repos/octo-org/example
     description: maintains the workflow files of the example repository
     permissions: [read, create, update]
-    tools: [github.workflows.list, github.workflows.get, github.workflowfiles.list, github.workflowfiles.get,
-      github.workflowfiles.create, github.workflowfiles.update, github.workflows.enable, github.workflows.disable]
+    tools: [github.workflows.list, github.workflows.get, github.workflow-files.list, github.workflow-files.get,
+      github.workflow-files.create, github.workflow-files.update, github.workflows.enable, github.workflows.disable]
 
   # An Actions administrator reads and changes whether Actions run, which actions they may use, and the
   # default rights of the GITHUB_TOKEN, and the merge and branch settings. Its tools are listed only as well.
@@ -495,8 +495,8 @@ connections:
     target: repos/octo-org/example
     description: administers the Actions settings of the example repository
     permissions: [read, update]
-    tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
-      github.workflowpermissions.update, github.repositorysettings.get, github.repositorysettings.update]
+    tools: [github.actions-permissions.get, github.actions-permissions.update, github.workflow-permissions.get,
+      github.workflow-permissions.update, github.repository-settings.get, github.repository-settings.update]
 
   # A Todoist connection binds one personal account to an explicit list of project IDs. Tasks, sections,
   # comments, and reminders of any other project are never returned, and no argument widens the list.

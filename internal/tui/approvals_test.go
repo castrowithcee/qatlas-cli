@@ -587,7 +587,7 @@ func toolsChange() approval.Change {
 	for i := 0; i < 57; i++ {
 		kept = append(kept, "github.issues.operation"+strings.Repeat("x", i%3)+string(rune('a'+i%26))+string(rune('a'+i/26)))
 	}
-	added := []string{"github.pullrequestchecks.list", "github.pullrequests.get"}
+	added := []string{"github.pull-request-checks.list", "github.pull-requests.get"}
 	removed := []string{"github.repositories.archive"}
 	return approval.Change{
 		Connection: "gh",
@@ -612,7 +612,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	assertViewFits(t, view, m.width, m.height)
 	for _, want := range []string{
 		"tools       2 new, 1 removed",
-		"+ github.pullrequestchecks.list", "+ github.pullrequests.get", "- github.repositories.archive",
+		"+ github.pull-request-checks.list", "+ github.pull-requests.get", "- github.repositories.archive",
 		"unchanged: 57", "e unchanged",
 	} {
 		if !strings.Contains(view, want) {
@@ -622,7 +622,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	if strings.Contains(view, "github.issues.operation") {
 		t.Errorf("collapsed view lists the unchanged tools:\n%s", view)
 	}
-	if strings.Index(view, "+ github.pullrequests.get") > strings.Index(view, "unchanged: 57") ||
+	if strings.Index(view, "+ github.pull-requests.get") > strings.Index(view, "unchanged: 57") ||
 		strings.Index(view, "- github.repositories.archive") > strings.Index(view, "unchanged: 57") {
 		t.Errorf("unchanged comes before new or removed:\n%s", view)
 	}

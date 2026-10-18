@@ -197,7 +197,7 @@ func TestCustomPropertiesTargetIsExclusive(t *testing.T) {
 	}
 }
 
-// github.customproperties.set is offered only where a connection's tools list names it, and refused
+// github.custom-properties.set is offered only where a connection's tools list names it, and refused
 // otherwise before a secret is read.
 func TestCustomPropertiesSetNeedsItsNameInTheToolsList(t *testing.T) {
 	f, _, base := serveCustomProperties(t)
@@ -243,7 +243,7 @@ func TestCustomPropertiesSetNeedsItsNameInTheToolsList(t *testing.T) {
 	}
 }
 
-// Every check of github.customproperties.set runs before a credential is resolved: properties applies only
+// Every check of github.custom-properties.set runs before a credential is resolved: properties applies only
 // to a repository, definitions only to an organization, and each is required with its own target.
 func TestCustomPropertiesSetArgumentsAreValidatedBeforeIO(t *testing.T) {
 	f, _, base := serveCustomProperties(t)

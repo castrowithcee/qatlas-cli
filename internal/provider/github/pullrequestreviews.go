@@ -66,7 +66,7 @@ var reviewFields = []capability.Field{
 }
 
 var pullRequestReviewsList = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviews.list",
+	ID:      Provider + ".pull-request-reviews.list",
 	Version: 1,
 	Title:   "List GitHub pull request reviews",
 	Description: "List one bounded batch of the reviews of one pull request of a repository an explicit " +
@@ -87,13 +87,13 @@ var pullRequestReviewsList = capability.Descriptor{
 }
 
 var pullRequestReviewsCreate = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviews.create",
+	ID:      Provider + ".pull-request-reviews.create",
 	Version: 1,
 	Title:   "Create a GitHub pull request review",
 	Description: "Submit one review of one pull request of a repository a connection allows, as a " +
 		"comment or a request for changes, with its line comments bundled into this one call; only while its " +
 		"head is still the given commit, so a head that changed since is refused instead of reviewing the " +
-		"wrong diff. Not offered for approving, which is github.pullrequestreviews.approve",
+		"wrong diff. Not offered for approving, which is github.pull-request-reviews.approve",
 	Tags:     []string{"github", "pulls", "pullrequests", "reviews", "create"},
 	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider: Provider,
@@ -103,7 +103,7 @@ var pullRequestReviewsCreate = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reviewProperties + `},` + reviewRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
-		{Name: "sha", Description: "Head commit the pull request must still be at; github.pullrequests.get " +
+		{Name: "sha", Description: "Head commit the pull request must still be at; github.pull-requests.get " +
 			"reports the current one", Required: true},
 		{Name: "event", Description: "comment or request_changes", Required: true},
 		{Name: "body", Description: "Review summary in Markdown, at most 65536 characters; stored as given"},
@@ -119,7 +119,7 @@ var pullRequestReviewsCreate = capability.Descriptor{
 }
 
 var pullRequestReviewsApprove = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviews.approve",
+	ID:      Provider + ".pull-request-reviews.approve",
 	Version: 1,
 	Title:   "Approve a GitHub pull request",
 	Description: "Approve one pull request of a repository a connection allows, with an optional " +
@@ -135,7 +135,7 @@ var pullRequestReviewsApprove = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reviewProperties + `},` + reviewRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
-		{Name: "sha", Description: "Head commit the pull request must still be at; github.pullrequests.get " +
+		{Name: "sha", Description: "Head commit the pull request must still be at; github.pull-requests.get " +
 			"reports the current one", Required: true},
 		{Name: "body", Description: "Approval note in Markdown, at most 65536 characters; stored as given"},
 		{Name: "line_notes", Description: lineNotesArgumentDescription},

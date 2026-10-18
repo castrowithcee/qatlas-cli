@@ -14,9 +14,9 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// Sub-issues of an issue of a repository a connection allows: github.subissues.list reads the
-// sub-issues of one issue in their priority order; github.subissues.add and github.subissues.reprioritize
-// change them and need their own confirmation; github.subissues.remove detaches one and needs its own
+// Sub-issues of an issue of a repository a connection allows: github.sub-issues.list reads the
+// sub-issues of one issue in their priority order; github.sub-issues.add and github.sub-issues.reprioritize
+// change them and need their own confirmation; github.sub-issues.remove detaches one and needs its own
 // confirmation as well, but, unlike removing a label or a ruleset, touches only the one relationship between
 // the two named issues and deletes neither, so it is not listed-only. A sub-issue is always named by its
 // issue number, in the bound repository unless sub_issue_repository names another one; that other repository
@@ -129,7 +129,7 @@ func (raw subIssueParentJSON) summary() *SubIssuesSummary {
 }
 
 var subIssuesList = capability.Descriptor{
-	ID:      Provider + ".subissues.list",
+	ID:      Provider + ".sub-issues.list",
 	Version: 1,
 	Title:   "List GitHub sub-issues",
 	Description: "List one bounded batch of the sub-issues of one issue of a repository an explicit " +
@@ -159,7 +159,7 @@ var subIssuesList = capability.Descriptor{
 }
 
 var subIssuesAdd = capability.Descriptor{
-	ID:      Provider + ".subissues.add",
+	ID:      Provider + ".sub-issues.add",
 	Version: 1,
 	Title:   "Add a GitHub sub-issue",
 	Description: "Add one issue as a sub-issue of another issue of a repository a connection " +
@@ -193,7 +193,7 @@ var subIssuesAdd = capability.Descriptor{
 }
 
 var subIssuesRemove = capability.Descriptor{
-	ID:      Provider + ".subissues.remove",
+	ID:      Provider + ".sub-issues.remove",
 	Version: 1,
 	Title:   "Remove a GitHub sub-issue",
 	Description: "Detach one sub-issue from its parent issue of a repository a connection allows; " +
@@ -226,7 +226,7 @@ var subIssuesRemove = capability.Descriptor{
 }
 
 var subIssuesReprioritize = capability.Descriptor{
-	ID:      Provider + ".subissues.reprioritize",
+	ID:      Provider + ".sub-issues.reprioritize",
 	Version: 1,
 	Title:   "Reorder a GitHub sub-issue",
 	Description: "Move one sub-issue of a repository a connection allows to just after or just " +
@@ -331,7 +331,7 @@ func checkSubIssuesList(a *subIssuesArguments, bound target) error {
 	return err
 }
 
-// checkSubIssue applies the bounds shared by github.subissues.add and github.subissues.remove.
+// checkSubIssue applies the bounds shared by github.sub-issues.add and github.sub-issues.remove.
 func checkSubIssue(a *subIssuesArguments, _ target) error {
 	if err := checkNumber(a.Number); err != nil {
 		return err

@@ -201,7 +201,7 @@ var templateFields = []capability.Field{
 }
 
 var templatesMark = capability.Descriptor{
-	ID:      Provider + ".projecttemplates.mark",
+	ID:      Provider + ".project-templates.mark",
 	Version: 1,
 	Title:   "Mark a GitHub project as a template",
 	Description: "Mark one project of an organization a connection allows as a template, which the " +
@@ -219,7 +219,7 @@ var templatesMark = capability.Descriptor{
 }
 
 var templatesUnmark = capability.Descriptor{
-	ID:      Provider + ".projecttemplates.unmark",
+	ID:      Provider + ".project-templates.unmark",
 	Version: 1,
 	Title:   "Unmark a GitHub project as a template",
 	Description: "Stop offering one project a connection allows as a template; the project itself " +

@@ -79,13 +79,13 @@ const (
 )
 
 var fieldArgument = capability.Argument{Name: "field", Description: "Name of the project field, compared " +
-	"without case, as github.projectfields.list names it", Required: true}
+	"without case, as github.project-fields.list names it", Required: true}
 
 var changedField = capability.Field{Name: "field", Description: "The field after the change: name, type, " +
 	"built_in, options with name, color, and description, and the iteration settings, untrusted data"}
 
 var fieldsList = capability.Descriptor{
-	ID:      Provider + ".projectfields.list",
+	ID:      Provider + ".project-fields.list",
 	Version: 1,
 	Title:   "List the fields of a GitHub project",
 	Description: "Read every field of one GitHub project a connection allows: name, type, whether " +
@@ -109,7 +109,7 @@ var fieldsList = capability.Descriptor{
 }
 
 var fieldsCreate = capability.Descriptor{
-	ID:      Provider + ".projectfields.create",
+	ID:      Provider + ".project-fields.create",
 	Version: 1,
 	Title:   "Create a GitHub project field",
 	Description: "Create one text, number, date, single-select, multi-select, or iteration field with its " +
@@ -150,13 +150,13 @@ var fieldsCreate = capability.Descriptor{
 }
 
 var fieldsUpdate = capability.Descriptor{
-	ID:      Provider + ".projectfields.update",
+	ID:      Provider + ".project-fields.update",
 	Version: 1,
 	Title:   "Update a GitHub project field",
 	Description: "Rename one field of a GitHub project a connection allows, or add, rename, " +
 		"recolor, describe, or reorder the options of a single- or multi-select field, the built-in Status " +
 		"included; options left out stay, and so do the values items hold. Iterations change through " +
-		"github.projectiterations.replace",
+		"github.project-iterations.replace",
 	Tags:     []string{"github", "projects", "fields", "options", "update", "planning"},
 	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider,
@@ -185,7 +185,7 @@ var fieldsUpdate = capability.Descriptor{
 }
 
 var fieldOptionsDelete = capability.Descriptor{
-	ID:      Provider + ".projectfieldoptions.delete",
+	ID:      Provider + ".project-field-options.delete",
 	Version: 1,
 	Title:   "Delete options of a GitHub project field",
 	Description: "Remove named options of a single- or multi-select field of a GitHub project an explicit " +
@@ -211,7 +211,7 @@ var fieldOptionsDelete = capability.Descriptor{
 }
 
 var iterationsReplace = capability.Descriptor{
-	ID:      Provider + ".projectiterations.replace",
+	ID:      Provider + ".project-iterations.replace",
 	Version: 1,
 	Title:   "Replace the iterations of a GitHub project field",
 	Description: "Change the start date or duration of one iteration field of a GitHub project an explicit " +
@@ -246,7 +246,7 @@ var iterationsReplace = capability.Descriptor{
 }
 
 var fieldsDelete = capability.Descriptor{
-	ID:      Provider + ".projectfields.delete",
+	ID:      Provider + ".project-fields.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project field",
 	Description: "Delete one field that is not built in, with its values on every item, from a GitHub " +

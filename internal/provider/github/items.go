@@ -17,13 +17,13 @@ import (
 // users it assigns, and a conversion the repository the issue is created in, before the one change is sent.
 
 var itemIDArgument = capability.Argument{Name: "item_id", Description: "Project item identifier, as returned " +
-	"by github.projectitems.list", Required: true}
+	"by github.project-items.list", Required: true}
 
 const itemIDInput = `{"type":"object","properties":{"item_id":` + itemIDSchema + `},"required":["item_id"],` +
 	`"additionalProperties":false}`
 
 var itemsDelete = capability.Descriptor{
-	ID:      Provider + ".projectitems.delete",
+	ID:      Provider + ".project-items.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project item",
 	Description: "Remove one item from a GitHub project a connection allows, with its field values; " +
@@ -45,7 +45,7 @@ var itemsDelete = capability.Descriptor{
 }
 
 var itemsUnarchive = capability.Descriptor{
-	ID:           Provider + ".projectitems.unarchive",
+	ID:           Provider + ".project-items.unarchive",
 	Version:      1,
 	Title:        "Restore an archived GitHub project item",
 	Description:  "Restore one archived item of a GitHub project a connection allows",
@@ -63,7 +63,7 @@ var itemsUnarchive = capability.Descriptor{
 }
 
 var itemsMove = capability.Descriptor{
-	ID:      Provider + ".projectitems.move",
+	ID:      Provider + ".project-items.move",
 	Version: 1,
 	Title:   "Move a GitHub project item",
 	Description: "Place one item of a GitHub project a connection allows directly after another item " +
@@ -92,7 +92,7 @@ var itemsMove = capability.Descriptor{
 }
 
 var draftsUpdate = capability.Descriptor{
-	ID:      Provider + ".projectdrafts.update",
+	ID:      Provider + ".project-drafts.update",
 	Version: 1,
 	Title:   "Update a GitHub project draft",
 	Description: "Replace the title, body, or assignees of one draft issue of a GitHub project an explicit " +
@@ -108,7 +108,7 @@ var draftsUpdate = capability.Descriptor{
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "item_id", Description: "Identifier of the project item of the draft, as returned by " +
-			"github.projectitems.list", Required: true},
+			"github.project-items.list", Required: true},
 		{Name: "title", Description: "Draft title, 1 to 256 characters"},
 		{Name: "body", Description: "Draft body in Markdown, at most 65536 characters; stored as given, \"\" " +
 			"empties it"},
@@ -125,7 +125,7 @@ var draftsUpdate = capability.Descriptor{
 }
 
 var draftsConvert = capability.Descriptor{
-	ID:      Provider + ".projectdrafts.convert",
+	ID:      Provider + ".project-drafts.convert",
 	Version: 1,
 	Title:   "Convert a GitHub project draft into an issue",
 	Description: "Turn one draft issue of a GitHub project a connection allows into an issue of a " +
@@ -142,7 +142,7 @@ var draftsConvert = capability.Descriptor{
 		`"required":["item_id","issue"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "item_id", Description: "Identifier of the project item of the draft, as returned by " +
-			"github.projectitems.list", Required: true},
+			"github.project-items.list", Required: true},
 		repositoryArgument,
 	},
 	Fields: []capability.Field{

@@ -72,7 +72,7 @@ const workflowFileProperties = `"name":{"type":"string"},"path":{"type":"string"
 	`"size":{"type":"integer"}`
 
 var workflowFilesList = capability.Descriptor{
-	ID:      Provider + ".workflowfiles.list",
+	ID:      Provider + ".workflow-files.list",
 	Version: 1,
 	Title:   "List GitHub workflow files",
 	Description: "List the workflow files directly below .github/workflows/ of " +
@@ -95,7 +95,7 @@ var workflowFilesList = capability.Descriptor{
 }
 
 var workflowFilesGet = capability.Descriptor{
-	ID:      Provider + ".workflowfiles.get",
+	ID:      Provider + ".workflow-files.get",
 	Version: 1,
 	Title:   "Get a GitHub workflow file",
 	Description: "Read one workflow file directly below .github/workflows/ of " +
@@ -143,7 +143,7 @@ var workflowFileChangeArguments = []capability.Argument{
 }
 
 var workflowFilesCreate = capability.Descriptor{
-	ID:      Provider + ".workflowfiles.create",
+	ID:      Provider + ".workflow-files.create",
 	Version: 1,
 	Title:   "Create a GitHub workflow file",
 	Description: "Commit one new workflow file directly below .github/workflows/ of " +
@@ -166,7 +166,7 @@ var workflowFilesCreate = capability.Descriptor{
 }
 
 var workflowFilesUpdate = capability.Descriptor{
-	ID:      Provider + ".workflowfiles.update",
+	ID:      Provider + ".workflow-files.update",
 	Version: 1,
 	Title:   "Update a GitHub workflow file",
 	Description: "Replace the content of one workflow file directly below .github/workflows/ of " +
@@ -180,7 +180,7 @@ var workflowFilesUpdate = capability.Descriptor{
 		`,"message":`+commitMessageSchema+`,"branch":`+refSchema, "path", "sha", "content", "message"),
 	OutputSchema: json.RawMessage(workflowFileChangeOutput),
 	Arguments: append([]capability.Argument{workflowFileChangeArguments[0],
-		{Name: "sha", Description: "Blob SHA of the version to replace, as github.workflowfiles.get reports it", Required: true},
+		{Name: "sha", Description: "Blob SHA of the version to replace, as github.workflow-files.get reports it", Required: true},
 	}, workflowFileChangeArguments[1:]...),
 	Fields: workflowFileChangeFields,
 	Examples: []capability.Example{{
@@ -267,7 +267,7 @@ var settingsChangeFields = []capability.Field{
 }
 
 var actionsPermissionsGet = capability.Descriptor{
-	ID:      Provider + ".actionspermissions.get",
+	ID:      Provider + ".actions-permissions.get",
 	Version: 1,
 	Title:   "Get the GitHub Actions permissions of a repository",
 	Description: "Read whether GitHub Actions run in a repository a connection allows and which " +
@@ -286,7 +286,7 @@ var actionsPermissionsGet = capability.Descriptor{
 }
 
 var actionsPermissionsUpdate = capability.Descriptor{
-	ID:      Provider + ".actionspermissions.update",
+	ID:      Provider + ".actions-permissions.update",
 	Version: 1,
 	Title:   "Change the GitHub Actions permissions of a repository",
 	Description: "Switch GitHub Actions on or off in a repository a connection allows or choose which " +
@@ -311,7 +311,7 @@ var actionsPermissionsUpdate = capability.Descriptor{
 }
 
 var workflowPermissionsGet = capability.Descriptor{
-	ID:      Provider + ".workflowpermissions.get",
+	ID:      Provider + ".workflow-permissions.get",
 	Version: 1,
 	Title:   "Get the default GITHUB_TOKEN permissions of a repository",
 	Description: "Read the default rights of the GITHUB_TOKEN of workflows in " +
@@ -331,7 +331,7 @@ var workflowPermissionsGet = capability.Descriptor{
 }
 
 var workflowPermissionsUpdate = capability.Descriptor{
-	ID:      Provider + ".workflowpermissions.update",
+	ID:      Provider + ".workflow-permissions.update",
 	Version: 1,
 	Title:   "Change the default GITHUB_TOKEN permissions of a repository",
 	Description: "Set the default rights of the GITHUB_TOKEN of workflows in " +
@@ -476,10 +476,10 @@ func checkFileChange(update bool) func(*actionsArguments, target) error {
 		case !validWorkflowFile(a.Path):
 			return invalidRequest("path must name a .yml or .yaml file directly below .github/workflows/")
 		case update && !validBlobSHA(a.SHA):
-			return invalidRequest("sha must be the blob SHA of the version to replace, as github.workflowfiles.get " +
+			return invalidRequest("sha must be the blob SHA of the version to replace, as github.workflow-files.get " +
 				"reports it")
 		case !update && a.SHA != "":
-			return invalidRequest("a new workflow file has no sha; change an existing one with github.workflowfiles.update")
+			return invalidRequest("a new workflow file has no sha; change an existing one with github.workflow-files.update")
 		case a.Content == "" || len(a.Content) > maxWorkflowFile:
 			return invalidRequest(fmt.Sprintf("content must hold between 1 byte and %d KiB", maxWorkflowFile>>10))
 		case strings.TrimSpace(a.Message) == "" || utf8.RuneCountInString(a.Message) > maxCommitMessage:
@@ -687,16 +687,16 @@ func fileWriteFailure(err error, repository target, update bool) error {
 		refused.Message = workflowFileChangePermission
 	case failure.Message == conflictMessage && update:
 		refused.Message = "the workflow file no longer has the given blob SHA, so nothing was written; read it " +
-			"again with github.workflowfiles.get and apply the change to its current content"
+			"again with github.workflow-files.get and apply the change to its current content"
 	case failure.Message == conflictMessage:
 		refused.Message = "GitHub refused to create the workflow file in the current state of the branch, so " +
 			"nothing was written"
 	case failure.Message == rejectedMessage && update:
 		refused.Message = "GitHub rejected the update, so nothing was written; the blob SHA may not be the " +
-			"file's current one on this branch, read it again with github.workflowfiles.get"
+			"file's current one on this branch, read it again with github.workflow-files.get"
 	case failure.Message == rejectedMessage:
 		refused.Message = "GitHub rejected the new file, so nothing was written; a file may already exist at " +
-			"this path, read it with github.workflowfiles.get and change it with github.workflowfiles.update"
+			"this path, read it with github.workflow-files.get and change it with github.workflow-files.update"
 	case failure.Class == provider.ClassNotFound:
 		refused.Message = "GitHub does not hold " + subject{in: repository}.String() + " or this branch, or does " +
 			"not show them to this token; a workflow file change also needs workflow on a classic token or " +

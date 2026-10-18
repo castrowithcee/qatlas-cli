@@ -25,7 +25,7 @@ const reviewCommentProperties = `"id":{"type":"integer"},"path":{"type":"string"
 const reviewCommentRequired = `"required":["id","path","body"],"additionalProperties":false`
 
 var pullRequestReviewCommentsList = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewcomments.list",
+	ID:      Provider + ".pull-request-review-comments.list",
 	Version: 1,
 	Title:   "List GitHub pull request line comments",
 	Description: "List one bounded batch of the line comments of one pull request of a repository a " +
@@ -49,7 +49,7 @@ var pullRequestReviewCommentsList = capability.Descriptor{
 }
 
 var pullRequestReviewCommentsReply = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewcomments.reply",
+	ID:      Provider + ".pull-request-review-comments.reply",
 	Version: 1,
 	Title:   "Reply to a GitHub pull request line comment",
 	Description: "Write exactly one reply in the thread of one line comment of a pull request of a " +
@@ -63,7 +63,7 @@ var pullRequestReviewCommentsReply = capability.Descriptor{
 		reviewCommentRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
-		{Name: "comment_id", Description: "Line comment to reply to, as github.pullrequestreviewcomments.list " +
+		{Name: "comment_id", Description: "Line comment to reply to, as github.pull-request-review-comments.list " +
 			"reports it", Required: true},
 		{Name: "body", Description: "Reply in Markdown, 1 to 65536 characters; stored as given", Required: true},
 	},

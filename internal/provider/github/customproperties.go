@@ -18,12 +18,12 @@ import (
 // checked against the connection's repository targets the way every other repository tool is, or
 // organization, checked against its owner targets the way github.rulesets.list checks one; giving both or
 // neither is refused before a credential is resolved, the same exclusive selection github.rulesets.list uses.
-// github.customproperties.get reads the custom property values of a repository or, with organization instead,
+// github.custom-properties.get reads the custom property values of a repository or, with organization instead,
 // the custom property definitions (schema) an organization declares. It never reads the values GitHub holds
 // for the repositories of an organization: that route names repositories by a bare list of names the caller
 // supplies, and binding that list to the connection's own repository targets would need a second, independent
 // allow-list check this tool does not perform, so the narrower reading is a schema read only.
-// github.customproperties.set changes them and is offered only where a connection's tools list names it,
+// github.custom-properties.set changes them and is offered only where a connection's tools list names it,
 // since a custom property can gate what a ruleset condition matches: for a repository it sets or removes
 // property values, a null value removing one; for an organization it creates or updates property definitions,
 // the smaller scope that already covers the official custom properties write for a single repository, since
@@ -33,7 +33,7 @@ import (
 // organization it belongs to, the same way rulesetSensitivity does for a ruleset.
 const customPropertySensitivity = "github-custom-property"
 
-// maxCustomPropertiesInputBytes bounds the size of one github.customproperties.set request. maxCustomProperties
+// maxCustomPropertiesInputBytes bounds the size of one github.custom-properties.set request. maxCustomProperties
 // bounds how many property values or property definitions it may hold; checkCustomPropertiesSize applies both,
 // the way checkRulesetSize applies the bounds a JSON schema's maxItems cannot enforce by itself.
 const (
@@ -105,7 +105,7 @@ var customPropertiesFields = []capability.Field{
 }
 
 var customPropertiesGet = capability.Descriptor{
-	ID:      Provider + ".customproperties.get",
+	ID:      Provider + ".custom-properties.get",
 	Version: 1,
 	Title:   "Get GitHub custom properties",
 	Description: "Read the custom property values of a repository or, with organization instead, the custom " +
@@ -128,7 +128,7 @@ var customPropertiesGet = capability.Descriptor{
 }
 
 var customPropertiesSet = capability.Descriptor{
-	ID:      Provider + ".customproperties.set",
+	ID:      Provider + ".custom-properties.set",
 	Version: 1,
 	Title:   "Set GitHub custom properties",
 	Description: "Set or remove the custom property values of a repository with properties, or, with " +
@@ -394,7 +394,7 @@ func (c *Client) getOrganizationPropertySchema(ctx context.Context) (*CustomProp
 	return result, nil
 }
 
-// customPropertiesSetArguments holds the arguments of github.customproperties.set: exactly one of properties
+// customPropertiesSetArguments holds the arguments of github.custom-properties.set: exactly one of properties
 // (for a repository) or definitions (for an organization) applies, matching the exclusive target.
 type customPropertiesSetArguments struct {
 	Properties  []CustomPropertyValue      `json:"properties"`
@@ -446,7 +446,7 @@ func invokeCustomPropertiesSet(ctx context.Context, resolved *config.Resolved, s
 	return bound.customPropertiesLocate(client.setRepositoryPropertyValues(ctx, arguments.Properties))
 }
 
-// propertyValuesBody turns the given property values into the REST body github.customproperties.set sends:
+// propertyValuesBody turns the given property values into the REST body github.custom-properties.set sends:
 // every value as given, including an explicit null, which GitHub reads as removing that property.
 func propertyValuesBody(properties []CustomPropertyValue) []map[string]any {
 	body := make([]map[string]any, 0, len(properties))
@@ -472,7 +472,7 @@ func (c *Client) setRepositoryPropertyValues(ctx context.Context, properties []C
 	return &CustomPropertiesResult{Properties: properties}, nil
 }
 
-// definitionsBody turns the given property definitions into the REST body github.customproperties.set sends.
+// definitionsBody turns the given property definitions into the REST body github.custom-properties.set sends.
 func definitionsBody(definitions []CustomPropertyDefinition) []map[string]any {
 	body := make([]map[string]any, 0, len(definitions))
 	for _, d := range definitions {

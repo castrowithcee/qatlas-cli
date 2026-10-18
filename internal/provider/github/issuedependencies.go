@@ -14,9 +14,9 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// Issue dependencies of a repository a connection allows: github.issuedependencies.list reads both
-// directions of one issue, the issues that block it and the issues it blocks; github.issuedependencies.add
-// records that one issue blocks another and needs its own confirmation; github.issuedependencies.remove
+// Issue dependencies of a repository a connection allows: github.issue-dependencies.list reads both
+// directions of one issue, the issues that block it and the issues it blocks; github.issue-dependencies.add
+// records that one issue blocks another and needs its own confirmation; github.issue-dependencies.remove
 // detaches one blocked-by relationship and needs its own confirmation as well, but, like removing a
 // sub-issue, only removes the relationship and deletes neither issue, so it is not listed-only. The blocking
 // issue may live in another repository, named by blocking_issue_repository, which must lie inside the
@@ -39,7 +39,7 @@ const (
 )
 
 var issueDependenciesList = capability.Descriptor{
-	ID:      Provider + ".issuedependencies.list",
+	ID:      Provider + ".issue-dependencies.list",
 	Version: 1,
 	Title:   "List GitHub issue dependencies",
 	Description: "List the issues that block one issue and the issues it blocks, of a repository a " +
@@ -72,7 +72,7 @@ var issueDependenciesList = capability.Descriptor{
 }
 
 var issueDependenciesAdd = capability.Descriptor{
-	ID:      Provider + ".issuedependencies.add",
+	ID:      Provider + ".issue-dependencies.add",
 	Version: 1,
 	Title:   "Add a GitHub issue dependency",
 	Description: "Record that one issue of a repository a connection allows is blocked by " +
@@ -102,7 +102,7 @@ var issueDependenciesAdd = capability.Descriptor{
 }
 
 var issueDependenciesRemove = capability.Descriptor{
-	ID:      Provider + ".issuedependencies.remove",
+	ID:      Provider + ".issue-dependencies.remove",
 	Version: 1,
 	Title:   "Remove a GitHub issue dependency",
 	Description: "Remove that one issue of a repository a connection allows is blocked by " +
@@ -201,8 +201,8 @@ func checkIssueDependenciesList(a *issueDependenciesArguments, bound target) err
 	return err
 }
 
-// checkIssueDependency applies the bounds shared by github.issuedependencies.add and
-// github.issuedependencies.remove.
+// checkIssueDependency applies the bounds shared by github.issue-dependencies.add and
+// github.issue-dependencies.remove.
 func checkIssueDependency(a *issueDependenciesArguments, _ target) error {
 	if err := checkNumber(a.Number); err != nil {
 		return err

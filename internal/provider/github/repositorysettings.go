@@ -40,7 +40,7 @@ const repositorySettingsGetProperties = `"default_branch":{"type":"string"},"vis
 	`"archived":{"type":"boolean"},` + repositorySettingProperties
 
 var repositorySettingsGet = capability.Descriptor{
-	ID:      Provider + ".repositorysettings.get",
+	ID:      Provider + ".repository-settings.get",
 	Version: 1,
 	Title:   "Get the merge and branch settings of a GitHub repository",
 	Description: "Read the default branch, visibility, archived state, and merge settings of a repository a " +
@@ -71,7 +71,7 @@ var repositorySettingsGet = capability.Descriptor{
 }
 
 var repositorySettingsUpdate = capability.Descriptor{
-	ID:      Provider + ".repositorysettings.update",
+	ID:      Provider + ".repository-settings.update",
 	Version: 1,
 	Title:   "Change the merge and branch settings of a GitHub repository",
 	Description: "Change which merge methods a repository a connection allows accepts, its auto-merge, " +
@@ -167,7 +167,7 @@ type RepositorySettings struct {
 	MergeSettings
 }
 
-// MergeSettings are the settings repositorysettings.update can change.
+// MergeSettings are the settings repository-settings.update can change.
 type MergeSettings struct {
 	AllowMergeCommit         *bool  `json:"allow_merge_commit,omitempty"`
 	AllowSquashMerge         *bool  `json:"allow_squash_merge,omitempty"`

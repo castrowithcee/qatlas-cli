@@ -96,7 +96,7 @@ var releasesGet = capability.Descriptor{
 }
 
 var releaseAssetsList = capability.Descriptor{
-	ID:      Provider + ".releaseassets.list",
+	ID:      Provider + ".release-assets.list",
 	Version: 1,
 	Title:   "List the assets of a GitHub release",
 	Description: "List one bounded batch of asset metadata of one release of a repository an explicit " +
