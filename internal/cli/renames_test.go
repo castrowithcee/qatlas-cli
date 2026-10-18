@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -176,26 +177,207 @@ func TestFormerProviderNameIsUnknownAndNamesTheNewOne(t *testing.T) {
 	}
 }
 
+// formerCatalog is the provider catalog of the release before the rename.
+type formerCatalog struct{}
+
+func (formerCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool) {
+	if id != "acmechat" {
+		return config.ProviderMetadata{}, false
+	}
+	return config.ProviderMetadata{ID: id, Name: "Acme Chat", SecretRoles: []config.SecretRole{{Name: "token"}},
+		Tools: []config.ToolMetadata{
+			{ID: "acmechat.messages.fetch", Effect: config.PermissionRead},
+			{ID: "acme.chat.messages.list", Effect: config.PermissionRead},
+		}}, true
+}
+
+func (f formerCatalog) ProviderMetadataAll() []config.ProviderMetadata {
+	metadata, _ := f.ProviderMetadata("acmechat")
+	return []config.ProviderMetadata{metadata}
+}
+
+// vaultRenameFixture returns a directory whose vault holds a secret and approves connection "conn" under the
+// former provider ID and the former tool ID, as an earlier release configured it. The configuration is then
+// the one a user still has on disk.
+func vaultRenameFixture(t *testing.T, tools string) string {
+	t.Helper()
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	dir := t.TempDir()
+	body := `version: 1
+services:
+  svc:
+    provider: acmechat
+    base_url: https://example.invalid
+credentials:
+  cred:
+    type: vault
+connections:
+  conn:
+    service: svc
+    credential: cred
+    permissions: [read]
+    tools: ` + tools + "\n"
+	if err := os.WriteFile(configIn(dir), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := vault.New(dir)
+	if err := v.Set("cred", "token", "synthetic-token", offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatal(err)
+	}
+	// The earlier release knew the provider under its former ID, so the file loads as written.
+	old, err := config.Load(configIn(dir), formerCatalog{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := approval.Approve(context.Background(), old, v, nil); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func runRenameApprove(t *testing.T, dir string, args ...string) (int, string, string) {
+	t.Helper()
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	var stdout, stderr bytes.Buffer
+	opts := &Options{Input: strings.NewReader(""), Redactor: &redact.Redactor{}}
+	cmd := newRootCommand(opts, renameRegistry(t))
+	code := run(cmd, opts, append([]string{"vault", "approve", "--config", configIn(dir)}, args...), &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
+}
+
+// pendingRenamed loads the configuration with the provider catalog and reports the connection's open change.
+func pendingRenamed(t *testing.T, dir string) (approval.Change, bool) {
+	t.Helper()
+	cfg, err := config.Load(configIn(dir), renameRegistry(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := vault.New(dir)
+	if _, err := v.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	report, err := approval.Pending(cfg, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range report.Open {
+		if c.Connection == "conn" {
+			return c, true
+		}
+	}
+	return approval.Change{}, false
+}
+
 // A vault approval is given for the provider and the tools list a connection has. Loading a former name
-// changes both, so the scope, and with it the fingerprint, no longer equals the one approved earlier.
-func TestFormerNamesChangeTheApprovalFingerprint(t *testing.T) {
-	path := writeConfig(t, formerNamesConfig)
-	cfg, err := config.Load(path, renameRegistry(t))
+// changes both, so the connection is open; the view tells it as a rename, and approving it closes it.
+func TestRenamedNamesOpenAVaultConnectionAndShowAsRenamed(t *testing.T) {
+	const tools = "[acmechat.messages.fetch, acme.chat.messages.list]"
+
+	t.Run("text", func(t *testing.T) {
+		dir := vaultRenameFixture(t, tools)
+		change, open := pendingRenamed(t, dir)
+		if !open {
+			t.Fatal("the connection with renamed names is not open")
+		}
+		if approval.DirectApprovable(change) {
+			t.Error("a renamed provider became directly approvable")
+		}
+		code, stdout, stderr := runRenameApprove(t, dir)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		for _, want := range []string{
+			"  provider  renamed acmechat -> acme.chat\n", "  tools  1 renamed\n",
+			"    renamed acmechat.messages.fetch -> acme.chat.messages.get\n", "    unchanged: 1\n",
+			"approved 1 connection: conn",
+		} {
+			if !strings.Contains(stdout, want) {
+				t.Errorf("stdout lacks %q:\n%s", want, stdout)
+			}
+		}
+		if strings.Contains(stdout, "    + ") || strings.Contains(stdout, "    - ") {
+			t.Errorf("a rename is shown as added and removed:\n%s", stdout)
+		}
+		if _, open := pendingRenamed(t, dir); open {
+			t.Error("the connection is still open after vault approve")
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		dir := vaultRenameFixture(t, tools)
+		code, stdout, stderr := runRenameApprove(t, dir, "--output", "json")
+		if code != exitOK || stderr != "" {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		var got struct {
+			Open []struct {
+				Fields []struct {
+					Field   string   `json:"field"`
+					Before  *string  `json:"before"`
+					After   *string  `json:"after"`
+					Added   []string `json:"added"`
+					Removed []string `json:"removed"`
+					Kept    []string `json:"kept"`
+					Renamed []struct {
+						Old string `json:"old"`
+						New string `json:"new"`
+					} `json:"renamed"`
+				} `json:"fields"`
+			} `json:"open"`
+			Approved []string `json:"approved"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &got); err != nil || len(got.Open) != 1 || len(got.Open[0].Fields) != 2 {
+			t.Fatalf("json = %v\n%s", err, stdout)
+		}
+		provider, toolsField := got.Open[0].Fields[0], got.Open[0].Fields[1]
+		if provider.Field != "provider" || *provider.Before != "acmechat" || *provider.After != "acme.chat" ||
+			len(provider.Renamed) != 1 || provider.Renamed[0].Old != "acmechat" || provider.Renamed[0].New != "acme.chat" {
+			t.Errorf("provider = %+v", provider)
+		}
+		if toolsField.Field != "tools" || len(toolsField.Renamed) != 1 ||
+			toolsField.Renamed[0].Old != "acmechat.messages.fetch" || toolsField.Renamed[0].New != "acme.chat.messages.get" ||
+			len(toolsField.Added) != 0 || len(toolsField.Removed) != 0 || len(toolsField.Kept) != 1 {
+			t.Errorf("tools = %+v", toolsField)
+		}
+		if len(got.Approved) != 1 || got.Approved[0] != "conn" {
+			t.Errorf("approved = %v", got.Approved)
+		}
+	})
+
+	// The approval stays open after the configuration was saved with the current names (as the TUI and the web
+	// interface do), and the view still tells it as a rename.
+	t.Run("saved with current names", func(t *testing.T) {
+		dir := vaultRenameFixture(t, tools)
+		saved := strings.NewReplacer("acmechat.messages.fetch", "acme.chat.messages.get",
+			"provider: acmechat", "provider: acme.chat").Replace(mustRead(t, configIn(dir)))
+		if err := os.WriteFile(configIn(dir), []byte(saved), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		change, open := pendingRenamed(t, dir)
+		if !open {
+			t.Fatal("the connection saved with current names is not open")
+		}
+		var provider, toolsField approval.FieldChange
+		for _, f := range change.Fields {
+			switch f.Field {
+			case approval.FieldProvider:
+				provider = f
+			case approval.FieldTools:
+				toolsField = f
+			}
+		}
+		if !provider.IsRename || len(toolsField.Renamed) != 1 {
+			t.Errorf("provider = %+v, tools = %+v", provider, toolsField)
+		}
+	})
+}
+
+func mustRead(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := cfg.Resolve("conn", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	current := secret.ScopeOf(resolved)
-	approved := current
-	approved.Provider = "acmechat"
-	approved.Tools = []string{"acmechat.messages.fetch", "acme.chat.messages.list", "acmechat.messages.purge"}
-	if vault.Fingerprint(current, "id") == vault.Fingerprint(approved, "id") {
-		t.Error("the fingerprint of the mapped connection equals the one given for the former names")
-	}
-	if current.Provider != "acme.chat" || current.Tools[0] != "acme.chat.messages.get" {
-		t.Errorf("scope = %+v, want the current names", current)
-	}
+	return string(b)
 }

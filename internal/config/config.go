@@ -795,6 +795,10 @@ func providerCatalog(providers []ProviderCatalog) ProviderCatalog {
 	return emptyProviderCatalog{}
 }
 
+// ProviderCatalog returns the provider catalog the configuration was loaded with, an empty one when there
+// is none.
+func (c *Config) ProviderCatalog() ProviderCatalog { return c.providerCatalog() }
+
 func (c *Config) providerCatalog() ProviderCatalog {
 	if c.providers != nil {
 		return c.providers

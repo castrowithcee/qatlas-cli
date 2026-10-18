@@ -129,6 +129,9 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		switch {
 		case ok && f.IsListChange():
 			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, approvalCounts(f))})
+			for _, r := range f.Renamed {
+				rows = append(rows, approvalRow{text: "renamed " + r.Old + " -> " + r.New, item: true})
+			}
 			for _, v := range f.Added {
 				rows = append(rows, approvalRow{text: "+ " + v, item: true})
 			}
@@ -143,6 +146,8 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 					}
 				}
 			}
+		case ok && f.IsRename:
+			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s renamed %s -> %s", field, f.Before, f.After)})
 		case ok:
 			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s -> %s", field, f.Before, f.After)})
 		case c.New:
@@ -157,6 +162,9 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 // approvalCounts is the one-line summary of a list change: "2 new, 1 removed".
 func approvalCounts(f approval.FieldChange) string {
 	var parts []string
+	if len(f.Renamed) > 0 {
+		parts = append(parts, fmt.Sprintf("%d renamed", len(f.Renamed)))
+	}
 	if len(f.Added) > 0 {
 		parts = append(parts, fmt.Sprintf("%d new", len(f.Added)))
 	}

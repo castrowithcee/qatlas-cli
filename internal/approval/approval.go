@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -45,6 +46,11 @@ const (
 // list, paths "(every project)" and a list, files "(no local files)" and a list - and every single-value
 // field carries only Before and After; IsListChange tells the two apart. Before and After are set in both
 // cases.
+//
+// Renamed marks what a provider's rename tables explain: entries of a list that the provider renamed
+// (never counted in Added, Removed, or Kept), and, with IsRename, a single value that is the provider's
+// former ID. It changes how a person reads the change, not whether the connection is open or what approving
+// it releases.
 type FieldChange struct {
 	Field   string
 	Before  string
@@ -52,12 +58,21 @@ type FieldChange struct {
 	Added   []string
 	Removed []string
 	Kept    []string
+	Renamed []Rename
+	// IsRename is true when a single-value field changed from a former ID to the current one.
+	IsRename bool
 }
 
-// IsListChange reports whether the change is told by Added, Removed, and Kept rather than by Before and
-// After alone.
+// Rename is one list entry that a provider renamed: Old was approved, New is configured now.
+type Rename struct {
+	Old string
+	New string
+}
+
+// IsListChange reports whether the change is told by Added, Removed, Renamed, and Kept rather than by
+// Before and After alone.
 func (f FieldChange) IsListChange() bool {
-	return len(f.Added) > 0 || len(f.Removed) > 0
+	return len(f.Added) > 0 || len(f.Removed) > 0 || len(f.Renamed) > 0
 }
 
 // Change is one connection that reads a vault credential and is not approved as it is configured now.
@@ -138,7 +153,7 @@ func Pending(cfg *config.Config, v *vault.Vault) (Report, error) {
 			before := approved.Scope
 			report.Open = append(report.Open, Change{
 				Connection: name, Before: &before, After: c.scope.Normalized(),
-				Fields: diff(approved, c.scope, c.id), Approved: approved.Approved,
+				Fields: diff(approved, c.scope, c.id, cfg.ProviderCatalog()), Approved: approved.Approved,
 			})
 		}
 	}
@@ -159,8 +174,9 @@ func cfgConnection(cfg *config.Config, name string) (config.Connection, bool) {
 	return connection, ok
 }
 
-// diff lists the fields of now that differ from what approved was given for, in a fixed order.
-func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
+// diff lists the fields of now that differ from what approved was given for, in a fixed order. catalog
+// supplies the rename tables that let a renamed provider or tool read as a rename; nil knows none.
+func diff(approved vault.Approval, now vault.Scope, id string, catalog config.ProviderCatalog) []FieldChange {
 	before, after := approved.Scope.Normalized(), now.Normalized()
 	var fields []FieldChange
 	add := func(field, b, a string) {
@@ -176,16 +192,25 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 		fields = append(fields, FieldChange{Field: FieldCredential, Before: before.Credential,
 			After: after.Credential + " (stored anew)"})
 	}
-	add(FieldProvider, before.Provider, after.Provider)
+	providerRenamed := false
+	if before.Provider != after.Provider {
+		providerRenamed = formerProvider(catalog, after.Provider, before.Provider)
+		fields = append(fields, FieldChange{Field: FieldProvider, Before: before.Provider, After: after.Provider,
+			IsRename: providerRenamed})
+	}
 	add(FieldOrigin, before.Origin, after.Origin)
 	// addList records a change of a list field. mode is true when one side is a mode rather than a list, which
 	// stays readable only as before and after, as does a list whose text changed without a different entry.
-	addList := func(field string, mode bool, b, a []string, bText, aText string) {
+	addList := func(field string, mode bool, b, a []string, bText, aText string, renamed ...Rename) {
 		if bText == aText {
 			return
 		}
 		change := FieldChange{Field: field, Before: bText, After: aText}
 		if !mode {
+			if len(renamed) > 0 {
+				change.Renamed = renamed
+				b, a = withoutRenamed(b, a, renamed)
+			}
 			change.Added, change.Removed, change.Kept = setDiff(b, a)
 			if !change.IsListChange() {
 				change.Kept = nil
@@ -196,8 +221,12 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	addList(FieldPermissions, false, before.Permissions, after.Permissions,
 		list(before.Permissions), list(after.Permissions))
 	addList(FieldTargets, false, before.Targets, after.Targets, list(before.Targets), list(after.Targets))
+	var renamedTools []Rename
+	if before.Tools != nil && after.Tools != nil && (before.Provider == after.Provider || providerRenamed) {
+		renamedTools = renamedEntries(catalog, after.Provider, before.Tools, after.Tools)
+	}
 	addList(FieldTools, (before.Tools == nil) != (after.Tools == nil), before.Tools, after.Tools,
-		tools(before.Tools), tools(after.Tools))
+		tools(before.Tools), tools(after.Tools), renamedTools...)
 	addList(FieldPaths, (len(before.Paths) == 0) != (len(after.Paths) == 0), before.Paths, after.Paths,
 		PathsText(before.Paths), PathsText(after.Paths))
 	beforeFiles, afterFiles := FileItems(before.FilesRead, before.FilesWrite), FileItems(after.FilesRead, after.FilesWrite)
@@ -206,6 +235,52 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	addList(FieldForward, false, ForwardItems(before.Forward), ForwardItems(after.Forward),
 		ForwardText(before.Forward), ForwardText(after.Forward))
 	return fields
+}
+
+// formerProvider reports whether the provider current lists former among its earlier IDs.
+func formerProvider(catalog config.ProviderCatalog, current, former string) bool {
+	if catalog == nil || current == former {
+		return false
+	}
+	metadata, ok := catalog.ProviderMetadata(current)
+	return ok && slices.Contains(metadata.FormerIDs, former)
+}
+
+// renamedEntries pairs each approved tool that the current provider's rename table maps to a tool configured
+// now, and that the approval did not already hold, sorted by the old ID.
+func renamedEntries(catalog config.ProviderCatalog, provider string, before, after []string) []Rename {
+	if catalog == nil {
+		return nil
+	}
+	metadata, ok := catalog.ProviderMetadata(provider)
+	if !ok {
+		return nil
+	}
+	var out []Rename
+	for _, old := range before {
+		current, mapped := metadata.RenamedTools[old]
+		if mapped && slices.Contains(after, current) && !slices.Contains(before, current) &&
+			!slices.ContainsFunc(out, func(r Rename) bool { return r.Old == old || r.New == current }) {
+			out = append(out, Rename{Old: old, New: current})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Old < out[j].Old })
+	return out
+}
+
+// withoutRenamed drops the renamed entries from both lists, so they are neither added, removed, nor kept.
+func withoutRenamed(before, after []string, renamed []Rename) (b, a []string) {
+	for _, value := range before {
+		if !slices.ContainsFunc(renamed, func(r Rename) bool { return r.Old == value }) {
+			b = append(b, value)
+		}
+	}
+	for _, value := range after {
+		if !slices.ContainsFunc(renamed, func(r Rename) bool { return r.New == value }) {
+			a = append(a, value)
+		}
+	}
+	return b, a
 }
 
 // setDiff splits two lists into what only after holds, what only before holds, and what both hold, each

@@ -239,7 +239,7 @@ func TestDiffListsAddedRemovedKept(t *testing.T) {
 
 	// Only added.
 	now.Tools = append(now.Tools, "github.pullrequests.get", "github.pullrequestchecks.list")
-	fields := diff(approved, now, "")
+	fields := diff(approved, now, "", nil)
 	if len(fields) != 1 {
 		t.Fatalf("diff() = %+v, want only the tools", fields)
 	}
@@ -252,7 +252,7 @@ func TestDiffListsAddedRemovedKept(t *testing.T) {
 	// Only removed.
 	now = scopeFixture()
 	now.Tools = []string{"github.issues.get", "github.issues.list"}
-	got = fieldOf(t, diff(approved, now, ""), FieldTools)
+	got = fieldOf(t, diff(approved, now, "", nil), FieldTools)
 	if len(got.Added) != 0 || !reflect.DeepEqual(got.Removed, []string{"github.pullrequests.list"}) || len(got.Kept) != 2 {
 		t.Errorf("removed only: %+v", got)
 	}
@@ -262,7 +262,7 @@ func TestDiffListsAddedRemovedKept(t *testing.T) {
 	now.Tools = []string{"github.issues.get", "github.pullrequests.get", "github.pullrequests.list"}
 	approved.Scope.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user", "pass"}}}
 	now.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user"}}}
-	fields = diff(approved, now, "")
+	fields = diff(approved, now, "", nil)
 	got = fieldOf(t, fields, FieldTools)
 	if !reflect.DeepEqual(got.Added, []string{"github.pullrequests.get"}) ||
 		!reflect.DeepEqual(got.Removed, []string{"github.issues.list"}) || len(got.Kept) != 2 {
@@ -283,7 +283,7 @@ func TestDiffModeSwitchesStayBeforeAndAfter(t *testing.T) {
 	now.Tools = nil
 	now.Paths = []string{"~/a"}
 	now.FilesRead = []string{"~/in"}
-	fields := diff(approved, now, "")
+	fields := diff(approved, now, "", nil)
 	for _, name := range []string{FieldTools, FieldPaths, FieldFiles} {
 		f := fieldOf(t, fields, name)
 		if f.IsListChange() || f.Added != nil || f.Removed != nil || f.Kept != nil {
@@ -302,7 +302,7 @@ func TestDiffModeSwitchesStayBeforeAndAfter(t *testing.T) {
 	}
 
 	// And back: a list that becomes the mode.
-	back := diff(vault.Approval{Scope: now}, scopeFixture(), "")
+	back := diff(vault.Approval{Scope: now}, scopeFixture(), "", nil)
 	if f := fieldOf(t, back, FieldPaths); f.IsListChange() || f.After != "(every project)" {
 		t.Errorf("paths back to every project: %+v", f)
 	}
@@ -316,7 +316,7 @@ func TestDiffFilesPerDirectionAndUnchangedFields(t *testing.T) {
 	now.FilesRead = []string{"~/in", "~/more"}
 	now.FilesWrite = nil
 	now.FilesWrite = []string{"~/other"}
-	fields := diff(vault.Approval{Scope: base}, now, "")
+	fields := diff(vault.Approval{Scope: base}, now, "", nil)
 	if len(fields) != 1 {
 		t.Fatalf("diff() = %+v, want only files: the rest is unchanged", fields)
 	}
@@ -324,5 +324,87 @@ func TestDiffFilesPerDirectionAndUnchangedFields(t *testing.T) {
 	if !reflect.DeepEqual(f.Added, []string{"read: ~/more", "write: ~/other"}) ||
 		!reflect.DeepEqual(f.Removed, []string{"write: ~/out"}) || !reflect.DeepEqual(f.Kept, []string{"read: ~/in"}) {
 		t.Errorf("files: %+v", f)
+	}
+}
+
+type renameCatalog map[string]config.ProviderMetadata
+
+func (c renameCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool) {
+	m, ok := c[id]
+	return m, ok
+}
+
+func (c renameCatalog) ProviderMetadataAll() []config.ProviderMetadata {
+	var all []config.ProviderMetadata
+	for _, m := range c {
+		all = append(all, m)
+	}
+	return all
+}
+
+var renameTestCatalog = renameCatalog{"acme.chat": {
+	ID: "acme.chat", FormerIDs: []string{"acmechat"},
+	RenamedTools: map[string]string{"acmechat.messages.fetch": "acme.chat.messages.get"},
+}}
+
+func TestDiffTellsRenamesFromTheCatalogTables(t *testing.T) {
+	approved := vault.Approval{Scope: vault.Scope{Connection: "c", Credential: "k", Provider: "acmechat",
+		Tools: []string{"acmechat.messages.fetch", "acme.chat.messages.list", "acme.chat.messages.drop"}}}
+	now := vault.Scope{Connection: "c", Credential: "k", Provider: "acme.chat",
+		Tools: []string{"acme.chat.messages.get", "acme.chat.messages.list", "acme.chat.messages.post"}}
+	fields := diff(approved, now, "", renameTestCatalog)
+	if p := fieldOf(t, fields, FieldProvider); !p.IsRename || p.Before != "acmechat" || p.After != "acme.chat" {
+		t.Errorf("provider = %+v", p)
+	}
+	got := fieldOf(t, fields, FieldTools)
+	if !reflect.DeepEqual(got.Renamed, []Rename{{Old: "acmechat.messages.fetch", New: "acme.chat.messages.get"}}) ||
+		!reflect.DeepEqual(got.Added, []string{"acme.chat.messages.post"}) ||
+		!reflect.DeepEqual(got.Removed, []string{"acme.chat.messages.drop"}) ||
+		!reflect.DeepEqual(got.Kept, []string{"acme.chat.messages.list"}) {
+		t.Errorf("tools = %+v", got)
+	}
+
+	// Without the tables, or for a provider that is not a former ID, the same change stays added and removed.
+	for name, catalog := range map[string]config.ProviderCatalog{"nil": nil, "empty": renameCatalog{}} {
+		fields := diff(approved, now, "", catalog)
+		if p := fieldOf(t, fields, FieldProvider); p.IsRename {
+			t.Errorf("%s: provider shown as renamed", name)
+		}
+		if f := fieldOf(t, fields, FieldTools); len(f.Renamed) != 0 || len(f.Added) != 2 || len(f.Removed) != 2 {
+			t.Errorf("%s: tools = %+v", name, f)
+		}
+	}
+	other := now
+	other.Provider = "other"
+	if f := fieldOf(t, diff(approved, other, "", renameTestCatalog), FieldProvider); f.IsRename {
+		t.Error("an unrelated provider change is shown as a rename")
+	}
+	if f := fieldOf(t, diff(approved, other, "", renameTestCatalog), FieldTools); len(f.Renamed) != 0 {
+		t.Errorf("tools of an unrelated provider read as renamed: %+v", f)
+	}
+}
+
+// The readable view changes no decision: a renamed list is as direct as the same change without the tables, and
+// a renamed provider is as indirect as any provider change.
+func TestDirectApprovableIgnoresRenames(t *testing.T) {
+	approved := vault.Approval{Scope: vault.Scope{Connection: "c", Credential: "k", Provider: "acme.chat",
+		Tools: []string{"acmechat.messages.fetch"}}}
+	now := approved.Scope
+	now.Tools = []string{"acme.chat.messages.get"}
+	withTables := Change{Fields: diff(approved, now, "", renameTestCatalog)}
+	without := Change{Fields: diff(approved, now, "", nil)}
+	if len(withTables.Fields) != 1 || len(withTables.Fields[0].Renamed) != 1 {
+		t.Fatalf("fields = %+v", withTables.Fields)
+	}
+	if DirectApprovable(withTables) != DirectApprovable(without) || !DirectApprovable(withTables) {
+		t.Errorf("DirectApprovable: with tables %v, without %v", DirectApprovable(withTables), DirectApprovable(without))
+	}
+
+	approved.Scope.Provider, now.Provider = "acmechat", "acme.chat"
+	withTables = Change{Fields: diff(approved, now, "", renameTestCatalog)}
+	without = Change{Fields: diff(approved, now, "", nil)}
+	if DirectApprovable(withTables) || DirectApprovable(without) {
+		t.Errorf("a provider change became directly approvable: with tables %v, without %v",
+			DirectApprovable(withTables), DirectApprovable(without))
 	}
 }
