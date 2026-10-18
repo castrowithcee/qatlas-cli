@@ -36,12 +36,12 @@ without a path, user, query, or fragment. No redirect is followed.
 ```yaml
 services:
   seatable-account:
-    provider: seatableaccount
+    provider: seatable.account
     base_url: https://cloud.seatable.io
 
 credentials:
   seatable-account-token:
-    provider: seatableaccount
+    provider: seatable.account
     type: keyring
 ```
 
@@ -64,8 +64,8 @@ connections:
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `seatableaccount.snapshots.list` | read | none | lists the snapshots of the bound base, page by page |
-| `seatableaccount.snapshots.restore` | create | required | restores one snapshot into a new base |
+| `seatable.account.snapshots.list` | read | none | lists the snapshots of the bound base, page by page |
+| `seatable.account.snapshots.restore` | create | required | restores one snapshot into a new base |
 
 The read profile offers `snapshots.list` only. `snapshots.restore` has no profile: a connection offers it
 only when its `tools` list names it and its `permissions` include `create`.
@@ -77,7 +77,7 @@ connections:
     credential: seatable-account-token
     target: 42/Customer base
     permissions: [read, create]
-    tools: [seatableaccount.snapshots.list, seatableaccount.snapshots.restore]
+    tools: [seatable.account.snapshots.list, seatable.account.snapshots.restore]
 ```
 
 `snapshots.list` takes `page` (from 1) and `per_page` (1 to 100; 50 when omitted) and answers `snapshots`

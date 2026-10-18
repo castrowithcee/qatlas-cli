@@ -212,7 +212,7 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 
 // The Infomaniak providers are listed under their current ID only; a former ID resolves through a rename and
 // is not a namespace of its own.
-func TestProvidersListsInfomaniakProvidersUnderTheirCurrentIDs(t *testing.T) {
+func TestProvidersListsVendorFamilyProvidersUnderTheirCurrentIDs(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	path := writeConfig(t, "version: 1\ndefaults: {}\n")
@@ -229,7 +229,7 @@ func TestProvidersListsInfomaniakProvidersUnderTheirCurrentIDs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &listed); err != nil {
 		t.Fatal(err)
 	}
-	for current, former := range map[string]string{"infomaniak.chat": "infomaniakchat", "infomaniak.drive": "infomaniakdrive", "infomaniak.mail": "infomaniakmail", "infomaniak.dav": "infomaniakdav"} {
+	for current, former := range map[string]string{"infomaniak.chat": "infomaniakchat", "infomaniak.drive": "infomaniakdrive", "infomaniak.mail": "infomaniakmail", "infomaniak.dav": "infomaniakdav", "seatable.account": "seatableaccount"} {
 		var hasCurrent, hasFormer bool
 		for _, p := range listed.Providers {
 			hasCurrent = hasCurrent || p.Provider == current

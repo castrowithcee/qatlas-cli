@@ -30,7 +30,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "seatableaccount"
+const Provider = "seatable.account"
 
 // roleAccountToken is the single secret role: the account token, sent as a Bearer token.
 const roleAccountToken = "account-token"
@@ -227,7 +227,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // Register adds the provider metadata, its connection test, and its two operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "SeaTable account", DefaultBaseURL: cloudOrigin,
+		ID: Provider, Name: "SeaTable account", FormerIDs: []string{"seatableaccount"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
 		Description:        "SeaTable account API, snapshots of one base listed and restored into a new base",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
