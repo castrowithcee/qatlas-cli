@@ -230,9 +230,12 @@ type ProviderMetadata struct {
 	RemovedTools []string
 	Profiles     []ToolProfile
 	// Groups, when set, sorts every tool of the provider into exactly one of these groups.
-	Groups      []ToolGroup
-	SecretRoles []SecretRole
-	Target      TargetMetadata
+	Groups []ToolGroup
+	// ServiceLevel makes the group of a tool its second ID segment (<provider>.<group>.<object>.<action>).
+	// It needs Groups and is invalid for a <vendor>.<product> provider.
+	ServiceLevel bool
+	SecretRoles  []SecretRole
+	Target       TargetMetadata
 	// LocalFiles states which directions of local file access at least one tool of the provider has. It is
 	// derived from the registered operations and never declared by hand.
 	LocalFiles LocalFilesSupport

@@ -115,7 +115,7 @@ Keys in the editor mean the same everywhere. The arrow keys move on every screen
 
 const agents = `An agent uses qatlas like a person on the command line, through connections a person configured beforehand. It never handles a secret: of a connection it knows only the name, its one-line description, and the effects it may use.
 
-A tool is one versioned contract with an ID of the form <provider>.<object>.<action>. A provider is the namespace of its tools, and a connection is a configured route through which its tools run.
+A tool is one versioned contract with an ID of dot-separated segments: <provider>, an optional <service>, <object> and <action>. A provider is one segment or <vendor>.<product>; only a provider with a service level has the <service> segment. Words in a segment are joined by single hyphens. A provider is the namespace of its tools, and a connection is a configured route through which its tools run.
 
 Three lines tell the systems apart. A provider's description says what kind of system it is. Its optional note, kept by a person, says what it stands for in this installation, for example wiki or CRM. A connection's description says what one route is for. Map a word of the task to a provider by its description and note, then choose the connection by its description.
 

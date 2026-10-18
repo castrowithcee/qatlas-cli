@@ -87,17 +87,22 @@ func TestRegisterRejectsInvalidOperations(t *testing.T) {
 		{
 			"uppercase provider ID", "Fakewiki",
 			operation(withID(withProvider(pagesList, "Fakewiki"), "Fakewiki.pages.list")),
-			"provider ID \"Fakewiki\" must match",
+			"provider ID \"Fakewiki\": segment",
 		},
 		{"provider mismatch", "fakewiki", operation(withProvider(pagesList, "other")), "want registered provider"},
-		{"two segments", "fakewiki", operation(withID(pagesList, "pages.list")), "exactly three segments"},
-		{"four segments", "fakewiki", operation(withID(pagesList, "fakewiki.knowledge.pages.list")), "exactly three segments"},
-		{"uppercase object", "fakewiki", operation(withID(pagesList, "fakewiki.Pages.list")), "must match [a-z][a-z0-9]*"},
-		{"space in object", "fakewiki", operation(withID(pagesList, "fakewiki.page list.get")), "must match [a-z][a-z0-9]*"},
-		{"special character", "fakewiki", operation(withID(pagesList, "fakewiki.pages.get-all")), "must match [a-z][a-z0-9]*"},
-		{"empty ID segment", "fakewiki", operation(withID(pagesList, "fakewiki..list")), "must match [a-z][a-z0-9]*"},
-		{"wrong provider prefix", "fakewiki", operation(withID(pagesList, "other.pages.list")), "provider prefix"},
-		{"prefix lookalike", "fakewiki", operation(withID(pagesList, "fakewikix.pages.list")), "provider prefix"},
+		{"two segments", "fakewiki", operation(withID(pagesList, "pages.list")), "does not start with registered provider"},
+		{"four segments", "fakewiki", operation(withID(pagesList, "fakewiki.knowledge.pages.list")), "exactly 3 segments"},
+		{"uppercase object", "fakewiki", operation(withID(pagesList, "fakewiki.Pages.list")), "segment"},
+		{"space in object", "fakewiki", operation(withID(pagesList, "fakewiki.page list.get")), "segment"},
+		{"special character", "fakewiki", operation(withID(pagesList, "fakewiki.pages.get!all")), "segment"},
+		{"double hyphen", "fakewiki", operation(withID(pagesList, "fakewiki.pull--requests.list")), "segment"},
+		{"trailing hyphen", "fakewiki", operation(withID(pagesList, "fakewiki.pull-.list")), "segment"},
+		{"underscore", "fakewiki", operation(withID(pagesList, "fakewiki.pull_requests.list")), "segment"},
+		{"capital", "fakewiki", operation(withID(pagesList, "fakewiki.Pull.list")), "segment"},
+		{"leading digit", "fakewiki", operation(withID(pagesList, "fakewiki.2pages.list")), "segment"},
+		{"empty ID segment", "fakewiki", operation(withID(pagesList, "fakewiki..list")), "segment"},
+		{"wrong provider prefix", "fakewiki", operation(withID(pagesList, "other.pages.list")), "does not start with registered provider"},
+		{"prefix lookalike", "fakewiki", operation(withID(pagesList, "fakewikix.pages.list")), "does not start with registered provider"},
 		{"missing version", "fakewiki", operation(withVersion(pagesList, 0)), "version must be positive"},
 		{"missing description", "fakewiki", operation(withDescription(pagesList, "")), "description must not be empty"},
 		{"missing effect", "fakewiki", operation(withEffect(pagesList, "")), `effect "" must be one of`},
@@ -593,8 +598,11 @@ func TestRegistryChecksToolGroups(t *testing.T) {
 		{"unknown group", groups, []Descriptor{withGroup(pagesList, "other")}, `unknown group "other"`},
 		{"empty group", groups, []Descriptor{withGroup(pagesList, "pages")}, `group "books" has no tool`},
 		{"group in flat provider", nil, []Descriptor{withGroup(pagesList, "pages")}, "declares no groups"},
-		{"bad slug", []config.ToolGroup{{ID: "Pages"}}, nil, `group "Pages" must match`},
+		{"bad slug", []config.ToolGroup{{ID: "Pages"}}, nil, `group "Pages" must be`},
 		{"duplicate", []config.ToolGroup{{ID: "pages"}, {ID: "pages"}}, nil, `group "pages" twice`},
+		{"trailing hyphen", []config.ToolGroup{{ID: "a-"}}, nil, `group "a-" must be`},
+		{"double hyphen", []config.ToolGroup{{ID: "a--b"}}, nil, `group "a--b" must be`},
+		{"hyphenated", []config.ToolGroup{{ID: "pull-requests"}}, nil, ""},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -636,5 +644,95 @@ func TestSuggestTargetWithoutSuggesterIsEmpty(t *testing.T) {
 		return "x", nil
 	}); err == nil {
 		t.Error("a suggester for an unregistered provider was accepted")
+	}
+}
+
+// Each provider registers with the depth its declaration fixes: three segments, four with a service level,
+// and four for <vendor>.<product>. Every other shape is refused with the rule it breaks.
+func TestRegistryEnforcesToolIDDepth(t *testing.T) {
+	desc := func(provider, id, group string) Descriptor {
+		d := withID(withProvider(pagesList, provider), id)
+		d.Group = group
+		return d
+	}
+	groups := []config.ToolGroup{{ID: "deck", Title: "Deck"}, {ID: "pull-requests", Title: "Pull requests"}}
+	tests := []struct {
+		name     string
+		metadata config.ProviderMetadata
+		tool     Descriptor
+		want     string
+	}{
+		{"three segments", config.ProviderMetadata{ID: "todoist"}, desc("todoist", "todoist.tasks.list", ""), ""},
+		{"hyphenated provider", config.ProviderMetadata{ID: "excalidraw-plus"}, desc("excalidraw-plus", "excalidraw-plus.scenes.list", ""), ""},
+		{"hyphenated words", config.ProviderMetadata{ID: "todoist"}, desc("todoist", "todoist.pull-request-reviews.list-all", ""), ""},
+		{"service level", config.ProviderMetadata{ID: "nextcloud", ServiceLevel: true, Groups: groups},
+			desc("nextcloud", "nextcloud.deck.cards.list", "deck"), ""},
+		{"vendor product", config.ProviderMetadata{ID: "infomaniak.chat"},
+			desc("infomaniak.chat", "infomaniak.chat.messages.send", ""), ""},
+		{"vendor product with groups", config.ProviderMetadata{ID: "infomaniak.chat", Groups: groups},
+			desc("infomaniak.chat", "infomaniak.chat.messages.send", "deck"), ""},
+		{"four segments without service level", config.ProviderMetadata{ID: "todoist"},
+			desc("todoist", "todoist.deck.tasks.list", ""), "exactly 3 segments"},
+		{"three segments with service level", config.ProviderMetadata{ID: "nextcloud", ServiceLevel: true, Groups: groups},
+			desc("nextcloud", "nextcloud.cards.list", "deck"), "exactly 4 segments"},
+		{"service segment is not the group", config.ProviderMetadata{ID: "nextcloud", ServiceLevel: true, Groups: groups},
+			desc("nextcloud", "nextcloud.deck.cards.list", "pull-requests"), "must equal the tool's group"},
+		{"service level without groups", config.ProviderMetadata{ID: "nextcloud", ServiceLevel: true},
+			desc("nextcloud", "nextcloud.deck.cards.list", ""), "must declare groups"},
+		{"vendor product with three segments", config.ProviderMetadata{ID: "infomaniak.chat"},
+			desc("infomaniak.chat", "infomaniak.messages.send", ""), "does not start with registered provider"},
+		{"vendor product with five segments", config.ProviderMetadata{ID: "infomaniak.chat"},
+			desc("infomaniak.chat", "infomaniak.chat.a.messages.send", ""), "exactly 4 segments"},
+		{"vendor product with service level", config.ProviderMetadata{ID: "infomaniak.chat", ServiceLevel: true, Groups: groups},
+			desc("infomaniak.chat", "infomaniak.chat.messages.send", "deck"), "must not declare a service level"},
+		{"three-part provider", config.ProviderMetadata{ID: "a.b.c"},
+			desc("a.b.c", "a.b.c.x.y", ""), "one segment or <vendor>.<product>"},
+		{"double hyphen provider", config.ProviderMetadata{ID: "pull--requests"},
+			desc("pull--requests", "pull--requests.x.y", ""), "segment"},
+		{"trailing hyphen provider", config.ProviderMetadata{ID: "pull-"},
+			desc("pull-", "pull-.x.y", ""), "segment"},
+		{"underscore provider", config.ProviderMetadata{ID: "pull_requests"},
+			desc("pull_requests", "pull_requests.x.y", ""), "segment"},
+		{"capital provider", config.ProviderMetadata{ID: "Pull"}, desc("Pull", "Pull.x.y", ""), "segment"},
+		{"empty vendor", config.ProviderMetadata{ID: ".chat"}, desc(".chat", ".chat.x.y", ""), "segment"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reg := NewRegistry()
+			test.metadata.Name = "Fake"
+			err := reg.RegisterProvider(test.metadata, nil)
+			if err == nil {
+				err = reg.Register(test.metadata.ID, operation(test.tool))
+			}
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("error = %v, want none", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want one containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+// A vendor is either one single-segment provider or only <vendor>.<product> providers, in either order.
+func TestRegistryRefusesVendorCollision(t *testing.T) {
+	for _, order := range [][2]string{{"seatable", "seatable.account"}, {"seatable.account", "seatable"}} {
+		reg := NewRegistry()
+		if err := reg.RegisterProvider(config.ProviderMetadata{ID: order[0], Name: "A"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		err := reg.RegisterProvider(config.ProviderMetadata{ID: order[1], Name: "B"}, nil)
+		if err == nil || !strings.Contains(err.Error(), "a vendor is either") {
+			t.Errorf("%s then %s: error = %v, want a vendor conflict", order[0], order[1], err)
+		}
+	}
+	reg := NewRegistry()
+	for _, id := range []string{"seatable.account", "seatable.base"} {
+		if err := reg.RegisterProvider(config.ProviderMetadata{ID: id, Name: "A"}, nil); err != nil {
+			t.Errorf("RegisterProvider(%s) = %v, want products of one vendor to register", id, err)
+		}
 	}
 }
