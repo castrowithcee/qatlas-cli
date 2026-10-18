@@ -173,7 +173,7 @@ func TestDataColumnDeleteIsOnlyOfferedByAToolsListAndProfilesAreOwn(t *testing.T
 			if id == dataColumnsDelete.ID {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
-			if strings.HasPrefix(id, "n8n.datacolumns.") && !strings.HasPrefix(profile.ID, "datacolumns") {
+			if strings.HasPrefix(id, "n8n.data-columns.") && !strings.HasPrefix(profile.ID, "datacolumns") {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
 		}

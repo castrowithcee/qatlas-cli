@@ -123,24 +123,24 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.projects.create` | create | creates one team project from its name |
 | `n8n.projects.update` | update | renames one project |
 | `n8n.projects.delete` | delete | deletes one team project and everything it owns; only offered by a tools list |
-| `n8n.projectmembers.list` | read | lists the members (id, email, name, role) of one allow-listed project |
-| `n8n.projectmembers.add` | update | gives one existing user a role in one allow-listed project |
-| `n8n.projectmembers.setrole` | update | changes one member's role in one allow-listed project |
-| `n8n.projectmembers.remove` | delete | removes one member from one allow-listed project; only offered by a tools list |
-| `n8n.datatables.list` | read | lists data tables (never rows), filtered to the project allow-list, page by page |
-| `n8n.datatables.get` | read | reads one data table's name, project, and column definitions |
-| `n8n.datatables.create` | create | creates one data table without columns, in one project |
-| `n8n.datatables.rename` | update | renames one data table |
-| `n8n.datatables.delete` | delete | deletes one data table and all its rows; only offered by a tools list |
-| `n8n.datacolumns.list` | read | lists the columns of one data table (never rows) |
-| `n8n.datacolumns.add` | create | adds one column (name, type, optional position) to a data table |
-| `n8n.datacolumns.update` | update | renames and/or moves one column; the type cannot change |
-| `n8n.datacolumns.delete` | delete | deletes one column and its data in every row; only offered by a tools list |
-| `n8n.datarows.list` | read | lists rows of one data table, optionally by a structured filter, page by page |
-| `n8n.datarows.insert` | create | inserts 1 to 50 rows into a data table |
-| `n8n.datarows.update` | update | sets column values on all rows matching a filter; only offered by a tools list |
-| `n8n.datarows.upsert` | update | updates the rows matching a filter or inserts one; only offered by a tools list |
-| `n8n.datarows.delete` | delete | deletes all rows matching a filter; only offered by a tools list |
+| `n8n.project-members.list` | read | lists the members (id, email, name, role) of one allow-listed project |
+| `n8n.project-members.add` | update | gives one existing user a role in one allow-listed project |
+| `n8n.project-members.set-role` | update | changes one member's role in one allow-listed project |
+| `n8n.project-members.remove` | delete | removes one member from one allow-listed project; only offered by a tools list |
+| `n8n.data-tables.list` | read | lists data tables (never rows), filtered to the project allow-list, page by page |
+| `n8n.data-tables.get` | read | reads one data table's name, project, and column definitions |
+| `n8n.data-tables.create` | create | creates one data table without columns, in one project |
+| `n8n.data-tables.rename` | update | renames one data table |
+| `n8n.data-tables.delete` | delete | deletes one data table and all its rows; only offered by a tools list |
+| `n8n.data-columns.list` | read | lists the columns of one data table (never rows) |
+| `n8n.data-columns.add` | create | adds one column (name, type, optional position) to a data table |
+| `n8n.data-columns.update` | update | renames and/or moves one column; the type cannot change |
+| `n8n.data-columns.delete` | delete | deletes one column and its data in every row; only offered by a tools list |
+| `n8n.data-rows.list` | read | lists rows of one data table, optionally by a structured filter, page by page |
+| `n8n.data-rows.insert` | create | inserts 1 to 50 rows into a data table |
+| `n8n.data-rows.update` | update | sets column values on all rows matching a filter; only offered by a tools list |
+| `n8n.data-rows.upsert` | update | updates the rows matching a filter or inserts one; only offered by a tools list |
+| `n8n.data-rows.delete` | delete | deletes all rows matching a filter; only offered by a tools list |
 | `n8n.variables.list` | read | lists variables (key, plain-text value), project-bound ones apart from global ones, page by page |
 | `n8n.variables.create` | create | creates one project or global variable from key and value |
 | `n8n.variables.update` | update | replaces key and value of one variable, keeping its project or global status |
@@ -152,12 +152,12 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.tags.delete` | delete | deletes one tag; only offered by a tools list |
 | `n8n.users.list` | read | lists the instance's users, page by page |
 | `n8n.users.get` | read | reads one user by ID (not by email) |
-| `n8n.users.setrole` | update | sets one user's instance role |
+| `n8n.users.set-role` | update | sets one user's instance role |
 | `n8n.users.delete` | delete | deletes one user; only offered by a tools list |
 | `n8n.audit.generate` | read | generates the security audit report, capped |
-| `n8n.sourcecontrol.status` | read | previews pending source control changes, `push` or `pull` |
-| `n8n.sourcecontrol.pull` | execute | imports the connected Git branch; only offered by a tools list |
-| `n8n.sourcecontrol.push` | execute | commits and pushes named objects; only offered by a tools list |
+| `n8n.source-control.status` | read | previews pending source control changes, `push` or `pull` |
+| `n8n.source-control.pull` | execute | imports the connected Git branch; only offered by a tools list |
+| `n8n.source-control.push` | execute | commits and pushes named objects; only offered by a tools list |
 | `n8n.credentials.list` | read | lists credential metadata (id, name, type, times, never values), page by page |
 | `n8n.credentials.get` | read | reads one credential's metadata by ID |
 | `n8n.credentials.test` | execute | asks n8n to test one credential's connection; needs confirmation |
@@ -192,34 +192,34 @@ The member tools have their own profiles, in none of the others and recommended 
 
 | Profile | Tools |
 | --- | --- |
-| `members-read` | `n8n.projectmembers.list` |
-| `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
+| `members-read` | `n8n.project-members.list` |
+| `members-manage` | `n8n.project-members.list`, `n8n.project-members.add`, `n8n.project-members.set-role` |
 
 The data table, column, row, variable, and tag tools have their own profiles, in none of the others:
 
 | Profile | Tools |
 | --- | --- |
-| `datatables-read` | `n8n.datatables.list`, `n8n.datatables.get` |
-| `datatables-manage` | `n8n.datatables.list`, `n8n.datatables.get`, `n8n.datatables.create`, `n8n.datatables.rename` |
-| `datacolumns-read` | `n8n.datacolumns.list` |
-| `datacolumns-manage` | `n8n.datacolumns.list`, `n8n.datacolumns.add`, `n8n.datacolumns.update` |
-| `datarows-read` | `n8n.datarows.list` |
-| `datarows-manage` | `n8n.datarows.list`, `n8n.datarows.insert` |
+| `datatables-read` | `n8n.data-tables.list`, `n8n.data-tables.get` |
+| `datatables-manage` | `n8n.data-tables.list`, `n8n.data-tables.get`, `n8n.data-tables.create`, `n8n.data-tables.rename` |
+| `datacolumns-read` | `n8n.data-columns.list` |
+| `datacolumns-manage` | `n8n.data-columns.list`, `n8n.data-columns.add`, `n8n.data-columns.update` |
+| `datarows-read` | `n8n.data-rows.list` |
+| `datarows-manage` | `n8n.data-rows.list`, `n8n.data-rows.insert` |
 | `variables-read` | `n8n.variables.list` |
 | `variables-manage` | `n8n.variables.list`, `n8n.variables.create`, `n8n.variables.update` |
 | `tags-read` | `n8n.tags.list`, `n8n.tags.get` |
 | `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
 | `users-read` | `n8n.users.list`, `n8n.users.get` |
-| `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.setrole` |
+| `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.set-role` |
 | `audit` | `n8n.audit.generate` |
-| `sourcecontrol-read` | `n8n.sourcecontrol.status` |
+| `sourcecontrol-read` | `n8n.source-control.status` |
 | `credentials-read` | `n8n.credentials.list`, `n8n.credentials.get`, `n8n.credentials.schema` |
 | `credentials-test` | `n8n.credentials.test` |
 
-`n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
-`n8n.datarows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.users.delete`, `n8n.credentials.create`,
-`n8n.credentials.update`, `n8n.credentials.transfer`, `n8n.credentials.delete`, `n8n.sourcecontrol.pull`,
-and `n8n.sourcecontrol.push` are in no profile. Each
+`n8n.project-members.remove`, `n8n.projects.delete`, `n8n.data-tables.delete`, `n8n.data-columns.delete`, `n8n.data-rows.update`, `n8n.data-rows.upsert`,
+`n8n.data-rows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.users.delete`, `n8n.credentials.create`,
+`n8n.credentials.update`, `n8n.credentials.transfer`, `n8n.credentials.delete`, `n8n.source-control.pull`,
+and `n8n.source-control.push` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -337,7 +337,7 @@ routes are those of n8n-io/n8n at commit `191a22e` (scopes `user:list` and `proj
 - **Add.** `add` sends one `POST` with a single relation `{"relations":[{"userId","role"}]}` for an existing
   user: nobody is created or invited, and there is no email argument. It is not idempotent.
 - **Roles.** `role` is one of `project:admin`, `project:editor`, `project:viewer`. `project:personalOwner`
-  and instance roles are refused locally. `setrole` sends `PATCH` with `{"role"}`.
+  and instance roles are refused locally. `set-role` sends `PATCH` with `{"role"}`.
 - **Output.** `list` returns only `id`, `email`, `name` (first and last name), and `role`, each at most 256
   characters, with the data sensitivity `n8n-project-members` (personal data). It pages with `cursor` and
   `limit` (default 100); more entries than `limit` are cut and flagged `truncated`.
@@ -370,9 +370,8 @@ tools, see "Data table columns" and "Data table rows" below.
 
 ## Data table columns
 
-The column tools are `n8n.datacolumns.list`, `add`, `update`, and `delete`; they call
-`GET` and `POST /data-tables/{id}/columns` and `PATCH` and `DELETE /data-tables/{id}/columns/{columnId}`. The
-object segment is `datacolumns` because tool IDs have exactly three segments.
+The column tools are `n8n.data-columns.list`, `add`, `update`, and `delete`; they call
+`GET` and `POST /data-tables/{id}/columns` and `PATCH` and `DELETE /data-tables/{id}/columns/{columnId}`.
 
 - **Table binding.** Every tool reads the table first and refuses one whose project is outside the
   allow-list, or that reports no project, before any change request; the refusal names neither the table nor
@@ -392,10 +391,9 @@ object segment is `datacolumns` because tool IDs have exactly three segments.
 
 ## Data table rows
 
-The row tools are `n8n.datarows.list`, `insert`, `update`, `upsert`, and `delete`; they call
+The row tools are `n8n.data-rows.list`, `insert`, `update`, `upsert`, and `delete`; they call
 `GET` and `POST /data-tables/{id}/rows`, `PATCH /data-tables/{id}/rows/update`,
-`POST /data-tables/{id}/rows/upsert`, and `DELETE /data-tables/{id}/rows/delete`. The object segment is
-`datarows` because tool IDs have exactly three segments. There is no tool for `rows/clear`.
+`POST /data-tables/{id}/rows/upsert`, and `DELETE /data-tables/{id}/rows/delete`. There is no tool for `rows/clear`.
 
 - **Table binding.** Every tool reads the table first and refuses one whose project is outside the
   allow-list before any request on its rows; column names in filters and data are checked against the columns
@@ -478,7 +476,7 @@ links); reading, pausing, revoking, and deleting remain, so no tool invites a us
 - **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
   not. `n8n.users.list` does not forward n8n's `projectId` filter.
 - **Roles.** Only `global:admin`, `global:member`, and `global:chatUser` can be assigned, as `role` of
-  `n8n.users.setrole` (sent as `newRoleName`). `global:owner` and free-form
+  `n8n.users.set-role` (sent as `newRoleName`). `global:owner` and free-form
   role names are never sent.
 - **Delete** cannot be undone and is in no profile. It needs exactly one choice for the user's workflows
   and credentials: `transfer_project_id` moves them into that project (`DELETE /users/{id}?transferId=...`),

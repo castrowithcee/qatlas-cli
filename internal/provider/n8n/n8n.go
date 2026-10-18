@@ -424,6 +424,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "n8n", DefaultPermissions: []config.Permission{config.PermissionRead},
 		RemovedTools: []string{"n8n.users.invite"},
+		RenamedTools: renamedTools,
 		Description: "Workflow automation platform, self-hosted or n8n Cloud, read and confirmed changes " +
 			"of workflows, executions, and projects through its Public API",
 		SecretRoles: []config.SecretRole{{
@@ -491,7 +492,7 @@ func Register(reg *capability.Registry) error {
 			ID: "members-manage", Title: "Manage project members",
 			Description: "lists members, adds existing users to a project, and changes their role, within this " +
 				"connection's project allow-list; every change needs its own confirmation. Removing a member is " +
-				"never part of a profile: n8n.projectmembers.remove is offered only by a connection whose " +
+				"never part of a profile: n8n.project-members.remove is offered only by a connection whose " +
 				"tools list names it",
 			Tools: []string{membersList.ID, membersAdd.ID, membersSetRole.ID},
 		}, {
@@ -503,7 +504,7 @@ func Register(reg *capability.Registry) error {
 			ID: "datatables-manage", Title: "Manage data tables",
 			Description: "reads, creates, and renames data tables within this connection's project allow-list; " +
 				"every change needs its own confirmation. Deleting a data table is never part of a profile: it " +
-				"deletes all rows, so n8n.datatables.delete is offered only by a connection whose tools list " +
+				"deletes all rows, so n8n.data-tables.delete is offered only by a connection whose tools list " +
 				"names it",
 			Tools: []string{dataTablesList.ID, dataTablesGet.ID, dataTablesCreate.ID, dataTablesRename.ID},
 		}, {
@@ -515,7 +516,7 @@ func Register(reg *capability.Registry) error {
 			ID: "datacolumns-manage", Title: "Manage data table columns",
 			Description: "lists, adds, renames, and moves columns of data tables within this connection's " +
 				"project allow-list; every change needs its own confirmation. Deleting a column is never part " +
-				"of a profile: it deletes the column's data in every row, so n8n.datacolumns.delete is offered " +
+				"of a profile: it deletes the column's data in every row, so n8n.data-columns.delete is offered " +
 				"only by a connection whose tools list names it",
 			Tools: []string{dataColumnsList.ID, dataColumnsAdd.ID, dataColumnsUpdate.ID},
 		}, {
@@ -527,8 +528,8 @@ func Register(reg *capability.Registry) error {
 			ID: "datarows-manage", Title: "Manage data table rows",
 			Description: "lists rows and inserts new rows into data tables within this connection's project " +
 				"allow-list; every insert needs its own confirmation. Updating, upserting, and deleting rows " +
-				"are never part of a profile: a filter can match any number of rows, so n8n.datarows.update, " +
-				"n8n.datarows.upsert, and n8n.datarows.delete are offered only by a connection whose tools " +
+				"are never part of a profile: a filter can match any number of rows, so n8n.data-rows.update, " +
+				"n8n.data-rows.upsert, and n8n.data-rows.delete are offered only by a connection whose tools " +
 				"list names them",
 			Tools: []string{dataRowsList.ID, dataRowsInsert.ID},
 		}, {
@@ -578,7 +579,7 @@ func Register(reg *capability.Registry) error {
 			Description: "previews the pending changes between the instance and its connected Git branch, in " +
 				"the push or pull direction; needs the Enterprise source control feature and only on a " +
 				"connection without project and workflow targets; changes nothing. Pulling and pushing are " +
-				"never part of a profile: n8n.sourcecontrol.pull and n8n.sourcecontrol.push are offered only by " +
+				"never part of a profile: n8n.source-control.pull and n8n.source-control.push are offered only by " +
 				"a connection whose tools list names them",
 			Tools: []string{sourceControlStatus.ID},
 		}, {

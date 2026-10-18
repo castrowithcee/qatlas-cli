@@ -243,7 +243,7 @@ func TestDataRowUpdateUpsertDeleteAreOnlyOfferedByAToolsListAndProfilesAreOwn(t 
 			if id == dataRowsUpdate.ID || id == dataRowsUpsert.ID || id == dataRowsDelete.ID {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
-			if strings.HasPrefix(id, "n8n.datarows.") && !strings.HasPrefix(profile.ID, "datarows") {
+			if strings.HasPrefix(id, "n8n.data-rows.") && !strings.HasPrefix(profile.ID, "datarows") {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
 		}

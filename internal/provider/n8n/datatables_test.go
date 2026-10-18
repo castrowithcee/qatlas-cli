@@ -221,7 +221,7 @@ func TestDataTableDeleteIsOnlyOfferedByAToolsList(t *testing.T) {
 			if id == dataTablesDelete.ID {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
-			if strings.HasPrefix(id, "n8n.datatables.") && !strings.HasPrefix(profile.ID, "datatables") {
+			if strings.HasPrefix(id, "n8n.data-tables.") && !strings.HasPrefix(profile.ID, "datatables") {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
 		}
