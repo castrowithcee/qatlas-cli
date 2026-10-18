@@ -508,7 +508,7 @@ connections:
     description: the work projects of the personal Todoist account
     permissions: [read]
     tools: [todoist.projects.list, todoist.projects.get, todoist.sections.list, todoist.tasks.list,
-      todoist.tasks.filter, todoist.tasks.get, todoist.completedtasks.list, todoist.comments.list,
+      todoist.tasks.filter, todoist.tasks.get, todoist.completed-tasks.list, todoist.comments.list,
       todoist.reminders.list]
 
   # This connection also creates, updates, moves, closes, and reopens tasks and writes comments and
