@@ -34,11 +34,11 @@ query, or fragment is refused before a secret is read. Redirects are never follo
 ```yaml
 services:
   excalidraw-customer-a:
-    provider: excalidrawplus
+    provider: excalidraw-plus
 
 credentials:
   excalidraw-customer-a-reader:
-    provider: excalidrawplus
+    provider: excalidraw-plus
     type: keyring
 
 connections:
@@ -69,17 +69,17 @@ A collection identifier is limited to ASCII letters, digits, hyphen, and undersc
 
 | Tool | Reads |
 | --- | --- |
-| `excalidrawplus.collections.list` | the allowed collections: `id`, `name`, `is_default`, `created`, `updated` |
-| `excalidrawplus.scenes.list` | scenes of the allowed collections; optional `collection_id` and `name` |
-| `excalidrawplus.scenes.get` | one scene's metadata, without creator, preview, or share links |
-| `excalidrawplus.scenes.content` | one scene's elements, capped, with their `version`; optional `query`, `offset`, `limit` |
+| `excalidraw-plus.collections.list` | the allowed collections: `id`, `name`, `is_default`, `created`, `updated` |
+| `excalidraw-plus.scenes.list` | scenes of the allowed collections; optional `collection_id` and `name` |
+| `excalidraw-plus.scenes.get` | one scene's metadata, without creator, preview, or share links |
+| `excalidraw-plus.scenes.content` | one scene's elements, capped, with their `version`; optional `query`, `offset`, `limit` |
 
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
 collections; with exactly one allowed collection it is the default, with `*` it is optional.
 
 ## Activity log
 
-`excalidrawplus.logs.list` reads the workspace activity log (`GET /logs`). It is read-only, safe to repeat, and
+`excalidraw-plus.logs.list` reads the workspace activity log (`GET /logs`). It is read-only, safe to repeat, and
 classified as personal data (`excalidrawplus-workspace-activity`). It belongs to the separate, not recommended
 `activity` profile, never to `read`.
 
@@ -103,8 +103,8 @@ request, and is never repeated.
 
 | Tool | Does |
 | --- | --- |
-| `excalidrawplus.scenes.create` | creates an empty, unpinned scene: `name` and `collection_id` |
-| `excalidrawplus.scenes.update` | renames and/or moves a scene: `scene_id` and `name` and/or `collection_id` |
+| `excalidraw-plus.scenes.create` | creates an empty, unpinned scene: `name` and `collection_id` |
+| `excalidraw-plus.scenes.update` | renames and/or moves a scene: `scene_id` and `name` and/or `collection_id` |
 
 - The target collection of `create` and of a move must be allowed by the targets; it is checked before any secret is
   read or request is sent. The `private` collection is never offered.
@@ -125,8 +125,8 @@ continue only when its collection is allowed; a scene of another collection rece
 
 | Tool | Request | Does |
 | --- | --- | --- |
-| `excalidrawplus.content.patch` | `PATCH /scenes/{id}/content` | merges 1 to 100 elements into the scene |
-| `excalidrawplus.content.replace` | `PUT /scenes/{id}/content` | replaces the whole content with 1 to 500 elements |
+| `excalidraw-plus.content.patch` | `PATCH /scenes/{id}/content` | merges 1 to 100 elements into the scene |
+| `excalidraw-plus.content.replace` | `PUT /scenes/{id}/content` | replaces the whole content with 1 to 500 elements |
 
 **Patch.** Excalidraw+ merges the elements by id and the higher element version wins. Every element therefore
 states `expected_version`, the version it has now (the `version` that `scenes.content` returns, `0` for a new
@@ -169,8 +169,8 @@ repeated.
 
 | Tool | Request | Does |
 | --- | --- | --- |
-| `excalidrawplus.scenes.delete` | `DELETE /scenes/{id}` | moves a scene to the trash: `scene_id` |
-| `excalidrawplus.collections.delete` | `DELETE /collections/{id}` | moves a collection to the trash: `collection_id` |
+| `excalidraw-plus.scenes.delete` | `DELETE /scenes/{id}` | moves a scene to the trash: `scene_id` |
+| `excalidraw-plus.collections.delete` | `DELETE /collections/{id}` | moves a collection to the trash: `collection_id` |
 
 - Excalidraw+ soft-deletes: the scene or collection goes to the trash of Excalidraw+. **Shared links and embeds of the
   scene, or of all scenes in the collection, stop working.** Restoring is only possible inside Excalidraw+ (trash in
@@ -194,10 +194,10 @@ target, because users belong to no collection. Qatlas creates no permanent acces
 
 | Tool | Request | Does |
 | --- | --- | --- |
-| `excalidrawplus.users.list` | `GET /workspaces/users` | lists users with `offset` and `limit` |
-| `excalidrawplus.users.get` | `GET /workspaces/users/{id}` | reads one user: `user_id` |
-| `excalidrawplus.users.update` | `PATCH /workspaces/users/{id}` | changes `name` and/or `role` (`member` or `admin`) |
-| `excalidrawplus.users.remove` | `DELETE /workspaces/users/{id}` | removes a user from the workspace |
+| `excalidraw-plus.users.list` | `GET /workspaces/users` | lists users with `offset` and `limit` |
+| `excalidraw-plus.users.get` | `GET /workspaces/users/{id}` | reads one user: `user_id` |
+| `excalidraw-plus.users.update` | `PATCH /workspaces/users/{id}` | changes `name` and/or `role` (`member` or `admin`) |
+| `excalidraw-plus.users.remove` | `DELETE /workspaces/users/{id}` | removes a user from the workspace |
 
 - The two reads are safe to repeat. They return `id`, `name`, `email`, `role`, `teams`, `created`, and `last_active`;
   pictures, preferences, scene history, and rate limits are not passed on. The data is personal and untrusted:

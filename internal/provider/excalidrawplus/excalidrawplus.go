@@ -45,7 +45,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "excalidrawplus"
+const Provider = "excalidraw-plus"
 
 // roleAPIKey is the single secret role: a workspace API key sent as a Bearer token.
 const roleAPIKey = "api-key"
@@ -343,7 +343,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // Register adds the provider metadata, its connection test, and its read and manage operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Excalidraw+", DefaultBaseURL: defaultOrigin,
+		ID: Provider, Name: "Excalidraw+", FormerIDs: []string{"excalidrawplus"}, RenamedTools: renamedTools, DefaultBaseURL: defaultOrigin,
 		RemovedTools: []string{"excalidrawplus.invitations.create"},
 		Description: "Whiteboard workspace, collections and scenes with their text content, and workspace users " +
 			"through the public workspace API (beta)",
