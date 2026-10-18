@@ -172,7 +172,7 @@ func TestEventSubscriptionToolsAreDeclaredAsContracted(t *testing.T) {
 	reg := registry(t)
 	seen := map[string]bool{}
 	for _, d := range reg.Provider(Provider) {
-		if strings.Contains(d.ID, "eventsubscriptions") {
+		if strings.Contains(d.ID, "event-subscriptions") {
 			seen[d.ID] = true
 			if !d.Risk.OpenWorld || d.Risk.DataSensitivity != integrationSensitivity {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
@@ -238,12 +238,12 @@ func TestDeleteEventSubscriptionIsOfferedOnlyThroughAToolEntry(t *testing.T) {
 	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key",
 		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}}
 	cfg.Connections["lexware-deleter"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionDelete}, Tools: []string{"lexware.eventsubscriptions.delete"}}
+		Permissions: []config.Permission{config.PermissionDelete}, Tools: []string{"lexware.event-subscriptions.delete"}}
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)
 	invoke := func(connection, id string, confirm bool) error {
 		_, err := core.Invoke(context.Background(), application.InvokeRequest{
-			Operation: "lexware.eventsubscriptions.delete", Connection: connection,
+			Operation: "lexware.event-subscriptions.delete", Connection: connection,
 			Arguments: json.RawMessage(`{"id":"` + id + `"}`), Confirmed: confirm})
 		return err
 	}

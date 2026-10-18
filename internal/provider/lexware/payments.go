@@ -30,7 +30,7 @@ var paymentsGet = capability.Descriptor{
 		`"currency":{"type":"string"},"exchange_rate":{"type":"number"}},"additionalProperties":false}}},` +
 		`"required":["voucher_id","payment_items"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "voucher_id", Description: "Voucher identifier as a UUID, as returned by lexware.voucherlist.list or lexware.invoices.list", Required: true},
+		{Name: "voucher_id", Description: "Voucher identifier as a UUID, as returned by lexware.voucher-list.list or lexware.invoices.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "voucher_id", Description: "Identifier of the requested voucher"},

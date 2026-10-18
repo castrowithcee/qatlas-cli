@@ -283,9 +283,9 @@ func TestVoucherOperationsThroughTheApplicationCore(t *testing.T) {
 		return err
 	}
 	for operation, args := range map[string]string{
-		"lexware.voucherlist.list": `{"voucher_types":["salesinvoice","quotation"],"voucher_statuses":["open","paid"],"archived":false,"contact_id":"` + contactID + `","created_date_from":"2026-01-01","page":1,"size":10}`,
-		"lexware.payments.get":     `{"voucher_id":"` + voucherID + `"}`,
-		"lexware.vouchers.get":     `{"id":"` + voucherID + `"}`,
+		"lexware.voucher-list.list": `{"voucher_types":["salesinvoice","quotation"],"voucher_statuses":["open","paid"],"archived":false,"contact_id":"` + contactID + `","created_date_from":"2026-01-01","page":1,"size":10}`,
+		"lexware.payments.get":      `{"voucher_id":"` + voucherID + `"}`,
+		"lexware.vouchers.get":      `{"id":"` + voucherID + `"}`,
 	} {
 		if err := invoke(operation, args); err != nil {
 			t.Errorf("%s = %v", operation, err)
@@ -297,15 +297,15 @@ func TestVoucherOperationsThroughTheApplicationCore(t *testing.T) {
 
 	refuse(t)
 	for name, request := range map[string][2]string{
-		"unknown type":      {"lexware.voucherlist.list", `{"voucher_types":["receipt"]}`},
-		"unknown status":    {"lexware.voucherlist.list", `{"voucher_statuses":["lost"]}`},
-		"duplicate":         {"lexware.voucherlist.list", `{"voucher_types":["invoice","invoice"]}`},
-		"empty list":        {"lexware.voucherlist.list", `{"voucher_types":[]}`},
-		"free parameter":    {"lexware.voucherlist.list", `{"extra":"x"}`},
-		"contact no UUID":   {"lexware.voucherlist.list", `{"contact_id":"x"}`},
-		"overdue and other": {"lexware.voucherlist.list", `{"voucher_statuses":["overdue","open"]}`},
-		"any and other":     {"lexware.voucherlist.list", `{"voucher_types":["any","invoice"]}`},
-		"limit":             {"lexware.voucherlist.list", `{"page":150,"size":100}`},
+		"unknown type":      {"lexware.voucher-list.list", `{"voucher_types":["receipt"]}`},
+		"unknown status":    {"lexware.voucher-list.list", `{"voucher_statuses":["lost"]}`},
+		"duplicate":         {"lexware.voucher-list.list", `{"voucher_types":["invoice","invoice"]}`},
+		"empty list":        {"lexware.voucher-list.list", `{"voucher_types":[]}`},
+		"free parameter":    {"lexware.voucher-list.list", `{"extra":"x"}`},
+		"contact no UUID":   {"lexware.voucher-list.list", `{"contact_id":"x"}`},
+		"overdue and other": {"lexware.voucher-list.list", `{"voucher_statuses":["overdue","open"]}`},
+		"any and other":     {"lexware.voucher-list.list", `{"voucher_types":["any","invoice"]}`},
+		"limit":             {"lexware.voucher-list.list", `{"page":150,"size":100}`},
 		"payment no UUID":   {"lexware.payments.get", `{"voucher_id":"../x"}`},
 		"voucher no UUID":   {"lexware.vouchers.get", `{"id":"../x"}`},
 	} {
