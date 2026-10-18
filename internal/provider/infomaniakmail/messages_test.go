@@ -34,7 +34,7 @@ func uids(page MessagesPage) []uint32 {
 
 func list(t *testing.T, e *environment, connection, arguments string) MessagesPage {
 	t.Helper()
-	result, err := e.invoke("infomaniakmail.messages.list", connection, arguments)
+	result, err := e.invoke("infomaniak.mail.messages.list", connection, arguments)
 	if err != nil {
 		t.Fatalf("messages.list %s: %v", arguments, err)
 	}
@@ -46,7 +46,7 @@ func TestMessagesListReturnsOnlyEnvelopeData(t *testing.T) {
 	e.f.folder(t, "INBOX")
 	uid := e.f.add(t, "INBOX", "Alice <alice@example.net>", "Hello there", base, imap.FlagSeen)
 
-	result, err := e.invoke("infomaniakmail.messages.list", "open", `{"folder":"INBOX"}`)
+	result, err := e.invoke("infomaniak.mail.messages.list", "open", `{"folder":"INBOX"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestMessagesListFixedCriteria(t *testing.T) {
 		`{"folder":"INBOX","since":"2026-03-01","before":"2026-02-01"}`,
 		`{"folder":"INBOX","sender":"alice@example.net\" OR ALL"}`, `{"folder":"INBOX","sender":"everyone"}`,
 	} {
-		if _, err := e.invoke("infomaniakmail.messages.list", "open", arguments); err == nil {
+		if _, err := e.invoke("infomaniak.mail.messages.list", "open", arguments); err == nil {
 			t.Errorf("%s was accepted", arguments)
 		}
 	}
@@ -138,7 +138,7 @@ func TestForeignFolderIsRefusedWithoutIO(t *testing.T) {
 	e.f.add(t, "Secret", "alice@example.net", "classified", base)
 
 	for _, folder := range []string{"Secret", "allowed", "Allowed/Child", "INBOX"} {
-		_, err := e.invoke("infomaniakmail.messages.list", "allowed", fmt.Sprintf(`{"folder":%q}`, folder))
+		_, err := e.invoke("infomaniak.mail.messages.list", "allowed", fmt.Sprintf(`{"folder":%q}`, folder))
 		if !isInvalidRequest(err) {
 			t.Errorf("folder %q: error = %v, want an invalid request", folder, err)
 			continue
@@ -152,7 +152,7 @@ func TestForeignFolderIsRefusedWithoutIO(t *testing.T) {
 	}
 	// Wildcards are never a folder, even on a connection without an allow-list.
 	for _, folder := range []string{"*", "%", "Sec*", "Sec%", "a\\u0000b", "a\\nb"} {
-		_, err := e.invoke("infomaniakmail.messages.list", "open", fmt.Sprintf(`{"folder":"%s"}`, folder))
+		_, err := e.invoke("infomaniak.mail.messages.list", "open", fmt.Sprintf(`{"folder":"%s"}`, folder))
 		if !isInvalidRequest(err) {
 			t.Errorf("folder %q: error = %v, want an invalid request", folder, err)
 		}
@@ -170,7 +170,7 @@ func TestForeignFolderIsRefusedWithoutIO(t *testing.T) {
 func TestMissingFolderIsNotFoundWithoutProviderText(t *testing.T) {
 	e := newEnvironment(t)
 	e.f.folder(t, "INBOX")
-	_, err := e.invoke("infomaniakmail.messages.list", "open", `{"folder":"Nope"}`)
+	_, err := e.invoke("infomaniak.mail.messages.list", "open", `{"folder":"Nope"}`)
 	if classOf(err) != provider.ClassNotFound {
 		t.Fatalf("error = %v, want not-found", err)
 	}
@@ -200,7 +200,7 @@ func TestSenderAllowlistIsAppliedLocally(t *testing.T) {
 	}
 	// A sender outside the allow-list is refused before any connection.
 	dials := e.f.dials.Load()
-	if _, err := e.invoke("infomaniakmail.messages.list", "senders", `{"folder":"INBOX","sender":"bob@example.net"}`); !isInvalidRequest(err) {
+	if _, err := e.invoke("infomaniak.mail.messages.list", "senders", `{"folder":"INBOX","sender":"bob@example.net"}`); !isInvalidRequest(err) {
 		t.Errorf("foreign sender: error = %v, want an invalid request", err)
 	}
 	if e.f.dials.Load() != dials {
@@ -231,7 +231,7 @@ func TestResultCountIsCappedAndNewestFirst(t *testing.T) {
 		t.Errorf("limit 3 = %v", uids(page))
 	}
 	for _, arguments := range []string{`{"folder":"INBOX","limit":101}`, `{"folder":"INBOX","limit":0}`, `{"folder":"INBOX","limit":-1}`} {
-		if _, err := e.invoke("infomaniakmail.messages.list", "open", arguments); err == nil {
+		if _, err := e.invoke("infomaniak.mail.messages.list", "open", arguments); err == nil {
 			t.Errorf("%s was accepted", arguments)
 		}
 	}
@@ -271,7 +271,7 @@ func TestUIDWindowIsBoundToFolderAndUIDValidity(t *testing.T) {
 		"inverted window":       window(`"uid_from":4,"uid_to":2`),
 		"zero uid":              window(`"uid_from":0,"uid_to":2`),
 	} {
-		if _, err := e.invoke("infomaniakmail.messages.list", "open", arguments); err == nil {
+		if _, err := e.invoke("infomaniak.mail.messages.list", "open", arguments); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
 	}
@@ -280,7 +280,7 @@ func TestUIDWindowIsBoundToFolderAndUIDValidity(t *testing.T) {
 	}
 
 	// A UIDVALIDITY of another listing is refused, and the refusal creates no listing.
-	_, err := e.invoke("infomaniakmail.messages.list", "open",
+	_, err := e.invoke("infomaniak.mail.messages.list", "open",
 		fmt.Sprintf(`{"folder":"INBOX","uidvalidity":%d,"uid_from":1}`, validity+1000))
 	if !isInvalidRequest(err) {
 		t.Errorf("mismatching uidvalidity: error = %v, want an invalid request", err)
@@ -290,7 +290,7 @@ func TestUIDWindowIsBoundToFolderAndUIDValidity(t *testing.T) {
 	if other.Folder != "Other" || len(other.Messages) != 1 || other.UIDValidity == validity {
 		t.Errorf("other folder page = %+v (INBOX validity %d)", other, validity)
 	}
-	_, err = e.invoke("infomaniakmail.messages.list", "open",
+	_, err = e.invoke("infomaniak.mail.messages.list", "open",
 		fmt.Sprintf(`{"folder":"Other","uidvalidity":%d,"uid_from":1}`, validity))
 	if !isInvalidRequest(err) {
 		t.Errorf("uidvalidity of another folder: error = %v, want an invalid request", err)

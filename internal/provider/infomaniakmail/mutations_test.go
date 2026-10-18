@@ -84,7 +84,7 @@ func TestChangesNeedConfirmationAndAToolsList(t *testing.T) {
 	for _, tool := range []struct{ name, extra string }{
 		{"flag", `,"flag":"seen","set":true`}, {"move", `,"destination":"Archive"`}, {"delete", ``}, {"expunge", ``},
 	} {
-		operation := "infomaniakmail.messages." + tool.name
+		operation := "infomaniak.mail.messages." + tool.name
 		args := refArgs("INBOX", uid, validity, tool.extra)
 		var needed *application.ConfirmationRequiredError
 		if _, err := e.invoke(operation, "change", args); !asError(err, &needed) {
@@ -124,7 +124,7 @@ func TestMessagesFlagSetsAndClearsOneFlagWithOneStore(t *testing.T) {
 	other := e.f.add(t, "INBOX", "alice@example.net", "two", base.Add(time.Hour))
 	validity := validityOf(t, e, "INBOX")
 
-	result, err := e.confirmed("infomaniakmail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"seen","set":true`))
+	result, err := e.confirmed("infomaniak.mail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"seen","set":true`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,10 +139,10 @@ func TestMessagesFlagSetsAndClearsOneFlagWithOneStore(t *testing.T) {
 	if !hasFlag(flagsOf(t, e, "INBOX", uid), imap.FlagSeen) || len(flagsOf(t, e, "INBOX", other)) != 0 {
 		t.Errorf("flags: target %v, other %v", flagsOf(t, e, "INBOX", uid), flagsOf(t, e, "INBOX", other))
 	}
-	if _, err := e.confirmed("infomaniakmail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"flagged","set":true`)); err != nil {
+	if _, err := e.confirmed("infomaniak.mail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"flagged","set":true`)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.confirmed("infomaniakmail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"seen","set":false`)); err != nil {
+	if _, err := e.confirmed("infomaniak.mail.messages.flag", "change", refArgs("INBOX", uid, validity, `,"flag":"seen","set":false`)); err != nil {
 		t.Fatal(err)
 	}
 	if flags := flagsOf(t, e, "INBOX", uid); hasFlag(flags, imap.FlagSeen) || !hasFlag(flags, imap.FlagFlagged) {
@@ -166,7 +166,7 @@ func TestMessagesFlagRefusesUnknownFlagsBeforeNetwork(t *testing.T) {
 	e := changeEnvironment(t)
 	for _, extra := range []string{`,"flag":"deleted","set":true`, `,"flag":"\\Deleted","set":true`, `,"flag":"seen"`,
 		`,"flag":"seen","set":"yes"`, `,"set":true`, `,"flag":"seen","set":true,"keyword":"x"`} {
-		if _, err := e.confirmed("infomaniakmail.messages.flag", "change", refArgs("INBOX", 1, 1, extra)); err == nil {
+		if _, err := e.confirmed("infomaniak.mail.messages.flag", "change", refArgs("INBOX", 1, 1, extra)); err == nil {
 			t.Errorf("accepted %s", extra)
 		}
 	}
@@ -181,7 +181,7 @@ func TestMessagesMoveMovesExactlyOneMessage(t *testing.T) {
 	stay := e.f.add(t, "INBOX", "alice@example.net", "two", base.Add(time.Hour))
 	validity := validityOf(t, e, "INBOX")
 
-	result, err := e.confirmed("infomaniakmail.messages.move", "changefolders", refArgs("INBOX", uid, validity, `,"destination":"Archive"`))
+	result, err := e.confirmed("infomaniak.mail.messages.move", "changefolders", refArgs("INBOX", uid, validity, `,"destination":"Archive"`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestChangesStayInsideTheFolderTargets(t *testing.T) {
 		{"move", "INBOX", `,"destination":"Secret"`}, {"move", "INBOX", `,"destination":"INBOX"`},
 		{"move", "INBOX", `,"destination":"Arch*"`}, {"move", "INBOX", `,"destination":"inbox"`},
 	} {
-		_, err := e.confirmed("infomaniakmail."+"messages."+tc.tool, "changefolders", refArgs(tc.folder, uid, validity, tc.extra))
+		_, err := e.confirmed("infomaniak.mail."+"messages."+tc.tool, "changefolders", refArgs(tc.folder, uid, validity, tc.extra))
 		if !isInvalidRequest(err) {
 			t.Errorf("%s %s%s: err = %v, want an invalid request", tc.tool, tc.folder, tc.extra, err)
 			continue
@@ -245,7 +245,7 @@ func TestChangesCheckUIDValidityAndSenderBeforeAnyChange(t *testing.T) {
 	for _, tc := range []struct{ tool, extra string }{
 		{"flag", `,"flag":"seen","set":true`}, {"move", `,"destination":"Archive"`}, {"delete", ``}, {"expunge", ``},
 	} {
-		operation := "infomaniakmail.messages." + tc.tool
+		operation := "infomaniak.mail.messages." + tc.tool
 		if _, err := e.confirmed(operation, "change", refArgs("INBOX", allowed, validity+1, tc.extra)); !isInvalidRequest(err) {
 			t.Errorf("%s wrong uidvalidity: err = %v, want invalid request", tc.tool, err)
 		}
@@ -275,7 +275,7 @@ func TestMessagesDeleteMovesToTheTrashFolderOnly(t *testing.T) {
 	uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 	validity := validityOf(t, e, "INBOX")
 
-	result, err := e.confirmed("infomaniakmail.messages.delete", "changefolders", refArgs("INBOX", uid, validity, ""))
+	result, err := e.confirmed("infomaniak.mail.messages.delete", "changefolders", refArgs("INBOX", uid, validity, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestMessagesDeleteMovesToTheTrashFolderOnly(t *testing.T) {
 	}
 	// A message in the trash is not deleted a second time.
 	trashed := list(t, e, "open", `{"folder":"Trash"}`)
-	if _, err := e.confirmed("infomaniakmail.messages.delete", "changefolders",
+	if _, err := e.confirmed("infomaniak.mail.messages.delete", "changefolders",
 		refArgs("Trash", trashed.Messages[0].UID, trashed.UIDValidity, "")); !isInvalidRequest(err) {
 		t.Errorf("delete from the trash: err = %v, want invalid request", err)
 	}
@@ -328,7 +328,7 @@ func TestMessagesDeleteRefusesWithoutAnUnambiguousAllowedTrash(t *testing.T) {
 			connection := setup(t, e)
 			uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 			validity := validityOf(t, e, "INBOX")
-			_, err := e.confirmed("infomaniakmail.messages.delete", connection, refArgs("INBOX", uid, validity, ""))
+			_, err := e.confirmed("infomaniak.mail.messages.delete", connection, refArgs("INBOX", uid, validity, ""))
 			if !isInvalidRequest(err) || strings.Contains(err.Error(), "Trash") || strings.Contains(err.Error(), "Archive") {
 				t.Errorf("err = %v, want an invalid request that names no folder", err)
 			}
@@ -347,7 +347,7 @@ func TestMessagesExpungeRemovesOnlyTheOneUID(t *testing.T) {
 	plain := e.f.add(t, "Trash", "alice@example.net", "plain", base.Add(2*time.Hour))
 	validity := validityOf(t, e, "Trash")
 
-	result, err := e.confirmed("infomaniakmail.messages.expunge", "change", refArgs("Trash", target, validity, ""))
+	result, err := e.confirmed("infomaniak.mail.messages.expunge", "change", refArgs("Trash", target, validity, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func TestMessagesExpungeNeedsUIDPlus(t *testing.T) {
 	uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 	validity := validityOf(t, e, "INBOX")
 
-	_, err := e.confirmed("infomaniakmail.messages.expunge", "change", refArgs("INBOX", uid, validity, ""))
+	_, err := e.confirmed("infomaniak.mail.messages.expunge", "change", refArgs("INBOX", uid, validity, ""))
 	if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "nothing was changed") {
 		t.Errorf("err = %v, want a provider error that says nothing was changed", err)
 	}
@@ -398,7 +398,7 @@ func TestMovingNeedsMove(t *testing.T) {
 	uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 	validity := validityOf(t, e, "INBOX")
 	for tool, extra := range map[string]string{"move": `,"destination":"Archive"`, "delete": ``} {
-		_, err := e.confirmed("infomaniakmail.messages."+tool, "change", refArgs("INBOX", uid, validity, extra))
+		_, err := e.confirmed("infomaniak.mail.messages."+tool, "change", refArgs("INBOX", uid, validity, extra))
 		if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "nothing was changed") {
 			t.Errorf("%s: err = %v, want a provider error that says nothing was changed", tool, err)
 		}
@@ -416,7 +416,7 @@ func TestDeleteNeedsSpecialUse(t *testing.T) {
 	markSpecialUse(t, e.f, "Trash", imap.MailboxAttrTrash)
 	uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 	validity := validityOf(t, e, "INBOX")
-	if _, err := e.confirmed("infomaniakmail.messages.delete", "change", refArgs("INBOX", uid, validity, "")); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.messages.delete", "change", refArgs("INBOX", uid, validity, "")); !isInvalidRequest(err) {
 		t.Errorf("err = %v, want an invalid request", err)
 	}
 	if commands(e, moveCommand) != 0 {
@@ -482,7 +482,7 @@ func TestAnUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 			t.Cleanup(func() { dialIMAP = real })
 			dials := e.f.dials.Load()
 
-			_, err := e.confirmed("infomaniakmail.messages."+tc.tool, "change", refArgs("INBOX", uid, validity, tc.extra))
+			_, err := e.confirmed("infomaniak.mail.messages."+tc.tool, "change", refArgs("INBOX", uid, validity, tc.extra))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want it to say %q", err, tc.want)
 			}
@@ -502,7 +502,7 @@ func TestAServerRefusalIsDefiniteAndCarriesNoServerText(t *testing.T) {
 	uid := e.f.add(t, "INBOX", "alice@example.net", "one", base)
 	validity := validityOf(t, e, "INBOX")
 
-	_, err := e.confirmed("infomaniakmail.messages.move", "change", refArgs("INBOX", uid, validity, `,"destination":"Missing"`))
+	_, err := e.confirmed("infomaniak.mail.messages.move", "change", refArgs("INBOX", uid, validity, `,"destination":"Missing"`))
 	if classOf(err) == "" || strings.Contains(err.Error(), "may have been applied") {
 		t.Fatalf("err = %v, want a definite failure", err)
 	}

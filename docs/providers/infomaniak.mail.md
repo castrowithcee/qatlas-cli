@@ -40,11 +40,11 @@ Manager. The login name is the mailbox address from the connection's `mailbox/` 
 ```yaml
 services:
   infomaniak-mail:
-    provider: infomaniakmail
+    provider: infomaniak.mail
 
 credentials:
   customer-a-mail:
-    provider: infomaniakmail
+    provider: infomaniak.mail
     type: keyring
 ```
 
@@ -70,9 +70,9 @@ wildcards `*` and `%`, so a name can never widen into a pattern. `INBOX` is case
 folder name is compared exactly. A folder target names that folder only; its subfolders are not implied.
 No error quotes a configured value.
 
-Without a folder target, every folder of the mailbox is reachable. With one, `infomaniakmail.messages.list`,
-`infomaniakmail.messages.get`, and `infomaniakmail.attachments.get` refuse any other folder as an invalid request **before** a secret is read and before any connection is
-opened, and the refusal never names an allowed folder. `infomaniakmail.folders.list` then asks the server only
+Without a folder target, every folder of the mailbox is reachable. With one, `infomaniak.mail.messages.list`,
+`infomaniak.mail.messages.get`, and `infomaniak.mail.attachments.get` refuse any other folder as an invalid request **before** a secret is read and before any connection is
+opened, and the refusal never names an allowed folder. `infomaniak.mail.folders.list` then asks the server only
 for the allow-listed names and filters every answer again locally.
 
 Without a sender target, every sender is listed. With one, only messages whose parsed From address is on the
@@ -86,19 +86,19 @@ would match).
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `infomaniakmail.folders.list` | read | none | IMAP LIST, filtered to the folder allow-list |
-| `infomaniakmail.messages.list` | read | none | envelopes of the newest matching messages of one folder |
-| `infomaniakmail.messages.get` | read | none | one message: envelope, bounded text, attachment metadata |
-| `infomaniakmail.attachments.get` | read | none | one attachment, inline as base64 or written to a local file |
-| `infomaniakmail.messages.flag` | update | required | sets or removes `seen` or `flagged` on one message |
-| `infomaniakmail.messages.move` | update | required | moves one message to another folder of the connection |
-| `infomaniakmail.messages.delete` | delete | required | moves one message to the trash folder |
-| `infomaniakmail.messages.expunge` | delete | required | removes one message for good |
-| `infomaniakmail.drafts.create` | create | required | stores one new draft with attachments in the drafts folder |
-| `infomaniakmail.drafts.update` | update | required | replaces one draft by a new one |
-| `infomaniakmail.drafts.delete` | delete | required | removes one draft for good |
-| `infomaniakmail.messages.send` | create | required | sends one new message or reply over SMTP and stores a copy in the Sent folder |
-| `infomaniakmail.drafts.send` | create | required | sends one checked draft over SMTP and stores a copy in the Sent folder |
+| `infomaniak.mail.folders.list` | read | none | IMAP LIST, filtered to the folder allow-list |
+| `infomaniak.mail.messages.list` | read | none | envelopes of the newest matching messages of one folder |
+| `infomaniak.mail.messages.get` | read | none | one message: envelope, bounded text, attachment metadata |
+| `infomaniak.mail.attachments.get` | read | none | one attachment, inline as base64 or written to a local file |
+| `infomaniak.mail.messages.flag` | update | required | sets or removes `seen` or `flagged` on one message |
+| `infomaniak.mail.messages.move` | update | required | moves one message to another folder of the connection |
+| `infomaniak.mail.messages.delete` | delete | required | moves one message to the trash folder |
+| `infomaniak.mail.messages.expunge` | delete | required | removes one message for good |
+| `infomaniak.mail.drafts.create` | create | required | stores one new draft with attachments in the drafts folder |
+| `infomaniak.mail.drafts.update` | update | required | replaces one draft by a new one |
+| `infomaniak.mail.drafts.delete` | delete | required | removes one draft for good |
+| `infomaniak.mail.messages.send` | create | required | sends one new message or reply over SMTP and stores a copy in the Sent folder |
+| `infomaniak.mail.drafts.send` | create | required | sends one checked draft over SMTP and stores a copy in the Sent folder |
 
 The recommended profile, `read`, offers the four reads and needs the `read` permission. The profile `organise`
 is not recommended; it adds `messages.flag`, `messages.move`, and `messages.delete`, so it needs `update` and
@@ -115,7 +115,7 @@ needs no release.
 
 ## Listing messages
 
-`infomaniakmail.messages.list` takes a `folder` and these fixed, typed filters only:
+`infomaniak.mail.messages.list` takes a `folder` and these fixed, typed filters only:
 
 | Argument | Meaning |
 | --- | --- |
@@ -147,7 +147,7 @@ message, and the result count is still capped by `limit`.
 
 ## Reading a message
 
-`infomaniakmail.messages.get` takes `folder`, `uid`, and `uidvalidity`, all required; the UID and UIDVALIDITY
+`infomaniak.mail.messages.get` takes `folder`, `uid`, and `uidvalidity`, all required; the UID and UIDVALIDITY
 come from `messages.list`, and a `uidvalidity` that no longer matches the folder is refused as an invalid
 request. It answers the envelope fields of `messages.list` plus:
 
@@ -175,7 +175,7 @@ request. It answers the envelope fields of `messages.list` plus:
 
 ## Reading an attachment
 
-`infomaniakmail.attachments.get` takes `folder`, `uid`, `uidvalidity`, and `part`, and optionally `local_path`.
+`infomaniak.mail.attachments.get` takes `folder`, `uid`, `uidvalidity`, and `part`, and optionally `local_path`.
 The part number is only matched against the attachments of the message's own BODYSTRUCTURE; the section that is
 fetched always comes from that structure, never from the argument, so `HEADER`, `TEXT`, or the message's text
 cannot be asked for. A part that is no attachment is `not-found`.
@@ -253,8 +253,8 @@ connections:
     credential: customer-a-mail
     permissions: [read, update, delete]
     targets: [mailbox/office@example.com, folder/INBOX, folder/Archive, folder/Trash]
-    tools: [infomaniakmail.messages.list, infomaniakmail.messages.get, infomaniakmail.messages.flag,
-            infomaniakmail.messages.move, infomaniakmail.messages.delete]
+    tools: [infomaniak.mail.messages.list, infomaniak.mail.messages.get, infomaniak.mail.messages.flag,
+            infomaniak.mail.messages.move, infomaniak.mail.messages.delete]
 ```
 
 ## Drafts
@@ -323,8 +323,8 @@ connections:
     targets: [mailbox/office@example.com, folder/INBOX, folder/Drafts]
     files:
       read: [~/uploads]
-    tools: [infomaniakmail.messages.list, infomaniakmail.messages.get, infomaniakmail.drafts.create,
-            infomaniakmail.drafts.update]
+    tools: [infomaniak.mail.messages.list, infomaniak.mail.messages.get, infomaniak.mail.drafts.create,
+            infomaniak.mail.drafts.update]
 ```
 
 ## Sending
@@ -407,7 +407,7 @@ connections:
     targets: [mailbox/office@example.com, folder/INBOX, folder/Drafts, folder/Sent]
     files:
       read: [~/uploads]
-    tools: [infomaniakmail.messages.get, infomaniakmail.drafts.send, infomaniakmail.messages.send]
+    tools: [infomaniak.mail.messages.get, infomaniak.mail.drafts.send, infomaniak.mail.messages.send]
 ```
 
 ## Reading changes nothing
