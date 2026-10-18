@@ -94,7 +94,7 @@ func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 }
 
 var accountGet = capability.Descriptor{
-	ID: Provider + ".account.get", Version: 1, Title: "Get Nextcloud account data",
+	ID: Provider + ".account.account.get", Version: 1, Title: "Get Nextcloud account data",
 	Description: "Read the own account data of the identity: ID, display name, email, language, locale, groups " +
 		"(at most 50), and storage use as numbers. Values are personal and untrusted data; storage paths, backend " +
 		"details, phone, and address are not reported",

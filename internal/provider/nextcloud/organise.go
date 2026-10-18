@@ -32,7 +32,7 @@ func organiseRisk(effect capability.Effect) capability.Risk {
 const folderPathArgument = "Path relative to the fixed root folder of this connection"
 
 var foldersCreate = capability.Descriptor{
-	ID: Provider + ".folders.create", Version: 1,
+	ID: Provider + ".files.folders.create", Version: 1,
 	Title: "Create a Nextcloud folder",
 	Description: "Create exactly one confirmed folder below an existing folder of the fixed root of a connection; " +
 		"a path that already exists or a missing parent folder is refused",
@@ -52,7 +52,7 @@ var foldersCreate = capability.Descriptor{
 }
 
 var foldersDelete = capability.Descriptor{
-	ID: Provider + ".folders.delete", Version: 1,
+	ID: Provider + ".files.folders.delete", Version: 1,
 	Title: "Delete a Nextcloud folder",
 	Description: "Delete one confirmed folder below the fixed root of a connection together with everything in it, " +
 		"bound to the folder ETag; the root itself is never deleted. Nextcloud moves the folder to the trash bin " +
@@ -67,7 +67,7 @@ var foldersDelete = capability.Descriptor{
 		`"required":["deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "path", Required: true, Description: "Folder relative to the fixed root folder of this connection; never the root itself"},
-		{Name: "etag", Required: true, Description: "Entity tag of the folder version to delete, from files.stat or files.list"},
+		{Name: "etag", Required: true, Description: "Entity tag of the folder version to delete, from files.files.stat or files.files.list"},
 	},
 	Fields:   []capability.Field{{Name: "deleted", Description: "True when Nextcloud applied the deletion"}},
 	Examples: []capability.Example{{Description: "Delete a folder with its content", Arguments: json.RawMessage(`{"path":"2026/Old","etag":"abc123"}`)}},
@@ -75,7 +75,7 @@ var foldersDelete = capability.Descriptor{
 
 func transferDescriptor(action, done, title, description string, effect capability.Effect) capability.Descriptor {
 	return capability.Descriptor{
-		ID: Provider + ".files." + action, Version: 1, Title: title, Description: description,
+		ID: Provider + ".files.files." + action, Version: 1, Title: title, Description: description,
 		Tags: []string{"nextcloud", "files", "webdav", action}, Provider: Provider,
 		Risk: organiseRisk(effect),
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `,"destination":` +

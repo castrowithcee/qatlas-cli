@@ -43,15 +43,15 @@ func talkWriteCases() []talkWriteCase {
 	const chat = "/ocs/v2.php/apps/spreed/api/v1/chat/" + boundRoom
 	const reaction = "/ocs/v2.php/apps/spreed/api/v1/reaction/" + boundRoom + "/42"
 	return []talkWriteCase{
-		{"send", "nextcloud.talkmessages.send", `,"message":"Hello","reply_to":"7","silent":true`, http.MethodPost, chat,
+		{"send", "nextcloud.talk.messages.send", `,"message":"Hello","reply_to":"7","silent":true`, http.MethodPost, chat,
 			url.Values{"message": {"Hello"}, "replyTo": {"7"}, "silent": {"true"}}},
-		{"edit", "nextcloud.talkmessages.edit", `,"message_id":"42","message":"Fixed"`, http.MethodPut, chat + "/42",
+		{"edit", "nextcloud.talk.messages.edit", `,"message_id":"42","message":"Fixed"`, http.MethodPut, chat + "/42",
 			url.Values{"message": {"Fixed"}}},
-		{"delete", "nextcloud.talkmessages.delete", `,"message_id":"42"`, http.MethodDelete, chat + "/42", nil},
-		{"react", "nextcloud.talkreactions.set", `,"message_id":"42","reaction":"👍","add":true`, http.MethodPost, reaction,
+		{"delete", "nextcloud.talk.messages.delete", `,"message_id":"42"`, http.MethodDelete, chat + "/42", nil},
+		{"react", "nextcloud.talk.reactions.set", `,"message_id":"42","reaction":"👍","add":true`, http.MethodPost, reaction,
 			url.Values{"reaction": {"👍"}}},
-		{"unreact", "nextcloud.talkreactions.set", `,"message_id":"42","reaction":"👍","add":false`, http.MethodDelete, reaction, nil},
-		{"markread", "nextcloud.talkrooms.markread", ``, http.MethodPost, chat + "/read", nil},
+		{"unreact", "nextcloud.talk.reactions.set", `,"message_id":"42","reaction":"👍","add":false`, http.MethodDelete, reaction, nil},
+		{"markread", "nextcloud.talk.rooms.mark-read", ``, http.MethodPost, chat + "/read", nil},
 	}
 }
 
@@ -194,18 +194,18 @@ func TestTalkWritesClassifyFailures(t *testing.T) {
 func TestTalkWritesRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 	refuse(t)
 	cases := map[string][2]string{
-		"unbound room":        {"nextcloud.talkmessages.send", talkArgs(foreignRoom, `,"message":"x"`)},
-		"reply not numeric":   {"nextcloud.talkmessages.send", talkArgs(boundRoom, `,"message":"x","reply_to":"1/../2"`)},
-		"empty text":          {"nextcloud.talkmessages.send", talkArgs(boundRoom, `,"message":"  "`)},
-		"long text":           {"nextcloud.talkmessages.send", talkArgs(boundRoom, `,"message":"`+strings.Repeat("a", 4001)+`"`)},
-		"edit id not numeric": {"nextcloud.talkmessages.edit", talkArgs(boundRoom, `,"message_id":"4x","message":"x"`)},
-		"edit id empty":       {"nextcloud.talkmessages.edit", talkArgs(boundRoom, `,"message_id":"","message":"x"`)},
-		"delete id traversal": {"nextcloud.talkmessages.delete", talkArgs(boundRoom, `,"message_id":"../42"`)},
-		"delete unbound":      {"nextcloud.talkmessages.delete", talkArgs(foreignRoom, `,"message_id":"42"`)},
-		"reaction text":       {"nextcloud.talkreactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"ok","add":true`)},
-		"reaction two words":  {"nextcloud.talkreactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"👍 👍","add":true`)},
-		"reaction no add":     {"nextcloud.talkreactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"👍"`)},
-		"reaction id":         {"nextcloud.talkreactions.set", talkArgs(boundRoom, `,"message_id":"x","reaction":"👍","add":true`)},
+		"unbound room":        {"nextcloud.talk.messages.send", talkArgs(foreignRoom, `,"message":"x"`)},
+		"reply not numeric":   {"nextcloud.talk.messages.send", talkArgs(boundRoom, `,"message":"x","reply_to":"1/../2"`)},
+		"empty text":          {"nextcloud.talk.messages.send", talkArgs(boundRoom, `,"message":"  "`)},
+		"long text":           {"nextcloud.talk.messages.send", talkArgs(boundRoom, `,"message":"`+strings.Repeat("a", 4001)+`"`)},
+		"edit id not numeric": {"nextcloud.talk.messages.edit", talkArgs(boundRoom, `,"message_id":"4x","message":"x"`)},
+		"edit id empty":       {"nextcloud.talk.messages.edit", talkArgs(boundRoom, `,"message_id":"","message":"x"`)},
+		"delete id traversal": {"nextcloud.talk.messages.delete", talkArgs(boundRoom, `,"message_id":"../42"`)},
+		"delete unbound":      {"nextcloud.talk.messages.delete", talkArgs(foreignRoom, `,"message_id":"42"`)},
+		"reaction text":       {"nextcloud.talk.reactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"ok","add":true`)},
+		"reaction two words":  {"nextcloud.talk.reactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"👍 👍","add":true`)},
+		"reaction no add":     {"nextcloud.talk.reactions.set", talkArgs(boundRoom, `,"message_id":"42","reaction":"👍"`)},
+		"reaction id":         {"nextcloud.talk.reactions.set", talkArgs(boundRoom, `,"message_id":"x","reaction":"👍","add":true`)},
 	}
 	for name, c := range cases {
 		_, err := talkWriter(t, "talk/"+boundRoom).Invoke(context.Background(), application.InvokeRequest{
@@ -217,7 +217,7 @@ func TestTalkWritesRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 	}
 	for _, targets := range [][]string{{"folder/Reports"}, {"account"}} {
 		_, err := talkWriter(t, targets...).Invoke(context.Background(), application.InvokeRequest{
-			Operation: "nextcloud.talkmessages.send", Connection: "reports", Confirmed: true,
+			Operation: "nextcloud.talk.messages.send", Connection: "reports", Confirmed: true,
 			Arguments: json.RawMessage(talkArgs(boundRoom, `,"message":"x"`)),
 		})
 		if err == nil || strings.Contains(err.Error(), boundRoom) {

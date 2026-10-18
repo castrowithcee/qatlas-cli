@@ -112,7 +112,7 @@ var eventFields = []capability.Field{
 }
 
 var calendarsList = capability.Descriptor{
-	ID: Provider + ".calendars.list", Version: 1, Title: "List Nextcloud calendars",
+	ID: Provider + ".calendar.calendars.list", Version: 1, Title: "List Nextcloud calendars",
 	Description: "List the calendars of the bound Nextcloud identity that the connection's calendar targets " +
 		"bind, shared calendars included; subscriptions, the scheduling inbox and outbox, and the trash bin " +
 		"are never listed; calendars only, no events",
@@ -139,7 +139,7 @@ var calendarsList = capability.Descriptor{
 }
 
 var eventsList = capability.Descriptor{
-	ID: Provider + ".events.list", Version: 1, Title: "List Nextcloud calendar events",
+	ID: Provider + ".calendar.events.list", Version: 1, Title: "List Nextcloud calendar events",
 	Description: "List the events of one bound calendar that overlap a time range, ordered by start; a " +
 		"repeating event is reported once with its recurrence rule, never expanded; the result is limited " +
 		"and compact",
@@ -165,7 +165,7 @@ var eventsList = capability.Descriptor{
 }
 
 var eventsGet = capability.Descriptor{
-	ID: Provider + ".events.get", Version: 1, Title: "Get a Nextcloud calendar event",
+	ID: Provider + ".calendar.events.get", Version: 1, Title: "Get a Nextcloud calendar event",
 	Description: "Read one event of a bound calendar with its structured fields and entity tag; a repeating " +
 		"event carries its recurrence rule, never expanded",
 	Tags: []string{"nextcloud", "calendar", "event", "get"}, Risk: calendarRisk, Provider: Provider,

@@ -44,7 +44,7 @@ var taskFields = []capability.Field{
 }
 
 var tasksList = capability.Descriptor{
-	ID: Provider + ".tasks.list", Version: 1, Title: "List Nextcloud calendar tasks",
+	ID: Provider + ".calendar.tasks.list", Version: 1, Title: "List Nextcloud calendar tasks",
 	Description: "List the tasks (VTODO, as the Nextcloud Tasks app manages them) of one bound calendar that " +
 		"supports tasks, optionally only open or completed ones and only those with a due date in a range (tasks without one are left out), ordered by " +
 		"due date; the result is limited and compact",
@@ -72,7 +72,7 @@ var tasksList = capability.Descriptor{
 }
 
 var tasksGet = capability.Descriptor{
-	ID: Provider + ".tasks.get", Version: 1, Title: "Get a Nextcloud calendar task",
+	ID: Provider + ".calendar.tasks.get", Version: 1, Title: "Get a Nextcloud calendar task",
 	Description: "Read one task of a bound calendar that supports tasks, with its structured fields and entity tag",
 	Tags:        []string{"nextcloud", "calendar", "task", "get"}, Risk: calendarRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarArgSchema + `,` +

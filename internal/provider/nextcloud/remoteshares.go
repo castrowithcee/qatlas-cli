@@ -23,8 +23,8 @@ import (
 const (
 	maxRemoteHost = 255
 
-	uncertainRemoteShareRemove = "; the remote share may have been removed, check remoteshares.list or " +
-		"remoteshares.get before repeating"
+	uncertainRemoteShareRemove = "; the remote share may have been removed, check shares.remote-shares.list or " +
+		"shares.remote-shares.get before repeating"
 
 	messageFederationOff       = "federated sharing is not available on this Nextcloud instance"
 	messageRemoteShareNotFound = "this Nextcloud identity holds no such remote share"
@@ -202,10 +202,10 @@ var remoteShareFields = []capability.Field{
 }
 
 var remoteShareIDArgument = capability.Argument{Name: "share_id", Required: true,
-	Description: "Numeric remote share ID as reported by remoteshares.list"}
+	Description: "Numeric remote share ID as reported by shares.remote-shares.list"}
 
 var remoteSharesList = capability.Descriptor{
-	ID: Provider + ".remoteshares.list", Version: 1, Title: "List accepted Nextcloud federated shares",
+	ID: Provider + ".shares.remote-shares.list", Version: 1, Title: "List accepted Nextcloud federated shares",
 	Description: "List the federated shares the identity accepted from other servers; the other server is " +
 		"reported as a host only, and no token, password, or remote URL is reported. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "list", "ocs"},
@@ -223,7 +223,7 @@ var remoteSharesList = capability.Descriptor{
 }
 
 var remoteSharesGet = capability.Descriptor{
-	ID: Provider + ".remoteshares.get", Version: 1, Title: "Get an accepted Nextcloud federated share",
+	ID: Provider + ".shares.remote-shares.get", Version: 1, Title: "Get an accepted Nextcloud federated share",
 	Description: "Read one accepted federated share of the identity by its ID; the other server is reported as " +
 		"a host only. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "get", "ocs"},
@@ -238,7 +238,7 @@ var remoteSharesGet = capability.Descriptor{
 }
 
 var remoteSharesRemove = capability.Descriptor{
-	ID: Provider + ".remoteshares.remove", Version: 1, Title: "Remove an accepted Nextcloud federated share",
+	ID: Provider + ".shares.remote-shares.remove", Version: 1, Title: "Remove an accepted Nextcloud federated share",
 	Description: "Remove exactly one accepted federated share from the identity, which unmounts it; the share " +
 		"on the other server stays. One read-only pre-check precedes exactly one request. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "remove", "delete", "ocs"},
@@ -251,7 +251,7 @@ var remoteSharesRemove = capability.Descriptor{
 	Arguments: []capability.Argument{remoteShareIDArgument},
 	Fields: []capability.Field{{Name: "removed", Description: "True when Nextcloud removed the share"},
 		{Name: "id", Description: "ID of the removed share"}, remoteShareFields[2], remoteShareFields[3]},
-	Examples: []capability.Example{{Description: "Use a share_id from remoteshares.list",
+	Examples: []capability.Example{{Description: "Use a share_id from shares.remote-shares.list",
 		Arguments: json.RawMessage(`{"share_id":"5"}`)}},
 	RequiresToolAllowList: true,
 }

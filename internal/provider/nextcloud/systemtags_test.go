@@ -271,7 +271,7 @@ func TestFileTagChangesWithAnUnclearOutcomeAreNeverRepeated(t *testing.T) {
 					handler = invokeFilesTagsRemove
 				}
 				_, err := invokeTag(t, handler, `{"path":"note.txt","tag_id":"7"}`)
-				if err == nil || !strings.Contains(err.Error(), hint) || !strings.Contains(err.Error(), "filetags.list") {
+				if err == nil || !strings.Contains(err.Error(), hint) || !strings.Contains(err.Error(), "files.file-tags.list") {
 					t.Errorf("err = %v", err)
 				}
 				if len(*changes) != 1 {
@@ -344,8 +344,8 @@ func TestFileTagsWorkOnFoldersAndRefuseAMissingFileID(t *testing.T) {
 
 func TestFileTagToolsRisksProfilesAndGroup(t *testing.T) {
 	reg := registry(t)
-	want := map[string]capability.Effect{"nextcloud.systemtags.list": capability.EffectRead, "nextcloud.filetags.list": capability.EffectRead,
-		"nextcloud.filetags.add": capability.EffectUpdate, "nextcloud.filetags.remove": capability.EffectUpdate}
+	want := map[string]capability.Effect{"nextcloud.files.system-tags.list": capability.EffectRead, "nextcloud.files.file-tags.list": capability.EffectRead,
+		"nextcloud.files.file-tags.add": capability.EffectUpdate, "nextcloud.files.file-tags.remove": capability.EffectUpdate}
 	for _, d := range reg.Provider(Provider) {
 		effect, ok := want[d.ID]
 		if !ok {

@@ -124,7 +124,7 @@ func TestStatusChangeOutcomes(t *testing.T) {
 				serve(t, func(*http.Request) (*http.Response, error) { requests++; return tc.answer() })
 				_, err := runAccount(tl.h, tl.args)
 				if err == nil || requests != 1 || strings.Contains(err.Error(), bodyCanary) || strings.Contains(err.Error(), redirectTarget) ||
-					strings.Contains(err.Error(), "check status.get before repeating") != tc.uncertn {
+					strings.Contains(err.Error(), "check account.status.get before repeating") != tc.uncertn {
 					t.Errorf("err = %v, requests = %d", err, requests)
 				}
 				if name == "302" && !strings.Contains(err.Error(), "redirect") {

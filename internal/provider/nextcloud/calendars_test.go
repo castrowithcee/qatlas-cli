@@ -98,7 +98,7 @@ func TestCalendarsListReportsOnlyBoundCalendarsOfTheHome(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, homeListing()), nil
 	})
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendars.list", `{}`)
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.calendars.list", `{}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestCalendarsListReportsOnlyBoundCalendarsOfTheHome(t *testing.T) {
 	}
 
 	// A single calendar target narrows the listing to that calendar.
-	result, err = calInvoke(t, []string{"calendar/team_shared_by_bob"}, "nextcloud.calendars.list", `{}`)
+	result, err = calInvoke(t, []string{"calendar/team_shared_by_bob"}, "nextcloud.calendar.calendars.list", `{}`)
 	if err != nil || !strings.Contains(string(result), `"count":1`) || strings.Contains(string(result), "personal") {
 		t.Errorf("narrowed = %s, %v", result, err)
 	}
@@ -134,14 +134,14 @@ func TestReservedCollectionsAreNeverCalendars(t *testing.T) {
 			return xmlResponse(http.StatusMultiStatus, homeListing()), nil
 		})
 		// Bound by name, the collection is neither listed nor addressable.
-		result, err := calInvoke(t, []string{"calendar/" + name}, "nextcloud.calendars.list", `{}`)
+		result, err := calInvoke(t, []string{"calendar/" + name}, "nextcloud.calendar.calendars.list", `{}`)
 		if err != nil || !strings.Contains(string(result), `"count":0`) {
 			t.Errorf("list %s = %s, %v", name, result, err)
 		}
 		before := len(*calls)
 		for op, args := range map[string]string{
-			"nextcloud.events.list": `{"calendar":"` + name + `","start":"2026-03-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`,
-			"nextcloud.events.get":  `{"calendar":"` + name + `","id":"a.ics"}`,
+			"nextcloud.calendar.events.list": `{"calendar":"` + name + `","start":"2026-03-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`,
+			"nextcloud.calendar.events.get":  `{"calendar":"` + name + `","id":"a.ics"}`,
 		} {
 			if _, err := calInvoke(t, []string{"calendar/" + name}, op, args); classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s = %v, want a permission refusal", op, name, err)
@@ -176,7 +176,7 @@ func TestReadOnlyFollowsTheConservativePrivilegeRule(t *testing.T) {
 					calendarNode(calHome, "Home", "", nil),
 					calendarNode(calHome+"one/", "One", isCalendar, tc.privileges, "VEVENT"))), nil
 			})
-			result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendars.list", `{}`)
+			result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.calendars.list", `{}`)
 			var listed CalendarsResult
 			if err != nil || json.Unmarshal(result, &listed) != nil || len(listed.Calendars) != 1 ||
 				listed.Calendars[0].ReadOnly != tc.readOnly {
@@ -196,14 +196,14 @@ func TestUnboundCalendarIsRefusedBeforeAnyRequest(t *testing.T) {
 		targets []string
 		op, arg string
 	}{
-		"list, no calendar target": {[]string{"folder/Reports"}, "nextcloud.calendars.list", `{}`},
-		"events, no target":        {[]string{"folder/Reports"}, "nextcloud.events.list", `{"calendar":"personal",` + rangeArgs + `}`},
-		"get, no target":           {[]string{"account"}, "nextcloud.events.get", `{"calendar":"personal","id":"a.ics"}`},
-		"events, other calendar":   {[]string{"calendar/work"}, "nextcloud.events.list", `{"calendar":"other-secret",` + rangeArgs + `}`},
-		"get, other calendar":      {[]string{"calendar/work"}, "nextcloud.events.get", `{"calendar":"other-secret","id":"a.ics"}`},
-		"case differs":             {[]string{"calendar/work"}, "nextcloud.events.get", `{"calendar":"Work","id":"a.ics"}`},
-		"traversal calendar":       {[]string{"calendar"}, "nextcloud.events.get", `{"calendar":"../bobby","id":"a.ics"}`},
-		"separator calendar":       {[]string{"calendar"}, "nextcloud.events.list", `{"calendar":"a/b",` + rangeArgs + `}`},
+		"list, no calendar target": {[]string{"folder/Reports"}, "nextcloud.calendar.calendars.list", `{}`},
+		"events, no target":        {[]string{"folder/Reports"}, "nextcloud.calendar.events.list", `{"calendar":"personal",` + rangeArgs + `}`},
+		"get, no target":           {[]string{"account"}, "nextcloud.calendar.events.get", `{"calendar":"personal","id":"a.ics"}`},
+		"events, other calendar":   {[]string{"calendar/work"}, "nextcloud.calendar.events.list", `{"calendar":"other-secret",` + rangeArgs + `}`},
+		"get, other calendar":      {[]string{"calendar/work"}, "nextcloud.calendar.events.get", `{"calendar":"other-secret","id":"a.ics"}`},
+		"case differs":             {[]string{"calendar/work"}, "nextcloud.calendar.events.get", `{"calendar":"Work","id":"a.ics"}`},
+		"traversal calendar":       {[]string{"calendar"}, "nextcloud.calendar.events.get", `{"calendar":"../bobby","id":"a.ics"}`},
+		"separator calendar":       {[]string{"calendar"}, "nextcloud.calendar.events.list", `{"calendar":"a/b",` + rangeArgs + `}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := calInvoke(t, tc.targets, tc.op, tc.arg)
@@ -229,7 +229,7 @@ func TestEventIDAndRangeAreValidatedBeforeAnyRequest(t *testing.T) {
 	})
 	for _, id := range []string{"../x.ics", "a/b.ics", "%2e%2e", "..", ".", "a\\b.ics", "a\u0001.ics", strings.Repeat("a", 256)} {
 		body, _ := json.Marshal(map[string]string{"calendar": "personal", "id": id})
-		if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.events.get", string(body)); err == nil {
+		if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.events.get", string(body)); err == nil {
 			t.Errorf("id %q was accepted", id)
 		}
 	}
@@ -240,7 +240,7 @@ func TestEventIDAndRangeAreValidatedBeforeAnyRequest(t *testing.T) {
 		"limit":       `{"calendar":"personal","start":"2026-01-01T00:00:00Z","end":"2026-02-01T00:00:00Z","limit":500}`,
 		"free filter": `{"calendar":"personal","start":"2026-01-01T00:00:00Z","end":"2026-02-01T00:00:00Z","filter":"x"}`,
 	} {
-		if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.events.list", args); err == nil {
+		if _, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.events.list", args); err == nil {
 			t.Errorf("%s: the arguments were accepted", name)
 		}
 	}
@@ -262,7 +262,7 @@ func TestEventsListSendsOneFixedReportAndDropsForeignNodes(t *testing.T) {
 			eventNode(base+"broken.ics", "x", "not an iCalendar object"),
 		)), nil
 	})
-	result, err := calInvoke(t, []string{"calendar/personal"}, "nextcloud.events.list",
+	result, err := calInvoke(t, []string{"calendar/personal"}, "nextcloud.calendar.events.list",
 		`{"calendar":"personal","start":"2026-03-01T00:00:00+01:00","end":"2026-04-01T00:00:00Z","limit":1}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -295,7 +295,7 @@ func TestEventsGetReadsOneEventAtAFixedPath(t *testing.T) {
 		response.Header = http.Header{"Etag": []string{`"abc123"`}}
 		return response, nil
 	})
-	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.events.get",
+	result, err := calInvoke(t, []string{"calendar"}, "nextcloud.calendar.events.get",
 		`{"calendar":"team_shared_by_bob","id":"my event.ics"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -324,9 +324,9 @@ func TestCalendarRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 			return response, nil
 		})
 		for op, args := range map[string]string{
-			"nextcloud.calendars.list": `{}`,
-			"nextcloud.events.list":    `{"calendar":"personal","start":"2026-03-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`,
-			"nextcloud.events.get":     `{"calendar":"personal","id":"a.ics"}`,
+			"nextcloud.calendar.calendars.list": `{}`,
+			"nextcloud.calendar.events.list":    `{"calendar":"personal","start":"2026-03-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`,
+			"nextcloud.calendar.events.get":     `{"calendar":"personal","id":"a.ics"}`,
 		} {
 			_, err := calInvoke(t, []string{"calendar"}, op, args)
 			if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "redirect") ||
@@ -458,7 +458,7 @@ func TestCalendarToolsAreGroupedAndProfiled(t *testing.T) {
 			tools = p.Tools
 		}
 	}
-	if strings.Join(tools, " ") != "nextcloud.calendars.list nextcloud.events.list nextcloud.events.get nextcloud.tasks.list nextcloud.tasks.get" {
+	if strings.Join(tools, " ") != "nextcloud.calendar.calendars.list nextcloud.calendar.events.list nextcloud.calendar.events.get nextcloud.calendar.tasks.list nextcloud.calendar.tasks.get" {
 		t.Errorf("profile tools = %v", tools)
 	}
 	for _, d := range []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID} {

@@ -12,17 +12,17 @@ import (
 
 // Calendar sharing: one oc:share POST to a bound calendar of the identity after the read-only owner pre-check
 // of the calendar management tools. Nextcloud ignores an unknown user or group without an error, so the
-// answer says that the change was accepted, not that the recipient exists; calendars.list shows the result.
+// answer says that the change was accepted, not that the recipient exists; calendar.calendars.list shows the result.
 
 const calendarShareOut = `"calendar":{"type":"string"},"type":{"type":"string"},"id":{"type":"string"},` +
 	`"accepted":{"type":"boolean"}`
 
 var calendarsShare = capability.Descriptor{
-	ID: Provider + ".calendars.share", Version: 1, Title: "Share a Nextcloud calendar with a user or group",
+	ID: Provider + ".calendar.calendars.share", Version: 1, Title: "Share a Nextcloud calendar with a user or group",
 	Description: "Share one bound calendar that belongs to the identity with one existing user or group of the " +
 		"instance for reading or for reading and writing; calling it again changes the access. A calendar shared " +
 		"by someone else is refused, and no e-mail, team, or remote recipient and no public link can be set. " +
-		"Nextcloud ignores an unknown user or group without an error, so check calendars.list. One read-only " +
+		"Nextcloud ignores an unknown user or group without an error, so check calendar.calendars.list. One read-only " +
 		"pre-check of the calendar follows, then one POST; the request is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "share"}, Provider: Provider,
 	Risk: eventWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
@@ -41,7 +41,7 @@ var calendarsShare = capability.Descriptor{
 }
 
 var calendarsUnshare = capability.Descriptor{
-	ID: Provider + ".calendars.unshare", Version: 1, Title: "Revoke the share of a Nextcloud calendar",
+	ID: Provider + ".calendar.calendars.unshare", Version: 1, Title: "Revoke the share of a Nextcloud calendar",
 	Description: "Revoke the share of one bound calendar that belongs to the identity for one user or group. A " +
 		"calendar shared by someone else is refused. One read-only pre-check of the calendar follows, then one " +
 		"POST; the request is never repeated after an unclear result",

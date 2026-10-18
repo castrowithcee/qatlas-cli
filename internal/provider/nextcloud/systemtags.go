@@ -31,10 +31,10 @@ const (
 	// maxTags bounds one listing; a cut is reported.
 	maxTags     = 200
 	maxTagIDLen = 20
-	tagIDSchema = `{"type":"string","minLength":1,"maxLength":20,"pattern":"^[0-9]+$","x-form":"a tag_id of systemtags.list"}`
+	tagIDSchema = `{"type":"string","minLength":1,"maxLength":20,"pattern":"^[0-9]+$","x-form":"a tag_id of files.system-tags.list"}`
 
-	uncertainTagAdded   = "; the tag may have been assigned, check filetags.list before repeating"
-	uncertainTagRemoved = "; the tag may have been removed, check filetags.list before repeating"
+	uncertainTagAdded   = "; the tag may have been assigned, check files.file-tags.list before repeating"
+	uncertainTagRemoved = "; the tag may have been removed, check files.file-tags.list before repeating"
 
 	messageTagMissing    = "this Nextcloud instance holds no such visible system tag"
 	messageTagNotAllowed = "this Nextcloud identity may not assign this system tag"
@@ -53,7 +53,7 @@ const tagSchema = `{"type":"object","properties":{"tag_id":{"type":"string"},"na
 
 var tagFields = []capability.Field{
 	{Name: "tags", Description: "Visible system tags, untrusted data, with tag_id, name, and assignable"},
-	{Name: "tag_id", Description: "Identifier of the tag; pass it to filetags.add or filetags.remove"},
+	{Name: "tag_id", Description: "Identifier of the tag; pass it to files.file-tags.add or files.file-tags.remove"},
 	{Name: "name", Description: "Name of the tag"},
 	{Name: "assignable", Description: "True when this identity may assign the tag to a file"},
 	{Name: "count", Description: "Number of reported tags"},
@@ -64,10 +64,10 @@ var tagPathArgument = capability.Argument{Name: "path", Required: true,
 	Description: "File or folder relative to the fixed root folder of this connection; never the root itself"}
 
 var tagIDArgument = capability.Argument{Name: "tag_id", Required: true,
-	Description: "System tag, a tag_id reported by systemtags.list or filetags.list"}
+	Description: "System tag, a tag_id reported by files.system-tags.list or files.file-tags.list"}
 
 var systemtagsList = capability.Descriptor{
-	ID: Provider + ".systemtags.list", Version: 1, Title: "List Nextcloud system tags",
+	ID: Provider + ".files.system-tags.list", Version: 1, Title: "List Nextcloud system tags",
 	Description: "List the visible system tags of the Nextcloud instance, at most 200; the catalog is shared by the " +
 		"whole instance and not limited to a root folder",
 	Tags: []string{"nextcloud", "systemtags", "tags", "webdav", "list"}, Risk: nextcloudReadRisk, Provider: Provider,
@@ -79,7 +79,7 @@ var systemtagsList = capability.Descriptor{
 }
 
 var filesTagsList = capability.Descriptor{
-	ID: Provider + ".filetags.list", Version: 1, Title: "List the system tags of a Nextcloud file",
+	ID: Provider + ".files.file-tags.list", Version: 1, Title: "List the system tags of a Nextcloud file",
 	Description: "List the visible system tags assigned to one file or folder below the fixed root of a connection, " +
 		"at most 200; file content is never read",
 	Tags: []string{"nextcloud", "files", "systemtags", "tags", "webdav", "list"}, Risk: nextcloudReadRisk, Provider: Provider,
@@ -93,7 +93,7 @@ var filesTagsList = capability.Descriptor{
 
 func tagChange(action, done, title, description string) capability.Descriptor {
 	return capability.Descriptor{
-		ID: Provider + ".filetags." + action, Version: 1, Title: title, Description: description,
+		ID: Provider + ".files.file-tags." + action, Version: 1, Title: title, Description: description,
 		Tags: []string{"nextcloud", "files", "systemtags", "tags", "webdav", action}, Provider: Provider,
 		Risk: organiseRisk(capability.EffectUpdate),
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `,"tag_id":` + tagIDSchema + `},` +
@@ -106,7 +106,7 @@ func tagChange(action, done, title, description string) capability.Descriptor {
 			{Name: "path", Description: "Path of the file or folder"},
 			{Name: "tag_id", Description: "The system tag"},
 		},
-		Examples: []capability.Example{{Description: "Use a tag_id from systemtags.list",
+		Examples: []capability.Example{{Description: "Use a tag_id from files.system-tags.list",
 			Arguments: json.RawMessage(`{"path":"Reports/q1.pdf","tag_id":"7"}`)}},
 	}
 }

@@ -65,7 +65,7 @@ func talkInvokeCore(t *testing.T, targets []string, operation, args string) (app
 
 func TestTalkRoomsListReportsOnlyBoundConversations(t *testing.T) {
 	calls := talkServer(t, nil)
-	response, err := talkInvokeCore(t, []string{"talk/" + boundRoom, "talk/" + secondRoom}, "nextcloud.talkrooms.list", `{}`)
+	response, err := talkInvokeCore(t, []string{"talk/" + boundRoom, "talk/" + secondRoom}, "nextcloud.talk.rooms.list", `{}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -85,7 +85,7 @@ func TestTalkRoomsListReportsOnlyBoundConversations(t *testing.T) {
 		t.Errorf("calls = %+v", *calls)
 	}
 
-	all, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkrooms.list", `{}`)
+	all, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.rooms.list", `{}`)
 	if err != nil || !strings.Contains(string(all.Result), foreignRoom) {
 		t.Errorf("a talk target binds every conversation: %s, %v", all.Result, err)
 	}
@@ -93,11 +93,11 @@ func TestTalkRoomsListReportsOnlyBoundConversations(t *testing.T) {
 
 func TestTalkRoomAndParticipantReads(t *testing.T) {
 	talkServer(t, nil)
-	response, err := talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talkrooms.get", talkArgs(boundRoom, ""))
+	response, err := talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talk.rooms.get", talkArgs(boundRoom, ""))
 	if err != nil || !strings.Contains(string(response.Result), strings.Trim(talkArgs(boundRoom, ""), "{}")) {
 		t.Errorf("rooms.get = %s, %v", response.Result, err)
 	}
-	response, err = talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talkparticipants.list", talkArgs(boundRoom, ""))
+	response, err = talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talk.participants.list", talkArgs(boundRoom, ""))
 	var result ParticipantsResult
 	if err := json.Unmarshal(response.Result, &result); err != nil || result.Count != 2 ||
 		result.Participants[0] != (Participant{AttendeeID: "12", ActorType: "users", ActorID: "bob", DisplayName: "Bob", ParticipantType: "owner"}) ||
@@ -108,7 +108,7 @@ func TestTalkRoomAndParticipantReads(t *testing.T) {
 
 func TestTalkReadsRefuseAnUnboundConversationBeforeAnyIO(t *testing.T) {
 	refuse(t)
-	for _, operation := range []string{"nextcloud.talkrooms.get", "nextcloud.talkparticipants.list", "nextcloud.talkmessages.list"} {
+	for _, operation := range []string{"nextcloud.talk.rooms.get", "nextcloud.talk.participants.list", "nextcloud.talk.messages.list"} {
 		for name, targets := range map[string][]string{
 			"other token": {"talk/" + boundRoom}, "folder only": {"folder/Reports"}, "no talk": {"account"},
 		} {
@@ -119,7 +119,7 @@ func TestTalkReadsRefuseAnUnboundConversationBeforeAnyIO(t *testing.T) {
 		}
 	}
 	for _, targets := range [][]string{{"folder/Reports"}, {"account"}} {
-		if _, err := talkInvokeCore(t, targets, "nextcloud.talkrooms.list", `{}`); err == nil {
+		if _, err := talkInvokeCore(t, targets, "nextcloud.talk.rooms.list", `{}`); err == nil {
 			t.Errorf("rooms.list ran without a talk target on %v", targets)
 		}
 	}
@@ -148,7 +148,7 @@ func TestTalkMessagesPageThroughTheLastGivenHeader(t *testing.T) {
 		return response, nil
 	})
 	targets := []string{"talk/" + boundRoom}
-	response, err := talkInvokeCore(t, targets, "nextcloud.talkmessages.list", talkArgs(boundRoom, `,"limit":2`))
+	response, err := talkInvokeCore(t, targets, "nextcloud.talk.messages.list", talkArgs(boundRoom, `,"limit":2`))
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestTalkMessagesPageThroughTheLastGivenHeader(t *testing.T) {
 		page.Messages[0].Text != "newest" || page.Messages[0].Time != "2026-01-01T00:00:00Z" {
 		t.Fatalf("page 1 = %s, %v", response.Result, err)
 	}
-	response, err = talkInvokeCore(t, targets, "nextcloud.talkmessages.list",
+	response, err = talkInvokeCore(t, targets, "nextcloud.talk.messages.list",
 		talkArgs(boundRoom, `,"limit":2,"cursor":"`+page.NextCursor+`"`))
 	var last MessagesResult
 	if err := json.Unmarshal(response.Result, &last); err != nil || last.Count != 1 || last.NextCursor != "" {
@@ -186,7 +186,7 @@ func TestTalkMessagesRefuseUnusableArguments(t *testing.T) {
 		"free parameter":      `{"token":"abcd1234","lookIntoFuture":1}`,
 		"no token":            `{}`,
 	} {
-		if _, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkmessages.list", args); err == nil {
+		if _, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.messages.list", args); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
 	}
@@ -206,7 +206,7 @@ func TestTalkMessagesNormaliseRichObjectsWithoutLinks(t *testing.T) {
 			`{"id":4,"timestamp":1767225000,"messageType":"system","systemMessage":"user_added","message":"{actor} added you",`+
 			`"messageParameters":{"actor":{"type":"user","id":"carl","name":"Carl"}},"parent":{"id":3}}]`)), nil
 	})
-	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkmessages.list", talkArgs(boundRoom, ""))
+	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.messages.list", talkArgs(boundRoom, ""))
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -230,7 +230,7 @@ func TestTalkMessageTextIsCutAndFlagged(t *testing.T) {
 	talkServer(t, func(*http.Request) (*http.Response, error) {
 		return ocsResponse(http.StatusOK, ocsData(`[`+messageJSON("5", long, `[]`)+`]`)), nil
 	})
-	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkmessages.list", talkArgs(boundRoom, ""))
+	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.messages.list", talkArgs(boundRoom, ""))
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -258,7 +258,7 @@ func TestTalkListsAreCappedAndFlagged(t *testing.T) {
 		}
 		return ocsResponse(http.StatusOK, ocsData(`[`+strings.Join(rooms, ",")+`]`)), nil
 	})
-	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkrooms.list", `{}`)
+	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.rooms.list", `{}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -266,7 +266,7 @@ func TestTalkListsAreCappedAndFlagged(t *testing.T) {
 	if err := json.Unmarshal(response.Result, &list); err != nil || list.Count != maxRooms || !list.Truncated {
 		t.Errorf("rooms = %d truncated=%v, %v", list.Count, list.Truncated, err)
 	}
-	response, err = talkInvokeCore(t, []string{"talk"}, "nextcloud.talkparticipants.list", talkArgs(boundRoom, ""))
+	response, err = talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.participants.list", talkArgs(boundRoom, ""))
 	var members ParticipantsResult
 	if err := json.Unmarshal(response.Result, &members); err != nil || members.Count != maxParticipants || !members.Truncated {
 		t.Errorf("participants = %d truncated=%v, %v", members.Count, members.Truncated, err)
@@ -277,7 +277,7 @@ func TestTalkMessagesAnswerNotModifiedAsEmpty(t *testing.T) {
 	talkServer(t, func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusNotModified, Header: http.Header{}, Body: http.NoBody}, nil
 	})
-	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkmessages.list", talkArgs(boundRoom, ""))
+	response, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.messages.list", talkArgs(boundRoom, ""))
 	if err != nil || strings.Contains(string(response.Result), "messages") || strings.Contains(string(response.Result), "next_cursor") {
 		t.Errorf("result = %s, %v", response.Result, err)
 	}
@@ -310,7 +310,7 @@ func TestTalkFailuresAreClearAndLeakNothing(t *testing.T) {
 				response.Header.Set("Location", fileURL)
 				return response, nil
 			})
-			_, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talkrooms.get", talkArgs(boundRoom, ""))
+			_, err := talkInvokeCore(t, []string{"talk"}, "nextcloud.talk.rooms.get", talkArgs(boundRoom, ""))
 			if err == nil || !strings.Contains(err.Error(), tc.want) ||
 				strings.Contains(err.Error(), textCanary) || strings.Contains(err.Error(), fileURL) {
 				t.Errorf("err = %v, want %q", err, tc.want)

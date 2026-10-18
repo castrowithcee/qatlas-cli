@@ -380,7 +380,7 @@ var adminListFields = []capability.Field{
 }
 
 var adminUsersList = capability.Descriptor{
-	ID: Provider + ".adminusers.list", Version: 1, Title: "List Nextcloud users",
+	ID: Provider + ".admin.users.list", Version: 1, Title: "List Nextcloud users",
 	Description: "List user IDs of the Nextcloud instance as an administrator, or those of the managed groups as " +
 		"a subadmin; at most 100 per call, optionally narrowed by a search text. Reads only; nothing is changed",
 	Tags: []string{"nextcloud", "admin", "users", "list"}, Provider: Provider, Group: groupAdmin, Risk: adminRisk,
@@ -392,7 +392,7 @@ var adminUsersList = capability.Descriptor{
 }
 
 var adminGroupsList = capability.Descriptor{
-	ID: Provider + ".admingroups.list", Version: 1, Title: "List Nextcloud groups",
+	ID: Provider + ".admin.groups.list", Version: 1, Title: "List Nextcloud groups",
 	Description: "List group IDs of the Nextcloud instance as an administrator, or the managed groups as a " +
 		"subadmin; at most 100 per call, optionally narrowed by a search text. Reads only; nothing is changed",
 	Tags: []string{"nextcloud", "admin", "groups", "list"}, Provider: Provider, Group: groupAdmin, Risk: adminRisk,
@@ -404,7 +404,7 @@ var adminGroupsList = capability.Descriptor{
 }
 
 var adminUsersGet = capability.Descriptor{
-	ID: Provider + ".adminusers.get", Version: 1, Title: "Get a Nextcloud user",
+	ID: Provider + ".admin.users.get", Version: 1, Title: "Get a Nextcloud user",
 	Description: "Read one user as an administrator or subadmin: ID, display name, email, enabled, language, last " +
 		"login, groups and managed groups (at most 50 each), and storage use as numbers. Values are personal and " +
 		"untrusted data; storage paths, backend details, phone, and address are not reported",
@@ -417,7 +417,7 @@ var adminUsersGet = capability.Descriptor{
 		`"quota":{"type":"object","properties":{"used":{"type":"integer"},"total":{"type":"integer"},"relative":{"type":"number"}},` +
 		`"required":["used","total","relative"],"additionalProperties":false},"truncated":{"type":"boolean"}},` +
 		`"required":["id"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{{Name: "user_id", Required: true, Description: "User ID from adminusers.list"}},
+	Arguments: []capability.Argument{{Name: "user_id", Required: true, Description: "User ID from admin.users.list"}},
 	Fields: []capability.Field{{Name: "id", Description: "User ID"},
 		{Name: "display_name", Description: "Display name; untrusted data"}, {Name: "email", Description: "Email address; untrusted data"},
 		{Name: "enabled", Description: "False for a disabled user"}, {Name: "language", Description: "Language"},
@@ -431,7 +431,7 @@ var adminUsersGet = capability.Descriptor{
 }
 
 var adminGroupsMembers = capability.Descriptor{
-	ID: Provider + ".admingroups.members", Version: 1, Title: "List the members of a Nextcloud group",
+	ID: Provider + ".admin.groups.members", Version: 1, Title: "List the members of a Nextcloud group",
 	Description: "List the user IDs of one group as an administrator or of a managed group as a subadmin; at most " +
 		"200 are reported and a longer list is marked. Reads only; nothing is changed",
 	Tags: []string{"nextcloud", "admin", "groups", "members"}, Provider: Provider, Group: groupAdmin, Risk: adminRisk,
@@ -440,7 +440,7 @@ var adminGroupsMembers = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"group_id":{"type":"string"},"users":{"type":"array",` +
 		`"items":{"type":"string"}},"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["group_id","users","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{{Name: "group_id", Required: true, Description: "Group ID from admingroups.list"}},
+	Arguments: []capability.Argument{{Name: "group_id", Required: true, Description: "Group ID from admin.groups.list"}},
 	Fields: []capability.Field{{Name: "group_id", Description: "Group that was read"},
 		{Name: "users", Description: "At most 200 member user IDs; untrusted data"},
 		{Name: "count", Description: "Number of reported members"},

@@ -712,7 +712,7 @@ var deckRisk = capability.Risk{
 }
 
 var deckBoardIDArgument = capability.Argument{
-	Name: "board_id", Description: "Numeric Deck board ID as reported by deckboards.list; the connection must bind it",
+	Name: "board_id", Description: "Numeric Deck board ID as reported by deck.boards.list; the connection must bind it",
 	Required: true,
 }
 
@@ -734,7 +734,7 @@ var deckCardFields = []capability.Field{
 }
 
 var deckBoardsList = capability.Descriptor{
-	ID: Provider + ".deckboards.list", Version: 1, Title: "List Nextcloud Deck boards",
+	ID: Provider + ".deck.boards.list", Version: 1, Title: "List Nextcloud Deck boards",
 	Description: "List the Deck boards of an explicit Nextcloud connection: all boards of the identity for a " +
 		"deck target, or only the boards a deck/BOARD_ID target binds; deleted boards are omitted",
 	Tags:        []string{"nextcloud", "deck", "boards", "list"},
@@ -753,7 +753,7 @@ var deckBoardsList = capability.Descriptor{
 }
 
 var deckBoardsGet = capability.Descriptor{
-	ID: Provider + ".deckboards.get", Version: 1, Title: "Get a Nextcloud Deck board",
+	ID: Provider + ".deck.boards.get", Version: 1, Title: "Get a Nextcloud Deck board",
 	Description: "Read one bound Deck board with its labels, sharing entries, and members; a board the " +
 		"connection does not bind is refused locally",
 	Tags:     []string{"nextcloud", "deck", "boards", "get", "labels", "members"},
@@ -780,7 +780,7 @@ var deckBoardsGet = capability.Descriptor{
 }
 
 var deckStacksList = capability.Descriptor{
-	ID: Provider + ".deckstacks.list", Version: 1, Title: "List Nextcloud Deck stacks",
+	ID: Provider + ".deck.stacks.list", Version: 1, Title: "List Nextcloud Deck stacks",
 	Description: "List the stacks of one bound Deck board with their cards; by default the active cards, with " +
 		"archived the archived ones",
 	Tags:     []string{"nextcloud", "deck", "stacks", "cards", "list"},
@@ -807,7 +807,7 @@ var deckStacksList = capability.Descriptor{
 }
 
 var deckCardsGet = capability.Descriptor{
-	ID: Provider + ".deckcards.get", Version: 1, Title: "Get a Nextcloud Deck card",
+	ID: Provider + ".deck.cards.get", Version: 1, Title: "Get a Nextcloud Deck card",
 	Description: "Read one card of a bound Deck board; the card is accepted only when the stack list of the " +
 		"board holds it in the named stack, and any other card is reported as not found",
 	Tags:     []string{"nextcloud", "deck", "cards", "get"},
@@ -819,8 +819,8 @@ var deckCardsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(deckCardSchema),
 	Arguments: []capability.Argument{
 		deckBoardIDArgument,
-		{Name: "stack_id", Description: "Numeric stack ID as reported by deckstacks.list", Required: true},
-		{Name: "card_id", Description: "Numeric card ID as reported by deckstacks.list", Required: true},
+		{Name: "stack_id", Description: "Numeric stack ID as reported by deck.stacks.list", Required: true},
+		{Name: "card_id", Description: "Numeric card ID as reported by deck.stacks.list", Required: true},
 	},
 	Fields: deckCardFields,
 	Examples: []capability.Example{{

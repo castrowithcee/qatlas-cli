@@ -20,7 +20,7 @@ import (
 // after at most one read-only pre-check.
 
 var contactKind = objectKind{"a", "contact", "", "; the change may have been applied, check the address book " +
-	"with contacts.list or contacts.get before repeating it"}
+	"with contacts.contacts.list or contacts.contacts.get before repeating it"}
 
 // contactBookProbeBody reads what decides whether an address book takes a new contact.
 const contactBookProbeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
@@ -71,13 +71,13 @@ var contactFieldArguments = []capability.Argument{
 
 var (
 	contactIDArgument = capability.Argument{Name: "id", Required: true,
-		Description: "Contact id as contacts.list or contacts.get reports it: one path segment of the contact resource"}
+		Description: "Contact id as contacts.contacts.list or contacts.contacts.get reports it: one path segment of the contact resource"}
 	contactETagArgument = capability.Argument{Name: "etag", Required: true,
-		Description: "Entity tag of the contact version to change, as contacts.get or contacts.list reports it"}
+		Description: "Entity tag of the contact version to change, as contacts.contacts.get or contacts.contacts.list reports it"}
 )
 
 var contactsCreate = capability.Descriptor{
-	ID: Provider + ".contacts.create", Version: 1, Title: "Create a Nextcloud contact",
+	ID: Provider + ".contacts.contacts.create", Version: 1, Title: "Create a Nextcloud contact",
 	Description: "Create one new contact in a bound, writable address book from structured fields. Qatlas builds " +
 		"the vCard 3.0 itself and generates the UID and the resource id; nothing raw comes from an argument. One " +
 		"read-only pre-check of the address book refuses a read-only one, then one PUT with If-None-Match: * " +
@@ -102,7 +102,7 @@ var contactsCreate = capability.Descriptor{
 }
 
 var contactsUpdate = capability.Descriptor{
-	ID: Provider + ".contacts.update", Version: 1, Title: "Replace a Nextcloud contact",
+	ID: Provider + ".contacts.contacts.update", Version: 1, Title: "Replace a Nextcloud contact",
 	Description: "Replace one contact of a bound, writable address book completely by structured fields, bound to " +
 		"its etag. One read-only GET of the contact keeps its UID and refuses a changed etag and a contact that " +
 		"holds a photo, a group card, or any other property Qatlas does not model; it is left unchanged. Then one " +
@@ -129,7 +129,7 @@ var contactsUpdate = capability.Descriptor{
 }
 
 var contactsDelete = capability.Descriptor{
-	ID: Provider + ".contacts.delete", Version: 1, Title: "Delete a Nextcloud contact",
+	ID: Provider + ".contacts.contacts.delete", Version: 1, Title: "Delete a Nextcloud contact",
 	Description: "Delete one contact of a bound, writable address book, bound to its etag. One read-only GET " +
 		"checks that the contact is a vCard with this etag, then one DELETE with If-Match follows; a changed etag " +
 		"deletes nothing. Nextcloud keeps no restore for it through Qatlas. The system address book is never " +

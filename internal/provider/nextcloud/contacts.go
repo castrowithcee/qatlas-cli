@@ -122,7 +122,7 @@ var contactFields = []capability.Field{
 }
 
 var addressbooksList = capability.Descriptor{
-	ID: Provider + ".addressbooks.list", Version: 1, Title: "List Nextcloud address books",
+	ID: Provider + ".contacts.address-books.list", Version: 1, Title: "List Nextcloud address books",
 	Description: "List the address books of the bound Nextcloud identity that the connection's addressbook " +
 		"targets bind, shared address books included; the system address book is listed only when an " +
 		"addressbook target names it, and then read-only; address books only, no contacts",
@@ -149,7 +149,7 @@ var addressbooksList = capability.Descriptor{
 }
 
 var contactsList = capability.Descriptor{
-	ID: Provider + ".contacts.list", Version: 1, Title: "List Nextcloud contacts",
+	ID: Provider + ".contacts.contacts.list", Version: 1, Title: "List Nextcloud contacts",
 	Description: "List the contacts of one bound address book, ordered by name, optionally only those whose " +
 		"formatted name or e-mail address contains a text; the result is limited and compact, and a card " +
 		"that is not a valid vCard is left out; photos and other binary data are never returned",
@@ -175,7 +175,7 @@ var contactsList = capability.Descriptor{
 }
 
 var contactsGet = capability.Descriptor{
-	ID: Provider + ".contacts.get", Version: 1, Title: "Get a Nextcloud contact",
+	ID: Provider + ".contacts.contacts.get", Version: 1, Title: "Get a Nextcloud contact",
 	Description: "Read one contact of a bound address book with its structured fields and entity tag; a " +
 		"photo or other binary data is never returned",
 	Tags: []string{"nextcloud", "contacts", "contact", "get"}, Risk: contactRisk, Provider: Provider,

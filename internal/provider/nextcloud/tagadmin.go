@@ -29,7 +29,7 @@ const (
 	maxTagName  = 64
 	tagColorLen = 6
 
-	uncertainTagAdmin = "; the change may have been applied, check systemtags.list before repeating"
+	uncertainTagAdmin = "; the change may have been applied, check files.system-tags.list before repeating"
 
 	messageTagAdminDenied = "this Nextcloud identity may not create, change, or delete this system tag"
 	messageTagExists      = "a system tag with this name already exists"
@@ -37,7 +37,7 @@ const (
 		"create invisible or unassignable system tags"
 	messageTagRefused = "Nextcloud refused to change this system tag; its name may exist already or this " +
 		"identity may not change it"
-	messageTagNoID = "; Nextcloud named no usable tag_id, find the tag with systemtags.list"
+	messageTagNoID = "; Nextcloud named no usable tag_id, find the tag with files.system-tags.list"
 )
 
 const (
@@ -46,7 +46,7 @@ const (
 )
 
 var tagAdminFields = []capability.Field{
-	{Name: "tag_id", Description: "Identifier of the tag; pass it to systemtags.update, systemtags.delete, filetags.add"},
+	{Name: "tag_id", Description: "Identifier of the tag; pass it to files.system-tags.update, files.system-tags.delete, files.file-tags.add"},
 }
 
 func tagAdminRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
@@ -63,7 +63,7 @@ var (
 )
 
 var systemtagsCreate = capability.Descriptor{
-	ID: Provider + ".systemtags.create", Version: 1, Title: "Create a Nextcloud system tag",
+	ID: Provider + ".files.system-tags.create", Version: 1, Title: "Create a Nextcloud system tag",
 	Description: "Create exactly one confirmed system tag in the catalog of the Nextcloud instance, which is shared by " +
 		"the whole instance; visible and assignable default to true, a duplicate name is refused",
 	Tags: []string{"nextcloud", "systemtags", "tags", "webdav", "create"}, Provider: Provider,
@@ -80,7 +80,7 @@ var systemtagsCreate = capability.Descriptor{
 }
 
 var systemtagsUpdate = capability.Descriptor{
-	ID: Provider + ".systemtags.update", Version: 1, Title: "Change a Nextcloud system tag",
+	ID: Provider + ".files.system-tags.update", Version: 1, Title: "Change a Nextcloud system tag",
 	Description: "Change the name, visibility, assignability, or color of exactly one confirmed visible system tag of " +
 		"the Nextcloud instance, at least one field; one read-only pre-check precedes exactly one change request",
 	Tags: []string{"nextcloud", "systemtags", "tags", "webdav", "update"}, Provider: Provider,
@@ -97,7 +97,7 @@ var systemtagsUpdate = capability.Descriptor{
 }
 
 var systemtagsDelete = capability.Descriptor{
-	ID: Provider + ".systemtags.delete", Version: 1, Title: "Delete a Nextcloud system tag",
+	ID: Provider + ".files.system-tags.delete", Version: 1, Title: "Delete a Nextcloud system tag",
 	Description: "Delete exactly one confirmed visible system tag from the Nextcloud instance; every assignment of the " +
 		"tag to any file of the instance is dropped with it. One read-only pre-check precedes exactly one request",
 	Tags: []string{"nextcloud", "systemtags", "tags", "webdav", "delete"}, Provider: Provider,
@@ -108,7 +108,7 @@ var systemtagsDelete = capability.Descriptor{
 		`"required":["deleted","tag_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{tagIDArgument},
 	Fields:    append([]capability.Field{{Name: "deleted", Description: "True when Nextcloud deleted the tag"}}, tagAdminFields...),
-	Examples:  []capability.Example{{Description: "Use a tag_id from systemtags.list", Arguments: json.RawMessage(`{"tag_id":"7"}`)}},
+	Examples:  []capability.Example{{Description: "Use a tag_id from files.system-tags.list", Arguments: json.RawMessage(`{"tag_id":"7"}`)}},
 	// Reachable only through a tools list, never through a profile.
 	RequiresToolAllowList: true,
 }

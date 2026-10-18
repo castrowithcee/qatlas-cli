@@ -443,7 +443,7 @@ func TestCommentDescriptorsCarryTheContract(t *testing.T) {
 			listed = listed || id == commentsList.ID
 		}
 		if listed != (profile.ID == "read" || profile.ID == "write") {
-			t.Errorf("profile %s lists comments.list = %v", profile.ID, listed)
+			t.Errorf("profile %s lists files.comments.list = %v", profile.ID, listed)
 		}
 	}
 }

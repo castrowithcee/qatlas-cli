@@ -25,11 +25,11 @@ const (
 )
 
 var talkFilesShare = capability.Descriptor{
-	ID: Provider + ".talkfiles.share", Version: 1, Title: "Share a Nextcloud file in a Talk conversation",
+	ID: Provider + ".talk.files.share", Version: 1, Title: "Share a Nextcloud file in a Talk conversation",
 	Description: "Share exactly one file or folder below the fixed root folder, read-only, with one private " +
 		"one-to-one or group Talk conversation the connection binds; every participant can then open it. Public " +
 		"conversations are refused. Needs a folder and a talk target. One read-only check of the conversation " +
-		"precedes exactly one request; revoke the share with shares.delete",
+		"precedes exactly one request; revoke the share with shares.shares.delete",
 	Tags:     []string{"nextcloud", "talk", "shares", "files", "share", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"token":` + talkTokenSchema + `,"path":` + pathSchema +
@@ -39,7 +39,7 @@ var talkFilesShare = capability.Descriptor{
 	Arguments: []capability.Argument{talkTokenArgument,
 		{Name: "path", Required: true, Description: "File or folder relative to the fixed root folder of this connection"}},
 	Fields: []capability.Field{{Name: "shared", Description: "True when Nextcloud created the share"},
-		{Name: "share", Description: "The share as Nextcloud reports it; its ID revokes it with shares.delete"}},
+		{Name: "share", Description: "The share as Nextcloud reports it; its ID revokes it with shares.shares.delete"}},
 	Examples: []capability.Example{{Description: "Share a report in a conversation",
 		Arguments: json.RawMessage(`{"token":"abcd1234","path":"2026/q1.pdf"}`)}},
 	RequiresToolAllowList: true,

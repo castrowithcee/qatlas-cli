@@ -26,7 +26,7 @@ const eventProductID = "-//Qatlas//Nextcloud//EN"
 type objectKind struct{ article, noun, component, uncertain string }
 
 var eventKind = objectKind{"an", "event", "VEVENT", "; the change may have been applied, check the calendar with " +
-	"events.list or events.get before repeating it"}
+	"calendar.events.list or calendar.events.get before repeating it"}
 
 // eventCalendarProbeBody reads what decides whether a calendar takes a new or changed event.
 const eventCalendarProbeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
@@ -78,13 +78,13 @@ var eventFieldArguments = []capability.Argument{
 }
 
 var (
-	eventIDArgument   = capability.Argument{Name: "id", Description: "Event id as events.list or events.get reports it", Required: true}
+	eventIDArgument   = capability.Argument{Name: "id", Description: "Event id as calendar.events.list or calendar.events.get reports it", Required: true}
 	eventETagArgument = capability.Argument{Name: "etag", Required: true,
-		Description: "Entity tag of the event version to change, as events.get or events.list reports it"}
+		Description: "Entity tag of the event version to change, as calendar.events.get or calendar.events.list reports it"}
 )
 
 var eventsCreate = capability.Descriptor{
-	ID: Provider + ".events.create", Version: 1, Title: "Create a Nextcloud calendar event",
+	ID: Provider + ".calendar.events.create", Version: 1, Title: "Create a Nextcloud calendar event",
 	Description: "Create one confirmed event in a bound, writable calendar from structured fields. Qatlas builds " +
 		"the iCalendar object itself and generates its UID and resource id; nothing raw comes from an argument. " +
 		"One read-only pre-check of the calendar refuses a read-only calendar, then one PUT that never replaces " +
@@ -111,7 +111,7 @@ var eventsCreate = capability.Descriptor{
 }
 
 var eventsUpdate = capability.Descriptor{
-	ID: Provider + ".events.update", Version: 1, Title: "Replace a Nextcloud calendar event",
+	ID: Provider + ".calendar.events.update", Version: 1, Title: "Replace a Nextcloud calendar event",
 	Description: "Replace one confirmed event of a bound, writable calendar completely by structured fields, bound " +
 		"to its etag. One read-only pre-check reads the event and refuses a read-only calendar, a changed etag, " +
 		"and an event that holds overrides of single occurrences or other components; then one PUT with the etag " +
@@ -139,7 +139,7 @@ var eventsUpdate = capability.Descriptor{
 }
 
 var eventsDelete = capability.Descriptor{
-	ID: Provider + ".events.delete", Version: 1, Title: "Delete a Nextcloud calendar event",
+	ID: Provider + ".calendar.events.delete", Version: 1, Title: "Delete a Nextcloud calendar event",
 	Description: "Delete one confirmed event of a bound, writable calendar, bound to its etag; a changed etag " +
 		"deletes nothing. One read-only pre-check of the calendar refuses a read-only calendar, then one DELETE " +
 		"follows. Nextcloud may keep the event in its calendar trash bin for a while; Qatlas offers no restore. " +

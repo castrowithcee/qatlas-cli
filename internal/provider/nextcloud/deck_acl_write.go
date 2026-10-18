@@ -20,7 +20,7 @@ import (
 // created nor changed, and the ACL entry must be shown by the one pre-read of the bound board.
 
 const (
-	uncertainDeckACL = "; the change may have been applied, check deckboards.get before repeating"
+	uncertainDeckACL = "; the change may have been applied, check deck.boards.get before repeating"
 
 	maxDeckParticipantBytes = 64
 
@@ -40,7 +40,7 @@ const (
 
 var (
 	deckACLIDArgument = capability.Argument{
-		Name: "acl_id", Description: "Numeric sharing entry ID as reported by deckboards.get for this board", Required: true,
+		Name: "acl_id", Description: "Numeric sharing entry ID as reported by deck.boards.get for this board", Required: true,
 	}
 	deckACLRightArguments = []capability.Argument{
 		{Name: "can_edit", Description: "Right to edit cards and stacks"},
@@ -55,7 +55,7 @@ func deckACLOutput(flag string) json.RawMessage {
 }
 
 var deckACLAdd = capability.Descriptor{
-	ID: Provider + ".deckacl.add", Version: 1, Title: "Share a Nextcloud Deck board",
+	ID: Provider + ".deck.acl.add", Version: 1, Title: "Share a Nextcloud Deck board",
 	Description: "Share exactly one confirmed bound Deck board with one existing user or group of the instance, which " +
 		"extends access to it; rights not given are off. Teams are not supported. The identity needs the manage right " +
 		"on the board; an existing entry of the same participant is refused. One read-only pre-check precedes exactly " +
@@ -79,7 +79,7 @@ var deckACLAdd = capability.Descriptor{
 }
 
 var deckACLUpdate = capability.Descriptor{
-	ID: Provider + ".deckacl.update", Version: 1, Title: "Change a Nextcloud Deck board sharing",
+	ID: Provider + ".deck.acl.update", Version: 1, Title: "Change a Nextcloud Deck board sharing",
 	Description: "Change the rights of exactly one confirmed sharing entry of a bound Deck board, at least one right; " +
 		"rights not given keep their current value. Entries of teams and of the owner are refused. The identity " +
 		"needs the manage right on the board. One read-only pre-check precedes exactly one request",
@@ -98,7 +98,7 @@ var deckACLUpdate = capability.Descriptor{
 }
 
 var deckACLRemove = capability.Descriptor{
-	ID: Provider + ".deckacl.remove", Version: 1, Title: "Revoke a Nextcloud Deck board sharing",
+	ID: Provider + ".deck.acl.remove", Version: 1, Title: "Revoke a Nextcloud Deck board sharing",
 	Description: "Revoke exactly one confirmed sharing entry of a bound Deck board. Entries of teams and of the owner " +
 		"are refused. The identity needs the manage right on the board. One read-only pre-check precedes exactly " +
 		"one request",
@@ -113,7 +113,7 @@ var deckACLRemove = capability.Descriptor{
 		{Name: "removed", Description: "True when Deck revoked the sharing"},
 		{Name: "acl_id", Description: "ID of the revoked sharing entry"},
 	},
-	Examples:              []capability.Example{{Description: "Use IDs from deckboards.get", Arguments: json.RawMessage(`{"board_id":"7","acl_id":"4"}`)}},
+	Examples:              []capability.Example{{Description: "Use IDs from deck.boards.get", Arguments: json.RawMessage(`{"board_id":"7","acl_id":"4"}`)}},
 	RequiresToolAllowList: true,
 }
 

@@ -24,9 +24,9 @@ type organiseTool struct {
 
 func organiseTools() []organiseTool {
 	return []organiseTool{
-		{"folders.create", "MKCOL", `{"path":"2026/New folder"}`, invokeFoldersCreate, "folder may have been created"},
-		{"files.move", "MOVE", `{"path":"2026/a b.txt","destination":"Archive/ä.txt"}`, invokeFilesMove, "source and target"},
-		{"files.copy", "COPY", `{"path":"2026/a b.txt","destination":"Archive/ä.txt"}`, invokeFilesCopy, "source and target"},
+		{"files.folders.create", "MKCOL", `{"path":"2026/New folder"}`, invokeFoldersCreate, "folder may have been created"},
+		{"files.files.move", "MOVE", `{"path":"2026/a b.txt","destination":"Archive/ä.txt"}`, invokeFilesMove, "source and target"},
+		{"files.files.copy", "COPY", `{"path":"2026/a b.txt","destination":"Archive/ä.txt"}`, invokeFilesCopy, "source and target"},
 	}
 }
 
@@ -98,7 +98,7 @@ func TestOrganiseRefusesBadPathsBeforeSecretsAndIO(t *testing.T) {
 	for _, p := range []string{"", "../x", "/x", "a%2e", `a\b`, "a//b"} {
 		args, _ := json.Marshal(map[string]string{"path": p})
 		if _, err := invokeFoldersCreate(context.Background(), reportsConnection(), res, &redact.Redactor{}, args); err == nil {
-			t.Errorf("folders.create accepted %q", p)
+			t.Errorf("files.folders.create accepted %q", p)
 		}
 	}
 	if touched {
@@ -161,8 +161,8 @@ func TestOrganiseRefusesWithoutAFolderBeforeSecretsAndIO(t *testing.T) {
 func TestOrganiseRisksProfileAndPermissions(t *testing.T) {
 	reg := registry(t)
 	want := map[string]capability.Effect{
-		"nextcloud.folders.create": capability.EffectCreate, "nextcloud.files.copy": capability.EffectCreate,
-		"nextcloud.files.move": capability.EffectUpdate,
+		"nextcloud.files.folders.create": capability.EffectCreate, "nextcloud.files.files.copy": capability.EffectCreate,
+		"nextcloud.files.files.move": capability.EffectUpdate,
 	}
 	for _, d := range reg.Provider(Provider) {
 		effect, ok := want[d.ID]
@@ -190,7 +190,7 @@ func TestOrganiseRisksProfileAndPermissions(t *testing.T) {
 			t.Error("write must not be recommended")
 		}
 	}
-	exp := "nextcloud.files.list nextcloud.files.stat nextcloud.files.get nextcloud.shares.list nextcloud.shares.get nextcloud.versions.list nextcloud.files.search nextcloud.favorites.list nextcloud.filetags.list nextcloud.comments.list nextcloud.folders.create nextcloud.files.move nextcloud.files.copy"
+	exp := "nextcloud.files.files.list nextcloud.files.files.stat nextcloud.files.files.get nextcloud.shares.shares.list nextcloud.shares.shares.get nextcloud.files.versions.list nextcloud.files.files.search nextcloud.files.favorites.list nextcloud.files.file-tags.list nextcloud.files.comments.list nextcloud.files.folders.create nextcloud.files.files.move nextcloud.files.files.copy"
 	if strings.Join(write, " ") != exp {
 		t.Errorf("write profile = %v", write)
 	}
@@ -201,9 +201,9 @@ func TestOrganiseRisksProfileAndPermissions(t *testing.T) {
 		op    string
 		args  string
 	}{
-		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.folders.create", `{"path":"x"}`},
-		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.files.copy", `{"path":"x","destination":"y"}`},
-		{[]config.Permission{config.PermissionRead, config.PermissionCreate}, "nextcloud.files.move", `{"path":"x","destination":"y"}`},
+		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.files.folders.create", `{"path":"x"}`},
+		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.files.files.copy", `{"path":"x","destination":"y"}`},
+		{[]config.Permission{config.PermissionRead, config.PermissionCreate}, "nextcloud.files.files.move", `{"path":"x","destination":"y"}`},
 	}
 	for _, c := range cases {
 		refuse(t)
