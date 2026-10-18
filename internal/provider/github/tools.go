@@ -93,7 +93,7 @@ const milestoneUpdateSchema = `{"type":"integer","minimum":0,"maximum":100000000
 
 // typeUpdateSchema is the bound of github.issues.update's own type argument: "" removes the current issue
 // type, since a type name is never empty; setting one needs an organization issue type of the same name, as
-// github.issuetypes.list reports it, and is silently dropped by GitHub without push access to the repository.
+// github.issue-types.list reports it, and is silently dropped by GitHub without push access to the repository.
 const typeUpdateSchema = `{"type":"string","maxLength":100}`
 
 var issuesUpdate = capability.Descriptor{
@@ -115,7 +115,7 @@ var issuesUpdate = capability.Descriptor{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
 	}, issueContentArguments...), capability.Argument{Name: "milestone", Description: "Milestone number to " +
 		"set, as github.milestones.list reports it; 0 removes the current milestone; left out leaves it unchanged"},
-		capability.Argument{Name: "type", Description: "Issue type name to set, as github.issuetypes.list " +
+		capability.Argument{Name: "type", Description: "Issue type name to set, as github.issue-types.list " +
 			"reports it; \"\" removes the current type; left out leaves it unchanged"}),
 	Fields: issuesGet.Fields,
 	Examples: []capability.Example{{
@@ -247,7 +247,7 @@ var commentsCreate = capability.Descriptor{
 }
 
 var itemsUpdate = capability.Descriptor{
-	ID:      Provider + ".projectitems.update",
+	ID:      Provider + ".project-items.update",
 	Version: 1,
 	Title:   "Update GitHub project item fields",
 	Description: "Set or clear single-select, multi-select, text, number, date, and iteration fields of one item of " +
@@ -259,7 +259,7 @@ var itemsUpdate = capability.Descriptor{
 		`"fields":` + fieldsSchema + `},"required":["item_id","fields"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(planningOutput),
 	Arguments: []capability.Argument{
-		{Name: "item_id", Description: "Project item identifier, as returned by github.projectitems.list", Required: true},
+		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 		{Name: "fields", Description: fieldsDescription, Required: true},
 	},
 	Fields: planningFields,
@@ -270,7 +270,7 @@ var itemsUpdate = capability.Descriptor{
 }
 
 var itemsAdd = capability.Descriptor{
-	ID:      Provider + ".projectitems.add",
+	ID:      Provider + ".project-items.add",
 	Version: 1,
 	Title:   "Add a GitHub issue to the project",
 	Description: "Add one existing issue of a repository a connection allows to a GitHub project it " +
@@ -295,7 +295,7 @@ var itemsAdd = capability.Descriptor{
 }
 
 var itemsArchive = capability.Descriptor{
-	ID:      Provider + ".projectitems.archive",
+	ID:      Provider + ".project-items.archive",
 	Version: 1,
 	Title:   "Archive a GitHub project item",
 	Description: "Archive one item of a GitHub project a connection allows; GitHub keeps it " +
@@ -308,7 +308,7 @@ var itemsArchive = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +
 		`"archived":{"type":"boolean"}},"required":["item_id","archived"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "item_id", Description: "Project item identifier, as returned by github.projectitems.list", Required: true},
+		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 	},
 	Fields: []capability.Field{{Name: "archived", Description: "True once the item is archived"}},
 	Examples: []capability.Example{{
@@ -318,7 +318,7 @@ var itemsArchive = capability.Descriptor{
 }
 
 var draftsCreate = capability.Descriptor{
-	ID:      Provider + ".projectdrafts.create",
+	ID:      Provider + ".project-drafts.create",
 	Version: 1,
 	Title:   "Create a GitHub project draft",
 	Description: "Add one draft issue to a GitHub project a connection allows, then set field " +
@@ -342,7 +342,7 @@ var draftsCreate = capability.Descriptor{
 }
 
 var projectIssuesCreate = capability.Descriptor{
-	ID:      Provider + ".projectissues.create",
+	ID:      Provider + ".project-issues.create",
 	Version: 1,
 	Title:   "Create a planned GitHub issue",
 	Description: "Open one issue in a repository a connection allows, add it to a GitHub project it " +

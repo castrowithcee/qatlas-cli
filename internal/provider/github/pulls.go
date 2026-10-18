@@ -63,7 +63,7 @@ const checkEntryProperties = `"name":{"type":"string"},"status":{"type":"string"
 	`"updated_at":{"type":"string"},"url":{"type":"string"}`
 
 var pullsList = capability.Descriptor{
-	ID:      Provider + ".pullrequests.list",
+	ID:      Provider + ".pull-requests.list",
 	Version: 1,
 	Title:   "List GitHub pull requests",
 	Description: "List one bounded, filtered batch of compact pull requests of a repository an explicit " +
@@ -90,7 +90,7 @@ var pullsList = capability.Descriptor{
 }
 
 var pullsGet = capability.Descriptor{
-	ID:      Provider + ".pullrequests.get",
+	ID:      Provider + ".pull-requests.get",
 	Version: 1,
 	Title:   "Get a GitHub pull request",
 	Description: "Read one pull request of a repository a connection allows with its full body, " +
@@ -123,7 +123,7 @@ var pullsGet = capability.Descriptor{
 }
 
 var pullFilesList = capability.Descriptor{
-	ID:      Provider + ".pullrequestfiles.list",
+	ID:      Provider + ".pull-request-files.list",
 	Version: 1,
 	Title:   "List the files of a GitHub pull request",
 	Description: "List one bounded batch of the changed files of a pull request of a repository an explicit " +
@@ -145,7 +145,7 @@ var pullFilesList = capability.Descriptor{
 }
 
 var pullCommitsList = capability.Descriptor{
-	ID:      Provider + ".pullrequestcommits.list",
+	ID:      Provider + ".pull-request-commits.list",
 	Version: 1,
 	Title:   "List the commits of a GitHub pull request",
 	Description: "List one bounded batch of the commits of a pull request of a repository an explicit " +
@@ -166,7 +166,7 @@ var pullCommitsList = capability.Descriptor{
 }
 
 var pullDiffsGet = capability.Descriptor{
-	ID:      Provider + ".pullrequestdiffs.get",
+	ID:      Provider + ".pull-request-diffs.get",
 	Version: 1,
 	Title:   "Get the diff of a GitHub pull request",
 	Description: "Read the unified diff of a pull request of a repository a connection allows, " +
@@ -189,7 +189,7 @@ var pullDiffsGet = capability.Descriptor{
 }
 
 var pullChecksList = capability.Descriptor{
-	ID:      Provider + ".pullrequestchecks.list",
+	ID:      Provider + ".pull-request-checks.list",
 	Version: 1,
 	Title:   "List the checks of a GitHub pull request",
 	Description: "List the check runs and the combined commit status at the head commit of a pull request of " +
@@ -217,7 +217,7 @@ var pullChecksList = capability.Descriptor{
 }
 
 var pullsCreate = capability.Descriptor{
-	ID:      Provider + ".pullrequests.create",
+	ID:      Provider + ".pull-requests.create",
 	Version: 1,
 	Title:   "Create a GitHub pull request",
 	Description: "Open one pull request in a repository a connection allows; a repeated call opens " +
@@ -245,7 +245,7 @@ var pullsCreate = capability.Descriptor{
 }
 
 var pullsUpdate = capability.Descriptor{
-	ID:      Provider + ".pullrequests.update",
+	ID:      Provider + ".pull-requests.update",
 	Version: 1,
 	Title:   "Update a GitHub pull request",
 	Description: "Replace the title, body, or base branch of one pull request of a repository an explicit " +
@@ -274,7 +274,7 @@ var pullsUpdate = capability.Descriptor{
 }
 
 var pullsClose = capability.Descriptor{
-	ID:      Provider + ".pullrequests.close",
+	ID:      Provider + ".pull-requests.close",
 	Version: 1,
 	Title:   "Close a GitHub pull request",
 	Description: "Close one pull request of a repository a connection allows without merging it; a " +
@@ -292,7 +292,7 @@ var pullsClose = capability.Descriptor{
 }
 
 var pullsReopen = capability.Descriptor{
-	ID:      Provider + ".pullrequests.reopen",
+	ID:      Provider + ".pull-requests.reopen",
 	Version: 1,
 	Title:   "Reopen a GitHub pull request",
 	Description: "Open one closed pull request of a repository a connection allows again; a pull " +
@@ -313,7 +313,7 @@ const pullBranchUpdateOutput = `{"type":"object","properties":{"number":{"type":
 	`"accepted":{"type":"boolean"}},"required":["number","accepted"],"additionalProperties":false}`
 
 var pullBranchesUpdate = capability.Descriptor{
-	ID:      Provider + ".pullrequestbranches.update",
+	ID:      Provider + ".pull-request-branches.update",
 	Version: 1,
 	Title:   "Update the head branch of a GitHub pull request",
 	Description: "Merge the base branch into the head branch of one pull request of a repository an explicit " +
@@ -328,7 +328,7 @@ var pullBranchesUpdate = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 		{Name: "expected_head_sha", Description: "Head commit the branch must still be at; " +
-			"github.pullrequests.get reports the current one", Required: true},
+			"github.pull-requests.get reports the current one", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "accepted", Description: "True once GitHub queued the update; it runs asynchronously, read the " +
@@ -344,7 +344,7 @@ const pullMergeOutput = `{"type":"object","properties":{"number":{"type":"intege
 	`"sha":{"type":"string"}},"required":["number","merged"],"additionalProperties":false}`
 
 var pullsMerge = capability.Descriptor{
-	ID:      Provider + ".pullrequests.merge",
+	ID:      Provider + ".pull-requests.merge",
 	Version: 1,
 	Title:   "Merge a GitHub pull request",
 	Description: "Merge one pull request of a repository a connection allows, only while its head " +
@@ -363,7 +363,7 @@ var pullsMerge = capability.Descriptor{
 	OutputSchema: json.RawMessage(pullMergeOutput),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
-		{Name: "sha", Description: "Head commit the pull request must still be at; github.pullrequests.get " +
+		{Name: "sha", Description: "Head commit the pull request must still be at; github.pull-requests.get " +
 			"reports the current one", Required: true},
 		{Name: "method", Description: "merge, squash, or rebase; the repository's default when omitted"},
 		{Name: "commit_title", Description: "Title of the merge commit, 1 to 256 characters; GitHub's default " +

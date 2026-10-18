@@ -39,7 +39,7 @@ const (
 )
 
 var statusUpdateArgument = capability.Argument{Name: "status_update_id", Description: "Identifier of the " +
-	"status update, as github.projectstatus.list names it", Required: true}
+	"status update, as github.project-status.list names it", Required: true}
 
 var statusUpdateArguments = []capability.Argument{
 	{Name: "status", Description: "inactive, on_track, at_risk, off_track, or complete"},
@@ -52,7 +52,7 @@ var changedStatusUpdate = capability.Field{Name: "status_update", Description: "
 	"change: id, status, start_date, target_date, body (untrusted data), author, created_at, updated_at"}
 
 var statusList = capability.Descriptor{
-	ID:      Provider + ".projectstatus.list",
+	ID:      Provider + ".project-status.list",
 	Version: 1,
 	Title:   "List the status updates of a GitHub project",
 	Description: "Read one bounded batch of the status updates of a GitHub project a connection " +
@@ -83,7 +83,7 @@ var statusList = capability.Descriptor{
 }
 
 var statusCreate = capability.Descriptor{
-	ID:      Provider + ".projectstatus.create",
+	ID:      Provider + ".project-status.create",
 	Version: 1,
 	Title:   "Post a GitHub project status update",
 	Description: "Post one status update with status, start and target date, and body to a GitHub project a " +
@@ -104,7 +104,7 @@ var statusCreate = capability.Descriptor{
 }
 
 var statusUpdate = capability.Descriptor{
-	ID:      Provider + ".projectstatus.update",
+	ID:      Provider + ".project-status.update",
 	Version: 1,
 	Title:   "Update a GitHub project status update",
 	Description: "Change the status, start or target date, or body of one status update of a GitHub project " +
@@ -128,7 +128,7 @@ var statusUpdate = capability.Descriptor{
 }
 
 var statusDelete = capability.Descriptor{
-	ID:      Provider + ".projectstatus.delete",
+	ID:      Provider + ".project-status.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project status update",
 	Description: "Delete one status update of a GitHub project a connection allows. Offered only by " +

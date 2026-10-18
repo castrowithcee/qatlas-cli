@@ -218,7 +218,7 @@ func scopeFixture() vault.Scope {
 	return vault.Scope{
 		Connection: "gh", Credential: "token", Provider: "github", Origin: "https://api.example.test",
 		Permissions: []string{"read"}, Targets: []string{"org"},
-		Tools: []string{"github.issues.get", "github.issues.list", "github.pullrequests.list"},
+		Tools: []string{"github.issues.get", "github.issues.list", "github.pull-requests.list"},
 	}
 }
 
@@ -238,14 +238,14 @@ func TestDiffListsAddedRemovedKept(t *testing.T) {
 	now := scopeFixture()
 
 	// Only added.
-	now.Tools = append(now.Tools, "github.pullrequests.get", "github.pullrequestchecks.list")
+	now.Tools = append(now.Tools, "github.pull-requests.get", "github.pull-request-checks.list")
 	fields := diff(approved, now, "", nil)
 	if len(fields) != 1 {
 		t.Fatalf("diff() = %+v, want only the tools", fields)
 	}
 	got := fieldOf(t, fields, FieldTools)
-	if !got.IsListChange() || !reflect.DeepEqual(got.Added, []string{"github.pullrequestchecks.list", "github.pullrequests.get"}) ||
-		len(got.Removed) != 0 || !reflect.DeepEqual(got.Kept, []string{"github.issues.get", "github.issues.list", "github.pullrequests.list"}) {
+	if !got.IsListChange() || !reflect.DeepEqual(got.Added, []string{"github.pull-request-checks.list", "github.pull-requests.get"}) ||
+		len(got.Removed) != 0 || !reflect.DeepEqual(got.Kept, []string{"github.issues.get", "github.issues.list", "github.pull-requests.list"}) {
 		t.Errorf("added only: %+v", got)
 	}
 
@@ -253,18 +253,18 @@ func TestDiffListsAddedRemovedKept(t *testing.T) {
 	now = scopeFixture()
 	now.Tools = []string{"github.issues.get", "github.issues.list"}
 	got = fieldOf(t, diff(approved, now, "", nil), FieldTools)
-	if len(got.Added) != 0 || !reflect.DeepEqual(got.Removed, []string{"github.pullrequests.list"}) || len(got.Kept) != 2 {
+	if len(got.Added) != 0 || !reflect.DeepEqual(got.Removed, []string{"github.pull-requests.list"}) || len(got.Kept) != 2 {
 		t.Errorf("removed only: %+v", got)
 	}
 
 	// Both at once, and a forward credential whose fields changed counts as one removed and one added.
 	now = scopeFixture()
-	now.Tools = []string{"github.issues.get", "github.pullrequests.get", "github.pullrequests.list"}
+	now.Tools = []string{"github.issues.get", "github.pull-requests.get", "github.pull-requests.list"}
 	approved.Scope.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user", "pass"}}}
 	now.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user"}}}
 	fields = diff(approved, now, "", nil)
 	got = fieldOf(t, fields, FieldTools)
-	if !reflect.DeepEqual(got.Added, []string{"github.pullrequests.get"}) ||
+	if !reflect.DeepEqual(got.Added, []string{"github.pull-requests.get"}) ||
 		!reflect.DeepEqual(got.Removed, []string{"github.issues.list"}) || len(got.Kept) != 2 {
 		t.Errorf("both: %+v", got)
 	}
@@ -291,7 +291,7 @@ func TestDiffModeSwitchesStayBeforeAndAfter(t *testing.T) {
 		}
 	}
 	if f := fieldOf(t, fields, FieldTools); f.After != "(every tool the permissions allow)" ||
-		f.Before != "github.issues.get github.issues.list github.pullrequests.list" {
+		f.Before != "github.issues.get github.issues.list github.pull-requests.list" {
 		t.Errorf("tools mode switch: %+v", f)
 	}
 	if f := fieldOf(t, fields, FieldPaths); f.Before != "(every project)" || f.After != "~/a" {

@@ -25,7 +25,7 @@ const workflowOutput = `{"type":"object","properties":{"number":{"type":"integer
 	`"enabled":{"type":"boolean"}},"required":["number","name","enabled"],"additionalProperties":false}`
 
 var projectWorkflowsList = capability.Descriptor{
-	ID:      Provider + ".projectworkflows.list",
+	ID:      Provider + ".project-workflows.list",
 	Version: 1,
 	Title:   "List the automations of a GitHub project",
 	Description: "Read the built-in workflows of one GitHub project a connection allows: number, " +
@@ -45,7 +45,7 @@ var projectWorkflowsList = capability.Descriptor{
 }
 
 var projectWorkflowsDelete = capability.Descriptor{
-	ID:      Provider + ".projectworkflows.delete",
+	ID:      Provider + ".project-workflows.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project automation",
 	Description: "Delete one built-in workflow of a GitHub project a connection allows; GitHub's API " +
@@ -60,7 +60,7 @@ var projectWorkflowsDelete = capability.Descriptor{
 		`"name":{"type":"string"},"deleted":{"type":"boolean"}},"required":["number","name","deleted"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "workflow", Description: "Number of the workflow in the project, as " +
-		"github.projectworkflows.list names it", Required: true}},
+		"github.project-workflows.list names it", Required: true}},
 	Fields: []capability.Field{
 		{Name: "number", Description: "Number of the deleted workflow"},
 		{Name: "name", Description: "Name of the deleted workflow, untrusted data"},

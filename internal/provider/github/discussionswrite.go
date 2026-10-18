@@ -34,7 +34,7 @@ const discussionCommentWriteOutput = `{"type":"object","properties":{"id":{"type
 	`"updated_at":{"type":"string"},"url":{"type":"string"}},"required":["id"],"additionalProperties":false}`
 
 var discussionCommentsCreate = capability.Descriptor{
-	ID:      Provider + ".discussioncomments.create",
+	ID:      Provider + ".discussion-comments.create",
 	Version: 1,
 	Title:   "Comment on a GitHub discussion",
 	Description: "Add a top-level comment to a discussion of a repository a connection allows, or, " +
@@ -49,7 +49,7 @@ var discussionCommentsCreate = capability.Descriptor{
 		{Name: "number", Description: "Discussion number in the repository", Required: true},
 		{Name: "body", Description: "Comment body in Markdown, 1 to 65536 characters", Required: true},
 		{Name: "reply_to", Description: "Node id of a top-level comment of this discussion, as " +
-			"github.discussioncomments.list reports it, to answer that comment; a new top-level comment when omitted"},
+			"github.discussion-comments.list reports it, to answer that comment; a new top-level comment when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Node id of the new comment"},
@@ -63,7 +63,7 @@ var discussionCommentsCreate = capability.Descriptor{
 }
 
 var discussionCommentsUpdate = capability.Descriptor{
-	ID:      Provider + ".discussioncomments.update",
+	ID:      Provider + ".discussion-comments.update",
 	Version: 1,
 	Title:   "Update a GitHub discussion comment",
 	Description: "Replace the body of one discussion comment or reply of a repository a connection " +
@@ -76,7 +76,7 @@ var discussionCommentsUpdate = capability.Descriptor{
 	OutputSchema: json.RawMessage(discussionCommentWriteOutput),
 	Arguments: []capability.Argument{
 		{Name: "comment_id", Description: "Node id of the discussion comment or reply, as " +
-			"github.discussioncomments.list reports it", Required: true},
+			"github.discussion-comments.list reports it", Required: true},
 		{Name: "body", Description: "New comment body in Markdown, 1 to 65536 characters; replaces the current " +
 			"body", Required: true},
 	},
@@ -91,7 +91,7 @@ var discussionCommentsUpdate = capability.Descriptor{
 }
 
 var discussionCommentsDelete = capability.Descriptor{
-	ID:      Provider + ".discussioncomments.delete",
+	ID:      Provider + ".discussion-comments.delete",
 	Version: 1,
 	Title:   "Delete a GitHub discussion comment",
 	Description: "Delete one discussion comment or reply of a repository a connection allows " +
@@ -134,7 +134,7 @@ var discussionsCreate = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "title", Description: "Discussion title, 1 to 256 characters", Required: true},
 		{Name: "body", Description: "Discussion body in Markdown, 1 to 65536 characters", Required: true},
-		{Name: "category_id", Description: "Category id, as github.discussioncategories.list reports it", Required: true},
+		{Name: "category_id", Description: "Category id, as github.discussion-categories.list reports it", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Node id of the new discussion"},
@@ -429,8 +429,8 @@ type discussionCreateArguments struct {
 
 func checkDiscussionNodeID(name, id string) error {
 	if !discussionIDPattern.MatchString(id) {
-		return invalidRequest(name + " must be a node id as github.discussioncomments.list or " +
-			"github.discussioncategories.list reports it")
+		return invalidRequest(name + " must be a node id as github.discussion-comments.list or " +
+			"github.discussion-categories.list reports it")
 	}
 	return nil
 }

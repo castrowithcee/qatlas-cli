@@ -119,7 +119,7 @@ func TestCrossTargetToolsCheckBothTargets(t *testing.T) {
 	} {
 		reads = 0
 		before := len(f.recorded())
-		if _, err := invoke(t, core, "github.projectitems.add", tt.connection, tt.arguments, true); !isInvalidRequest(err) {
+		if _, err := invoke(t, core, "github.project-items.add", tt.connection, tt.arguments, true); !isInvalidRequest(err) {
 			t.Errorf("%s = %v, want an invalid request", tt.name, err)
 		}
 		if reads != 0 || len(f.recorded()) != before {
@@ -127,11 +127,11 @@ func TestCrossTargetToolsCheckBothTargets(t *testing.T) {
 		}
 	}
 
-	result, err := invoke(t, core, "github.projectitems.add", "mixed", `{"repository":"octo-org/example","number":42}`, true)
+	result, err := invoke(t, core, "github.project-items.add", "mixed", `{"repository":"octo-org/example","number":42}`, true)
 	if err != nil || !strings.Contains(string(result), "PVTI_for_I_example_42") {
 		t.Fatalf("an allowed issue = %s, %v", result, err)
 	}
-	result, err = invoke(t, core, "github.projectitems.add", "open",
+	result, err = invoke(t, core, "github.project-items.add", "open",
 		`{"repository":"octo-org/example","number":42,"project":"orgs/octo-org/projects/7"}`, true)
 	if err != nil || !strings.Contains(string(result), "PVTI_for_I_example_42") {
 		t.Fatalf("both targets on an open connection = %s, %v", result, err)
@@ -306,11 +306,11 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	if err != nil || named(result, "repository") != "octo-org/example" {
 		t.Errorf("the only repository = %s, %v; want it named in the result", result, err)
 	}
-	result, err = invoke(t, core, "github.projectitems.list", "single", `{}`, false)
+	result, err = invoke(t, core, "github.project-items.list", "single", `{}`, false)
 	if err != nil || named(result, "project") != projectTarget || named(result, "repository") != "" {
 		t.Errorf("the only project = %s, %v; want it named in the result", result, err)
 	}
-	result, err = invoke(t, core, "github.projectitems.add", "mixed", `{"repository":"octo-org/example","number":42}`, true)
+	result, err = invoke(t, core, "github.project-items.add", "mixed", `{"repository":"octo-org/example","number":42}`, true)
 	if err != nil || named(result, "project") != projectTarget || named(result, "repository") != "octo-org/example" {
 		t.Errorf("an added issue = %s, %v; want both targets named in the result", result, err)
 	}
@@ -340,7 +340,7 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	// A target of the wrong form is refused before any request, with the form it must have.
 	for _, tt := range []struct{ operation, arguments, want string }{
 		{"github.issues.list", `{"repository":"nodash"}`, "$.repository does not have the required form OWNER/REPO"},
-		{"github.projectitems.list", `{"project":"octocat/3"}`, "$.project does not have the required form " +
+		{"github.project-items.list", `{"project":"octocat/3"}`, "$.project does not have the required form " +
 			"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER"},
 	} {
 		var invalid *provider.InvalidRequestError
@@ -378,7 +378,7 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 			_, _ = w.Write([]byte(answer))
 			return true
 		}
-		_, err := invoke(t, core, "github.projectitems.list", "open", `{"project":"users/octocat/projects/3"}`, false)
+		_, err := invoke(t, core, "github.project-items.list", "open", `{"project":"users/octocat/projects/3"}`, false)
 		if classOf(err) != tt.class || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s = %v (class %q), want %q with %q", tt.name, err, classOf(err), tt.class, tt.want)
 		}

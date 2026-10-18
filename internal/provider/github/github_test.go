@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,7 +106,7 @@ type fakeGitHub struct {
 	issueTypesForbidden bool
 	// issueFields are the issue fields of octo-org, read directly or inherited by repository octo-org/example.
 	issueFields []fakeIssueFieldDef
-	// issueFieldValues records the field values github.issuefields.set sent to issue 42, by field identifier.
+	// issueFieldValues records the field values github.issue-fields.set sent to issue 42, by field identifier.
 	issueFieldValues map[string]map[string]any
 	// issueType42 is the issue type issue 42 already carries, reported back until a change names another.
 	issueType42 string
@@ -776,6 +777,15 @@ func expected(items []fakeItem, keep func(fakeItem) bool) []string {
 	return ids
 }
 
+// equalSortedIDs compares tool IDs regardless of order: hyphens change where an ID sorts.
+func equalSortedIDs(t *testing.T, got, want []string) {
+	t.Helper()
+	got, want = append([]string(nil), got...), append([]string(nil), want...)
+	sort.Strings(got)
+	sort.Strings(want)
+	equalIDs(t, got, want)
+}
+
 func equalIDs(t *testing.T, got, want []string) {
 	t.Helper()
 	if strings.Join(got, ",") != strings.Join(want, ",") {
@@ -854,35 +864,35 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
-		"github.branches.list", "github.code.search", "github.codequalityfindings.get", "github.codescanningalerts.get", "github.codescanningalerts.list",
+	equalSortedIDs(t, ids, []string{"github.accounts.me", "github.actions-permissions.get", "github.blame.get",
+		"github.branches.list", "github.code.search", "github.code-quality-findings.get", "github.code-scanning-alerts.get", "github.code-scanning-alerts.list",
 		"github.collaborators.list",
 
 		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
-		"github.contents.get", "github.customproperties.get", "github.dependabotalerts.get",
-		"github.dependabotalerts.list", "github.discussioncategories.list",
-		"github.discussioncomments.list", "github.discussions.get", "github.discussions.list", "github.gists.get", "github.gists.list", "github.globaladvisories.get", "github.globaladvisories.list",
-		"github.issuedependencies.list",
-		"github.issuefields.list",
+		"github.contents.get", "github.custom-properties.get", "github.dependabot-alerts.get",
+		"github.dependabot-alerts.list", "github.discussion-categories.list",
+		"github.discussion-comments.list", "github.discussions.get", "github.discussions.list", "github.gists.get", "github.gists.list", "github.global-advisories.get", "github.global-advisories.list",
+		"github.issue-dependencies.list",
+		"github.issue-fields.list",
 		"github.issues.get",
-		"github.issues.list", "github.issues.search", "github.issuetypes.list", "github.labels.get", "github.labels.list",
+		"github.issues.list", "github.issues.search", "github.issue-types.list", "github.labels.get", "github.labels.list",
 		"github.milestones.list", "github.notifications.get", "github.notifications.list",
-		"github.organizationadvisories.list", "github.organizations.search", "github.projectfields.list",
-		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
-		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
-		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
-		"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequestreviewcomments.list",
-		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
-		"github.pullrequests.list", "github.pullrequests.search",
-		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.repositorysettings.get", "github.rulesets.get", "github.rulesets.list",
-		"github.secretscanningalerts.get", "github.secretscanningalerts.list", "github.stars.list", "github.subissues.list", "github.tags.get",
-		"github.tags.list", "github.teammembers.list",
+		"github.organization-advisories.list", "github.organizations.search", "github.project-fields.list",
+		"github.project-items.get", "github.project-items.list", "github.projects.list",
+		"github.project-status.list", "github.project-teams.list", "github.project-views.list", "github.project-workflows.list",
+		"github.pull-request-checks.list", "github.pull-request-comments.list", "github.pull-request-commits.list",
+		"github.pull-request-diffs.get", "github.pull-request-files.list", "github.pull-request-review-comments.list",
+		"github.pull-request-reviews.list", "github.pull-request-review-threads.list", "github.pull-requests.get",
+		"github.pull-requests.list", "github.pull-requests.search",
+		"github.release-assets.list", "github.releases.get", "github.releases.list",
+		"github.repositories.list", "github.repositories.search", "github.repository-advisories.list", "github.repository-settings.get", "github.rulesets.get", "github.rulesets.list",
+		"github.secret-scanning-alerts.get", "github.secret-scanning-alerts.list", "github.stars.list", "github.sub-issues.list", "github.tags.get",
+		"github.tags.list", "github.team-members.list",
 		"github.teams.list", "github.trees.get", "github.users.search",
-		"github.workflowartifacts.list",
-		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
-		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
-		"github.workflowruns.list", "github.workflowruns.usage", "github.workflows.get", "github.workflows.list"})
+		"github.workflow-artifacts.list",
+		"github.workflow-files.get", "github.workflow-files.list", "github.workflow-jobs.get", "github.workflow-jobs.list",
+		"github.workflow-jobs.log", "github.workflow-permissions.get", "github.workflow-runs.get",
+		"github.workflow-runs.list", "github.workflow-runs.usage", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
@@ -1436,27 +1446,27 @@ func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 	tests := []struct {
 		name, operation, connection, arguments, code string
 	}{
-		{"project tool on a repository", "github.projectitems.list", "repo", `{}`, "invalid"},
-		{"item on a repository", "github.projectitems.get", "repo", `{"item_id":"PVTI_item00"}`, "invalid"},
+		{"project tool on a repository", "github.project-items.list", "repo", `{}`, "invalid"},
+		{"item on a repository", "github.project-items.get", "repo", `{"item_id":"PVTI_item00"}`, "invalid"},
 		{"issue tool on a project", "github.issues.list", "planning", `{}`, "invalid"},
 		{"issue on a project", "github.issues.get", "planning", `{"number":1}`, "invalid"},
 		{"a repository outside the targets", "github.issues.get", "repo", `{"number":1,"repository":"octo-org/other"}`,
 			"invalid"},
-		{"a project outside the targets", "github.projectitems.list", "planning",
+		{"a project outside the targets", "github.project-items.list", "planning",
 			`{"project":"orgs/octo-org/projects/8"}`, "invalid"},
-		{"a malformed project", "github.projectitems.list", "planning", `{"project":"orgs/octo-org/projects/0"}`,
+		{"a malformed project", "github.project-items.list", "planning", `{"project":"orgs/octo-org/projects/0"}`,
 			"invalid"},
-		{"an owner argument", "github.projectitems.list", "planning", `{"owner":"other-org"}`, "invalid"},
-		{"a project argument", "github.projectitems.get", "planning", `{"item_id":"PVTI_item00","project":8}`, "invalid"},
+		{"an owner argument", "github.project-items.list", "planning", `{"owner":"other-org"}`, "invalid"},
+		{"a project argument", "github.project-items.get", "planning", `{"item_id":"PVTI_item00","project":8}`, "invalid"},
 		{"a repository argument", "github.issues.get", "repo", `{"number":1,"repo":"other/repo"}`, "invalid"},
-		{"a free filter", "github.projectitems.list", "planning", `{"query":"is:open"}`, "invalid"},
-		{"a filter separator", "github.projectitems.list", "planning", `{"status":["Done\" -status:\"x"]}`, "invalid"},
-		{"a comma in a label", "github.projectitems.list", "planning", `{"labels":["a,b"]}`, "invalid"},
-		{"a limit beyond the bound", "github.projectitems.list", "planning", `{"limit":101}`, "invalid"},
-		{"too many values", "github.projectitems.list", "planning",
+		{"a free filter", "github.project-items.list", "planning", `{"query":"is:open"}`, "invalid"},
+		{"a filter separator", "github.project-items.list", "planning", `{"status":["Done\" -status:\"x"]}`, "invalid"},
+		{"a comma in a label", "github.project-items.list", "planning", `{"labels":["a,b"]}`, "invalid"},
+		{"a limit beyond the bound", "github.project-items.list", "planning", `{"limit":101}`, "invalid"},
+		{"too many values", "github.project-items.list", "planning",
 			`{"labels":["a","b","c","d","e","f","g","h","i","j","k"]}`, "invalid"},
-		{"a foreign cursor", "github.projectitems.list", "planning", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid"},
-		{"no connection among several", "github.projectitems.list", "", `{}`, "ambiguous"},
+		{"a foreign cursor", "github.project-items.list", "planning", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid"},
+		{"no connection among several", "github.project-items.list", "", `{}`, "ambiguous"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1506,11 +1516,11 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		list     string
 		urlAtTop bool
 	}{
-		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+		{application.InvokeRequest{Operation: "github.project-items.list", Connection: "planning",
 			Arguments: json.RawMessage(`{}`)}, "items", false},
-		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+		{application.InvokeRequest{Operation: "github.project-items.list", Connection: "planning",
 			Arguments: json.RawMessage(`{"status":["Todo"],"type":"issue","limit":2}`)}, "items", false},
-		{application.InvokeRequest{Operation: "github.projectitems.get", Connection: "planning",
+		{application.InvokeRequest{Operation: "github.project-items.get", Connection: "planning",
 			Arguments: json.RawMessage(`{"item_id":"PVTI_item00"}`)}, "", true},
 		{application.InvokeRequest{Operation: "github.issues.list", Connection: "repo",
 			Arguments: json.RawMessage(`{"state":"all","limit":2}`)}, "issues", false},
@@ -1554,7 +1564,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	}
 
 	first, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "github.projectitems.list", Connection: "planning", Arguments: json.RawMessage(`{}`)})
+		Operation: "github.project-items.list", Connection: "planning", Arguments: json.RawMessage(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1570,7 +1580,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		t.Errorf("a list item carries a body: %v", listed.Items[0])
 	}
 	next, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "github.projectitems.list", Connection: "planning",
+		Operation: "github.project-items.list", Connection: "planning",
 		Arguments: json.RawMessage(`{"cursor":"` + listed.NextCursor + `"}`)})
 	if err != nil || !strings.Contains(string(next.Result), `"has_more":false`) {
 		t.Errorf("second batch = %s, %v", next.Result, err)
@@ -1770,7 +1780,7 @@ func TestTheTokenNeverReachesTheOutput(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "github.projectitems.list", Connection: "planning", Arguments: json.RawMessage(`{}`)})
+		Operation: "github.project-items.list", Connection: "planning", Arguments: json.RawMessage(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

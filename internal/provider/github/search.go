@@ -19,7 +19,7 @@ import (
 //
 // A connection whose targets name a repository, an owner, or a project never reaches beyond them: before a
 // credential is resolved, github.repositories.search, github.code.search, github.issues.search,
-// github.pullrequests.search, and github.commits.search force the repo: and org:/user: qualifiers the
+// github.pull-requests.search, and github.commits.search force the repo: and org:/user: qualifiers the
 // targets allow ahead of the caller's terms, GitHub ANDs a forced qualifier with the terms and, repeated,
 // unions several forced qualifiers of the same name, so several targets narrow the search to their combined
 // reach and never beyond it; a repository pattern (repos/OWNER/*) is refused instead, because it carries no
@@ -98,7 +98,7 @@ func checkForeignQualifiers(terms string, scoped bool) error {
 }
 
 // searchScope builds the repo: and org:/user: qualifiers github.repositories.search, github.code.search,
-// github.issues.search, github.pullrequests.search, and github.commits.search force from the connection's
+// github.issues.search, github.pull-requests.search, and github.commits.search force from the connection's
 // targets, so none of them ever reaches beyond what the targets allow. Every repository target forces its
 // own repo:OWNER/REPO, and every owner target forces org:LOGIN or user:LOGIN of its own owner and scope, once
 // per distinct owner. A repository pattern (repos/OWNER/*) carries no record of whether OWNER is a user or
@@ -157,7 +157,7 @@ func issuesSearchScope(allowed allowlist) (string, error) {
 }
 
 // pullRequestsSearchScope adds the fixed is:pr qualifier ahead of searchScope's target-derived qualifiers,
-// so github.pullrequests.search never answers with plain issues, whatever a connection's targets allow.
+// so github.pull-requests.search never answers with plain issues, whatever a connection's targets allow.
 func pullRequestsSearchScope(allowed allowlist) (string, error) {
 	scope, err := searchScope(allowed)
 	if err != nil {
@@ -302,7 +302,7 @@ var issuesSearch = capability.Descriptor{
 }
 
 var pullRequestsSearch = capability.Descriptor{
-	ID:      Provider + ".pullrequests.search",
+	ID:      Provider + ".pull-requests.search",
 	Version: 1,
 	Title:   "Search GitHub pull requests",
 	Description: "Search pull requests, never plain issues, GitHub's index covers with terms and qualifiers, " +

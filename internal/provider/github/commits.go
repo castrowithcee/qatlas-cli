@@ -446,7 +446,7 @@ func (c *Client) getCommit(ctx context.Context, a *commitArguments) (*CommitDeta
 }
 
 // commitsSubject names the commit a commits path below a repository addresses: commits/REF, without the
-// check-runs and status tails github.pullrequestchecks.list already names through pullsSubject. It names
+// check-runs and status tails github.pull-request-checks.list already names through pullsSubject. It names
 // only a ref of the characters the input schema allows, and is empty otherwise.
 func commitsSubject(path string) string {
 	rest, ok := strings.CutPrefix(path, "commits/")

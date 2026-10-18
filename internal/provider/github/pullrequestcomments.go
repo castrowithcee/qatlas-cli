@@ -21,7 +21,7 @@ import (
 // tools bound to a review or a review thread; these two tools never see one.
 
 var pullRequestCommentsList = capability.Descriptor{
-	ID:      Provider + ".pullrequestcomments.list",
+	ID:      Provider + ".pull-request-comments.list",
 	Version: 1,
 	Title:   "List GitHub pull request comments",
 	Description: "List one bounded batch of the conversation comments of one pull request of a repository " +
@@ -55,7 +55,7 @@ var pullRequestCommentsList = capability.Descriptor{
 }
 
 var pullRequestCommentsCreate = capability.Descriptor{
-	ID:      Provider + ".pullrequestcomments.create",
+	ID:      Provider + ".pull-request-comments.create",
 	Version: 1,
 	Title:   "Comment on a GitHub pull request",
 	Description: "Write exactly one conversation comment on one pull request of a repository an explicit " +

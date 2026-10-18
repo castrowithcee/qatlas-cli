@@ -347,7 +347,7 @@ func TestAnOwnerTargetAllowsNoRepositoryOrProject(t *testing.T) {
 	for _, tt := range []struct{ operation, arguments string }{
 		{"github.issues.list", `{}`},
 		{"github.issues.list", `{"repository":"octo-org/example"}`},
-		{"github.projectitems.list", `{"project":"orgs/octo-org/projects/7"}`},
+		{"github.project-items.list", `{"project":"orgs/octo-org/projects/7"}`},
 	} {
 		if _, err := invoke(t, core, tt.operation, "org", tt.arguments, false); !isInvalidRequest(err) || reads != 0 {
 			t.Errorf("%s %s on an owner target = %v, want an invalid request before the secret", tt.operation,

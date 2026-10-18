@@ -311,10 +311,11 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	selectChoice(t, m, toolsSelected)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
-	typeText(t, m, "workflowfiles")
-	view := screenOf(m)
-	for _, want := range []string{"github.workflowfiles.get  read  (listed only)",
-		"github.workflowfiles.update  update  (listed only)  (not permitted)"} {
+	typeText(t, m, "workflow-files")
+	// Columns pad to the longest ID on screen, so compare with collapsed whitespace.
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	for _, want := range []string{"github.workflow-files.get read (listed only)",
+		"github.workflow-files.update update (listed only) (not permitte"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}

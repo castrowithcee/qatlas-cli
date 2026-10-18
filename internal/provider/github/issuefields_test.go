@@ -45,7 +45,7 @@ func (d fakeIssueFieldDef) json() string {
 		d.id, d.name, description, d.dataType, d.visibility, options)
 }
 
-// issueFieldsPage answers github.issuefields.list's own GraphQL query, of a repository or an organization
+// issueFieldsPage answers github.issue-fields.list's own GraphQL query, of a repository or an organization
 // directly, with f.issueFields; it never paginates in these tests, since a single page is enough to satisfy
 // the contract.
 func (f *fakeGitHub) issueFieldsPage(w http.ResponseWriter, document string, variables map[string]any) bool {
@@ -65,7 +65,7 @@ func (f *fakeGitHub) issueFieldsPage(w http.ResponseWriter, document string, var
 	return true
 }
 
-// issueFieldsChange answers the setIssueFieldValue mutation github.issuefields.set sends: every field of one
+// issueFieldsChange answers the setIssueFieldValue mutation github.issue-fields.set sends: every field of one
 // call is recorded as a whole, the way GitHub applies it as a single mutation.
 func (f *fakeGitHub) issueFieldsChange(w http.ResponseWriter, document string, variables map[string]any) bool {
 	if !strings.Contains(document, "setIssueFieldValue(input") {
@@ -96,7 +96,7 @@ func (f *fakeGitHub) issueFieldsChange(w http.ResponseWriter, document string, v
 	return true
 }
 
-// github.issuefields.list reads the issue fields of a repository or, with organization instead, directly of
+// github.issue-fields.list reads the issue fields of a repository or, with organization instead, directly of
 // an organization an explicit connection allows.
 func TestIssueFieldsListSatisfiesItsContractThroughTheApplicationCore(t *testing.T) {
 	f := &fakeGitHub{issueFields: []fakeIssueFieldDef{
@@ -161,7 +161,7 @@ func TestIssueFieldsListRefusalsBeforeIO(t *testing.T) {
 	}
 }
 
-// github.issuefields.set writes every field value of one call as a single mutation and needs its own
+// github.issue-fields.set writes every field value of one call as a single mutation and needs its own
 // confirmation.
 func TestIssueFieldsSetSatisfiesItsContractThroughTheApplicationCore(t *testing.T) {
 	f := &fakeGitHub{}

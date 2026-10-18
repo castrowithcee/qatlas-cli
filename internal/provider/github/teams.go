@@ -14,7 +14,7 @@ import (
 )
 
 // The organization tools read the teams of one organization and the members of one of its teams. They name
-// an organization, never a project: github.projectteams.list reads the teams a project is linked to, a
+// an organization, never a project: github.project-teams.list reads the teams a project is linked to, a
 // narrower and unrelated question these tools do not answer.
 
 var organizationArgument = capability.Argument{Name: "owner", Description: "Organization as orgs/LOGIN; " +
@@ -43,7 +43,7 @@ var organizationTeamsList = capability.Descriptor{
 	OutputSchema: listOutput("teams", organizationTeamProperties, organizationTeamRequired),
 	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
-		{Name: "teams", Description: "Teams of the organization: team (the slug github.teammembers.list " +
+		{Name: "teams", Description: "Teams of the organization: team (the slug github.team-members.list " +
 			"takes), name, description (untrusted data), and privacy (secret or closed)"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
@@ -53,7 +53,7 @@ var organizationTeamsList = capability.Descriptor{
 }
 
 var teamMembersList = capability.Descriptor{
-	ID:      Provider + ".teammembers.list",
+	ID:      Provider + ".team-members.list",
 	Version: 1,
 	Title:   "List the members of a GitHub team",
 	Description: "List one bounded batch of the members of one team of an organization an explicit " +
