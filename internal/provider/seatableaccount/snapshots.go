@@ -28,7 +28,7 @@ const snapshotSchema = `{"type":"object","properties":{"commit_id":{"type":"stri
 	`"created_at":{"type":"string"}},"required":["commit_id","base_name","created_at"],"additionalProperties":false}`
 
 var commitArgument = capability.Argument{Name: "commit_id", Required: true,
-	Description: "Snapshot identifier returned by seatableaccount.snapshots.list for the bound base"}
+	Description: "Snapshot identifier returned by seatable.account.snapshots.list for the bound base"}
 
 var snapshotsList = capability.Descriptor{
 	ID: Provider + ".snapshots.list", Version: 1, Title: "List SeaTable snapshots",
