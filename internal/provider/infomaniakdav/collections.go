@@ -28,9 +28,9 @@ const collectionSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},"color":{"type":"string"}},` +
 	`"required":["id","name"],"additionalProperties":false}`
 
-func listDescriptor(kind, title, description string) capability.Descriptor {
+func listDescriptor(kind, object, title, description string) capability.Descriptor {
 	return capability.Descriptor{
-		ID: Provider + "." + kind + "s.list", Version: 1, Title: title, Description: description,
+		ID: Provider + "." + object + ".list", Version: 1, Title: title, Description: description,
 		Tags:        []string{"infomaniak", "dav", kind, "list"},
 		Risk:        readRisk,
 		Provider:    Provider,
@@ -50,10 +50,10 @@ func listDescriptor(kind, title, description string) capability.Descriptor {
 	}
 }
 
-var calendarsList = listDescriptor("calendar", "List Infomaniak calendars",
+var calendarsList = listDescriptor("calendar", "calendars", "List Infomaniak calendars",
 	"List the calendars of the bound Infomaniak identity that the connection's calendar/ID targets allow; "+
 		"calendars only, no events")
-var addressbooksList = listDescriptor("addressbook", "List Infomaniak address books",
+var addressbooksList = listDescriptor("addressbook", "address-books", "List Infomaniak address books",
 	"List the address books of the bound Infomaniak identity that the connection's addressbook/ID targets "+
 		"allow; address books only, no contacts")
 

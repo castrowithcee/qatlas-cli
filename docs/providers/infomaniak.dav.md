@@ -35,11 +35,11 @@ The credential provides two roles:
 ```yaml
 services:
   infomaniak-dav:
-    provider: infomaniakdav
+    provider: infomaniak.dav
 
 credentials:
   customer-a-dav:
-    provider: infomaniakdav
+    provider: infomaniak.dav
     type: keyring
 ```
 
@@ -64,7 +64,7 @@ connections:
 
 The allow-list is required: a connection needs at least one target, and a target named twice within its kind
 is refused. Only listed collections are reported. If a connection lists only calendars,
-`infomaniakdav.addressbooks.list` returns an empty set (and the other way round) without contacting
+`infomaniak.dav.address-books.list` returns an empty set (and the other way round) without contacting
 Infomaniak or reading a secret. A listed collection the server does not show is simply absent. No error
 quotes a configured value.
 
@@ -72,18 +72,18 @@ quotes a configured value.
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `infomaniakdav.calendars.list` | read | none | the allow-listed calendars |
-| `infomaniakdav.addressbooks.list` | read | none | the allow-listed address books |
-| `infomaniakdav.events.list` | read | none | the events of one allow-listed calendar in a time range |
-| `infomaniakdav.events.get` | read | none | one event of an allow-listed calendar |
-| `infomaniakdav.contacts.list` | read | none | the contacts of one allow-listed address book |
-| `infomaniakdav.contacts.get` | read | none | one contact of an allow-listed address book |
-| `infomaniakdav.events.create` | create | required | a new event in an allow-listed calendar |
-| `infomaniakdav.events.update` | update | required | replaces one event, bound to its etag |
-| `infomaniakdav.events.delete` | delete | required | deletes one event, bound to its etag |
-| `infomaniakdav.contacts.create` | create | required | a new contact in an allow-listed address book |
-| `infomaniakdav.contacts.update` | update | required | replaces one contact, bound to its etag |
-| `infomaniakdav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
+| `infomaniak.dav.calendars.list` | read | none | the allow-listed calendars |
+| `infomaniak.dav.address-books.list` | read | none | the allow-listed address books |
+| `infomaniak.dav.events.list` | read | none | the events of one allow-listed calendar in a time range |
+| `infomaniak.dav.events.get` | read | none | one event of an allow-listed calendar |
+| `infomaniak.dav.contacts.list` | read | none | the contacts of one allow-listed address book |
+| `infomaniak.dav.contacts.get` | read | none | one contact of an allow-listed address book |
+| `infomaniak.dav.events.create` | create | required | a new event in an allow-listed calendar |
+| `infomaniak.dav.events.update` | update | required | replaces one event, bound to its etag |
+| `infomaniak.dav.events.delete` | delete | required | deletes one event, bound to its etag |
+| `infomaniak.dav.contacts.create` | create | required | a new contact in an allow-listed address book |
+| `infomaniak.dav.contacts.update` | update | required | replaces one contact, bound to its etag |
+| `infomaniak.dav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
 
 The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
 needs the `read` permission. The profile `events` adds `events.create` and `events.update`
@@ -100,13 +100,13 @@ valid hex value.
 Both event tools take `calendar`, the ID of a `calendar/ID` target. A calendar outside the allow-list is
 refused as `permission` before any secret is read or any request is sent, and the message does not name it.
 
-`infomaniakdav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after
+`infomaniak.dav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after
 `start` and at most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REPORT of the
 `VEVENT` components that overlap the range. `limit` defaults to 50 and may be at most 200. Events are sorted
 by start and cut at `limit`; `truncated` is true when more matched. The list is compact: `id`, `uid`,
 `summary`, `location`, `start`, `end`, `all_day`, `timezone`, `status`, `rrule`, and `etag`.
 
-`infomaniakdav.events.get` takes the required `id`, the event as the list reports it, and reads that one
+`infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that one
 event with a GET. Besides the compact members it returns `description`, `organizer`, and at most 50
 `attendees` (`attendees_truncated` when there were more). The `etag` is the entity tag of the event version.
 
@@ -124,12 +124,12 @@ Both contact tools take `addressbook`, the ID of an `addressbook/ID` target. An 
 allow-list is refused as `permission` before any secret is read or any request is sent, and the message does
 not name it. Contacts are personal data and carry the data sensitivity class `infomaniak-dav-contacts`.
 
-`infomaniakdav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults
+`infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults
 to 50 and may be at most 200. Contacts are sorted by name, then id, and cut at `limit`; `truncated` is true
 when more were found. The list is compact: `id`, `uid`, `name`, the first `email`, `organization`, and `etag`.
 A card that is not a valid vCard is left out of the list.
 
-`infomaniakdav.contacts.get` takes the required `id`, the contact as the list reports it, and reads that one
+`infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads that one
 contact with a GET. It returns `structured_name`, at most 20 `emails` and 20 `phones` with their `type`, at
 most 20 `addresses`, `organization`, `title`, `birthday`, `note`, and at most 20 `urls`. A member cut at its
 cap is named in `truncated`. A photo or other binary property is never returned. The `name` is the formatted

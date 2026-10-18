@@ -384,11 +384,11 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 		}
 	}
 	sort.Strings(got)
-	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list",
-		"infomaniakdav.contacts.create", "infomaniakdav.contacts.delete", "infomaniakdav.contacts.get",
-		"infomaniakdav.contacts.list", "infomaniakdav.contacts.update",
-		"infomaniakdav.events.create", "infomaniakdav.events.delete", "infomaniakdav.events.get",
-		"infomaniakdav.events.list", "infomaniakdav.events.update"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"infomaniak.dav.address-books.list", "infomaniak.dav.calendars.list",
+		"infomaniak.dav.contacts.create", "infomaniak.dav.contacts.delete", "infomaniak.dav.contacts.get",
+		"infomaniak.dav.contacts.list", "infomaniak.dav.contacts.update",
+		"infomaniak.dav.events.create", "infomaniak.dav.events.delete", "infomaniak.dav.events.get",
+		"infomaniak.dav.events.list", "infomaniak.dav.events.update"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("tool IDs = %v, want %v", got, want)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
@@ -418,13 +418,13 @@ func TestInvokeThroughCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)
 	resp, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "infomaniakdav.calendars.list", Connection: "main", Arguments: json.RawMessage(`{}`)})
+		Operation: "infomaniak.dav.calendars.list", Connection: "main", Arguments: json.RawMessage(`{}`)})
 	if err != nil || !strings.Contains(string(resp.Result), `"id":"work"`) ||
 		strings.Contains(string(resp.Result), passCanary) {
 		t.Errorf("result = %s, err = %v", resp.Result, err)
 	}
 	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "infomaniakdav.calendars.list", Connection: "main",
+		Operation: "infomaniak.dav.calendars.list", Connection: "main",
 		Arguments: json.RawMessage(`{"url":"https://evil.example"}`)}); err == nil {
 		t.Error("a free argument was accepted")
 	}
