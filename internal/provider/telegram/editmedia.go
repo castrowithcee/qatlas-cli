@@ -39,7 +39,7 @@ func liveRisk() capability.Risk {
 }
 
 var messagesEditCaption = capability.Descriptor{
-	ID:          Provider + ".messages.editcaption",
+	ID:          Provider + ".messages.edit-caption",
 	Version:     1,
 	Title:       "Edit the caption of a Telegram message",
 	Description: "Replace or remove the caption of one media message in a bound chat of an explicit Telegram connection",
@@ -67,7 +67,7 @@ var messagesEditCaption = capability.Descriptor{
 }
 
 var messagesEditMedia = capability.Descriptor{
-	ID:      Provider + ".messages.editmedia",
+	ID:      Provider + ".messages.edit-media",
 	Version: 1,
 	Title:   "Replace the media of a Telegram message",
 	Description: "Replace the photo, video, animation, or document of one message in a bound chat of an explicit " +
@@ -112,7 +112,7 @@ var messagesEditMedia = capability.Descriptor{
 }
 
 var locationsEditLive = capability.Descriptor{
-	ID:          Provider + ".locations.editlive",
+	ID:          Provider + ".locations.edit-live",
 	Version:     1,
 	Title:       "Update a Telegram live location",
 	Description: "Move one live location of a bound chat of an explicit Telegram connection to new coordinates",
@@ -145,7 +145,7 @@ var locationsEditLive = capability.Descriptor{
 }
 
 var locationsStopLive = capability.Descriptor{
-	ID:          Provider + ".locations.stoplive",
+	ID:          Provider + ".locations.stop-live",
 	Version:     1,
 	Title:       "Stop a Telegram live location",
 	Description: "Stop updating one live location of a bound chat of an explicit Telegram connection before it expires",

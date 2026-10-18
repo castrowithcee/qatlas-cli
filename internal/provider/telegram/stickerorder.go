@@ -17,11 +17,11 @@ const maxStickerPosition = 199
 
 const stickerFileRefSchema = `{"type":"string","minLength":1,"maxLength":2048}`
 
-const stickerRefHelp = "file_ref of the sticker as stickersets.get returns it for a connection that binds the bot target"
+const stickerRefHelp = "file_ref of the sticker as sticker-sets.get returns it for a connection that binds the bot target"
 
 var (
 	stickersSetPosition = capability.Descriptor{
-		ID:      Provider + ".stickers.setposition",
+		ID:      Provider + ".stickers.set-position",
 		Version: 1,
 		Title:   "Move a sticker in a Telegram sticker set",
 		Description: "Move one sticker of a sticker set of the bot to a zero-based position. The name must end in _by_ " +
@@ -46,7 +46,7 @@ var (
 			{Name: "position", Description: "Position Telegram accepted"},
 		},
 		Examples: []capability.Example{{Description: "Move a sticker to the front of its set",
-			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of stickersets.get>","position":0}`)}},
+			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of sticker-sets.get>","position":0}`)}},
 	}
 
 	stickersReplace = capability.Descriptor{
@@ -76,8 +76,8 @@ var (
 			{Name: "replaced", Description: "True when Telegram accepted the replacement"},
 		},
 		Examples: []capability.Example{{Description: "Replace a sticker by an uploaded one",
-			Arguments: json.RawMessage(`{"user_id":42,"name":"animals_by_mybot","old_file_ref":"<file_ref of stickersets.get>",` +
-				`"sticker":{"file_ref":"<file_ref of stickers.uploadfile>","format":"static","emoji_list":["🐱"]}}`)}},
+			Arguments: json.RawMessage(`{"user_id":42,"name":"animals_by_mybot","old_file_ref":"<file_ref of sticker-sets.get>",` +
+				`"sticker":{"file_ref":"<file_ref of stickers.upload-file>","format":"static","emoji_list":["🐱"]}}`)}},
 	}
 
 	stickersDelete = capability.Descriptor{
@@ -105,7 +105,7 @@ var (
 			{Name: "deleted", Description: "True when Telegram accepted the removal"},
 		},
 		Examples: []capability.Example{{Description: "Remove a sticker from a set",
-			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of stickersets.get>"}`)}},
+			Arguments: json.RawMessage(`{"name":"animals_by_mybot","file_ref":"<file_ref of sticker-sets.get>"}`)}},
 	}
 )
 
@@ -117,7 +117,7 @@ func botFileRef(op string, resolved *config.Resolved, value string) (parsedRef, 
 		return parsedRef{}, err
 	}
 	if ref.binding != botTarget {
-		return parsedRef{}, providerError(op, "the sticker file_ref must be bound to the bot, as stickersets.get returns it")
+		return parsedRef{}, providerError(op, "the sticker file_ref must be bound to the bot, as sticker-sets.get returns it")
 	}
 	return ref, nil
 }

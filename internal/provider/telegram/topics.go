@@ -163,7 +163,7 @@ var topicsDelete = capability.Descriptor{
 }
 
 var topicsUnpinAll = capability.Descriptor{
-	ID:      Provider + ".topics.unpinall",
+	ID:      Provider + ".topics.unpin-all",
 	Version: 1,
 	Title:   "Unpin all messages of a Telegram forum topic",
 	Description: "Unpin all pinned messages of a forum topic or, with general: true, of the General topic of a " +
@@ -185,7 +185,7 @@ var topicsUnpinAll = capability.Descriptor{
 }
 
 var topicsHideGeneral = capability.Descriptor{
-	ID:      Provider + ".topics.hidegeneral",
+	ID:      Provider + ".topics.hide-general",
 	Version: 1,
 	Title:   "Hide the General topic of a Telegram forum",
 	Description: "Hide the General topic of a bound forum supergroup of an explicit Telegram connection; an open " +
@@ -207,7 +207,7 @@ var topicsHideGeneral = capability.Descriptor{
 }
 
 var topicsUnhideGeneral = capability.Descriptor{
-	ID:          Provider + ".topics.unhidegeneral",
+	ID:          Provider + ".topics.unhide-general",
 	Version:     1,
 	Title:       "Unhide the General topic of a Telegram forum",
 	Description: "Unhide the General topic of a bound forum supergroup of an explicit Telegram connection",

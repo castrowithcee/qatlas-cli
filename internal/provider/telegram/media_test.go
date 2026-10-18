@@ -604,8 +604,8 @@ func TestMediaToolsDeclareRiskGroupAndProfile(t *testing.T) {
 
 func TestToolIDsOfAudioAndVoiceHaveNoPlural(t *testing.T) {
 	for d, id := range map[*capability.Descriptor]string{&audioSend: "telegram.audio.send", &voiceSend: "telegram.voice.send",
-		&photosSend: "telegram.photos.send", &videoNotesSend: "telegram.videonotes.send",
-		&livePhotosSend: "telegram.livephotos.send"} {
+		&photosSend: "telegram.photos.send", &videoNotesSend: "telegram.video-notes.send",
+		&livePhotosSend: "telegram.live-photos.send"} {
 		if d.ID != id {
 			t.Errorf("ID = %s, want %s", d.ID, id)
 		}

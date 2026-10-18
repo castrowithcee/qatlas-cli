@@ -38,19 +38,19 @@ const inputStickerSchema = `{"type":"object","properties":{"file_ref":{"type":"s
 	`"keywords":{"type":"array","maxItems":20,"items":{"type":"string","minLength":1,"maxLength":64}}},` +
 	`"required":["file_ref","format","emoji_list"],"additionalProperties":false}`
 
-const inputStickerHelp = "an object with file_ref (from stickers.uploadfile, bound to the bot), format (static, animated, " +
+const inputStickerHelp = "an object with file_ref (from stickers.upload-file, bound to the bot), format (static, animated, " +
 	"or video, matching the uploaded file), emoji_list (1 through 20 emoji), and optional keywords (up to 20, " +
 	"64 characters in total)"
 
 var (
 	stickersUploadFile = capability.Descriptor{
-		ID:      Provider + ".stickers.uploadfile",
+		ID:      Provider + ".stickers.upload-file",
 		Version: 1,
 		Title:   "Upload a Telegram sticker file",
 		Description: "Upload one .webp, .tgs, or .webm local_path in a directory the connection releases for reading " +
 			"for a user, for use in a sticker set; the sticker format follows the extension and the file is sent " +
-			"under a neutral name without its path. Returns a file_ref bound to the bot for stickersets.create and " +
-			"stickersets.addsticker. Needs the bot target. An unclear outcome is never repeated",
+			"under a neutral name without its path. Returns a file_ref bound to the bot for sticker-sets.create and " +
+			"sticker-sets.add-sticker. Needs the bot target. An unclear outcome is never repeated",
 		Tags:       []string{"telegram", "stickers", "upload", "files"},
 		Risk:       stickerSetMutationRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		Provider:   Provider,
@@ -75,7 +75,7 @@ var (
 	}
 
 	stickersetsCreate = capability.Descriptor{
-		ID:      Provider + ".stickersets.create",
+		ID:      Provider + ".sticker-sets.create",
 		Version: 1,
 		Title:   "Create a Telegram sticker set",
 		Description: "Create a sticker set owned by a user, from 1 through 50 uploaded stickers. The name must end in " +
@@ -105,11 +105,11 @@ var (
 		},
 		Examples: []capability.Example{{Description: "Create a sticker set from an uploaded file",
 			Arguments: json.RawMessage(`{"user_id":42,"name":"animals_by_mybot","title":"Animals","stickers":` +
-				`[{"file_ref":"<file_ref of stickers.uploadfile>","format":"static","emoji_list":["🐶"]}]}`)}},
+				`[{"file_ref":"<file_ref of stickers.upload-file>","format":"static","emoji_list":["🐶"]}]}`)}},
 	}
 
 	stickersetsAddSticker = capability.Descriptor{
-		ID:      Provider + ".stickersets.addsticker",
+		ID:      Provider + ".sticker-sets.add-sticker",
 		Version: 1,
 		Title:   "Add a sticker to a Telegram sticker set",
 		Description: "Add one uploaded sticker to a sticker set of the bot. The name must end in _by_ and the bot's " +
@@ -133,11 +133,11 @@ var (
 		},
 		Examples: []capability.Example{{Description: "Add an uploaded sticker to a set",
 			Arguments: json.RawMessage(`{"user_id":42,"name":"animals_by_mybot","sticker":` +
-				`{"file_ref":"<file_ref of stickers.uploadfile>","format":"static","emoji_list":["🐱"]}}`)}},
+				`{"file_ref":"<file_ref of stickers.upload-file>","format":"static","emoji_list":["🐱"]}}`)}},
 	}
 
 	stickersetsDelete = capability.Descriptor{
-		ID:      Provider + ".stickersets.delete",
+		ID:      Provider + ".sticker-sets.delete",
 		Version: 1,
 		Title:   "Delete a Telegram sticker set",
 		Description: "Delete a sticker set of the bot. The name must end in _by_ and the bot's username. Needs the bot " +
@@ -257,7 +257,7 @@ func checkInputSticker(op string, resolved *config.Resolved, s inputStickerArg) 
 		return parsedRef{}, err
 	}
 	if ref.binding != botTarget {
-		return parsedRef{}, providerError(op, "the sticker file_ref must be bound to the bot, as stickers.uploadfile returns it")
+		return parsedRef{}, providerError(op, "the sticker file_ref must be bound to the bot, as stickers.upload-file returns it")
 	}
 	return ref, nil
 }

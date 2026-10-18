@@ -25,7 +25,7 @@ const (
 )
 
 var businessSetPhoto = capability.Descriptor{
-	ID:      Provider + ".business.setphoto",
+	ID:      Provider + ".business.set-photo",
 	Version: 1,
 	Title:   "Set the profile photo of a Telegram business account",
 	Description: "Replace the profile photo of a bound business account with a static JPEG image from a local file up to " +
@@ -56,7 +56,7 @@ var businessSetPhoto = capability.Descriptor{
 }
 
 var businessRemovePhoto = capability.Descriptor{
-	ID:          Provider + ".business.removephoto",
+	ID:          Provider + ".business.remove-photo",
 	Version:     1,
 	Title:       "Remove the profile photo of a Telegram business account",
 	Description: "Remove the profile photo of a bound business account",
@@ -119,7 +119,7 @@ var businessGifts = capability.Descriptor{
 }
 
 var businessStarBalance = capability.Descriptor{
-	ID:          Provider + ".business.starbalance",
+	ID:          Provider + ".business.star-balance",
 	Version:     1,
 	Title:       "Read the Star balance of a Telegram business account",
 	Description: "Read the Star balance of a bound business account; nothing can be spent or transferred",

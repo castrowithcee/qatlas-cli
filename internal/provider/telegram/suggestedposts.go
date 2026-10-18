@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	groupSuggestedPosts = "suggestedposts"
+	groupSuggestedPosts = "suggested-posts"
 	// maxSendDateAhead is the Bot API limit of 2678400 seconds (30 days) for send_date.
 	maxSendDateAhead = 30 * 24 * time.Hour
 	maxDeclineNote   = 128
@@ -39,7 +39,7 @@ func suggestedRisk(effect capability.Effect) capability.Risk {
 }
 
 var suggestedpostsApprove = capability.Descriptor{
-	ID:      Provider + ".suggestedposts.approve",
+	ID:      Provider + ".suggested-posts.approve",
 	Version: 1,
 	Title:   "Approve a Telegram suggested post",
 	Description: "Approve one suggested post in the bound channel direct messages chat of an explicit Telegram " +
@@ -65,7 +65,7 @@ var suggestedpostsApprove = capability.Descriptor{
 }
 
 var suggestedpostsDecline = capability.Descriptor{
-	ID:      Provider + ".suggestedposts.decline",
+	ID:      Provider + ".suggested-posts.decline",
 	Version: 1,
 	Title:   "Decline a Telegram suggested post",
 	Description: "Decline one suggested post in the bound channel direct messages chat of an explicit Telegram " +

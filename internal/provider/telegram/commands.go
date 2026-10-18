@@ -114,7 +114,7 @@ const menuChatArgument = "Bound private chat whose menu button is addressed, by 
 	"the default menu button of the bot when omitted"
 
 var menubuttonGet = capability.Descriptor{
-	ID:      Provider + ".menubutton.get",
+	ID:      Provider + ".menu-button.get",
 	Version: 1,
 	Title:   "Get the Telegram bot menu button",
 	Description: "Read the type of the menu button of the bot, the default one or that of a bound private chat; " +
@@ -139,7 +139,7 @@ var menubuttonGet = capability.Descriptor{
 }
 
 var menubuttonSet = capability.Descriptor{
-	ID:      Provider + ".menubutton.set",
+	ID:      Provider + ".menu-button.set",
 	Version: 1,
 	Title:   "Set the Telegram bot menu button",
 	Description: "Set the menu button of the bot, the default one or that of a bound private chat, to the " +

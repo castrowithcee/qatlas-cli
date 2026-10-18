@@ -52,11 +52,11 @@ var kindSpecs = map[string]struct{ method, field, noun, example, segment string 
 	kindDocument:  {"sendDocument", "document", "document", ".pdf", "documents"},
 	kindVideo:     {"sendVideo", "video", "video", ".mp4", "videos"},
 	kindAnimation: {"sendAnimation", "animation", "animation", ".mp4", "animations"},
-	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4", "videonotes"},
+	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4", "video-notes"},
 	kindAudio:     {"sendAudio", "audio", "audio file", ".mp3", "audio"},
 	kindVoice:     {"sendVoice", "voice", "voice message", ".ogg", "voice"},
-	kindLivePhoto: {"sendLivePhoto", "live_photo", "live photo", ".mp4", "livephotos"},
-	kindLiveStill: {"sendLivePhoto", "photo", "live photo still", ".jpg", "livephotos"},
+	kindLivePhoto: {"sendLivePhoto", "live_photo", "live photo", ".mp4", "live-photos"},
+	kindLiveStill: {"sendLivePhoto", "photo", "live photo still", ".jpg", "live-photos"},
 }
 
 var mediaRisk = capability.Risk{
@@ -165,7 +165,7 @@ var livePhotosSend = func() capability.Descriptor {
 			"returned by an earlier send to it; instead of photo_local_path"},
 	}, mediaArguments("Caption of the live photo")...)
 	return capability.Descriptor{
-		ID:      Provider + ".livephotos.send",
+		ID:      Provider + ".live-photos.send",
 		Version: 1,
 		Title:   "Send a Telegram live photo",
 		Description: "Send one live photo, a video of at most 10 seconds and 10 MB with its still image up to 10 MB, " +
@@ -192,7 +192,7 @@ var livePhotosSend = func() capability.Descriptor {
 }()
 
 var mediaGroupsSend = capability.Descriptor{
-	ID:      Provider + ".mediagroups.send",
+	ID:      Provider + ".media-groups.send",
 	Version: 1,
 	Title:   "Send a Telegram album",
 	Description: "Send an album of 2 through 10 photos and videos, which may be mixed, of 2 through 10 documents, or " +

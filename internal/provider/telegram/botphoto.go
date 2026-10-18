@@ -18,7 +18,7 @@ import (
 const profileAttachName = "profile"
 
 var profileSetPhoto = capability.Descriptor{
-	ID:      Provider + ".profile.setphoto",
+	ID:      Provider + ".profile.set-photo",
 	Version: 1,
 	Title:   "Set the Telegram bot profile photo",
 	Description: "Replace the profile photo of the bot with a static JPEG image from a local file up to 10 MB in a " +
@@ -44,7 +44,7 @@ var profileSetPhoto = capability.Descriptor{
 }
 
 var profileRemovePhoto = capability.Descriptor{
-	ID:          Provider + ".profile.removephoto",
+	ID:          Provider + ".profile.remove-photo",
 	Version:     1,
 	Title:       "Remove the Telegram bot profile photo",
 	Description: "Remove the profile photo of the bot. Requires the bot target",

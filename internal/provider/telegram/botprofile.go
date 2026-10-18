@@ -80,13 +80,13 @@ func profileSetter(name, title, desc, field string, limit int, fieldDesc string)
 }
 
 var (
-	profileSetName = profileSetter("setname", "Set the Telegram bot name",
+	profileSetName = profileSetter("set-name", "Set the Telegram bot name",
 		"Change or remove the name of the bot for a language; requires the bot target", "name", maxBotNameRunes,
 		"New name, up to 64 characters; an empty string removes the language-specific name")
-	profileSetDescription = profileSetter("setdescription", "Set the Telegram bot description",
+	profileSetDescription = profileSetter("set-description", "Set the Telegram bot description",
 		"Change or remove the description of the bot for a language; requires the bot target", "description",
 		maxBotDescriptionRunes, "New description, up to 512 characters; an empty string removes the language-specific one")
-	profileSetShortDescription = profileSetter("setshortdescription", "Set the Telegram bot short description",
+	profileSetShortDescription = profileSetter("set-short-description", "Set the Telegram bot short description",
 		"Change or remove the short description of the bot for a language; requires the bot target",
 		"short_description", maxBotShortDescriptionRunes,
 		"New short description, up to 120 characters; an empty string removes the language-specific one")

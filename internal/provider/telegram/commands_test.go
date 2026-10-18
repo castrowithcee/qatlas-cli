@@ -263,12 +263,12 @@ func TestCommandsToolRisksGroupsAndProfiles(t *testing.T) {
 	}
 	if !strings.Contains(string(menubuttonSet.InputSchema), `"enum":["commands","default"]`) ||
 		strings.Contains(string(menubuttonSet.InputSchema), "web_app") || strings.Contains(string(menubuttonSet.InputSchema), "url") {
-		t.Error("menubutton.set schema admits more than commands and default")
+		t.Error("menu-button.set schema admits more than commands and default")
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, tool := range profile.Tools {
-			if strings.HasPrefix(tool, "telegram.commands.") || strings.HasPrefix(tool, "telegram.menubutton.") {
+			if strings.HasPrefix(tool, "telegram.commands.") || strings.HasPrefix(tool, "telegram.menu-button.") {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}

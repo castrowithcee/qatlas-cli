@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	groupInviteLinks = "invitelinks"
+	groupInviteLinks = "invite-links"
 	// inviteLinkSensitivity classifies results and requests that carry a link granting chat membership.
 	inviteLinkSensitivity = "telegram-invite-link"
 	maxInviteLinkRunes    = 128
@@ -23,7 +23,7 @@ const (
 var inviteLinkPattern = regexp.MustCompile(`^https://t\.me/(?:\+|joinchat/)[A-Za-z0-9_-]{8,64}$`)
 
 var invitelinksPrimary = capability.Descriptor{
-	ID:          Provider + ".invitelinks.primary",
+	ID:          Provider + ".invite-links.primary",
 	Version:     1,
 	Title:       "Read the primary Telegram invite link",
 	Description: "Read the primary invite link of a bound chat; the link grants joining the chat",
@@ -40,7 +40,7 @@ var invitelinksPrimary = capability.Descriptor{
 }
 
 var invitelinksRevoke = capability.Descriptor{
-	ID:      Provider + ".invitelinks.revoke",
+	ID:      Provider + ".invite-links.revoke",
 	Version: 1,
 	Title:   "Revoke a Telegram invite link",
 	Description: "Revoke one invite link of a bound chat; for a revoked primary link Telegram generates a new one, " +

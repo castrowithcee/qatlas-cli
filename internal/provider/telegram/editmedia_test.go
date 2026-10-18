@@ -305,10 +305,10 @@ func TestEditToolsRiskGroupAndProfiles(t *testing.T) {
 		sensitivity      string
 		allowList, files bool
 	}{
-		"telegram.messages.editcaption": {groupMessages, capability.IdempotencyUnknown, dataSensitivity, false, false},
-		"telegram.messages.editmedia":   {groupMessages, capability.IdempotencyUnknown, dataSensitivity, false, true},
-		"telegram.locations.editlive":   {groupInteractions, capability.IdempotencyUnknown, personalDataSensitivity, false, false},
-		"telegram.locations.stoplive":   {groupInteractions, capability.IdempotencyIdempotent, personalDataSensitivity, true, false},
+		"telegram.messages.edit-caption": {groupMessages, capability.IdempotencyUnknown, dataSensitivity, false, false},
+		"telegram.messages.edit-media":   {groupMessages, capability.IdempotencyUnknown, dataSensitivity, false, true},
+		"telegram.locations.edit-live":   {groupInteractions, capability.IdempotencyUnknown, personalDataSensitivity, false, false},
+		"telegram.locations.stop-live":   {groupInteractions, capability.IdempotencyIdempotent, personalDataSensitivity, true, false},
 	}
 	for _, d := range editTools {
 		w := want[d.ID]
