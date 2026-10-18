@@ -66,7 +66,7 @@ var discussionLimitArgument = capability.Argument{Name: "limit", Description: "E
 	"through 100; 30 when omitted"}
 
 var discussionCategoriesList = capability.Descriptor{
-	ID:      Provider + ".discussioncategories.list",
+	ID:      Provider + ".discussion-categories.list",
 	Version: 1,
 	Title:   "List GitHub discussion categories",
 	Description: "List one bounded batch of the discussion categories of a repository a connection " +
@@ -114,7 +114,7 @@ var discussionsList = capability.Descriptor{
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["discussions","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "category", Description: "Category id, as github.discussioncategories.list reports it; every " +
+		{Name: "category", Description: "Category id, as github.discussion-categories.list reports it; every " +
 			"category when omitted"},
 		{Name: "state", Description: "open or closed; both when omitted"},
 		{Name: "answered", Description: "true for answered discussions only, false for unanswered ones only; " +
@@ -141,7 +141,7 @@ var discussionsGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get a GitHub discussion",
 	Description: "Read one discussion of a repository a connection allows by its number, with its " +
-		"body; comments are read by github.discussioncomments.list",
+		"body; comments are read by github.discussion-comments.list",
 	Tags:     []string{"github", "discussions", "get"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -164,7 +164,7 @@ var discussionsGet = capability.Descriptor{
 }
 
 var discussionCommentsList = capability.Descriptor{
-	ID:      Provider + ".discussioncomments.list",
+	ID:      Provider + ".discussion-comments.list",
 	Version: 1,
 	Title:   "List comments of a GitHub discussion",
 	Description: "List one bounded batch of the top-level comments of one discussion of a repository a " +
@@ -465,7 +465,7 @@ type discussionListArguments struct {
 
 func (a *discussionListArguments) normalize() error {
 	if a.Category != "" && !discussionIDPattern.MatchString(a.Category) {
-		return invalidRequest("category must be a category id as github.discussioncategories.list reports it")
+		return invalidRequest("category must be a category id as github.discussion-categories.list reports it")
 	}
 	switch a.State {
 	case "", "open", "closed":

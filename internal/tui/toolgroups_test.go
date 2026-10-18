@@ -103,14 +103,14 @@ func TestSpaceTicksAGroupAndAllGroupsAndSearchFindsFoldedTools(t *testing.T) {
 	}
 
 	// A search shows a tool of a folded group under its group row, and space then acts on the tool.
-	typeText(t, m, "workflowfiles.get")
+	typeText(t, m, "workflow-files.get")
 	view := screenOf(m)
-	if !strings.Contains(view, "github.workflowfiles.get") || !strings.Contains(view, "Actions") || !m.pickerGroups.collapsed["actions"] {
+	if !strings.Contains(view, "github.workflow-files.get") || !strings.Contains(view, "Actions") || !m.pickerGroups.collapsed["actions"] {
 		t.Fatalf("the search does not show the tool under its folded group:\n%s", view)
 	}
 	press(t, m, "down", "down", " ")
-	if !m.pickerMarks["github.workflowfiles.get"] || len(m.pickerMarks) != 1 {
-		t.Fatalf("ticks = %v, want only github.workflowfiles.get", m.pickerMarks)
+	if !m.pickerMarks["github.workflow-files.get"] || len(m.pickerMarks) != 1 {
+		t.Fatalf("ticks = %v, want only github.workflow-files.get", m.pickerMarks)
 	}
 	// While searching, a group row acts on the matching tools only.
 	press(t, m, "up", " ")

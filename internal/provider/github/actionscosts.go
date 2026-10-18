@@ -26,7 +26,7 @@ const usageOutput = `{"type":"object","properties":{"run_id":{"type":"integer"},
 	`"required":["run_id","billable","truncated"],"additionalProperties":false}`
 
 var runsUsage = capability.Descriptor{
-	ID:      Provider + ".workflowruns.usage",
+	ID:      Provider + ".workflow-runs.usage",
 	Version: 1,
 	Title:   "Get the billable time of a GitHub Actions run",
 	Description: "Read the billable time of one workflow run of a repository a connection allows, " +
@@ -48,7 +48,7 @@ var runsUsage = capability.Descriptor{
 }
 
 var runLogsDelete = capability.Descriptor{
-	ID:      Provider + ".workflowrunlogs.delete",
+	ID:      Provider + ".workflow-run-logs.delete",
 	Version: 1,
 	Title:   "Delete the logs of a GitHub Actions run",
 	Description: "Delete all logs of one workflow run of a repository a connection allows; the logs " +

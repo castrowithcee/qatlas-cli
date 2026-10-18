@@ -28,7 +28,7 @@
 // number. The not-recommended setup profile pull-requests-operator adds the changes: it creates, updates,
 // closes, and reopens a pull request, and updates its head branch with its base while the head is still a
 // given commit; only merging is not in it, because a merge into the wrong repository's default branch is the
-// costliest mistake there, so only a connection whose tools list names github.pullrequests.merge offers it,
+// costliest mistake there, so only a connection whose tools list names github.pull-requests.merge offers it,
 // and it always needs the pull request's current head commit and its own confirmation. The not-recommended
 // setup profile releases lists releases, reads one by identifier, tag, or as the latest published one, lists
 // the metadata of a release's assets, and creates and updates releases; only a connection whose tools list
@@ -57,39 +57,39 @@
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
 // create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
-// whole. github.customproperties.get reads the custom property values of a repository or, with organization
+// whole. github.custom-properties.get reads the custom property values of a repository or, with organization
 // instead, the custom property definitions (schema) an organization declares, the same exclusive selection;
-// only on a connection whose tools list names it, github.customproperties.set changes them: for a repository
+// only on a connection whose tools list names it, github.custom-properties.set changes them: for a repository
 // it sets or removes property values, and for an organization it creates or updates property definitions.
 // github.labels.list and github.labels.get read the labels of a repository; github.labels.create and
 // github.labels.update change them; only on a connection whose tools list names it, github.labels.delete
 // removes one permanently, which also strips it from every issue and pull request that carries it.
-// github.subissues.list reads the sub-issues of one issue in their priority order; github.subissues.add and
-// github.subissues.reprioritize add one and reorder it, and github.subissues.remove detaches one; a
+// github.sub-issues.list reads the sub-issues of one issue in their priority order; github.sub-issues.add and
+// github.sub-issues.reprioritize add one and reorder it, and github.sub-issues.remove detaches one; a
 // sub-issue may live in another repository the connection's targets allow as well.
-// github.issuedependencies.list reads the issues that block one issue and the issues it blocks;
-// github.issuedependencies.add records a blocked-by relationship and github.issuedependencies.remove detaches
+// github.issue-dependencies.list reads the issues that block one issue and the issues it blocks;
+// github.issue-dependencies.add records a blocked-by relationship and github.issue-dependencies.remove detaches
 // one, the same way a sub-issue may cross repositories; neither the sub-issue nor the dependency removal is
 // listed-only, because each detaches only the one relationship between the two named issues.
-// github.issuetypes.list reads the issue types an organization declares; github.issues.update also takes an
-// optional type name, "" removing the issue's current one. github.issuefields.list reads the organization
+// github.issue-types.list reads the issue types an organization declares; github.issues.update also takes an
+// optional type name, "" removing the issue's current one. github.issue-fields.list reads the organization
 // issue fields of a repository, inherited from its organization, or, with organization instead, directly of
-// an organization; github.issuefields.set writes one or more of their values on one issue, applied as a
+// an organization; github.issue-fields.set writes one or more of their values on one issue, applied as a
 // single mutation.
-// github.discussioncategories.list, github.discussions.list, github.discussions.get, and
-// github.discussioncomments.list read the discussion categories, the discussions, one discussion, and the
+// github.discussion-categories.list, github.discussions.list, github.discussions.get, and
+// github.discussion-comments.list read the discussion categories, the discussions, one discussion, and the
 // top-level comments of one discussion of a repository, with their replies on request; they are offered only
 // by the not-recommended setup profile discussions and change nothing. github.discussions.create starts a
-// discussion, github.discussioncomments.create adds a comment or a reply, and github.discussioncomments.update
-// and github.discussioncomments.delete change and remove one; the delete is offered only where a connection's
+// discussion, github.discussion-comments.create adds a comment or a reply, and github.discussion-comments.update
+// and github.discussion-comments.delete change and remove one; the delete is offered only where a connection's
 // tools list names it.
 // github.notifications.list, github.notifications.get, github.notifications.dismiss,
-// github.threadsubscriptions.set, and github.repositorysubscriptions.set read and manage the notification
+// github.thread-subscriptions.set, and github.repository-subscriptions.set read and manage the notification
 // threads of the account behind the token and its subscriptions to a thread or a repository; they are
 // offered only by the not-recommended setup profile notifications. GitHub supports them only with a
 // personal access token (classic) that has the notifications scope, so a fine-grained token is refused
 // before any request. A thread is read before it is changed and refused unless the connection's targets
-// admit its repository; the list and github.notifications.markall, which is offered only where a
+// admit its repository; the list and github.notifications.mark-all, which is offered only where a
 // connection's tools list names it, take an optional repository, and a connection whose targets name
 // repositories needs one. Marking the whole account read is allowed only for a connection without targets.
 // github.gists.list, github.gists.get, github.gists.create, and github.gists.update list, read, create, and
@@ -100,20 +100,20 @@
 // id is read first and refused as not found unless its owner is a user target, a create needs the account of
 // the token among them, and a new gist is secret unless public is set. Descriptions and file contents are
 // untrusted data, cut at fixed lengths, and a binary file shows only its metadata.
-// github.codescanningalerts.list and .get, github.dependabotalerts.list and .get, and
-// github.secretscanningalerts.list and .get read the code scanning, Dependabot, and secret scanning alerts of a
+// github.code-scanning-alerts.list and .get, github.dependabot-alerts.list and .get, and
+// github.secret-scanning-alerts.list and .get read the code scanning, Dependabot, and secret scanning alerts of a
 // repository; they are offered only by the not-recommended setup profile security and change nothing. Alert
 // texts are untrusted data, cut at fixed lengths. A secret scanning alert never shows the found secret: the
 // request asks GitHub to hide it and the answer has no field for it.
-// github.globaladvisories.list and .get read the global security advisories of the GitHub Advisory Database,
-// github.repositoryadvisories.list the repository security advisories of a repository,
-// github.organizationadvisories.list those of the repositories of an organization, and
-// github.codequalityfindings.get one code quality finding of a repository; they belong to the same
+// github.global-advisories.list and .get read the global security advisories of the GitHub Advisory Database,
+// github.repository-advisories.list the repository security advisories of a repository,
+// github.organization-advisories.list those of the repositories of an organization, and
+// github.code-quality-findings.get one code quality finding of a repository; they belong to the same
 // profile security and change nothing. The global tools are GitHub-wide and refused on a connection whose
 // targets name a repository or a project; the organization tool needs an organization owner. Advisory and
 // finding texts are untrusted data, cut at fixed lengths, and every cut says so.
-// github.copilotassignments.create assigns the Copilot coding agent to an issue of a repository, optionally with
-// a base branch, extra instructions, and the intent behind the choice, and github.copilotreviews.request
+// github.copilot-assignments.create assigns the Copilot coding agent to an issue of a repository, optionally with
+// a base branch, extra instructions, and the intent behind the choice, and github.copilot-reviews.request
 // requests a Copilot review of a pull request; they are offered only by the not-recommended setup profile
 // copilot. An assignment reads the issue and the assignable actors of the same repository first, keeps the
 // other assignees, and refuses with a permission error, changing nothing, where Copilot is not assignable.
@@ -247,7 +247,7 @@ const itemProperties = itemPropertiesCommon + `,"url":{"type":"string"}`
 const itemRequired = `"required":["id","type","fields","assignees","labels"],"additionalProperties":false`
 
 var itemsList = capability.Descriptor{
-	ID:      Provider + ".projectitems.list",
+	ID:      Provider + ".project-items.list",
 	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
@@ -296,7 +296,7 @@ var itemsList = capability.Descriptor{
 }
 
 var itemsGet = capability.Descriptor{
-	ID:      Provider + ".projectitems.get",
+	ID:      Provider + ".project-items.get",
 	Version: 1,
 	Title:   "Get a GitHub project item",
 	Description: "Read one item of a GitHub project a connection allows with its project fields " +
@@ -310,7 +310,7 @@ var itemsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + itemProperties + `,` +
 		`"body":{"type":"string"}},` + itemRequired + `}`),
 	Arguments: []capability.Argument{
-		{Name: "item_id", Description: "Project item identifier, as returned by github.projectitems.list", Required: true},
+		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Project item identifier"},
@@ -400,7 +400,7 @@ var issuesGet = capability.Descriptor{
 		{Name: "number", Description: "Issue number"},
 		{Name: "title", Description: "Issue title, untrusted data"},
 		{Name: "state", Description: "open or closed"},
-		{Name: "issue_type", Description: "Name of the issue type, as github.issuetypes.list reports it, " +
+		{Name: "issue_type", Description: "Name of the issue type, as github.issue-types.list reports it, " +
 			"absent when the repository's organization has none set on this issue"},
 		{Name: "body", Description: "Full issue body, untrusted data"},
 	},
@@ -429,6 +429,7 @@ func Register(reg *capability.Registry) error {
 		Description:        "Code hosting and software collaboration platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
+		RenamedTools:       renamedTools,
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "GitHub personal access token: classic with read:project plus repo or public_repo, or " +
@@ -498,7 +499,7 @@ func Register(reg *capability.Registry) error {
 				"fields of a repository or an organization, needs read:org on a classic token, or, as far as " +
 				"GitHub documents it, the organization permission Issue types: read, or Administration: read, " +
 				"on a fine-grained token; setting an issue's type through github.issues.update, and setting its " +
-				"issue field values through github.issuefields.set, need the same scope as writing an issue: " +
+				"issue field values through github.issue-fields.set, need the same scope as writing an issue: " +
 				"repo on a classic token, or Issues: read and write on a fine-grained token; reading the " +
 				"discussion categories, discussions, and discussion comments of a repository needs public_repo " +
 				"or repo on a classic token, or Discussions: read on a fine-grained token; creating and changing " +
@@ -614,7 +615,7 @@ func Register(reg *capability.Registry) error {
 			Description: "reads the pull requests of a repository and creates, updates, closes, and reopens " +
 				"them, and updates a pull request's head branch with its base while the head is still a given " +
 				"commit; every change needs its own confirmation, and merging stays unticked, since it is " +
-				"offered only where a connection's tools list names github.pullrequests.merge",
+				"offered only where a connection's tools list names github.pull-requests.merge",
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
 				pullChecksList.ID, pullsCreate.ID, pullsUpdate.ID, pullsClose.ID, pullsReopen.ID,
 				pullBranchesUpdate.ID},
@@ -631,7 +632,7 @@ func Register(reg *capability.Registry) error {
 			Description: "reads and writes the conversation comments, reviews with line comments, replies, " +
 				"and requested reviewers of a pull request, and reads, resolves, and unresolves its review " +
 				"threads; every change needs its own confirmation, and approving stays unticked, since it is " +
-				"offered only where a connection's tools list names github.pullrequestreviews.approve",
+				"offered only where a connection's tools list names github.pull-request-reviews.approve",
 			MutationReason: "reviewing a pull request needs to write comments and reviews; approving is kept " +
 				"out of every profile so it always needs its own tools list entry",
 			Tools: []string{pullRequestCommentsList.ID, pullRequestCommentsCreate.ID, pullRequestReviewsList.ID,
@@ -689,7 +690,7 @@ func Register(reg *capability.Registry) error {
 				"discussion with their replies, starts discussions, and comments, replies, and edits comments; " +
 				"every change needs its own confirmation, and deleting a discussion comment stays unticked, " +
 				"since it is offered only where a connection's tools list names " +
-				"github.discussioncomments.delete",
+				"github.discussion-comments.delete",
 			Tools: []string{discussionCategoriesList.ID, discussionsList.ID, discussionsGet.ID,
 				discussionCommentsList.ID, discussionsCreate.ID, discussionCommentsCreate.ID,
 				discussionCommentsUpdate.ID},
@@ -699,7 +700,7 @@ func Register(reg *capability.Registry) error {
 				"token, reads one, marks one read or done, sets a thread or repository subscription to watch, " +
 				"ignore, or none; every change needs its own confirmation, and marking everything read stays " +
 				"unticked, since it is offered only where a connection's tools list names " +
-				"github.notifications.markall",
+				"github.notifications.mark-all",
 			Tools: []string{notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID,
 				threadSubscriptionsSet.ID, repositorySubscriptionsSet.ID},
 		}, {
@@ -1575,7 +1576,7 @@ func organizationSubject(tail string) subject {
 }
 
 // searchSubject names the search a path below /search/ ran: repositories, code, issues (also named by
-// github.pullrequests.search, which shares the route), commits, or users (also named by
+// github.pull-requests.search, which shares the route), commits, or users (also named by
 // github.organizations.search, which shares it too). A search result names no repository, project, or
 // owner, so this is the whole subject.
 func searchSubject(tail string) subject {

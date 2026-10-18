@@ -114,7 +114,7 @@ var alertNumberArgument = capability.Argument{Name: "alert_number", Description:
 	"reports it", Required: true}
 
 var codeScanningAlertsList = capability.Descriptor{
-	ID:      Provider + ".codescanningalerts.list",
+	ID:      Provider + ".code-scanning-alerts.list",
 	Version: 1,
 	Title:   "List GitHub code scanning alerts",
 	Description: "List one bounded, filtered batch of the code scanning alerts of a repository an explicit " +
@@ -142,7 +142,7 @@ var codeScanningAlertsList = capability.Descriptor{
 }
 
 var codeScanningAlertsGet = capability.Descriptor{
-	ID:           Provider + ".codescanningalerts.get",
+	ID:           Provider + ".code-scanning-alerts.get",
 	Version:      1,
 	Title:        "Get a GitHub code scanning alert",
 	Description:  "Read one code scanning alert of a repository a connection allows, with its rule help",
@@ -159,7 +159,7 @@ var codeScanningAlertsGet = capability.Descriptor{
 }
 
 var dependabotAlertsList = capability.Descriptor{
-	ID:      Provider + ".dependabotalerts.list",
+	ID:      Provider + ".dependabot-alerts.list",
 	Version: 1,
 	Title:   "List GitHub Dependabot alerts",
 	Description: "List one bounded, filtered batch of the Dependabot alerts of a repository an explicit " +
@@ -185,7 +185,7 @@ var dependabotAlertsList = capability.Descriptor{
 }
 
 var dependabotAlertsGet = capability.Descriptor{
-	ID:           Provider + ".dependabotalerts.get",
+	ID:           Provider + ".dependabot-alerts.get",
 	Version:      1,
 	Title:        "Get a GitHub Dependabot alert",
 	Description:  "Read one Dependabot alert of a repository a connection allows, with the advisory description",
@@ -202,7 +202,7 @@ var dependabotAlertsGet = capability.Descriptor{
 }
 
 var secretScanningAlertsList = capability.Descriptor{
-	ID:      Provider + ".secretscanningalerts.list",
+	ID:      Provider + ".secret-scanning-alerts.list",
 	Version: 1,
 	Title:   "List GitHub secret scanning alerts",
 	Description: "List one bounded, filtered batch of the secret scanning alerts of a repository an explicit " +
@@ -231,7 +231,7 @@ var secretScanningAlertsList = capability.Descriptor{
 }
 
 var secretScanningAlertsGet = capability.Descriptor{
-	ID:           Provider + ".secretscanningalerts.get",
+	ID:           Provider + ".secret-scanning-alerts.get",
 	Version:      1,
 	Title:        "Get a GitHub secret scanning alert",
 	Description:  "Read one secret scanning alert of a repository a connection allows; the found secret is never shown",

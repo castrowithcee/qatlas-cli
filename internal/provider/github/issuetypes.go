@@ -12,7 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// github.issuetypes.list reads the issue types an organization declares. GitHub scopes issue types to an
+// github.issue-types.list reads the issue types an organization declares. GitHub scopes issue types to an
 // organization as a whole, never to one repository or one user, so this tool takes an organization argument
 // checked against the connection's targets the broad way github.repositories.list checks the owner of an
 // owner list: allowed when the connection names no targets at all, when it names the organization as an
@@ -30,7 +30,7 @@ const issueTypeProperties = `"id":{"type":"integer"},"name":{"type":"string"},"d
 	`"color":{"type":"string"},"is_enabled":{"type":"boolean"}`
 const issueTypeRequired = `"required":["id","name","is_enabled"],"additionalProperties":false`
 
-// issueTypesOwnerArgument and issueTypesOwnerField describe github.issuetypes.list's own owner argument,
+// issueTypesOwnerArgument and issueTypesOwnerField describe github.issue-types.list's own owner argument,
 // broader than organizationArgument/organizationField: a repository target of the organization allows the
 // call as well, the way a repository target allows github.repositories.list to list its owner's repositories.
 var issueTypesOwnerArgument = capability.Argument{Name: "owner", Description: "Organization as orgs/LOGIN " +
@@ -42,7 +42,7 @@ var issueTypesOwnerField = capability.Field{Name: "owner", Description: "Organiz
 	"orgs/LOGIN; the one a default chose when the argument was left out"}
 
 var issueTypesList = capability.Descriptor{
-	ID:      Provider + ".issuetypes.list",
+	ID:      Provider + ".issue-types.list",
 	Version: 1,
 	Title:   "List GitHub issue types",
 	Description: "List the issue types an organization declares, that a connection allows: name, " +
@@ -72,7 +72,7 @@ const issueTypesReadPermission = "GitHub refused this token the issue types of t
 	"them needs read:org on a classic token, or, as far as GitHub documents it, the organization permission " +
 	"Issue types: read, or Administration: read, on a fine-grained token"
 
-// selectIssueTypesOwner resolves github.issuetypes.list's own owner argument against the connection's
+// selectIssueTypesOwner resolves github.issue-types.list's own owner argument against the connection's
 // targets: allowed when the connection names no targets, when it lists the organization as an owner target
 // itself, or when it lists a repository of that organization, the same broad rule github.repositories.list
 // applies to its own owner argument. It runs before a credential is resolved, so a refused organization
@@ -93,7 +93,7 @@ func issueTypesPath(org target) string {
 	return "/orgs/" + url.PathEscape(org.owner) + "/issue-types"
 }
 
-// issueTypeJSON is the REST issue type shape github.issuetypes.list normalises into an IssueType.
+// issueTypeJSON is the REST issue type shape github.issue-types.list normalises into an IssueType.
 type issueTypeJSON struct {
 	ID          int64   `json:"id"`
 	Name        string  `json:"name"`

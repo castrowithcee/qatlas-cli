@@ -225,13 +225,13 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		repositoriesDelete.ID: true, collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true,
 		filesPush.ID: true, rulesetsDelete.ID: true, labelsDelete.ID: true, commentsDelete.ID: true,
 		discussionCommentsDelete.ID: true, runLogsDelete.ID: true}
-	// github.pullrequests.merge and github.pullrequestreviews.approve are each guarded on their own: neither is
+	// github.pull-requests.merge and github.pull-request-reviews.approve are each guarded on their own: neither is
 	// a maintainer or administrator tool nor a delete, but each is offered only where a connection's tools list
 	// names it, because merging into the wrong repository's default branch, and approving on the connection's
 	// behalf, are costly mistakes. github.rulesets.create and github.rulesets.update are guarded the same way:
-	// a ruleset governs what a repository or an organization allows at all. github.customproperties.set is
+	// a ruleset governs what a repository or an organization allows at all. github.custom-properties.set is
 	// guarded the same way too: a custom property can gate what a ruleset condition matches.
-	// github.notifications.markall is guarded because GitHub marks every notification of the account read.
+	// github.notifications.mark-all is guarded because GitHub marks every notification of the account read.
 	for _, descriptor := range reg.Provider(Provider) {
 		want := guarded[descriptor.ID] || deletes[descriptor.ID] || descriptor.ID == pullsMerge.ID ||
 			descriptor.ID == pullRequestReviewsApprove.ID || descriptor.ID == rulesetsCreate.ID ||

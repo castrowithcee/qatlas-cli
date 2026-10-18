@@ -29,7 +29,7 @@ const reviewThreadProperties = `"id":{"type":"string"},"is_resolved":{"type":"bo
 const reviewThreadRequired = `"required":["id","is_resolved","is_outdated","comments"],"additionalProperties":false`
 
 var pullRequestReviewThreadsList = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewthreads.list",
+	ID:      Provider + ".pull-request-review-threads.list",
 	Version: 1,
 	Title:   "List GitHub pull request review threads",
 	Description: "List one bounded batch of the review threads of one pull request of a repository a " +
@@ -57,7 +57,7 @@ const threadStateOutput = `{"type":"object","properties":{"thread_id":{"type":"s
 
 var threadStateArguments = []capability.Argument{
 	{Name: "number", Description: "Pull request number in the repository the thread must belong to", Required: true},
-	{Name: "thread_id", Description: "Review thread identifier, as github.pullrequestreviewthreads.list " +
+	{Name: "thread_id", Description: "Review thread identifier, as github.pull-request-review-threads.list " +
 		"reports it", Required: true},
 }
 
@@ -66,7 +66,7 @@ var threadStateFields = []capability.Field{
 }
 
 var pullRequestReviewThreadsResolve = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewthreads.resolve",
+	ID:      Provider + ".pull-request-review-threads.resolve",
 	Version: 1,
 	Title:   "Resolve a GitHub pull request review thread",
 	Description: "Mark one review thread of a pull request of a repository a connection allows " +
@@ -85,7 +85,7 @@ var pullRequestReviewThreadsResolve = capability.Descriptor{
 }
 
 var pullRequestReviewThreadsUnresolve = capability.Descriptor{
-	ID:      Provider + ".pullrequestreviewthreads.unresolve",
+	ID:      Provider + ".pull-request-review-threads.unresolve",
 	Version: 1,
 	Title:   "Unresolve a GitHub pull request review thread",
 	Description: "Open one resolved review thread of a pull request of a repository a connection " +
@@ -112,7 +112,7 @@ func pullRequestReviewThreadOperations() []capability.Operation {
 	}
 }
 
-// reviewThreadListArguments holds the arguments of github.pullrequestreviewthreads.list.
+// reviewThreadListArguments holds the arguments of github.pull-request-review-threads.list.
 type reviewThreadListArguments struct {
 	Number int    `json:"number"`
 	Limit  int    `json:"limit"`

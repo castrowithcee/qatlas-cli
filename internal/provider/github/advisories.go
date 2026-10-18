@@ -127,7 +127,7 @@ var repositoryAdvisoryFilterKeys = `"state":` + enumSchema(advisoryStates) + `,"
 	`,"direction":` + enumSchema(advisoryDirections) + `,` + pagingKeys
 
 var globalAdvisoriesList = capability.Descriptor{
-	ID:      Provider + ".globaladvisories.list",
+	ID:      Provider + ".global-advisories.list",
 	Version: 1,
 	Title:   "List GitHub global security advisories",
 	Description: "List one bounded, filtered batch of the global security advisories of the GitHub Advisory " +
@@ -171,7 +171,7 @@ var globalAdvisoriesList = capability.Descriptor{
 }
 
 var globalAdvisoriesGet = capability.Descriptor{
-	ID:      Provider + ".globaladvisories.get",
+	ID:      Provider + ".global-advisories.get",
 	Version: 1,
 	Title:   "Get a GitHub global security advisory",
 	Description: "Read one global security advisory of the GitHub Advisory Database by its GHSA ID, with " +
@@ -191,7 +191,7 @@ var globalAdvisoriesGet = capability.Descriptor{
 }
 
 var repositoryAdvisoriesList = capability.Descriptor{
-	ID:      Provider + ".repositoryadvisories.list",
+	ID:      Provider + ".repository-advisories.list",
 	Version: 1,
 	Title:   "List GitHub repository security advisories",
 	Description: "List one bounded, filtered batch of the repository security advisories of a repository a " +
@@ -214,7 +214,7 @@ var repositoryAdvisoriesList = capability.Descriptor{
 }
 
 var organizationAdvisoriesList = capability.Descriptor{
-	ID:      Provider + ".organizationadvisories.list",
+	ID:      Provider + ".organization-advisories.list",
 	Version: 1,
 	Title:   "List GitHub repository security advisories of an organization",
 	Description: "List one bounded, filtered batch of the repository security advisories of the repositories of " +
@@ -238,7 +238,7 @@ var organizationAdvisoriesList = capability.Descriptor{
 }
 
 var codeQualityFindingsGet = capability.Descriptor{
-	ID:      Provider + ".codequalityfindings.get",
+	ID:      Provider + ".code-quality-findings.get",
 	Version: 1,
 	Title:   "Get a GitHub code quality finding",
 	Description: "Read one code quality finding of a repository a connection allows, with its rule and " +

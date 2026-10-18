@@ -101,7 +101,7 @@ func TestCopilotToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 	c := &fakeCopilot{copilotPage: 1}
 	f, core, _ := copilotRig(t, c)
 
-	result, err := invoke(t, core, "github.copilotassignments.create", "repo",
+	result, err := invoke(t, core, "github.copilot-assignments.create", "repo",
 		`{"number":42,"base_ref":"main","custom_instructions":"Add tests."}`, true)
 	if err != nil || !strings.Contains(string(result), `"number":42`) || !strings.Contains(string(result), `"is_suggestion":false`) {
 		t.Fatalf("assign = %s, %v", result, err)
@@ -123,7 +123,7 @@ func TestCopilotToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 
 	// With intent the object form is used, and a suggestion sends no agent assignment.
 	c.pages = 0
-	result, err = invoke(t, core, "github.copilotassignments.create", "repo",
+	result, err = invoke(t, core, "github.copilot-assignments.create", "repo",
 		`{"number":42,"rationale":"Well scoped","confidence":"HIGH","is_suggestion":true}`, true)
 	if err != nil || !strings.Contains(string(result), `"is_suggestion":true`) {
 		t.Fatalf("suggest = %s, %v", result, err)
@@ -137,7 +137,7 @@ func TestCopilotToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 		t.Errorf("suggestion input = %+v", input)
 	}
 
-	review, err := invoke(t, core, "github.copilotreviews.request", "repo", `{"number":7}`, true)
+	review, err := invoke(t, core, "github.copilot-reviews.request", "repo", `{"number":7}`, true)
 	if err != nil || !strings.Contains(string(review), "copilot-pull-request-reviewer[bot]") {
 		t.Fatalf("review = %s, %v", review, err)
 	}
@@ -152,8 +152,8 @@ func TestCopilotToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 func TestCopilotChangesNeedConfirmation(t *testing.T) {
 	f, core, _ := copilotRig(t, &fakeCopilot{})
 	unconfirmed := &application.ConfirmationRequiredError{}
-	for id, arguments := range map[string]string{"github.copilotassignments.create": `{"number":42}`,
-		"github.copilotreviews.request": `{"number":7}`} {
+	for id, arguments := range map[string]string{"github.copilot-assignments.create": `{"number":42}`,
+		"github.copilot-reviews.request": `{"number":7}`} {
 		before := len(f.recorded())
 		if _, err := invoke(t, core, id, "repo", arguments, false); !errors.As(err, &unconfirmed) {
 			t.Errorf("%s without --confirm = %v, want confirmation-required", id, err)
@@ -168,12 +168,12 @@ func TestCopilotChangesNeedConfirmation(t *testing.T) {
 func TestCopilotRefuseTargetsAndArgumentsBeforeIO(t *testing.T) {
 	f, core, reads := copilotRig(t, &fakeCopilot{})
 	for _, tt := range []struct{ id, connection, arguments string }{
-		{"github.copilotassignments.create", "project", `{"number":42}`},
-		{"github.copilotreviews.request", "project", `{"number":7}`},
-		{"github.copilotassignments.create", "repo", `{"number":42,"rationale":"only"}`},
-		{"github.copilotassignments.create", "repo", `{"number":42,"confidence":"HIGH","rationale":"x","is_suggestion":true,"base_ref":"main"}`},
-		{"github.copilotassignments.create", "repo", `{"number":42,"base_ref":"a..b"}`},
-		{"github.copilotassignments.create", "repo", `{"number":0}`},
+		{"github.copilot-assignments.create", "project", `{"number":42}`},
+		{"github.copilot-reviews.request", "project", `{"number":7}`},
+		{"github.copilot-assignments.create", "repo", `{"number":42,"rationale":"only"}`},
+		{"github.copilot-assignments.create", "repo", `{"number":42,"confidence":"HIGH","rationale":"x","is_suggestion":true,"base_ref":"main"}`},
+		{"github.copilot-assignments.create", "repo", `{"number":42,"base_ref":"a..b"}`},
+		{"github.copilot-assignments.create", "repo", `{"number":0}`},
 	} {
 		if _, err := invoke(t, core, tt.id, tt.connection, tt.arguments, true); !isInvalidRequest(err) {
 			t.Errorf("%s %s = %v, want an invalid request", tt.id, tt.arguments, err)
@@ -189,14 +189,14 @@ func TestCopilotRefuseTargetsAndArgumentsBeforeIO(t *testing.T) {
 func TestCopilotAssignmentWithoutCopilotChangesNothing(t *testing.T) {
 	c := &fakeCopilot{noCopilot: true}
 	_, core, _ := copilotRig(t, c)
-	_, err := invoke(t, core, "github.copilotassignments.create", "repo", `{"number":42}`, true)
+	_, err := invoke(t, core, "github.copilot-assignments.create", "repo", `{"number":42}`, true)
 	var failure *provider.Error
 	if !errors.As(err, &failure) || failure.Class != provider.ClassPermission ||
 		!strings.Contains(failure.Message, "Copilot license") || c.mutations != 0 {
 		t.Errorf("err = %v, mutations = %d, want a permission refusal naming the license and no mutation", err, c.mutations)
 	}
 
-	_, err = invoke(t, core, "github.copilotassignments.create", "repo", `{"number":43}`, true)
+	_, err = invoke(t, core, "github.copilot-assignments.create", "repo", `{"number":43}`, true)
 	if !errors.As(err, &failure) || failure.Class != provider.ClassInvalidResponse && failure.Class != provider.ClassNotFound {
 		t.Errorf("missing issue = %v", err)
 	}
@@ -207,7 +207,7 @@ func TestCopilotReviewRefusals(t *testing.T) {
 	for status, want := range map[int]string{http.StatusUnprocessableEntity: "Copilot license",
 		http.StatusForbidden: "write access"} {
 		_, core, _ := copilotRig(t, &fakeCopilot{reviewStatus: status})
-		_, err := invoke(t, core, "github.copilotreviews.request", "repo", `{"number":7}`, true)
+		_, err := invoke(t, core, "github.copilot-reviews.request", "repo", `{"number":7}`, true)
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("status %d = %v, want a message naming %q", status, err, want)
 		}

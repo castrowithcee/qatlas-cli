@@ -353,22 +353,22 @@ func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 		want                                   any
 	}{
 		{"reads only", "github.workflows.dispatch", "reader", dispatch, true, &capability.UnsupportedError{}},
-		{"planning rights", "github.workflowruns.rerun", "planner", `{"run_id":5000}`, true, &capability.UnsupportedError{}},
-		{"observer", "github.workflowruns.cancel", "observer", `{"run_id":5001}`, true, &capability.UnsupportedError{}},
-		{"tools without operators", "github.workflowruns.rerunfailed", "listed", `{"run_id":5000}`, true,
+		{"planning rights", "github.workflow-runs.rerun", "planner", `{"run_id":5000}`, true, &capability.UnsupportedError{}},
+		{"observer", "github.workflow-runs.cancel", "observer", `{"run_id":5001}`, true, &capability.UnsupportedError{}},
+		{"tools without operators", "github.workflow-runs.rerun-failed", "listed", `{"run_id":5000}`, true,
 			&capability.UnsupportedError{}},
 		{"project connection", "github.workflows.dispatch", "project", dispatch, true,
 			&provider.InvalidRequestError{}},
-		{"project observer", "github.workflowruns.list", "project", `{}`, false, &provider.InvalidRequestError{}},
-		{"a repository outside the targets", "github.workflowruns.list", "operator",
+		{"project observer", "github.workflow-runs.list", "project", `{}`, false, &provider.InvalidRequestError{}},
+		{"a repository outside the targets", "github.workflow-runs.list", "operator",
 			`{"repository":"octo-org/other"}`, false, &provider.InvalidRequestError{}},
 		{"unconfirmed dispatch", "github.workflows.dispatch", "operator", dispatch, false,
 			&application.ConfirmationRequiredError{}},
-		{"unconfirmed cancel", "github.workflowruns.cancel", "operator", `{"run_id":5001}`, false,
+		{"unconfirmed cancel", "github.workflow-runs.cancel", "operator", `{"run_id":5001}`, false,
 			&application.ConfirmationRequiredError{}},
-		{"an owner argument", "github.workflowruns.rerun", "operator", `{"run_id":5000,"owner":"other"}`, true,
+		{"an owner argument", "github.workflow-runs.rerun", "operator", `{"run_id":5000,"owner":"other"}`, true,
 			&provider.InvalidRequestError{}},
-		{"a repository argument", "github.workflowruns.list", "operator", `{"repo":"other/repo"}`, false,
+		{"a repository argument", "github.workflow-runs.list", "operator", `{"repo":"other/repo"}`, false,
 			&provider.InvalidRequestError{}},
 		{"a path as workflow", "github.workflows.dispatch", "operator", `{"workflow":"../x.yml","ref":"main"}`, true,
 			&provider.InvalidRequestError{}},
@@ -381,15 +381,15 @@ func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 		{"too many inputs", "github.workflows.dispatch", "operator",
 			`{"workflow":"release.yml","ref":"main","inputs":{` + manyInputs(26) + `}}`, true,
 			&provider.InvalidRequestError{}},
-		{"an unknown status", "github.workflowruns.list", "observer", `{"status":"broken"}`, false,
+		{"an unknown status", "github.workflow-runs.list", "observer", `{"status":"broken"}`, false,
 			&provider.InvalidRequestError{}},
-		{"a free created filter", "github.workflowruns.list", "observer", `{"created_from":">=2026-01-01"}`, false,
+		{"a free created filter", "github.workflow-runs.list", "observer", `{"created_from":">=2026-01-01"}`, false,
 			&provider.InvalidRequestError{}},
-		{"a reversed time range", "github.workflowruns.list", "observer",
+		{"a reversed time range", "github.workflow-runs.list", "observer",
 			`{"created_from":"2026-02-01","created_to":"2026-01-01"}`, false, &provider.InvalidRequestError{}},
-		{"a log beyond the bound", "github.workflowjobs.log", "observer", `{"job_id":7001,"max_bytes":1048576}`, false,
+		{"a log beyond the bound", "github.workflow-jobs.log", "observer", `{"job_id":7001,"max_bytes":1048576}`, false,
 			&provider.InvalidRequestError{}},
-		{"a foreign cursor", "github.workflowruns.list", "observer", `{"cursor":"AAAAAAAAAAAAAAAAMjoxMA"}`, false,
+		{"a foreign cursor", "github.workflow-runs.list", "observer", `{"cursor":"AAAAAAAAAAAAAAAAMjoxMA"}`, false,
 			&provider.InvalidRequestError{}},
 	}
 	for _, tt := range tests {
@@ -429,7 +429,7 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 			t.Fatal("the list did not end")
 		}
 		document, _ := json.Marshal(arguments)
-		result, err := invoke(t, core, "github.workflowruns.list", "observer", string(document), false)
+		result, err := invoke(t, core, "github.workflow-runs.list", "observer", string(document), false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -487,18 +487,18 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 	}
 
 	// A cursor belongs to its filters; the workflow and time filters travel as GitHub parameters.
-	first, _ := invoke(t, core, "github.workflowruns.list", "observer", `{"status":"success","limit":5}`, false)
+	first, _ := invoke(t, core, "github.workflow-runs.list", "observer", `{"status":"success","limit":5}`, false)
 	var listed struct {
 		NextCursor string `json:"next_cursor"`
 	}
 	_ = json.Unmarshal(first, &listed)
-	if _, err := invoke(t, core, "github.workflowruns.list", "observer",
+	if _, err := invoke(t, core, "github.workflow-runs.list", "observer",
 		`{"status":"failure","cursor":"`+listed.NextCursor+`"}`, false); !isInvalidRequest(err) {
 		t.Errorf("a cursor of other filters = %v, want an invalid request", err)
 	}
 	before := len(f.recorded())
 	for name, cursor := range alteredCursors(t, listed.NextCursor) {
-		if _, err := invoke(t, core, "github.workflowruns.list", "observer",
+		if _, err := invoke(t, core, "github.workflow-runs.list", "observer",
 			`{"status":"success","cursor":"`+cursor+`"}`, false); !isInvalidRequest(err) ||
 			!strings.HasSuffix(err.Error(), "; start the list again without cursor") {
 			t.Errorf("%s: err = %v, want an invalid request with the next step", name, err)
@@ -507,12 +507,12 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 	if requests := f.recorded()[before:]; len(requests) != 0 {
 		t.Errorf("requests = %d, want refusals before provider I/O", len(requests))
 	}
-	if _, err := invoke(t, core, "github.workflowruns.list", "observer",
+	if _, err := invoke(t, core, "github.workflow-runs.list", "observer",
 		`{"status":"success","cursor":"`+listed.NextCursor+`"}`, false); err != nil {
 		t.Errorf("the cursor of the same filters = %v, want the next batch", err)
 	}
 	before = len(f.recorded())
-	if _, err := invoke(t, core, "github.workflowruns.list", "observer", `{"workflow":"ci.yml","branch":"main",`+
+	if _, err := invoke(t, core, "github.workflow-runs.list", "observer", `{"workflow":"ci.yml","branch":"main",`+
 		`"event":"push","actor":"dependabot[bot]","created_from":"2026-01-01","created_to":"2026-01-31T23:59:59Z"}`,
 		false); err != nil {
 		t.Fatal(err)
@@ -546,16 +546,16 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 		{"github.workflows.list", `{"limit":3}`, []string{`"path":".github/workflows/ci.yml"`, `"has_more":true`},
 			nil},
 		{"github.workflows.get", `{"workflow":"release.yml"}`, []string{`"id":2`, `"state":"active"`}, nil},
-		{"github.workflowruns.get", `{"run_id":5000}`,
+		{"github.workflow-runs.get", `{"run_id":5000}`,
 			[]string{`"conclusion":"failure"`, `"actor":"octocat"`, `"url":"https://github.com/octo-org/example/actions/runs/5000"`},
 			[]string{"pull_requests", bodyCanary}},
-		{"github.workflowjobs.list", `{"run_id":5000}`,
+		{"github.workflow-jobs.list", `{"run_id":5000}`,
 			[]string{`"name":"build 0"`, `"has_more":false`, `"repository":"octo-org/example"`},
 			[]string{"steps", "runner_name", "url"}},
-		{"github.workflowjobs.get", `{"job_id":7001}`,
+		{"github.workflow-jobs.get", `{"job_id":7001}`,
 			[]string{`"steps":[`, `"name":"test"`, `"attempt":2`, `"url":"https://github.com/j/1"`},
 			[]string{"labels"}},
-		{"github.workflowartifacts.list", `{"run_id":5000}`, []string{`"size_bytes":99999999`, `"expired":true`},
+		{"github.workflow-artifacts.list", `{"run_id":5000}`, []string{`"size_bytes":99999999`, `"expired":true`},
 			[]string{"archive_download_url", "/zip"}},
 	} {
 		result, err := invoke(t, core, tt.operation, "observer", tt.arguments, false)
@@ -575,9 +575,9 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 		}
 	}
 	for _, tt := range []struct{ operation, arguments, want string }{
-		{"github.workflowruns.get", `{"run_id":42}`, "workflow run 42 in repository octo-org/example"},
-		{"github.workflowjobs.get", `{"job_id":43}`, "workflow job 43 in repository octo-org/example"},
-		{"github.workflowjobs.log", `{"job_id":44}`, "workflow job 44 in repository octo-org/example"},
+		{"github.workflow-runs.get", `{"run_id":42}`, "workflow run 42 in repository octo-org/example"},
+		{"github.workflow-jobs.get", `{"job_id":43}`, "workflow job 43 in repository octo-org/example"},
+		{"github.workflow-jobs.log", `{"job_id":44}`, "workflow job 44 in repository octo-org/example"},
 		{"github.workflows.get", `{"workflow":"missing.yml"}`, "workflow missing.yml in repository octo-org/example"},
 		{"github.workflows.get", `{"workflow":"45"}`, "workflow 45 in repository octo-org/example"},
 	} {
@@ -604,7 +604,7 @@ func TestJobLogIsBoundedAndLeavesTheTokenBehind(t *testing.T) {
 	var excerpt JobLog
 	for _, ignoreRange := range []bool{false, true} {
 		storage.ignoreRange = ignoreRange
-		result, err := invoke(t, core, "github.workflowjobs.log", "observer", `{"job_id":7001,"lines":5}`, false)
+		result, err := invoke(t, core, "github.workflow-jobs.log", "observer", `{"job_id":7001,"lines":5}`, false)
 		if err != nil {
 			t.Fatalf("range ignored %v: %v", ignoreRange, err)
 		}
@@ -640,7 +640,7 @@ func TestJobLogIsBoundedAndLeavesTheTokenBehind(t *testing.T) {
 	}
 
 	// The byte bound holds whatever the line bound allows.
-	result, err := invoke(t, core, "github.workflowjobs.log", "observer", `{"job_id":7001,"lines":500,"max_bytes":1024}`,
+	result, err := invoke(t, core, "github.workflow-jobs.log", "observer", `{"job_id":7001,"lines":500,"max_bytes":1024}`,
 		false)
 	if err != nil {
 		t.Fatal(err)
@@ -997,18 +997,18 @@ func TestActionsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	}{
 		{"github.workflows.list", `{}`, false},
 		{"github.workflows.get", `{"workflow":"2"}`, false},
-		{"github.workflowruns.list", `{"limit":2}`, false},
-		{"github.workflowruns.get", `{"run_id":5001}`, false},
-		{"github.workflowjobs.list", `{"run_id":5000,"filter":"all","limit":2}`, false},
-		{"github.workflowjobs.get", `{"job_id":7001}`, false},
-		{"github.workflowjobs.log", `{"job_id":7001}`, false},
-		{"github.workflowartifacts.list", `{"run_id":5000}`, false},
-		{"github.workflowruns.usage", `{"run_id":5000}`, false},
+		{"github.workflow-runs.list", `{"limit":2}`, false},
+		{"github.workflow-runs.get", `{"run_id":5001}`, false},
+		{"github.workflow-jobs.list", `{"run_id":5000,"filter":"all","limit":2}`, false},
+		{"github.workflow-jobs.get", `{"job_id":7001}`, false},
+		{"github.workflow-jobs.log", `{"job_id":7001}`, false},
+		{"github.workflow-artifacts.list", `{"run_id":5000}`, false},
+		{"github.workflow-runs.usage", `{"run_id":5000}`, false},
 		{"github.workflows.dispatch", `{"workflow":"release.yml","ref":"main","inputs":{"channel":"stable"}}`, true},
-		{"github.workflowruns.rerun", `{"run_id":5000}`, true},
-		{"github.workflowruns.rerunfailed", `{"run_id":5000}`, true},
-		{"github.workflowruns.cancel", `{"run_id":5001}`, true},
-		{"github.workflowruns.cancel", `{"run_id":5000}`, true},
+		{"github.workflow-runs.rerun", `{"run_id":5000}`, true},
+		{"github.workflow-runs.rerun-failed", `{"run_id":5000}`, true},
+		{"github.workflow-runs.cancel", `{"run_id":5001}`, true},
+		{"github.workflow-runs.cancel", `{"run_id":5000}`, true},
 	} {
 		result, err := invoke(t, core, request.operation, "operator", request.arguments, request.confirmed)
 		if err != nil {
@@ -1031,7 +1031,7 @@ func TestRunUsageIsCompactAndBelowTheRepository(t *testing.T) {
 	f, _, base := serveActions(t)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), actionsConfig(base), resolver(red, nil), red)
-	result, err := invoke(t, core, "github.workflowruns.usage", "observer", `{"run_id":5000}`, false)
+	result, err := invoke(t, core, "github.workflow-runs.usage", "observer", `{"run_id":5000}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}

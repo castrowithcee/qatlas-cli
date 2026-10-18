@@ -461,7 +461,7 @@ func TestPullRequestCommentToolsRefuseAnIssueNumber(t *testing.T) {
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
 	r.convComments[42] = []fakeConvComment{{id: "IC_1", author: "octocat", body: "first"}}
-	listed, err := invoke(t, core, "github.pullrequestcomments.list", "repo", `{"number":42}`, false)
+	listed, err := invoke(t, core, "github.pull-request-comments.list", "repo", `{"number":42}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +475,7 @@ func TestPullRequestCommentToolsRefuseAnIssueNumber(t *testing.T) {
 		t.Fatalf("listed comments = %s, %v", listed, err)
 	}
 
-	created, err := invoke(t, core, "github.pullrequestcomments.create", "repo", `{"number":42,"body":"lgtm"}`, true)
+	created, err := invoke(t, core, "github.pull-request-comments.create", "repo", `{"number":42,"body":"lgtm"}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,8 +487,8 @@ func TestPullRequestCommentToolsRefuseAnIssueNumber(t *testing.T) {
 	}
 
 	for _, tt := range []struct{ operation, arguments string }{
-		{"github.pullrequestcomments.list", `{"number":7}`},
-		{"github.pullrequestcomments.create", `{"number":7,"body":"x"}`},
+		{"github.pull-request-comments.list", `{"number":7}`},
+		{"github.pull-request-comments.create", `{"number":7,"body":"x"}`},
 	} {
 		confirmed := strings.HasSuffix(tt.operation, "create")
 		if _, err := invoke(t, core, tt.operation, "repo", tt.arguments, confirmed); !isInvalidRequest(err) ||
@@ -515,7 +515,7 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
 	before := len(f.recorded())
-	created, err := invoke(t, core, "github.pullrequestreviews.create", "repo", fmt.Sprintf(
+	created, err := invoke(t, core, "github.pull-request-reviews.create", "repo", fmt.Sprintf(
 		`{"number":90,"sha":%q,"event":"request_changes","body":"one thing","line_notes":`+
 			`[{"path":"a.go","line":10,"side":"right","body":"fix this"}]}`, sha), true)
 	if err != nil {
@@ -536,13 +536,13 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	}
 
 	// Approving is unsupported for a connection that does not list it.
-	if _, err := invoke(t, core, "github.pullrequestreviews.approve", "repo", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true); err == nil {
+	if _, err := invoke(t, core, "github.pull-request-reviews.approve", "repo", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true); err == nil {
 		t.Error("approve on a connection without the tool listed succeeded, want unsupported")
 	} else if _, ok := err.(*capability.UnsupportedError); !ok {
 		t.Errorf("approve on a connection without the tool listed = %T %v, want unsupported", err, err)
 	}
 
-	approved, err := invoke(t, core, "github.pullrequestreviews.approve", "approver", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true)
+	approved, err := invoke(t, core, "github.pull-request-reviews.approve", "approver", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -556,7 +556,7 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	// A stale sha is refused clearly naming both commits, without a second attempt.
 	before = len(f.recorded())
 	stale := strings.Repeat("b", 40)
-	_, err = invoke(t, core, "github.pullrequestreviews.create", "repo", fmt.Sprintf(
+	_, err = invoke(t, core, "github.pull-request-reviews.create", "repo", fmt.Sprintf(
 		`{"number":90,"sha":%q,"event":"comment"}`, stale), true)
 	if !isInvalidRequest(err) || !strings.Contains(err.Error(), stale) || !strings.Contains(err.Error(), sha) {
 		t.Errorf("a stale sha = %v, want an invalid request naming both commits", err)
@@ -568,7 +568,7 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	// GitHub refusing for another reason, such as approving one's own pull request, is refused clearly.
 	before = len(f.recorded())
 	r.selfApprove = true
-	_, err = invoke(t, core, "github.pullrequestreviews.approve", "approver", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true)
+	_, err = invoke(t, core, "github.pull-request-reviews.approve", "approver", fmt.Sprintf(`{"number":90,"sha":%q}`, sha), true)
 	if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "own pull request") {
 		t.Errorf("a self-approval = %v, want a clear provider refusal", err)
 	}
@@ -577,7 +577,7 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	}
 
 	// Reviews are listed in GitHub's own order.
-	listed, err := invoke(t, core, "github.pullrequestreviews.list", "repo", `{"number":90}`, false)
+	listed, err := invoke(t, core, "github.pull-request-reviews.list", "repo", `{"number":90}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -606,7 +606,7 @@ func TestPullRequestReviewCommentsListAndReply(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
-	listed, err := invoke(t, core, "github.pullrequestreviewcomments.list", "repo", `{"number":91}`, false)
+	listed, err := invoke(t, core, "github.pull-request-review-comments.list", "repo", `{"number":91}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +621,7 @@ func TestPullRequestReviewCommentsListAndReply(t *testing.T) {
 	}
 
 	before := len(f.recorded())
-	replied, err := invoke(t, core, "github.pullrequestreviewcomments.reply", "repo",
+	replied, err := invoke(t, core, "github.pull-request-review-comments.reply", "repo",
 		`{"number":91,"comment_id":5,"body":"good catch"}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -637,7 +637,7 @@ func TestPullRequestReviewCommentsListAndReply(t *testing.T) {
 		t.Errorf("reply sent %d requests, want exactly one POST", got)
 	}
 
-	_, err = invoke(t, core, "github.pullrequestreviewcomments.reply", "repo",
+	_, err = invoke(t, core, "github.pull-request-review-comments.reply", "repo",
 		`{"number":91,"comment_id":999,"body":"x"}`, true)
 	if classOf(err) != provider.ClassNotFound || !strings.Contains(err.Error(), "review comment 999") {
 		t.Errorf("a reply to an unknown comment = %v, want not found naming the review comment", err)
@@ -654,7 +654,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
-	listed, err := invoke(t, core, "github.pullrequestreviewthreads.list", "repo", `{"number":92}`, false)
+	listed, err := invoke(t, core, "github.pull-request-review-threads.list", "repo", `{"number":92}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -674,7 +674,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 
 	// A thread of a different pull request number is refused not found, before any mutation.
 	before := len(f.recorded())
-	_, err = invoke(t, core, "github.pullrequestreviewthreads.resolve", "repo", `{"number":93,"thread_id":"PRRT_1"}`, true)
+	_, err = invoke(t, core, "github.pull-request-review-threads.resolve", "repo", `{"number":93,"thread_id":"PRRT_1"}`, true)
 	if classOf(err) != provider.ClassNotFound || !strings.Contains(err.Error(), "this review thread") {
 		t.Errorf("a thread of another pull request = %v, want not found naming the review thread", err)
 	}
@@ -685,7 +685,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 	// A thread of another repository is refused not found the same way.
 	r.threads[92][0].repoOwner, r.threads[92][0].repoName = "other-org", "other-repo"
 	before = len(f.recorded())
-	_, err = invoke(t, core, "github.pullrequestreviewthreads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
+	_, err = invoke(t, core, "github.pull-request-review-threads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
 	if classOf(err) != provider.ClassNotFound || !strings.Contains(err.Error(), "this review thread") {
 		t.Errorf("a thread of another repository = %v, want not found naming the review thread", err)
 	}
@@ -694,7 +694,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 	}
 	r.threads[92][0].repoOwner, r.threads[92][0].repoName = "", ""
 
-	resolved, err := invoke(t, core, "github.pullrequestreviewthreads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
+	resolved, err := invoke(t, core, "github.pull-request-review-threads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +706,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 	}
 
 	// Resolving an already-resolved thread is idempotent.
-	resolvedAgain, err := invoke(t, core, "github.pullrequestreviewthreads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
+	resolvedAgain, err := invoke(t, core, "github.pull-request-review-threads.resolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,7 +714,7 @@ func TestPullRequestReviewThreadsListResolveAndUnresolve(t *testing.T) {
 		t.Fatalf("resolved again = %s, %v", resolvedAgain, err)
 	}
 
-	unresolved, err := invoke(t, core, "github.pullrequestreviewthreads.unresolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
+	unresolved, err := invoke(t, core, "github.pull-request-review-threads.unresolve", "repo", `{"number":92,"thread_id":"PRRT_1"}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -731,7 +731,7 @@ func TestPullRequestReviewersRequestAndRemove(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
-	requested, err := invoke(t, core, "github.pullrequestreviewers.request", "repo",
+	requested, err := invoke(t, core, "github.pull-request-reviewers.request", "repo",
 		`{"number":93,"reviewers":["hubot"]}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -745,7 +745,7 @@ func TestPullRequestReviewersRequestAndRemove(t *testing.T) {
 	}
 
 	// Requesting the same reviewer again is idempotent.
-	again, err := invoke(t, core, "github.pullrequestreviewers.request", "repo",
+	again, err := invoke(t, core, "github.pull-request-reviewers.request", "repo",
 		`{"number":93,"reviewers":["hubot"]}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -754,7 +754,7 @@ func TestPullRequestReviewersRequestAndRemove(t *testing.T) {
 		t.Fatalf("requested again = %s, %v", again, err)
 	}
 
-	removed, err := invoke(t, core, "github.pullrequestreviewers.remove", "repo",
+	removed, err := invoke(t, core, "github.pull-request-reviewers.remove", "repo",
 		`{"number":93,"reviewers":["hubot"]}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -765,7 +765,7 @@ func TestPullRequestReviewersRequestAndRemove(t *testing.T) {
 	}
 
 	// Removing a reviewer that was not requested is idempotent.
-	removedAgain, err := invoke(t, core, "github.pullrequestreviewers.remove", "repo",
+	removedAgain, err := invoke(t, core, "github.pull-request-reviewers.remove", "repo",
 		`{"number":93,"reviewers":["hubot"]}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -825,10 +825,10 @@ func TestPullRequestReviewToolsSatisfyTheirContractThroughTheApplicationCoreWith
 	core.SetAudit(&audit)
 
 	for _, request := range []struct{ operation, arguments string }{
-		{"github.pullrequestcomments.list", `{"number":95}`},
-		{"github.pullrequestreviews.list", `{"number":95}`},
-		{"github.pullrequestreviewcomments.list", `{"number":95}`},
-		{"github.pullrequestreviewthreads.list", `{"number":95}`},
+		{"github.pull-request-comments.list", `{"number":95}`},
+		{"github.pull-request-reviews.list", `{"number":95}`},
+		{"github.pull-request-review-comments.list", `{"number":95}`},
+		{"github.pull-request-review-threads.list", `{"number":95}`},
 	} {
 		result, err := invoke(t, core, request.operation, "repo", request.arguments, false)
 		if err != nil {
@@ -841,21 +841,21 @@ func TestPullRequestReviewToolsSatisfyTheirContractThroughTheApplicationCoreWith
 	}
 
 	for _, request := range []application.InvokeRequest{
-		{Operation: "github.pullrequestcomments.create", Connection: "repo",
+		{Operation: "github.pull-request-comments.create", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":42,"body":"thanks"}`)},
-		{Operation: "github.pullrequestreviews.create", Connection: "repo",
+		{Operation: "github.pull-request-reviews.create", Connection: "repo",
 			Arguments: json.RawMessage(fmt.Sprintf(`{"number":95,"sha":%q,"event":"comment"}`, sha))},
-		{Operation: "github.pullrequestreviews.approve", Connection: "approver",
+		{Operation: "github.pull-request-reviews.approve", Connection: "approver",
 			Arguments: json.RawMessage(fmt.Sprintf(`{"number":95,"sha":%q}`, sha))},
-		{Operation: "github.pullrequestreviewcomments.reply", Connection: "repo",
+		{Operation: "github.pull-request-review-comments.reply", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":95,"comment_id":8,"body":"ack"}`)},
-		{Operation: "github.pullrequestreviewthreads.resolve", Connection: "repo",
+		{Operation: "github.pull-request-review-threads.resolve", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":95,"thread_id":"PRRT_9"}`)},
-		{Operation: "github.pullrequestreviewthreads.unresolve", Connection: "repo",
+		{Operation: "github.pull-request-review-threads.unresolve", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":95,"thread_id":"PRRT_9"}`)},
-		{Operation: "github.pullrequestreviewers.request", Connection: "repo",
+		{Operation: "github.pull-request-reviewers.request", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":95,"reviewers":["hubot"]}`)},
-		{Operation: "github.pullrequestreviewers.remove", Connection: "repo",
+		{Operation: "github.pull-request-reviewers.remove", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":95,"reviewers":["hubot"]}`)},
 	} {
 		request.Confirmed = true

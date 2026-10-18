@@ -16,7 +16,7 @@ type fakeIssueType struct {
 	enabled                  bool
 }
 
-// github.issuetypes.list reads every issue type of an organization an explicit connection allows: an
+// github.issue-types.list reads every issue type of an organization an explicit connection allows: an
 // explicit owner target, a repository target of that organization, or a connection without targets allow
 // the call; the result names the organization it read, the way every owner tool does.
 func TestIssueTypesListSatisfiesItsContractThroughTheApplicationCore(t *testing.T) {

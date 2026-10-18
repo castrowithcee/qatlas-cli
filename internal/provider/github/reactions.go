@@ -19,7 +19,7 @@ import (
 // numeric id: an issue number for kind issue, since a pull request conversation is an issue for GitHub's
 // reaction routes just as it is for github.comments.list and github.comments.create's database_id; the REST
 // comment_id for kind issue_comment, of an issue or a pull request conversation comment alike, since GitHub
-// keeps both under the same issue comment route; and the REST comment_id github.pullrequestreviewcomments.list
+// keeps both under the same issue comment route; and the REST comment_id github.pull-request-review-comments.list
 // already reports as id for kind review_comment. A foreign id is never accepted from outside the bound
 // repository: every reaction route lives below /repos/OWNER/REPO, so an id of another repository answers
 // not-found before anything changes.

@@ -179,7 +179,7 @@ var notificationsDismiss = capability.Descriptor{
 }
 
 var notificationsMarkAll = capability.Descriptor{
-	ID:      Provider + ".notifications.markall",
+	ID:      Provider + ".notifications.mark-all",
 	Version: 1,
 	Title:   "Mark GitHub notifications read",
 	Description: "Mark every notification thread of the account, or of one repository, read, optionally only " +
@@ -214,7 +214,7 @@ var notificationsMarkAll = capability.Descriptor{
 var subscriptionActions = `"enum":["watch","ignore","delete"]`
 
 var threadSubscriptionsSet = capability.Descriptor{
-	ID:      Provider + ".threadsubscriptions.set",
+	ID:      Provider + ".thread-subscriptions.set",
 	Version: 1,
 	Title:   "Set a GitHub thread subscription",
 	Description: "Subscribe to one notification thread (watch), mute it (ignore), or remove the subscription " +
@@ -248,7 +248,7 @@ var threadSubscriptionsSet = capability.Descriptor{
 }
 
 var repositorySubscriptionsSet = capability.Descriptor{
-	ID:      Provider + ".repositorysubscriptions.set",
+	ID:      Provider + ".repository-subscriptions.set",
 	Version: 1,
 	Title:   "Set a GitHub repository subscription",
 	Description: "Watch a repository a connection allows, ignore all its notifications, or remove the " +
@@ -316,14 +316,14 @@ type NotificationDismissed struct {
 	State      string `json:"state"`
 }
 
-// NotificationsMarked is the answer of github.notifications.markall.
+// NotificationsMarked is the answer of github.notifications.mark-all.
 type NotificationsMarked struct {
 	Marked     bool   `json:"marked"`
 	Queued     bool   `json:"queued"`
 	Repository string `json:"repository,omitempty"`
 }
 
-// ThreadSubscription is the answer of github.threadsubscriptions.set.
+// ThreadSubscription is the answer of github.thread-subscriptions.set.
 type ThreadSubscription struct {
 	ThreadID   string `json:"thread_id"`
 	Repository string `json:"repository"`
@@ -332,7 +332,7 @@ type ThreadSubscription struct {
 	Ignored    bool   `json:"ignored"`
 }
 
-// RepositorySubscription is the answer of github.repositorysubscriptions.set.
+// RepositorySubscription is the answer of github.repository-subscriptions.set.
 type RepositorySubscription struct {
 	Action     string `json:"action"`
 	Subscribed bool   `json:"subscribed"`

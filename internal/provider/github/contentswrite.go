@@ -367,8 +367,8 @@ func isWorkflowPath(path string) bool {
 	return len(path) >= len(workflowsDir) && strings.EqualFold(path[:len(workflowsDir)], workflowsDir)
 }
 
-const workflowPutMessage = "path lies below .github/workflows/; github.workflowfiles.create and " +
-	"github.workflowfiles.update maintain workflow files instead, with their own workflow token requirement"
+const workflowPutMessage = "path lies below .github/workflows/; github.workflow-files.create and " +
+	"github.workflow-files.update maintain workflow files instead, with their own workflow token requirement"
 
 const workflowDeleteMessage = "path lies below .github/workflows/; the workflow file tools have no delete " +
 	"tool, so a workflow file cannot be deleted through github.contents.delete"

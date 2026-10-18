@@ -43,7 +43,7 @@ const copilotAssignmentOutput = `{"type":"object","properties":{"number":{"type"
 	`"required":["number","is_suggestion"],"additionalProperties":false}`
 
 var copilotAssignmentsCreate = capability.Descriptor{
-	ID:      Provider + ".copilotassignments.create",
+	ID:      Provider + ".copilot-assignments.create",
 	Version: 1,
 	Title:   "Assign GitHub Copilot to an issue",
 	Description: "Assign the Copilot coding agent to one issue of a repository a connection allows, " +
@@ -77,12 +77,12 @@ var copilotAssignmentsCreate = capability.Descriptor{
 }
 
 var copilotReviewsRequest = capability.Descriptor{
-	ID:      Provider + ".copilotreviews.request",
+	ID:      Provider + ".copilot-reviews.request",
 	Version: 1,
 	Title:   "Request a GitHub Copilot review",
 	Description: "Request Copilot as a reviewer of one pull request of a repository a connection " +
 		"allows; requesting it again leaves it requested. The answer is the pull request, as " +
-		"github.pullrequests.get reports it",
+		"github.pull-requests.get reports it",
 	Tags:         []string{"github", "pulls", "pullrequests", "copilot", "reviews", "request"},
 	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:     Provider,

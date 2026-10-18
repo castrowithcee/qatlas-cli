@@ -11,13 +11,13 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// github.issuefields.list reads the organization issue fields of a repository, inherited from its
+// github.issue-fields.list reads the organization issue fields of a repository, inherited from its
 // organization, or, with organization instead, directly of an organization; the same exclusive selection
 // github.rulesets.list applies, except that the organization branch is checked the broad way
-// github.issuetypes.list checks its own owner argument, since organization-wide issue fields are exactly as
-// broad a resource as an organization's issue types. github.issuefields.set writes one or more field values
+// github.issue-types.list checks its own owner argument, since organization-wide issue fields are exactly as
+// broad a resource as an organization's issue types. github.issue-fields.set writes one or more field values
 // of an issue of a repository a connection allows, by the field and option identifiers
-// github.issuefields.list reports; GitHub applies every value of one call as a single mutation, so it either
+// github.issue-fields.list reports; GitHub applies every value of one call as a single mutation, so it either
 // applies as a whole or not at all.
 //
 // Verified 2026-09-29 against GitHub's public GraphQL reference schema
@@ -26,7 +26,7 @@ import (
 // IssueFieldSingleSelect, and IssueFieldMultiSelect) and the setIssueFieldValue mutation
 // (IssueFieldCreateOrUpdateInput with fieldId and exactly one of textValue, numberValue, dateValue,
 // singleSelectOptionId, multiSelectOptionIds, or delete) carry no @preview marker in this schema, the same
-// stability signal github.subissues.* and github.issuedependencies.* were verified by in the first
+// stability signal github.sub-issues.* and github.issue-dependencies.* were verified by in the first
 // milestone; they are not reachable from docs.github.com/en/graphql/reference's rendered pages yet, so this
 // is stated on the schema alone. IssueFieldCreateOrUpdateInput also carries confidence, rationale, and
 // suggest properties the official github/github-mcp-server (MIT) exposes only behind its own
@@ -65,7 +65,7 @@ var issueFieldsOrganizationField = capability.Field{Name: "organization", Descri
 	"call read, as orgs/LOGIN; present only when organization addressed the call"}
 
 var issueFieldsList = capability.Descriptor{
-	ID:      Provider + ".issuefields.list",
+	ID:      Provider + ".issue-fields.list",
 	Version: 1,
 	Title:   "List GitHub issue fields",
 	Description: "List one bounded batch of the organization issue fields of a repository, inherited from " +
@@ -85,7 +85,7 @@ var issueFieldsList = capability.Descriptor{
 		pagingArguments...),
 	Fields: append([]capability.Field{
 		{Name: "issue_fields", Description: "Issue fields: id and single_select_option_id/" +
-			"multi_select_option_ids of github.issuefields.set need the field's own id, name and description " +
+			"multi_select_option_ids of github.issue-fields.set need the field's own id, name and description " +
 			"(untrusted data), data_type (text, number, date, single_select, or multi_select), visibility " +
 			"(all or org_only), and for a select field its options, each with id, name, description, and color"},
 		issueFieldsRepositoryField, issueFieldsOrganizationField,
@@ -107,12 +107,12 @@ const issueFieldValueSchema = `{"type":"object","properties":{"field_id":` + fie
 const issueFieldValuesSchema = `{"type":"array","minItems":1,"maxItems":20,"items":` + issueFieldValueSchema + `}`
 
 var issueFieldsSet = capability.Descriptor{
-	ID:      Provider + ".issuefields.set",
+	ID:      Provider + ".issue-fields.set",
 	Version: 1,
 	Title:   "Set GitHub issue field values",
 	Description: "Set or clear text, number, date, single-select, and multi-select organization issue field " +
 		"values on one issue of a repository a connection allows, by field and option identifier, " +
-		"as github.issuefields.list reports them; GitHub applies every value of one call as a single mutation",
+		"as github.issue-fields.list reports them; GitHub applies every value of one call as a single mutation",
 	Tags:        []string{"github", "issues", "issuefields", "set"},
 	Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:    Provider,
@@ -122,7 +122,7 @@ var issueFieldsSet = capability.Descriptor{
 		`"required":["number","updated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
-		{Name: "fields", Description: "Field values to set, each with field_id as github.issuefields.list " +
+		{Name: "fields", Description: "Field values to set, each with field_id as github.issue-fields.list " +
 			"reports it, and exactly one of text_value, number_value, date_value (YYYY-MM-DD), " +
 			"single_select_option_id, multi_select_option_ids ([] clears a multi-select field), or delete: " +
 			"true to remove the value; at most 20", Required: true},
@@ -138,9 +138,9 @@ var issueFieldsSet = capability.Descriptor{
 	}},
 }
 
-// selectIssueFieldsTarget reads github.issuefields.list's own exclusive repository or organization argument:
+// selectIssueFieldsTarget reads github.issue-fields.list's own exclusive repository or organization argument:
 // a repository call is checked the way every other repository tool is, and an organization call the broad
-// way github.issuetypes.list checks its own owner argument. It runs before a credential is resolved.
+// way github.issue-types.list checks its own owner argument. It runs before a credential is resolved.
 func selectIssueFieldsTarget(resolved *config.Resolved, raw json.RawMessage) (target, error) {
 	if resolved == nil {
 		return target{}, providerError("open", "no connection was selected")
@@ -167,8 +167,8 @@ func selectIssueFieldsTarget(resolved *config.Resolved, raw json.RawMessage) (ta
 	return selectFieldsOwner(allowed, arguments.Organization)
 }
 
-// selectFieldsOwner resolves the organization argument of github.issuefields.list's organization-wide mode
-// against the connection's targets, exactly the way selectIssueTypesOwner resolves github.issuetypes.list's
+// selectFieldsOwner resolves the organization argument of github.issue-fields.list's organization-wide mode
+// against the connection's targets, exactly the way selectIssueTypesOwner resolves github.issue-types.list's
 // owner argument: an explicit owner target, a repository target of that organization, or a connection
 // without targets allow it.
 func selectFieldsOwner(allowed allowlist, value string) (target, error) {
@@ -192,7 +192,7 @@ func selectFieldsOwner(allowed allowlist, value string) (target, error) {
 	return parsed, nil
 }
 
-// issueFieldsLocate adds the repository or the organization github.issuefields.list addressed to its
+// issueFieldsLocate adds the repository or the organization github.issue-fields.list addressed to its
 // successful result, under that argument's own name, the way rulesetLocate does for the ruleset tools.
 func (t target) issueFieldsLocate(value any, err error) (any, error) {
 	if err != nil {
@@ -264,7 +264,7 @@ type IssueFieldOption struct {
 	Color       string `json:"color,omitempty"`
 }
 
-// IssueField is one organization issue field, as github.issuefields.list reports it.
+// IssueField is one organization issue field, as github.issue-fields.list reports it.
 type IssueField struct {
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
@@ -293,7 +293,7 @@ func issueFieldOf(op string, node issueFieldNodeJSON) (IssueField, error) {
 	return field, nil
 }
 
-// issueFieldsListOptions is the paging of github.issuefields.list.
+// issueFieldsListOptions is the paging of github.issue-fields.list.
 type issueFieldsListOptions struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
@@ -401,7 +401,7 @@ func invokeIssueFieldsList(ctx context.Context, resolved *config.Resolved, secre
 	return bound.issueFieldsLocate(client.listIssueFields(ctx, options, binding, after))
 }
 
-// issueFieldValueArgument is one entry of github.issuefields.set's own fields argument.
+// issueFieldValueArgument is one entry of github.issue-fields.set's own fields argument.
 type issueFieldValueArgument struct {
 	FieldID              string   `json:"field_id"`
 	TextValue            *string  `json:"text_value"`
@@ -412,7 +412,7 @@ type issueFieldValueArgument struct {
 	Delete               *bool    `json:"delete"`
 }
 
-// check applies the bound every field value of github.issuefields.set shares: exactly one value or delete.
+// check applies the bound every field value of github.issue-fields.set shares: exactly one value or delete.
 func (f issueFieldValueArgument) check() error {
 	if strings.TrimSpace(f.FieldID) == "" {
 		return invalidRequest("fields.field_id is required")
@@ -466,7 +466,7 @@ func (f issueFieldValueArgument) mutationInput() map[string]any {
 const setIssueFieldValueMutation = `mutation($issueId:ID!,$fields:[IssueFieldCreateOrUpdateInput!]!){` +
 	`setIssueFieldValue(input:{issueId:$issueId,issueFields:$fields}){issue{id url}}}`
 
-// IssueFieldsChange confirms one github.issuefields.set call.
+// IssueFieldsChange confirms one github.issue-fields.set call.
 type IssueFieldsChange struct {
 	Number  int    `json:"number"`
 	URL     string `json:"url,omitempty"`

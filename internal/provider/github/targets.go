@@ -53,7 +53,7 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
 	// target argument of their own. github.repositories.create names no existing repository either, since it
 	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools, the
-	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
+	// custom properties tools, and github.issue-fields.list take an exclusive repository or organization
 	// argument of their own, since exactly one of the two, never a default, addresses a call. The notification
 	// tools take an optional repository of their own, or a thread id whose repository is read and checked. The
 	// gist tools belong to a user account and take a gist id or none, checked against the user targets. The

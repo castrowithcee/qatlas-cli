@@ -38,7 +38,7 @@ connections:
     credential: gh-reader
     target: orgs/octo-org/projects/7
     permissions: [read]
-    tools: [github.projectitems.list, github.projectitems.get]
+    tools: [github.project-items.list, github.project-items.get]
   code:
     service: gh
     credential: gh-reader
@@ -49,7 +49,7 @@ connections:
     credential: gh-reader
     targets: [orgs/octo-org/projects/7, repos/octo-org/example]
     permissions: [read, create, update]
-    tools: [github.projectitems.list, github.projectitems.update, github.projectissues.create]
+    tools: [github.project-items.list, github.project-items.update, github.project-issues.create]
 defaults: {}
 `)
 }
@@ -80,16 +80,16 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"  github.branches.list,List GitHub branches,read,\"\",\"\",false,code\n",
 		"  github.tags.list,List GitHub tags,read,\"\",\"\",false,code\n",
 		"  github.tags.get,Get a GitHub tag,read,tag,\"\",false,code\n",
-		"  github.projectitems.list,List GitHub project items,read,\"\",\"project:users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER\",false,\"\"\n",
-		"  github.projectitems.update,Update GitHub project item fields,update,item_id; fields,\"\",true,roadmap\n",
+		"  github.project-items.list,List GitHub project items,read,\"\",\"project:users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER\",false,\"\"\n",
+		"  github.project-items.update,Update GitHub project item fields,update,item_id; fields,\"\",true,roadmap\n",
 		"  github.accounts.me,Get the GitHub account behind this connection,read,\"\",\"\",false,code\n",
 		"  github.stars.list,List the GitHub repositories starred by this account,read,\"\",\"\",false,code\n",
 		"  github.teams.list,List the teams of a GitHub organization,read,\"\",\"\",false,code\n",
-		"  github.teammembers.list,List the members of a GitHub team,read,team,\"\",false,code\n",
+		"  github.team-members.list,List the members of a GitHub team,read,team,\"\",false,code\n",
 		"  github.repositories.search,Search GitHub repositories,read,terms,\"\",false,code\n",
 		"  github.code.search,Search GitHub code,read,terms,\"\",false,code\n",
 		"  github.issues.search,Search GitHub issues,read,terms,\"\",false,code\n",
-		"  github.pullrequests.search,Search GitHub pull requests,read,terms,\"\",false,code\n",
+		"  github.pull-requests.search,Search GitHub pull requests,read,terms,\"\",false,code\n",
 		"  github.commits.search,Search GitHub commits,read,terms,\"\",false,code\n",
 		"  github.users.search,Search GitHub users,read,terms,\"\",false,code\n",
 		"  github.organizations.search,Search GitHub organizations,read,terms,\"\",false,code\n",
@@ -98,7 +98,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	for _, absent := range []string{"github.issues.create", "github.workflowfiles", "github.workflows.dispatch"} {
+	for _, absent := range []string{"github.issues.create", "github.workflow-files", "github.workflows.dispatch"} {
 		if strings.Contains(stdout, absent) {
 			t.Errorf("tools output offers %s, which no connection offers:\n%s", absent, stdout)
 		}
@@ -114,7 +114,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		`  github.issues.get,Get a GitHub issue,read,number,"",false,code,""`,
 		`  github.issues.create,Create a GitHub issue,create,title,"",true,"",not-in-tools-list`,
 		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,`,
-		`  github.workflowfiles.get,Get a GitHub workflow file,read,`,
+		`  github.workflow-files.get,Get a GitHub workflow file,read,`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
@@ -136,56 +136,56 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
-		"github.notifications.list,List GitHub notifications,read,", "github.notifications.markall,Mark GitHub notifications read,update,",
-		"github.threadsubscriptions.set,Set a GitHub thread subscription,update,",
+		"github.notifications.list,List GitHub notifications,read,", "github.notifications.mark-all,Mark GitHub notifications read,update,",
+		"github.thread-subscriptions.set,Set a GitHub thread subscription,update,",
 		"github.gists.list,List GitHub gists,read,", "github.gists.delete,Delete a GitHub gist,delete,",
-		"github.codescanningalerts.list,List GitHub code scanning alerts,read,",
-		"github.dependabotalerts.get,Get a GitHub Dependabot alert,read,",
-		"github.secretscanningalerts.list,List GitHub secret scanning alerts,read,",
-		"github.globaladvisories.list,List GitHub global security advisories,read,",
-		"github.copilotassignments.create,Assign GitHub Copilot to an issue,update,",
-		"github.copilotreviews.request,Request a GitHub Copilot review,update,",
-		"github.codequalityfindings.get,Get a GitHub code quality finding,read,",
+		"github.code-scanning-alerts.list,List GitHub code scanning alerts,read,",
+		"github.dependabot-alerts.get,Get a GitHub Dependabot alert,read,",
+		"github.secret-scanning-alerts.list,List GitHub secret scanning alerts,read,",
+		"github.global-advisories.list,List GitHub global security advisories,read,",
+		"github.copilot-assignments.create,Assign GitHub Copilot to an issue,update,",
+		"github.copilot-reviews.request,Request a GitHub Copilot review,update,",
+		"github.code-quality-findings.get,Get a GitHub code quality finding,read,",
 		"github.blame.get,Get the GitHub blame of a file,read,",
 		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",
 		"github.branches.list,List GitHub branches,read,", "github.tags.list,List GitHub tags,read,",
 		"github.tags.get,Get a GitHub tag,read,",
 		"github.accounts.me,Get the GitHub account behind this connection,read,",
 		"github.teams.list,List the teams of a GitHub organization,read,",
-		"github.teammembers.list,List the members of a GitHub team,read,",
+		"github.team-members.list,List the members of a GitHub team,read,",
 		"github.stars.list,List the GitHub repositories starred by this account,read,",
 		"github.stars.add,Star a GitHub repository,create,", "github.stars.remove,Unstar a GitHub repository,delete,",
-		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
+		"github.project-items.get,Get a GitHub project item,read,", "github.project-items.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
 		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
-		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",
-		"github.projectitems.add,Add a GitHub issue to the project,create,", "github.projectitems.archive,Archive a GitHub project item,update,",
-		"github.projectitems.unarchive,Restore an archived GitHub project item,update,", "github.projectitems.move,Move a GitHub project item,update,",
-		"github.projectitems.delete,Delete a GitHub project item,delete,", "github.projectdrafts.create,Create a GitHub project draft,create,",
-		"github.projectdrafts.update,Update a GitHub project draft,update,", "github.projectdrafts.convert,Convert a GitHub project draft into an issue,create,",
-		"github.projectissues.create,Create a planned GitHub issue,create,",
+		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.project-items.update,Update GitHub project item fields,update,",
+		"github.project-items.add,Add a GitHub issue to the project,create,", "github.project-items.archive,Archive a GitHub project item,update,",
+		"github.project-items.unarchive,Restore an archived GitHub project item,update,", "github.project-items.move,Move a GitHub project item,update,",
+		"github.project-items.delete,Delete a GitHub project item,delete,", "github.project-drafts.create,Create a GitHub project draft,create,",
+		"github.project-drafts.update,Update a GitHub project draft,update,", "github.project-drafts.convert,Convert a GitHub project draft into an issue,create,",
+		"github.project-issues.create,Create a planned GitHub issue,create,",
 		"github.projects.create,Create a GitHub project,create,", "github.projects.update,Update a GitHub project,update,", "github.projects.delete,Delete a GitHub project,delete,",
 		"github.projects.copy,Copy a GitHub project,create,", "github.projects.link,Link a GitHub project to a repository,update,", "github.projects.unlink,Unlink a GitHub project from a repository,update,",
-		"github.projectfields.list,List the fields of a GitHub project,read,", "github.projectfields.create,Create a GitHub project field,create,",
-		"github.projectfields.update,Update a GitHub project field,update,", "github.projectfields.delete,Delete a GitHub project field,delete,",
-		"github.projectfieldoptions.delete,Delete options of a GitHub project field,delete,", "github.projectiterations.replace,Replace the iterations of a GitHub project field,delete,",
-		"github.projectviews.list,List the views of a GitHub project,read,", "github.projectviews.create,Create a GitHub project view,create,",
-		"github.projectviews.update,Update a GitHub project view,update,", "github.projectviews.delete,Delete a GitHub project view,delete,",
-		"github.projecttemplates.mark,Mark a GitHub project as a template,update,", "github.projecttemplates.unmark,Unmark a GitHub project as a template,update,",
-		"github.projectstatus.list,List the status updates of a GitHub project,read,", "github.projectstatus.create,Post a GitHub project status update,create,",
-		"github.projectstatus.update,Update a GitHub project status update,update,", "github.projectstatus.delete,Delete a GitHub project status update,delete,",
-		"github.projectteams.list,List the teams of a GitHub project,read,", "github.projectcollaborators.update,Change the collaborators of a GitHub project,update,",
-		"github.projects.linkteam,Link a GitHub project to a team,update,",
-		"github.projects.unlinkteam,Unlink a GitHub project from a team,update,", "github.projectworkflows.list,List the automations of a GitHub project,read,",
-		"github.projectworkflows.delete,Delete a GitHub project automation,delete,",
-		"github.workflows.list,List GitHub Actions workflows,read,", "github.workflows.get,Get a GitHub Actions workflow,read,", "github.workflowruns.list,List GitHub Actions workflow runs,read,",
-		"github.workflowruns.get,Get a GitHub Actions workflow run,read,", "github.workflowjobs.list,List GitHub Actions jobs of a run,read,", "github.workflowjobs.get,Get a GitHub Actions job,read,",
-		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,", "github.workflowruns.usage,Get the billable time of a GitHub Actions run,read,", "github.workflowrunlogs.delete,Delete the logs of a GitHub Actions run,delete,",
-		"github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,", "github.workflowruns.rerun,Re-run a GitHub Actions workflow run,execute,",
-		"github.workflowruns.rerunfailed,Re-run the failed jobs of a GitHub Actions run,execute,", "github.workflowruns.cancel,Cancel a GitHub Actions workflow run,execute,",
-		"github.workflowfiles.list,List GitHub workflow files,read,", "github.workflowfiles.get,Get a GitHub workflow file,read,", "github.workflowfiles.create,Create a GitHub workflow file,create,",
-		"github.workflowfiles.update,Update a GitHub workflow file,update,", "github.workflows.enable,Enable a GitHub Actions workflow,update,", "github.workflows.disable,Disable a GitHub Actions workflow,update,",
-		"github.actionspermissions.get,Get the GitHub Actions permissions of a repository,read,", "github.actionspermissions.update,Change the GitHub Actions permissions of a repository,update,",
-		"github.workflowpermissions.get,Get the default GITHUB_TOKEN permissions of a repository,read,", "github.workflowpermissions.update,Change the default GITHUB_TOKEN permissions of a repository,update,",
+		"github.project-fields.list,List the fields of a GitHub project,read,", "github.project-fields.create,Create a GitHub project field,create,",
+		"github.project-fields.update,Update a GitHub project field,update,", "github.project-fields.delete,Delete a GitHub project field,delete,",
+		"github.project-field-options.delete,Delete options of a GitHub project field,delete,", "github.project-iterations.replace,Replace the iterations of a GitHub project field,delete,",
+		"github.project-views.list,List the views of a GitHub project,read,", "github.project-views.create,Create a GitHub project view,create,",
+		"github.project-views.update,Update a GitHub project view,update,", "github.project-views.delete,Delete a GitHub project view,delete,",
+		"github.project-templates.mark,Mark a GitHub project as a template,update,", "github.project-templates.unmark,Unmark a GitHub project as a template,update,",
+		"github.project-status.list,List the status updates of a GitHub project,read,", "github.project-status.create,Post a GitHub project status update,create,",
+		"github.project-status.update,Update a GitHub project status update,update,", "github.project-status.delete,Delete a GitHub project status update,delete,",
+		"github.project-teams.list,List the teams of a GitHub project,read,", "github.project-collaborators.update,Change the collaborators of a GitHub project,update,",
+		"github.projects.link-team,Link a GitHub project to a team,update,",
+		"github.projects.unlink-team,Unlink a GitHub project from a team,update,", "github.project-workflows.list,List the automations of a GitHub project,read,",
+		"github.project-workflows.delete,Delete a GitHub project automation,delete,",
+		"github.workflows.list,List GitHub Actions workflows,read,", "github.workflows.get,Get a GitHub Actions workflow,read,", "github.workflow-runs.list,List GitHub Actions workflow runs,read,",
+		"github.workflow-runs.get,Get a GitHub Actions workflow run,read,", "github.workflow-jobs.list,List GitHub Actions jobs of a run,read,", "github.workflow-jobs.get,Get a GitHub Actions job,read,",
+		"github.workflow-jobs.log,Read the end of a GitHub Actions job log,read,", "github.workflow-artifacts.list,List GitHub Actions artifacts of a run,read,", "github.workflow-runs.usage,Get the billable time of a GitHub Actions run,read,", "github.workflow-run-logs.delete,Delete the logs of a GitHub Actions run,delete,",
+		"github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,", "github.workflow-runs.rerun,Re-run a GitHub Actions workflow run,execute,",
+		"github.workflow-runs.rerun-failed,Re-run the failed jobs of a GitHub Actions run,execute,", "github.workflow-runs.cancel,Cancel a GitHub Actions workflow run,execute,",
+		"github.workflow-files.list,List GitHub workflow files,read,", "github.workflow-files.get,Get a GitHub workflow file,read,", "github.workflow-files.create,Create a GitHub workflow file,create,",
+		"github.workflow-files.update,Update a GitHub workflow file,update,", "github.workflows.enable,Enable a GitHub Actions workflow,update,", "github.workflows.disable,Disable a GitHub Actions workflow,update,",
+		"github.actions-permissions.get,Get the GitHub Actions permissions of a repository,read,", "github.actions-permissions.update,Change the GitHub Actions permissions of a repository,update,",
+		"github.workflow-permissions.get,Get the default GITHUB_TOKEN permissions of a repository,read,", "github.workflow-permissions.update,Change the default GITHUB_TOKEN permissions of a repository,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -195,7 +195,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
 	}
 
-	document := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--full", "--config", path)
+	document := runTwentyJSON(t, "", "describe", "github.project-items.list", "--full", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -219,7 +219,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	if !strings.Contains(string(issues), `"name":"code"`) || strings.Contains(string(issues), `"name":"planning"`) {
 		t.Errorf("issue tool connections = %s, want only the repository connection", issues)
 	}
-	planned := runTwentyJSON(t, "", "describe", "github.projectissues.create", "--config", path)
+	planned := runTwentyJSON(t, "", "describe", "github.project-issues.create", "--config", path)
 	if !strings.Contains(string(planned), `"name":"roadmap"`) || strings.Contains(string(planned), `"name":"code"`) ||
 		!strings.Contains(string(planned), `"confirmation":"required"`) ||
 		!strings.Contains(string(planned), `"idempotency":"non_idempotent"`) {
@@ -227,7 +227,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	}
 	// A tool that requires an allow-list has no route on a connection that does not list it, whatever the
 	// connection's permissions.
-	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update",
+	for _, id := range []string{"github.workflow-files.get", "github.workflow-files.update", "github.actions-permissions.update",
 		"github.files.push"} {
 		guarded := runTwentyJSON(t, "", "describe", id, "--full", "--config", path)
 		if !strings.Contains(string(guarded), `"connections":[]`) ||
@@ -237,10 +237,10 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	}
 	for _, connection := range []string{"code", "roadmap"} {
 		code, listed, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--connection", connection, "--config", path)
-		if code != exitOK || stderr != "" || !strings.Contains(listed, "github.projectitems.list") {
+		if code != exitOK || stderr != "" || !strings.Contains(listed, "github.project-items.list") {
 			t.Fatalf("tools --connection %s: exit=%d stdout=%q stderr=%q", connection, code, listed, stderr)
 		}
-		for _, id := range []string{"workflowfiles", "actionspermissions", "workflowpermissions", "workflows.enable",
+		for _, id := range []string{"workflow-files", "actions-permissions", "workflow-permissions", "workflows.enable",
 			"files.push"} {
 			if strings.Contains(listed, id) {
 				t.Errorf("connection %s lists %s:\n%s", connection, id, listed)
@@ -260,33 +260,33 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		args              []string
 	}{
 		{"a project tool on a connection without a project", `{}`, "invalid-request",
-			[]string{"invoke", "github.projectitems.list", "--connection", "code", "--config", path}},
+			[]string{"invoke", "github.project-items.list", "--connection", "code", "--config", path}},
 		{"a project outside the targets", ``, "invalid-request",
-			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--arg",
+			[]string{"invoke", "github.project-items.list", "--connection", "planning", "--arg",
 				"project=orgs/octo-org/projects/8", "--config", path}},
 		{"an issue tool outside the tools list", `{}`, "unsupported-capability",
 			[]string{"invoke", "github.issues.list", "--connection", "planning", "--config", path}},
 		{"an owner argument", `{"owner":"other-org"}`, "invalid-request",
-			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
+			[]string{"invoke", "github.project-items.list", "--connection", "planning", "--config", path}},
 		{"a free filter", `{"status":["Done\" OR x"]}`, "invalid-request",
-			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
+			[]string{"invoke", "github.project-items.list", "--connection", "planning", "--config", path}},
 		{"a foreign cursor", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid-request",
-			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
+			[]string{"invoke", "github.project-items.list", "--connection", "planning", "--config", path}},
 		{"an unconfirmed change", `{"item_id":"PVTI_x1","fields":{"Status":"Done"}}`, "confirmation-required",
-			[]string{"invoke", "github.projectitems.update", "--connection", "roadmap", "--config", path}},
+			[]string{"invoke", "github.project-items.update", "--connection", "roadmap", "--config", path}},
 		{"a change the permissions exclude", `{"title":"x"}`, "unsupported-capability",
 			[]string{"invoke", "github.issues.create", "--connection", "code", "--confirm", "--config", path}},
 		{"an execution the permissions exclude", `{"run_id":1}`, "unsupported-capability",
-			[]string{"invoke", "github.workflowruns.rerun", "--connection", "code", "--confirm", "--config", path}},
+			[]string{"invoke", "github.workflow-runs.rerun", "--connection", "code", "--confirm", "--config", path}},
 		{"a change outside the tools list", `{"item_id":"PVTI_x1"}`, "unsupported-capability",
-			[]string{"invoke", "github.projectitems.archive", "--connection", "roadmap", "--confirm", "--config", path}},
+			[]string{"invoke", "github.project-items.archive", "--connection", "roadmap", "--confirm", "--config", path}},
 		{"a listed-only read without a tools list", `{"path":".github/workflows/ci.yml"}`, "unsupported-capability",
-			[]string{"invoke", "github.workflowfiles.get", "--connection", "code", "--config", path}},
+			[]string{"invoke", "github.workflow-files.get", "--connection", "code", "--config", path}},
 		{"a listed-only change outside the tools list", `{"default_workflow_permissions":"write"}`,
-			"unsupported-capability", []string{"invoke", "github.workflowpermissions.update", "--connection",
+			"unsupported-capability", []string{"invoke", "github.workflow-permissions.update", "--connection",
 				"roadmap", "--confirm", "--config", path}},
 		{"a repository outside the targets", `{"repository":"octo-org/other","title":"x"}`, "invalid-request",
-			[]string{"invoke", "github.projectissues.create", "--connection", "roadmap", "--confirm", "--config", path}},
+			[]string{"invoke", "github.project-issues.create", "--connection", "roadmap", "--confirm", "--config", path}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -302,7 +302,7 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	}
 }
 
-// The MCP broker finds and describes the same GitHub tools as the CLI. github.projectitems.list carries
+// The MCP broker finds and describes the same GitHub tools as the CLI. github.project-items.list carries
 // contract version 2, so its former version 1 is no longer callable.
 func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	path := githubConfig(t)
@@ -311,9 +311,9 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":{"provider":"github","limit":50}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":2}}}`,
+			`,"name":"qatlas.describe","arguments":{"operation":"github.project-items.list","version":2}}}`,
 		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"github.projectitems.list","version":1,` +
+			`,"name":"qatlas.invoke","arguments":{"operation":"github.project-items.list","version":1,` +
 			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
@@ -330,7 +330,7 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	if len(searched.Operations) != 50 || !searched.HasMore || searched.Operations[0].ID != "github.accounts.me" {
 		t.Fatalf("search operations = %+v, has_more = %t", searched.Operations, searched.HasMore)
 	}
-	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")
+	describedByCLI := runTwentyJSON(t, "", "describe", "github.project-items.list", "--config", path, "--output", "json")
 	describe := toolResultFrom(t, responses[`"describe"`])
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")

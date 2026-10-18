@@ -27,7 +27,7 @@ as an item, and its issue and comment tools still refuse a pull request number. 
 `pull-request-reviews` it also reads and writes the pull request's conversation comments, reads and submits
 reviews with their line comments bundled in, replies to a line comment, reads, resolves, and unresolves review
 threads, and requests or removes reviewers; only approving is not in any profile, offered only while a
-connection's `tools` list names `github.pullrequestreviews.approve`. On the not-recommended profile
+connection's `tools` list names `github.pull-request-reviews.approve`. On the not-recommended profile
 `releases` it also lists the releases of a repository, reads one by identifier, tag, or as the latest
 published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
 whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It also reads the
@@ -98,9 +98,9 @@ One GitHub connection carries the project, issue, comment, and Actions tools tog
 offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
 connection with a `tools` list offers only the tools it lists, never one added in a later version.
-`github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`,
-`github.projectiterations.replace`, `github.projectviews.delete`, `github.projectitems.delete`,
-`github.projectstatus.delete`, and `github.projectworkflows.delete` need `delete`. They, the
+`github.projects.delete`, `github.project-fields.delete`, `github.project-field-options.delete`,
+`github.project-iterations.replace`, `github.project-views.delete`, `github.project-items.delete`,
+`github.project-status.delete`, and `github.project-workflows.delete` need `delete`. They, the
 [access tools](#project-collaborators-and-teams) that change who reaches a project, and the workflow
 maintainer and Actions administrator tools are listed only: a connection without a `tools` list never offers
 them, whatever its permissions.
@@ -108,13 +108,13 @@ them, whatever its permissions.
 ### The target of a call
 
 Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
-`repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
-`unarchive`, `move`, `delete`, `github.projectdrafts.create`, `update`, `github.projects.update`, `delete`,
+`repository` as `OWNER/REPO`. Every project tool (`github.project-items.list`, `get`, `update`, `archive`,
+`unarchive`, `move`, `delete`, `github.project-drafts.create`, `update`, `github.projects.update`, `delete`,
 the [field schema tools](#project-fields), and the tools of views, status updates, collaborators, teams, and
 automations) takes `project` as
-`users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add`,
-`github.projectissues.create`, `github.projectdrafts.convert`, `github.projects.link`, and
-`github.projects.unlink` touch both, take both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
+`users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.project-items.add`,
+`github.project-issues.create`, `github.project-drafts.convert`, `github.projects.link`, and
+`github.projects.unlink` touch both, take both, and check both against the targets. In `github.project-items.list`, `repository` stays a filter on the items of
 the project, not a target. The owner lists `github.projects.list` and `github.repositories.list` and
 `github.projects.create` take `owner` as `users/LOGIN` for a user or `orgs/LOGIN` for an organization;
 `github.projects.copy` takes the source as `project` and the destination as `owner`, and checks both.
@@ -141,8 +141,8 @@ a secret is read as well.
 
 Every result names the target the tool acted on in a field named like its argument, whether the argument
 chose it or a default did: `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or
-`orgs/LOGIN/projects/NUMBER`, both for `github.projectitems.add`, `github.projectissues.create`,
-`github.projectdrafts.convert`, `github.projects.link`, and `github.projects.unlink`, and `owner` as `users/LOGIN` or `orgs/LOGIN` for the
+`orgs/LOGIN/projects/NUMBER`, both for `github.project-items.add`, `github.project-issues.create`,
+`github.project-drafts.convert`, `github.projects.link`, and `github.projects.unlink`, and `owner` as `users/LOGIN` or `orgs/LOGIN` for the
 owner lists, `github.projects.create`, and, beside `project`, `github.projects.copy`. The field sits beside the tool's own fields,
 so `github.issues.get` without an argument answers, for example:
 
@@ -151,7 +151,7 @@ so `github.issues.get` without an argument answers, for example:
  "state": "open", "title": "Crash on start"}
 ```
 
-`github.projectitems.get` keeps its own `repository` field for the repository of the item's content and names
+`github.project-items.get` keeps its own `repository` field for the repository of the item's content and names
 its target as `project`.
 
 ### Errors
@@ -166,7 +166,7 @@ the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s
 `github.collaborators.list` address, the pull request by its number (also for a Copilot review request), the issue a Copilot assignment addresses by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
-`github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were asked
+`github.pull-request-checks.list` once the pull request itself was found, the commit its checks were asked
 for, where the call named one:
 
 ```text
@@ -207,19 +207,19 @@ their own permission messages, listed under [Tokens for Actions](#tokens-for-act
 ### Setup profiles
 
 The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads
-`github.projects.list`, `github.repositories.list`, `github.projectitems.list`, `github.projectitems.get`,
+`github.projects.list`, `github.repositories.list`, `github.project-items.list`, `github.project-items.get`,
 `github.issues.list`, `github.issues.get`, and `github.comments.list`. The profile `planning` ticks
-`[read, create, update]` with the owner lists, the project reads, `github.projectitems.update`,
-`github.projectitems.add`, `github.projectitems.move`, `github.projectdrafts.create`,
-`github.projectdrafts.update`, `github.projectdrafts.convert`, and `github.projectissues.create`; archiving
+`[read, create, update]` with the owner lists, the project reads, `github.project-items.update`,
+`github.project-items.add`, `github.project-items.move`, `github.project-drafts.create`,
+`github.project-drafts.update`, `github.project-drafts.convert`, and `github.project-issues.create`; archiving
 and restoring stay unticked. The profile
 `projects` ticks `[read, create, update]` with the owner lists, the
 [project lifecycle](#project-lifecycle) tools except `github.projects.delete`, the template tools,
-`github.projectfields.list`, `create`, and `update` of the [project fields](#project-fields),
-`github.projectviews.list`, `create`, and `update` of the [project views](#project-views),
-`github.projectstatus.list`, `create`, and `update` of the [status updates](#project-status-updates),
-`github.projectteams.list` of the [teams](#project-collaborators-and-teams), and
-`github.projectworkflows.list` of the [automations](#project-automations); no profile ticks a tool with the
+`github.project-fields.list`, `create`, and `update` of the [project fields](#project-fields),
+`github.project-views.list`, `create`, and `update` of the [project views](#project-views),
+`github.project-status.list`, `create`, and `update` of the [status updates](#project-status-updates),
+`github.project-teams.list` of the [teams](#project-collaborators-and-teams), and
+`github.project-workflows.list` of the [automations](#project-automations); no profile ticks a tool with the
 effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), the
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
@@ -263,8 +263,8 @@ connections:
     credential: github-planner
     targets: [orgs/octo-org/projects/7, repos/octo-org/*]
     permissions: [read, create, update]
-    tools: [github.projectitems.list, github.projectitems.get, github.projectitems.update,
-      github.projectissues.create, github.issues.list, github.issues.get]
+    tools: [github.project-items.list, github.project-items.get, github.project-items.update,
+      github.project-issues.create, github.issues.list, github.issues.get]
 ```
 
 `roadmap` defaults `project` to its one project. `repository` comes from the call, and only repositories of
@@ -309,14 +309,14 @@ access to the repositories on a fine-grained token.
 ## Discovery: account, organization teams, and stars
 
 `github.accounts.me` reads the login, display name, account type, and billing plan of the account behind the
-connection's token; `github.teams.list` and `github.teammembers.list` read the teams of an organization and
+connection's token; `github.teams.list` and `github.team-members.list` read the teams of an organization and
 the members of one of them; `github.stars.list` reads the account's starred repositories, and
 `github.stars.add` and `github.stars.remove` star and unstar one:
 
 ```sh
 qatlas invoke github.accounts.me --connection discovery
 qatlas invoke github.teams.list --connection discovery --arg owner=orgs/octo-org
-qatlas invoke github.teammembers.list --connection discovery --arg owner=orgs/octo-org --arg team=design
+qatlas invoke github.team-members.list --connection discovery --arg owner=orgs/octo-org --arg team=design
 qatlas invoke github.stars.list --connection discovery
 echo '{"repository":"octo-org/example"}' | qatlas invoke github.stars.add --connection stars --confirm
 ```
@@ -325,18 +325,18 @@ echo '{"repository":"octo-org/example"}' | qatlas invoke github.stars.add --conn
 | --- | --- | --- | --- |
 | `github.accounts.me` | read | safe | reads the account behind the connection's token; no repository, project, or owner argument |
 | `github.teams.list` | read | safe | lists the teams of an organization, in batches, with slug, name, description, and privacy |
-| `github.teammembers.list` | read | safe | lists the members of one team of an organization, in batches, by login |
+| `github.team-members.list` | read | safe | lists the members of one team of an organization, in batches, by login |
 | `github.stars.list` | read | safe | lists the repositories the account has starred, in batches; no repository or project argument |
 | `github.stars.add` | create | idempotent | stars one repository; a repository already starred is left as it is |
 | `github.stars.remove` | delete | idempotent | unstars one repository; a repository that is not starred is left as it is |
 
-`github.teams.list` and `github.teammembers.list` take `owner` as `orgs/LOGIN`: the organization must be a
+`github.teams.list` and `github.team-members.list` take `owner` as `orgs/LOGIN`: the organization must be a
 target the connection names as an owner itself, exactly as `github.projects.create` requires, since a project
 or a repository pattern of the organization is not enough. `owner` may be left out only when the targets name
 exactly one owner entry; `users/LOGIN` is refused with `invalid-request`, because teams belong to an
-organization, not a user. `github.teammembers.list` also takes `team`, the slug `github.teams.list` reports.
+organization, not a user. `github.team-members.list` also takes `team`, the slug `github.teams.list` reports.
 Both follow the [cursor contract](#cursor-contract), a `github.teams.list` cursor bound to the organization and
-a `github.teammembers.list` cursor bound to the organization and the team together.
+a `github.team-members.list` cursor bound to the organization and the team together.
 
 `github.accounts.me` and `github.stars.list` take no `repository`, `project`, or `owner` argument: they read
 data of the account behind the token as a whole. A connection whose targets name a repository or a project is
@@ -360,7 +360,7 @@ on a classic token, `repo` as well for a private repository, or Starring read an
 fine-grained token.
 
 The terminal editor's setup profile `discovery` ticks `[read]` with `github.accounts.me`,
-`github.teams.list`, `github.teammembers.list`, `github.stars.list`, and the seven
+`github.teams.list`, `github.team-members.list`, `github.stars.list`, and the seven
 [search tools](#search-repositories-code-issues-pull-requests-commits-users-and-organizations); it changes
 nothing. The setup profile
 `stars` ticks `[read, create, delete]` with `github.stars.list`, `github.stars.add`, and
@@ -369,7 +369,7 @@ which stays `read`, unchanged.
 
 ## Search: repositories, code, issues, pull requests, commits, users, and organizations
 
-`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`,
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pull-requests.search`,
 `github.commits.search`, `github.users.search`, and `github.organizations.search` read GitHub's own search
 index with `terms`: search terms and GitHub qualifiers, such as `language:go` or `is:merged`, never a `query`
 argument or a route of an agent's own:
@@ -378,7 +378,7 @@ argument or a route of an agent's own:
 qatlas invoke github.repositories.search --connection discovery --arg terms="qatlas language:go"
 qatlas invoke github.code.search --connection discovery --arg terms="handleRequest language:go"
 qatlas invoke github.issues.search --connection discovery --arg terms="is:open label:bug"
-qatlas invoke github.pullrequests.search --connection discovery --arg terms="is:merged base:main"
+qatlas invoke github.pull-requests.search --connection discovery --arg terms="is:merged base:main"
 qatlas invoke github.commits.search --connection discovery --arg terms="author:octocat"
 qatlas invoke github.users.search --connection discovery --arg terms="location:berlin"
 qatlas invoke github.organizations.search --connection discovery --arg terms="octo in:name"
@@ -389,7 +389,7 @@ qatlas invoke github.organizations.search --connection discovery --arg terms="oc
 | `github.repositories.search` | repositories | the target qualifiers below | `repository`, `description`, `visibility`, `language`, `stars`, `fork`, `archived`, `updated_at`, `url` |
 | `github.code.search` | code, without file bodies or fragments | the target qualifiers below | `path`, `repository`, `sha`, `url` |
 | `github.issues.search` | issues, never pull requests | `is:issue` and the target qualifiers below | `number`, `title`, `repository`, `state`, `labels`, `assignees`, `updated_at`, `url` |
-| `github.pullrequests.search` | pull requests, never plain issues | `is:pr` and the target qualifiers below | `number`, `title`, `repository`, `state`, `draft`, `labels`, `assignees`, `updated_at`, `url` |
+| `github.pull-requests.search` | pull requests, never plain issues | `is:pr` and the target qualifiers below | `number`, `title`, `repository`, `state`, `draft`, `labels`, `assignees`, `updated_at`, `url` |
 | `github.commits.search` | commits | the target qualifiers below | `sha`, `message`, `repository`, `author`, `committed_at`, `url` |
 | `github.users.search` | personal accounts, never organizations | `type:user`, and, with one organization owner target, `org:LOGIN` of it | `login`, `type`, `url` |
 | `github.organizations.search` | organizations, never personal accounts | `type:org` | `login`, `url` |
@@ -402,7 +402,7 @@ searches something else.
 
 ### Target scoping
 
-`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`, and
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pull-requests.search`, and
 `github.commits.search` force a `repo:` or `org:`/`user:` qualifier ahead of `terms` from every target the
 connection names, so the search never reaches beyond them:
 
@@ -710,7 +710,7 @@ collaborators needs `repo` on a classic token, or Metadata: read on a fine-grain
 | `github.collaborators.list` | `repo` | Metadata: read |
 
 The terminal editor's setup profile `repository-admin-reader` (not recommended) ticks `[read]` with
-`github.collaborators.list`, `github.rulesets.list`, `github.rulesets.get`, and `github.customproperties.get`;
+`github.collaborators.list`, `github.rulesets.list`, `github.rulesets.get`, and `github.custom-properties.get`;
 it is not the recommended profile, which stays `read`, unchanged.
 
 ## Rulesets: repository and organization governance
@@ -783,13 +783,13 @@ organization, read or read and write:
 
 ## Custom properties
 
-`github.customproperties.get` reads the custom property values of a repository or, with `organization`
+`github.custom-properties.get` reads the custom property values of a repository or, with `organization`
 instead of `repository`, the custom property definitions (schema) an organization declares; exactly one of
 the two is required, the same exclusive selection as [Rulesets](#rulesets-repository-and-organization-governance).
 It never reads the values GitHub holds for the repositories of an organization: that GitHub route names
 repositories by a bare list of names the caller supplies, and binding that list to the connection's own
 repository targets would need a second, independent allow-list check this tool does not perform, so the
-narrower reading is a schema read only. `github.customproperties.set` changes them and is offered only where
+narrower reading is a schema read only. `github.custom-properties.set` changes them and is offered only where
 a connection's `tools` list names it, since a custom property can gate what a ruleset condition matches: for
 a repository it takes `properties` and sets or removes property values, a `value` of `null` removing one; for
 an organization it takes `definitions` and creates or replaces property definitions, the smaller scope that
@@ -798,33 +798,33 @@ the repository target above; only one of `properties` or `definitions` may be gi
 target:
 
 ```sh
-qatlas invoke github.customproperties.get --connection code --arg repository=octo-org/example
-qatlas invoke github.customproperties.get --connection org --arg organization=orgs/octo-org
+qatlas invoke github.custom-properties.get --connection code --arg repository=octo-org/example
+qatlas invoke github.custom-properties.get --connection org --arg organization=orgs/octo-org
 echo '{"repository":"octo-org/example","properties":[{"property_name":"team","value":"atlas"},
   {"property_name":"cost_center","value":null}]}' |
-  qatlas invoke github.customproperties.set --connection governance --confirm
+  qatlas invoke github.custom-properties.set --connection governance --confirm
 echo '{"organization":"orgs/octo-org","definitions":[{"property_name":"team","value_type":"single_select",
   "allowed_values":["atlas","hydra"]}]}' |
-  qatlas invoke github.customproperties.set --connection governance --confirm
+  qatlas invoke github.custom-properties.set --connection governance --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.customproperties.get` | read | safe | none | reads the property values of a repository or the property schema of an organization |
-| `github.customproperties.set` | update | idempotent | required | sets or removes property values, or creates or replaces property definitions; offered only where a connection's tools list names it |
+| `github.custom-properties.get` | read | safe | none | reads the property values of a repository or the property schema of an organization |
+| `github.custom-properties.set` | update | idempotent | required | sets or removes property values, or creates or replaces property definitions; offered only where a connection's tools list names it |
 
 Every call takes exactly one of `repository` (as `OWNER/REPO`, checked against the connection's repository
 targets like every other repository tool) or `organization` (as `orgs/LOGIN`, checked against its owner
 targets like `github.rulesets.list`); giving both or neither is an invalid request, checked before a
 credential is resolved.
 
-`github.customproperties.get` answers `properties` (present only for a repository call: each `property_name`
+`github.custom-properties.get` answers `properties` (present only for a repository call: each `property_name`
 and `value`, a string, an array of strings for a multi-select property, or `null` while unset) or `schema`
 (present only for an organization call: each `property_name`, `value_type` (`string`, `single_select`,
 `multi_select`, or `true_false`), `required`, `default_value`, `description`, `allowed_values`, and
 `values_editable_by` (`org_actors` or `org_and_repo_actors`)).
 
-`github.customproperties.set` takes `properties` (required with `repository`, refused with `organization`):
+`github.custom-properties.set` takes `properties` (required with `repository`, refused with `organization`):
 an array of at most 100 `{property_name, value}` entries, each value a string, an array of strings, or `null`
 to remove that property. It takes `definitions` instead (required with `organization`, refused with
 `repository`): an array of at most 100 property definitions, each with `property_name`, `value_type`, and,
@@ -844,10 +844,10 @@ live:
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.customproperties.get` (repository) | `repo` | Custom properties: read |
-| `github.customproperties.set` (repository) | `repo` | Custom properties: write |
-| `github.customproperties.get` (organization) | `admin:org` | Custom properties: read (organization), as far as GitHub documents it |
-| `github.customproperties.set` (organization) | `admin:org` | Custom properties: read and write (organization), as far as GitHub documents it |
+| `github.custom-properties.get` (repository) | `repo` | Custom properties: read |
+| `github.custom-properties.set` (repository) | `repo` | Custom properties: write |
+| `github.custom-properties.get` (organization) | `admin:org` | Custom properties: read (organization), as far as GitHub documents it |
+| `github.custom-properties.set` (organization) | `admin:org` | Custom properties: read and write (organization), as far as GitHub documents it |
 
 ## Labels
 
@@ -904,14 +904,14 @@ listed-only, needs Issues: read and write instead:
 
 Four read tools and four write tools cover the GitHub Discussions of one repository, all through GraphQL and all taking
 `repository` like the other repository tools; a repository outside the connection's targets is refused as an
-invalid request before any credential is resolved. `github.discussioncategories.list` lists the categories
+invalid request before any credential is resolved. `github.discussion-categories.list` lists the categories
 (`id`, `name`, `slug`, `description`, `emoji`, `is_answerable`, times). `github.discussions.list` lists
 discussions, optionally filtered by `category` (a category `id`), `state` (`open` or `closed`), and `answered`
 (`true` or `false`), ordered by `order_by` (`created_at` or `updated_at`) and `direction` (`asc` or `desc`);
 each entry carries `number`, `title`, `body` (cut at 1000 characters, `body_truncated` says so), `author`,
 `category`, `closed`, `locked`, `answered`, `upvote_count`, `comment_count`, `labels`, times, and `url`.
 `github.discussions.get` reads one discussion by `number`, with its body cut at 20000 characters.
-`github.discussioncomments.list` lists the top-level comments of one discussion, oldest first, with `author`,
+`github.discussion-comments.list` lists the top-level comments of one discussion, oldest first, with `author`,
 `body` (cut at 4000 characters), `is_answer`, `upvote_count`, `reply_count`, times, and `url`. Replies are
 counted; with `include_replies=true` each top-level comment also carries `replies` (at most 100, GitHub's
 maximum, each with `id`, `database_id`, `author`, `body` cut at 4000 characters with `body_truncated`,
@@ -929,10 +929,10 @@ repository as `repository`, and it must be among the connection's targets. Qatla
 `.github` repository of an organization on its own.
 
 `github.discussions.create` starts a discussion from `title`, `body`, and a `category_id`;
-`github.discussioncomments.create` adds a top-level comment to a discussion `number`, or, with `reply_to` (the
+`github.discussion-comments.create` adds a top-level comment to a discussion `number`, or, with `reply_to` (the
 node `id` of a top-level comment of that discussion), a reply; GitHub allows one level of replies, so a reply
-to a reply is refused. `github.discussioncomments.update` replaces the body of a comment or reply by its node
-`id` (`comment_id`), and `github.discussioncomments.delete` removes one permanently. Before any mutation the
+to a reply is refused. `github.discussion-comments.update` replaces the body of a comment or reply by its node
+`id` (`comment_id`), and `github.discussion-comments.delete` removes one permanently. Before any mutation the
 comment or category is read back and must belong to the chosen `repository`; a foreign one is refused
 (`not-found`, or `invalid-request` for a reply to a reply or to a comment of another discussion) without a
 change. Written bodies are not echoed. Every change needs `--confirm`, is sent once, and is never retried; an
@@ -940,29 +940,29 @@ unclear outcome says it may have been applied. Discussions are not closed, locke
 edited as a whole, and polls are not written. Creating is not idempotent, since each request adds a new
 object; updating is idempotent, since the same body leaves the same state; deleting has unknown idempotency,
 since GitHub answers a second delete of the same comment with an error. Deleting is offered only where the
-connection's `tools` list names `github.discussioncomments.delete`.
+connection's `tools` list names `github.discussion-comments.delete`.
 
 ```sh
-qatlas invoke github.discussioncategories.list --connection code
+qatlas invoke github.discussion-categories.list --connection code
 qatlas invoke github.discussions.list --connection code --arg category=DIC_kwDOExample --arg answered=false
 qatlas invoke github.discussions.get --connection code --arg number=12
-qatlas invoke github.discussioncomments.list --connection code --arg number=12 --arg limit=10 --arg include_replies=true
-qatlas invoke github.discussioncomments.create --connection code --arg number=12 --arg body="Thanks" --confirm
+qatlas invoke github.discussion-comments.list --connection code --arg number=12 --arg limit=10 --arg include_replies=true
+qatlas invoke github.discussion-comments.create --connection code --arg number=12 --arg body="Thanks" --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.discussioncategories.list` | read | safe | none | lists the discussion categories of a repository |
+| `github.discussion-categories.list` | read | safe | none | lists the discussion categories of a repository |
 | `github.discussions.list` | read | safe | none | lists one bounded batch of discussions, filtered by category, state, and answered status |
 | `github.discussions.get` | read | safe | none | reads one discussion by its number |
-| `github.discussioncomments.list` | read | safe | none | lists one bounded batch of the top-level comments of a discussion, with their replies on request |
+| `github.discussion-comments.list` | read | safe | none | lists one bounded batch of the top-level comments of a discussion, with their replies on request |
 | `github.discussions.create` | create | non-idempotent | required | starts a discussion in a category of the repository |
-| `github.discussioncomments.create` | create | non-idempotent | required | adds a comment or a reply |
-| `github.discussioncomments.update` | update | idempotent | required | replaces the body of a comment or reply |
-| `github.discussioncomments.delete` | delete | unknown | required | deletes a comment or reply; listed-only |
+| `github.discussion-comments.create` | create | non-idempotent | required | adds a comment or a reply |
+| `github.discussion-comments.update` | update | idempotent | required | replaces the body of a comment or reply |
+| `github.discussion-comments.delete` | delete | unknown | required | deletes a comment or reply; listed-only |
 
 The not-recommended setup profile `discussions` ticks the read tools,
-`github.discussions.create`, `github.discussioncomments.create`, and `github.discussioncomments.update`; the
+`github.discussions.create`, `github.discussion-comments.create`, and `github.discussion-comments.update`; the
 delete stays unticked, and the recommended profile `read` is unchanged. Reading discussions needs
 `public_repo` (public repositories) or `repo` on a classic token, or Discussions: read on a fine-grained
 token; creating, changing, and deleting need `public_repo` or `repo` on a classic token, or Discussions: read
@@ -971,7 +971,7 @@ and write on a fine-grained token.
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
 | the four read tools | `public_repo` or `repo` | Discussions: read |
-| `github.discussions.create`, `github.discussioncomments.create`, `.update`, `.delete` | `public_repo` or `repo` | Discussions: read and write |
+| `github.discussions.create`, `github.discussion-comments.create`, `.update`, `.delete` | `public_repo` or `repo` | Discussions: read and write |
 
 ## Notifications
 
@@ -991,10 +991,10 @@ UTC) or UTC time, or of one `repository`. Each entry carries `id` (the `thread_i
 (30 when omitted) and `cursor` is the opaque `next_cursor`; a cursor belongs to the repository and the
 filters that produced it, and another filter or repository refuses it as an invalid request. Titles come from
 other accounts and are untrusted data. `github.notifications.get` reads one thread by `thread_id`.
-`github.notifications.dismiss` marks a thread `read` or `done` (`state`); `github.threadsubscriptions.set`
+`github.notifications.dismiss` marks a thread `read` or `done` (`state`); `github.thread-subscriptions.set`
 subscribes to a thread (`action=watch`), mutes it (`ignore`), or removes the subscription (`delete`);
-`github.repositorysubscriptions.set` does the same for a repository, taking `repository` like the other
-repository tools. `github.notifications.markall` marks every thread of the account or of one `repository`
+`github.repository-subscriptions.set` does the same for a repository, taking `repository` like the other
+repository tools. `github.notifications.mark-all` marks every thread of the account or of one `repository`
 read, optionally only those not updated after `last_read_at`; GitHub answers 202 when it finishes in the
 background (`queued=true`) and 205 when it is done.
 
@@ -1002,15 +1002,15 @@ A notification belongs to the account, not to a repository, so the targets act a
 the thread first and refuses one whose repository the targets do not admit as `not-found`, without a change; a
 repository target admits its repository, an owner target the repositories of that owner. A connection whose
 targets name only projects has no repository to admit and is refused as an invalid request. The list and
-`markall` take an optional `repository`, which must lie inside the targets, as a repository target or through
+`mark-all` take an optional `repository`, which must lie inside the targets, as a repository target or through
 an owner target. Without `repository`, a connection whose targets name repositories needs the one repository
 they name exactly, otherwise it is an invalid request; a connection without targets lists the whole account; a
 connection whose targets name only owners lists the account narrowed to the repositories of those owners.
-GitHub cannot narrow "mark everything read" to an owner, so `markall` without `repository` is allowed only on
+GitHub cannot narrow "mark everything read" to an owner, so `mark-all` without `repository` is allowed only on
 a connection without any target. Every refusal happens before a credential is resolved, except the thread
 check, which needs the credential for its one read.
 
-Every change needs `--confirm`, is sent once, and is never retried. `github.notifications.markall` is offered
+Every change needs `--confirm`, is sent once, and is never retried. `github.notifications.mark-all` is offered
 only where the connection's `tools` list names it. GitHub documents no answer for repeating a mark as done, a
 mark-all, or a delete, so those changes declare their idempotency as unknown; a mark as read and setting a
 subscription to watch or ignore leave the same state when repeated. A repeated mark as done, or a thread
@@ -1021,9 +1021,9 @@ thread.
 qatlas invoke github.notifications.list --connection code --arg participating=true --arg limit=20
 qatlas invoke github.notifications.get --connection code --arg thread_id=1234567890
 qatlas invoke github.notifications.dismiss --connection code --arg thread_id=1234567890 --arg state=done --confirm
-qatlas invoke github.threadsubscriptions.set --connection code --arg thread_id=1234567890 --arg action=ignore --confirm
-qatlas invoke github.repositorysubscriptions.set --connection code --arg repository=octo-org/example --arg action=watch --confirm
-qatlas invoke github.notifications.markall --connection code --arg repository=octo-org/example --confirm
+qatlas invoke github.thread-subscriptions.set --connection code --arg thread_id=1234567890 --arg action=ignore --confirm
+qatlas invoke github.repository-subscriptions.set --connection code --arg repository=octo-org/example --arg action=watch --confirm
+qatlas invoke github.notifications.mark-all --connection code --arg repository=octo-org/example --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
@@ -1031,17 +1031,17 @@ qatlas invoke github.notifications.markall --connection code --arg repository=oc
 | `github.notifications.list` | read | safe | none | lists one bounded batch of notification threads with filters |
 | `github.notifications.get` | read | safe | none | reads one thread by its id |
 | `github.notifications.dismiss` | update | unknown | required | marks a thread read or done |
-| `github.notifications.markall` | update | unknown | required | marks all threads of the account or a repository read; listed-only |
-| `github.threadsubscriptions.set` | update | unknown | required | watches, ignores, or unsubscribes a thread |
-| `github.repositorysubscriptions.set` | update | unknown | required | watches, ignores, or unsubscribes a repository |
+| `github.notifications.mark-all` | update | unknown | required | marks all threads of the account or a repository read; listed-only |
+| `github.thread-subscriptions.set` | update | unknown | required | watches, ignores, or unsubscribes a thread |
+| `github.repository-subscriptions.set` | update | unknown | required | watches, ignores, or unsubscribes a repository |
 
 The not-recommended setup profile `notifications` ticks the list, the get, the dismiss, and both subscription
-tools; `github.notifications.markall` stays unticked, and the recommended profile `read` is unchanged.
+tools; `github.notifications.mark-all` stays unticked, and the recommended profile `read` is unchanged.
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| the thread tools, `github.notifications.list`, `.get`, `.dismiss`, `.markall`, and `github.threadsubscriptions.set` | `notifications` or `repo` | not supported, refused by Qatlas |
-| `github.repositorysubscriptions.set` | decided by GitHub per request | decided by GitHub per request |
+| the thread tools, `github.notifications.list`, `.get`, `.dismiss`, `.mark-all`, and `github.thread-subscriptions.set` | `notifications` or `repo` | not supported, refused by Qatlas |
+| `github.repository-subscriptions.set` | decided by GitHub per request | decided by GitHub per request |
 
 ## Gists
 
@@ -1108,10 +1108,10 @@ write access and lists no gist read route).
 ## Security alerts
 
 Six tools read the alerts of one repository; they change nothing, so an alert is neither closed, dismissed, nor
-assigned. `github.codescanningalerts.list` filters by `state` (open, closed, dismissed, fixed), `severity`
-(critical, high, medium, low, warning, note, error), `tool_name`, and `ref`; `github.dependabotalerts.list`
+assigned. `github.code-scanning-alerts.list` filters by `state` (open, closed, dismissed, fixed), `severity`
+(critical, high, medium, low, warning, note, error), `tool_name`, and `ref`; `github.dependabot-alerts.list`
 filters by `state` (open, fixed, dismissed, auto_dismissed) and `severity` (critical, high, medium, low);
-`github.secretscanningalerts.list` filters by `state` (open, resolved), `secret_type` (a comma-separated list of
+`github.secret-scanning-alerts.list` filters by `state` (open, resolved), `secret_type` (a comma-separated list of
 type names), and `resolution` (false_positive, wont_fix, revoked, pattern_edited, pattern_deleted,
 used_in_tests). Each list answers one bounded batch, newest first, with `limit`, `next_cursor`, and `has_more`;
 a cursor belongs to the repository and the filters of its first batch. Each `.get` takes an `alert_number` as the
@@ -1129,28 +1129,28 @@ with a fixed message that quotes nothing of it. An alert reports its type, state
 and the first location (kind, path, lines) only.
 
 ```sh
-qatlas invoke github.codescanningalerts.list --connection code --arg state=open --arg severity=high
-qatlas invoke github.dependabotalerts.get --connection code --arg alert_number=7
-qatlas invoke github.secretscanningalerts.list --connection code --arg state=open
+qatlas invoke github.code-scanning-alerts.list --connection code --arg state=open --arg severity=high
+qatlas invoke github.dependabot-alerts.get --connection code --arg alert_number=7
+qatlas invoke github.secret-scanning-alerts.list --connection code --arg state=open
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.codescanningalerts.list` | read | safe | none | lists code scanning alerts |
-| `github.codescanningalerts.get` | read | safe | none | reads one code scanning alert with the rule help |
-| `github.dependabotalerts.list` | read | safe | none | lists Dependabot alerts |
-| `github.dependabotalerts.get` | read | safe | none | reads one Dependabot alert with the advisory description |
-| `github.secretscanningalerts.list` | read | safe | none | lists secret scanning alerts without the secret |
-| `github.secretscanningalerts.get` | read | safe | none | reads one secret scanning alert without the secret |
+| `github.code-scanning-alerts.list` | read | safe | none | lists code scanning alerts |
+| `github.code-scanning-alerts.get` | read | safe | none | reads one code scanning alert with the rule help |
+| `github.dependabot-alerts.list` | read | safe | none | lists Dependabot alerts |
+| `github.dependabot-alerts.get` | read | safe | none | reads one Dependabot alert with the advisory description |
+| `github.secret-scanning-alerts.list` | read | safe | none | lists secret scanning alerts without the secret |
+| `github.secret-scanning-alerts.get` | read | safe | none | reads one secret scanning alert without the secret |
 
 The not-recommended setup profile `security` ticks these six and the tools of the next subsection; the
 recommended profile `read` is unchanged.
 
 | Tool | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.codescanningalerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Code scanning alerts: read |
-| `github.dependabotalerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Dependabot alerts: read |
-| `github.secretscanningalerts.*` | `repo` or `security_events` | Secret scanning alerts: read |
+| `github.code-scanning-alerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Code scanning alerts: read |
+| `github.dependabot-alerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Dependabot alerts: read |
+| `github.secret-scanning-alerts.*` | `repo` or `security_events` | Secret scanning alerts: read |
 
 GitHub answers `not-found` for a repository without the feature enabled or not visible to the token, and code
 scanning answers 403 without GitHub Advanced Security. Sources:
@@ -1165,18 +1165,18 @@ https://docs.github.com/en/rest/authentication/permissions-required-for-fine-gra
 Five more tools read advisories and code quality findings; they change nothing, so an advisory is neither created,
 edited, published, nor closed.
 
-- `github.globaladvisories.list` reads the GitHub Advisory Database, GitHub-wide. It filters by `ghsa_id`, `type`
+- `github.global-advisories.list` reads the GitHub Advisory Database, GitHub-wide. It filters by `ghsa_id`, `type`
   (reviewed, malware, unreviewed; GitHub answers reviewed when omitted), `cve_id`, `ecosystem` (actions, composer,
   erlang, go, maven, npm, nuget, other, pip, pub, rubygems, rust, swift), `severity` (unknown, low, medium, high,
   critical), `cwes` (a list of up to 20 numbers), `is_withdrawn` (true returns only withdrawn advisories; false adds
   no filter), `affects` (such as `package1,package2@1.0.0`), and `published`, `updated`, and `modified` (an ISO 8601
-  date or range). `github.globaladvisories.get` reads one advisory by `ghsa_id`, with its description and up to 20
+  date or range). `github.global-advisories.get` reads one advisory by `ghsa_id`, with its description and up to 20
   references.
-- `github.repositoryadvisories.list` reads the repository security advisories of one repository, filtered by
+- `github.repository-advisories.list` reads the repository security advisories of one repository, filtered by
   `state` (triage, draft, published, closed), `sort` (created, updated, published; created when omitted), and
-  `direction` (asc, desc; desc when omitted). `github.organizationadvisories.list` does the same for the
+  `direction` (asc, desc; desc when omitted). `github.organization-advisories.list` does the same for the
   repositories of an organization.
-- `github.codequalityfindings.get` reads one code quality finding by `finding_number`, with its rule, location,
+- `github.code-quality-findings.get` reads one code quality finding by `finding_number`, with its rule, location,
   and message. GitHub also lists findings; that list is not offered.
 
 The global tools name no repository: a connection without targets, or one whose targets name only owners, may use
@@ -1197,29 +1197,29 @@ says so. Draft and triage advisories hold non-public vulnerability details; they
 GitHub allows to see them.
 
 ```sh
-qatlas invoke github.globaladvisories.list --connection open --arg ecosystem=npm --arg severity=critical
-qatlas invoke github.repositoryadvisories.list --connection code --arg state=draft
-qatlas invoke github.organizationadvisories.list --connection org --arg owner=orgs/octo-org
-qatlas invoke github.codequalityfindings.get --connection code --arg finding_number=12
+qatlas invoke github.global-advisories.list --connection open --arg ecosystem=npm --arg severity=critical
+qatlas invoke github.repository-advisories.list --connection code --arg state=draft
+qatlas invoke github.organization-advisories.list --connection org --arg owner=orgs/octo-org
+qatlas invoke github.code-quality-findings.get --connection code --arg finding_number=12
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.globaladvisories.list` | read | safe | none | lists global security advisories |
-| `github.globaladvisories.get` | read | safe | none | reads one global security advisory |
-| `github.repositoryadvisories.list` | read | safe | none | lists the security advisories of a repository |
-| `github.organizationadvisories.list` | read | safe | none | lists the security advisories of an organization's repositories |
-| `github.codequalityfindings.get` | read | safe | none | reads one code quality finding |
+| `github.global-advisories.list` | read | safe | none | lists global security advisories |
+| `github.global-advisories.get` | read | safe | none | reads one global security advisory |
+| `github.repository-advisories.list` | read | safe | none | lists the security advisories of a repository |
+| `github.organization-advisories.list` | read | safe | none | lists the security advisories of an organization's repositories |
+| `github.code-quality-findings.get` | read | safe | none | reads one code quality finding |
 
 The not-recommended setup profile `security` ticks these five and the six alert tools, eleven in all; the
 recommended profile `read` is unchanged.
 
 | Tool | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.globaladvisories.*` | none | none |
-| `github.repositoryadvisories.list` | `repo` or `repository_advisories:read` for a private repository or an unpublished advisory | Repository security advisories: read |
-| `github.organizationadvisories.list` | `repo` or `repository_advisories:write`, and an organization owner or security manager | Repository security advisories: write |
-| `github.codequalityfindings.get` | `repo`; `public_repo` for a public repository | Code quality: read |
+| `github.global-advisories.*` | none | none |
+| `github.repository-advisories.list` | `repo` or `repository_advisories:read` for a private repository or an unpublished advisory | Repository security advisories: read |
+| `github.organization-advisories.list` | `repo` or `repository_advisories:write`, and an organization owner or security manager | Repository security advisories: write |
+| `github.code-quality-findings.get` | `repo`; `public_repo` for a public repository | Code quality: read |
 
 The organization list needs the write-level permission although it only reads; that is how GitHub documents it.
 GitHub answers the finding read with 403 when code quality is not enabled or the token may not read it, and the
@@ -1238,7 +1238,7 @@ or pull request `number` in that repository; a connection without a matching rep
 invalid request before a credential is resolved. Both are covered by a confirmation, and neither waits for what
 Copilot does afterwards.
 
-`github.copilotassignments.create` assigns the Copilot coding agent to one issue and keeps the other assignees. It
+`github.copilot-assignments.create` assigns the Copilot coding agent to one issue and keeps the other assignees. It
 first reads the issue and the actors the repository lists as assignable, all in the bound repository. `base_ref`
 names the branch the agent starts from (the default branch when absent) and `custom_instructions` adds up to
 10000 characters of instructions. `rationale` (at most 280 characters) and `confidence` (`LOW`, `MEDIUM`, `HIGH`)
@@ -1249,8 +1249,8 @@ Copilot is not among the assignable actors (no Copilot license with the coding a
 the repository) the call fails as `permission` with that reason and changes nothing; an issue that the repository
 does not hold is `not-found`. The tool is non-idempotent: a repeated call asks the agent again.
 
-`github.copilotreviews.request` requests Copilot as reviewer of one pull request and answers with the pull request
-as `github.pullrequests.get` reports it. It is idempotent: requesting again leaves Copilot requested. GitHub
+`github.copilot-reviews.request` requests Copilot as reviewer of one pull request and answers with the pull request
+as `github.pull-requests.get` reports it. It is idempotent: requesting again leaves Copilot requested. GitHub
 answers a missing write access with `permission`, and a request it rejects with an error that names the license or
 the repository setting as the likely reason.
 
@@ -1259,22 +1259,22 @@ Both cover the official tools `assign_copilot_to_issue`, `assign_copilot_to_issu
 operation. Unlike the official assignment tools they do not poll for the pull request the agent opens later.
 
 ```
-qatlas invoke github.copilotassignments.create --connection code --arg number=42 --arg base_ref=main --confirm
-qatlas invoke github.copilotreviews.request --connection code --arg number=7 --confirm
+qatlas invoke github.copilot-assignments.create --connection code --arg number=42 --arg base_ref=main --confirm
+qatlas invoke github.copilot-reviews.request --connection code --arg number=7 --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Notes |
 | --- | --- | --- | --- | --- |
-| `github.copilotassignments.create` | update | non-idempotent | required | assigns Copilot to an issue, optionally with intent |
-| `github.copilotreviews.request` | update | idempotent | required | requests a Copilot review of a pull request |
+| `github.copilot-assignments.create` | update | non-idempotent | required | assigns Copilot to an issue, optionally with intent |
+| `github.copilot-reviews.request` | update | idempotent | required | requests a Copilot review of a pull request |
 
 The not-recommended setup profile `copilot` ticks both tools; the recommended profile `read` is unchanged. Both need a
 user token, never a GitHub App installation token.
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.copilotassignments.create` | `repo` | Metadata: read; Actions, Contents, Issues, and Pull requests: read and write |
-| `github.copilotreviews.request` | `repo`, and write access to the repository | Pull requests: read and write, and write access to the repository |
+| `github.copilot-assignments.create` | `repo` | Metadata: read; Actions, Contents, Issues, and Pull requests: read and write |
+| `github.copilot-reviews.request` | `repo`, and write access to the repository | Pull requests: read and write, and write access to the repository |
 
 Sources: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api (user
 token only, the fine-grained permissions for the assignment, and the check of Copilot among the repository's
@@ -1299,38 +1299,38 @@ read on a fine-grained token, for a private one.
 
 ## Sub-issues
 
-`github.subissues.list` reads one bounded batch of the sub-issues of one issue in their priority order;
-`github.subissues.add` adds one and `github.subissues.reprioritize` moves one, both needing confirmation;
-`github.subissues.remove` detaches one and needs confirmation as well, but is not listed-only, because it only
+`github.sub-issues.list` reads one bounded batch of the sub-issues of one issue in their priority order;
+`github.sub-issues.add` adds one and `github.sub-issues.reprioritize` moves one, both needing confirmation;
+`github.sub-issues.remove` detaches one and needs confirmation as well, but is not listed-only, because it only
 removes the relationship between the two named issues and deletes neither. A sub-issue is named by its issue
 `number`, in the bound repository unless `sub_issue_repository` (as `OWNER/REPO`) names another one; that other
 repository must lie inside the connection's targets as well, checked before any credential is resolved, since
 GitHub allows a sub-issue relationship to cross repositories and organizations:
 
 ```sh
-qatlas invoke github.subissues.list --connection code --arg number=42
-echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.subissues.add --connection maintainer --confirm
+qatlas invoke github.sub-issues.list --connection code --arg number=42
+echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.sub-issues.add --connection maintainer --confirm
 echo '{"number":42,"sub_issue_number":44,"after_number":43}' |
-  qatlas invoke github.subissues.reprioritize --connection maintainer --confirm
-echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.subissues.remove --connection maintainer --confirm
+  qatlas invoke github.sub-issues.reprioritize --connection maintainer --confirm
+echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.sub-issues.remove --connection maintainer --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.subissues.list` | read | safe | none | lists one bounded batch of the sub-issues of one issue |
-| `github.subissues.add` | create | non-idempotent | required | adds one issue as a sub-issue of another |
-| `github.subissues.remove` | delete | unknown | required | detaches one sub-issue from its parent |
-| `github.subissues.reprioritize` | update | idempotent | required | moves a sub-issue just after or just before a sibling |
+| `github.sub-issues.list` | read | safe | none | lists one bounded batch of the sub-issues of one issue |
+| `github.sub-issues.add` | create | non-idempotent | required | adds one issue as a sub-issue of another |
+| `github.sub-issues.remove` | delete | unknown | required | detaches one sub-issue from its parent |
+| `github.sub-issues.reprioritize` | update | idempotent | required | moves a sub-issue just after or just before a sibling |
 
-`github.subissues.list` answers `sub_issues`, each with `number`, `repository` (present only when it differs
+`github.sub-issues.list` answers `sub_issues`, each with `number`, `repository` (present only when it differs
 from the parent's), `title`, `state`, and `url`, paged the same way [labels](#labels) are. When the connection's
 targets name any, a sub-issue whose repository they do not cover is left out of `sub_issues` and counted in
 `withheld` instead, so a title or a state of an out-of-scope issue is never reported; the bound repository's own
-sub-issues are always shown. Without targets, nothing is withheld. `github.subissues.add`,
+sub-issues are always shown. Without targets, nothing is withheld. `github.sub-issues.add`,
 `.remove`, and `.reprioritize` resolve the issue numbers they are given into the internal issue identifiers the
 REST routes need, in the same request budget as the change; `.add` and `.remove` answer `sub_issue` and, where
 GitHub reports it, `sub_issues_summary` (`total`, `completed`, `percent_completed`), and `.remove` also answers
-`removed`. `github.subissues.reprioritize` takes exactly one of `after_number` or `before_number`, looked up in
+`removed`. `github.sub-issues.reprioritize` takes exactly one of `after_number` or `before_number`, looked up in
 the same repository as `sub_issue_number`; this is narrower than GitHub's own cross-repository reordering, which
 Qatlas does not offer a way to name.
 
@@ -1346,9 +1346,9 @@ December 2024, per the GitHub changelog.
 
 ## Issue dependencies
 
-`github.issuedependencies.list` reads both directions of one issue's dependencies: the issues that block it
-and the issues it blocks. `github.issuedependencies.add` records that one issue is blocked by another and needs
-confirmation; `github.issuedependencies.remove` detaches one blocked-by relationship and needs confirmation as
+`github.issue-dependencies.list` reads both directions of one issue's dependencies: the issues that block it
+and the issues it blocks. `github.issue-dependencies.add` records that one issue is blocked by another and needs
+confirmation; `github.issue-dependencies.remove` detaches one blocked-by relationship and needs confirmation as
 well, but, like removing a sub-issue, only detaches the relationship and deletes neither issue, so it is not
 listed-only. GitHub exposes no route to add or remove a "blocking" entry directly; every change is made from
 the blocked issue's own blocked-by list, and the blocking direction is only ever read. The blocking issue may
@@ -1356,25 +1356,25 @@ live in another repository, named by `blocking_issue_repository` (as `OWNER/REPO
 connection's targets as well, checked before any credential is resolved:
 
 ```sh
-qatlas invoke github.issuedependencies.list --connection code --arg number=42
+qatlas invoke github.issue-dependencies.list --connection code --arg number=42
 echo '{"number":42,"blocking_issue_number":40}' |
-  qatlas invoke github.issuedependencies.add --connection maintainer --confirm
+  qatlas invoke github.issue-dependencies.add --connection maintainer --confirm
 echo '{"number":42,"blocking_issue_number":40}' |
-  qatlas invoke github.issuedependencies.remove --connection maintainer --confirm
+  qatlas invoke github.issue-dependencies.remove --connection maintainer --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.issuedependencies.list` | read | safe | none | lists the issues blocking one issue and the issues it blocks |
-| `github.issuedependencies.add` | create | non-idempotent | required | records that one issue is blocked by another |
-| `github.issuedependencies.remove` | delete | unknown | required | detaches one blocked-by relationship |
+| `github.issue-dependencies.list` | read | safe | none | lists the issues blocking one issue and the issues it blocks |
+| `github.issue-dependencies.add` | create | non-idempotent | required | records that one issue is blocked by another |
+| `github.issue-dependencies.remove` | delete | unknown | required | detaches one blocked-by relationship |
 
-`github.issuedependencies.list` answers `blocked_by` and `blocking`, each an array of issues shaped like
-`github.subissues.list`'s; both directions are paged together with the same page and page size, so a single
+`github.issue-dependencies.list` answers `blocked_by` and `blocking`, each an array of issues shaped like
+`github.sub-issues.list`'s; both directions are paged together with the same page and page size, so a single
 cursor advances both, which is narrower than paging each direction on its own. When the connection's targets
 name any, a dependency whose repository they do not cover is left out of both arrays and counted, across both
 directions, in `withheld` instead; the bound repository's own dependencies are always shown. Without targets,
-nothing is withheld. `github.issuedependencies.add`
+nothing is withheld. `github.issue-dependencies.add`
 and `.remove` resolve the blocking issue's number into its internal identifier the way the sub-issue tools do,
 and answer `blocker` and, for `.remove`, `removed`.
 
@@ -1390,26 +1390,26 @@ the GitHub changelog.
 
 ## Issue types
 
-`github.issuetypes.list` reads every issue type an organization declares: `id`, `name`, `description`, `color`,
+`github.issue-types.list` reads every issue type an organization declares: `id`, `name`, `description`, `color`,
 and `is_enabled`. GitHub scopes issue types to an organization as a whole, never to one repository or one user,
 so the tool takes an `owner` argument (as `orgs/LOGIN`) checked the same broad way `github.repositories.list`
 checks its own owner argument: an explicit owner target, a repository target of that organization, or a
 connection without targets allow the call; a connection whose targets name only a project, or only a different
 organization, refuses it as an invalid request before any credential is resolved. `github.issues.update` takes
-an optional `type` (a type name `github.issuetypes.list` reports, or `""` to remove the issue's current one)
+an optional `type` (a type name `github.issue-types.list` reports, or `""` to remove the issue's current one)
 alongside its existing arguments; a call that never names `type` behaves exactly as it did before this argument
 existed. GitHub silently drops a type change from a token without push access to the repository rather than
 refusing it, and reports the resulting type back as `issue_type` on every issue tool that reads or changes one:
 
 ```sh
-qatlas invoke github.issuetypes.list --connection code --arg owner=orgs/octo-org
+qatlas invoke github.issue-types.list --connection code --arg owner=orgs/octo-org
 echo '{"number":42,"type":"Bug"}' | qatlas invoke github.issues.update --connection maintainer --confirm
 echo '{"number":42,"type":""}' | qatlas invoke github.issues.update --connection maintainer --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.issuetypes.list` | read | safe | none | lists the issue types an organization declares |
+| `github.issue-types.list` | read | safe | none | lists the issue types an organization declares |
 
 Defining, enabling, or disabling an organization's issue types (`POST`/`PUT`/`DELETE
 /orgs/{org}/issue-types`) is organization administration, out of this provider's scope; it is not offered.
@@ -1431,34 +1431,34 @@ only the name.
 
 ## Issue fields
 
-`github.issuefields.list` reads one bounded batch of the organization issue fields of a repository, inherited
+`github.issue-fields.list` reads one bounded batch of the organization issue fields of a repository, inherited
 from its organization, or, with `organization` instead of `repository`, directly of an organization: text,
 number, date, single-select, and multi-select fields, each with `id`, `name`, `description`, `data_type`,
 `visibility`, and, for a select field, `options` (`id`, `name`, `description`, `color`). Exactly one of
 `repository` or `organization` is required, never both; a repository call is checked the way every other
-repository tool is, and the organization-wide call the same broad way `github.issuetypes.list` checks its own
-owner argument. `github.issuefields.set` writes one or more field values on one issue of a repository an
+repository tool is, and the organization-wide call the same broad way `github.issue-types.list` checks its own
+owner argument. `github.issue-fields.set` writes one or more field values on one issue of a repository an
 connection allows, each named by the `field_id` (and, for a select field, the option's own `id`)
-`github.issuefields.list` reports; GitHub applies every value of one call as a single mutation, so it either
+`github.issue-fields.list` reports; GitHub applies every value of one call as a single mutation, so it either
 applies as a whole or not at all:
 
 ```sh
-qatlas invoke github.issuefields.list --connection code --arg repository=octo-org/example
-qatlas invoke github.issuefields.list --connection code --arg organization=orgs/octo-org
+qatlas invoke github.issue-fields.list --connection code --arg repository=octo-org/example
+qatlas invoke github.issue-fields.list --connection code --arg organization=orgs/octo-org
 echo '{"number":42,"fields":[{"field_id":"IF_kwDOAxxxx","text_value":"Backend"},
   {"field_id":"IF_kwDOAyyyy","single_select_option_id":"IFO_kwDOAzzzz"}]}' |
-  qatlas invoke github.issuefields.set --connection maintainer --confirm
+  qatlas invoke github.issue-fields.set --connection maintainer --confirm
 ```
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.issuefields.list` | read | safe | none | lists the issue fields of a repository or an organization |
-| `github.issuefields.set` | update | idempotent | required | sets or clears one or more issue field values |
+| `github.issue-fields.list` | read | safe | none | lists the issue fields of a repository or an organization |
+| `github.issue-fields.set` | update | idempotent | required | sets or clears one or more issue field values |
 
-Each entry of `github.issuefields.set`'s own `fields` argument needs exactly one of `text_value`,
+Each entry of `github.issue-fields.set`'s own `fields` argument needs exactly one of `text_value`,
 `number_value`, `date_value` (`YYYY-MM-DD`), `single_select_option_id`, `multi_select_option_ids` (`[]` clears
 a multi-select field), or `delete: true` to remove the value; at most 20 entries per call.
-`github.issuefields.set` answers `url` (the issue's web address) and `updated` (the count of values sent, which
+`github.issue-fields.set` answers `url` (the issue's web address) and `updated` (the count of values sent, which
 GitHub applied as a whole). GitHub's `IssueFieldCreateOrUpdateInput` also carries `confidence`, `rationale`, and
 `suggest` properties the official `github/github-mcp-server` (MIT) exposes only behind its own
 `update_issue_suggestions` GraphQL feature-flag context, an agent-suggestion workflow of that server's own, not
@@ -1489,8 +1489,8 @@ behind the connection's token. The target is named by `kind` and a numeric `id`:
 | `kind` | `id` | Addresses |
 | --- | --- | --- |
 | `issue` | an issue or pull request number | an issue, or a pull request's own conversation as a whole, since a pull request conversation is an issue for GitHub's reaction routes |
-| `issue_comment` | the numeric `database_id` `github.comments.list`, `.create`, `github.pullrequestcomments.list`, and `.create` report | an issue comment or a pull request conversation comment alike |
-| `review_comment` | the `id` `github.pullrequestreviewcomments.list` and `.reply` report | one pull request line comment |
+| `issue_comment` | the numeric `database_id` `github.comments.list`, `.create`, `github.pull-request-comments.list`, and `.create` report | an issue comment or a pull request conversation comment alike |
+| `review_comment` | the `id` `github.pull-request-review-comments.list` and `.reply` report | one pull request line comment |
 
 `content` is one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, or `eyes`. Every `id` is
 addressed below the connection's bound repository, so an `id` of another repository, or one GitHub does not
@@ -1537,8 +1537,8 @@ confirmation in its own invoke request, is sent exactly once, and follows the ru
 | `github.projects.copy` | create | non-idempotent | copies `project` with its fields and views into a new project `title` of `owner`; `include_drafts: true` copies its draft issues as well |
 | `github.projects.link` | update | idempotent | links `project` to `repository`; a linked project stays linked once |
 | `github.projects.unlink` | update | idempotent | removes the link between `project` and `repository` |
-| `github.projecttemplates.mark` | update | idempotent | marks `project` of an organization as a template |
-| `github.projecttemplates.unmark` | update | idempotent | stops offering `project` as a template |
+| `github.project-templates.mark` | update | idempotent | marks `project` of an organization as a template |
+| `github.project-templates.unmark` | update | idempotent | stops offering `project` as a template |
 | `github.projects.delete` | delete | unknown | deletes `project` with its items, fields, and views; listed only |
 
 `closed: true` closes a project and `closed: false` reopens it; `public` switches its visibility, which an
@@ -1554,7 +1554,7 @@ before repeating one.
 A template is a project its organization offers when someone creates a project; `github.projects.copy` copies
 any allowed project, template or not. The template tools answer the project's state with `template`. GitHub
 marks only projects of an organization as templates: it refuses a user's project as unprocessable, so
-Qatlas refuses `github.projecttemplates.mark` for a `users/LOGIN/projects/NUMBER` project with
+Qatlas refuses `github.project-templates.mark` for a `users/LOGIN/projects/NUMBER` project with
 `invalid-request` before a secret is read. Unmarking a project that is no template, a user's project
 included, succeeds and changes nothing.
 
@@ -1598,14 +1598,14 @@ invoke request, is sent exactly once, and follows the rules under
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
-| `github.projectfields.list` | read | safe | lists every field with its type, options, and iterations |
-| `github.projectfields.create` | create | non-idempotent | creates one text, number, date, single-select, multi-select, or iteration field |
-| `github.projectfields.update` | update | idempotent | renames a field, or adds, renames, recolors, describes, or reorders its options; every value stays |
-| `github.projectfieldoptions.delete` | delete | unknown | removes named options; every item loses a removed option; listed only |
-| `github.projectiterations.replace` | delete | non-idempotent | changes the iteration settings and adds, changes, or removes iterations; every item loses its value of the field; listed only |
-| `github.projectfields.delete` | delete | unknown | deletes a field that is not built in, with its values; listed only |
+| `github.project-fields.list` | read | safe | lists every field with its type, options, and iterations |
+| `github.project-fields.create` | create | non-idempotent | creates one text, number, date, single-select, multi-select, or iteration field |
+| `github.project-fields.update` | update | idempotent | renames a field, or adds, renames, recolors, describes, or reorders its options; every value stays |
+| `github.project-field-options.delete` | delete | unknown | removes named options; every item loses a removed option; listed only |
+| `github.project-iterations.replace` | delete | non-idempotent | changes the iteration settings and adds, changes, or removes iterations; every item loses its value of the field; listed only |
+| `github.project-fields.delete` | delete | unknown | deletes a field that is not built in, with its values; listed only |
 
-`github.projectfields.list` answers `fields` in project order. Each field has `name`, `type` (`text`,
+`github.project-fields.list` answers `fields` in project order. Each field has `name`, `type` (`text`,
 `number`, `date`, `single_select`, `multi_select`, `iteration`, or the type of a built-in field such as
 `title`, `assignees`, `labels`, or `linked_pull_requests`), and `built_in`. A select field lists its
 `options` with `name`, `color`, and `description`; an iteration field has `iteration` with `duration` in
@@ -1615,18 +1615,18 @@ The `Status` field every project has is built in as well: GitHub neither deletes
 options are maintained like those of any single-select field. Names and descriptions are untrusted data.
 
 ```sh
-qatlas invoke github.projectfields.list --connection projects --arg project=orgs/octo-org/projects/7
+qatlas invoke github.project-fields.list --connection projects --arg project=orgs/octo-org/projects/7
 echo '{"project":"orgs/octo-org/projects/7","name":"Priority","type":"single_select",
   "options":[{"name":"P1","color":"red"},{"name":"P2","color":"yellow"},{"name":"P3"}]}' |
-  qatlas invoke github.projectfields.create --connection projects --confirm
+  qatlas invoke github.project-fields.create --connection projects --confirm
 echo '{"project":"orgs/octo-org/projects/7","name":"Sprint","type":"iteration","iteration":{"start_date":"2026-10-05",
   "duration":14,"iterations":[{"title":"Sprint 1","start_date":"2026-10-05"},{"title":"Sprint 2","start_date":"2026-10-19"}]}}' |
-  qatlas invoke github.projectfields.create --connection projects --confirm
+  qatlas invoke github.project-fields.create --connection projects --confirm
 echo '{"project":"orgs/octo-org/projects/7","field":"Status","options":[{"name":"Review","color":"purple"}],
-  "order":["Todo","In progress","Review","Done"]}' | qatlas invoke github.projectfields.update --connection projects --confirm
+  "order":["Todo","In progress","Review","Done"]}' | qatlas invoke github.project-fields.update --connection projects --confirm
 ```
 
-`github.projectfields.create` takes `name`, unique in the project, and `type`. A select field needs
+`github.project-fields.create` takes `name`, unique in the project, and `type`. A select field needs
 `options`, at most 50, each with `name` and optionally `color` (`gray`, `blue`, `green`, `yellow`, `orange`,
 `red`, `pink`, or `purple`; `gray` when omitted) and `description` (empty when omitted). An iteration field
 needs `iteration` with `start_date` (`YYYY-MM-DD`) and `duration` (1 to 365 days), and takes `iterations`,
@@ -1634,7 +1634,7 @@ each with `title`, `start_date`, and optionally `duration`, which defaults to th
 `iterations` the field starts empty. A name the project already holds is refused before the change; a
 repeated create is refused that way, so it never makes a second field of one name.
 
-`github.projectfields.update` addresses the field by `field` and changes `name`, `options`, or `order`.
+`github.project-fields.update` addresses the field by `field` and changes `name`, `options`, or `order`.
 An entry of `options` names an option: `new_name`, `color`, and `description` change an existing one, and a
 name the field lacks adds an option at the end. `order` names every option after these changes exactly once,
 in the new order. GitHub replaces the options of a field as a whole, so Qatlas sends every option the field
@@ -1644,16 +1644,16 @@ option left out of `options` stays as it is.
 The value-losing changes are separate tools with the effect `delete`, offered only by a connection whose
 `permissions` include `delete` and whose `tools` list names them:
 
-- `github.projectfieldoptions.delete` removes the named `options` of a select field. Every item that holds a
+- `github.project-field-options.delete` removes the named `options` of a select field. Every item that holds a
   removed option loses it; at least one option stays, and deleting the field removes the last one.
-- `github.projectiterations.replace` changes the iterations of an iteration field. `start_date` and
+- `github.project-iterations.replace` changes the iterations of an iteration field. `start_date` and
   `duration` change the settings; an entry of `iterations` names an iteration by `title` and changes its
   `new_title`, `start_date`, or `duration`, or adds it when the field lacks the title, which then needs
   `start_date`; `remove` names iterations to remove. Iterations left out stay, completed ones included.
   GitHub takes iterations without identifiers and recreates every iteration of the field with such a change,
   so every item loses its value of this field, whichever iterations the change names; set the values again
-  afterwards. Renaming an iteration field through `github.projectfields.update` keeps its values.
-- `github.projectfields.delete` deletes a field that is not built in, with its value on every item.
+  afterwards. Renaming an iteration field through `github.project-fields.update` keeps its values.
+- `github.project-fields.delete` deletes a field that is not built in, with its value on every item.
 
 A field, option, or iteration the project lacks, an option or iteration named twice, and an `order` that
 leaves an option out are refused before any change and name what the field holds. A repeated removal or
@@ -1667,8 +1667,8 @@ connections:
     credential: github-planner
     targets: [orgs/octo-org/projects/7]
     permissions: [read, create, update, delete]
-    tools: [github.projectfields.list, github.projectfields.create, github.projectfields.update,
-      github.projectfieldoptions.delete, github.projectiterations.replace, github.projectfields.delete]
+    tools: [github.project-fields.list, github.project-fields.create, github.project-fields.update,
+      github.project-field-options.delete, github.project-iterations.replace, github.project-fields.delete]
 ```
 
 The field tools need `project` on a classic token, or Projects read and write access of the organization on a
@@ -1685,22 +1685,22 @@ confirmation in its own invoke request, is sent exactly once, and follows the ru
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
-| `github.projectviews.list` | read | safe | lists every view with its layout, filter, visible fields, grouping, board columns, and sorting |
-| `github.projectviews.create` | create | non-idempotent | creates one `table`, `board`, or `roadmap` view with `name`, `fields`, and `filter` |
-| `github.projectviews.update` | update | idempotent | changes `name`, `layout`, `filter`, or `fields`; left-out settings stay |
-| `github.projectviews.delete` | delete | unknown | deletes one view; the items and fields stay; listed only |
+| `github.project-views.list` | read | safe | lists every view with its layout, filter, visible fields, grouping, board columns, and sorting |
+| `github.project-views.create` | create | non-idempotent | creates one `table`, `board`, or `roadmap` view with `name`, `fields`, and `filter` |
+| `github.project-views.update` | update | idempotent | changes `name`, `layout`, `filter`, or `fields`; left-out settings stay |
+| `github.project-views.delete` | delete | unknown | deletes one view; the items and fields stay; listed only |
 
-`github.projectviews.list` answers `views` in project order, at most 100. Each view has `number`, `name`,
+`github.project-views.list` answers `views` in project order, at most 100. Each view has `number`, `name`,
 `layout` (`table`, `board`, or `roadmap`), `filter` (empty without one), `fields` (the visible fields in
 the view's order, the title first), `group_by` and `column_by` (field names), and `sort_by` (entries with
 `field` and `direction`, `asc` or `desc`). Names and filters are untrusted data.
 
 ```sh
-qatlas invoke github.projectviews.list --connection projects --arg project=orgs/octo-org/projects/7
+qatlas invoke github.project-views.list --connection projects --arg project=orgs/octo-org/projects/7
 echo '{"project":"orgs/octo-org/projects/7","name":"Bugs","layout":"board","fields":["Assignees","Priority"],
-  "filter":"label:bug -status:Done"}' | qatlas invoke github.projectviews.create --connection projects --confirm
+  "filter":"label:bug -status:Done"}' | qatlas invoke github.project-views.create --connection projects --confirm
 echo '{"project":"orgs/octo-org/projects/7","view":2,"name":"Open work","fields":["Status","Sprint"]}' |
-  qatlas invoke github.projectviews.update --connection projects --confirm
+  qatlas invoke github.project-views.update --connection projects --confirm
 ```
 
 `fields` names every field the view shows, in the view's order. GitHub shows the title first in every
@@ -1714,14 +1714,14 @@ the only filter expression Qatlas takes from a caller, and it reaches GitHub as 
 query. GitHub judges the syntax and keeps a filter it cannot read as written. A filter holds at most 512
 characters, GitHub's own limit, and no control characters; `""` removes it.
 
-GitHub creates a view without a filter, so `github.projectviews.create` with a non-empty `filter` sends two
+GitHub creates a view without a filter, so `github.project-views.create` with a non-empty `filter` sends two
 changes: the create, and then the filter of the new view. Once the view exists, the answer reports it in
 `view` together with `complete`. When the filter could not be set, `complete` is false and `error` says why,
-including when the filter may have been set without a confirmation; set it with `github.projectviews.update`
+including when the filter may have been set without a confirmation; set it with `github.project-views.update`
 then, instead of creating the view again. A repeated create makes a second view.
 
 A view number the project lacks is refused before any change and names the project's view numbers, and an
-unknown field names the project's fields. `github.projectviews.delete` needs `delete` in the connection's
+unknown field names the project's fields. `github.project-views.delete` needs `delete` in the connection's
 `permissions` and its name in the connection's `tools`. GitHub keeps the last view of a project, so Qatlas
 refuses to delete it. A repeated delete is refused once the number is gone; its idempotency stays `unknown`,
 because a delete addresses the view by number.
@@ -1743,21 +1743,21 @@ invoke request, is sent exactly once, and follows the rules under
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
-| `github.projectstatus.list` | read | safe | lists the status updates, newest first, in batches |
-| `github.projectstatus.create` | create | non-idempotent | posts one status update with `status`, `start_date`, `target_date`, and `body` |
-| `github.projectstatus.update` | update | idempotent | changes `status`, `start_date`, `target_date`, or `body`; left-out settings stay |
-| `github.projectstatus.delete` | delete | idempotent | deletes one status update; listed only |
+| `github.project-status.list` | read | safe | lists the status updates, newest first, in batches |
+| `github.project-status.create` | create | non-idempotent | posts one status update with `status`, `start_date`, `target_date`, and `body` |
+| `github.project-status.update` | update | idempotent | changes `status`, `start_date`, `target_date`, or `body`; left-out settings stay |
+| `github.project-status.delete` | delete | idempotent | deletes one status update; listed only |
 
-`github.projectstatus.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
+`github.project-status.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
 Each status update has `id`, `status` (`inactive`, `on_track`, `at_risk`, `off_track`, `complete`, or empty
 without one), `start_date` and `target_date` (`YYYY-MM-DD` or empty), `body`, `author`, `created_at`, and
 `updated_at`. Bodies are untrusted data.
 
 ```sh
 echo '{"project":"orgs/octo-org/projects/7","status":"at_risk","target_date":"2026-12-18",
-  "body":"The migration slips by one sprint."}' | qatlas invoke github.projectstatus.create --connection projects --confirm
+  "body":"The migration slips by one sprint."}' | qatlas invoke github.project-status.create --connection projects --confirm
 echo '{"project":"orgs/octo-org/projects/7","status_update_id":"PVTSU_...","status":"on_track","target_date":""}' |
-  qatlas invoke github.projectstatus.update --connection projects --confirm
+  qatlas invoke github.project-status.update --connection projects --confirm
 ```
 
 A create needs at least one setting; GitHub posts a status update without a status or dates as well. In an
@@ -1775,13 +1775,13 @@ change needs confirmation in its own invoke request, is sent exactly once, and f
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
-| `github.projectteams.list` | read | safe | lists the teams the project is linked to, in name order, in batches |
-| `github.projectcollaborators.update` | update | idempotent | grants teams and members of the owning organization a role, changes it, or removes the direct access of any user or team; listed only |
-| `github.projects.linkteam` | update | idempotent | links a project of an organization to one of its teams, which GitHub grants read access; listed only |
-| `github.projects.unlinkteam` | update | idempotent | removes that link and the read access it granted; listed only |
+| `github.project-teams.list` | read | safe | lists the teams the project is linked to, in name order, in batches |
+| `github.project-collaborators.update` | update | idempotent | grants teams and members of the owning organization a role, changes it, or removes the direct access of any user or team; listed only |
+| `github.projects.link-team` | update | idempotent | links a project of an organization to one of its teams, which GitHub grants read access; listed only |
+| `github.projects.unlink-team` | update | idempotent | removes that link and the read access it granted; listed only |
 
-`github.projectteams.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
-Each entry has `team`, the slug `github.projects.linkteam` takes, and `name`, which is untrusted data. A
+`github.project-teams.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
+Each entry has `team`, the slug `github.projects.link-team` takes, and `name`, which is untrusted data. A
 project of a user is linked to no team and lists none. GitHub shows teams only to a token that may read the
 organizations, even for a project of a user: without `read:org` on a classic token, or Members read access on a
 fine-grained one, the list ends with `permission`, and the message names that scope.
@@ -1800,13 +1800,13 @@ project's organization only, so a team of another organization can never be name
 
 ```sh
 echo '{"project":"orgs/octo-org/projects/7","collaborators":[{"team":"design","role":"writer"},
-  {"user":"octocat","role":"none"}]}' | qatlas invoke github.projectcollaborators.update --connection project-access --confirm
+  {"user":"octocat","role":"none"}]}' | qatlas invoke github.project-collaborators.update --connection project-access --confirm
 echo '{"project":"orgs/octo-org/projects/7","team":"design"}' |
-  qatlas invoke github.projects.linkteam --connection project-access --confirm
+  qatlas invoke github.projects.link-team --connection project-access --confirm
 ```
 
 Teams belong to an organization, so Qatlas refuses a team for a `users/LOGIN/projects/NUMBER` project, in
-`github.projectcollaborators.update` and in the team links, with `invalid-request` before a secret is read.
+`github.project-collaborators.update` and in the team links, with `invalid-request` before a secret is read.
 GitHub's API reads neither the collaborators of a project nor their roles, so there is no tool that lists them;
 check them in GitHub itself. Changing collaborators needs the rights of a project administrator and `project`
 on a classic token, or Projects read and write access of the organization on a fine-grained token; resolving a
@@ -1822,14 +1822,14 @@ in one query before the change is sent.
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
-| `github.projectworkflows.list` | read | safe | lists every workflow with `number`, `name`, and `enabled`, in number order |
-| `github.projectworkflows.delete` | delete | unknown | deletes one workflow; listed only |
+| `github.project-workflows.list` | read | safe | lists every workflow with `number`, `name`, and `enabled`, in number order |
+| `github.project-workflows.delete` | delete | unknown | deletes one workflow; listed only |
 
 A new project starts with GitHub's default workflows. GitHub's API neither creates, enables, disables, nor
 configures a workflow, and a deleted workflow cannot be created again through it: change them in GitHub
 itself. A workflow number the project lacks is refused before any change and names the project's workflow
 numbers; a repeated delete ends that way. Its idempotency stays `unknown`, because a delete addresses the
-workflow by number. `github.projectworkflows.delete` needs `delete` in the connection's `permissions` and its
+workflow by number. `github.project-workflows.delete` needs `delete` in the connection's `permissions` and its
 name in the connection's `tools`, and the tools need the same token as the [status updates](#project-status-updates).
 
 ```yaml
@@ -1839,10 +1839,10 @@ connections:
     credential: github-planner
     targets: [orgs/octo-org/projects/7]
     permissions: [read, create, update, delete]
-    tools: [github.projectstatus.list, github.projectstatus.delete, github.projectteams.list,
-      github.projectcollaborators.update,
-      github.projects.linkteam, github.projects.unlinkteam, github.projectworkflows.list,
-      github.projectworkflows.delete]
+    tools: [github.project-status.list, github.project-status.delete, github.project-teams.list,
+      github.project-collaborators.update,
+      github.projects.link-team, github.projects.unlink-team, github.project-workflows.list,
+      github.project-workflows.delete]
 ```
 
 ## Project-first use
@@ -1850,12 +1850,12 @@ connections:
 When a repository has an authoritative project, work selection starts there:
 
 ```sh
-qatlas invoke github.projectitems.list --connection planning
-echo '{"status":["In progress"],"type":"issue"}' | qatlas invoke github.projectitems.list --connection planning
-qatlas invoke github.projectitems.get --connection planning --arg item_id=PVTI_...
+qatlas invoke github.project-items.list --connection planning
+echo '{"status":["In progress"],"type":"issue"}' | qatlas invoke github.project-items.list --connection planning
+qatlas invoke github.project-items.get --connection planning --arg item_id=PVTI_...
 ```
 
-`github.projectitems.list` (contract version 2) returns compact items: identifier, type, title, number,
+`github.project-items.list` (contract version 2) returns compact items: identifier, type, title, number,
 repository, state, Status, the other single-select, multi-select, text, number, date, and iteration values by
 field name, a multi-select value as the list of its option names, assignees, and labels, but no URL, which
 repository and number give. It never returns bodies or comments. Without `status` and `status_not` it lists at
@@ -1863,9 +1863,9 @@ most 30 items whose Status is not `Done`; `status_not: []` lists every status. T
 `type` (`issue`, `pull_request`, `draft_issue`), `repository` (`owner/name`), `assignee`, and `labels` (any of)
 become quoted terms of the project filter syntax applied by GitHub; Qatlas verifies each returned item against
 them. A `status` value must be an option of the project's Status field. GitHub indexes this list with a delay, so
-an item added a moment ago can be missing for a few seconds; `github.projectitems.get` reads it by `item_id`.
+an item added a moment ago can be missing for a few seconds; `github.project-items.get` reads it by `item_id`.
 
-`github.projectitems.get` reads one item of the chosen project with its fields, its URL, and, for an issue or
+`github.project-items.get` reads one item of the chosen project with its fields, its URL, and, for an issue or
 a draft issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
 
 `github.issues.list` (contract version 2) and `github.issues.get` read the issues of the chosen repository:
@@ -1891,16 +1891,16 @@ read and before GitHub is contacted. The changes of projects themselves are list
 | `github.comments.create` | create | non-idempotent | writes exactly one comment on one issue |
 | `github.comments.update` | update | idempotent | replaces the body of one comment, by its `comment_id` |
 | `github.comments.delete` | delete | unknown | deletes one comment permanently, by its `comment_id`; offered only where a connection's `tools` list names it |
-| `github.projectitems.update` | update | idempotent | sets or clears field values of one item |
-| `github.projectitems.add` | create | idempotent | adds an existing issue of a named repository, then sets fields |
-| `github.projectitems.archive` | update | idempotent | archives one item; GitHub keeps it restorable |
-| `github.projectitems.unarchive` | update | idempotent | restores one archived item |
-| `github.projectitems.move` | update | idempotent | places one item after `after_id`, or first without it |
-| `github.projectitems.delete` | delete | idempotent | removes one item from the project; an issue or pull request stays, a draft is deleted; listed only |
-| `github.projectdrafts.create` | create | non-idempotent | adds one draft issue, then sets fields |
-| `github.projectdrafts.update` | update | idempotent | replaces the title, body, or assignees of a draft; left-out fields stay |
-| `github.projectdrafts.convert` | create | idempotent | turns a draft into an issue of a named repository; the item keeps its identifier, place, and fields |
-| `github.projectissues.create` | create | non-idempotent | opens an issue in a named repository, adds it, then sets fields |
+| `github.project-items.update` | update | idempotent | sets or clears field values of one item |
+| `github.project-items.add` | create | idempotent | adds an existing issue of a named repository, then sets fields |
+| `github.project-items.archive` | update | idempotent | archives one item; GitHub keeps it restorable |
+| `github.project-items.unarchive` | update | idempotent | restores one archived item |
+| `github.project-items.move` | update | idempotent | places one item after `after_id`, or first without it |
+| `github.project-items.delete` | delete | idempotent | removes one item from the project; an issue or pull request stays, a draft is deleted; listed only |
+| `github.project-drafts.create` | create | non-idempotent | adds one draft issue, then sets fields |
+| `github.project-drafts.update` | update | idempotent | replaces the title, body, or assignees of a draft; left-out fields stay |
+| `github.project-drafts.convert` | create | idempotent | turns a draft into an issue of a named repository; the item keeps its identifier, place, and fields |
+| `github.project-issues.create` | create | non-idempotent | opens an issue in a named repository, adds it, then sets fields |
 
 Issues and comments are written through REST. `labels` and `assignees` replace the whole set; `[]` removes
 every entry. GitHub creates a label the repository does not have yet, so a misspelled name adds a new label;
@@ -1912,7 +1912,7 @@ request as `invalid-request` and name the number and the repository, with a clas
 alike; a change is never sent. A fine-grained token without access to pull requests is refused by GitHub on
 such a number; only then Qatlas looks the number up once, and a refusal that names no pull request stays
 `permission`. A pull request's own conversation comments are read and written by
-`github.pullrequestcomments.list` and `.create`, described under
+`github.pull-request-comments.list` and `.create`, described under
 [Pull request reviews and comments](#pull-request-reviews-and-comments); the mirror image holds there, an
 issue number given to either is refused as `invalid-request`.
 
@@ -1935,9 +1935,9 @@ echo '{"number":42,"milestone":0}' | qatlas invoke github.issues.update --connec
 the numeric identifier GitHub reports in a comment's URL after `#issuecomment-`, not the `id`
 `github.comments.list` and `github.comments.create` answer, which is a GraphQL identifier the issue comment
 REST route does not accept. Both tools also report this numeric identifier as `database_id`, alongside `id`,
-which `github.pullrequestcomments.list` and `.create` report as well, so it never needs a separate lookup; the
+which `github.pull-request-comments.list` and `.create` report as well, so it never needs a separate lookup; the
 reaction tools under [Reactions](#reactions) take the same identifier for kind `issue_comment`.
-`github.pullrequestreviewcomments.list` and `.reply` already report the numeric identifier a line comment
+`github.pull-request-review-comments.list` and `.reply` already report the numeric identifier a line comment
 needs as `id`, since GitHub gives that route no GraphQL identifier of its own. Both comment tools read the
 comment first: its route already scopes it to the connection's
 bound repository, so a comment of another repository answers `not-found`, and the issue it belongs to is read
@@ -1962,37 +1962,37 @@ At most 20 values are accepted per request. The fields a project holds and their
 
 ```sh
 echo '{"item_id":"PVTI_...","fields":{"Status":"In progress","Estimate":3,"Areas":["API","Docs"]}}' |
-  qatlas invoke github.projectitems.update --connection roadmap --confirm
+  qatlas invoke github.project-items.update --connection roadmap --confirm
 echo '{"repository":"octo-org/example","title":"Crash on start","fields":{"Status":"Todo"}}' |
-  qatlas invoke github.projectissues.create --connection roadmap --confirm
+  qatlas invoke github.project-issues.create --connection roadmap --confirm
 ```
 
 ### Items and drafts
 
-The item tools address an item by the `item_id` of `github.projectitems.list`. Each resolves the project and
+The item tools address an item by the `item_id` of `github.project-items.list`. Each resolves the project and
 every item it names in one query and refuses an item of another project, or one GitHub does not show, as
-`not-found` before any change; that holds for `after_id` of `github.projectitems.move` as well.
-`github.projectitems.move` sets the project order, which views without a sort show: it places the item
-directly after `after_id`, or first when `after_id` is left out. `github.projectitems.delete` removes the item
+`not-found` before any change; that holds for `after_id` of `github.project-items.move` as well.
+`github.project-items.move` sets the project order, which views without a sort show: it places the item
+directly after `after_id`, or first when `after_id` is left out. `github.project-items.delete` removes the item
 and its field values; the issue or pull request stays in its repository, while a draft issue exists only as
 its item and is deleted with it. A repeated delete finds no item and is refused, and an issue added again
-gets a new item, so a repetition never removes anything else. `github.projectitems.archive` reads whether
+gets a new item, so a repetition never removes anything else. `github.project-items.archive` reads whether
 the item is archived with the project; an archived item is answered with `archived: true` without a change,
 so a repeated archive succeeds like the first one.
 
-`github.projectdrafts.update` and `github.projectdrafts.convert` accept only the item of a draft issue and
+`github.project-drafts.update` and `github.project-drafts.convert` accept only the item of a draft issue and
 refuse an issue or pull request as `invalid-request`. `assignees` names logins and replaces every assignee of
 the draft; `[]` removes them all, and a login GitHub does not know is `not-found`. `body: ""` empties the
-body. `github.projectdrafts.convert` creates the issue in `repository`, which the targets must allow beside
+body. `github.project-drafts.convert` creates the issue in `repository`, which the targets must allow beside
 the project, and answers with its number and URL. The item keeps its identifier, its place, and its field
 values, so a repeated conversion finds no draft and is refused without opening a second issue. The token
 needs write access to the issues of that repository besides the project.
 
 ```sh
 echo '{"item_id":"PVTI_...","after_id":"PVTI_..."}' |
-  qatlas invoke github.projectitems.move --connection roadmap --confirm
+  qatlas invoke github.project-items.move --connection roadmap --confirm
 echo '{"item_id":"PVTI_...","repository":"octo-org/example"}' |
-  qatlas invoke github.projectdrafts.convert --connection roadmap --confirm
+  qatlas invoke github.project-drafts.convert --connection roadmap --confirm
 ```
 
 ### Batches and partial results
@@ -2002,12 +2002,12 @@ concerns in one query, and resolves every field value before the first change is
 option, or iteration, a value of the wrong type, or an item of another project is refused without any
 change. The values are then written in field-name order in serial GraphQL requests of at most 10 aliased
 mutations each. Adding an item and setting its fields are separate requests, because GitHub does not allow
-both in one; `github.projectissues.create` creates the issue, adds it, and sets its fields in three steps.
+both in one; `github.project-issues.create` creates the issue, adds it, and sets its fields in three steps.
 
 The answer lists every field with its `result`: `updated`, `failed`, `unknown` when the value may have been
 written without a confirmation, or `not_sent` when an earlier failure stopped the request. A failure ends the
 request after its batch. `complete` is true only when every step succeeded; otherwise `error` says what
-stopped it. `github.projectitems.update` fails as a whole only when no value was or may have been written.
+stopped it. `github.project-items.update` fails as a whole only when no value was or may have been written.
 Once an issue, a draft, or an item exists, the answer always reports it, including an issue that was created
 but could not be added to the project, so a caller never creates it a second time to learn the outcome.
 
@@ -2043,9 +2043,9 @@ caller pages can move an older run onto the next batch, where it appears again; 
 GitHub answers at most 1000 runs of a run list filtered by `status`, `branch`, `event`, `actor`, or time;
 `has_more` turns false there, and a narrower filter reaches older runs.
 
-`github.pullrequests.list`, `github.pullrequestfiles.list`, and `github.pullrequestcommits.list` page by
+`github.pull-requests.list`, `github.pull-request-files.list`, and `github.pull-request-commits.list` page by
 number as well, but GitHub answers these plain array routes without a total count, so `has_more` follows
-whether GitHub's `Link` response header names a following page instead. `github.pullrequestchecks.list`
+whether GitHub's `Link` response header names a following page instead. `github.pull-request-checks.list`
 answers no cursor at all: it reads up to 100 check runs and 100 legacy statuses at the head commit in one
 call and reports `truncated` when GitHub held more of either.
 
@@ -2060,18 +2060,18 @@ or a free REST path.
 | --- | --- | --- | --- | --- |
 | `github.workflows.list` | read | safe | none | lists workflows: identifier, name, file path, state |
 | `github.workflows.get` | read | safe | none | reads one workflow by identifier or file name such as `ci.yml` |
-| `github.workflowruns.list` | read | safe | none | lists compact runs, newest first, with structured filters |
-| `github.workflowruns.get` | read | safe | none | reads one run |
-| `github.workflowjobs.list` | read | safe | none | lists the compact jobs of one run, without steps |
-| `github.workflowjobs.get` | read | safe | none | reads one job with its compact steps |
-| `github.workflowjobs.log` | read | safe | none | reads the last lines of one job log within a hard size limit |
-| `github.workflowartifacts.list` | read | safe | none | lists the artifact metadata of one run |
-| `github.workflowruns.usage` | read | safe | none | reads the billable time of one run for each runner operating system |
+| `github.workflow-runs.list` | read | safe | none | lists compact runs, newest first, with structured filters |
+| `github.workflow-runs.get` | read | safe | none | reads one run |
+| `github.workflow-jobs.list` | read | safe | none | lists the compact jobs of one run, without steps |
+| `github.workflow-jobs.get` | read | safe | none | reads one job with its compact steps |
+| `github.workflow-jobs.log` | read | safe | none | reads the last lines of one job log within a hard size limit |
+| `github.workflow-artifacts.list` | read | safe | none | lists the artifact metadata of one run |
+| `github.workflow-runs.usage` | read | safe | none | reads the billable time of one run for each runner operating system |
 | `github.workflows.dispatch` | execute | non-idempotent | required | starts one `workflow_dispatch` run on a branch or tag |
-| `github.workflowruns.rerun` | execute | non-idempotent | required | re-runs every job of a completed run |
-| `github.workflowruns.rerunfailed` | execute | non-idempotent | required | re-runs the failed jobs of a completed run and their dependents |
-| `github.workflowruns.cancel` | execute | idempotent | required | asks GitHub to cancel a run; a completed run is reported with its state |
-| `github.workflowrunlogs.delete` | delete | idempotent | required | deletes all logs of one run; listed-only, see [Deleting run logs](#deleting-run-logs) |
+| `github.workflow-runs.rerun` | execute | non-idempotent | required | re-runs every job of a completed run |
+| `github.workflow-runs.rerun-failed` | execute | non-idempotent | required | re-runs the failed jobs of a completed run and their dependents |
+| `github.workflow-runs.cancel` | execute | idempotent | required | asks GitHub to cancel a run; a completed run is reported with its state |
+| `github.workflow-run-logs.delete` | delete | idempotent | required | deletes all logs of one run; listed-only, see [Deleting run logs](#deleting-run-logs) |
 
 No observer or operator tool changes a workflow file or a setting; that is the listed-only group under
 [workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). No tool
@@ -2087,7 +2087,7 @@ a secret is read. Planning permissions (`create`, `update`) never allow an execu
 
 The terminal editor offers two setup profiles that are never preselected. `actions-observer` ticks `[read]`
 and the nine observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
-operator tools. No profile ticks `github.workflowrunlogs.delete`. The recommended profile `read` stays without Actions tools. A connection without a
+operator tools. No profile ticks `github.workflow-run-logs.delete`. The recommended profile `read` stays without Actions tools. A connection without a
 `tools` list offers every read, the observer tools included, but never a listed-only tool; give it a `tools`
 list to narrow that.
 
@@ -2098,28 +2098,28 @@ connections:
     credential: github-reader
     target: repos/octo-org/example
     permissions: [read]
-    tools: [github.workflows.list, github.workflows.get, github.workflowruns.list, github.workflowruns.get,
-      github.workflowjobs.list, github.workflowjobs.get, github.workflowjobs.log, github.workflowartifacts.list,
-      github.workflowruns.usage]
+    tools: [github.workflows.list, github.workflows.get, github.workflow-runs.list, github.workflow-runs.get,
+      github.workflow-jobs.list, github.workflow-jobs.get, github.workflow-jobs.log, github.workflow-artifacts.list,
+      github.workflow-runs.usage]
   ci-operator:
     service: github
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, execute]
-    tools: [github.workflowruns.list, github.workflowruns.get, github.workflowjobs.list,
-      github.workflowjobs.log, github.workflows.dispatch, github.workflowruns.rerunfailed,
-      github.workflowruns.cancel]
+    tools: [github.workflow-runs.list, github.workflow-runs.get, github.workflow-jobs.list,
+      github.workflow-jobs.log, github.workflows.dispatch, github.workflow-runs.rerun-failed,
+      github.workflow-runs.cancel]
 ```
 
 ### Diagnosing a run
 
 ```sh
-echo '{"status":"failure","branch":"main","limit":5}' | qatlas invoke github.workflowruns.list --connection ci-observer
-qatlas invoke github.workflowjobs.list --connection ci-observer --arg run_id=30433642
-qatlas invoke github.workflowjobs.log --connection ci-observer --arg job_id=399444496 --arg lines=40
+echo '{"status":"failure","branch":"main","limit":5}' | qatlas invoke github.workflow-runs.list --connection ci-observer
+qatlas invoke github.workflow-jobs.list --connection ci-observer --arg run_id=30433642
+qatlas invoke github.workflow-jobs.log --connection ci-observer --arg job_id=399444496 --arg lines=40
 ```
 
-`github.workflowruns.list` (contract version 2) filters by `workflow` (identifier or file name), `status` (a
+`github.workflow-runs.list` (contract version 2) filters by `workflow` (identifier or file name), `status` (a
 status or a conclusion: `completed`, `action_required`, `cancelled`, `failure`, `neutral`, `skipped`, `stale`,
 `success`, `timed_out`, `in_progress`, `queued`, `requested`, `waiting`, `pending`), `branch`, `event`
 (such as `push` or `workflow_dispatch`), `actor` (a login, `[bot]` allowed), and `created_from` /
@@ -2127,15 +2127,15 @@ status or a conclusion: `completed`, `action_required`, `cancelled`, `failure`, 
 repository once at the result level and gives each run its identifier, workflow name and identifier, title,
 run number, attempt, event, status, conclusion, branch, commit, and actor, and times; pull requests, the
 per-run repository, the commit message, and the URL are left out, the URL because it is derivable from the
-repository and the identifier. The title is untrusted data. `github.workflowruns.get` reads one run,
-including its URL. `github.workflowjobs.list` (contract version 2) takes `filter`: `latest` (default) for the
+repository and the identifier. The title is untrusted data. `github.workflow-runs.get` reads one run,
+including its URL. `github.workflow-jobs.list` (contract version 2) takes `filter`: `latest` (default) for the
 latest attempt or `all` for every attempt, names the repository once at the result level the same way, and
-leaves the URL out of each job; `github.workflowjobs.get` reads one job with its compact steps and its URL.
+leaves the URL out of each job; `github.workflow-jobs.get` reads one job with its compact steps and its URL.
 
 ### Logs and artifacts
 
 A job log may carry anything a workflow printed and is treated as sensitive, untrusted data. Only
-`github.workflowjobs.log` reads it; no other answer embeds a log. The tool returns the last `lines` lines (1
+`github.workflow-jobs.log` reads it; no other answer embeds a log. The tool returns the last `lines` lines (1
 to 500, default 50) of at most the last `max_bytes` bytes (1024 to 65536, default 8192) and `truncated` when
 the log holds more. Invalid UTF-8, terminal escape sequences, and control characters other than tab and line
 feed are removed, so no binary content reaches the answer. The log passes through memory into the answer
@@ -2152,7 +2152,7 @@ GitHub serves as a zip archive as well, are read per job instead.
 
 ### Billable time
 
-`github.workflowruns.usage` takes `run_id` and reads the billable time of that run in the chosen repository:
+`github.workflow-runs.usage` takes `run_id` and reads the billable time of that run in the chosen repository:
 `run_duration_ms` and, for each GitHub-hosted runner operating system GitHub reports (`UBUNTU`, `MACOS`,
 `WINDOWS`), `total_ms`, `jobs`, and `job_runs` with `job_id` and `duration_ms`. Re-runs are included; the
 macOS and Windows multiplier is not applied and nothing is rounded to whole minutes. Billable time only
@@ -2165,7 +2165,7 @@ offered: a signed link acts like a short-lived credential.
 
 ### Deleting run logs
 
-`github.workflowrunlogs.delete` takes `run_id`, deletes all logs of that run in the chosen repository, and
+`github.workflow-run-logs.delete` takes `run_id`, deletes all logs of that run in the chosen repository, and
 cannot be undone. It is listed-only: a connection offers it only while its `tools` list names it, and it needs
 `delete` in `permissions` and confirmation (`--confirm`). No profile selects it. Qatlas reads the run first,
 so a missing run is answered not found. It answers `run_id`, `deleted`, and `already_deleted`. GitHub
@@ -2180,7 +2180,7 @@ one, and confirmation in its own invoke request (`--confirm`, or `confirm: true`
 permission or confirmation ends the request before a secret is read and before GitHub is contacted. An
 execution is sent exactly once; an unclear outcome (a timeout, a dropped connection, a server error) says
 that the execution may have happened, is never repeated by Qatlas, and must be checked with
-`github.workflowruns.list` or `github.workflowruns.get` before a repetition. After each execution the next
+`github.workflow-runs.list` or `github.workflow-runs.get` before a repetition. After each execution the next
 request of the same token waits one second.
 
 `github.workflows.dispatch` takes `workflow`, `ref` (a branch or tag), and `inputs`, a flat map of input
@@ -2217,12 +2217,12 @@ claims what the configured token holds.
 | observer tools | `repo` for a private repository; a public repository needs no scope | Actions: read |
 | `github.workflows.dispatch` | `repo` | Actions: read and write, and Contents: read for the workflow file |
 | re-runs and cancel | `repo` | Actions: read and write |
-| `github.workflowruns.usage` | `repo` for a private repository | Actions: read |
-| `github.workflowrunlogs.delete` | `repo` | Actions: write |
+| `github.workflow-runs.usage` | `repo` for a private repository | Actions: read |
+| `github.workflow-run-logs.delete` | `repo` | Actions: write |
 
 A repository or organization policy may forbid an execution although the token would allow it. A classic
 token needs the `workflow` scope only to change workflow files, which only the listed-only
-`github.workflowfiles.create` and `github.workflowfiles.update` do.
+`github.workflow-files.create` and `github.workflow-files.update` do.
 
 ## Pull requests
 
@@ -2233,18 +2233,18 @@ line comments are a separate group of tools, described under
 [Pull request reviews and comments](#pull-request-reviews-and-comments). The six reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
 profile `pull-requests-operator` adds the changes, described under [Changes](#changes-1) below, but never the
 merge, described under [Merge and conflicts](#merge-and-conflicts): it is offered only where a connection's
-`tools` list names `github.pullrequests.merge`, because a merge into the wrong repository's default branch is
+`tools` list names `github.pull-requests.merge`, because a merge into the wrong repository's default branch is
 the costliest mistake there. Neither profile is offered by the recommended profile `read`. Every route lies
 below the chosen repository; no tool accepts an owner or a free REST path.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.pullrequests.list` | read | safe | none | lists compact pull requests, filtered by `state`, `base`, and `head` |
-| `github.pullrequests.get` | read | safe | none | reads one pull request with its body, merge state, and requested reviewers |
-| `github.pullrequestfiles.list` | read | safe | none | lists its changed files with a bounded patch excerpt |
-| `github.pullrequestcommits.list` | read | safe | none | lists its commits |
-| `github.pullrequestdiffs.get` | read | safe | none | reads its unified diff, cut to at most 65536 bytes from its start |
-| `github.pullrequestchecks.list` | read | safe | none | reads the check runs and the combined commit status at its head commit |
+| `github.pull-requests.list` | read | safe | none | lists compact pull requests, filtered by `state`, `base`, and `head` |
+| `github.pull-requests.get` | read | safe | none | reads one pull request with its body, merge state, and requested reviewers |
+| `github.pull-request-files.list` | read | safe | none | lists its changed files with a bounded patch excerpt |
+| `github.pull-request-commits.list` | read | safe | none | lists its commits |
+| `github.pull-request-diffs.get` | read | safe | none | reads its unified diff, cut to at most 65536 bytes from its start |
+| `github.pull-request-checks.list` | read | safe | none | reads the check runs and the combined commit status at its head commit |
 
 ```yaml
 connections:
@@ -2253,33 +2253,33 @@ connections:
     credential: github-reader
     target: repos/octo-org/example
     permissions: [read]
-    tools: [github.pullrequests.list, github.pullrequests.get, github.pullrequestfiles.list,
-      github.pullrequestcommits.list, github.pullrequestdiffs.get, github.pullrequestchecks.list]
+    tools: [github.pull-requests.list, github.pull-requests.get, github.pull-request-files.list,
+      github.pull-request-commits.list, github.pull-request-diffs.get, github.pull-request-checks.list]
 ```
 
-`github.pullrequests.list` filters by `state` (`open`, `closed`, or `all`; `open` when omitted), `base` (a
+`github.pull-requests.list` filters by `state` (`open`, `closed`, or `all`; `open` when omitted), `base` (a
 branch name), and `head` (a branch name, or `LOGIN:branch` for a fork), in GitHub's own order; a pull request
 carries its number, title, state, whether it is a draft, its author, its head and base branch, its head
 commit, its labels, whether it is merged, its times, and its URL. Title, body, branch names, and commit
-messages are untrusted data. `github.pullrequests.get` adds the full body, `mergeable` (absent while GitHub
+messages are untrusted data. `github.pull-requests.get` adds the full body, `mergeable` (absent while GitHub
 is still computing it), `mergeable_state`, `merge_commit_sha`, the base commit, the requested reviewers, and
 the number of commits and changed files.
 
 ```sh
-echo '{"state":"open","base":"main","limit":10}' | qatlas invoke github.pullrequests.list --connection pull-reader
-qatlas invoke github.pullrequests.get --connection pull-reader --arg number=42
+echo '{"state":"open","base":"main","limit":10}' | qatlas invoke github.pull-requests.list --connection pull-reader
+qatlas invoke github.pull-requests.get --connection pull-reader --arg number=42
 ```
 
-`github.pullrequestfiles.list` reads the changed files with path, status, additions, deletions, changes, the
+`github.pull-request-files.list` reads the changed files with path, status, additions, deletions, changes, the
 previous path for a rename, and a patch excerpt: at most 4096 bytes of it, cut at a valid character boundary,
 with `patch_truncated` when GitHub's patch held more; a file GitHub sends no patch for, such as a binary
-file, carries none. `github.pullrequestcommits.list` reads each commit's SHA, its author (the linked GitHub
+file, carries none. `github.pull-request-commits.list` reads each commit's SHA, its author (the linked GitHub
 login when GitHub reports one, otherwise the commit's author name), its message, and its time; the message is
-untrusted data. `github.pullrequestdiffs.get` reads the unified diff through GitHub's diff media type, from
+untrusted data. `github.pull-request-diffs.get` reads the unified diff through GitHub's diff media type, from
 its start, up to the hard limit of 65536 bytes; `truncated` says when the diff held more. None of the three is
 ever read unbounded.
 
-`github.pullrequestchecks.list` takes `number` alone: it reads the pull request to resolve its head commit,
+`github.pull-request-checks.list` takes `number` alone: it reads the pull request to resolve its head commit,
 then the check runs (the GitHub Checks API, which Actions and most third-party CI systems report through) and
 the combined legacy commit status (the older Status API) at that commit, and merges them into one compact
 list with name, status, conclusion, the most recent time, and a details URL; a legacy status is mapped into
@@ -2292,48 +2292,48 @@ did, and `none` when nothing reported a check for the commit. `truncated` says w
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.pullrequests.create` | create | non-idempotent | required | opens one pull request with `title`, `head`, `base`, `body`, `draft`, `maintainer_can_modify` |
-| `github.pullrequests.update` | update | idempotent | required | replaces `title`, `body`, or `base`, marks it ready for review or a draft, or changes `maintainer_can_modify`; left-out fields stay |
-| `github.pullrequests.close` | update | idempotent | required | closes it without merging; a pull request already closed, merged or not, is left as it is |
-| `github.pullrequests.reopen` | update | idempotent | required | opens a closed pull request again; a merged one is refused |
-| `github.pullrequestbranches.update` | update | non-idempotent | required | merges the base branch into the head branch while the head is still `expected_head_sha` |
+| `github.pull-requests.create` | create | non-idempotent | required | opens one pull request with `title`, `head`, `base`, `body`, `draft`, `maintainer_can_modify` |
+| `github.pull-requests.update` | update | idempotent | required | replaces `title`, `body`, or `base`, marks it ready for review or a draft, or changes `maintainer_can_modify`; left-out fields stay |
+| `github.pull-requests.close` | update | idempotent | required | closes it without merging; a pull request already closed, merged or not, is left as it is |
+| `github.pull-requests.reopen` | update | idempotent | required | opens a closed pull request again; a merged one is refused |
+| `github.pull-request-branches.update` | update | non-idempotent | required | merges the base branch into the head branch while the head is still `expected_head_sha` |
 
-`github.pullrequests.create` and `github.pullrequests.update` write `title` and `body` through REST, exactly
-as the issue tools do; `head` is a branch, or `LOGIN:branch` for a fork. `github.pullrequests.update` writes a
+`github.pull-requests.create` and `github.pull-requests.update` write `title` and `body` through REST, exactly
+as the issue tools do; `head` is a branch, or `LOGIN:branch` for a fork. `github.pull-requests.update` writes a
 `draft` change through a separate GraphQL mutation, `markPullRequestReadyForReview` or
 `convertPullRequestToDraft`, because GitHub's REST route has no field for it; when both a REST field and
 `draft` are given, the REST change is sent first, then the draft change, and the pull request is read once
 more only then, so the answer never reports a draft state the REST answer could not have known about.
-`github.pullrequests.close` and `github.pullrequests.reopen` read the pull request first: a repeated call on
+`github.pull-requests.close` and `github.pull-requests.reopen` read the pull request first: a repeated call on
 a pull request already in the state asked for changes nothing and is success, like the issue tools; reopening
 a pull request GitHub reports as merged is refused before a request is sent, because GitHub has no way to
 reopen a merged pull request.
 
 ```sh
 echo '{"title":"Add retry logic","head":"feature/retry","base":"main"}' |
-  qatlas invoke github.pullrequests.create --connection pull-operator --confirm
-echo '{"number":42,"draft":false}' | qatlas invoke github.pullrequests.update --connection pull-operator --confirm
-qatlas invoke github.pullrequests.close --connection pull-operator --arg number=42 --confirm
+  qatlas invoke github.pull-requests.create --connection pull-operator --confirm
+echo '{"number":42,"draft":false}' | qatlas invoke github.pull-requests.update --connection pull-operator --confirm
+qatlas invoke github.pull-requests.close --connection pull-operator --arg number=42 --confirm
 ```
 
-`github.pullrequestbranches.update` requires `expected_head_sha`, the pull request's current head commit as
-`github.pullrequests.get` reports it, so a head that changed since it was last read is never merged into
+`github.pull-request-branches.update` requires `expected_head_sha`, the pull request's current head commit as
+`github.pull-requests.get` reports it, so a head that changed since it was last read is never merged into
 blindly; GitHub queues the merge of the base branch into the head branch and answers `accepted: true` before
 it finishes, so the new head commit shows up only on a later read. A stale `expected_head_sha` is refused
 without queuing anything.
 
 ### Merge and conflicts
 
-`github.pullrequests.merge` merges one pull request with a REST `PUT`. It is high risk, on the scale of the
+`github.pull-requests.merge` merges one pull request with a REST `PUT`. It is high risk, on the scale of the
 [listed-only workflow maintenance tools](#workflow-maintenance-and-actions-administration): a connection
 offers it only while its `tools` list names it, whatever its permissions, and no profile a new connection
 starts with, recommended or not, may select it.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.pullrequests.merge` | update | idempotent | required | merges with `sha`, and optionally `method` (`merge`, `squash`, or `rebase`), `commit_title`, `commit_message`; offered only where a connection's `tools` list names it |
+| `github.pull-requests.merge` | update | idempotent | required | merges with `sha`, and optionally `method` (`merge`, `squash`, or `rebase`), `commit_title`, `commit_message`; offered only where a connection's `tools` list names it |
 
-`sha` is required: the pull request's current head commit, exactly as `github.pullrequests.get` reports it.
+`sha` is required: the pull request's current head commit, exactly as `github.pull-requests.get` reports it.
 Qatlas reads the pull request first. Already merged with exactly that head commit is success without another
 request, so a repeated merge with the same `sha` never fails; already merged with a different head commit is
 refused as `invalid-request`, naming both commits. Otherwise Qatlas sends the merge exactly once and never
@@ -2355,36 +2355,36 @@ connections:
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, create, update]
-    tools: [github.pullrequests.list, github.pullrequests.get, github.pullrequestfiles.list,
-      github.pullrequestcommits.list, github.pullrequestdiffs.get, github.pullrequestchecks.list,
-      github.pullrequests.create, github.pullrequests.update, github.pullrequests.close,
-      github.pullrequests.reopen, github.pullrequestbranches.update]
+    tools: [github.pull-requests.list, github.pull-requests.get, github.pull-request-files.list,
+      github.pull-request-commits.list, github.pull-request-diffs.get, github.pull-request-checks.list,
+      github.pull-requests.create, github.pull-requests.update, github.pull-requests.close,
+      github.pull-requests.reopen, github.pull-request-branches.update]
   pull-merger:
     service: github
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, update]
-    tools: [github.pullrequests.get, github.pullrequests.merge]
+    tools: [github.pull-requests.get, github.pull-requests.merge]
 ```
 
 ```sh
-qatlas invoke github.pullrequests.get --connection pull-merger --arg number=42
+qatlas invoke github.pull-requests.get --connection pull-merger --arg number=42
 echo '{"number":42,"sha":"6cb1a1e...","method":"squash"}' |
-  qatlas invoke github.pullrequests.merge --connection pull-merger --confirm
+  qatlas invoke github.pull-requests.merge --connection pull-merger --confirm
 ```
 
 `pull-operator` never offers the merge, whatever its permissions, because its `tools` list does not name it;
-`pull-merger` offers only the read `github.pullrequests.get` and the merge, so a caller reads the current head
+`pull-merger` offers only the read `github.pull-requests.get` and the merge, so a caller reads the current head
 commit and merges with it in two calls on the same connection.
 
 ### Tokens for pull requests
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.pullrequests.list`, `get`, `github.pullrequestfiles.list`, `github.pullrequestcommits.list`, `github.pullrequestdiffs.get` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
-| `github.pullrequestchecks.list` | `repo` | Checks: read, and Commit statuses: read |
-| `github.pullrequests.create`, `update`, `close`, `reopen`, `github.pullrequestbranches.update` | `repo` | Pull requests: read and write |
-| `github.pullrequests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
+| `github.pull-requests.list`, `get`, `github.pull-request-files.list`, `github.pull-request-commits.list`, `github.pull-request-diffs.get` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
+| `github.pull-request-checks.list` | `repo` | Checks: read, and Commit statuses: read |
+| `github.pull-requests.create`, `update`, `close`, `reopen`, `github.pull-request-branches.update` | `repo` | Pull requests: read and write |
+| `github.pull-requests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
 
 ## Pull request reviews and comments
 
@@ -2393,26 +2393,26 @@ comments a review bundles in, replies to an existing line comment, its review th
 reviewers. `github.comments.*` is unchanged and keeps refusing a pull request number; the two conversation
 comment tools of this section are its mirror image, refusing an issue number instead, described below. A
 line comment is never written on its own: it exists only bundled into the one review
-that creates it, in `github.pullrequestreviews.create` or `.approve`, or as a reply to an existing one in
-`github.pullrequestreviewcomments.reply`. The eleven reads and changes below `approve` are offered by the
+that creates it, in `github.pull-request-reviews.create` or `.approve`, or as a reply to an existing one in
+`github.pull-request-review-comments.reply`. The eleven reads and changes below `approve` are offered by the
 not-recommended setup profile `pull-request-reviews`; approving is in no profile, offered only while a
-connection's `tools` list names `github.pullrequestreviews.approve`, because an approval given on the
+connection's `tools` list names `github.pull-request-reviews.approve`, because an approval given on the
 connection's behalf is the one outcome no other review tool can reach.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.pullrequestcomments.list` | read | safe | none | lists the conversation comments of a pull request, oldest first |
-| `github.pullrequestcomments.create` | create | non-idempotent | required | writes exactly one conversation comment |
-| `github.pullrequestreviews.list` | read | safe | none | lists the reviews of a pull request |
-| `github.pullrequestreviews.create` | create | non-idempotent | required | submits a review as `comment` or `request_changes`, with its `line_notes` bundled in |
-| `github.pullrequestreviews.approve` | create | non-idempotent | required | approves, with an optional body and `line_notes`; offered only where a connection's `tools` list names it |
-| `github.pullrequestreviewcomments.list` | read | safe | none | lists the line comments of a pull request, across every review |
-| `github.pullrequestreviewcomments.reply` | create | non-idempotent | required | writes exactly one reply in the thread of one line comment |
-| `github.pullrequestreviewthreads.list` | read | safe | none | lists the review threads of a pull request, each with its resolved state and its comments |
-| `github.pullrequestreviewthreads.resolve` | update | idempotent | required | marks one review thread resolved |
-| `github.pullrequestreviewthreads.unresolve` | update | idempotent | required | opens one resolved review thread again |
-| `github.pullrequestreviewers.request` | update | idempotent | required | requests the given users, teams, or both as reviewers |
-| `github.pullrequestreviewers.remove` | update | idempotent | required | removes the given users, teams, or both from the requested reviewers |
+| `github.pull-request-comments.list` | read | safe | none | lists the conversation comments of a pull request, oldest first |
+| `github.pull-request-comments.create` | create | non-idempotent | required | writes exactly one conversation comment |
+| `github.pull-request-reviews.list` | read | safe | none | lists the reviews of a pull request |
+| `github.pull-request-reviews.create` | create | non-idempotent | required | submits a review as `comment` or `request_changes`, with its `line_notes` bundled in |
+| `github.pull-request-reviews.approve` | create | non-idempotent | required | approves, with an optional body and `line_notes`; offered only where a connection's `tools` list names it |
+| `github.pull-request-review-comments.list` | read | safe | none | lists the line comments of a pull request, across every review |
+| `github.pull-request-review-comments.reply` | create | non-idempotent | required | writes exactly one reply in the thread of one line comment |
+| `github.pull-request-review-threads.list` | read | safe | none | lists the review threads of a pull request, each with its resolved state and its comments |
+| `github.pull-request-review-threads.resolve` | update | idempotent | required | marks one review thread resolved |
+| `github.pull-request-review-threads.unresolve` | update | idempotent | required | opens one resolved review thread again |
+| `github.pull-request-reviewers.request` | update | idempotent | required | requests the given users, teams, or both as reviewers |
+| `github.pull-request-reviewers.remove` | update | idempotent | required | removes the given users, teams, or both from the requested reviewers |
 
 ```yaml
 connections:
@@ -2421,33 +2421,33 @@ connections:
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, create, update]
-    tools: [github.pullrequestcomments.list, github.pullrequestcomments.create,
-      github.pullrequestreviews.list, github.pullrequestreviews.create,
-      github.pullrequestreviewcomments.list, github.pullrequestreviewcomments.reply,
-      github.pullrequestreviewthreads.list, github.pullrequestreviewthreads.resolve,
-      github.pullrequestreviewthreads.unresolve, github.pullrequestreviewers.request,
-      github.pullrequestreviewers.remove]
+    tools: [github.pull-request-comments.list, github.pull-request-comments.create,
+      github.pull-request-reviews.list, github.pull-request-reviews.create,
+      github.pull-request-review-comments.list, github.pull-request-review-comments.reply,
+      github.pull-request-review-threads.list, github.pull-request-review-threads.resolve,
+      github.pull-request-review-threads.unresolve, github.pull-request-reviewers.request,
+      github.pull-request-reviewers.remove]
   pull-approver:
     service: github
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, create]
-    tools: [github.pullrequestreviews.approve]
+    tools: [github.pull-request-reviews.approve]
 ```
 
-`github.pullrequestcomments.list` and `.create` read and write a pull request's conversation comments through
+`github.pull-request-comments.list` and `.create` read and write a pull request's conversation comments through
 the same Issue Comments REST route `github.comments.*` uses; an issue number is refused as `invalid-request`,
 naming the number and the repository, the mirror image of the refusal `github.comments.*` gives a pull
 request number.
 
 ```sh
-echo '{"limit":10}' | qatlas invoke github.pullrequestcomments.list --connection pull-reviewer --arg number=42
+echo '{"limit":10}' | qatlas invoke github.pull-request-comments.list --connection pull-reviewer --arg number=42
 echo '{"number":42,"body":"Looks good to me."}' |
-  qatlas invoke github.pullrequestcomments.create --connection pull-reviewer --confirm
+  qatlas invoke github.pull-request-comments.create --connection pull-reviewer --confirm
 ```
 
-`github.pullrequestreviews.create` and `.approve` require `sha`, the pull request's head commit exactly as
-`github.pullrequests.get` reports it, sent to GitHub as `commit_id`, so a review never lands on a head the
+`github.pull-request-reviews.create` and `.approve` require `sha`, the pull request's head commit exactly as
+`github.pull-requests.get` reports it, sent to GitHub as `commit_id`, so a review never lands on a head the
 caller did not see. `event` (`comment` or `request_changes`, required for `.create`; always an approval for
 `.approve`) and an optional `body` are the review itself; `line_notes` bundles its line comments into this one
 call, each with `path`, `line`, `side` (`left` or `right` of the diff), optionally `start_line` and
@@ -2461,17 +2461,17 @@ and refuses `invalid-request` naming the expected and the current commit, or, fo
 ```sh
 echo '{"number":42,"sha":"6cb1a1e...","event":"request_changes","body":"One thing to fix.",
   "line_notes":[{"path":"a.go","line":10,"side":"right","body":"Use the existing helper here."}]}' |
-  qatlas invoke github.pullrequestreviews.create --connection pull-reviewer --confirm
-echo '{"number":42,"sha":"6cb1a1e..."}' | qatlas invoke github.pullrequestreviews.approve --connection pull-approver --confirm
+  qatlas invoke github.pull-request-reviews.create --connection pull-reviewer --confirm
+echo '{"number":42,"sha":"6cb1a1e..."}' | qatlas invoke github.pull-request-reviews.approve --connection pull-approver --confirm
 ```
 
-`github.pullrequestreviewcomments.list` reads a pull request's line comments across every review, with path,
-line, side, commit, the comment they reply to when any, author, and body. `github.pullrequestreviewcomments.reply`
+`github.pull-request-review-comments.list` reads a pull request's line comments across every review, with path,
+line, side, commit, the comment they reply to when any, author, and body. `github.pull-request-review-comments.reply`
 takes `comment_id`, as the list reports it, and writes exactly one reply in its thread; a `comment_id` GitHub
 does not hold answers not found, naming the review comment.
 
 GitHub keeps whether a review thread is resolved only in GraphQL, never in the REST line comments read
-above, so `github.pullrequestreviewthreads.list`, `.resolve`, and `.unresolve` read and change that state on
+above, so `github.pull-request-review-threads.list`, `.resolve`, and `.unresolve` read and change that state on
 their own, by the thread's `id` as the list reports it. `.resolve` and `.unresolve` also take `number`: before
 either changes anything, Qatlas reads the thread node itself and confirms it is a thread of `number` in the
 bound repository; a `thread_id` of another pull request or another repository is refused not found, naming
@@ -2479,14 +2479,14 @@ bound repository; a `thread_id` of another pull request or another repository is
 already-open one, is left as it is and reported in its current state.
 
 ```sh
-qatlas invoke github.pullrequestreviewthreads.list --connection pull-reviewer --arg number=42
-qatlas invoke github.pullrequestreviewthreads.resolve --connection pull-reviewer --arg number=42 \
+qatlas invoke github.pull-request-review-threads.list --connection pull-reviewer --arg number=42
+qatlas invoke github.pull-request-review-threads.resolve --connection pull-reviewer --arg number=42 \
   --arg thread_id=PRRT_kwABC --confirm
 ```
 
-`github.pullrequestreviewers.request` and `.remove` take `reviewers` (logins), `team_reviewers` (team slugs of
+`github.pull-request-reviewers.request` and `.remove` take `reviewers` (logins), `team_reviewers` (team slugs of
 the repository's organization), or both, at least one and at most 15 together, and answer with the pull
-request itself, the same shape `github.pullrequests.get` reports, so `requested_reviewers` is read back after
+request itself, the same shape `github.pull-requests.get` reports, so `requested_reviewers` is read back after
 the change. A reviewer already requested, one not requested, and the pull request's own author are all left
 as they are.
 
@@ -2494,9 +2494,9 @@ as they are.
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.pullrequestreviews.list`, `github.pullrequestreviewcomments.list`, `github.pullrequestreviewthreads.list` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
-| `github.pullrequestreviews.create`, `.approve`, `github.pullrequestreviewcomments.reply`, `github.pullrequestreviewthreads.resolve`, `.unresolve`, `github.pullrequestreviewers.request`, `.remove` | `repo` | Pull requests: read and write |
-| `github.pullrequestcomments.list`, `.create` | as `github.comments.*`: `repo` or `public_repo` | Pull requests or Issues: read; read and write for `.create` |
+| `github.pull-request-reviews.list`, `github.pull-request-review-comments.list`, `github.pull-request-review-threads.list` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
+| `github.pull-request-reviews.create`, `.approve`, `github.pull-request-review-comments.reply`, `github.pull-request-review-threads.resolve`, `.unresolve`, `github.pull-request-reviewers.request`, `.remove` | `repo` | Pull requests: read and write |
+| `github.pull-request-comments.list`, `.create` | as `github.comments.*`: `repo` or `public_repo` | Pull requests or Issues: read; read and write for `.create` |
 
 ## Releases
 
@@ -2510,7 +2510,7 @@ chosen repository; no tool accepts an owner or a free REST path.
 | --- | --- | --- | --- | --- |
 | `github.releases.list` | read | safe | none | lists compact releases, in GitHub's own order |
 | `github.releases.get` | read | safe | none | reads one release by `id`, `tag`, or `latest` |
-| `github.releaseassets.list` | read | safe | none | lists the asset metadata of one release |
+| `github.release-assets.list` | read | safe | none | lists the asset metadata of one release |
 | `github.releases.create` | create | non-idempotent | required | cuts one release from `tag` |
 | `github.releases.update` | update | idempotent | required | replaces fields of one release; left-out fields stay |
 
@@ -2521,7 +2521,7 @@ connections:
     credential: github-reader
     target: repos/octo-org/example
     permissions: [read]
-    tools: [github.releases.list, github.releases.get, github.releaseassets.list]
+    tools: [github.releases.list, github.releases.get, github.release-assets.list]
 ```
 
 `github.releases.list` pages by GitHub's `Link` response header, like the Actions and pull request lists that
@@ -2534,10 +2534,10 @@ because GitHub does not index a draft's tag, so a draft is only reachable by `id
 ```sh
 qatlas invoke github.releases.list --connection release-reader --arg limit=10
 qatlas invoke github.releases.get --connection release-reader --arg tag=v1.2.0
-qatlas invoke github.releaseassets.list --connection release-reader --arg id=1
+qatlas invoke github.release-assets.list --connection release-reader --arg id=1
 ```
 
-`github.releaseassets.list` reads only metadata: name and label (untrusted data), size in bytes, content
+`github.release-assets.list` reads only metadata: name and label (untrusted data), size in bytes, content
 type, a digest when GitHub reports one, the download count, and times; an asset's content is never read.
 
 ### Changes
@@ -2573,7 +2573,7 @@ connections:
     credential: github-operator
     target: repos/octo-org/example
     permissions: [read, create, update]
-    tools: [github.releases.list, github.releases.get, github.releaseassets.list, github.releases.create,
+    tools: [github.releases.list, github.releases.get, github.release-assets.list, github.releases.create,
       github.releases.update]
   release-deleter:
     service: github
@@ -2587,7 +2587,7 @@ connections:
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.releases.list`, `get`, `github.releaseassets.list` | `repo` for a private repository; `public_repo` for a public one | Contents: read |
+| `github.releases.list`, `get`, `github.release-assets.list` | `repo` for a private repository; `public_repo` for a public one | Contents: read |
 | `github.releases.create`, `update`, `delete` | `repo` | Contents: read and write |
 
 ## Workflow maintenance and Actions administration
@@ -2617,18 +2617,18 @@ and Qatlas keeps them behind a boundary of their own:
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
-| `github.workflowfiles.list` | read | safe | none | lists the workflow files with path, blob SHA, and size, without content |
-| `github.workflowfiles.get` | read | safe | none | reads one workflow file with its content and blob SHA |
-| `github.workflowfiles.create` | create | idempotent | required | commits one new workflow file; fails when the file exists |
-| `github.workflowfiles.update` | update | idempotent | required | replaces one workflow file while it still has the given blob SHA |
+| `github.workflow-files.list` | read | safe | none | lists the workflow files with path, blob SHA, and size, without content |
+| `github.workflow-files.get` | read | safe | none | reads one workflow file with its content and blob SHA |
+| `github.workflow-files.create` | create | idempotent | required | commits one new workflow file; fails when the file exists |
+| `github.workflow-files.update` | update | idempotent | required | replaces one workflow file while it still has the given blob SHA |
 | `github.workflows.enable` | update | idempotent | required | enables one workflow |
 | `github.workflows.disable` | update | idempotent | required | disables one workflow; a disabled workflow stays as it is |
-| `github.actionspermissions.get` | read | safe | none | reads `enabled` and `allowed_actions` |
-| `github.actionspermissions.update` | update | idempotent | required | changes `enabled` or `allowed_actions` |
-| `github.workflowpermissions.get` | read | safe | none | reads `default_workflow_permissions` and `can_approve_pull_request_reviews` |
-| `github.workflowpermissions.update` | update | idempotent | required | changes either of them |
-| `github.repositorysettings.get` | read | safe | none | reads the default branch, visibility, archived state, and merge settings |
-| `github.repositorysettings.update` | update | idempotent | required | changes the merge methods and merge settings |
+| `github.actions-permissions.get` | read | safe | none | reads `enabled` and `allowed_actions` |
+| `github.actions-permissions.update` | update | idempotent | required | changes `enabled` or `allowed_actions` |
+| `github.workflow-permissions.get` | read | safe | none | reads `default_workflow_permissions` and `can_approve_pull_request_reviews` |
+| `github.workflow-permissions.update` | update | idempotent | required | changes either of them |
+| `github.repository-settings.get` | read | safe | none | reads the default branch, visibility, archived state, and merge settings |
+| `github.repository-settings.update` | update | idempotent | required | changes the merge methods and merge settings |
 
 The reads are listed only as well: a workflow file and the Actions settings are part of what this group
 maintains, and the observer tools already read what diagnosing a run needs. A create and an update are
@@ -2645,16 +2645,16 @@ secret is read, and a path of another form, `ci.yml` as well as a subdirectory, 
 names the rule: `$.path does not have the required form a file directly in .github/workflows/ ending in .yml
 or .yaml`. No tool deletes or renames a file or writes any other path.
 
-`github.workflowfiles.update` needs `sha`, the blob SHA `github.workflowfiles.get` or
-`github.workflowfiles.list` reported. GitHub writes the file only while it still has that blob; otherwise
+`github.workflow-files.update` needs `sha`, the blob SHA `github.workflow-files.get` or
+`github.workflow-files.list` reported. GitHub writes the file only while it still has that blob; otherwise
 nothing is written, and the refusal says so: read the file again and apply the change to its current
-content. `github.workflowfiles.create` takes no `sha` and never replaces an existing file.
+content. `github.workflow-files.create` takes no `sha` and never replaces an existing file.
 
 `content` is the complete new file as text: 1 byte to 512 KiB of valid UTF-8 without control characters
 other than tab, line feed, and carriage return. `message` is the commit message, 1 to 1000 characters
 without control characters other than tab and line breaks. `branch` names the branch to commit to and is the
 default branch when omitted; reads take `ref`, a branch or tag. Qatlas does not generate, repair, or
-interpret workflows; GitHub decides whether a file is a valid workflow. `github.workflowfiles.get` refuses a
+interpret workflows; GitHub decides whether a file is a valid workflow. `github.workflow-files.get` refuses a
 file larger than 512 KiB or one that is not text, and returns the content as untrusted data only on that
 explicit read.
 
@@ -2669,17 +2669,17 @@ a disabled state (`disabled_manually`, `disabled_inactivity`, or `disabled_fork`
 which sends nothing and answers that state as `previous_state` and `state`.
 
 ```sh
-qatlas invoke github.workflowfiles.get --connection ci-maintainer --arg path=.github/workflows/ci.yml
+qatlas invoke github.workflow-files.get --connection ci-maintainer --arg path=.github/workflows/ci.yml
 echo '{"path":".github/workflows/ci.yml","sha":"3d21ec53a331a6f037a91c368710b99387d012c1",
   "content":"name: CI\non: [push, pull_request]\njobs: {}\n","message":"ci: also run on pull requests"}' |
-  qatlas invoke github.workflowfiles.update --connection ci-maintainer --confirm
+  qatlas invoke github.workflow-files.update --connection ci-maintainer --confirm
 ```
 
 ### Actions settings
 
-`github.actionspermissions.update` takes `enabled` and `allowed_actions` (`all`, `local_only`, or
+`github.actions-permissions.update` takes `enabled` and `allowed_actions` (`all`, `local_only`, or
 `selected`); `selected` keeps the selection of allowed actions maintained in the repository settings, which
-Qatlas does not change: that pattern list is a separate, wider surface. `github.workflowpermissions.update`
+Qatlas does not change: that pattern list is a separate, wider surface. `github.workflow-permissions.update`
 takes `default_workflow_permissions` (`read` or `write`) and `can_approve_pull_request_reviews`. At least one
 value is required, and a value left out stays as it is: GitHub replaces a setting as a whole, so Qatlas
 reads it first and sends it with the requested values in one change. `allowed_actions` applies only while
@@ -2690,7 +2690,7 @@ retried.
 
 ### Repository merge and branch settings
 
-`github.repositorysettings.get` and `github.repositorysettings.update` belong to the Actions administrator
+`github.repository-settings.get` and `github.repository-settings.update` belong to the Actions administrator
 group, so they are listed only, never part of a starting profile, and chosen with the profile `actions-admin`
 or by name in a `tools` list. Both act on one repository inside the connection's targets; a repository
 outside them is refused before a secret is read or GitHub is contacted, without naming it.
@@ -2725,13 +2725,13 @@ token would allow it.
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.workflowfiles.list`, `get` | `repo` for a private repository | Contents: read |
-| `github.workflowfiles.create`, `update` | `repo` and `workflow` | Contents: read and write, and Workflows: read and write |
+| `github.workflow-files.list`, `get` | `repo` for a private repository | Contents: read |
+| `github.workflow-files.create`, `update` | `repo` and `workflow` | Contents: read and write, and Workflows: read and write |
 | `github.workflows.enable`, `disable` | `repo` | Actions: read and write |
-| `github.actionspermissions.get`, `github.workflowpermissions.get` | `repo`, as a repository administrator | Administration: read |
-| `github.actionspermissions.update`, `github.workflowpermissions.update` | `repo`, as a repository administrator | Administration: read and write |
-| `github.repositorysettings.get` | `repo` for a private repository | Metadata: read |
-| `github.repositorysettings.update` | `repo`, as a repository administrator | Administration: write |
+| `github.actions-permissions.get`, `github.workflow-permissions.get` | `repo`, as a repository administrator | Administration: read |
+| `github.actions-permissions.update`, `github.workflow-permissions.update` | `repo`, as a repository administrator | Administration: read and write |
+| `github.repository-settings.get` | `repo` for a private repository | Metadata: read |
+| `github.repository-settings.update` | `repo`, as a repository administrator | Administration: write |
 
 ```yaml
 connections:
@@ -2740,13 +2740,13 @@ connections:
     credential: github-maintainer
     target: repos/octo-org/example
     permissions: [read, create, update]
-    tools: [github.workflows.list, github.workflows.get, github.workflowfiles.list, github.workflowfiles.get,
-      github.workflowfiles.create, github.workflowfiles.update, github.workflows.enable, github.workflows.disable]
+    tools: [github.workflows.list, github.workflows.get, github.workflow-files.list, github.workflow-files.get,
+      github.workflow-files.create, github.workflow-files.update, github.workflows.enable, github.workflows.disable]
   ci-admin:
     service: github
     credential: github-maintainer
     target: repos/octo-org/example
     permissions: [read, update]
-    tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
-      github.workflowpermissions.update, github.repositorysettings.get, github.repositorysettings.update]
+    tools: [github.actions-permissions.get, github.actions-permissions.update, github.workflow-permissions.get,
+      github.workflow-permissions.update, github.repository-settings.get, github.repository-settings.update]
 ```

@@ -10,7 +10,7 @@ import (
 // toolGroups are the subject areas GitHub's tools are sorted into for display.
 var toolGroups = []config.ToolGroup{
 	{ID: "issues", Title: "Issues", Description: "Issues, comments, reactions, labels, milestones, types, fields, dependencies, sub-issues, and Copilot assignments"},
-	{ID: "pullrequests", Title: "Pull requests", Description: "Pull requests with their files, commits, checks, reviews, review threads, reviewers, and Copilot reviews"},
+	{ID: "pull-requests", Title: "Pull requests", Description: "Pull requests with their files, commits, checks, reviews, review threads, reviewers, and Copilot reviews"},
 	{ID: "projects", Title: "Projects", Description: "Projects with their items, drafts, fields, views, status updates, iterations, templates, and access"},
 	{ID: "actions", Title: "Actions", Description: "Workflows, runs, jobs, logs, artifacts, and workflow and Actions permissions"},
 	{ID: "code", Title: "Code", Description: "Repository contents, files, trees, branches, tags, commits, and blame"},
@@ -24,28 +24,28 @@ var toolGroups = []config.ToolGroup{
 }
 
 // groupBySegment maps the resource segment of a tool ID (github.<segment>.<action>) to its group. Segments
-// starting with "project" or "pullrequest" are grouped by prefix, see groupOf.
+// starting with "project" or "pull-request" are grouped by prefix, see groupOf.
 var groupBySegment = map[string]string{
 	"issues": "issues", "comments": "issues", "reactions": "issues", "labels": "issues",
-	"milestones": "issues", "issuetypes": "issues", "issuefields": "issues", "issuedependencies": "issues",
-	"subissues": "issues", "copilotassignments": "issues",
-	"copilotreviews": "pullrequests",
-	"workflows":      "actions", "workflowruns": "actions", "workflowjobs": "actions", "workflowrunlogs": "actions",
-	"workflowartifacts": "actions", "workflowfiles": "actions", "workflowpermissions": "actions",
-	"actionspermissions": "actions",
-	"contents":           "code", "files": "code", "branches": "code", "commits": "code", "trees": "code",
+	"milestones": "issues", "issue-types": "issues", "issue-fields": "issues", "issue-dependencies": "issues",
+	"sub-issues": "issues", "copilot-assignments": "issues",
+	"copilot-reviews": "pull-requests",
+	"workflows":       "actions", "workflow-runs": "actions", "workflow-jobs": "actions", "workflow-run-logs": "actions",
+	"workflow-artifacts": "actions", "workflow-files": "actions", "workflow-permissions": "actions",
+	"actions-permissions": "actions",
+	"contents":            "code", "files": "code", "branches": "code", "commits": "code", "trees": "code",
 	"blame": "code", "code": "code", "tags": "code",
-	"repositories": "repositories", "customproperties": "repositories", "rulesets": "repositories",
-	"collaborators": "repositories", "repositorysettings": "repositories", "repositorysubscriptions": "repositories", "stars": "repositories",
-	"releases": "releases", "releaseassets": "releases",
-	"codescanningalerts": "security", "dependabotalerts": "security", "secretscanningalerts": "security",
-	"codequalityfindings": "security", "globaladvisories": "security", "organizationadvisories": "security",
-	"repositoryadvisories": "security",
-	"discussions":          "discussions", "discussioncategories": "discussions", "discussioncomments": "discussions",
+	"repositories": "repositories", "custom-properties": "repositories", "rulesets": "repositories",
+	"collaborators": "repositories", "repository-settings": "repositories", "repository-subscriptions": "repositories", "stars": "repositories",
+	"releases": "releases", "release-assets": "releases",
+	"code-scanning-alerts": "security", "dependabot-alerts": "security", "secret-scanning-alerts": "security",
+	"code-quality-findings": "security", "global-advisories": "security", "organization-advisories": "security",
+	"repository-advisories": "security",
+	"discussions":           "discussions", "discussion-categories": "discussions", "discussion-comments": "discussions",
 	"gists":         "gists",
-	"notifications": "notifications", "threadsubscriptions": "notifications",
+	"notifications": "notifications", "thread-subscriptions": "notifications",
 	"accounts": "accounts", "users": "accounts", "organizations": "accounts", "teams": "accounts",
-	"teammembers": "accounts",
+	"team-members": "accounts",
 }
 
 // groupOf returns the group of a GitHub tool ID, or "" for an ID outside every group.
@@ -56,8 +56,8 @@ func groupOf(id string) string {
 	}
 	segment := parts[1]
 	switch {
-	case strings.HasPrefix(segment, "pullrequest"):
-		return "pullrequests"
+	case strings.HasPrefix(segment, "pull-request"):
+		return "pull-requests"
 	case strings.HasPrefix(segment, "project"):
 		return "projects"
 	}

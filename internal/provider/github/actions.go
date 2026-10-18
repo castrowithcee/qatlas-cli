@@ -182,7 +182,7 @@ var workflowsGet = capability.Descriptor{
 }
 
 var runsList = capability.Descriptor{
-	ID:      Provider + ".workflowruns.list",
+	ID:      Provider + ".workflow-runs.list",
 	Version: 2,
 	Title:   "List GitHub Actions workflow runs",
 	Description: "List one bounded, filtered batch of compact workflow runs of " +
@@ -217,7 +217,7 @@ var runsList = capability.Descriptor{
 }
 
 var runsGet = capability.Descriptor{
-	ID:           Provider + ".workflowruns.get",
+	ID:           Provider + ".workflow-runs.get",
 	Version:      1,
 	Title:        "Get a GitHub Actions workflow run",
 	Description:  "Read one workflow run of a repository a connection allows",
@@ -236,7 +236,7 @@ var runsGet = capability.Descriptor{
 }
 
 var jobsList = capability.Descriptor{
-	ID:      Provider + ".workflowjobs.list",
+	ID:      Provider + ".workflow-jobs.list",
 	Version: 2,
 	Title:   "List GitHub Actions jobs of a run",
 	Description: "List one bounded batch of compact jobs of one workflow run of " +
@@ -259,7 +259,7 @@ var jobsList = capability.Descriptor{
 }
 
 var jobsGet = capability.Descriptor{
-	ID:      Provider + ".workflowjobs.get",
+	ID:      Provider + ".workflow-jobs.get",
 	Version: 1,
 	Title:   "Get a GitHub Actions job",
 	Description: "Read one job of a workflow run of a repository a connection allows with its " +
@@ -270,7 +270,7 @@ var jobsGet = capability.Descriptor{
 	InputSchema: inputSchema(`"job_id":`+actionsIDSchema, "job_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + jobProperties + `,` + stepsProperty + `},` +
 		jobRequired + `}`),
-	Arguments: []capability.Argument{{Name: "job_id", Description: "Job identifier, as github.workflowjobs.list reports it",
+	Arguments: []capability.Argument{{Name: "job_id", Description: "Job identifier, as github.workflow-jobs.list reports it",
 		Required: true}},
 	Fields: []capability.Field{
 		{Name: "steps", Description: "Steps with number, name, status, conclusion, and times"},
@@ -279,7 +279,7 @@ var jobsGet = capability.Descriptor{
 }
 
 var jobsLog = capability.Descriptor{
-	ID:      Provider + ".workflowjobs.log",
+	ID:      Provider + ".workflow-jobs.log",
 	Version: 1,
 	Title:   "Read the end of a GitHub Actions job log",
 	Description: "Read the last lines of the log of one job of a repository a connection allows, " +
@@ -294,7 +294,7 @@ var jobsLog = capability.Descriptor{
 		`"lines":{"type":"integer"},"truncated":{"type":"boolean"}},"required":["job_id","log","lines","truncated"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "job_id", Description: "Job identifier, as github.workflowjobs.list reports it", Required: true},
+		{Name: "job_id", Description: "Job identifier, as github.workflow-jobs.list reports it", Required: true},
 		{Name: "lines", Description: "Last lines to return, from 1 through 500; 50 when omitted"},
 		{Name: "max_bytes", Description: "Bytes read from the end of the log, from 1024 through 65536; 8192 when omitted"},
 	},
@@ -311,7 +311,7 @@ var jobsLog = capability.Descriptor{
 }
 
 var artifactsList = capability.Descriptor{
-	ID:      Provider + ".workflowartifacts.list",
+	ID:      Provider + ".workflow-artifacts.list",
 	Version: 1,
 	Title:   "List GitHub Actions artifacts of a run",
 	Description: "List one bounded batch of artifact metadata of one workflow run of " +
@@ -370,7 +370,7 @@ var workflowsDispatch = capability.Descriptor{
 }
 
 var runsRerun = capability.Descriptor{
-	ID:      Provider + ".workflowruns.rerun",
+	ID:      Provider + ".workflow-runs.rerun",
 	Version: 1,
 	Title:   "Re-run a GitHub Actions workflow run",
 	Description: "Re-run every job of one completed workflow run of " +
@@ -386,7 +386,7 @@ var runsRerun = capability.Descriptor{
 }
 
 var runsRerunFailed = capability.Descriptor{
-	ID:      Provider + ".workflowruns.rerunfailed",
+	ID:      Provider + ".workflow-runs.rerun-failed",
 	Version: 1,
 	Title:   "Re-run the failed jobs of a GitHub Actions run",
 	Description: "Re-run the failed jobs and their dependents of one completed workflow run of " +
@@ -403,7 +403,7 @@ var runsRerunFailed = capability.Descriptor{
 }
 
 var runsCancel = capability.Descriptor{
-	ID:      Provider + ".workflowruns.cancel",
+	ID:      Provider + ".workflow-runs.cancel",
 	Version: 1,
 	Title:   "Cancel a GitHub Actions workflow run",
 	Description: "Ask GitHub to cancel one workflow run of a repository a connection allows; jobs end " +
@@ -526,7 +526,7 @@ type actionsArguments struct {
 	DefaultWorkflowPermissions string `json:"default_workflow_permissions"`
 	CanApprove                 *bool  `json:"can_approve_pull_request_reviews"`
 
-	// The arguments of github.repositorysettings.update.
+	// The arguments of github.repository-settings.update.
 	AllowMergeCommit         *bool  `json:"allow_merge_commit"`
 	AllowSquashMerge         *bool  `json:"allow_squash_merge"`
 	AllowRebaseMerge         *bool  `json:"allow_rebase_merge"`

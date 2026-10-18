@@ -9,7 +9,7 @@ import (
 )
 
 // fakePRComments answers the pull request conversation comment routes of pull request 7 through the
-// failure hook of fakeGitHub, both the GraphQL list and the REST create, since github.pullrequestcomments.*
+// failure hook of fakeGitHub, both the GraphQL list and the REST create, since github.pull-request-comments.*
 // shares the REST issue comment route github.comments.* uses but lists through its own GraphQL query.
 type fakePRComments struct {
 	f *fakeGitHub
@@ -49,7 +49,7 @@ func (p *fakePRComments) route(w http.ResponseWriter, req *http.Request) bool {
 	return false
 }
 
-// github.pullrequestcomments.list and github.pullrequestcomments.create report database_id alongside the
+// github.pull-request-comments.list and github.pull-request-comments.create report database_id alongside the
 // node id they have always reported as id, the numeric REST identifier the reaction tools need for kind
 // issue_comment on a pull request conversation comment, since github.comments.update and
 // github.comments.delete refuse one.

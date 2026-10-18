@@ -528,7 +528,7 @@ func TestPullRequestsAreListedFilteredAndPagedByLinkHeader(t *testing.T) {
 		HasMore    bool   `json:"has_more"`
 		NextCursor string `json:"next_cursor"`
 	}
-	first, err := invoke(t, core, "github.pullrequests.list", "repo", `{"base":"main","limit":30}`, false)
+	first, err := invoke(t, core, "github.pull-requests.list", "repo", `{"base":"main","limit":30}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,7 +536,7 @@ func TestPullRequestsAreListedFilteredAndPagedByLinkHeader(t *testing.T) {
 	if err := json.Unmarshal(first, &firstPage); err != nil || len(firstPage.PullRequests) != 30 || !firstPage.HasMore {
 		t.Fatalf("first batch = %s, %v", first, err)
 	}
-	second, err := invoke(t, core, "github.pullrequests.list", "repo",
+	second, err := invoke(t, core, "github.pull-requests.list", "repo",
 		`{"base":"main","cursor":"`+firstPage.NextCursor+`"}`, false)
 	if err != nil {
 		t.Fatal(err)
@@ -560,13 +560,13 @@ func TestPullRequestsAreListedFilteredAndPagedByLinkHeader(t *testing.T) {
 
 	before := len(f.recorded())
 	for name, cursor := range alteredCursors(t, firstPage.NextCursor) {
-		if _, err := invoke(t, core, "github.pullrequests.list", "repo",
+		if _, err := invoke(t, core, "github.pull-requests.list", "repo",
 			`{"base":"main","cursor":"`+cursor+`"}`, false); !isInvalidRequest(err) ||
 			!strings.HasSuffix(err.Error(), "; start the list again without cursor") {
 			t.Errorf("%s: err = %v, want an invalid request with the next step", name, err)
 		}
 	}
-	if _, err := invoke(t, core, "github.pullrequests.list", "repo",
+	if _, err := invoke(t, core, "github.pull-requests.list", "repo",
 		`{"head":"octocat:feature","cursor":"`+firstPage.NextCursor+`"}`, false); !isInvalidRequest(err) {
 		t.Errorf("a cursor of other filters = %v, want an invalid request", err)
 	}
@@ -582,7 +582,7 @@ func TestGetPullRequestReadsFullDetail(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequests.get", "repo", `{"number":100}`, false)
+	result, err := invoke(t, core, "github.pull-requests.get", "repo", `{"number":100}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,7 +619,7 @@ func TestPullRequestFilesTruncatePatchAndReportRenames(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequestfiles.list", "repo", `{"number":100}`, false)
+	result, err := invoke(t, core, "github.pull-request-files.list", "repo", `{"number":100}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -658,7 +658,7 @@ func TestPullRequestCommitsPreferTheGitHubAuthor(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequestcommits.list", "repo", `{"number":100}`, false)
+	result, err := invoke(t, core, "github.pull-request-commits.list", "repo", `{"number":100}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,7 +689,7 @@ func TestPullRequestDiffIsBoundedFromItsStart(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequestdiffs.get", "repo", `{"number":100}`, false)
+	result, err := invoke(t, core, "github.pull-request-diffs.get", "repo", `{"number":100}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -701,7 +701,7 @@ func TestPullRequestDiffIsBoundedFromItsStart(t *testing.T) {
 		t.Fatalf("small diff = %s, %v", result, err)
 	}
 
-	result, err = invoke(t, core, "github.pullrequestdiffs.get", "repo", `{"number":101}`, false)
+	result, err = invoke(t, core, "github.pull-request-diffs.get", "repo", `{"number":101}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -752,7 +752,7 @@ func TestPullRequestChecksCombineRunsAndStatusesWithOverall(t *testing.T) {
 		{102, "none", false, 0},
 		{103, "failure", false, 2},
 	} {
-		result, err := invoke(t, core, "github.pullrequestchecks.list", "repo",
+		result, err := invoke(t, core, "github.pull-request-checks.list", "repo",
 			fmt.Sprintf(`{"number":%d}`, tt.number), false)
 		if err != nil {
 			t.Fatalf("%d: %v", tt.number, err)
@@ -781,12 +781,12 @@ func TestPullRequestNotFoundNamesTheSubject(t *testing.T) {
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
 	for _, tt := range []struct{ operation, arguments, want string }{
-		{"github.pullrequests.get", `{"number":9}`, "pull request #9 in repository octo-org/example"},
-		{"github.pullrequestfiles.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
-		{"github.pullrequestcommits.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
-		{"github.pullrequestdiffs.get", `{"number":9}`, "pull request #9 in repository octo-org/example"},
-		{"github.pullrequestchecks.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
-		{"github.pullrequestchecks.list", `{"number":106}`, "commit facade0000 in repository octo-org/example"},
+		{"github.pull-requests.get", `{"number":9}`, "pull request #9 in repository octo-org/example"},
+		{"github.pull-request-files.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
+		{"github.pull-request-commits.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
+		{"github.pull-request-diffs.get", `{"number":9}`, "pull request #9 in repository octo-org/example"},
+		{"github.pull-request-checks.list", `{"number":9}`, "pull request #9 in repository octo-org/example"},
+		{"github.pull-request-checks.list", `{"number":106}`, "commit facade0000 in repository octo-org/example"},
 	} {
 		if _, err := invoke(t, core, tt.operation, "repo", tt.arguments, false); classOf(err) != provider.ClassNotFound ||
 			!strings.Contains(err.Error(), "GitHub does not hold "+tt.want) {
@@ -808,12 +808,12 @@ func TestPullRequestsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
 	for _, request := range []struct{ operation, arguments string }{
-		{"github.pullrequests.list", `{"limit":5}`},
-		{"github.pullrequests.get", `{"number":100}`},
-		{"github.pullrequestfiles.list", `{"number":100}`},
-		{"github.pullrequestcommits.list", `{"number":100}`},
-		{"github.pullrequestdiffs.get", `{"number":100}`},
-		{"github.pullrequestchecks.list", `{"number":100}`},
+		{"github.pull-requests.list", `{"limit":5}`},
+		{"github.pull-requests.get", `{"number":100}`},
+		{"github.pull-request-files.list", `{"number":100}`},
+		{"github.pull-request-commits.list", `{"number":100}`},
+		{"github.pull-request-diffs.get", `{"number":100}`},
+		{"github.pull-request-checks.list", `{"number":100}`},
 	} {
 		result, err := invoke(t, core, request.operation, "repo", request.arguments, false)
 		if err != nil {
@@ -837,7 +837,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
 	before := len(f.recorded())
-	created, err := invoke(t, core, "github.pullrequests.create", "repo",
+	created, err := invoke(t, core, "github.pull-requests.create", "repo",
 		`{"title":"Add retry logic","head":"feature/retry","base":"main","draft":true}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -854,7 +854,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	}
 
 	before = len(f.recorded())
-	updated, err := invoke(t, core, "github.pullrequests.update", "repo",
+	updated, err := invoke(t, core, "github.pull-requests.update", "repo",
 		`{"number":50,"title":"New title","base":"develop"}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -875,7 +875,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	// A draft change alone sends only the mutation, then re-reads the pull request because GitHub's REST
 	// answer would otherwise still show the earlier draft state.
 	before = len(f.recorded())
-	toDraft, err := invoke(t, core, "github.pullrequests.update", "repo", `{"number":50,"draft":true}`, true)
+	toDraft, err := invoke(t, core, "github.pull-requests.update", "repo", `{"number":50,"draft":true}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -892,7 +892,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 
 	// A REST field and a draft change together send both, then re-read once.
 	before = len(f.recorded())
-	ready, err := invoke(t, core, "github.pullrequests.update", "repo",
+	ready, err := invoke(t, core, "github.pull-requests.update", "repo",
 		`{"number":50,"title":"Ready again","draft":false}`, true)
 	if err != nil {
 		t.Fatal(err)
@@ -911,7 +911,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	}
 
 	before = len(f.recorded())
-	closed, err := invoke(t, core, "github.pullrequests.close", "repo", `{"number":50}`, true)
+	closed, err := invoke(t, core, "github.pull-requests.close", "repo", `{"number":50}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,7 +927,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 
 	// A repeated close on an already-closed pull request is idempotent and sends only the read.
 	before = len(f.recorded())
-	if _, err := invoke(t, core, "github.pullrequests.close", "repo", `{"number":50}`, true); err != nil {
+	if _, err := invoke(t, core, "github.pull-requests.close", "repo", `{"number":50}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if requests := f.recorded()[before:]; len(requests) != 1 {
@@ -935,7 +935,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	}
 
 	before = len(f.recorded())
-	reopened, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true)
+	reopened, err := invoke(t, core, "github.pull-requests.reopen", "repo", `{"number":50}`, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -951,7 +951,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 
 	// A repeated reopen on an already-open pull request is idempotent and sends only the read.
 	before = len(f.recorded())
-	if _, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true); err != nil {
+	if _, err := invoke(t, core, "github.pull-requests.reopen", "repo", `{"number":50}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if requests := f.recorded()[before:]; len(requests) != 1 {
@@ -962,7 +962,7 @@ func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
 	idx := p.index(50)
 	p.pulls[idx].state, p.pulls[idx].merged = "closed", true
 	before = len(f.recorded())
-	if _, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true); !isInvalidRequest(err) ||
+	if _, err := invoke(t, core, "github.pull-requests.reopen", "repo", `{"number":50}`, true); !isInvalidRequest(err) ||
 		!strings.Contains(err.Error(), "pull request #50 is already merged and cannot be reopened") {
 		t.Errorf("reopen of a merged pull request = %v, want an invalid request naming it", err)
 	}
@@ -980,7 +980,7 @@ func TestPullRequestBranchUpdateQueuesWhileTheHeadMatches(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequestbranches.update", "repo",
+	result, err := invoke(t, core, "github.pull-request-branches.update", "repo",
 		fmt.Sprintf(`{"number":60,"expected_head_sha":%q}`, head), true)
 	if err != nil {
 		t.Fatal(err)
@@ -999,7 +999,7 @@ func TestPullRequestBranchUpdateQueuesWhileTheHeadMatches(t *testing.T) {
 
 	before := len(f.recorded())
 	stale := strings.Repeat("b", 40)
-	_, err = invoke(t, core, "github.pullrequestbranches.update", "repo",
+	_, err = invoke(t, core, "github.pull-request-branches.update", "repo",
 		fmt.Sprintf(`{"number":60,"expected_head_sha":%q}`, stale), true)
 	if classOf(err) != provider.ClassProviderError ||
 		!strings.Contains(err.Error(), "expected_head_sha may no longer be its current head commit") {
@@ -1025,7 +1025,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 		Tools:       []string{pullsGet.ID, pullsMerge.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.pullrequests.merge", "merger",
+	result, err := invoke(t, core, "github.pull-requests.merge", "merger",
 		fmt.Sprintf(`{"number":70,"sha":%q,"method":"squash"}`, head), true)
 	if err != nil {
 		t.Fatal(err)
@@ -1045,7 +1045,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 
 	// Already merged with exactly this head commit is idempotent success without another request.
 	before := len(f.recorded())
-	again, err := invoke(t, core, "github.pullrequests.merge", "merger",
+	again, err := invoke(t, core, "github.pull-requests.merge", "merger",
 		fmt.Sprintf(`{"number":70,"sha":%q}`, head), true)
 	if err != nil {
 		t.Fatal(err)
@@ -1064,7 +1064,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 	// Already merged with a different head commit is refused as an invalid request naming both.
 	before = len(f.recorded())
 	other := strings.Repeat("d", 40)
-	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":70,"sha":%q}`, other), true)
+	_, err = invoke(t, core, "github.pull-requests.merge", "merger", fmt.Sprintf(`{"number":70,"sha":%q}`, other), true)
 	if !isInvalidRequest(err) || !strings.Contains(err.Error(), head) || !strings.Contains(err.Error(), other) {
 		t.Errorf("merge with the wrong head = %v, want an invalid request naming both commits", err)
 	}
@@ -1076,7 +1076,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 	// invalid request naming the expected and the now-current head.
 	stale, current := strings.Repeat("e", 40), strings.Repeat("f", 40)
 	p.pulls = append(p.pulls, fakePull{number: 71, title: "y", state: "open", headSHA: current})
-	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, stale), true)
+	_, err = invoke(t, core, "github.pull-requests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, stale), true)
 	if !isInvalidRequest(err) || !strings.Contains(err.Error(), stale) || !strings.Contains(err.Error(), current) {
 		t.Errorf("a changed head = %v, want an invalid request naming the expected and the current head", err)
 	}
@@ -1085,7 +1085,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 	// is never retried automatically.
 	before = len(f.recorded())
 	p.notMergeable = true
-	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, current), true)
+	_, err = invoke(t, core, "github.pull-requests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, current), true)
 	if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "not mergeable") {
 		t.Errorf("a not-mergeable pull request = %v, want a clear provider refusal", err)
 	}
@@ -1095,7 +1095,7 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 
 	// A connection whose tools list does not name the merge neither discovers nor runs it.
 	before = len(f.recorded())
-	_, err = invoke(t, core, "github.pullrequests.merge", "repo", fmt.Sprintf(`{"number":70,"sha":%q}`, head), true)
+	_, err = invoke(t, core, "github.pull-requests.merge", "repo", fmt.Sprintf(`{"number":70,"sha":%q}`, head), true)
 	if _, ok := err.(*capability.UnsupportedError); !ok {
 		t.Errorf("merge on a connection without the tool listed = %T %v, want unsupported", err, err)
 	}
@@ -1124,15 +1124,15 @@ func TestPullRequestChangesSatisfyTheirContractThroughTheApplicationCoreWithAudi
 	core.SetAudit(&audit)
 
 	for _, request := range []application.InvokeRequest{
-		{Operation: "github.pullrequests.create", Connection: "repo",
+		{Operation: "github.pull-requests.create", Connection: "repo",
 			Arguments: json.RawMessage(`{"title":"New feature","head":"feature/new","base":"main"}`)},
-		{Operation: "github.pullrequests.update", Connection: "repo",
+		{Operation: "github.pull-requests.update", Connection: "repo",
 			Arguments: json.RawMessage(`{"number":80,"title":"Updated title"}`)},
-		{Operation: "github.pullrequests.close", Connection: "repo", Arguments: json.RawMessage(`{"number":80}`)},
-		{Operation: "github.pullrequests.reopen", Connection: "repo", Arguments: json.RawMessage(`{"number":81}`)},
-		{Operation: "github.pullrequestbranches.update", Connection: "repo",
+		{Operation: "github.pull-requests.close", Connection: "repo", Arguments: json.RawMessage(`{"number":80}`)},
+		{Operation: "github.pull-requests.reopen", Connection: "repo", Arguments: json.RawMessage(`{"number":81}`)},
+		{Operation: "github.pull-request-branches.update", Connection: "repo",
 			Arguments: json.RawMessage(fmt.Sprintf(`{"number":82,"expected_head_sha":%q}`, strings.Repeat("2", 40)))},
-		{Operation: "github.pullrequests.merge", Connection: "merger",
+		{Operation: "github.pull-requests.merge", Connection: "merger",
 			Arguments: json.RawMessage(fmt.Sprintf(`{"number":82,"sha":%q}`, strings.Repeat("2", 40)))},
 	} {
 		request.Confirmed = true

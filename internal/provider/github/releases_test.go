@@ -428,7 +428,7 @@ func TestReleaseAssetsAreListed(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, "github.releaseassets.list", "repo", `{"id":5}`, false)
+	result, err := invoke(t, core, "github.release-assets.list", "repo", `{"id":5}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,7 +568,7 @@ func TestReleaseNotFoundNamesTheSubject(t *testing.T) {
 	for _, tt := range []struct{ operation, arguments, want string }{
 		{"github.releases.get", `{"id":9}`, "release 9 in repository octo-org/example"},
 		{"github.releases.get", `{"tag":"v9.0.0"}`, "release with tag v9.0.0 in repository octo-org/example"},
-		{"github.releaseassets.list", `{"id":9}`, "release asset 9 in repository octo-org/example"},
+		{"github.release-assets.list", `{"id":9}`, "release asset 9 in repository octo-org/example"},
 	} {
 		if _, err := invoke(t, core, tt.operation, "repo", tt.arguments, false); classOf(err) != provider.ClassNotFound ||
 			!strings.Contains(err.Error(), "GitHub does not hold "+tt.want) {
@@ -590,7 +590,7 @@ func TestReleasesSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	for _, request := range []struct{ operation, arguments string }{
 		{"github.releases.list", `{"limit":5}`},
 		{"github.releases.get", `{"id":100}`},
-		{"github.releaseassets.list", `{"id":100}`},
+		{"github.release-assets.list", `{"id":100}`},
 	} {
 		result, err := invoke(t, core, request.operation, "repo", request.arguments, false)
 		if err != nil {

@@ -45,7 +45,7 @@ const (
 )
 
 var teamsList = capability.Descriptor{
-	ID:      Provider + ".projectteams.list",
+	ID:      Provider + ".project-teams.list",
 	Version: 1,
 	Title:   "List the teams of a GitHub project",
 	Description: "Read one bounded batch of the teams one GitHub project a connection allows is " +
@@ -64,7 +64,7 @@ var teamsList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch; the first batch when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "teams", Description: "Linked teams in name order: team (the slug github.projects.linkteam " +
+		{Name: "teams", Description: "Linked teams in name order: team (the slug github.projects.link-team " +
 			"takes) and name, untrusted data; empty for a project of a user"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the project is linked to further teams"},
@@ -76,7 +76,7 @@ var teamsList = capability.Descriptor{
 }
 
 var collaboratorsUpdate = capability.Descriptor{
-	ID:      Provider + ".projectcollaborators.update",
+	ID:      Provider + ".project-collaborators.update",
 	Version: 2,
 	Title:   "Change the collaborators of a GitHub project",
 	Description: "Grant teams of the owning organization and its members a role on one organization project " +
@@ -107,7 +107,7 @@ var collaboratorsUpdate = capability.Descriptor{
 }
 
 var teamsLink = capability.Descriptor{
-	ID:      Provider + ".projects.linkteam",
+	ID:      Provider + ".projects.link-team",
 	Version: 1,
 	Title:   "Link a GitHub project to a team",
 	Description: "Link one project of an organization a connection allows to a team of that " +
@@ -132,7 +132,7 @@ var teamsLink = capability.Descriptor{
 }
 
 var teamsUnlink = capability.Descriptor{
-	ID:      Provider + ".projects.unlinkteam",
+	ID:      Provider + ".projects.unlink-team",
 	Version: 1,
 	Title:   "Unlink a GitHub project from a team",
 	Description: "Remove the link between one project of an organization a connection allows and a " +
