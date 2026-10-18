@@ -36,12 +36,12 @@ token, decides which teams and channels are reachable.
 ```yaml
 services:
   kchat:
-    provider: infomaniakchat
+    provider: infomaniak.chat
     base_url: https://acme-support.kchat.infomaniak.com
 
 credentials:
   kchat-bot:
-    provider: infomaniakchat
+    provider: infomaniak.chat
     type: keyring
 ```
 
@@ -79,27 +79,27 @@ Per tool family:
 
 - `channels.get` takes `channel_id` or `team_id` with `name`; the channel kChat answers with must belong to a
   bound team and be inside the allow-list. `channels.browse` drops channels outside the allow-list.
-- `channels.update`, `.archive`, `.restore`, `.privacy`, and the `channelmembers` tools bind their channel
+- `channels.update`, `.archive`, `.restore`, `.privacy`, and the `channel-members` tools bind their channel
   with the live check and refuse direct and group channels; `channels.update`, `.archive`, and `.privacy`
-  also refuse archived channels, and `.restore` accepts only archived ones. `channelmembers.add` proves each
+  also refuse archived channels, and `.restore` accepts only archived ones. `channel-members.add` proves each
   user a current member of the channel's own team, not merely of some bound team.
-- `archivedchannels.list` takes a bound `team_id`, checked locally, and drops channels of other teams,
+- `archived-channels.list` takes a bound `team_id`, checked locally, and drops channels of other teams,
   outside the allow-list, and direct and group channels.
 - The `categories` tools take a bound `team_id`, checked locally, and address the own user. A category
   must belong to that team and user. Shown `channel_ids` are only the reachable channels of the search set;
   any other channel in `channel_ids` is refused before the change, outside the allow-list locally.
-  `channelnotifications.update` binds its channel like `channels.update`.
+  `channel-notifications.update` binds its channel like `channels.update`.
 - `channels.create` works only in a bound team and only on a connection without a channel allow-list,
   because a channel that does not exist yet cannot be inside one; the refusal is local.
 - A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.flag`, `.unflag`,
-  `.remind`, `.markunread`, and the `reactions` tools) is bound through its channel: Qatlas reads the post,
+  `.remind`, `.mark-unread`, and the `reactions` tools) is bound through its channel: Qatlas reads the post,
   refuses another or a deleted post, applies the allow-list, and runs the live check first.
 - `pins.list` and `flagged.list` bind `channel_id` like a channel tool and drop posts of another channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
-- A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.markread`) is a root `post_id`: it is bound like
+- A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.mark-read`) is a root `post_id`: it is bound like
   one, must not be a reply, and its channel must be in the reachable set of the bound `team_id` described
   below, so a thread of another bound team is refused.
-- A `hook_id` (`incomingwebhooks.*`, `outgoingwebhooks.get`, `.update`, `.delete`) is bound through its
+- A `hook_id` (`incoming-webhooks.*`, `outgoing-webhooks.get`, `.update`, `.delete`) is bound through its
   channel like a post, but only in a bound team. A list keeps webhooks of live channels the token belongs to,
   inside the allow-list. An outgoing webhook without a channel watches every public channel of its team, and
   a `command_id` is bound through its team only; both are refused with a channel allow-list.
@@ -141,18 +141,18 @@ of the allow-list exists or is reachable.
 
 ## Tools
 
-Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
+Every tool ID starts with `infomaniak.chat.`; the tool group is the first column:
 
 | Group | Reads | Confirmed changes | Only with a tools list |
 | --- | --- | --- | --- |
-| `teams` | `teams.list`, `.get`, `teammembers.list`, `insights.top` | | `teammembers.roles` |
-| `channels` | `channels.list`, `.get`, `.browse`, `.search`, `.unread`, `archivedchannels.list`, `channelmembers.list`, `categories.list` | `channels.create`, `.update`, `.markread`, `channelmembers.add`, `categories.create`, `.update`, `channelnotifications.update` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles`, `categories.delete` |
-| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list`, `flagged.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.flag`, `.unflag`, `.remind`, `.markunread` | `messages.delete` |
+| `teams` | `teams.list`, `.get`, `team-members.list`, `insights.top` | | `team-members.roles` |
+| `channels` | `channels.list`, `.get`, `.browse`, `.search`, `.unread`, `archived-channels.list`, `channel-members.list`, `categories.list` | `channels.create`, `.update`, `.mark-read`, `channel-members.add`, `categories.create`, `.update`, `channel-notifications.update` | `channels.archive`, `.restore`, `.privacy`, `channel-members.remove`, `.roles`, `categories.delete` |
+| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list`, `flagged.list` | `direct.open`, `group-messages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.flag`, `.unflag`, `.remind`, `.mark-unread` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
-| `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
+| `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.mark-read` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
-| `users` | `users.get`, `.list`, `.search`, `.status`, `usergroups.list` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
-| `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
+| `users` | `users.get`, `.list`, `.search`, `.status`, `user-groups.list` | `status.set`, `custom-status.set`, `.clear`, `profile.update` | |
+| `integrations` | | | `incoming-webhooks.*`, `outgoing-webhooks.*`, `commands.*` |
 | `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `roles.get` (a `POST` that changes nothing), `emoji.create` (reads a local file), `.delete` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
@@ -162,18 +162,18 @@ and offered only to a connection whose tools list names them; the role tools alt
 The terminal editor starts a new connection on the setup profile `read` (all read tools). `messaging` adds
 the opens, sends, edits, pins, flags, reminders, read marks, uploads, reactions, thread following, category
 and notification changes, and the own status tools; `channel-admin` adds `channels.create`, `.update`,
-and `channelmembers.add`. `profile.update`, the integration, bot, and emoji-writing tools are in no profile.
+and `channel-members.add`. `profile.update`, the integration, bot, and emoji-writing tools are in no profile.
 
 Behaviour beyond the schemas:
 
-- `teams.get` and `teammembers.*` take a bound `team_id`, checked locally. `teams.get` never returns the
-  invitation ID, email, or allowed domains; `teammembers.roles` changes only a live member of that team.
+- `teams.get` and `team-members.*` take a bound `team_id`, checked locally. `teams.get` never returns the
+  invitation ID, email, or allowed domains; `team-members.roles` changes only a live member of that team.
 - `channels.create` and `.update` never create or change a direct or group channel; `update` sends only the
   given fields. Re-adding a member or reaction changes nothing; kChat notifies added users.
 - Opening a direct or group channel returns the existing one. Every named user is proven a member of a bound
   team first, the own user is added by Qatlas, and repeated IDs count once. A connection with a channel
   allow-list opens no channel, refused before any secret is read.
-- `status.set`, `customstatus.set`, `.clear`, `profile.update`, reactions, flags, categories, notifications,
+- `status.set`, `custom-status.set`, `.clear`, `profile.update`, reactions, flags, categories, notifications,
   and thread following always address the token's own user, read from `GET /api/v4/users/me` or `users/me` in
   the path and never from an argument; the status and profile act for it in every team of the instance (for
   the bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, `position`.
@@ -181,13 +181,13 @@ Behaviour beyond the schemas:
   other properties are written back as read, and channels the connection cannot reach stay in the category,
   after the given ones. System categories accept only `channel_ids`; `categories.create` and `.delete` handle
   only `custom` ones. Category order is not offered.
-- `channelnotifications.update` sends only the given fields and no direct or group channel.
+- `channel-notifications.update` sends only the given fields and no direct or group channel.
 - `messages.pin`, `.unpin`, `threads.follow`, and `.unfollow` are idempotent, send no body, change nothing
   else, and report the state kChat confirmed; `messages.flag` and `.unflag` send one fixed `flagged_post`
   preference entry, no other; `messages.remind` (not idempotent) sends just `target_time` in Unix seconds,
   from an RFC 3339 time within a year. Threads never include deleted threads or participants' user data.
 - Read state is always the token's own, never an argument, and the marks are idempotent. `channels.unread`
-  returns only the counts of the bound channel. `channels.markread` is kChat's channel view, so it also
+  returns only the counts of the bound channel. `channels.mark-read` is kChat's channel view, so it also
   clears push notifications for the channel; its body holds `channel_id` only.
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
   its replies. Whether a token may edit or delete another author's message is kChat's decision (`permission`).
@@ -217,8 +217,8 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `teams.list`, `channels.list`, `reactions.list`, `pins.list`, and `commands.list` read kChat's complete
   array, which has no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a
   window of the already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
-- `channels.browse`, `archivedchannels.list`, the webhook lists, `bots.list`, `emoji.list`,
-  `channelmembers.list`, `teammembers.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
+- `channels.browse`, `archived-channels.list`, the webhook lists, `bots.list`, `emoji.list`,
+  `channel-members.list`, `team-members.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
   true for a full page; dropped entries can lower `count`. `users.search` takes only `limit`, one page.
 - `messages.list` (`GetPostsForChannel`, newest first) and `insights.top`: `has_more` is kChat's `has_next`.
 - `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass `page` and `limit` (at most 100)
@@ -281,7 +281,7 @@ A live test against a real kChat instance checks, in order:
 - Listings match the allow-lists and the token's teams and channels; searches and `insights.top` show nothing
   from a channel outside the allow-list, a direct message, or another team.
 - Channel create and update work only without a channel allow-list; member tools refuse a user only in
-  another team. A disposable channel switches to private, is archived, shows in `archivedchannels.list`,
+  another team. A disposable channel switches to private, is archived, shows in `archived-channels.list`,
   and is restored; the default channel's refusal is a provider error class.
 - Message list ends with `has_more` false on the last of two pages; one confirmed send appears exactly once;
   an upload is sent by `file_id` without `text`; an attached file, another user's upload, and an upload for

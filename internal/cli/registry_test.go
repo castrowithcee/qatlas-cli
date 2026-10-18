@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -206,5 +207,34 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 			t.Errorf("provider %s recommended profile %s selects %v, want reads only", metadata.ID, profile.ID,
 				permissions)
 		}
+	}
+}
+
+// The kChat provider is listed under its current ID only; the former ID resolves through a rename and is not
+// a namespace of its own.
+func TestProvidersListsKChatUnderItsCurrentID(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	path := writeConfig(t, "version: 1\ndefaults: {}\n")
+	var reads atomic.Int32
+	code, stdout, stderr := runTools(t, &reads, "providers", "--config", path, "--output", "json")
+	if code != exitOK || stderr != "" {
+		t.Fatalf("providers: exit=%d stderr=%q", code, stderr)
+	}
+	var listed struct {
+		Providers []struct {
+			Provider string `json:"provider"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &listed); err != nil {
+		t.Fatal(err)
+	}
+	var current, former bool
+	for _, p := range listed.Providers {
+		current = current || p.Provider == "infomaniak.chat"
+		former = former || p.Provider == "infomaniakchat"
+	}
+	if !current || former {
+		t.Errorf("providers = %+v, want infomaniak.chat and not infomaniakchat", listed.Providers)
 	}
 }

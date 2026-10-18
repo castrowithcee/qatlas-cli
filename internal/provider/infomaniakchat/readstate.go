@@ -48,7 +48,7 @@ var channelsUnread = capability.Descriptor{
 }
 
 var channelsMarkRead = capability.Descriptor{
-	ID:      Provider + ".channels.markread",
+	ID:      Provider + ".channels.mark-read",
 	Version: 1,
 	Title:   "Mark an Infomaniak kChat channel as read",
 	Description: "Mark exactly one confirmed channel this connection may reach as read for the token's own user; kChat " +
@@ -74,7 +74,7 @@ var channelsMarkRead = capability.Descriptor{
 }
 
 var messagesMarkUnread = capability.Descriptor{
-	ID:      Provider + ".messages.markunread",
+	ID:      Provider + ".messages.mark-unread",
 	Version: 1,
 	Title:   "Mark an Infomaniak kChat message as unread",
 	Description: "Mark the channel of exactly one confirmed message this connection may reach as unread from that " +
@@ -99,7 +99,7 @@ var messagesMarkUnread = capability.Descriptor{
 }
 
 var threadsMarkRead = capability.Descriptor{
-	ID:      Provider + ".threads.markread",
+	ID:      Provider + ".threads.mark-read",
 	Version: 1,
 	Title:   "Mark an Infomaniak kChat thread as read",
 	Description: "Set the read state of exactly one confirmed followed thread of the token's own user, in a reachable " +

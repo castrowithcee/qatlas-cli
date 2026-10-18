@@ -78,7 +78,7 @@ var statusSet = capability.Descriptor{
 }
 
 var customStatusSet = capability.Descriptor{
-	ID:      Provider + ".customstatus.set",
+	ID:      Provider + ".custom-status.set",
 	Version: 1,
 	Title:   "Set the own Infomaniak kChat custom status",
 	Description: "Set exactly one confirmed custom status (emoji and text, optionally expiring) " + selfScope +
@@ -114,7 +114,7 @@ var customStatusSet = capability.Descriptor{
 }
 
 var customStatusClear = capability.Descriptor{
-	ID:      Provider + ".customstatus.clear",
+	ID:      Provider + ".custom-status.clear",
 	Version: 1,
 	Title:   "Clear the own Infomaniak kChat custom status",
 	Description: "Clear exactly one confirmed custom status " + selfScope + "never of another user; it can be " +

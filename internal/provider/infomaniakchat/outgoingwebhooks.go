@@ -24,7 +24,7 @@ const outgoingHookOutOfScope = "hook_id belongs to a team or channel outside the
 const maxHookListEntries = 50
 
 var outgoingHookIDArgument = capability.Argument{Name: "hook_id", Required: true,
-	Description: "Outgoing webhook identifier from outgoingwebhooks.list; treat it as a secret"}
+	Description: "Outgoing webhook identifier from outgoing-webhooks.list; treat it as a secret"}
 
 var outgoingHookSchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"team_id":` + idSchema + `,"channel_id":` + idSchema + `,` +
@@ -37,7 +37,7 @@ var outgoingHookSchema = `{"type":"object","properties":{` +
 	`"additionalProperties":false}`
 
 var outgoingHookFields = []capability.Field{
-	{Name: "id", Description: "Webhook identifier; only listed by outgoingwebhooks.list, absent elsewhere because " +
+	{Name: "id", Description: "Webhook identifier; only listed by outgoing-webhooks.list, absent elsewhere because " +
 		"the caller named it"},
 	{Name: "team_id", Description: "Team of the webhook"},
 	{Name: "channel_id", Description: "Public channel the webhook watches; absent for a webhook that watches " +
@@ -57,7 +57,7 @@ var outgoingHookFields = []capability.Field{
 }
 
 var outgoingWebhooksList = capability.Descriptor{
-	ID:      Provider + ".outgoingwebhooks.list",
+	ID:      Provider + ".outgoing-webhooks.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat outgoing webhooks",
 	Description: "List the active outgoing webhooks of one team this connection is bound to, one kChat page at a " +
@@ -96,7 +96,7 @@ var outgoingWebhooksList = capability.Descriptor{
 }
 
 var outgoingWebhooksGet = capability.Descriptor{
-	ID:      Provider + ".outgoingwebhooks.get",
+	ID:      Provider + ".outgoing-webhooks.get",
 	Version: 1,
 	Title:   "Get an Infomaniak kChat outgoing webhook",
 	Description: "Read exactly one active outgoing webhook of a bound team whose channel this connection may " +
@@ -115,7 +115,7 @@ var outgoingWebhooksGet = capability.Descriptor{
 }
 
 var outgoingWebhooksUpdate = capability.Descriptor{
-	ID:      Provider + ".outgoingwebhooks.update",
+	ID:      Provider + ".outgoing-webhooks.update",
 	Version: 1,
 	Title:   "Change an Infomaniak kChat outgoing webhook",
 	Description: "Change the display name or description of exactly one active outgoing webhook of a bound team " +
@@ -141,7 +141,7 @@ var outgoingWebhooksUpdate = capability.Descriptor{
 }
 
 var outgoingWebhooksDelete = capability.Descriptor{
-	ID:      Provider + ".outgoingwebhooks.delete",
+	ID:      Provider + ".outgoing-webhooks.delete",
 	Version: 1,
 	Title:   "Delete an Infomaniak kChat outgoing webhook",
 	Description: "Delete exactly one active outgoing webhook of a bound team whose channel this connection may " +

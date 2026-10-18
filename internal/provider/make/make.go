@@ -334,7 +334,7 @@ func (c *Client) change(ctx context.Context, op, method, path string, query url.
 // answer into out when out is not nil. need names the scope this request needs, so a permission refusal
 // tells a caller what to add to the token instead of only that it was refused. note marks this as a
 // changing request when it is not empty: every failure of it that could mean the request nonetheless arrived
-// has note appended, so this provider never repeats it by itself, the same contract n8n and infomaniakchat
+// has note appended, so this provider never repeats it by itself, the same contract n8n and infomaniak.chat
 // give their own change requests.
 func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body, out any,
 	need, note string) error {

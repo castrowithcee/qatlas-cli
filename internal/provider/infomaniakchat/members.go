@@ -42,7 +42,7 @@ var memberEntrySchema = `{"type":"object","properties":{` +
 	`"required":["user_id","roles","scheme_admin"],"additionalProperties":false}`
 
 var channelsMembersList = capability.Descriptor{
-	ID:      Provider + ".channelmembers.list",
+	ID:      Provider + ".channel-members.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat channel members",
 	Description: "List the members of one public or private channel this connection may reach, one page at a " +
@@ -77,7 +77,7 @@ var channelsMembersList = capability.Descriptor{
 }
 
 var channelsMembersAdd = capability.Descriptor{
-	ID:      Provider + ".channelmembers.add",
+	ID:      Provider + ".channel-members.add",
 	Version: 1,
 	Title:   "Add Infomaniak kChat channel members",
 	Description: "Add 1 to " + itoa(maxAddMembers) + " users with one confirmed request to one public or private " +
@@ -107,7 +107,7 @@ var channelsMembersAdd = capability.Descriptor{
 }
 
 var channelsMembersRemove = capability.Descriptor{
-	ID:      Provider + ".channelmembers.remove",
+	ID:      Provider + ".channel-members.remove",
 	Version: 1,
 	Title:   "Remove an Infomaniak kChat channel member",
 	Description: "Remove exactly one confirmed user from one public or private channel this connection may " +
@@ -131,7 +131,7 @@ var channelsMembersRemove = capability.Descriptor{
 }
 
 var channelsMembersRoles = capability.Descriptor{
-	ID:      Provider + ".channelmembers.roles",
+	ID:      Provider + ".channel-members.roles",
 	Version: 1,
 	Title:   "Change an Infomaniak kChat channel role",
 	Description: "Set the channel role of exactly one member of one public or private channel this connection " +

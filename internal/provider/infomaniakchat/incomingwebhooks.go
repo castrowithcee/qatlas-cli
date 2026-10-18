@@ -41,7 +41,7 @@ func hookRisk(effect capability.Effect, idempotency capability.Idempotency, conf
 }
 
 var hookIDArgument = capability.Argument{Name: "hook_id", Required: true,
-	Description: "Incoming webhook identifier from incomingwebhooks.list; it is the secret of the webhook's post " +
+	Description: "Incoming webhook identifier from incoming-webhooks.list; it is the secret of the webhook's post " +
 		"URL, so treat it as a secret"}
 
 var incomingHookSchema = `{"type":"object","properties":{` +
@@ -52,7 +52,7 @@ var incomingHookSchema = `{"type":"object","properties":{` +
 	`"required":["team_id","channel_id","display_name","description","channel_locked"],"additionalProperties":false}`
 
 var incomingHookFields = []capability.Field{
-	{Name: "id", Description: "Webhook identifier, the secret of its post URL; only listed by incomingwebhooks.list, " +
+	{Name: "id", Description: "Webhook identifier, the secret of its post URL; only listed by incoming-webhooks.list, " +
 		"absent elsewhere because the caller named it"},
 	{Name: "team_id", Description: "Team of the webhook"},
 	{Name: "channel_id", Description: "Channel the webhook posts to"},
@@ -66,7 +66,7 @@ var incomingHookFields = []capability.Field{
 }
 
 var incomingWebhooksList = capability.Descriptor{
-	ID:      Provider + ".incomingwebhooks.list",
+	ID:      Provider + ".incoming-webhooks.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat incoming webhooks",
 	Description: "List the active incoming webhooks of one team this connection is bound to, one kChat page at a " +
@@ -103,7 +103,7 @@ var incomingWebhooksList = capability.Descriptor{
 }
 
 var incomingWebhooksGet = capability.Descriptor{
-	ID:      Provider + ".incomingwebhooks.get",
+	ID:      Provider + ".incoming-webhooks.get",
 	Version: 1,
 	Title:   "Get an Infomaniak kChat incoming webhook",
 	Description: "Read exactly one active incoming webhook whose channel this connection may reach; the hook_id " +
@@ -122,7 +122,7 @@ var incomingWebhooksGet = capability.Descriptor{
 }
 
 var incomingWebhooksUpdate = capability.Descriptor{
-	ID:      Provider + ".incomingwebhooks.update",
+	ID:      Provider + ".incoming-webhooks.update",
 	Version: 1,
 	Title:   "Change an Infomaniak kChat incoming webhook",
 	Description: "Change the display name or description of exactly one active incoming webhook whose channel " +
@@ -148,7 +148,7 @@ var incomingWebhooksUpdate = capability.Descriptor{
 }
 
 var incomingWebhooksDelete = capability.Descriptor{
-	ID:      Provider + ".incomingwebhooks.delete",
+	ID:      Provider + ".incoming-webhooks.delete",
 	Version: 1,
 	Title:   "Delete an Infomaniak kChat incoming webhook",
 	Description: "Delete exactly one active incoming webhook whose channel this connection may reach with one " +
