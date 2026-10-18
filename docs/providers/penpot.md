@@ -96,7 +96,7 @@ connections:
 | `penpot.libraries.share` | update | required | `set-file-shared` | shares a file as a library for the whole team, or stops sharing it |
 | `penpot.libraries.link` | update | required | `link-file-to-library` | links one file to a library file |
 | `penpot.media.upload` | create | required | `upload-file-media-object` | stores an image from a local file or inline in a file |
-| `penpot.media.fromurl` | create | required | `create-file-media-object-from-url` | lets Penpot fetch an image from an https URL into a file |
+| `penpot.media.from-url` | create | required | `create-file-media-object-from-url` | lets Penpot fetch an image from an https URL into a file |
 | `penpot.files.export` | read | none | `export-binfile` | writes a file as a `.penpot` archive to a local path |
 | `penpot.files.import` | create | required | `import-binfile` | imports a local `.penpot` archive as a new file |
 | `penpot.comments.threads` | read | none | `get-comment-threads` | lists the comment threads of a file |
@@ -108,14 +108,14 @@ connections:
 | `penpot.webhooks.update` | update | required | `update-webhook` | replaces payload type and active state of a webhook |
 | `penpot.webhooks.delete` | delete | required, tool allow-list | `delete-webhook` | deletes a webhook |
 | `penpot.members.list` | read | none | `get-team-members` | lists the members of one bound team |
-| `penpot.members.setrole` | update | required, tool allow-list | `update-team-member-role` | sets a member's role to admin, editor, or viewer |
+| `penpot.members.set-role` | update | required, tool allow-list | `update-team-member-role` | sets a member's role to admin, editor, or viewer |
 | `penpot.members.remove` | delete | required, tool allow-list | `delete-team-member` | removes a member from a bound team |
 | `penpot.teams.create` | create | required, tool allow-list | `create-team` | creates a new team |
 | `penpot.teams.delete` | delete | required, tool allow-list | `delete-team` | deletes a bound team with its projects and files |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
 through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`,
-`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.setrole`, `penpot.members.remove`, `penpot.teams.create`, and `penpot.teams.delete` are offered only
+`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.set-role`, `penpot.members.remove`, `penpot.teams.create`, and `penpot.teams.delete` are offered only
 when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.
 
@@ -211,7 +211,7 @@ resolved and before any request is sent, and the refusal never names the path. A
   gif, webp, svg, chosen by the file name extension. Images are limited to 64 MiB by Qatlas and by the instance's own
   limit. The file is bound through its project. The answer has `id` (the media object), `media_id`, `file_id`,
   `project_id`, `name`, `mime_type`, `width`, `height`, `size`, and `sha256`.
-- `media.fromurl` takes `project_id`, `file_id`, `url`, and optionally `name` and `is_local`. **Penpot itself fetches the
+- `media.from-url` takes `project_id`, `file_id`, `url`, and optionally `name` and `is_local`. **Penpot itself fetches the
   URL.** Qatlas accepts only an `https` URL of up to 2048 characters on the default port, without user info or
   fragment, whose host is a DNS name of at least two labels with an alphabetic last label. Every IP form (also decimal,
   octal, hexadecimal, or IPv6), single-label names, and the suffixes `localhost`, `local`, `internal`, `intranet`,
@@ -231,10 +231,10 @@ resolved and before any request is sent, and the refusal never names the path. A
   instance's own upload limit; chunked uploads are not used. Penpot checks the archive. The answer has `imported`,
   `project_id`, `file_ids` (up to 20, when Penpot reports them), `size`, and `sha256`.
 
-`media.upload`, `media.fromurl`, and `files.import` ask for `confirm`, send exactly one request, and are never repeated;
+`media.upload`, `media.from-url`, and `files.import` ask for `confirm`, send exactly one request, and are never repeated;
 after a timeout, a connection reset, a 5xx answer, an unreadable answer, or an import stream without a final event the
 error says that the change may have taken effect, so read the file or project before trying again. Transfers use a
-30 minute timeout instead of the 30 seconds of the other requests (`media.fromurl`: 2 minutes). The export's archive is
+30 minute timeout instead of the 30 seconds of the other requests (`media.from-url`: 2 minutes). The export's archive is
 fetched from `/assets/by-id/<id>` on the connection's own origin, never from a host named in an answer, and without the
 token.
 
@@ -299,7 +299,7 @@ team that `teams.create` makes is outside every connection until you add `team/I
 - `members.list` takes `team_id` and answers `members` with `id` (used as `member_id`), `email`, `role` (`owner`,
   `admin`, `editor`, or `viewer`), and `is_active` (at most 200). Email addresses are personal data: the tool has its own
   sensitivity class, `penpot-members`; names and photos are not returned.
-- `members.setrole` takes `team_id`, `member_id`, and `role` (`admin`, `editor`, or `viewer`). The role `owner` is not
+- `members.set-role` takes `team_id`, `member_id`, and `role` (`admin`, `editor`, or `viewer`). The role `owner` is not
   offered, so ownership cannot be transferred. Penpot refuses a change of the owner and a change without admin rights.
   The answer has `updated`, `team_id`, `member_id`, and `role`.
 - `members.remove` takes `team_id` and `member_id`. Penpot refuses to remove the token's own account, and an admin

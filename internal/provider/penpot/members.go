@@ -52,7 +52,7 @@ var membersList = capability.Descriptor{
 }
 
 var membersSetRole = capability.Descriptor{
-	ID: Provider + ".members.setrole", Version: 1, Title: "Change a Penpot team member's role",
+	ID: Provider + ".members.set-role", Version: 1, Title: "Change a Penpot team member's role",
 	Description: "Set the role of one member of a bound team to admin, editor, or viewer. The owner role is not " +
 		"offered, so ownership cannot be transferred; Penpot refuses a change of the owner. " + membersNote,
 	Tags: []string{"penpot", "members", "role", "teams", "design"}, Provider: Provider, RequiresToolAllowList: true,
