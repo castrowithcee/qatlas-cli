@@ -20,7 +20,7 @@ import (
 const (
 	maxDeckStackOrder = 10000
 
-	uncertainDeckStack = "; the change may have been applied, check deckstacks.list before repeating"
+	uncertainDeckStack = "; the change may have been applied, check deck.stacks.list before repeating"
 
 	messageDeckStackList = "the Nextcloud board answer does not list its stacks"
 )
@@ -33,13 +33,13 @@ const (
 
 var (
 	deckStackIDArgument = capability.Argument{
-		Name: "stack_id", Description: "Numeric Deck stack ID as reported by deckstacks.list for this board", Required: true,
+		Name: "stack_id", Description: "Numeric Deck stack ID as reported by deck.stacks.list for this board", Required: true,
 	}
 	deckOrderArgument = capability.Argument{Name: "order", Description: "Position of the stack in the board, 0 to 10000"}
 )
 
 var deckStacksCreate = capability.Descriptor{
-	ID: Provider + ".deckstacks.create", Version: 1, Title: "Create a Nextcloud Deck stack",
+	ID: Provider + ".deck.stacks.create", Version: 1, Title: "Create a Nextcloud Deck stack",
 	Description: "Create exactly one confirmed stack in a bound Deck board; the identity needs the manage right on " +
 		"the board. One read-only pre-check precedes exactly one request; without order the stack goes last",
 	Tags: []string{"nextcloud", "deck", "stacks", "create"}, Provider: Provider,
@@ -58,7 +58,7 @@ var deckStacksCreate = capability.Descriptor{
 }
 
 var deckStacksUpdate = capability.Descriptor{
-	ID: Provider + ".deckstacks.update", Version: 1, Title: "Change a Nextcloud Deck stack",
+	ID: Provider + ".deck.stacks.update", Version: 1, Title: "Change a Nextcloud Deck stack",
 	Description: "Change the title or order of exactly one confirmed stack of a bound Deck board, at least one " +
 		"field; the identity needs the manage right on the board. One read-only pre-check precedes exactly one " +
 		"request; fields not given keep their current value",
@@ -79,7 +79,7 @@ var deckStacksUpdate = capability.Descriptor{
 }
 
 var deckStacksDelete = capability.Descriptor{
-	ID: Provider + ".deckstacks.delete", Version: 1, Title: "Delete a Nextcloud Deck stack",
+	ID: Provider + ".deck.stacks.delete", Version: 1, Title: "Delete a Nextcloud Deck stack",
 	Description: "Delete exactly one confirmed stack of a bound Deck board; the cards it contains are deleted " +
 		"with it. The identity needs the manage right on the board. One read-only pre-check precedes exactly " +
 		"one request",
@@ -94,7 +94,7 @@ var deckStacksDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Deck deleted the stack and its cards"},
 		{Name: "stack_id", Description: "ID of the deleted stack"},
 	},
-	Examples: []capability.Example{{Description: "Use IDs from deckstacks.list", Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3"}`)}},
+	Examples: []capability.Example{{Description: "Use IDs from deck.stacks.list", Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3"}`)}},
 	// Reachable only through a tools list, never through a profile.
 	RequiresToolAllowList: true,
 }

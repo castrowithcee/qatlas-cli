@@ -58,7 +58,7 @@ const trashEntrySchema = `{"type":"object","properties":{` +
 	`"required":["trash_id","name","path","type","size"],"additionalProperties":false}`
 
 var trashList = capability.Descriptor{
-	ID: Provider + ".trash.list", Version: 1,
+	ID: Provider + ".files.trash.list", Version: 1,
 	Title: "List the Nextcloud trash bin",
 	Description: "List the deleted items whose original location lies below the fixed root folder of a connection, " +
 		"at most 500 per call; items inside deleted folders are not listed and file content is never read",
@@ -69,7 +69,7 @@ var trashList = capability.Descriptor{
 		trashEntrySchema + `},"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["entries","count"],"additionalProperties":false}`),
 	Fields: []capability.Field{
-		{Name: "entries", Description: "Deleted items, untrusted data; pass trash_id to trash.restore or trash.delete"},
+		{Name: "entries", Description: "Deleted items, untrusted data; pass trash_id to files.trash.restore or files.trash.delete"},
 		{Name: "trash_id", Description: "Name of the item in the trash bin"},
 		{Name: "name", Description: "Name the item had before it was deleted"},
 		{Name: "path", Description: "Original path relative to the fixed root folder of this connection"},
@@ -84,20 +84,20 @@ var trashList = capability.Descriptor{
 
 func trashChange(action, done, title, description string, effect capability.Effect, risk capability.Risk) capability.Descriptor {
 	return capability.Descriptor{
-		ID: Provider + ".trash." + action, Version: 1, Title: title, Description: description,
+		ID: Provider + ".files.trash." + action, Version: 1, Title: title, Description: description,
 		Tags: []string{"nextcloud", "trash", "webdav", action}, Provider: Provider, Risk: risk,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"trash_id":` + trashIDSchema +
 			`},"required":["trash_id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{"` + done + `":{"type":"boolean"},` +
 			`"trash_id":{"type":"string"},"path":{"type":"string"}},"required":["` + done + `"],"additionalProperties":false}`),
 		Arguments: []capability.Argument{{Name: "trash_id", Required: true,
-			Description: "Name of the trash item, as trash.list reports it"}},
+			Description: "Name of the trash item, as files.trash.list reports it"}},
 		Fields: []capability.Field{
 			{Name: done, Description: "True when Nextcloud applied the change"},
 			{Name: "trash_id", Description: "The trash item"},
 			{Name: "path", Description: "Original path relative to the fixed root folder of this connection"},
 		},
-		Examples: []capability.Example{{Description: "Use a trash_id from trash.list",
+		Examples: []capability.Example{{Description: "Use a trash_id from files.trash.list",
 			Arguments: json.RawMessage(`{"trash_id":"report.pdf.d1700000000"}`)}},
 	}
 }
@@ -289,7 +289,7 @@ func invokeTrashChange(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	if err := checkSegment(input.TrashID); err != nil {
-		return nil, providerError(op, "trash_id is not a trash item name as trash.list reports it")
+		return nil, providerError(op, "trash_id is not a trash item name as files.trash.list reports it")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {

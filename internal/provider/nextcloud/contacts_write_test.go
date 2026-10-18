@@ -85,7 +85,7 @@ func TestContactsCreatePutsOneNewCardWithIfNoneMatch(t *testing.T) {
 	calls, headers := contactFixture(t, plainCard, func() (*http.Response, error) {
 		return eventChanged(http.StatusCreated, "n1"), nil
 	})
-	result, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.create", contactCreateArgs, true)
+	result, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts.create", contactCreateArgs, true)
 	if err != nil {
 		t.Fatalf("create = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestContactsCreatePutsOneNewCardWithIfNoneMatch(t *testing.T) {
 func TestContactsUpdateReplacesBoundToTheETagAndKeepsTheUID(t *testing.T) {
 	stored := vcardOf("u-keep", "Ada", "PRODID:-//x//EN\r\nREV:20200101T000000Z\r\nTEL:123\r\n")
 	calls, headers := contactFixture(t, stored, func() (*http.Response, error) { return eventChanged(http.StatusNoContent, "e2"), nil })
-	result, err := contactWrite(t, contactTools, []string{"addressbook/contacts"}, "nextcloud.contacts.update", contactUpdateArgs, true)
+	result, err := contactWrite(t, contactTools, []string{"addressbook/contacts"}, "nextcloud.contacts.contacts.update", contactUpdateArgs, true)
 	var got ContactWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil ||
 		got != (ContactWriteResult{Addressbook: "contacts", ID: "ada.vcf", UID: "u-keep", ETag: "e2", Updated: true}) {
@@ -133,7 +133,7 @@ func TestContactsUpdateReplacesBoundToTheETagAndKeepsTheUID(t *testing.T) {
 
 func TestContactsDeleteSendsOneETagBoundDelete(t *testing.T) {
 	calls, headers := contactFixture(t, plainCard, func() (*http.Response, error) { return eventChanged(http.StatusNoContent, ""), nil })
-	result, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.delete", contactDeleteArgs, true)
+	result, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts.delete", contactDeleteArgs, true)
 	var got ContactWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil ||
 		got != (ContactWriteResult{Addressbook: "contacts", ID: "ada.vcf", Deleted: true}) {
@@ -157,7 +157,7 @@ func TestContactsUpdateRefusesUnmodeledPropertiesBeforeAnyPut(t *testing.T) {
 			}
 			return contactGetAnswer("e1", vcardOf("u1", "Ada", extra)), nil
 		})
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.update", contactUpdateArgs, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts.update", contactUpdateArgs, true)
 		if err == nil || !strings.Contains(err.Error(), "does not write") || strings.Contains(err.Error(), contactPhoto) ||
 			len(*calls) != 1 {
 			t.Errorf("%s: err = %v, calls = %d", name, err, len(*calls))
@@ -177,7 +177,7 @@ func TestContactsChangedETagIsRefusedBeforeAnyMutation(t *testing.T) {
 			}
 			return contactGetAnswer("e9", plainCard), nil
 		})
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, true)
 		if err == nil || !strings.Contains(err.Error(), "precondition failed") || len(*calls) != 1 {
 			t.Errorf("%s: err = %v, calls = %d", op, err, len(*calls))
 		}
@@ -191,7 +191,7 @@ func TestContactsDeleteRefusesWhatIsNoVCard(t *testing.T) {
 		}
 		return contactGetAnswer("e1", "this is no card"), nil
 	})
-	_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.delete", contactDeleteArgs, true)
+	_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts.delete", contactDeleteArgs, true)
 	if err == nil || !strings.Contains(err.Error(), "not a valid vCard") || len(*calls) != 1 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}
@@ -205,7 +205,7 @@ func TestContactsCreateRefusesAReadOnlyAddressbookWithoutMutation(t *testing.T) 
 			}
 			return contactBookAnswer(privileges), nil
 		})
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.create", contactCreateArgs, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts.create", contactCreateArgs, true)
 		if classOf(err) != provider.ClassPermission || !strings.Contains(err.Error(), "read-only") || len(*calls) != 1 {
 			t.Errorf("%v: err = %v, calls = %d", privileges, err, len(*calls))
 		}
@@ -215,7 +215,7 @@ func TestContactsCreateRefusesAReadOnlyAddressbookWithoutMutation(t *testing.T) 
 func TestContactsUpdateAndDeleteReportAReadOnlyAddressbookByForbidden(t *testing.T) {
 	for op, args := range map[string]string{"update": contactUpdateArgs, "delete": contactDeleteArgs} {
 		calls, _ := contactFixture(t, plainCard, func() (*http.Response, error) { return status(http.StatusForbidden), nil })
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, true)
 		if classOf(err) != provider.ClassPermission || !strings.Contains(err.Error(), "read-only") ||
 			strings.Contains(err.Error(), contactHint) || len(*calls) != 2 {
 			t.Errorf("%s: err = %v, calls = %d", op, err, len(*calls))
@@ -230,7 +230,7 @@ func TestContactWritePreconditionFailureIsClear(t *testing.T) {
 		"delete": {contactDeleteArgs, "precondition failed"},
 	} {
 		calls, _ := contactFixture(t, plainCard, func() (*http.Response, error) { return status(http.StatusPreconditionFailed), nil })
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, tc.args, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, tc.args, true)
 		if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), tc.want) ||
 			strings.Contains(err.Error(), contactHint) || strings.Contains(err.Error(), bodyCanary) || len(*calls) != 2 {
 			t.Errorf("%s: err = %v, calls = %d", op, err, len(*calls))
@@ -251,8 +251,8 @@ func TestContactWriteUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 	} {
 		for name, answer := range answers {
 			calls, _ := contactFixture(t, plainCard, answer)
-			_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, true)
-			if err == nil || !strings.Contains(err.Error(), contactHint) || !strings.Contains(err.Error(), "contacts.list") ||
+			_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, true)
+			if err == nil || !strings.Contains(err.Error(), contactHint) || !strings.Contains(err.Error(), "contacts.contacts.list") ||
 				strings.Contains(err.Error(), bodyCanary) || len(*calls) != 2 {
 				t.Errorf("%s %s: err = %v, calls = %d", op, name, err, len(*calls))
 			}
@@ -270,13 +270,13 @@ func TestContactWriteRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 		"create": contactCreateArgs, "update": contactUpdateArgs, "delete": contactDeleteArgs,
 	} {
 		calls, _ := contactFixture(t, plainCard, func() (*http.Response, error) { return redirect(), nil })
-		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, true)
+		_, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, true)
 		if !strings.Contains(fmtErr(err), "redirect") || strings.Contains(fmtErr(err), "canary") ||
 			strings.Contains(fmtErr(err), contactHint) || len(*calls) != 2 {
 			t.Errorf("%s: err = %v, calls = %d", op, err, len(*calls))
 		}
 		calls = serve(t, func(*http.Request) (*http.Response, error) { return redirect(), nil })
-		_, err = contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, true)
+		_, err = contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, true)
 		if !strings.Contains(fmtErr(err), "redirect") || strings.Contains(fmtErr(err), "canary") || len(*calls) != 1 {
 			t.Errorf("%s pre-check: err = %v, calls = %d", op, err, len(*calls))
 		}
@@ -301,7 +301,7 @@ func TestContactWritesRefuseBeforeAnyRequest(t *testing.T) {
 			"other book":       {[]string{"addressbook/team"}, swap(args, "other-secret")},
 			"traversal":        {[]string{"addressbook"}, swap(args, "../bobby")},
 		} {
-			_, err := contactWrite(t, contactTools, tc.targets, "nextcloud.contacts."+op, tc.args, true)
+			_, err := contactWrite(t, contactTools, tc.targets, "nextcloud.contacts.contacts."+op, tc.args, true)
 			if classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s: err = %v, want a permission refusal", op, name, err)
 				continue
@@ -313,7 +313,7 @@ func TestContactWritesRefuseBeforeAnyRequest(t *testing.T) {
 			}
 		}
 		// Not confirmed.
-		if _, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+op, args, false); err == nil {
+		if _, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+op, args, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 	}
@@ -334,12 +334,12 @@ func TestContactWritesRefuseBeforeAnyRequest(t *testing.T) {
 		"free header":     {"update", with(contactUpdateArgs, `"headers":{"X":"y"}`)},
 		"fields on del":   {"delete", with(contactDeleteArgs, `"name":"x"`)},
 	} {
-		if _, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts."+tc.op, tc.args, true); err == nil {
+		if _, err := contactWrite(t, contactTools, []string{"addressbook"}, "nextcloud.contacts.contacts."+tc.op, tc.args, true); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
 	// Without a tools list naming it the delete is not offered, whatever the permissions.
-	if _, err := contactWrite(t, nil, []string{"addressbook"}, "nextcloud.contacts.delete", contactDeleteArgs, true); err == nil {
+	if _, err := contactWrite(t, nil, []string{"addressbook"}, "nextcloud.contacts.contacts.delete", contactDeleteArgs, true); err == nil {
 		t.Error("delete without a tools list: accepted")
 	}
 	if len(*calls) != 0 {

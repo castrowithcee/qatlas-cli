@@ -17,20 +17,20 @@ import (
 // its cards. Deck needs the manage right on the board for all three. The label must be shown by the one
 // pre-read of the bound board; Deck itself would accept a label ID of another board in the path.
 
-const uncertainDeckLabel = "; the change may have been applied, check deckboards.get before repeating"
+const uncertainDeckLabel = "; the change may have been applied, check deck.boards.get before repeating"
 
 const deckLabelBrief = `{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},` +
 	`"color":{"type":"string"}},"required":["id","title","color"],"additionalProperties":false}`
 
 var (
 	deckLabelIDArgument = capability.Argument{
-		Name: "label_id", Description: "Numeric Deck label ID as reported by deckboards.get for this board", Required: true,
+		Name: "label_id", Description: "Numeric Deck label ID as reported by deck.boards.get for this board", Required: true,
 	}
 	deckLabelColorArgument = capability.Argument{Name: "color", Description: "Label color as six hex digits without #"}
 )
 
 var deckLabelsCreate = capability.Descriptor{
-	ID: Provider + ".decklabels.create", Version: 1, Title: "Create a Nextcloud Deck label",
+	ID: Provider + ".deck.labels.create", Version: 1, Title: "Create a Nextcloud Deck label",
 	Description: "Create exactly one confirmed label in a bound Deck board; the identity needs the manage right on " +
 		"the board. One read-only pre-check precedes exactly one request",
 	Tags: []string{"nextcloud", "deck", "labels", "create"}, Provider: Provider,
@@ -50,7 +50,7 @@ var deckLabelsCreate = capability.Descriptor{
 }
 
 var deckLabelsUpdate = capability.Descriptor{
-	ID: Provider + ".decklabels.update", Version: 1, Title: "Change a Nextcloud Deck label",
+	ID: Provider + ".deck.labels.update", Version: 1, Title: "Change a Nextcloud Deck label",
 	Description: "Change the title or color of exactly one confirmed label of a bound Deck board, at least one " +
 		"field; the identity needs the manage right on the board. One read-only pre-check precedes exactly one " +
 		"request; fields not given keep their current value",
@@ -71,7 +71,7 @@ var deckLabelsUpdate = capability.Descriptor{
 }
 
 var deckLabelsDelete = capability.Descriptor{
-	ID: Provider + ".decklabels.delete", Version: 1, Title: "Delete a Nextcloud Deck label",
+	ID: Provider + ".deck.labels.delete", Version: 1, Title: "Delete a Nextcloud Deck label",
 	Description: "Delete exactly one confirmed label of a bound Deck board; Deck removes it from the cards that " +
 		"carry it. The identity needs the manage right on the board. One read-only pre-check precedes exactly " +
 		"one request",
@@ -86,7 +86,7 @@ var deckLabelsDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Deck deleted the label"},
 		{Name: "label_id", Description: "ID of the deleted label"},
 	},
-	Examples: []capability.Example{{Description: "Use IDs from deckboards.get", Arguments: json.RawMessage(`{"board_id":"7","label_id":"3"}`)}},
+	Examples: []capability.Example{{Description: "Use IDs from deck.boards.get", Arguments: json.RawMessage(`{"board_id":"7","label_id":"3"}`)}},
 	// Reachable only through a tools list, never through a profile.
 	RequiresToolAllowList: true,
 }

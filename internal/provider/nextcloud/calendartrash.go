@@ -29,7 +29,7 @@ const (
 
 	messageTrashObjectNone = "this calendar trash holds no such entry of a bound calendar"
 
-	calendarTrashUncertain = "; the change may have been applied, check the trash with calendartrash.list " +
+	calendarTrashUncertain = "; the change may have been applied, check the trash with calendar.trash.list " +
 		"before repeating it"
 )
 
@@ -53,7 +53,7 @@ const calendarTrashIDSchema = `"id":{"type":"string","minLength":1,"maxLength":2
 	`^(?:\\.[^./\\\\%][^/\\\\%]*|\\.\\.[^/\\\\%]+|[^./\\\\%][^/\\\\%]*)$"}`
 
 var calendarTrashList = capability.Descriptor{
-	ID: Provider + ".calendartrash.list", Version: 1, Title: "List the Nextcloud calendar trash bin",
+	ID: Provider + ".calendar.trash.list", Version: 1, Title: "List the Nextcloud calendar trash bin",
 	Description: "List the deleted events and tasks of the bound calendars, at most 200 per call, with the " +
 		"retention period of the trash bin; entries of other calendars are not listed and no content is read",
 	Tags: []string{"nextcloud", "calendar", "trash", "list"}, Provider: Provider,
@@ -63,7 +63,7 @@ var calendarTrashList = capability.Descriptor{
 		calendarTrashEntrySchema + `},"count":{"type":"integer"},"truncated":{"type":"boolean"},` +
 		`"retention_seconds":{"type":"integer"}},"required":["entries","count"],"additionalProperties":false}`),
 	Fields: []capability.Field{
-		{Name: "entries", Description: "Deleted entries, untrusted data; pass id to calendartrash.restore or delete"},
+		{Name: "entries", Description: "Deleted entries, untrusted data; pass id to calendar.trash.restore or delete"},
 		{Name: "id", Description: "Name of the entry in the trash bin"},
 		{Name: "calendar", Description: "URI of the calendar the entry was deleted from"},
 		{Name: "kind", Description: "VEVENT or VTODO, when the server reports it"},
@@ -78,7 +78,7 @@ var calendarTrashList = capability.Descriptor{
 func calendarTrashChange(action, done, title, description string, effect capability.Effect,
 	idempotency capability.Idempotency) capability.Descriptor {
 	return capability.Descriptor{
-		ID: Provider + ".calendartrash." + action, Version: 1, Title: title, Description: description,
+		ID: Provider + ".calendar.trash." + action, Version: 1, Title: title, Description: description,
 		Tags: []string{"nextcloud", "calendar", "trash", action}, Provider: Provider,
 		Risk: eventWriteRisk(effect, idempotency),
 		InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarTrashIDSchema +
@@ -87,13 +87,13 @@ func calendarTrashChange(action, done, title, description string, effect capabil
 			`"calendar":{"type":"string"},"` + done + `":{"type":"boolean"}},"required":["id","calendar","` + done +
 			`"],"additionalProperties":false}`),
 		Arguments: []capability.Argument{{Name: "id", Required: true,
-			Description: "Name of the trash entry, as calendartrash.list reports it"}},
+			Description: "Name of the trash entry, as calendar.trash.list reports it"}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "The trash entry"},
 			{Name: "calendar", Description: "URI of the calendar the entry was deleted from"},
 			{Name: done, Description: "True when Nextcloud applied the change"},
 		},
-		Examples: []capability.Example{{Description: "Use an id from calendartrash.list",
+		Examples: []capability.Example{{Description: "Use an id from calendar.trash.list",
 			Arguments: json.RawMessage(`{"id":"meeting.ics-deleted-1700000000"}`)}},
 	}
 }
@@ -315,7 +315,7 @@ func invokeCalendarTrashChange(ctx context.Context, resolved *config.Resolved, s
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	if !checkEventID(input.ID) {
-		return nil, providerError(op, "id must be one literal path segment as calendartrash.list reports it")
+		return nil, providerError(op, "id must be one literal path segment as calendar.trash.list reports it")
 	}
 	bound, err := requireCalendar(resolved)
 	if err != nil {

@@ -95,7 +95,7 @@ func eventMethods(calls *[]call) string {
 func TestEventsCreatePutsOneNewEventWithIfNoneMatch(t *testing.T) {
 	calls, headers := eventFixture(t, func() (*http.Response, error) { return eventChanged(http.StatusCreated, "n1"), nil })
 	args := strings.TrimSuffix(eventCreateArgs, "}") + `,"attendees":[{"address":"` + eventAttendee + `","name":"Ada"}]}`
-	result, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.create", args, true)
+	result, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.create", args, true)
 	if err != nil {
 		t.Fatalf("create = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestEventsCreatePutsOneNewEventWithIfNoneMatch(t *testing.T) {
 
 func TestEventsUpdateReplacesBoundToTheETagAndKeepsTheUID(t *testing.T) {
 	calls, headers := eventFixture(t, func() (*http.Response, error) { return eventChanged(http.StatusNoContent, "e2"), nil })
-	result, err := eventWrite(t, eventTools, []string{"calendar/personal"}, "nextcloud.events.update", eventUpdateArgs, true)
+	result, err := eventWrite(t, eventTools, []string{"calendar/personal"}, "nextcloud.calendar.events.update", eventUpdateArgs, true)
 	if err != nil {
 		t.Fatalf("update = %v", err)
 	}
@@ -151,7 +151,7 @@ func TestEventsUpdateReplacesBoundToTheETagAndKeepsTheUID(t *testing.T) {
 
 func TestEventsDeleteSendsOneETagBoundDelete(t *testing.T) {
 	calls, headers := eventFixture(t, func() (*http.Response, error) { return eventChanged(http.StatusNoContent, ""), nil })
-	result, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.delete", eventDeleteArgs, true)
+	result, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.delete", eventDeleteArgs, true)
 	var got EventWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil ||
 		got != (EventWriteResult{Calendar: "personal", ID: "standup.ics", Deleted: true}) {
@@ -178,7 +178,7 @@ func TestEventsUpdateRefusesOverridesBeforeAnyPut(t *testing.T) {
 				}
 				return eventAnswer("e1", data, fullRights), nil
 			})
-			_, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.update", eventUpdateArgs, true)
+			_, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.update", eventUpdateArgs, true)
 			if err == nil || !strings.Contains(err.Error(), "overrides of single occurrences") || len(*calls) != 1 {
 				t.Errorf("err = %v, calls = %d", err, len(*calls))
 			}
@@ -189,9 +189,9 @@ func TestEventsUpdateRefusesOverridesBeforeAnyPut(t *testing.T) {
 func TestEventWritesRefuseAReadOnlyCalendarAfterThePreRead(t *testing.T) {
 	for _, privileges := range [][]string{{"read"}, {"read", "write-properties"}, {"read", "write-content"}, nil} {
 		for op, args := range map[string]string{
-			"nextcloud.events.create": eventCreateArgs,
-			"nextcloud.events.update": eventUpdateArgs,
-			"nextcloud.events.delete": eventDeleteArgs,
+			"nextcloud.calendar.events.create": eventCreateArgs,
+			"nextcloud.calendar.events.update": eventUpdateArgs,
+			"nextcloud.calendar.events.delete": eventDeleteArgs,
 		} {
 			calls := serve(t, func(r *http.Request) (*http.Response, error) {
 				switch {
@@ -217,7 +217,7 @@ func TestEventWritesRefuseAReadOnlyCalendarAfterThePreRead(t *testing.T) {
 		}
 		return eventCalendarAnswer(fullRights, "VTODO"), nil
 	})
-	if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.create", eventCreateArgs, true); err == nil ||
+	if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.create", eventCreateArgs, true); err == nil ||
 		len(*calls) != 1 {
 		t.Errorf("tasks-only calendar: err = %v, calls = %d", err, len(*calls))
 	}
@@ -230,7 +230,7 @@ func TestEventsUpdateRefusesAChangedETagBeforeAnyPut(t *testing.T) {
 		}
 		return eventAnswer("e9", ics("u1", "S", "20260310T090000Z", ""), fullRights), nil
 	})
-	_, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.update", eventUpdateArgs, true)
+	_, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.update", eventUpdateArgs, true)
 	if err == nil || !strings.Contains(err.Error(), "precondition failed") || len(*calls) != 1 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}
@@ -238,9 +238,9 @@ func TestEventsUpdateRefusesAChangedETagBeforeAnyPut(t *testing.T) {
 
 func TestEventWritePreconditionFailureIsClear(t *testing.T) {
 	for op, tc := range map[string]struct{ args, want string }{
-		"nextcloud.events.create": {eventCreateArgs, "already exists"},
-		"nextcloud.events.update": {eventUpdateArgs, "precondition failed"},
-		"nextcloud.events.delete": {eventDeleteArgs, "precondition failed"},
+		"nextcloud.calendar.events.create": {eventCreateArgs, "already exists"},
+		"nextcloud.calendar.events.update": {eventUpdateArgs, "precondition failed"},
+		"nextcloud.calendar.events.delete": {eventDeleteArgs, "precondition failed"},
 	} {
 		calls, _ := eventFixture(t, func() (*http.Response, error) { return status(http.StatusPreconditionFailed), nil })
 		_, err := eventWrite(t, eventTools, []string{"calendar"}, op, tc.args, true)
@@ -261,9 +261,9 @@ func TestEventWriteUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 		answers[strconv.Itoa(code)] = func() (*http.Response, error) { return status(code), nil }
 	}
 	for op, args := range map[string]string{
-		"nextcloud.events.create": eventCreateArgs,
-		"nextcloud.events.update": eventUpdateArgs,
-		"nextcloud.events.delete": eventDeleteArgs,
+		"nextcloud.calendar.events.create": eventCreateArgs,
+		"nextcloud.calendar.events.update": eventUpdateArgs,
+		"nextcloud.calendar.events.delete": eventDeleteArgs,
 	} {
 		for name, answer := range answers {
 			calls, _ := eventFixture(t, answer)
@@ -284,9 +284,9 @@ func TestEventWriteRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 		return response
 	}
 	for op, args := range map[string]string{
-		"nextcloud.events.create": eventCreateArgs,
-		"nextcloud.events.update": eventUpdateArgs,
-		"nextcloud.events.delete": eventDeleteArgs,
+		"nextcloud.calendar.events.create": eventCreateArgs,
+		"nextcloud.calendar.events.update": eventUpdateArgs,
+		"nextcloud.calendar.events.delete": eventDeleteArgs,
 	} {
 		for _, code := range []int{301, 302, 307, 308} {
 			// On the mutation.
@@ -340,7 +340,7 @@ func TestEventWritesRefuseBeforeAnyRequest(t *testing.T) {
 		}{[]string{"calendar/" + name}, "delete", strings.Replace(eventDeleteArgs, "personal", name, 1)}
 	}
 	for name, tc := range unbound {
-		_, err := eventWrite(t, eventTools, tc.targets, "nextcloud.events."+tc.op, tc.arg, true)
+		_, err := eventWrite(t, eventTools, tc.targets, "nextcloud.calendar.events."+tc.op, tc.arg, true)
 		if classOf(err) != provider.ClassPermission {
 			t.Errorf("%s: err = %v, want a permission refusal", name, err)
 			continue
@@ -367,17 +367,17 @@ func TestEventWritesRefuseBeforeAnyRequest(t *testing.T) {
 		"free header":     {"update", with(eventUpdateArgs, `"headers":{"X":"y"}`)},
 		"fields on del":   {"delete", with(eventDeleteArgs, `"summary":"x"`)},
 	} {
-		if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events."+tc.op, tc.args, true); err == nil {
+		if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events."+tc.op, tc.args, true); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
 	for op, args := range map[string]string{"create": eventCreateArgs, "update": eventUpdateArgs, "delete": eventDeleteArgs} {
-		if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events."+op, args, false); err == nil {
+		if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events."+op, args, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 	}
 	// Without a tools list naming it the delete is not offered, whatever the permissions.
-	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.events.delete", eventDeleteArgs, true); err == nil {
+	if _, err := eventWrite(t, nil, []string{"calendar"}, "nextcloud.calendar.events.delete", eventDeleteArgs, true); err == nil {
 		t.Error("delete without a tools list: accepted")
 	}
 	if len(*calls) != 0 {
@@ -408,7 +408,7 @@ func TestEventWriteToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	last := metadata.Profiles[len(metadata.Profiles)-1]
 	if last.ID != "events" || strings.Join(last.Tools, " ") !=
-		"nextcloud.calendars.list nextcloud.events.list nextcloud.events.get nextcloud.tasks.list nextcloud.tasks.get nextcloud.events.create nextcloud.events.update" {
+		"nextcloud.calendar.calendars.list nextcloud.calendar.events.list nextcloud.calendar.events.get nextcloud.calendar.tasks.list nextcloud.calendar.tasks.get nextcloud.calendar.events.create nextcloud.calendar.events.update" {
 		t.Errorf("profile = %+v", last)
 	}
 	for _, p := range metadata.Profiles {
@@ -425,7 +425,7 @@ func TestEventWriteIgnoresTheBodyOfASuccess(t *testing.T) {
 	eventFixture(t, func() (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusNoContent, Header: http.Header{}, Body: io.NopCloser(failingBody{})}, nil
 	})
-	if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.events.delete", eventDeleteArgs, true); err != nil {
+	if _, err := eventWrite(t, eventTools, []string{"calendar"}, "nextcloud.calendar.events.delete", eventDeleteArgs, true); err != nil {
 		t.Errorf("delete = %v", err)
 	}
 }

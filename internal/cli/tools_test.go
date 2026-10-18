@@ -461,7 +461,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 	requireIDs(t, registryToolIDs(t, "telegram", nil), "telegram.messages.send")
 	requireIDs(t, registryToolIDs(t, "lexware", nil), "lexware.invoices.list")
 	requireIDs(t, registryToolIDs(t, "github", nil), "github.issues.list")
-	requireIDs(t, registryToolIDs(t, "nextcloud", nil), "nextcloud.files.list")
+	requireIDs(t, registryToolIDs(t, "nextcloud", nil), "nextcloud.files.files.list")
 	wikiOffered := registryToolIDs(t, "bookstack", offeredBy(capability.EffectRead))
 	alertsOffered := registryToolIDs(t, "telegram", offeredBy(capability.EffectCreate))
 

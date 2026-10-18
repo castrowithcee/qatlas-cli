@@ -21,7 +21,7 @@ import (
 const (
 	addressbookWriteOut = `"id":{"type":"string"}`
 
-	addressbookUncertain = "; the change may have been applied, check the address book with addressbooks.list " +
+	addressbookUncertain = "; the change may have been applied, check the address book with contacts.address-books.list " +
 		"before repeating it"
 )
 
@@ -32,7 +32,7 @@ const addressbookOwnProbeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`</d:prop></d:propfind>`
 
 var addressbooksCreate = capability.Descriptor{
-	ID: Provider + ".addressbooks.create", Version: 1, Title: "Create a Nextcloud address book",
+	ID: Provider + ".contacts.address-books.create", Version: 1, Title: "Create a Nextcloud address book",
 	Description: "Create one address book of the bound Nextcloud identity with a display name. Qatlas generates the " +
 		"address book id; nothing raw comes from an argument. It needs the general addressbook target of the " +
 		"connection and binds the new address book. One extended MKCOL follows without a pre-check; the request " +
@@ -54,7 +54,7 @@ var addressbooksCreate = capability.Descriptor{
 }
 
 var addressbooksUpdate = capability.Descriptor{
-	ID: Provider + ".addressbooks.update", Version: 1, Title: "Change a Nextcloud address book",
+	ID: Provider + ".contacts.address-books.update", Version: 1, Title: "Change a Nextcloud address book",
 	Description: "Change the display name and/or the description of one bound address book that belongs to the " +
 		"identity; the system address book and an address book shared by someone else are refused. One read-only " +
 		"pre-check of the address book follows, then one PROPPATCH; a partly refused change is reported. The " +
@@ -78,7 +78,7 @@ var addressbooksUpdate = capability.Descriptor{
 }
 
 var addressbooksDelete = capability.Descriptor{
-	ID: Provider + ".addressbooks.delete", Version: 1, Title: "Delete a Nextcloud address book",
+	ID: Provider + ".contacts.address-books.delete", Version: 1, Title: "Delete a Nextcloud address book",
 	Description: "Delete one bound address book that belongs to the identity, with all its contacts; the system " +
 		"address book and an address book shared by someone else are refused. Qatlas offers no restore. One " +
 		"read-only pre-check of the address book follows, then one DELETE. The request is never repeated after " +

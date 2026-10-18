@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -106,7 +107,7 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[144]{id,title,effect,requires,confirm,reason}:", "nextcloud.activity.list,List Nextcloud activity,read,", "nextcloud.account.get,Get Nextcloud account data,read,", "nextcloud.status.get,Get the Nextcloud status,read,", "nextcloud.status.set,Set the Nextcloud status,update,\"\",true,", "nextcloud.status.clear,Clear the Nextcloud status message,update,\"\",true,", "nextcloud.notifications.list,List Nextcloud notifications,read,", "nextcloud.notifications.dismiss,Dismiss a Nextcloud notification,delete,\"notification_id:an id of notifications.list\",true,", "nextcloud.notifications.dismissall,Dismiss all Nextcloud notifications,delete,", "nextcloud.calendars.create,Create a Nextcloud calendar,create,", "nextcloud.calendars.update,Change a Nextcloud calendar,update,", "nextcloud.calendars.delete,Delete a Nextcloud calendar,delete,", "nextcloud.calendars.share,Share a Nextcloud calendar with a user or group,update,", "nextcloud.calendars.unshare,Revoke the share of a Nextcloud calendar,delete,", "nextcloud.addressbooks.share,Share a Nextcloud address book with a user or group,update,", "nextcloud.addressbooks.unshare,Revoke the share of a Nextcloud address book,delete,", "nextcloud.calendartrash.list,List the Nextcloud calendar trash bin,read,", "nextcloud.calendartrash.restore,Restore a Nextcloud calendar trash entry,update,id,true,", "nextcloud.calendartrash.delete,Delete a Nextcloud calendar trash entry for good,delete,id,true,", "nextcloud.events.create,Create a Nextcloud calendar event,create,", "nextcloud.events.update,Replace a Nextcloud calendar event,update,", "nextcloud.events.delete,Delete a Nextcloud calendar event,delete,", "nextcloud.addressbooks.create,Create a Nextcloud address book,create,", "nextcloud.addressbooks.update,Change a Nextcloud address book,update,", "nextcloud.addressbooks.delete,Delete a Nextcloud address book,delete,", "nextcloud.addressbooks.list,List Nextcloud address books,read,", "nextcloud.contacts.list,List Nextcloud contacts,read,addressbook,", "nextcloud.contacts.get,Get a Nextcloud contact,read,addressbook; id,", "nextcloud.contacts.create,Create a Nextcloud contact,create,addressbook; name,true,", "nextcloud.contacts.update,Replace a Nextcloud contact,update,addressbook; id; etag; name,true,", "nextcloud.contacts.delete,Delete a Nextcloud contact,delete,addressbook; id; etag,true,", "nextcloud.calendars.list,List Nextcloud calendars,read,", "nextcloud.events.get,Get a Nextcloud calendar event,read,", "nextcloud.tasks.get,Get a Nextcloud calendar task,read,", "nextcloud.tasks.list,List Nextcloud calendar tasks,read,", "nextcloud.tasks.create,Create a Nextcloud calendar task,create,", "nextcloud.tasks.update,Replace a Nextcloud calendar task,update,", "nextcloud.tasks.delete,Delete a Nextcloud calendar task,delete,", "nextcloud.events.list,List Nextcloud calendar events,read,", "nextcloud.deckboards.create,Create a Nextcloud Deck board,create,", "nextcloud.deckboards.update,Change a Nextcloud Deck board,update,", "nextcloud.deckboards.delete,Delete a Nextcloud Deck board,delete,", "nextcloud.comments.list,List the comments of a Nextcloud file,read,", "nextcloud.comments.create,Comment on a Nextcloud file,create,path; message,true,", "nextcloud.comments.update,Change a Nextcloud file comment,update,", "nextcloud.comments.delete,Delete a Nextcloud file comment,delete,", "nextcloud.deckboards.get,Get a Nextcloud Deck board,read,", "nextcloud.deckboards.list,List Nextcloud Deck boards,read,", "nextcloud.deckcards.get,Get a Nextcloud Deck card,read,", "nextcloud.deckcards.labels,Assign or remove a Nextcloud Deck card label,update,", "nextcloud.deckcards.assignees,Assign or unassign a Nextcloud Deck card member,update,", "nextcloud.deckattachments.list,List Nextcloud Deck card attachments,read,", "nextcloud.deckattachments.get,Read or download a Nextcloud Deck card attachment,read,", "nextcloud.deckstacks.list,List Nextcloud Deck stacks,read,", "nextcloud.favorites.list,List Nextcloud favorites,read,", "nextcloud.files.favorite,Mark or unmark a Nextcloud favorite,update,path; favorite,true,", "nextcloud.files.search,Search Nextcloud files,read,", "nextcloud.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,", "nextcloud.folders.create,Create a Nextcloud folder,create,", "nextcloud.incomingshares.accept,Accept an internal Nextcloud share,update,share_id,true,", "nextcloud.incomingshares.decline,Decline a pending Nextcloud share,delete,\"share_id; origin:internal|federated\",true,", "nextcloud.incomingshares.pending,List pending incoming Nextcloud shares,read,", "nextcloud.noteattachments.get,Read a Nextcloud note attachment,read,", "nextcloud.noteattachments.upload,Upload a Nextcloud note attachment,create,\"id:a note id of notes.list; local_path\",true,", "nextcloud.notes.create,Create a Nextcloud note,create,title,true,", "nextcloud.notes.update,Change a Nextcloud note,update,\"id:a note id of notes.list; etag\",true,", "nextcloud.notes.delete,Delete a Nextcloud note,delete,\"id:a note id of notes.list\",true,", "nextcloud.notes.get,Read a Nextcloud note,read,", "nextcloud.notes.list,List Nextcloud notes,read,", "nextcloud.notesettings.get,Get the Nextcloud Notes settings,read,", "nextcloud.remoteshares.get,Get an accepted Nextcloud federated share,read,share_id,", "nextcloud.remoteshares.list,List accepted Nextcloud federated shares,read,", "nextcloud.remoteshares.remove,Remove an accepted Nextcloud federated share,delete,share_id,true,", "nextcloud.search.providers,List Nextcloud search providers,read,", "nextcloud.search.query,Search Nextcloud with one provider,read,", "nextcloud.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.create,Share a Nextcloud item with a user or group,create,", "nextcloud.shares.update,Change a Nextcloud share,update,share_id,true,", "nextcloud.shares.delete,Revoke a Nextcloud share,delete,share_id,true,", "nextcloud.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.list,List Nextcloud shares,read,", "nextcloud.trash.delete,Delete a Nextcloud trash item for good,delete,trash_id,true,", "nextcloud.trash.list,List the Nextcloud trash bin,read,", "nextcloud.trash.restore,Restore a Nextcloud trash item,update,trash_id,true,", "nextcloud.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.versions.list,List Nextcloud file versions,read,", "nextcloud.versions.restore,Restore a Nextcloud file version,update,", "nextcloud.filetags.add,Assign a Nextcloud system tag,update,\"path; tag_id:a tag_id of systemtags.list\",true,", "nextcloud.filetags.list,List the system tags of a Nextcloud file,read,", "nextcloud.filetags.remove,Remove a Nextcloud system tag from a file,update,\"path; tag_id:a tag_id of systemtags.list\",true,", "nextcloud.systemtags.list,List Nextcloud system tags,read,", "nextcloud.systemtags.create,Create a Nextcloud system tag,create,", "nextcloud.systemtags.update,Change a Nextcloud system tag,update,", "nextcloud.talkfiles.share,Share a Nextcloud file in a Talk conversation,create,token; path,true,", "nextcloud.talkmessages.list,List Nextcloud Talk messages,read,token,", "nextcloud.talkmessages.send,Send a Nextcloud Talk message,create,token; message,true,", "nextcloud.talkmessages.edit,Edit a Nextcloud Talk message,update,token; message_id; message,true,", "nextcloud.talkmessages.delete,Delete a Nextcloud Talk message,delete,token; message_id,true,", "nextcloud.talkreactions.set,React to a Nextcloud Talk message,update,token; message_id; reaction; add,true,", "nextcloud.talkpolls.get,Get a Nextcloud Talk poll,read,token; poll_id,", "nextcloud.talkpolls.create,Create a Nextcloud Talk poll,create,token; question; options,true,", "nextcloud.talkpolls.vote,Vote on a Nextcloud Talk poll,update,token; poll_id; option_ids,true,", "nextcloud.talkpolls.close,Close a Nextcloud Talk poll,delete,token; poll_id,true,", "nextcloud.talkparticipants.list,List Nextcloud Talk participants,read,token,", "nextcloud.talkparticipants.add,Add a Nextcloud Talk participant,update,\"token; participant; source:users|groups\",true,", "nextcloud.talkparticipants.remove,Remove a Nextcloud Talk participant,delete,token; attendee_id,true,", "nextcloud.talkparticipants.moderator,Set a Nextcloud Talk moderator,update,token; attendee_id; moderator,true,", "nextcloud.talkrooms.get,Get a Nextcloud Talk conversation,read,token,", "nextcloud.talkrooms.list,List Nextcloud Talk conversations,read,", "nextcloud.talkrooms.create,Create a Nextcloud Talk conversation,create,\"kind:one-to-one|group\",true,", "nextcloud.talkrooms.markread,Mark a Nextcloud Talk conversation as read,update,token,true,", "nextcloud.talkrooms.update,Change a Nextcloud Talk conversation,update,token,true,", "nextcloud.talkrooms.delete,Delete a Nextcloud Talk conversation,delete,token,true,", "nextcloud.systemtags.delete,Delete a Nextcloud system tag,delete,",
+		"tools[144]{id,title,effect,requires,confirm,reason}:", "nextcloud.account.activity.list,List Nextcloud activity,read,", "nextcloud.account.account.get,Get Nextcloud account data,read,", "nextcloud.account.status.get,Get the Nextcloud status,read,", "nextcloud.account.status.set,Set the Nextcloud status,update,\"\",true,", "nextcloud.account.status.clear,Clear the Nextcloud status message,update,\"\",true,", "nextcloud.account.notifications.list,List Nextcloud notifications,read,", "nextcloud.account.notifications.dismiss,Dismiss a Nextcloud notification,delete,\"notification_id:an id of account.notifications.list\",true,", "nextcloud.account.notifications.dismiss-all,Dismiss all Nextcloud notifications,delete,", "nextcloud.calendar.calendars.create,Create a Nextcloud calendar,create,", "nextcloud.calendar.calendars.update,Change a Nextcloud calendar,update,", "nextcloud.calendar.calendars.delete,Delete a Nextcloud calendar,delete,", "nextcloud.calendar.calendars.share,Share a Nextcloud calendar with a user or group,update,", "nextcloud.calendar.calendars.unshare,Revoke the share of a Nextcloud calendar,delete,", "nextcloud.contacts.address-books.share,Share a Nextcloud address book with a user or group,update,", "nextcloud.contacts.address-books.unshare,Revoke the share of a Nextcloud address book,delete,", "nextcloud.calendar.trash.list,List the Nextcloud calendar trash bin,read,", "nextcloud.calendar.trash.restore,Restore a Nextcloud calendar trash entry,update,id,true,", "nextcloud.calendar.trash.delete,Delete a Nextcloud calendar trash entry for good,delete,id,true,", "nextcloud.calendar.events.create,Create a Nextcloud calendar event,create,", "nextcloud.calendar.events.update,Replace a Nextcloud calendar event,update,", "nextcloud.calendar.events.delete,Delete a Nextcloud calendar event,delete,", "nextcloud.contacts.address-books.create,Create a Nextcloud address book,create,", "nextcloud.contacts.address-books.update,Change a Nextcloud address book,update,", "nextcloud.contacts.address-books.delete,Delete a Nextcloud address book,delete,", "nextcloud.contacts.address-books.list,List Nextcloud address books,read,", "nextcloud.contacts.contacts.list,List Nextcloud contacts,read,addressbook,", "nextcloud.contacts.contacts.get,Get a Nextcloud contact,read,addressbook; id,", "nextcloud.contacts.contacts.create,Create a Nextcloud contact,create,addressbook; name,true,", "nextcloud.contacts.contacts.update,Replace a Nextcloud contact,update,addressbook; id; etag; name,true,", "nextcloud.contacts.contacts.delete,Delete a Nextcloud contact,delete,addressbook; id; etag,true,", "nextcloud.calendar.calendars.list,List Nextcloud calendars,read,", "nextcloud.calendar.events.get,Get a Nextcloud calendar event,read,", "nextcloud.calendar.tasks.get,Get a Nextcloud calendar task,read,", "nextcloud.calendar.tasks.list,List Nextcloud calendar tasks,read,", "nextcloud.calendar.tasks.create,Create a Nextcloud calendar task,create,", "nextcloud.calendar.tasks.update,Replace a Nextcloud calendar task,update,", "nextcloud.calendar.tasks.delete,Delete a Nextcloud calendar task,delete,", "nextcloud.calendar.events.list,List Nextcloud calendar events,read,", "nextcloud.deck.boards.create,Create a Nextcloud Deck board,create,", "nextcloud.deck.boards.update,Change a Nextcloud Deck board,update,", "nextcloud.deck.boards.delete,Delete a Nextcloud Deck board,delete,", "nextcloud.files.comments.list,List the comments of a Nextcloud file,read,", "nextcloud.files.comments.create,Comment on a Nextcloud file,create,path; message,true,", "nextcloud.files.comments.update,Change a Nextcloud file comment,update,", "nextcloud.files.comments.delete,Delete a Nextcloud file comment,delete,", "nextcloud.deck.boards.get,Get a Nextcloud Deck board,read,", "nextcloud.deck.boards.list,List Nextcloud Deck boards,read,", "nextcloud.deck.cards.get,Get a Nextcloud Deck card,read,", "nextcloud.deck.cards.labels,Assign or remove a Nextcloud Deck card label,update,", "nextcloud.deck.cards.assignees,Assign or unassign a Nextcloud Deck card member,update,", "nextcloud.deck.attachments.list,List Nextcloud Deck card attachments,read,", "nextcloud.deck.attachments.get,Read or download a Nextcloud Deck card attachment,read,", "nextcloud.deck.stacks.list,List Nextcloud Deck stacks,read,", "nextcloud.files.favorites.list,List Nextcloud favorites,read,", "nextcloud.files.files.favorite,Mark or unmark a Nextcloud favorite,update,path; favorite,true,", "nextcloud.files.files.search,Search Nextcloud files,read,", "nextcloud.files.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.files.create,Create a Nextcloud file,create,", "nextcloud.files.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.files.list,List Nextcloud files,read,", "nextcloud.files.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.files.update,Update a Nextcloud file,update,", "nextcloud.files.folders.create,Create a Nextcloud folder,create,", "nextcloud.shares.incoming-shares.accept,Accept an internal Nextcloud share,update,share_id,true,", "nextcloud.shares.incoming-shares.decline,Decline a pending Nextcloud share,delete,\"share_id; origin:internal|federated\",true,", "nextcloud.shares.incoming-shares.pending,List pending incoming Nextcloud shares,read,", "nextcloud.notes.attachments.get,Read a Nextcloud note attachment,read,", "nextcloud.notes.attachments.upload,Upload a Nextcloud note attachment,create,\"id:a note id of notes.notes.list; local_path\",true,", "nextcloud.notes.notes.create,Create a Nextcloud note,create,title,true,", "nextcloud.notes.notes.update,Change a Nextcloud note,update,\"id:a note id of notes.notes.list; etag\",true,", "nextcloud.notes.notes.delete,Delete a Nextcloud note,delete,\"id:a note id of notes.notes.list\",true,", "nextcloud.notes.notes.get,Read a Nextcloud note,read,", "nextcloud.notes.notes.list,List Nextcloud notes,read,", "nextcloud.notes.settings.get,Get the Nextcloud Notes settings,read,", "nextcloud.shares.remote-shares.get,Get an accepted Nextcloud federated share,read,share_id,", "nextcloud.shares.remote-shares.list,List accepted Nextcloud federated shares,read,", "nextcloud.shares.remote-shares.remove,Remove an accepted Nextcloud federated share,delete,share_id,true,", "nextcloud.account.search.providers,List Nextcloud search providers,read,", "nextcloud.account.search.query,Search Nextcloud with one provider,read,", "nextcloud.shares.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.shares.create,Share a Nextcloud item with a user or group,create,", "nextcloud.shares.shares.update,Change a Nextcloud share,update,share_id,true,", "nextcloud.shares.shares.delete,Revoke a Nextcloud share,delete,share_id,true,", "nextcloud.shares.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.shares.list,List Nextcloud shares,read,", "nextcloud.files.trash.delete,Delete a Nextcloud trash item for good,delete,trash_id,true,", "nextcloud.files.trash.list,List the Nextcloud trash bin,read,", "nextcloud.files.trash.restore,Restore a Nextcloud trash item,update,trash_id,true,", "nextcloud.files.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.files.versions.list,List Nextcloud file versions,read,", "nextcloud.files.versions.restore,Restore a Nextcloud file version,update,", "nextcloud.files.file-tags.add,Assign a Nextcloud system tag,update,\"path; tag_id:a tag_id of files.system-tags.list\",true,", "nextcloud.files.file-tags.list,List the system tags of a Nextcloud file,read,", "nextcloud.files.file-tags.remove,Remove a Nextcloud system tag from a file,update,\"path; tag_id:a tag_id of files.system-tags.list\",true,", "nextcloud.files.system-tags.list,List Nextcloud system tags,read,", "nextcloud.files.system-tags.create,Create a Nextcloud system tag,create,", "nextcloud.files.system-tags.update,Change a Nextcloud system tag,update,", "nextcloud.talk.files.share,Share a Nextcloud file in a Talk conversation,create,token; path,true,", "nextcloud.talk.messages.list,List Nextcloud Talk messages,read,token,", "nextcloud.talk.messages.send,Send a Nextcloud Talk message,create,token; message,true,", "nextcloud.talk.messages.edit,Edit a Nextcloud Talk message,update,token; message_id; message,true,", "nextcloud.talk.messages.delete,Delete a Nextcloud Talk message,delete,token; message_id,true,", "nextcloud.talk.reactions.set,React to a Nextcloud Talk message,update,token; message_id; reaction; add,true,", "nextcloud.talk.polls.get,Get a Nextcloud Talk poll,read,token; poll_id,", "nextcloud.talk.polls.create,Create a Nextcloud Talk poll,create,token; question; options,true,", "nextcloud.talk.polls.vote,Vote on a Nextcloud Talk poll,update,token; poll_id; option_ids,true,", "nextcloud.talk.polls.close,Close a Nextcloud Talk poll,delete,token; poll_id,true,", "nextcloud.talk.participants.list,List Nextcloud Talk participants,read,token,", "nextcloud.talk.participants.add,Add a Nextcloud Talk participant,update,\"token; participant; source:users|groups\",true,", "nextcloud.talk.participants.remove,Remove a Nextcloud Talk participant,delete,token; attendee_id,true,", "nextcloud.talk.participants.moderator,Set a Nextcloud Talk moderator,update,token; attendee_id; moderator,true,", "nextcloud.talk.rooms.get,Get a Nextcloud Talk conversation,read,token,", "nextcloud.talk.rooms.list,List Nextcloud Talk conversations,read,", "nextcloud.talk.rooms.create,Create a Nextcloud Talk conversation,create,\"kind:one-to-one|group\",true,", "nextcloud.talk.rooms.mark-read,Mark a Nextcloud Talk conversation as read,update,token,true,", "nextcloud.talk.rooms.update,Change a Nextcloud Talk conversation,update,token,true,", "nextcloud.talk.rooms.delete,Delete a Nextcloud Talk conversation,delete,token,true,", "nextcloud.files.system-tags.delete,Delete a Nextcloud system tag,delete,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -125,12 +126,12 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 func TestNextcloudToolContractKeepsInstanceIdentityAndRootOutOfTheArguments(t *testing.T) {
 	path := nextcloudConfig(t)
 
-	code, stdout, stderr := runNextcloudCLI(t, nil, "", "describe", "nextcloud.files.list", "--config", path)
+	code, stdout, stderr := runNextcloudCLI(t, nil, "", "describe", "nextcloud.files.files.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"id: nextcloud.files.list", "version: 1", "effect: read", "idempotency: safe",
+		"id: nextcloud.files.files.list", "version: 1", "effect: read", "idempotency: safe",
 		"confirmation: none", "path",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -138,7 +139,7 @@ func TestNextcloudToolContractKeepsInstanceIdentityAndRootOutOfTheArguments(t *t
 		}
 	}
 
-	document := runNextcloudJSON(t, "", "describe", "nextcloud.files.list", "--config", path)
+	document := runNextcloudJSON(t, "", "describe", "nextcloud.files.files.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -176,57 +177,57 @@ func TestNextcloudInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	}{
 		{
 			name: "four connections without a default", input: `{}`,
-			args: []string{"invoke", "nextcloud.files.list", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--config", path},
 			code: "connection-ambiguous",
 		},
 		{
 			name: "an instance as an argument", input: `{"base_url":"https://evil.example.invalid"}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "an identity as an argument", input: `{"user":"other"}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a depth as an argument", input: `{"depth":"infinity"}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a path that traverses the root", input: `{"path":"../Audit"}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "an absolute path", input: `{"path":"/remote.php/dav/files/other/Audit"}`,
-			args: []string{"invoke", "nextcloud.files.stat", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.stat", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "an encoded separator", input: `{"path":"2026%2F..%2FAudit"}`,
-			args: []string{"invoke", "nextcloud.files.stat", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.stat", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a double encoded separator", input: `{"path":"2026%252F.."}`,
-			args: []string{"invoke", "nextcloud.files.stat", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.stat", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a backslash separator", input: `{"path":"2026\\..\\Audit"}`,
-			args: []string{"invoke", "nextcloud.files.stat", "--connection", "files-reports", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.stat", "--connection", "files-reports", "--config", path},
 			code: "invalid-request",
 		},
 		{
 			name: "a connection of another provider", input: `{}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "wiki", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "wiki", "--config", path},
 			code: "unsupported-capability",
 		},
 		{
 			name: "an unknown connection", input: `{}`,
-			args: []string{"invoke", "nextcloud.files.list", "--connection", "absent", "--config", path},
+			args: []string{"invoke", "nextcloud.files.files.list", "--connection", "absent", "--config", path},
 			code: "unknown-connection",
 		},
 	}
@@ -256,12 +257,12 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":{"provider":"nextcloud","query":"nextcloud","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"nextcloud.files.list","version":1}}}`,
+			`,"name":"qatlas.describe","arguments":{"operation":"nextcloud.files.files.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"nextcloud.files.stat",` +
+			`,"name":"qatlas.invoke","arguments":{"operation":"nextcloud.files.files.stat",` +
 			`"connection":"files-reports","arguments":{"path":"../Audit"}}}}`,
 		`{"jsonrpc":"2.0","id":"ambiguous","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"nextcloud.files.list","arguments":{}}}}`,
+			`,"name":"qatlas.invoke","arguments":{"operation":"nextcloud.files.files.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
@@ -277,16 +278,13 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	decodeRaw(t, search.Structured, &searched)
 	// More than one page of tools: the query lists them instead of the groups, and a cursor reaches the rest.
 	if len(searched.Operations) != 50 || searched.NextCursor == "" ||
-		searched.Operations[1].ID != "nextcloud.activity.list" || searched.Operations[2].ID != "nextcloud.addressbooks.create" || searched.Operations[3].ID != "nextcloud.addressbooks.delete" || searched.Operations[4].ID != "nextcloud.addressbooks.list" || searched.Operations[5].ID != "nextcloud.addressbooks.share" || searched.Operations[6].ID != "nextcloud.addressbooks.unshare" || searched.Operations[7].ID != "nextcloud.addressbooks.update" || searched.Operations[12].ID != "nextcloud.calendars.create" || searched.Operations[14].ID != "nextcloud.calendars.list" || searched.Operations[15].ID != "nextcloud.calendars.share" || searched.Operations[16].ID != "nextcloud.calendars.unshare" ||
-		searched.Operations[21].ID != "nextcloud.comments.create" || searched.Operations[25].ID != "nextcloud.contacts.create" ||
-		searched.Operations[27].ID != "nextcloud.contacts.get" || searched.Operations[28].ID != "nextcloud.contacts.list" ||
-		searched.Operations[30].ID != "nextcloud.deckacl.add" || searched.Operations[37].ID != "nextcloud.deckboards.create" ||
-		searched.Operations[0].ID != "nextcloud.account.get" {
+		searched.Operations[0].ID != "nextcloud.account.account.get" || searched.Operations[1].ID != "nextcloud.account.activity.list" ||
+		!sort.SliceIsSorted(searched.Operations, func(a, b int) bool { return searched.Operations[a].ID < searched.Operations[b].ID }) {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runNextcloudJSON(t, "", "describe", "nextcloud.files.list", "--config", path, "--output", "json")
+	describedByCLI := runNextcloudJSON(t, "", "describe", "nextcloud.files.files.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 
@@ -296,7 +294,7 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 	mcpCode, _, _ := strings.Cut(invoke.Content[0].Text, ":")
 	code, _, cliStderr := runNextcloudCLI(t, nil, `{"path":"../Audit"}`,
-		"invoke", "nextcloud.files.stat", "--connection", "files-reports", "--config", path)
+		"invoke", "nextcloud.files.files.stat", "--connection", "files-reports", "--config", path)
 	cliCode, _, _ := strings.Cut(strings.TrimPrefix(strings.SplitN(cliStderr, "\n", 2)[0], "qatlas: "), ":")
 	if code != exitUsage || mcpCode != cliCode || cliCode != "invalid-request" {
 		t.Fatalf("MCP code=%q CLI code=%q exit=%d", mcpCode, cliCode, code)
@@ -319,4 +317,19 @@ func runNextcloudJSON(t *testing.T, input string, args ...string) []byte {
 		t.Fatalf("CLI %v exit=%d stderr=%q", args, code, stderr)
 	}
 	return []byte(stdout)
+}
+
+// With a service level the group overview stays the first answer and a group lists its tools.
+func TestNextcloudToolsListGroupsBeforeTools(t *testing.T) {
+	path := nextcloudConfig(t)
+	code, stdout, stderr := runNextcloudCLI(t, nil, "", "tools", "nextcloud", "--all", "--config", path)
+	if code != exitOK || !strings.Contains(stdout, "groups[9]{group,title,description,tools,offered}:\n") ||
+		strings.Contains(stdout, "tools[") || !strings.Contains(stderr, "tools in 9 groups; 'qatlas tools nextcloud <group>'") {
+		t.Fatalf("exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
+	}
+	code, stdout, stderr = runNextcloudCLI(t, nil, "", "tools", "nextcloud", "deck", "--all", "--config", path)
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, "nextcloud.deck.cards.get") ||
+		strings.Contains(stdout, "nextcloud.talk.") {
+		t.Fatalf("deck: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
+	}
 }

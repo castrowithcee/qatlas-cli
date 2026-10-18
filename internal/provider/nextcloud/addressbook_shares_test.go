@@ -31,7 +31,7 @@ func TestAddressbooksShareSendsOneGoldenPostAfterTheOwnerCheck(t *testing.T) {
 			shareHead + `<o:remove><d:href>principal:principals/groups/staff</d:href></o:remove>` + shareTail},
 	} {
 		calls := bookFixture(t, aliceUser, func() (*http.Response, error) { return status(http.StatusOK), nil })
-		result, err := bookShareCall(t, []string{"addressbook/clients"}, "nextcloud.addressbooks."+tc.op, tc.args, true)
+		result, err := bookShareCall(t, []string{"addressbook/clients"}, "nextcloud.contacts.address-books."+tc.op, tc.args, true)
 		var got AddressbookShareResult
 		if err != nil || json.Unmarshal(result, &got) != nil || !got.Accepted || got.Addressbook != "clients" {
 			t.Fatalf("%s: %s, %v", name, result, err)
@@ -69,7 +69,7 @@ func TestAddressbookShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) 
 		"recipient list":   `{"addressbook":"clients","type":"users","id":["bob"],"access":"read"}`,
 		"publish":          `{"addressbook":"clients","type":"public","id":"x","access":"read"}`,
 	} {
-		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.addressbooks.share", args, true); err == nil {
+		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.contacts.address-books.share", args, true); err == nil {
 			t.Errorf("share %s: accepted", name)
 		}
 	}
@@ -78,7 +78,7 @@ func TestAddressbookShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) 
 		"mailto id":   `{"addressbook":"clients","type":"groups","id":"mailto:x"}`,
 		"with access": `{"addressbook":"clients","type":"users","id":"bob","access":"read"}`,
 	} {
-		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.addressbooks.unshare", args, true); err == nil {
+		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.contacts.address-books.unshare", args, true); err == nil {
 			t.Errorf("unshare %s: accepted", name)
 		}
 	}
@@ -89,8 +89,8 @@ func TestAddressbookShareRefusesForeignRecipientsBeforeAnyRequest(t *testing.T) 
 
 func TestAddressbookShareRefusesForeignAndUnconfirmedOwnerAfterTheCheckOnly(t *testing.T) {
 	for op, args := range map[string]string{
-		"nextcloud.addressbooks.share":   `{"addressbook":"clients","type":"users","id":"carol","access":"read"}`,
-		"nextcloud.addressbooks.unshare": `{"addressbook":"clients","type":"users","id":"carol"}`,
+		"nextcloud.contacts.address-books.share":   `{"addressbook":"clients","type":"users","id":"carol","access":"read"}`,
+		"nextcloud.contacts.address-books.unshare": `{"addressbook":"clients","type":"users","id":"carol"}`,
 	} {
 		for _, owner := range []string{"bob", "alice2", ""} {
 			calls := bookFixture(t, owner, func() (*http.Response, error) {
@@ -126,7 +126,7 @@ func TestAddressbookShareRefusesUnboundCalendarsBeforeAnyRequest(t *testing.T) {
 			"system, kind": {[]string{"addressbook"}, systemAddressbook},
 			"traversal":    {[]string{"addressbook"}, "../bobby"},
 		} {
-			_, err := bookShareCall(t, tc.targets, "nextcloud.addressbooks."+op,
+			_, err := bookShareCall(t, tc.targets, "nextcloud.contacts.address-books."+op,
 				`{"addressbook":"`+tc.book+`","type":"users","id":"bob"`+extra+`}`, true)
 			if classOf(err) != provider.ClassPermission {
 				t.Errorf("%s %s: err = %v", op, name, err)
@@ -138,12 +138,12 @@ func TestAddressbookShareRefusesUnboundCalendarsBeforeAnyRequest(t *testing.T) {
 				}
 			}
 		}
-		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.addressbooks."+op,
+		if _, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.contacts.address-books."+op,
 			`{"addressbook":"clients","type":"users","id":"bob"`+extra+`}`, false); err == nil {
 			t.Errorf("unconfirmed %s: accepted", op)
 		}
 		// Without a tools list naming it the tool is not offered.
-		if _, err := eventWrite(t, nil, []string{"addressbook"}, "nextcloud.addressbooks."+op,
+		if _, err := eventWrite(t, nil, []string{"addressbook"}, "nextcloud.contacts.address-books."+op,
 			`{"addressbook":"clients","type":"users","id":"bob"`+extra+`}`, true); err == nil {
 			t.Errorf("%s without a tools list: accepted", op)
 		}
@@ -164,8 +164,8 @@ func TestAddressbookShareUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) 
 		answers[strconv.Itoa(code)] = func() (*http.Response, error) { return status(code), nil }
 	}
 	for op, args := range map[string]string{
-		"nextcloud.addressbooks.share":   `{"addressbook":"clients","type":"users","id":"bob","access":"read"}`,
-		"nextcloud.addressbooks.unshare": `{"addressbook":"clients","type":"users","id":"bob"}`,
+		"nextcloud.contacts.address-books.share":   `{"addressbook":"clients","type":"users","id":"bob","access":"read"}`,
+		"nextcloud.contacts.address-books.unshare": `{"addressbook":"clients","type":"users","id":"bob"}`,
 	} {
 		for name, answer := range answers {
 			calls := bookFixture(t, aliceUser, answer)
@@ -193,13 +193,13 @@ func TestAddressbookShareRedirectsAreClearFailuresWithoutATarget(t *testing.T) {
 	args := `{"addressbook":"clients","type":"users","id":"bob","access":"read"}`
 	for _, code := range []int{301, 302, 307, 308} {
 		calls := bookFixture(t, aliceUser, func() (*http.Response, error) { return redirect(code), nil })
-		_, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.addressbooks.share", args, true)
+		_, err := bookShareCall(t, []string{"addressbook"}, "nextcloud.contacts.address-books.share", args, true)
 		if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "redirect") ||
 			strings.Contains(err.Error(), "canary") || strings.Contains(err.Error(), eventHint) || len(*calls) != 2 {
 			t.Errorf("%d: err = %v, calls = %d", code, err, len(*calls))
 		}
 		calls = serve(t, func(*http.Request) (*http.Response, error) { return redirect(code), nil })
-		_, err = bookShareCall(t, []string{"addressbook"}, "nextcloud.addressbooks.share", args, true)
+		_, err = bookShareCall(t, []string{"addressbook"}, "nextcloud.contacts.address-books.share", args, true)
 		if !strings.Contains(fmtErr(err), "redirect") || strings.Contains(fmtErr(err), "canary") || len(*calls) != 1 {
 			t.Errorf("%d pre-check: err = %v, calls = %d", code, err, len(*calls))
 		}
@@ -224,7 +224,7 @@ func TestAddressbooksListReportsTheSharesFromInvite(t *testing.T) {
 				inviteUser("principal:principals/users/mail", "mail@example.com", "read", ``)+
 				inviteUser("principal:principals/users/a%2Fb", "x", "read", ``))), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.addressbooks.list", `{}`)
+	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.address-books.list", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestAddressbooksListCapsAndMarksTheShares(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, bookInviteListing(invites.String())), nil
 	})
-	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.addressbooks.list", `{}`)
+	result, err := bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.address-books.list", `{}`)
 	var listed AddressbooksResult
 	if err != nil || json.Unmarshal(result, &listed) != nil || len(listed.Addressbooks[0].Shares) != 50 ||
 		!listed.Addressbooks[0].SharesTruncated || listed.Addressbooks[0].Shares[49].ID != "u49" {
@@ -273,7 +273,7 @@ func TestAddressbooksListCapsAndMarksTheShares(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return xmlResponse(http.StatusMultiStatus, bookListing()), nil
 	})
-	result, err = bookInvoke(t, []string{"addressbook"}, "nextcloud.addressbooks.list", `{}`)
+	result, err = bookInvoke(t, []string{"addressbook"}, "nextcloud.contacts.address-books.list", `{}`)
 	if err != nil || strings.Contains(string(result), "shares") {
 		t.Errorf("result = %s, %v", result, err)
 	}

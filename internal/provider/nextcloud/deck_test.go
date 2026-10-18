@@ -39,7 +39,7 @@ func TestDeckBoardsListKeepsOnlyBoundBoards(t *testing.T) {
 		return jsonResponse(http.StatusOK, `[`+board("1", "One")+`,`+board("2", "Two")+`,`+
 			strings.Replace(board("3", "Gone"), `"deletedAt":0`, `"deletedAt":99`, 1)+`]`), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckboards.list", `{}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.boards.list", `{}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -53,7 +53,7 @@ func TestDeckBoardsListKeepsOnlyBoundBoards(t *testing.T) {
 		t.Errorf("request = %s %s", request.method, request.url)
 	}
 
-	result, err = deckInvoke(t, []string{"deck"}, "nextcloud.deckboards.list", `{}`)
+	result, err = deckInvoke(t, []string{"deck"}, "nextcloud.deck.boards.list", `{}`)
 	if err != nil || !strings.Contains(string(result), `"count":2`) || strings.Contains(string(result), "Gone") {
 		t.Errorf("all boards = %s, %v", result, err)
 	}
@@ -65,7 +65,7 @@ func TestDeckRequestsAreFixedAndJSON(t *testing.T) {
 		header = request.Header
 		return jsonResponse(http.StatusOK, `[]`), nil
 	})
-	if _, err := deckInvoke(t, []string{"deck"}, "nextcloud.deckboards.list", `{}`); err != nil {
+	if _, err := deckInvoke(t, []string{"deck"}, "nextcloud.deck.boards.list", `{}`); err != nil {
 		t.Fatal(err)
 	}
 	if header.Get("OCS-APIRequest") != "true" || header.Get("Accept") != "application/json" {
@@ -82,14 +82,14 @@ func TestDeckUnboundBoardIsRefusedBeforeAnyRequest(t *testing.T) {
 		targets []string
 		op, arg string
 	}{
-		"get":            {[]string{"deck/2"}, "nextcloud.deckboards.get", `{"board_id":"9"}`},
-		"stacks":         {[]string{"deck/2"}, "nextcloud.deckstacks.list", `{"board_id":"9"}`},
-		"card":           {[]string{"deck/2"}, "nextcloud.deckcards.get", `{"board_id":"9","stack_id":"1","card_id":"1"}`},
-		"no deck target": {[]string{"folder/Reports"}, "nextcloud.deckboards.list", `{}`},
-		"no deck, board": {[]string{"folder/Reports"}, "nextcloud.deckboards.get", `{"board_id":"2"}`},
-		"non numeric":    {[]string{"deck"}, "nextcloud.deckboards.get", `{"board_id":"2/../3"}`},
-		"non numeric id": {[]string{"deck"}, "nextcloud.deckcards.get", `{"board_id":"2","stack_id":"x","card_id":"1"}`},
-		"free parameter": {[]string{"deck"}, "nextcloud.deckboards.get", `{"board_id":"2","path":"/x"}`},
+		"get":            {[]string{"deck/2"}, "nextcloud.deck.boards.get", `{"board_id":"9"}`},
+		"stacks":         {[]string{"deck/2"}, "nextcloud.deck.stacks.list", `{"board_id":"9"}`},
+		"card":           {[]string{"deck/2"}, "nextcloud.deck.cards.get", `{"board_id":"9","stack_id":"1","card_id":"1"}`},
+		"no deck target": {[]string{"folder/Reports"}, "nextcloud.deck.boards.list", `{}`},
+		"no deck, board": {[]string{"folder/Reports"}, "nextcloud.deck.boards.get", `{"board_id":"2"}`},
+		"non numeric":    {[]string{"deck"}, "nextcloud.deck.boards.get", `{"board_id":"2/../3"}`},
+		"non numeric id": {[]string{"deck"}, "nextcloud.deck.cards.get", `{"board_id":"2","stack_id":"x","card_id":"1"}`},
+		"free parameter": {[]string{"deck"}, "nextcloud.deck.boards.get", `{"board_id":"2","path":"/x"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := deckInvoke(t, tc.targets, tc.op, tc.arg)
@@ -119,7 +119,7 @@ func TestDeckBoardGetReportsLabelsACLAndMembersBounded(t *testing.T) {
 			`"participant":{"uid":"team","displayname":"Team","type":1}}],`+
 			`"users":[{"uid":"bob","displayname":"Bob","type":0}],"extra":"`+deckCanary+`"}`), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckboards.get", `{"board_id":"2"}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.boards.get", `{"board_id":"2"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -151,7 +151,7 @@ func TestDeckStacksListMarksCutDescriptions(t *testing.T) {
 	calls := serve(t, func(request *http.Request) (*http.Response, error) {
 		return jsonResponse(http.StatusOK, `[`+stackJSON("3", cardJSON("21", "3", long), cardJSON("22", "3", "short"))+`]`), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckstacks.list", `{"board_id":"2"}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.stacks.list", `{"board_id":"2"}`)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -168,7 +168,7 @@ func TestDeckStacksListMarksCutDescriptions(t *testing.T) {
 		t.Errorf("path = %s", (*calls)[0].url.Path)
 	}
 
-	_, err = deckInvoke(t, []string{"deck/2"}, "nextcloud.deckstacks.list", `{"board_id":"2","archived":true}`)
+	_, err = deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.stacks.list", `{"board_id":"2","archived":true}`)
 	if err != nil || (*calls)[1].url.Path != "/index.php/apps/deck/api/v1.1/boards/2/stacks/archived" {
 		t.Errorf("archived request = %v, %v", (*calls)[1].url, err)
 	}
@@ -182,7 +182,7 @@ func TestDeckStacksListCapsCards(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return jsonResponse(http.StatusOK, `[`+stackJSON("3", cards...)+`]`), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckstacks.list", `{"board_id":"2"}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.stacks.list", `{"board_id":"2"}`)
 	var listed DeckStacksResult
 	if err != nil || json.Unmarshal(result, &listed) != nil || listed.Cards != maxDeckCards || !listed.Truncated {
 		t.Errorf("cards = %d, truncated = %v, err = %v", listed.Cards, listed.Truncated, err)
@@ -207,13 +207,13 @@ func TestDeckCardGetChecksTheBoardHierarchyFirst(t *testing.T) {
 		t.Errorf("unexpected request %s", request.URL.Path)
 		return jsonResponse(http.StatusOK, cardJSON("99", "8", "foreign "+deckCanary)), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckcards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.cards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
 	var card DeckCard
 	if err != nil || json.Unmarshal(result, &card) != nil || card.ID != "21" || card.Description != "full text" ||
 		card.StackID != "3" || card.Labels[0].Title != "Bug" {
 		t.Fatalf("card = %s, %v", result, err)
 	}
-	if result, err = deckInvoke(t, []string{"deck/2"}, "nextcloud.deckcards.get", `{"board_id":"2","stack_id":"3","card_id":"23"}`); err != nil ||
+	if result, err = deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.cards.get", `{"board_id":"2","stack_id":"3","card_id":"23"}`); err != nil ||
 		!strings.Contains(string(result), "archived text") {
 		t.Errorf("archived card = %s, %v", result, err)
 	}
@@ -224,7 +224,7 @@ func TestDeckCardGetChecksTheBoardHierarchyFirst(t *testing.T) {
 		"card in wrong stack":   `{"board_id":"2","stack_id":"3","card_id":"98"}`,
 	} {
 		before := len(paths)
-		_, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckcards.get", args)
+		_, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.cards.get", args)
 		if err == nil || strings.Contains(err.Error(), deckCanary) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -243,7 +243,7 @@ func TestDeckCardGetRejectsAnAnswerFromAnotherStack(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, cardJSON("21", "8", "other "+deckCanary)), nil
 	})
-	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deckcards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
+	result, err := deckInvoke(t, []string{"deck/2"}, "nextcloud.deck.cards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
 	if err == nil || strings.Contains(string(result), deckCanary) {
 		t.Errorf("result = %s, err = %v", result, err)
 	}
@@ -257,7 +257,7 @@ func TestDeckCardDescriptionIsCappedAtEightKiB(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, cardJSON("21", "3", long)), nil
 	})
-	result, err := deckInvoke(t, []string{"deck"}, "nextcloud.deckcards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
+	result, err := deckInvoke(t, []string{"deck"}, "nextcloud.deck.cards.get", `{"board_id":"2","stack_id":"3","card_id":"21"}`)
 	var card DeckCard
 	if err != nil || json.Unmarshal(result, &card) != nil || len(card.Description) != maxDeckCardText || !card.Truncated {
 		t.Errorf("len = %d, truncated = %v, err = %v", len(card.Description), card.Truncated, err)
@@ -278,7 +278,7 @@ func TestDeckRedirectAndMissingAppAreClear(t *testing.T) {
 				response.Header.Set("Location", "https://evil.example.invalid/"+bodyCanary)
 				return response, nil
 			})
-			_, err := deckInvoke(t, []string{"deck"}, "nextcloud.deckboards.list", `{}`)
+			_, err := deckInvoke(t, []string{"deck"}, "nextcloud.deck.boards.list", `{}`)
 			if err == nil || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), bodyCanary) ||
 				strings.Contains(err.Error(), "evil") {
 				t.Errorf("err = %v, want %q", err, tc.want)
@@ -293,7 +293,7 @@ func TestDeckReadProfileHoldsExactlyTheFourReads(t *testing.T) {
 		if profile.ID != "deck-read" {
 			continue
 		}
-		want := "nextcloud.deckboards.list nextcloud.deckboards.get nextcloud.deckstacks.list nextcloud.deckcards.get"
+		want := "nextcloud.deck.boards.list nextcloud.deck.boards.get nextcloud.deck.stacks.list nextcloud.deck.cards.get"
 		if strings.Join(profile.Tools, " ") != want {
 			t.Errorf("deck-read = %v", profile.Tools)
 		}

@@ -50,8 +50,8 @@ const (
 )
 
 const (
-	noteIDSchema     = `{"type":"string","minLength":1,"maxLength":18,"pattern":"^[1-9][0-9]*$","x-form":"a note id of notes.list"}`
-	noteCursorSchema = `{"type":"string","minLength":1,"maxLength":256,"pattern":"^[A-Za-z0-9_.,:=+/~-]+$","x-form":"the next_cursor of the previous notes.list"}`
+	noteIDSchema     = `{"type":"string","minLength":1,"maxLength":18,"pattern":"^[1-9][0-9]*$","x-form":"a note id of notes.notes.list"}`
+	noteCursorSchema = `{"type":"string","minLength":1,"maxLength":256,"pattern":"^[A-Za-z0-9_.,:=+/~-]+$","x-form":"the next_cursor of the previous notes.notes.list"}`
 	categorySchema   = `{"type":"string","minLength":1,"maxLength":1024}`
 	noteItemSchema   = `{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},"category":{"type":"string"},` +
 		`"favorite":{"type":"boolean"},"readonly":{"type":"boolean"},"modified_at":{"type":"string"},"etag":{"type":"string"},` +
@@ -59,10 +59,10 @@ const (
 )
 
 var noteIDArgument = capability.Argument{Name: "id", Required: true,
-	Description: "Note to address, an id reported by notes.list"}
+	Description: "Note to address, an id reported by notes.notes.list"}
 
 var notesList = capability.Descriptor{
-	ID: Provider + ".notes.list", Version: 1, Title: "List Nextcloud notes",
+	ID: Provider + ".notes.notes.list", Version: 1, Title: "List Nextcloud notes",
 	Description: "List the notes of the identity in the categories this connection binds, without their content, in " +
 		"chunks of at most 200; a note outside the bound categories is never reported",
 	Tags: []string{"nextcloud", "notes", "list"}, Risk: notesReadRisk(), Provider: Provider,
@@ -86,7 +86,7 @@ var notesList = capability.Descriptor{
 }
 
 var notesGet = capability.Descriptor{
-	ID: Provider + ".notes.get", Version: 1, Title: "Read a Nextcloud note",
+	ID: Provider + ".notes.notes.get", Version: 1, Title: "Read a Nextcloud note",
 	Description: "Read one note in a category this connection binds, with its content up to 256 KiB; a note outside " +
 		"the bound categories is answered like a missing one",
 	Tags: []string{"nextcloud", "notes", "get", "content"}, Risk: notesReadRisk(), Provider: Provider,
@@ -114,7 +114,7 @@ var notesGet = capability.Descriptor{
 }
 
 var notesAttachmentsGet = capability.Descriptor{
-	ID: Provider + ".noteattachments.get", Version: 1, Title: "Read a Nextcloud note attachment",
+	ID: Provider + ".notes.attachments.get", Version: 1, Title: "Read a Nextcloud note attachment",
 	Description: "Read one image or file embedded in a note in a category this connection binds, inline as base64 up " +
 		"to 4 MiB or written to local_path in a directory the connection releases for writing; the content of a " +
 		"local download is never returned, only its metadata. An existing local file is replaced only with confirmation",
@@ -143,7 +143,7 @@ var notesAttachmentsGet = capability.Descriptor{
 }
 
 var notesSettingsGet = capability.Descriptor{
-	ID: Provider + ".notesettings.get", Version: 1, Title: "Get the Nextcloud Notes settings",
+	ID: Provider + ".notes.settings.get", Version: 1, Title: "Get the Nextcloud Notes settings",
 	Description: "Read the Notes app settings of the identity: the folder that holds the notes and the file suffix of new notes",
 	Tags:        []string{"nextcloud", "notes", "settings", "get"}, Risk: notesReadRisk(), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -429,7 +429,7 @@ func invokeNotesAttachmentsGet(ctx context.Context, resolved *config.Resolved, s
 		}
 		return client.GetNoteAttachment(ctx, sel, input.ID, input.Path)
 	}
-	// As in files.get, the local target is prepared before the credential is resolved.
+	// As in files.files.get, the local target is prepared before the credential is resolved.
 	download, err := localfile.CreateForDownload(ctx, resolved, *input.LocalPath)
 	if err != nil {
 		return nil, err
@@ -627,7 +627,7 @@ func (c *Client) attachmentTarget(id, path string) string {
 	return c.notesURL(url.Values{"path": {path}}, "attachment", id)
 }
 
-// GetNoteAttachment reads one attachment inline, up to the limit of files.get.
+// GetNoteAttachment reads one attachment inline, up to the limit of files.files.get.
 func (c *Client) GetNoteAttachment(ctx context.Context, sel selection, id, path string) (*NoteAttachment, error) {
 	const op = "get note attachment"
 	if _, err := c.fetchNote(ctx, op, sel, id, false); err != nil {

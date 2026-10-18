@@ -254,7 +254,7 @@ func TestSharesChangesReportUncertainOutcomesWithoutRepeating(t *testing.T) {
 	for name, failure := range failures {
 		calls := serve(t, func(*http.Request) (*http.Response, error) { return failure(nil) })
 		_, err := runShare(createShareTool, obj{"type": "user", "path": "a", "share_with": "bob"})
-		if err == nil || !strings.Contains(err.Error(), "may have been created") || !strings.Contains(err.Error(), "shares.list") || len(*calls) != 1 {
+		if err == nil || !strings.Contains(err.Error(), "may have been created") || !strings.Contains(err.Error(), "shares.shares.list") || len(*calls) != 1 {
 			t.Errorf("create %s: err = %v, calls = %d", name, err, len(*calls))
 		}
 		calls = shareServer(t, "0", "/Reports/a.txt", failure)
@@ -321,7 +321,7 @@ func TestShareManagementIsConfirmedAllowListedAndInNoProfile(t *testing.T) {
 	}{{sharesCreate, capability.EffectCreate}, {sharesUpdate, capability.EffectUpdate}, {sharesDelete, capability.EffectDelete}} {
 		r := c.d.Risk
 		if r.Effect != c.effect || r.Idempotency == "" || r.Confirmation != capability.ConfirmationRequired || !r.OpenWorld ||
-			r.DataSensitivity == "" || !c.d.RequiresToolAllowList || c.d.Group != groupShares || strings.Count(c.d.ID, ".") != 2 {
+			r.DataSensitivity == "" || !c.d.RequiresToolAllowList || c.d.Group != groupShares || strings.Count(c.d.ID, ".") != 3 {
 			t.Errorf("%s = %+v", c.d.ID, c.d)
 		}
 	}
@@ -337,9 +337,9 @@ func TestShareManagementIsConfirmedAllowListedAndInNoProfile(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(reg, coreConfig(), resolver(red), red)
 	for op, args := range map[string]string{
-		"nextcloud.shares.create": `{"type":"user","path":"a","share_with":"bob"}`,
-		"nextcloud.shares.update": `{"share_id":"7","update":true}`,
-		"nextcloud.shares.delete": `{"share_id":"7"}`,
+		"nextcloud.shares.shares.create": `{"type":"user","path":"a","share_with":"bob"}`,
+		"nextcloud.shares.shares.update": `{"share_id":"7","update":true}`,
+		"nextcloud.shares.shares.delete": `{"share_id":"7"}`,
 	} {
 		if _, err := core.Invoke(context.Background(), application.InvokeRequest{
 			Operation: op, Connection: "reports", Arguments: json.RawMessage(args),

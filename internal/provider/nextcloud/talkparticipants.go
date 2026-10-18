@@ -33,9 +33,9 @@ const (
 	messageTalkNotUser    = "only a participant that is a user can be made or stopped being a moderator"
 	messageTalkNoTarget   = "this Talk conversation or participant does not exist or is not accessible to this identity"
 
-	uncertainTalkAdd       = "; the participant may have been added, check talkparticipants.list before repeating"
-	uncertainTalkRemove    = "; the participant may have been removed, check talkparticipants.list before repeating"
-	uncertainTalkModerator = "; the moderator right may have been changed, check talkparticipants.list before repeating"
+	uncertainTalkAdd       = "; the participant may have been added, check talk.participants.list before repeating"
+	uncertainTalkRemove    = "; the participant may have been removed, check talk.participants.list before repeating"
+	uncertainTalkModerator = "; the moderator right may have been changed, check talk.participants.list before repeating"
 )
 
 // A user ID is the Nextcloud character set. A group ID may also contain a space, which must not lead or
@@ -199,14 +199,14 @@ const (
 
 var (
 	attendeeIDArgument = capability.Argument{Name: "attendee_id", Required: true,
-		Description: "Numeric attendee_id of a participant, as reported by talkparticipants.list for the same conversation"}
+		Description: "Numeric attendee_id of a participant, as reported by talk.participants.list for the same conversation"}
 )
 
 var talkParticipantsAdd = capability.Descriptor{
-	ID: Provider + ".talkparticipants.add", Version: 1, Title: "Add a Nextcloud Talk participant",
+	ID: Provider + ".talk.participants.add", Version: 1, Title: "Add a Nextcloud Talk participant",
 	Description: "Add an existing user or group of the instance to a Talk conversation the connection binds. " +
 		"Guests, e-mail addresses, phone numbers, federated users, and teams are not added. An unclear outcome " +
-		"may have changed the conversation, so check talkparticipants.list before repeating",
+		"may have changed the conversation, so check talk.participants.list before repeating",
 	Tags:     []string{"nextcloud", "talk", "participant", "add", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"token":` + talkTokenSchema + `,"participant":` +
@@ -224,9 +224,9 @@ var talkParticipantsAdd = capability.Descriptor{
 }
 
 var talkParticipantsRemove = capability.Descriptor{
-	ID: Provider + ".talkparticipants.remove", Version: 1, Title: "Remove a Nextcloud Talk participant",
+	ID: Provider + ".talk.participants.remove", Version: 1, Title: "Remove a Nextcloud Talk participant",
 	Description: "Remove one participant listed in a Talk conversation the connection binds. The owner and this " +
-		"identity are refused. An unclear outcome may have changed the conversation, so check talkparticipants.list " +
+		"identity are refused. An unclear outcome may have changed the conversation, so check talk.participants.list " +
 		"before repeating",
 	Tags:     []string{"nextcloud", "talk", "participant", "remove", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
@@ -243,10 +243,10 @@ var talkParticipantsRemove = capability.Descriptor{
 }
 
 var talkParticipantsModerator = capability.Descriptor{
-	ID: Provider + ".talkparticipants.moderator", Version: 1, Title: "Set a Nextcloud Talk moderator",
+	ID: Provider + ".talk.participants.moderator", Version: 1, Title: "Set a Nextcloud Talk moderator",
 	Description: "Give or take the moderator right of one user listed in a Talk conversation the connection binds. " +
 		"The owner and this identity are refused. An unclear outcome may have changed the conversation, so check " +
-		"talkparticipants.list before repeating",
+		"talk.participants.list before repeating",
 	Tags:     []string{"nextcloud", "talk", "participant", "moderator", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"token":` + talkTokenSchema + `,"attendee_id":` +

@@ -46,9 +46,9 @@ func aclAnswer(id, edit, share, manage string) string {
 }
 
 var deckACLCalls = []struct{ name, id, args string }{
-	{"add", "nextcloud.deckacl.add", `{"board_id":"2","type":"user","participant":"bob"}`},
-	{"update", "nextcloud.deckacl.update", `{"board_id":"2","acl_id":"4","can_share":true}`},
-	{"remove", "nextcloud.deckacl.remove", `{"board_id":"2","acl_id":"4"}`},
+	{"add", "nextcloud.deck.acl.add", `{"board_id":"2","type":"user","participant":"bob"}`},
+	{"update", "nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"4","can_share":true}`},
+	{"remove", "nextcloud.deck.acl.remove", `{"board_id":"2","acl_id":"4"}`},
 }
 
 func TestDeckACLRefuseBeforeAnyRequest(t *testing.T) {
@@ -78,7 +78,7 @@ func TestDeckACLRefuseBeforeAnyRequest(t *testing.T) {
 		"free parameter":   {"add", `{"board_id":"2","type":"user","participant":"bob","path":"/y"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := deckACLWrite(t, deckACLTools, "nextcloud.deckacl."+tc.op, tc.args, true)
+			_, err := deckACLWrite(t, deckACLTools, "nextcloud.deck.acl."+tc.op, tc.args, true)
 			if err == nil {
 				t.Fatal("accepted")
 			}
@@ -112,13 +112,13 @@ func TestDeckACLRefuseWithoutMutation(t *testing.T) {
 	}
 	// Unknown, team, and owner entries and a duplicate participant stop after the read.
 	for name, op := range map[string]struct{ id, args string }{
-		"update unknown": {"nextcloud.deckacl.update", `{"board_id":"2","acl_id":"77","can_edit":true}`},
-		"remove unknown": {"nextcloud.deckacl.remove", `{"board_id":"2","acl_id":"77"}`},
-		"update team":    {"nextcloud.deckacl.update", `{"board_id":"2","acl_id":"6","can_edit":true}`},
-		"remove team":    {"nextcloud.deckacl.remove", `{"board_id":"2","acl_id":"6"}`},
-		"update owner":   {"nextcloud.deckacl.update", `{"board_id":"2","acl_id":"7","can_edit":false}`},
-		"remove owner":   {"nextcloud.deckacl.remove", `{"board_id":"2","acl_id":"7"}`},
-		"add duplicate":  {"nextcloud.deckacl.add", `{"board_id":"2","type":"user","participant":"anna"}`},
+		"update unknown": {"nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"77","can_edit":true}`},
+		"remove unknown": {"nextcloud.deck.acl.remove", `{"board_id":"2","acl_id":"77"}`},
+		"update team":    {"nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"6","can_edit":true}`},
+		"remove team":    {"nextcloud.deck.acl.remove", `{"board_id":"2","acl_id":"6"}`},
+		"update owner":   {"nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"7","can_edit":false}`},
+		"remove owner":   {"nextcloud.deck.acl.remove", `{"board_id":"2","acl_id":"7"}`},
+		"add duplicate":  {"nextcloud.deck.acl.add", `{"board_id":"2","type":"user","participant":"anna"}`},
 	} {
 		calls := serve(t, func(*http.Request) (*http.Response, error) {
 			return jsonResponse(http.StatusOK, boardWithACL(true)), nil
@@ -145,7 +145,7 @@ func TestDeckACLSendOneFixedRequest(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, `[]`), nil
 	})
-	result, err := deckACLWrite(t, deckACLTools, "nextcloud.deckacl.add",
+	result, err := deckACLWrite(t, deckACLTools, "nextcloud.deck.acl.add",
 		`{"board_id":"2","type":"group","participant":"ops","can_edit":true}`, true)
 	if err != nil || !strings.Contains(string(result), `"added":true`) || !strings.Contains(string(result), `"id":"9"`) {
 		t.Fatalf("add = %s, %v", result, err)
@@ -155,14 +155,14 @@ func TestDeckACLSendOneFixedRequest(t *testing.T) {
 		t.Fatalf("calls = %+v", *calls)
 	}
 	// A user of the same name as a group is a different participant.
-	if _, err := deckACLWrite(t, deckACLTools, "nextcloud.deckacl.add", `{"board_id":"2","type":"user","participant":"devs"}`, true); err != nil {
+	if _, err := deckACLWrite(t, deckACLTools, "nextcloud.deck.acl.add", `{"board_id":"2","type":"user","participant":"devs"}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[3].body; got != `{"type":0,"participant":"devs","permissionEdit":false,"permissionShare":false,"permissionManage":false}` {
 		t.Errorf("user add body = %s", got)
 	}
 	// update keeps what is not given
-	result, err = deckACLWrite(t, deckACLTools, "nextcloud.deckacl.update", `{"board_id":"2","acl_id":"4","can_share":true}`, true)
+	result, err = deckACLWrite(t, deckACLTools, "nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"4","can_share":true}`, true)
 	if err != nil || !strings.Contains(string(result), `"updated":true`) || !strings.Contains(string(result), `"participant":"anna"`) {
 		t.Fatalf("update = %s, %v", result, err)
 	}
@@ -170,13 +170,13 @@ func TestDeckACLSendOneFixedRequest(t *testing.T) {
 		c.body != `{"permissionEdit":true,"permissionShare":true,"permissionManage":false}` {
 		t.Errorf("update = %+v", c)
 	}
-	if _, err := deckACLWrite(t, deckACLTools, "nextcloud.deckacl.update", `{"board_id":"2","acl_id":"4","can_edit":false}`, true); err != nil {
+	if _, err := deckACLWrite(t, deckACLTools, "nextcloud.deck.acl.update", `{"board_id":"2","acl_id":"4","can_edit":false}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[7].body; got != `{"permissionEdit":false,"permissionShare":false,"permissionManage":false}` {
 		t.Errorf("edit update body = %s", got)
 	}
-	result, err = deckACLWrite(t, deckACLTools, "nextcloud.deckacl.remove", `{"board_id":"2","acl_id":"5"}`, true)
+	result, err = deckACLWrite(t, deckACLTools, "nextcloud.deck.acl.remove", `{"board_id":"2","acl_id":"5"}`, true)
 	if err != nil || !strings.Contains(string(result), `"removed":true`) {
 		t.Fatalf("remove = %s, %v", result, err)
 	}
@@ -233,7 +233,7 @@ func TestDeckACLUnclearOutcomeIsNeverRepeated(t *testing.T) {
 			if has := strings.Contains(text, "may have been applied"); has != hint {
 				t.Errorf("hint present = %v in %q", has, text)
 			}
-			if hint && !strings.Contains(text, "deckboards.get") {
+			if hint && !strings.Contains(text, "deck.boards.get") {
 				t.Errorf("no verification advice in %q", text)
 			}
 		}
@@ -266,7 +266,7 @@ func TestDeckACLToolsAreAllowListOnly(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.deckacl.") {
+			if strings.HasPrefix(id, "nextcloud.deck.acl.") {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}

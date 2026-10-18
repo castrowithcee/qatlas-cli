@@ -62,9 +62,9 @@ func TestSchemaMaxLengthsFitTheRequestLimit(t *testing.T) {
 // whose handler counts its calls.
 func uploadFixture(t *testing.T, calls *int) (*capability.Registry, string) {
 	t.Helper()
-	shipped, _, ok := defaultRegistry().Lookup("nextcloud.files.create")
+	shipped, _, ok := defaultRegistry().Lookup("nextcloud.files.files.create")
 	if !ok {
-		t.Fatal("nextcloud.files.create is not registered")
+		t.Fatal("nextcloud.files.files.create is not registered")
 	}
 	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
 		*redact.Redactor, json.RawMessage) (any, error) {
@@ -91,7 +91,7 @@ func uploadArguments(t *testing.T, length int) string {
 			MaxLength int `json:"maxLength"`
 		} `json:"properties"`
 	}
-	shipped, _, _ := defaultRegistry().Lookup("nextcloud.files.create")
+	shipped, _, _ := defaultRegistry().Lookup("nextcloud.files.files.create")
 	if err := json.Unmarshal(shipped.InputSchema, &schema); err != nil {
 		t.Fatal(err)
 	}

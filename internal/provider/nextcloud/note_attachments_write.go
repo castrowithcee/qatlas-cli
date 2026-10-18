@@ -15,7 +15,7 @@ import (
 )
 
 var noteAttachmentsUpload = capability.Descriptor{
-	ID: Provider + ".noteattachments.upload", Version: 1, Title: "Upload a Nextcloud note attachment",
+	ID: Provider + ".notes.attachments.upload", Version: 1, Title: "Upload a Nextcloud note attachment",
 	Description: "Attach exactly one confirmed local file to a note in a category this connection binds. " +
 		"local_path is a file up to 64 MiB in a directory the connection releases for reading; it keeps its file " +
 		"name and its content is reported by hash and size only. One read-only GET of the note refuses a foreign " +

@@ -20,7 +20,7 @@ import (
 const taskProductID = eventProductID
 
 var taskKind = objectKind{"a", "task", "VTODO", "; the change may have been applied, check the calendar with " +
-	"tasks.list or tasks.get before repeating it"}
+	"calendar.tasks.list or calendar.tasks.get before repeating it"}
 
 const taskFieldSchemas = `"title":{"type":"string","minLength":1,"maxLength":256},` +
 	`"description":{"type":"string","maxLength":4096},` +
@@ -42,13 +42,13 @@ var taskFieldArguments = []capability.Argument{
 }
 
 var (
-	taskIDArgument   = capability.Argument{Name: "id", Description: "Task id as tasks.list or tasks.get reports it", Required: true}
+	taskIDArgument   = capability.Argument{Name: "id", Description: "Task id as calendar.tasks.list or calendar.tasks.get reports it", Required: true}
 	taskETagArgument = capability.Argument{Name: "etag", Required: true,
-		Description: "Entity tag of the task version to change, as tasks.get or tasks.list reports it"}
+		Description: "Entity tag of the task version to change, as calendar.tasks.get or calendar.tasks.list reports it"}
 )
 
 var tasksCreate = capability.Descriptor{
-	ID: Provider + ".tasks.create", Version: 1, Title: "Create a Nextcloud calendar task",
+	ID: Provider + ".calendar.tasks.create", Version: 1, Title: "Create a Nextcloud calendar task",
 	Description: "Create one task (VTODO) in a bound calendar from structured fields. Qatlas builds the iCalendar " +
 		"object itself and generates its UID and resource id; nothing raw comes from an argument. Without " +
 		"parent_uid one read-only pre-check of the calendar refuses a read-only calendar or one without tasks; " +
@@ -75,7 +75,7 @@ var tasksCreate = capability.Descriptor{
 }
 
 var tasksUpdate = capability.Descriptor{
-	ID: Provider + ".tasks.update", Version: 1, Title: "Replace a Nextcloud calendar task",
+	ID: Provider + ".calendar.tasks.update", Version: 1, Title: "Replace a Nextcloud calendar task",
 	Description: "Replace one task of a bound calendar completely by structured fields, bound to its etag; this is " +
 		"also how a task is completed. One read-only pre-check reads the task and refuses a changed etag and " +
 		"a task with content Qatlas does not write, such as recurrence, alarms, attachments, or extensions; then " +
@@ -100,7 +100,7 @@ var tasksUpdate = capability.Descriptor{
 }
 
 var tasksDelete = capability.Descriptor{
-	ID: Provider + ".tasks.delete", Version: 1, Title: "Delete a Nextcloud calendar task",
+	ID: Provider + ".calendar.tasks.delete", Version: 1, Title: "Delete a Nextcloud calendar task",
 	Description: "Delete one task of a bound calendar, bound to its etag; a changed etag deletes nothing, and an " +
 		"object that is no task is refused. One read-only pre-check reads the task, then one DELETE follows. " +
 		"A read-only calendar is refused by Nextcloud. Nextcloud may keep the task in its calendar trash bin " +

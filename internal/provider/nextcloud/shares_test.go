@@ -293,7 +293,7 @@ func TestShareesSearchSendsFixedQueryAndReportsOnlyIdentity(t *testing.T) {
 	})
 	core := accountClient(t, "account")
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.sharees.search", Connection: "reports",
+		Operation: "nextcloud.shares.sharees.search", Connection: "reports",
 		Arguments: json.RawMessage(`{"search":"bo","per_page":50,"item_type":"folder"}`),
 	})
 	if err != nil {
@@ -329,7 +329,7 @@ func TestShareesSearchNeedsTheAccountTargetAndABoundedPageSize(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := accountClient(t, tc.targets...).Invoke(context.Background(), application.InvokeRequest{
-				Operation: "nextcloud.sharees.search", Connection: "reports", Arguments: json.RawMessage(tc.args),
+				Operation: "nextcloud.shares.sharees.search", Connection: "reports", Arguments: json.RawMessage(tc.args),
 			})
 			if err == nil {
 				t.Error("the request was accepted")
@@ -345,7 +345,7 @@ func TestShareesSearchNeedsTheAccountTargetAndABoundedPageSize(t *testing.T) {
 
 func TestSharesNeedAFolderTargetAndAccountOnlyConnectionsAreRefusedLocally(t *testing.T) {
 	refuse(t)
-	for _, op := range []string{"nextcloud.shares.list", "nextcloud.shares.get"} {
+	for _, op := range []string{"nextcloud.shares.shares.list", "nextcloud.shares.shares.get"} {
 		_, err := accountClient(t, "account").Invoke(context.Background(), application.InvokeRequest{
 			Operation: op, Connection: "reports", Arguments: json.RawMessage(`{"share_id":"1"}`),
 		})
@@ -362,8 +362,8 @@ func TestSharesOperationsRunThroughTheApplicationCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	for _, request := range []application.InvokeRequest{
-		{Operation: "nextcloud.shares.list", Connection: "reports", Arguments: json.RawMessage(`{"shared_with_me":false}`)},
-		{Operation: "nextcloud.shares.get", Connection: "reports", Arguments: json.RawMessage(`{"share_id":"12"}`)},
+		{Operation: "nextcloud.shares.shares.list", Connection: "reports", Arguments: json.RawMessage(`{"shared_with_me":false}`)},
+		{Operation: "nextcloud.shares.shares.get", Connection: "reports", Arguments: json.RawMessage(`{"share_id":"12"}`)},
 	} {
 		response, err := core.Invoke(context.Background(), request)
 		if err != nil || !strings.Contains(string(response.Result), `"id":"12"`) {
@@ -372,9 +372,9 @@ func TestSharesOperationsRunThroughTheApplicationCore(t *testing.T) {
 	}
 	for _, bad := range []string{`{"share_id":"1/2"}`, `{"share_id":"x"}`, `{}`, `{"share_id":"1","path":"x"}`} {
 		if _, err := core.Invoke(context.Background(), application.InvokeRequest{
-			Operation: "nextcloud.shares.get", Connection: "reports", Arguments: json.RawMessage(bad),
+			Operation: "nextcloud.shares.shares.get", Connection: "reports", Arguments: json.RawMessage(bad),
 		}); err == nil {
-			t.Errorf("shares.get accepted %s", bad)
+			t.Errorf("shares.shares.get accepted %s", bad)
 		}
 	}
 }

@@ -303,11 +303,11 @@ func TestSearchToolsRisksAndProfiles(t *testing.T) {
 	reg := registry(t)
 	for _, d := range reg.Provider(Provider) {
 		switch d.ID {
-		case "nextcloud.files.search", "nextcloud.favorites.list":
+		case "nextcloud.files.files.search", "nextcloud.files.favorites.list":
 			if d.Risk != nextcloudReadRisk || d.Group != "files" || d.RequiresToolAllowList {
 				t.Errorf("%s = %+v", d.ID, d)
 			}
-		case "nextcloud.files.favorite":
+		case "nextcloud.files.files.favorite":
 			r := d.Risk
 			if r.Effect != capability.EffectUpdate || r.Idempotency != capability.IdempotencyIdempotent || !r.OpenWorld ||
 				r.Confirmation != capability.ConfirmationRequired || r.DataSensitivity != dataSensitivity ||
@@ -322,8 +322,8 @@ func TestSearchToolsRisksAndProfiles(t *testing.T) {
 			continue
 		}
 		got := strings.Join(p.Tools, " ")
-		if !strings.Contains(got, "nextcloud.files.search") || !strings.Contains(got, "nextcloud.favorites.list") ||
-			strings.Contains(got, "nextcloud.files.favorite") {
+		if !strings.Contains(got, "nextcloud.files.files.search") || !strings.Contains(got, "nextcloud.files.favorites.list") ||
+			strings.Contains(got, "nextcloud.files.files.favorite") {
 			t.Errorf("profile %s = %s", p.ID, got)
 		}
 	}

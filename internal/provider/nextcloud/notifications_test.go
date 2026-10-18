@@ -171,7 +171,7 @@ func TestNotificationsDismissOutcomes(t *testing.T) {
 			})
 			_, err := runAccount(invokeNotificationsDismiss, `{"notification_id":"7"}`)
 			if err == nil || deletes != 1 || strings.Contains(err.Error(), bodyCanary) || strings.Contains(err.Error(), redirectTarget) ||
-				strings.Contains(err.Error(), "check notifications.list before repeating") != tc.uncertn {
+				strings.Contains(err.Error(), "check account.notifications.list before repeating") != tc.uncertn {
 				t.Errorf("err = %v, deletes = %d", err, deletes)
 			}
 			if name == "302" && !strings.Contains(err.Error(), "redirect") {
@@ -189,7 +189,7 @@ func TestNotificationsDismissAllSendsOneDelete(t *testing.T) {
 		t.Errorf("got = %+v, err = %v, calls = %+v", got, err, *calls)
 	}
 	serve(t, func(r *http.Request) (*http.Response, error) { return status(503), nil })
-	if _, err := runAccount(invokeNotificationsDismissAll, `{}`); err == nil || !strings.Contains(err.Error(), "check notifications.list before repeating") {
+	if _, err := runAccount(invokeNotificationsDismissAll, `{}`); err == nil || !strings.Contains(err.Error(), "check account.notifications.list before repeating") {
 		t.Errorf("err = %v", err)
 	}
 }

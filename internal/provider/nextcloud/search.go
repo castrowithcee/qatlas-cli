@@ -59,7 +59,7 @@ var entryListFields = append([]capability.Field{
 }, entryFields...)
 
 var filesSearch = capability.Descriptor{
-	ID: Provider + ".files.search", Version: 1,
+	ID: Provider + ".files.files.search", Version: 1,
 	Title: "Search Nextcloud files",
 	Description: "Search the files and folders below the fixed root folder of a connection with structured filters, " +
 		"at least one of which is required; the filters combine with AND and the root itself is never a hit. " +
@@ -91,7 +91,7 @@ var filesSearch = capability.Descriptor{
 }
 
 var favoritesList = capability.Descriptor{
-	ID: Provider + ".favorites.list", Version: 1,
+	ID: Provider + ".files.favorites.list", Version: 1,
 	Title: "List Nextcloud favorites",
 	Description: "List the files and folders below the fixed root folder of a connection that the identity marked as " +
 		"favorite, at most 500 per call",
@@ -104,7 +104,7 @@ var favoritesList = capability.Descriptor{
 }
 
 var filesFavorite = capability.Descriptor{
-	ID: Provider + ".files.favorite", Version: 1,
+	ID: Provider + ".files.files.favorite", Version: 1,
 	Title: "Mark or unmark a Nextcloud favorite",
 	Description: "Set or clear the favorite flag of exactly one confirmed file or folder below the fixed root folder of " +
 		"a connection; the root itself is refused and the content is never changed",

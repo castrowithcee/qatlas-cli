@@ -196,7 +196,7 @@ func TestTalkFilesShareReportsUnclearOutcomesWithoutRepeating(t *testing.T) {
 	for name, answer := range unclear {
 		calls := talkFilesServer(t, roomRead(2, ""), func(*http.Request) (*http.Response, error) { return answer() })
 		_, err := talkFilesShareCall(t, talkFilesCore(t, true, talkFilesBound()...), talkFilesArgs, true)
-		if err == nil || len(*calls) != 2 || !strings.Contains(err.Error(), "check shares.list before repeating") ||
+		if err == nil || len(*calls) != 2 || !strings.Contains(err.Error(), "check shares.shares.list before repeating") ||
 			strings.Contains(err.Error(), bodyCanary) {
 			t.Errorf("%s: err = %v, calls = %d", name, err, len(*calls))
 		}

@@ -162,7 +162,7 @@ var entryFields = []capability.Field{
 }
 
 var filesList = capability.Descriptor{
-	ID:      Provider + ".files.list",
+	ID:      Provider + ".files.files.list",
 	Version: 1,
 	Title:   "List Nextcloud files",
 	Description: "List the immediate children of the fixed root folder, or of one folder below it, of an " +
@@ -191,7 +191,7 @@ var filesList = capability.Descriptor{
 }
 
 var filesStat = capability.Descriptor{
-	ID:      Provider + ".files.stat",
+	ID:      Provider + ".files.files.stat",
 	Version: 1,
 	Title:   "Get Nextcloud file metadata",
 	Description: "Read the metadata of exactly one file or folder below the fixed root folder of an " +
@@ -213,7 +213,7 @@ var filesStat = capability.Descriptor{
 }
 
 var filesGet = capability.Descriptor{
-	ID: Provider + ".files.get", Version: 1, Title: "Read or download a Nextcloud file",
+	ID: Provider + ".files.files.get", Version: 1, Title: "Read or download a Nextcloud file",
 	Description: "Read one file below the fixed root of a connection, inline as base64 up to 4 MiB or written to " +
 		"local_path in a directory the connection releases for writing; the content of a local download is never " +
 		"returned, only its metadata. An existing local file is replaced only with confirmation",
@@ -260,7 +260,7 @@ func withArguments(d capability.Descriptor, arguments ...capability.Argument) ca
 }
 
 func fileMutationDescriptor(action string, effect capability.Effect, input string) capability.Descriptor {
-	return capability.Descriptor{ID: Provider + ".files." + action, Version: 1,
+	return capability.Descriptor{ID: Provider + ".files.files." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Nextcloud file",
 		Description: strings.ToUpper(action[:1]) + action[1:] + " one file below the fixed root of a connection",
 		Tags:        []string{"nextcloud", "files", "webdav", action}, Provider: Provider,
@@ -307,7 +307,7 @@ func Register(reg *capability.Registry) error {
 				"sessions, create a new app password; it is revocable on its own and is what Nextcloud " +
 				"expects from a WebDAV client, especially with two-factor or external authentication",
 		}},
-		Groups: toolGroups,
+		Groups: toolGroups, ServiceLevel: true, RenamedTools: renamedTools,
 		Target: config.TargetMetadata{
 			Label:    "targets",
 			Required: true,
@@ -355,7 +355,7 @@ func Register(reg *capability.Registry) error {
 			ID: "events", Title: "Read and write calendar events",
 			Description: "also creates events in bound writable calendars and replaces one event given its etag, with " +
 				"confirmation; attendees receive invitations by e-mail from Nextcloud; never deletes, which only a " +
-				"tools list naming events.delete allows",
+				"tools list naming calendar.events.delete allows",
 			Tools: []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID, eventsCreate.ID, eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {

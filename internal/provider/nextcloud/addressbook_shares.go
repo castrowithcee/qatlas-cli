@@ -12,17 +12,17 @@ import (
 
 // Address book sharing: one oc:share POST to a bound address book of the identity after the read-only owner
 // pre-check of the address book management tools. Nextcloud ignores an unknown user or group without an error, so the
-// answer says that the change was accepted, not that the recipient exists; addressbooks.list shows the result.
+// answer says that the change was accepted, not that the recipient exists; contacts.address-books.list shows the result.
 
 const addressbookShareOut = `"addressbook":{"type":"string"},"type":{"type":"string"},"id":{"type":"string"},` +
 	`"accepted":{"type":"boolean"}`
 
 var addressbooksShare = capability.Descriptor{
-	ID: Provider + ".addressbooks.share", Version: 1, Title: "Share a Nextcloud address book with a user or group",
+	ID: Provider + ".contacts.address-books.share", Version: 1, Title: "Share a Nextcloud address book with a user or group",
 	Description: "Share one bound address book that belongs to the identity with one existing user or group of the " +
 		"instance for reading or for reading and writing; calling it again changes the access. The system address book and an address book " +
 		"shared by someone else are refused, and no e-mail, team, or remote recipient and no public link can be set. " +
-		"Nextcloud ignores an unknown user or group without an error, so check addressbooks.list. One read-only " +
+		"Nextcloud ignores an unknown user or group without an error, so check contacts.address-books.list. One read-only " +
 		"pre-check of the address book follows, then one POST; the request is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "contacts", "addressbook", "share"}, Provider: Provider,
 	Risk: contactWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
@@ -41,7 +41,7 @@ var addressbooksShare = capability.Descriptor{
 }
 
 var addressbooksUnshare = capability.Descriptor{
-	ID: Provider + ".addressbooks.unshare", Version: 1, Title: "Revoke the share of a Nextcloud address book",
+	ID: Provider + ".contacts.address-books.unshare", Version: 1, Title: "Revoke the share of a Nextcloud address book",
 	Description: "Revoke the share of one bound address book that belongs to the identity for one user or group. The " +
 		"system address book and an address book shared by someone else are refused. One read-only pre-check of the " +
 		"address book follows, then one POST; the request is never repeated after an unclear result",

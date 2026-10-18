@@ -25,7 +25,7 @@ const (
 	// defaultDeckColor is the Deck blue; Deck requires a color on creation.
 	defaultDeckColor = "0087C5"
 
-	uncertainDeckBoard = "; the change may have been applied, check deckboards.list or deckboards.get before repeating"
+	uncertainDeckBoard = "; the change may have been applied, check deck.boards.list or deck.boards.get before repeating"
 
 	messageDeckManage       = "this connection or identity may not change this Deck board"
 	messageDeckCreateTarget = "creating a Deck board needs the general deck target of the connection"
@@ -47,7 +47,7 @@ var (
 )
 
 var deckBoardsCreate = capability.Descriptor{
-	ID: Provider + ".deckboards.create", Version: 1, Title: "Create a Nextcloud Deck board",
+	ID: Provider + ".deck.boards.create", Version: 1, Title: "Create a Nextcloud Deck board",
 	Description: "Create exactly one confirmed Deck board owned by the Nextcloud identity; needs the general deck " +
 		"target of the connection, which binds the new board; the color defaults to the Deck blue",
 	Tags: []string{"nextcloud", "deck", "boards", "create"}, Provider: Provider,
@@ -66,7 +66,7 @@ var deckBoardsCreate = capability.Descriptor{
 }
 
 var deckBoardsUpdate = capability.Descriptor{
-	ID: Provider + ".deckboards.update", Version: 1, Title: "Change a Nextcloud Deck board",
+	ID: Provider + ".deck.boards.update", Version: 1, Title: "Change a Nextcloud Deck board",
 	Description: "Change the title, color, or archived state of exactly one confirmed bound Deck board, at least " +
 		"one field; the identity needs the manage right on the board. One read-only pre-check precedes exactly " +
 		"one change request; fields not given keep their current value",
@@ -87,7 +87,7 @@ var deckBoardsUpdate = capability.Descriptor{
 }
 
 var deckBoardsDelete = capability.Descriptor{
-	ID: Provider + ".deckboards.delete", Version: 1, Title: "Delete a Nextcloud Deck board",
+	ID: Provider + ".deck.boards.delete", Version: 1, Title: "Delete a Nextcloud Deck board",
 	Description: "Delete exactly one confirmed bound Deck board; the identity needs the manage right on the board. " +
 		"Deck deletes softly and keeps the board recoverable, but Qatlas offers no restore. One read-only " +
 		"pre-check precedes exactly one request",
@@ -102,7 +102,7 @@ var deckBoardsDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Deck deleted the board"},
 		{Name: "board_id", Description: "ID of the deleted board"},
 	},
-	Examples: []capability.Example{{Description: "Use a board_id from deckboards.list", Arguments: json.RawMessage(`{"board_id":"7"}`)}},
+	Examples: []capability.Example{{Description: "Use a board_id from deck.boards.list", Arguments: json.RawMessage(`{"board_id":"7"}`)}},
 	// Reachable only through a tools list, never through a profile.
 	RequiresToolAllowList: true,
 }

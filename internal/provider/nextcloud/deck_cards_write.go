@@ -27,7 +27,7 @@ const (
 
 	maxDeckDueDate = 40
 
-	uncertainDeckCard = "; the change may have been applied, check deckcards.get or deckstacks.list before repeating"
+	uncertainDeckCard = "; the change may have been applied, check deck.cards.get or deck.stacks.list before repeating"
 
 	messageDeckCardChanged = "the card changed since it was read, read it again"
 )
@@ -41,10 +41,10 @@ const (
 
 var (
 	deckStackOfCardArgument = capability.Argument{
-		Name: "stack_id", Description: "Numeric ID of the stack that holds the card, as reported by deckstacks.list", Required: true,
+		Name: "stack_id", Description: "Numeric ID of the stack that holds the card, as reported by deck.stacks.list", Required: true,
 	}
 	deckCardIDArgument = capability.Argument{
-		Name: "card_id", Description: "Numeric card ID as reported by deckstacks.list", Required: true,
+		Name: "card_id", Description: "Numeric card ID as reported by deck.stacks.list", Required: true,
 	}
 	deckCardOrderArgument   = capability.Argument{Name: "order", Description: "Position in the stack, 0 to 10000; default last"}
 	deckDescriptionArgument = capability.Argument{
@@ -60,7 +60,7 @@ func deckCardResult(flag string) json.RawMessage {
 }
 
 var deckCardsCreate = capability.Descriptor{
-	ID: Provider + ".deckcards.create", Version: 1, Title: "Create a Nextcloud Deck card",
+	ID: Provider + ".deck.cards.create", Version: 1, Title: "Create a Nextcloud Deck card",
 	Description: "Create exactly one confirmed card in a stack of a bound Deck board; the identity needs the edit " +
 		"right on the board. One read-only pre-check must show the stack in the board, then exactly one request; " +
 		"without order the card goes last. Labels and assignments are not set",
@@ -72,7 +72,7 @@ var deckCardsCreate = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: deckCardResult("created"),
 	Arguments: []capability.Argument{deckBoardIDArgument,
-		{Name: "stack_id", Description: "Numeric ID of the target stack, as reported by deckstacks.list", Required: true},
+		{Name: "stack_id", Description: "Numeric ID of the target stack, as reported by deck.stacks.list", Required: true},
 		{Name: "title", Description: "Card title, 1 to 100 characters", Required: true},
 		deckDescriptionArgument, deckDueArgument, deckCardOrderArgument},
 	Fields: []capability.Field{
@@ -83,10 +83,10 @@ var deckCardsCreate = capability.Descriptor{
 }
 
 var deckCardsUpdate = capability.Descriptor{
-	ID: Provider + ".deckcards.update", Version: 1, Title: "Change a Nextcloud Deck card",
+	ID: Provider + ".deck.cards.update", Version: 1, Title: "Change a Nextcloud Deck card",
 	Description: "Change the title, description, due time, or archived state of exactly one confirmed card of a bound " +
 		"Deck board, at least one field; the identity needs the edit right on the board. last_modified from " +
-		"deckcards.get or deckstacks.list must match the card as read by the one pre-check, else nothing is sent. " +
+		"deck.cards.get or deck.stacks.list must match the card as read by the one pre-check, else nothing is sent. " +
 		"The card is sent back as read with the change; fields not given keep their value. An archived card can " +
 		"only be restored with archived false, which takes no other field",
 	Tags: []string{"nextcloud", "deck", "cards", "update", "archive"}, Provider: Provider,
@@ -112,7 +112,7 @@ var deckCardsUpdate = capability.Descriptor{
 }
 
 var deckCardsMove = capability.Descriptor{
-	ID: Provider + ".deckcards.move", Version: 1, Title: "Move a Nextcloud Deck card",
+	ID: Provider + ".deck.cards.move", Version: 1, Title: "Move a Nextcloud Deck card",
 	Description: "Move exactly one confirmed active card to another stack of the same bound Deck board or to another " +
 		"position; the identity needs the edit right on the board. One read-only pre-check must show the card in " +
 		"the named stack and the target stack in the board, then exactly one request; without order the card goes " +
@@ -135,7 +135,7 @@ var deckCardsMove = capability.Descriptor{
 }
 
 var deckCardsDelete = capability.Descriptor{
-	ID: Provider + ".deckcards.delete", Version: 1, Title: "Delete a Nextcloud Deck card",
+	ID: Provider + ".deck.cards.delete", Version: 1, Title: "Delete a Nextcloud Deck card",
 	Description: "Delete exactly one confirmed active card of a bound Deck board; the identity needs the edit right " +
 		"on the board. Deck deletes softly, but Qatlas offers no restore. One read-only pre-check must show the " +
 		"card in the named stack, then exactly one request; archived cards are not deleted",
@@ -151,7 +151,7 @@ var deckCardsDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Deck deleted the card"},
 		{Name: "card_id", Description: "ID of the deleted card"},
 	},
-	Examples: []capability.Example{{Description: "Use IDs from deckstacks.list", Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3","card_id":"21"}`)}},
+	Examples: []capability.Example{{Description: "Use IDs from deck.stacks.list", Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3","card_id":"21"}`)}},
 	// Reachable only through a tools list, never through a profile.
 	RequiresToolAllowList: true,
 }

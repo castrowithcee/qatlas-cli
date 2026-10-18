@@ -243,43 +243,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 144 || descriptors[98].ID != "nextcloud.search.providers" || descriptors[99].ID != "nextcloud.search.query" || descriptors[106].ID != "nextcloud.status.clear" || descriptors[107].ID != "nextcloud.status.get" || descriptors[108].ID != "nextcloud.status.set" || descriptors[1].ID != "nextcloud.activity.list" || descriptors[8].ID != "nextcloud.admingroups.list" || descriptors[9].ID != "nextcloud.admingroups.members" || descriptors[10].ID != "nextcloud.adminusers.get" || descriptors[11].ID != "nextcloud.adminusers.list" || descriptors[92].ID != "nextcloud.notifications.dismiss" || descriptors[93].ID != "nextcloud.notifications.dismissall" || descriptors[94].ID != "nextcloud.notifications.list" || descriptors[2].ID != "nextcloud.addressbooks.create" || descriptors[3].ID != "nextcloud.addressbooks.delete" || descriptors[4].ID != "nextcloud.addressbooks.list" || descriptors[5].ID != "nextcloud.addressbooks.share" || descriptors[6].ID != "nextcloud.addressbooks.unshare" || descriptors[7].ID != "nextcloud.addressbooks.update" || descriptors[12].ID != "nextcloud.calendars.create" || descriptors[13].ID != "nextcloud.calendars.delete" || descriptors[14].ID != "nextcloud.calendars.list" || descriptors[15].ID != "nextcloud.calendars.share" || descriptors[16].ID != "nextcloud.calendars.unshare" || descriptors[17].ID != "nextcloud.calendars.update" || descriptors[18].ID != "nextcloud.calendartrash.delete" || descriptors[19].ID != "nextcloud.calendartrash.list" || descriptors[20].ID != "nextcloud.calendartrash.restore" || descriptors[21].ID != "nextcloud.comments.create" ||
-		descriptors[23].ID != "nextcloud.comments.list" || descriptors[25].ID != "nextcloud.contacts.create" || descriptors[26].ID != "nextcloud.contacts.delete" ||
-		descriptors[27].ID != "nextcloud.contacts.get" ||
-		descriptors[28].ID != "nextcloud.contacts.list" ||
-		descriptors[29].ID != "nextcloud.contacts.update" || descriptors[30].ID != "nextcloud.deckacl.add" || descriptors[31].ID != "nextcloud.deckacl.remove" ||
-		descriptors[32].ID != "nextcloud.deckacl.update" ||
-		descriptors[33].ID != "nextcloud.deckattachments.delete" || descriptors[34].ID != "nextcloud.deckattachments.get" || descriptors[35].ID != "nextcloud.deckattachments.list" || descriptors[36].ID != "nextcloud.deckattachments.upload" || descriptors[37].ID != "nextcloud.deckboards.create" ||
-		descriptors[38].ID != "nextcloud.deckboards.delete" || descriptors[39].ID != "nextcloud.deckboards.get" ||
-		descriptors[41].ID != "nextcloud.deckboards.update" ||
-		descriptors[42].ID != "nextcloud.deckcards.assignees" || descriptors[43].ID != "nextcloud.deckcards.create" ||
-		descriptors[46].ID != "nextcloud.deckcards.labels" || descriptors[47].ID != "nextcloud.deckcards.move" ||
-		descriptors[48].ID != "nextcloud.deckcards.update" || descriptors[49].ID != "nextcloud.deckcomments.create" ||
-		descriptors[50].ID != "nextcloud.deckcomments.delete" || descriptors[51].ID != "nextcloud.deckcomments.list" || descriptors[52].ID != "nextcloud.deckcomments.update" ||
-		descriptors[56].ID != "nextcloud.deckstacks.create" || descriptors[57].ID != "nextcloud.deckstacks.delete" ||
-		descriptors[58].ID != "nextcloud.deckstacks.list" || descriptors[59].ID != "nextcloud.deckstacks.update" || descriptors[60].ID != "nextcloud.events.create" || descriptors[61].ID != "nextcloud.events.delete" ||
-		descriptors[62].ID != "nextcloud.events.get" ||
-		descriptors[63].ID != "nextcloud.events.list" || descriptors[64].ID != "nextcloud.events.update" ||
-		descriptors[65].ID != "nextcloud.favorites.list" ||
-		descriptors[69].ID != "nextcloud.files.favorite" || descriptors[73].ID != "nextcloud.files.search" ||
-		descriptors[76].ID != "nextcloud.filetags.add" || descriptors[78].ID != "nextcloud.filetags.remove" ||
-		descriptors[80].ID != "nextcloud.folders.delete" || descriptors[81].ID != "nextcloud.incomingshares.accept" || descriptors[82].ID != "nextcloud.incomingshares.decline" || descriptors[83].ID != "nextcloud.incomingshares.pending" || descriptors[84].ID != "nextcloud.noteattachments.get" || descriptors[85].ID != "nextcloud.noteattachments.upload" ||
-		descriptors[89].ID != "nextcloud.notes.list" || descriptors[86].ID != "nextcloud.notes.create" || descriptors[87].ID != "nextcloud.notes.delete" || descriptors[90].ID != "nextcloud.notes.update" || descriptors[91].ID != "nextcloud.notesettings.get" || descriptors[95].ID != "nextcloud.remoteshares.get" || descriptors[96].ID != "nextcloud.remoteshares.list" || descriptors[97].ID != "nextcloud.remoteshares.remove" ||
-		descriptors[101].ID != "nextcloud.shares.create" ||
-		descriptors[104].ID != "nextcloud.shares.list" || descriptors[105].ID != "nextcloud.shares.update" ||
-		descriptors[109].ID != "nextcloud.systemtags.create" || descriptors[111].ID != "nextcloud.systemtags.list" ||
-		descriptors[112].ID != "nextcloud.systemtags.update" || descriptors[113].ID != "nextcloud.talkfiles.share" || descriptors[114].ID != "nextcloud.talkmessages.delete" ||
-		descriptors[115].ID != "nextcloud.talkmessages.edit" || descriptors[116].ID != "nextcloud.talkmessages.list" ||
-		descriptors[117].ID != "nextcloud.talkmessages.send" || descriptors[118].ID != "nextcloud.talkparticipants.add" ||
-		descriptors[119].ID != "nextcloud.talkparticipants.list" || descriptors[120].ID != "nextcloud.talkparticipants.moderator" ||
-		descriptors[121].ID != "nextcloud.talkparticipants.remove" || descriptors[122].ID != "nextcloud.talkpolls.close" || descriptors[123].ID != "nextcloud.talkpolls.create" || descriptors[124].ID != "nextcloud.talkpolls.get" || descriptors[125].ID != "nextcloud.talkpolls.vote" || descriptors[126].ID != "nextcloud.talkreactions.set" ||
-		descriptors[127].ID != "nextcloud.talkrooms.create" || descriptors[128].ID != "nextcloud.talkrooms.delete" ||
-		descriptors[130].ID != "nextcloud.talkrooms.list" || descriptors[131].ID != "nextcloud.talkrooms.markread" || descriptors[132].ID != "nextcloud.talkrooms.update" ||
-		descriptors[133].ID != "nextcloud.tasks.create" || descriptors[134].ID != "nextcloud.tasks.delete" ||
-		descriptors[135].ID != "nextcloud.tasks.get" || descriptors[136].ID != "nextcloud.tasks.list" ||
-		descriptors[137].ID != "nextcloud.tasks.update" ||
-		descriptors[138].ID != "nextcloud.trash.delete" || descriptors[140].ID != "nextcloud.trash.restore" ||
-		descriptors[141].ID != "nextcloud.versions.get" || descriptors[143].ID != "nextcloud.versions.restore" {
+	if len(descriptors) != len(wantToolIDs) {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -287,7 +251,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		if strings.HasPrefix(descriptor.ID, "nextcloud.deck") {
 			wantGroup, wantSensitivity = "deck", deckSensitivity
 		}
-		if strings.HasPrefix(descriptor.ID, "nextcloud.share") || strings.HasPrefix(descriptor.ID, "nextcloud.incomingshares.") || strings.HasPrefix(descriptor.ID, "nextcloud.remoteshares.") {
+		if strings.HasPrefix(descriptor.ID, "nextcloud.share") || strings.HasPrefix(descriptor.ID, "nextcloud.shares.incoming-shares.") || strings.HasPrefix(descriptor.ID, "nextcloud.shares.remote-shares.") {
 			wantGroup, wantSensitivity = "shares", sharesSensitivity
 			if descriptor.ID == shareesSearch.ID {
 				wantSensitivity = shareeSensitivity
@@ -299,14 +263,14 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		if strings.HasPrefix(descriptor.ID, "nextcloud.note") {
 			wantGroup, wantSensitivity = "notes", notesSensitivity
 		}
-		if strings.HasPrefix(descriptor.ID, "nextcloud.calendars.") || strings.HasPrefix(descriptor.ID, "nextcloud.calendartrash.") || strings.HasPrefix(descriptor.ID, "nextcloud.events.") ||
-			strings.HasPrefix(descriptor.ID, "nextcloud.tasks.") {
+		if strings.HasPrefix(descriptor.ID, "nextcloud.calendar.calendars.") || strings.HasPrefix(descriptor.ID, "nextcloud.calendar.trash.") || strings.HasPrefix(descriptor.ID, "nextcloud.calendar.events.") ||
+			strings.HasPrefix(descriptor.ID, "nextcloud.calendar.tasks.") {
 			wantGroup, wantSensitivity = "calendar", calendarSensitivity
 		}
-		if strings.HasPrefix(descriptor.ID, "nextcloud.addressbooks.") || strings.HasPrefix(descriptor.ID, "nextcloud.contacts.") {
+		if strings.HasPrefix(descriptor.ID, "nextcloud.contacts.address-books.") || strings.HasPrefix(descriptor.ID, "nextcloud.contacts.contacts.") {
 			wantGroup, wantSensitivity = "contacts", contactsSensitivity
 		}
-		if strings.HasPrefix(descriptor.ID, "nextcloud.notifications.") || strings.HasPrefix(descriptor.ID, "nextcloud.status.") || strings.HasPrefix(descriptor.ID, "nextcloud.search.") ||
+		if strings.HasPrefix(descriptor.ID, "nextcloud.account.notifications.") || strings.HasPrefix(descriptor.ID, "nextcloud.account.status.") || strings.HasPrefix(descriptor.ID, "nextcloud.account.search.") ||
 			descriptor.ID == activityList.ID || descriptor.ID == accountGet.ID {
 			wantGroup, wantSensitivity = "account", accountSensitivity
 		}
@@ -1091,7 +1055,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 
 	list, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
+		Operation: "nextcloud.files.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke list = %v", err)
@@ -1108,7 +1072,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	}
 
 	stat, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.files.stat", Connection: "audit",
+		Operation: "nextcloud.files.files.stat", Connection: "audit",
 		Arguments: json.RawMessage(`{"path":"2026/q1.pdf"}`),
 	})
 	if err != nil {
@@ -1132,54 +1096,54 @@ func TestTheCoreRefusesUnsupportedRequestsBeforeProviderIO(t *testing.T) {
 		request application.InvokeRequest
 	}{
 		{"several connections without an explicit one", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Arguments: json.RawMessage(`{}`)}},
+			Operation: "nextcloud.files.files.list", Arguments: json.RawMessage(`{}`)}},
 		{"an instance as an argument", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"base_url":"https://evil.example.invalid"}`)}},
 		{"an identity as an argument", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"user":"` + bobUser + `"}`)}},
 		{"a root folder as an argument", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"root":"/"}`)}},
 		{"a depth as an argument", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"depth":"infinity"}`)}},
 		{"an absolute path", application.InvokeRequest{
-			Operation: "nextcloud.files.stat", Connection: "reports",
+			Operation: "nextcloud.files.files.stat", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"/remote.php/dav/files/` + bobUser + `/Audit"}`)}},
 		{"an absolute URL", application.InvokeRequest{
-			Operation: "nextcloud.files.stat", Connection: "reports",
+			Operation: "nextcloud.files.files.stat", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"https://evil.example.invalid/x"}`)}},
 		{"a traversal", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"../Audit"}`)}},
 		{"a traversal in the middle", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026/../../Audit"}`)}},
 		{"an encoded separator", application.InvokeRequest{
-			Operation: "nextcloud.files.stat", Connection: "reports",
+			Operation: "nextcloud.files.files.stat", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026%2F..%2FAudit"}`)}},
 		{"a double encoded separator", application.InvokeRequest{
-			Operation: "nextcloud.files.stat", Connection: "reports",
+			Operation: "nextcloud.files.files.stat", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026%252F.."}`)}},
 		{"a backslash separator", application.InvokeRequest{
-			Operation: "nextcloud.files.stat", Connection: "reports",
+			Operation: "nextcloud.files.files.stat", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026\\..\\Audit"}`)}},
 		{"an empty component", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026//q1.pdf"}`)}},
 		{"a trailing separator", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"2026/"}`)}},
 		{"an empty path", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":""}`)}},
 		{"a path beyond the length bound", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "reports",
+			Operation: "nextcloud.files.files.list", Connection: "reports",
 			Arguments: json.RawMessage(`{"path":"` + strings.Repeat("a", maxPathLength+1) + `"}`)}},
 		{"a connection of another provider", application.InvokeRequest{
-			Operation: "nextcloud.files.list", Connection: "wiki", Arguments: json.RawMessage(`{}`)}},
+			Operation: "nextcloud.files.files.list", Connection: "wiki", Arguments: json.RawMessage(`{}`)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1202,7 +1166,7 @@ func TestCredentialsAndProviderDataNeverReachTheOutput(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
+		Operation: "nextcloud.files.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -1225,7 +1189,7 @@ func TestCredentialsAndProviderDataNeverReachTheOutput(t *testing.T) {
 			` `+aliceRoot+`</s:message></d:error>`), nil
 	})
 	_, err = core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "nextcloud.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
+		Operation: "nextcloud.files.files.list", Connection: "reports", Arguments: json.RawMessage(`{}`),
 	})
 	if err == nil {
 		t.Fatal("the failing read was reported as a result")

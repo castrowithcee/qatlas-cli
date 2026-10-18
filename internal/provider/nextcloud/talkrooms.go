@@ -40,10 +40,10 @@ const (
 	messageTalkNotInternal   = "this Talk conversation is not an internal conversation that Qatlas manages"
 	messageTalkNoUser        = "the user to invite does not exist or is not accessible to this identity"
 
-	uncertainRoomCreate = "; the conversation may have been created, check talkrooms.list before repeating"
-	uncertainRoomUpdate = "; the conversation may have been changed, check talkrooms.get before repeating"
-	uncertainRoomDelete = "; the conversation may have been deleted, check talkrooms.list before repeating"
-	uncertainRoomRead   = "; the conversation may have been marked as read, check talkrooms.get before repeating"
+	uncertainRoomCreate = "; the conversation may have been created, check talk.rooms.list before repeating"
+	uncertainRoomUpdate = "; the conversation may have been changed, check talk.rooms.get before repeating"
+	uncertainRoomDelete = "; the conversation may have been deleted, check talk.rooms.list before repeating"
+	uncertainRoomRead   = "; the conversation may have been marked as read, check talk.rooms.get before repeating"
 
 	// Without lastReadMessage, Talk moves the marker to the newest message; that omission needs chat-read-last.
 	featureReadMarker = "chat-read-marker"
@@ -236,11 +236,11 @@ const (
 
 var (
 	talkRoomsCreate = capability.Descriptor{
-		ID: Provider + ".talkrooms.create", Version: 1, Title: "Create a Nextcloud Talk conversation",
+		ID: Provider + ".talk.rooms.create", Version: 1, Title: "Create a Nextcloud Talk conversation",
 		Description: "Create an internal Talk conversation: a one-to-one conversation with an existing user, or a group " +
 			"conversation with a name and no participants besides this identity. Public conversations are never " +
 			"created. Needs a connection bound to all Talk conversations. After an unclear outcome the conversation " +
-			"may exist, so check talkrooms.list before creating again; a rate limit is reported as such and not repeated",
+			"may exist, so check talk.rooms.list before creating again; a rate limit is reported as such and not repeated",
 		Tags:     []string{"nextcloud", "talk", "chat", "create", "ocs"},
 		Provider: Provider, Risk: talkWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"kind":{"type":"string","enum":["one-to-one","group"]},` +
@@ -256,7 +256,7 @@ var (
 	}
 
 	talkRoomsUpdate = capability.Descriptor{
-		ID: Provider + ".talkrooms.update", Version: 1, Title: "Change a Nextcloud Talk conversation",
+		ID: Provider + ".talk.rooms.update", Version: 1, Title: "Change a Nextcloud Talk conversation",
 		Description: "Rename a group conversation or change its description, as owner or moderator of a conversation " +
 			"the connection binds; give exactly one of name and description per call. Public conversations are not changed",
 		Tags:     []string{"nextcloud", "talk", "chat", "update", "ocs"},
@@ -276,7 +276,7 @@ var (
 	}
 
 	talkRoomsMarkRead = capability.Descriptor{
-		ID: Provider + ".talkrooms.markread", Version: 1, Title: "Mark a Nextcloud Talk conversation as read",
+		ID: Provider + ".talk.rooms.mark-read", Version: 1, Title: "Mark a Nextcloud Talk conversation as read",
 		Description: "Mark a Talk conversation the connection binds as read up to its newest message. This moves the " +
 			"read marker of this identity, which other participants may see; no message is changed. One capability " +
 			"read precedes exactly one request, which is not repeated after an unclear outcome",
@@ -293,7 +293,7 @@ var (
 	}
 
 	talkRoomsDelete = capability.Descriptor{
-		ID: Provider + ".talkrooms.delete", Version: 1, Title: "Delete a Nextcloud Talk conversation",
+		ID: Provider + ".talk.rooms.delete", Version: 1, Title: "Delete a Nextcloud Talk conversation",
 		Description: "Delete a one-to-one or group conversation with all of its messages for every participant, as " +
 			"owner or moderator of a conversation the connection binds. Public conversations are not deleted",
 		Tags:     []string{"nextcloud", "talk", "chat", "delete", "ocs"},

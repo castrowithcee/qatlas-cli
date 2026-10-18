@@ -70,7 +70,7 @@ func (f *noteWriteFixture) sent(t *testing.T) call {
 
 func TestNotesCreatePostsOneNoteInABoundCategory(t *testing.T) {
 	f := serveNotes(t, nil, false, storedNote(7, "C/sub"))
-	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.create",
+	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.create",
 		`{"title":"Ideas","content":"First","category":"C/sub","favorite":true}`, true)
 	var got NoteWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || !got.Created || got.ID != "7" || got.Category != "C/sub" {
@@ -97,7 +97,7 @@ func TestNotesCreateRefusesAnUnboundCategoryWithoutAnyRequest(t *testing.T) {
 			t.Errorf("the provider was contacted: %s %s", r.Method, r.URL.Path)
 			return nil, errors.New("unreachable")
 		})
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.create", args, true)
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.create", args, true)
 		if classOf(err) != provider.ClassPermission && classOf(err) != provider.ClassProviderError || len(*calls) != 0 {
 			t.Errorf("%s: err = %v, calls = %d", args, err, len(*calls))
 		}
@@ -106,7 +106,7 @@ func TestNotesCreateRefusesAnUnboundCategoryWithoutAnyRequest(t *testing.T) {
 
 func TestNotesCreateInTheRootNeedsAWholeKindBinding(t *testing.T) {
 	f := serveNotes(t, nil, false, storedNote(7, ""))
-	_, err := eventWrite(t, noteWriteTools, []string{"notes"}, "nextcloud.notes.create", `{"title":"T"}`, true)
+	_, err := eventWrite(t, noteWriteTools, []string{"notes"}, "nextcloud.notes.notes.create", `{"title":"T"}`, true)
 	if err != nil || eventMethods(f.calls) != "POST" {
 		t.Errorf("err = %v, calls = %+v", err, *f.calls)
 	}
@@ -114,7 +114,7 @@ func TestNotesCreateInTheRootNeedsAWholeKindBinding(t *testing.T) {
 
 func TestNotesUpdateSendsOneETagBoundPutAfterOneRead(t *testing.T) {
 	f := serveNotes(t, map[int]string{1: "C"}, false, storedNote(1, "C/new"))
-	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.update",
+	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.update",
 		`{"id":"1","etag":"e1","category":"C/new","favorite":false}`, true)
 	var got NoteWriteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || !got.Updated || got.ID != "1" {
@@ -135,7 +135,7 @@ func TestNotesUpdateRefusesAnUnboundTargetCategoryBeforeAnyRequest(t *testing.T)
 			t.Errorf("the provider was contacted: %s %s", r.Method, r.URL.Path)
 			return nil, errors.New("unreachable")
 		})
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.update",
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.update",
 			`{"id":"1","etag":"e1","category":"`+category+`"}`, true)
 		if classOf(err) != provider.ClassPermission || len(*calls) != 0 || strings.Contains(fmtErr(err), "C/") {
 			t.Errorf("%s: err = %v, calls = %d", category, err, len(*calls))
@@ -152,7 +152,7 @@ func TestNotesUpdateAndDeleteReadAForeignNoteLikeAMissingOne(t *testing.T) {
 			t.Errorf("%s: a mutation was sent", op)
 			return nil, errors.New("unreachable")
 		})
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+strings.Fields(op)[len(strings.Fields(op))-1], args, true)
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+strings.Fields(op)[len(strings.Fields(op))-1], args, true)
 		if classOf(err) != provider.ClassNotFound || err.Error() == "" || strings.Contains(fmtErr(err), "Secret") ||
 			eventMethods(f.calls) != "GET" {
 			t.Errorf("%s: err = %v, calls = %+v", op, err, *f.calls)
@@ -166,7 +166,7 @@ func TestNotesWritesRefuseAReadOnlyNoteWithoutMutation(t *testing.T) {
 			t.Errorf("%s: a mutation was sent", op)
 			return nil, errors.New("unreachable")
 		})
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+op, args, true)
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+op, args, true)
 		if classOf(err) != provider.ClassPermission || !strings.Contains(fmtErr(err), "read-only") || eventMethods(f.calls) != "GET" {
 			t.Errorf("%s: err = %v, calls = %+v", op, err, *f.calls)
 		}
@@ -178,7 +178,7 @@ func TestNotesUpdateRefusesAChangedETagBeforeThePut(t *testing.T) {
 		t.Error("a mutation was sent")
 		return nil, errors.New("unreachable")
 	})
-	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.update", `{"id":"1","etag":"old","title":"x"}`, true)
+	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.update", `{"id":"1","etag":"old","title":"x"}`, true)
 	if !strings.Contains(fmtErr(err), "etag") || strings.Contains(fmtErr(err), noteHint) || eventMethods(f.calls) != "GET" {
 		t.Errorf("err = %v, calls = %+v", err, *f.calls)
 	}
@@ -186,7 +186,7 @@ func TestNotesUpdateRefusesAChangedETagBeforeThePut(t *testing.T) {
 
 func TestNotesDeleteSendsOneDeleteAfterOneRead(t *testing.T) {
 	f := serveNotes(t, map[int]string{1: "C/x"}, false, func() (*http.Response, error) { return noteResponse(200, nil, ``), nil })
-	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.delete", `{"id":"1"}`, true)
+	result, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.delete", `{"id":"1"}`, true)
 	var got NoteDeleteResult
 	if err != nil || json.Unmarshal(result, &got) != nil || got != (NoteDeleteResult{ID: "1", Deleted: true}) {
 		t.Fatalf("delete = %s, %v", result, err)
@@ -203,7 +203,7 @@ func TestNotesWritesNeedConfirmation(t *testing.T) {
 			t.Errorf("%s: the provider was contacted: %s", op, r.Method)
 			return nil, errors.New("unreachable")
 		})
-		if _, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+op, args, false); err == nil || len(*calls) != 0 {
+		if _, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+op, args, false); err == nil || len(*calls) != 0 {
 			t.Errorf("unconfirmed %s: err = %v, calls = %d", op, err, len(*calls))
 		}
 	}
@@ -214,7 +214,7 @@ func TestNotesDeleteNeedsAToolsListEntry(t *testing.T) {
 		t.Errorf("the provider was contacted: %s", r.Method)
 		return nil, errors.New("unreachable")
 	})
-	_, err := noteWrite(t, []string{notesList.ID, notesGet.ID, notesCreate.ID, notesUpdate.ID}, "nextcloud.notes.delete",
+	_, err := noteWrite(t, []string{notesList.ID, notesGet.ID, notesCreate.ID, notesUpdate.ID}, "nextcloud.notes.notes.delete",
 		`{"id":"1"}`, true)
 	if err == nil || len(*calls) != 0 {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
@@ -229,7 +229,7 @@ func TestNotesWriteContentIsBoundedLocally(t *testing.T) {
 	big := strings.Repeat("a", maxNoteWriteContent+1)
 	for op, args := range map[string]string{"create": `{"title":"T","category":"C","content":"` + big + `"}`,
 		"update": `{"id":"1","etag":"e1","content":"` + big + `"}`} {
-		if _, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+op, args, true); err == nil {
+		if _, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+op, args, true); err == nil {
 			t.Errorf("%s: accepted content beyond the limit", op)
 		}
 	}
@@ -237,7 +237,7 @@ func TestNotesWriteContentIsBoundedLocally(t *testing.T) {
 		t.Errorf("calls = %d", len(*calls))
 	}
 	// Multi-byte text counts in bytes, which is what the request carries.
-	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.create",
+	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.create",
 		`{"title":"T","category":"C","content":"`+strings.Repeat("ä", maxNoteWriteContent/2+1)+`"}`, true)
 	if err == nil || len(*calls) != 0 {
 		t.Errorf("multi-byte content: err = %v, calls = %d", err, len(*calls))
@@ -249,7 +249,7 @@ func TestNotesWriteOutcomes(t *testing.T) {
 		"update": `{"id":"1","etag":"e1","title":"x"}`, "delete": `{"id":"1"}`}
 	check := func(t *testing.T, op string, answer func() (*http.Response, error), wantHint bool, contains string) {
 		f := serveNotes(t, map[int]string{1: "C"}, false, answer)
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+op, ops[op], true)
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+op, ops[op], true)
 		mutations := 0
 		for _, c := range *f.calls {
 			if c.method != http.MethodGet {
@@ -293,7 +293,7 @@ func TestNotesWriteOutcomes(t *testing.T) {
 
 func TestNotesUpdateConflictIsClear(t *testing.T) {
 	f := serveNotes(t, map[int]string{1: "C"}, false, func() (*http.Response, error) { return status(412), nil })
-	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.update", `{"id":"1","etag":"e1","title":"x"}`, true)
+	_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes.update", `{"id":"1","etag":"e1","title":"x"}`, true)
 	text := fmtErr(err)
 	if !strings.Contains(text, "precondition failed") || strings.Contains(text, noteHint) || strings.Contains(text, "canary") ||
 		eventMethods(f.calls) != "GET PUT" {
@@ -305,7 +305,7 @@ func TestNotesWritesAreNeverRepeatedAfterAnUnclearResult(t *testing.T) {
 	for op, args := range map[string]string{"create": `{"title":"T","category":"C"}`,
 		"update": `{"id":"1","etag":"e1","title":"x"}`, "delete": `{"id":"1"}`} {
 		f := serveNotes(t, map[int]string{1: "C"}, false, func() (*http.Response, error) { return nil, timeoutError{} })
-		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes."+op, args, true)
+		_, err := noteWrite(t, noteWriteTools, "nextcloud.notes.notes."+op, args, true)
 		mutations := 0
 		for _, c := range *f.calls {
 			if c.method != http.MethodGet {

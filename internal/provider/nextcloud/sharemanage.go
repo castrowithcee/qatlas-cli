@@ -33,9 +33,9 @@ const (
 	ocsShareUser  = "0"
 	ocsShareGroup = "1"
 
-	uncertainShareCreate = "; the share may have been created, check shares.list before repeating"
-	uncertainShareUpdate = "; the share may have been changed, check shares.get before repeating"
-	uncertainShareDelete = "; the share may have been revoked, check shares.get before repeating"
+	uncertainShareCreate = "; the share may have been created, check shares.shares.list before repeating"
+	uncertainShareUpdate = "; the share may have been changed, check shares.shares.get before repeating"
+	uncertainShareDelete = "; the share may have been revoked, check shares.shares.get before repeating"
 
 	messageShareRefused = "Nextcloud refused this share; an instance policy (for example a required or too late " +
 		"expiry date) or the arguments do not allow it"
@@ -75,13 +75,13 @@ var (
 		Description: "Last day of the share as YYYY-MM-DD; the instance may require or limit it"}
 	noteArgument    = capability.Argument{Name: "note", Description: "Note to the recipient, at most 500 characters"}
 	shareIDArgument = capability.Argument{Name: "share_id", Required: true,
-		Description: "Numeric share ID as reported by shares.list"}
+		Description: "Numeric share ID as reported by shares.shares.list"}
 )
 
 var shareManageFields = []capability.Field{{Name: "share", Description: "The share as Nextcloud reports it after the change"}}
 
 var sharesCreate = capability.Descriptor{
-	ID: Provider + ".shares.create", Version: 1, Title: "Share a Nextcloud item with a user or group",
+	ID: Provider + ".shares.shares.create", Version: 1, Title: "Share a Nextcloud item with a user or group",
 	Description: "Share exactly one file or folder below the fixed root folder with one existing user or group of the " +
 		"Nextcloud instance; the recipient always may read, the other rights default to false. Links, e-mail, " +
 		"federated, team, and Talk shares cannot be created, and no password is set",
@@ -96,7 +96,7 @@ var sharesCreate = capability.Descriptor{
 	Arguments: append([]capability.Argument{
 		{Name: "type", Required: true, Description: "user or group"},
 		{Name: "path", Required: true, Description: "File or folder relative to the fixed root folder of this connection"},
-		{Name: "share_with", Required: true, Description: "User ID or group ID as reported by sharees.search"},
+		{Name: "share_with", Required: true, Description: "User ID or group ID as reported by shares.sharees.search"},
 	}, append(rightsArguments, expiresArgument, noteArgument)...),
 	Fields: append([]capability.Field{{Name: "created", Description: "True when Nextcloud created the share"}},
 		shareManageFields...),
@@ -106,7 +106,7 @@ var sharesCreate = capability.Descriptor{
 }
 
 var sharesUpdate = capability.Descriptor{
-	ID: Provider + ".shares.update", Version: 1, Title: "Change a Nextcloud share",
+	ID: Provider + ".shares.shares.update", Version: 1, Title: "Change a Nextcloud share",
 	Description: "Change the rights, expiry, or note of exactly one share the identity made with a user or a group, " +
 		"below the fixed root folder, at least one field; rights not given keep their value. One read-only " +
 		"pre-check precedes exactly one change request",
@@ -125,7 +125,7 @@ var sharesUpdate = capability.Descriptor{
 }
 
 var sharesDelete = capability.Descriptor{
-	ID: Provider + ".shares.delete", Version: 1, Title: "Revoke a Nextcloud share",
+	ID: Provider + ".shares.shares.delete", Version: 1, Title: "Revoke a Nextcloud share",
 	Description: "Revoke exactly one share the identity made below the fixed root folder, of any type including link, " +
 		"e-mail, federated, team, and Talk shares; the recipient loses access. One read-only pre-check precedes " +
 		"exactly one request",
@@ -139,7 +139,7 @@ var sharesDelete = capability.Descriptor{
 	Fields: []capability.Field{{Name: "deleted", Description: "True when Nextcloud revoked the share"},
 		{Name: "share_id", Description: "ID of the revoked share"}, {Name: "type", Description: "Type name of the revoked share"},
 		{Name: "path", Description: "Path of the shared item relative to the root"}},
-	Examples:              []capability.Example{{Description: "Use a share_id from shares.list", Arguments: json.RawMessage(`{"share_id":"42"}`)}},
+	Examples:              []capability.Example{{Description: "Use a share_id from shares.shares.list", Arguments: json.RawMessage(`{"share_id":"42"}`)}},
 	RequiresToolAllowList: true,
 }
 

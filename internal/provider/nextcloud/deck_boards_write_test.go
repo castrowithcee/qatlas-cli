@@ -58,19 +58,19 @@ func TestDeckBoardsCreateNeedsGeneralTargetAndConfirmation(t *testing.T) {
 		t.Error("the provider was contacted")
 		return nil, errors.New("no request expected")
 	})
-	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.create", `{"title":"New"}`, true); err == nil {
+	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.create", `{"title":"New"}`, true); err == nil {
 		t.Error("a deck/ID binding created a board")
 	}
-	if _, err := deckWrite(t, []string{"folder/Reports"}, "nextcloud.deckboards.create", `{"title":"New"}`, true); err == nil {
+	if _, err := deckWrite(t, []string{"folder/Reports"}, "nextcloud.deck.boards.create", `{"title":"New"}`, true); err == nil {
 		t.Error("a connection without a deck target created a board")
 	}
-	if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deckboards.create", `{"title":"New"}`, false); err == nil {
+	if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deck.boards.create", `{"title":"New"}`, false); err == nil {
 		t.Error("an unconfirmed creation was accepted")
 	}
 	for _, args := range []string{`{"title":""}`, `{"title":"` + strings.Repeat("a", 101) + `"}`, "{\"title\":\"a\\u0007b\"}",
 		`{"title":"a","color":"#00ff00"}`, `{"title":"a","color":"fff"}`, `{"title":"a","archived":true}`,
 		`{"title":"a","url":"/x"}`, `{}`} {
-		if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deckboards.create", args, true); err == nil {
+		if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deck.boards.create", args, true); err == nil {
 			t.Errorf("%s was accepted", args)
 		}
 	}
@@ -85,7 +85,7 @@ func TestDeckBoardsCreateSendsOneFixedPost(t *testing.T) {
 		contentType = request.Header.Get("Content-Type")
 		return jsonResponse(http.StatusOK, board("12", "Plan")), nil
 	})
-	result, err := deckWrite(t, []string{"deck"}, "nextcloud.deckboards.create", `{"title":" \"Plan\" ","color":"00FF00"}`, true)
+	result, err := deckWrite(t, []string{"deck"}, "nextcloud.deck.boards.create", `{"title":" \"Plan\" ","color":"00FF00"}`, true)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -99,7 +99,7 @@ func TestDeckBoardsCreateSendsOneFixedPost(t *testing.T) {
 	if !strings.Contains(string(result), `"created":true`) || !strings.Contains(string(result), `"id":"12"`) {
 		t.Errorf("result = %s", result)
 	}
-	if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deckboards.create", `{"title":"x"}`, true); err != nil {
+	if _, err := deckWrite(t, []string{"deck"}, "nextcloud.deck.boards.create", `{"title":"x"}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[1].body; got != `{"title":"x","color":"`+defaultDeckColor+`"}` {
@@ -113,12 +113,12 @@ func TestDeckBoardsChangesRefuseUnboundBoardBeforeAnyRequest(t *testing.T) {
 		return nil, errors.New("no request expected")
 	})
 	for name, tc := range map[string]struct{ op, args string }{
-		"update":     {"nextcloud.deckboards.update", `{"board_id":"9","title":"x"}`},
-		"delete":     {"nextcloud.deckboards.delete", `{"board_id":"9"}`},
-		"update id":  {"nextcloud.deckboards.update", `{"board_id":"2/..","title":"x"}`},
-		"no change":  {"nextcloud.deckboards.update", `{"board_id":"2"}`},
-		"bad color":  {"nextcloud.deckboards.update", `{"board_id":"2","color":"zzzzzz"}`},
-		"delete+tit": {"nextcloud.deckboards.delete", `{"board_id":"2","title":"x"}`},
+		"update":     {"nextcloud.deck.boards.update", `{"board_id":"9","title":"x"}`},
+		"delete":     {"nextcloud.deck.boards.delete", `{"board_id":"9"}`},
+		"update id":  {"nextcloud.deck.boards.update", `{"board_id":"2/..","title":"x"}`},
+		"no change":  {"nextcloud.deck.boards.update", `{"board_id":"2"}`},
+		"bad color":  {"nextcloud.deck.boards.update", `{"board_id":"2","color":"zzzzzz"}`},
+		"delete+tit": {"nextcloud.deck.boards.delete", `{"board_id":"2","title":"x"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := deckWrite(t, []string{"deck/2"}, tc.op, tc.args, true)
@@ -130,10 +130,10 @@ func TestDeckBoardsChangesRefuseUnboundBoardBeforeAnyRequest(t *testing.T) {
 			}
 		})
 	}
-	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.update", `{"board_id":"2","title":"x"}`, false); err == nil {
+	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.update", `{"board_id":"2","title":"x"}`, false); err == nil {
 		t.Error("an unconfirmed update was accepted")
 	}
-	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.delete", `{"board_id":"2"}`, false); err == nil {
+	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.delete", `{"board_id":"2"}`, false); err == nil {
 		t.Error("an unconfirmed delete was accepted")
 	}
 	if len(*calls) != 0 {
@@ -148,7 +148,7 @@ func TestDeckBoardsUpdateKeepsFieldsNotGiven(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, board("2", "New")), nil
 	})
-	result, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.update", `{"board_id":"2","title":"New"}`, true)
+	result, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.update", `{"board_id":"2","title":"New"}`, true)
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
 	}
@@ -162,7 +162,7 @@ func TestDeckBoardsUpdateKeepsFieldsNotGiven(t *testing.T) {
 	if !strings.Contains(string(result), `"updated":true`) {
 		t.Errorf("result = %s", result)
 	}
-	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.update", `{"board_id":"2","archived":true}`, true); err != nil {
+	if _, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.update", `{"board_id":"2","archived":true}`, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := (*calls)[3].body; got != `{"title":"Old","color":"0087C5","archived":true}` {
@@ -178,8 +178,8 @@ func TestDeckBoardsChangesNeedManageRightAndSendNoMutation(t *testing.T) {
 		"other board":     managedBoard("3", "B", true),
 	} {
 		for _, op := range []struct{ id, args string }{
-			{"nextcloud.deckboards.update", `{"board_id":"2","title":"x"}`},
-			{"nextcloud.deckboards.delete", `{"board_id":"2"}`},
+			{"nextcloud.deck.boards.update", `{"board_id":"2","title":"x"}`},
+			{"nextcloud.deck.boards.delete", `{"board_id":"2"}`},
 		} {
 			t.Run(name+" "+op.id, func(t *testing.T) {
 				calls := serve(t, func(*http.Request) (*http.Response, error) {
@@ -222,9 +222,9 @@ func TestDeckBoardsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 		reads          int
 		targets        []string
 	}{
-		{"create", "nextcloud.deckboards.create", `{"title":"x"}`, http.MethodPost, 0, []string{"deck"}},
-		{"update", "nextcloud.deckboards.update", `{"board_id":"2","title":"x"}`, http.MethodPut, 1, []string{"deck/2"}},
-		{"delete", "nextcloud.deckboards.delete", `{"board_id":"2"}`, http.MethodDelete, 1, []string{"deck/2"}},
+		{"create", "nextcloud.deck.boards.create", `{"title":"x"}`, http.MethodPost, 0, []string{"deck"}},
+		{"update", "nextcloud.deck.boards.update", `{"board_id":"2","title":"x"}`, http.MethodPut, 1, []string{"deck/2"}},
+		{"delete", "nextcloud.deck.boards.delete", `{"board_id":"2"}`, http.MethodDelete, 1, []string{"deck/2"}},
 	}
 	for _, op := range ops {
 		check := func(t *testing.T, answer func() (*http.Response, error), hint bool) {
@@ -250,7 +250,7 @@ func TestDeckBoardsUnclearOutcomeIsNeverRepeated(t *testing.T) {
 			if has := strings.Contains(text, "may have been applied"); has != hint {
 				t.Errorf("hint present = %v in %q", has, text)
 			}
-			if hint && !strings.Contains(text, "deckboards.list") {
+			if hint && !strings.Contains(text, "deck.boards.list") {
 				t.Errorf("no verification advice in %q", text)
 			}
 		}
@@ -269,7 +269,7 @@ func TestDeckBoardsRedirectNamesNoTarget(t *testing.T) {
 		response.Header.Set("Location", "https://elsewhere.invalid/"+deckCanary)
 		return response, nil
 	})
-	_, err := deckWrite(t, []string{"deck"}, "nextcloud.deckboards.create", `{"title":"x"}`, true)
+	_, err := deckWrite(t, []string{"deck"}, "nextcloud.deck.boards.create", `{"title":"x"}`, true)
 	if err == nil || strings.Contains(err.Error(), "elsewhere") || strings.Contains(err.Error(), deckCanary) ||
 		!strings.Contains(err.Error(), "redirect") {
 		t.Errorf("err = %v", err)
@@ -283,7 +283,7 @@ func TestDeckBoardsDeleteDeletesOnceAndIsAllowListOnly(t *testing.T) {
 		}
 		return jsonResponse(http.StatusOK, strings.Replace(board("2", "B"), `"deletedAt":0`, `"deletedAt":9`, 1)), nil
 	})
-	result, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deckboards.delete", `{"board_id":"2"}`, true)
+	result, err := deckWrite(t, []string{"deck/2"}, "nextcloud.deck.boards.delete", `{"board_id":"2"}`, true)
 	if err != nil || !strings.Contains(string(result), `"deleted":true`) {
 		t.Fatalf("result = %s, %v", result, err)
 	}
@@ -310,7 +310,7 @@ func TestDeckBoardsDeleteDeletesOnceAndIsAllowListOnly(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
-			if strings.HasPrefix(id, "nextcloud.deckboards.") && id != deckBoardsList.ID && id != deckBoardsGet.ID {
+			if strings.HasPrefix(id, "nextcloud.deck.boards.") && id != deckBoardsList.ID && id != deckBoardsGet.ID {
 				t.Errorf("profile %s holds %s", p.ID, id)
 			}
 		}
