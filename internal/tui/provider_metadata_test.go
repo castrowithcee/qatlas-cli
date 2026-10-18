@@ -55,7 +55,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	m.section = sectionServices
 	m.fields = m.buildFields("")
 	if got := m.fields[1].choices; len(got) != 6 || got[0] != "bookstack" || got[1] != "lexware" ||
-		got[2] != "nextcloud" || got[3] != "seatable" || got[4] != "telegram" || got[5] != "twenty-crm" {
+		got[2] != "nextcloud" || got[3] != "seatable.base" || got[4] != "telegram" || got[5] != "twenty-crm" {
 		t.Fatalf("provider choices = %v, want the BookStack, Lexware, Nextcloud, SeaTable, Telegram and "+
 			"Twenty registry IDs", got)
 	}
@@ -77,7 +77,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("SeaTable default instance = %q", got)
 	}
 	m.fields[1].index = 4
-	m.providerChosen("seatable")
+	m.providerChosen("seatable.base")
 	if got := m.fieldValue("base url"); got != "https://api.telegram.org" {
 		t.Fatalf("Telegram default base URL = %q", got)
 	}
@@ -101,9 +101,9 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	m.cfg.Services["wiki-main"] = config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}
 	m.cfg.Services["crm-cloud"] = config.Service{Provider: "twenty-crm", BaseURL: "https://api.twenty.com"}
 	m.cfg.Services["crm-selfhosted"] = config.Service{Provider: "twenty-crm", BaseURL: "https://crm.example.invalid"}
-	m.cfg.Services["tables-cloud"] = config.Service{Provider: "seatable", BaseURL: "https://cloud.seatable.io"}
+	m.cfg.Services["tables-cloud"] = config.Service{Provider: "seatable.base", BaseURL: "https://cloud.seatable.io"}
 	m.cfg.Services["tables-onprem"] = config.Service{
-		Provider: "seatable", BaseURL: "https://seatable.example.invalid",
+		Provider: "seatable.base", BaseURL: "https://seatable.example.invalid",
 	}
 	m.cfg.Credentials["notifier"] = config.Credential{Type: config.CredentialTypeKeyring}
 	m.cfg.Credentials["reader"] = config.Credential{Type: config.CredentialTypeKeyring}
@@ -256,8 +256,8 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.cfg.Services["tables"] = config.Service{Provider: "seatable", BaseURL: "https://cloud.seatable.io"}
-	m.cfg.Credentials["base"] = config.Credential{Provider: "seatable", Type: config.CredentialTypeKeyring}
+	m.cfg.Services["tables"] = config.Service{Provider: "seatable.base", BaseURL: "https://cloud.seatable.io"}
+	m.cfg.Credentials["base"] = config.Credential{Provider: "seatable.base", Type: config.CredentialTypeKeyring}
 	m.cfg.Connections["all-tables"] = config.Connection{
 		Service: "tables", Credential: "base", Target: "*",
 	}

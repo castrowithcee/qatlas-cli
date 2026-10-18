@@ -56,10 +56,10 @@ func TestRegisterPublishesTableToolsWithRisk(t *testing.T) {
 		idempotency capability.Idempotency
 		allow       bool
 	}{
-		"seatable.tables.create":    {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
-		"seatable.tables.rename":    {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
-		"seatable.tables.duplicate": {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
-		"seatable.tables.delete":    {capability.EffectDelete, capability.IdempotencyIdempotent, true},
+		"seatable.base.tables.create":    {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
+		"seatable.base.tables.rename":    {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
+		"seatable.base.tables.duplicate": {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
+		"seatable.base.tables.delete":    {capability.EffectDelete, capability.IdempotencyIdempotent, true},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {
@@ -77,7 +77,7 @@ func TestRegisterPublishesTableToolsWithRisk(t *testing.T) {
 		t.Fatalf("table mutation tools = %d, want 4", seen)
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
-	if profile := strings.Join(metadata.Profiles[0].Tools, ","); strings.Contains(profile, "seatable.tables.c") ||
+	if profile := strings.Join(metadata.Profiles[0].Tools, ","); strings.Contains(profile, "seatable.base.tables.c") ||
 		strings.Contains(profile, "tables.rename") || strings.Contains(profile, "tables.delete") ||
 		strings.Contains(profile, "tables.duplicate") {
 		t.Errorf("the read profile holds a table change: %s", profile)

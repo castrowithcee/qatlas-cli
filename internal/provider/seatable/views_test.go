@@ -67,9 +67,9 @@ func TestRegisterPublishesViewToolsWithRisk(t *testing.T) {
 		effect capability.Effect
 		allow  bool
 	}{
-		"seatable.views.list": {capability.EffectRead, false}, "seatable.views.get": {capability.EffectRead, false},
-		"seatable.views.create": {capability.EffectCreate, false}, "seatable.views.update": {capability.EffectUpdate, false},
-		"seatable.views.delete": {capability.EffectDelete, true},
+		"seatable.base.views.list": {capability.EffectRead, false}, "seatable.base.views.get": {capability.EffectRead, false},
+		"seatable.base.views.create": {capability.EffectCreate, false}, "seatable.base.views.update": {capability.EffectUpdate, false},
+		"seatable.base.views.delete": {capability.EffectDelete, true},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {
@@ -91,13 +91,13 @@ func TestRegisterPublishesViewToolsWithRisk(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	profile := strings.Join(metadata.Profiles[0].Tools, ",")
-	for _, id := range []string{"seatable.views.list", "seatable.views.get"} {
+	for _, id := range []string{"seatable.base.views.list", "seatable.base.views.get"} {
 		if !strings.Contains(profile, id) {
 			t.Errorf("the read profile lacks %s", id)
 		}
 	}
 	for _, id := range []string{"create", "update", "delete"} {
-		if strings.Contains(profile, "seatable.views."+id) {
+		if strings.Contains(profile, "seatable.base.views."+id) {
 			t.Errorf("the read profile holds views.%s", id)
 		}
 	}

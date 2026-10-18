@@ -322,7 +322,7 @@ func TestProviderNoteIsOptionalAndOneShortNormalizedLine(t *testing.T) {
 	})
 
 	t.Run("blanks are normalized and an empty note is dropped", func(t *testing.T) {
-		cfg, err := Decode(strings.NewReader(withNotes("  bookstack: \"  team   wiki \"\n  seatable: \"\"\n")),
+		cfg, err := Decode(strings.NewReader(withNotes("  bookstack: \"  team   wiki \"\n  seatable.base: \"\"\n")),
 			testProviders)
 		if err != nil {
 			t.Fatalf("Decode() = %v", err)

@@ -60,7 +60,7 @@ func optionDescriptor(action string, effect capability.Effect, idempotency capab
 	what, input string, args []capability.Argument, example json.RawMessage) capability.Descriptor {
 	done := map[string]string{"add": "added", "update": "updated", "delete": "deleted"}[action]
 	return capability.Descriptor{
-		ID: Provider + ".columns.options" + action, Version: 1,
+		ID: Provider + ".columns.options-" + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " SeaTable column options",
 		Description: what, Tags: []string{"seatable", "base", "columns", "options", action},
 		Provider: Provider, RequiresToolAllowList: allowList,

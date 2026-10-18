@@ -103,7 +103,7 @@ func TestPermissionTextDistinguishesDefaultAndDenyAll(t *testing.T) {
 func TestSeaTableTargetAllowListRoundTripsWithoutChangingSingleTargets(t *testing.T) {
 	input := `version: 1
 services:
-  main: {provider: seatable, base_url: https://cloud.seatable.io}
+  main: {provider: seatable.base, base_url: https://cloud.seatable.io}
 credentials:
   reader: {type: keyring}
 connections:

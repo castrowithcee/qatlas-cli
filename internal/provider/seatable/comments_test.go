@@ -71,10 +71,10 @@ func TestCommentToolsRiskAndSensitivity(t *testing.T) {
 		sensitivity string
 		allowList   bool
 	}{
-		"seatable.comments.list":      {capability.EffectRead, peopleSensitivity, false},
-		"seatable.comments.create":    {capability.EffectCreate, dataSensitivity, false},
-		"seatable.comments.delete":    {capability.EffectDelete, dataSensitivity, true},
-		"seatable.collaborators.list": {capability.EffectRead, peopleSensitivity, false},
+		"seatable.base.comments.list":      {capability.EffectRead, peopleSensitivity, false},
+		"seatable.base.comments.create":    {capability.EffectCreate, dataSensitivity, false},
+		"seatable.base.comments.delete":    {capability.EffectDelete, dataSensitivity, true},
+		"seatable.base.collaborators.list": {capability.EffectRead, peopleSensitivity, false},
 	}
 	seen := 0
 	for _, d := range registry(t).Provider(Provider) {
@@ -107,7 +107,7 @@ func TestCollaboratorsAreInNoProfile(t *testing.T) {
 	meta, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range meta.Profiles {
 		for _, id := range profile.Tools {
-			if strings.HasPrefix(id, "seatable.collaborators.") || strings.HasPrefix(id, "seatable.comments.") {
+			if strings.HasPrefix(id, "seatable.base.collaborators.") || strings.HasPrefix(id, "seatable.base.comments.") {
 				t.Errorf("profile %s contains %s", profile.ID, id)
 			}
 		}

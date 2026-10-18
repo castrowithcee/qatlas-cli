@@ -50,8 +50,8 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		SecretRoles: []SecretRole{{Name: "api-key", Description: "Twenty API key"}},
 		Target:      TargetMetadata{Label: "target", Description: "not used by Twenty CRM"},
 	},
-	"seatable": {
-		ID: "seatable", Name: "SeaTable", DefaultBaseURL: "https://cloud.seatable.io",
+	"seatable.base": {
+		ID: "seatable.base", Name: "SeaTable", DefaultBaseURL: "https://cloud.seatable.io",
 		SecretRoles: []SecretRole{{Name: "api-token", Description: "SeaTable API token of one base"}},
 		Target: TargetMetadata{
 			Label: "table", Required: true, Multiple: true, Wildcard: "*",
@@ -204,7 +204,7 @@ connections:
 defaults: {}
 `
 
-	seatable := strings.Replace(prefix, "PROVIDER", "seatable", 1)
+	seatable := strings.Replace(prefix, "PROVIDER", "seatable.base", 1)
 	cfg, err := Decode(strings.NewReader(seatable), testProviders)
 	if err != nil {
 		t.Fatalf("SeaTable allow-list = %v", err)
@@ -342,7 +342,7 @@ defaults: {}
 func TestWildcardMustBeAnExplicitExclusiveSeaTableTarget(t *testing.T) {
 	input := `version: 1
 services:
-  main: {provider: seatable, base_url: https://cloud.seatable.io}
+  main: {provider: seatable.base, base_url: https://cloud.seatable.io}
 credentials:
   reader: {type: keyring}
 connections:

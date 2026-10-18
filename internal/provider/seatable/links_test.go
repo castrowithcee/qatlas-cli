@@ -78,8 +78,8 @@ func TestRegisterPublishesLinkToolsWithRisk(t *testing.T) {
 		effect capability.Effect
 		allow  bool
 	}{
-		"seatable.links.list": {capability.EffectRead, false}, "seatable.links.create": {capability.EffectCreate, false},
-		"seatable.links.update": {capability.EffectUpdate, false}, "seatable.links.delete": {capability.EffectDelete, true},
+		"seatable.base.links.list": {capability.EffectRead, false}, "seatable.base.links.create": {capability.EffectCreate, false},
+		"seatable.base.links.update": {capability.EffectUpdate, false}, "seatable.base.links.delete": {capability.EffectDelete, true},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {
@@ -105,8 +105,8 @@ func TestRegisterPublishesLinkToolsWithRisk(t *testing.T) {
 		t.Fatalf("link tools = %d, want 4", seen)
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
-	if !strings.Contains(strings.Join(metadata.Profiles[0].Tools, ","), "seatable.links.list") {
-		t.Error("the read profile lacks seatable.links.list")
+	if !strings.Contains(strings.Join(metadata.Profiles[0].Tools, ","), "seatable.base.links.list") {
+		t.Error("the read profile lacks seatable.base.links.list")
 	}
 }
 
@@ -358,13 +358,13 @@ func TestLinkTheCoreNeedsConfirmationAndPermissions(t *testing.T) {
 	cfg := coreConfig()
 	cfg.Connections["links"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader",
 		Targets: []string{"*"}, Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete},
-		Tools: []string{"seatable.links.list", "seatable.links.create", "seatable.links.delete"}}
+		Tools: []string{"seatable.base.links.list", "seatable.base.links.create", "seatable.base.links.delete"}}
 	cfg.Connections["links-read"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"}}
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)
 	args := json.RawMessage(`{"table":"Kunden","column":"Vorgang","row_id":"` + rowID + `","other_row_ids":["` + otherRowID + `"]}`)
 
-	for _, op := range []string{"seatable.links.create", "seatable.links.delete"} {
+	for _, op := range []string{"seatable.base.links.create", "seatable.base.links.delete"} {
 		if _, err := core.Invoke(context.Background(), application.InvokeRequest{Operation: op, Connection: "links", Arguments: args}); err == nil {
 			t.Errorf("%s ran without confirm", op)
 		}
@@ -373,21 +373,21 @@ func TestLinkTheCoreNeedsConfirmationAndPermissions(t *testing.T) {
 		t.Fatalf("requests without confirm = %v", *calls)
 	}
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "seatable.links.create", Connection: "links", Arguments: args, Confirmed: true})
+		Operation: "seatable.base.links.create", Connection: "links", Arguments: args, Confirmed: true})
 	if err != nil || string(response.Result) != `{"created":true}` {
 		t.Fatalf("create = %s, %v", response.Result, err)
 	}
 	// update is not in the tool list; delete needs the tool list, and a read connection offers no mutation.
 	for _, request := range []application.InvokeRequest{
-		{Operation: "seatable.links.update", Connection: "links", Arguments: args, Confirmed: true},
-		{Operation: "seatable.links.create", Connection: "links-read", Arguments: args, Confirmed: true},
-		{Operation: "seatable.links.delete", Connection: "links-read", Arguments: args, Confirmed: true},
+		{Operation: "seatable.base.links.update", Connection: "links", Arguments: args, Confirmed: true},
+		{Operation: "seatable.base.links.create", Connection: "links-read", Arguments: args, Confirmed: true},
+		{Operation: "seatable.base.links.delete", Connection: "links-read", Arguments: args, Confirmed: true},
 	} {
 		if _, err := core.Invoke(context.Background(), request); err == nil {
 			t.Errorf("%s ran on %s", request.Operation, request.Connection)
 		}
 	}
-	list, err := core.Invoke(context.Background(), application.InvokeRequest{Operation: "seatable.links.list", Connection: "links-read",
+	list, err := core.Invoke(context.Background(), application.InvokeRequest{Operation: "seatable.base.links.list", Connection: "links-read",
 		Arguments: json.RawMessage(`{"table":"Kunden","column":"Vorgang","row_ids":["` + rowID + `"]}`)})
 	if err != nil || !strings.Contains(string(list.Result), `"has_more":false`) {
 		t.Errorf("list = %s, %v", list.Result, err)

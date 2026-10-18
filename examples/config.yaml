@@ -42,11 +42,11 @@ services:
   # SeaTable is one instance per service: the managed cloud, a dedicated instance, or a self-hosted
   # server. Every request of a connection stays on the origin its service names.
   tables-cloud:
-    provider: seatable
+    provider: seatable.base
     base_url: https://cloud.seatable.io
 
   tables-onprem:
-    provider: seatable
+    provider: seatable.base
     base_url: https://seatable.example.invalid
 
   # Nextcloud is one instance per service. The URL may carry an installation path when the instance does
@@ -146,20 +146,20 @@ credentials:
   # These two tokens address the same base with different permissions, which is why they are two
   # credentials rather than one.
   sales-base-reader:
-    provider: seatable
+    provider: seatable.base
     type: keyring
 
   sales-base-auditor:
-    provider: seatable
+    provider: seatable.base
     type: keyring
 
   # A second base of the same instance needs its own token, because a token never leaves its base.
   support-base-reader:
-    provider: seatable
+    provider: seatable.base
     type: keyring
 
   onprem-base-reader:
-    provider: seatable
+    provider: seatable.base
     type: keyring
 
   # Nextcloud needs the two roles user-id and app-password, because both belong to one identity. Create
@@ -365,7 +365,7 @@ connections:
     permissions: [read]
 
   # This deliberately exposes every table in the base to the agent. Prefer targets when a smaller scope
-  # is enough. Row and column operations then require a table reference from seatable.tables.list.
+  # is enough. Row and column operations then require a table reference from seatable.base.tables.list.
   sales-all-tables:
     service: tables-cloud
     credential: sales-base-reader

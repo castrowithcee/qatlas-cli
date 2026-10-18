@@ -51,9 +51,9 @@ func TestRegisterPublishesOptionToolsWithRisk(t *testing.T) {
 		effect capability.Effect
 		allow  bool
 	}{
-		"seatable.columns.optionsadd":    {capability.EffectCreate, false},
-		"seatable.columns.optionsupdate": {capability.EffectUpdate, false},
-		"seatable.columns.optionsdelete": {capability.EffectDelete, true},
+		"seatable.base.columns.options-add":    {capability.EffectCreate, false},
+		"seatable.base.columns.options-update": {capability.EffectUpdate, false},
+		"seatable.base.columns.options-delete": {capability.EffectDelete, true},
 	}
 	seen := 0
 	for _, d := range reg.Provider(Provider) {

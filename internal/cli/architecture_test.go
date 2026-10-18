@@ -158,7 +158,7 @@ var architectureExceptions = []archException{
 	{ruleProviderNames, "internal/helptopics/helptopics.go", "Telegram", debtName},
 	{ruleProviderNames, "internal/helptopics/helptopics.go", "Todoist", debtName},
 	{ruleProviderNames, "internal/helptopics/helptopics.go", "bookstack", debtName},
-	{ruleProviderNames, "internal/helptopics/helptopics.go", "seatable", debtName},
+	{ruleProviderNames, "internal/helptopics/helptopics.go", "seatable.base", debtName},
 	{ruleProviderNames, "internal/selfupdate/selfupdate.go", "GitHub", releaseHost},
 	{ruleProviderNames, "internal/selfupdate/selfupdate.go", "github.", releaseHost},
 	// Rule 3: provider dependencies.

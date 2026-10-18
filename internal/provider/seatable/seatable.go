@@ -33,7 +33,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "seatable"
+const Provider = "seatable.base"
 
 // cloudOrigin is the managed SeaTable Cloud origin and the default a new service starts from. A dedicated
 // or self-hosted installation configures its own HTTPS origin instead; the agent never supplies one.
@@ -178,7 +178,7 @@ var columnsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["table","columns","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
+		{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "start", Description: "Zero-based column offset, up to 10000"},
 		{Name: "limit", Description: "Columns per page, from 1 through 100; 25 when omitted"},
 	},
@@ -211,7 +211,7 @@ var rowsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["rows","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
+		{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "start", Description: "Zero-based row offset inside the selected table or view, up to 10000"},
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
@@ -242,8 +242,8 @@ var rowsGet = capability.Descriptor{
 		`"required":["row_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(rowSchema),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
-		{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true},
+		{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
+		{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Row identifier"},
@@ -271,8 +271,8 @@ var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capabi
 	rowTableArgument, rowIDArgument)
 
 var (
-	rowTableArgument  = capability.Argument{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"}
-	rowIDArgument     = capability.Argument{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true}
+	rowTableArgument  = capability.Argument{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"}
+	rowIDArgument     = capability.Argument{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true}
 	rowValuesArgument = capability.Argument{Name: "values", Description: "Object of column name to value; link columns are refused", Required: true}
 )
 
@@ -290,7 +290,7 @@ func rowMutationDescriptor(action string, effect capability.Effect, idempotency 
 // operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "SeaTable", DefaultBaseURL: cloudOrigin,
+		ID: Provider, Name: "SeaTable", FormerIDs: []string{"seatable"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
 		Description:        "Spreadsheet-like no-code database platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
@@ -586,7 +586,7 @@ func (s scope) selectTarget(raw string) (target, error) {
 		if len(s.targets) == 1 {
 			return s.targets[0], nil
 		}
-		return target{}, errors.New("this SeaTable connection requires an explicit table from seatable.tables.list")
+		return target{}, errors.New("this SeaTable connection requires an explicit table from seatable.base.tables.list")
 	}
 	selected, err := parseTarget(trimmed)
 	if err != nil {

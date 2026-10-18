@@ -57,8 +57,8 @@ const assetSelectorProperties = `,"name":{"type":"string","minLength":1,"maxLeng
 	`"index":{"type":"integer","minimum":0,"maximum":999}`
 
 var fileRowArguments = []capability.Argument{
-	{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
-	{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true},
+	{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
+	{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true},
 	{Name: "column", Description: "Name of a file or image column of the table", Required: true},
 }
 
@@ -136,7 +136,7 @@ var filesDelete = capability.Descriptor{
 	ID: Provider + ".files.delete", Version: 1,
 	Title: "Delete a SeaTable cell file",
 	Description: "Delete the stored asset of one file or image entry of a cell of a table allowed by the " +
-		"connection; the entry stays in the cell and has to be removed with seatable.rows.update",
+		"connection; the entry stays in the cell and has to be removed with seatable.base.rows.update",
 	Tags: []string{"seatable", "base", "files", "delete", "cell", "table"}, Provider: Provider,
 	RequiresToolAllowList: true,
 	Risk: capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,

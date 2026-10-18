@@ -24,7 +24,7 @@ const (
 
 const tableNameSchema = `{"type":"string","minLength":1,"maxLength":255}`
 
-var tableRefArg = capability.Argument{Name: "table", Description: "Table reference returned by seatable.tables.list", Required: true}
+var tableRefArg = capability.Argument{Name: "table", Description: "Table reference returned by seatable.base.tables.list", Required: true}
 
 var tablesCreate = tableMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
 	dataSensitivity, false,
