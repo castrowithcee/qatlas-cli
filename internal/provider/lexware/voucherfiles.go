@@ -91,7 +91,7 @@ var vouchersAttach = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"file_id":{"type":"string"},` +
 		`"voucher_id":{"type":"string"}},"required":["file_id","voucher_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "Bookkeeping voucher identifier as a UUID, as returned by lexware.voucherlist.list", Required: true},
+		{Name: "id", Description: "Bookkeeping voucher identifier as a UUID, as returned by lexware.voucher-list.list", Required: true},
 		{Name: localfile.LocalPathArgument, Description: localPathDescription, Required: true},
 	},
 	Fields: []capability.Field{

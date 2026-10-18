@@ -147,7 +147,7 @@ var recurringSettingsFields = []capability.Field{
 }
 
 var recurringTemplatesList = capability.Descriptor{
-	ID:          Provider + ".recurringtemplates.list",
+	ID:          Provider + ".recurring-templates.list",
 	Version:     1,
 	Title:       "List Lexware recurring invoice templates",
 	Description: "List one page of templates for recurring invoices of an explicit Lexware Office connection",
@@ -180,7 +180,7 @@ var recurringTemplatesList = capability.Descriptor{
 }
 
 var recurringTemplatesGet = capability.Descriptor{
-	ID:          Provider + ".recurringtemplates.get",
+	ID:          Provider + ".recurring-templates.get",
 	Version:     1,
 	Title:       "Get a Lexware recurring invoice template",
 	Description: "Read one template for recurring invoices of an explicit Lexware Office connection by its identifier",
@@ -197,7 +197,7 @@ var recurringTemplatesGet = capability.Descriptor{
 		`"settings":` + recurringSettingsSchema + `,"line_items":` + lineItemsSchema + `},` +
 		`"required":["id","line_items"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "Identifier of the template as a UUID, as returned by lexware.recurringtemplates.list"}},
+		Description: "Identifier of the template as a UUID, as returned by lexware.recurring-templates.list"}},
 	Fields: append([]capability.Field{
 		{Name: "id", Description: "Identifier of the template"},
 		{Name: "version", Description: "Version counter reported by Lexware"},

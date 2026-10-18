@@ -73,15 +73,15 @@ var (
 	quotationKind = salesVoucherKind{path: "/v1/quotations/", resource: "quotation", op: "get quotation",
 		tool: "quotations", expiration: true}
 	orderConfirmationKind = salesVoucherKind{path: "/v1/order-confirmations/", resource: "order confirmation",
-		op: "get order confirmation", tool: "orderconfirmations", deliveryTerms: true}
+		op: "get order confirmation", tool: "order-confirmations", deliveryTerms: true}
 	creditNoteKind = salesVoucherKind{path: "/v1/credit-notes/", resource: "credit note",
-		op: "get credit note", tool: "creditnotes"}
+		op: "get credit note", tool: "credit-notes"}
 	deliveryNoteKind = salesVoucherKind{path: "/v1/delivery-notes/", resource: "delivery note",
-		op: "get delivery note", tool: "deliverynotes"}
+		op: "get delivery note", tool: "delivery-notes"}
 	dunningKind = salesVoucherKind{path: "/v1/dunnings/", resource: "dunning", op: "get dunning",
 		tool: "dunnings", dueDate: true, dunnedInvoice: true}
 	downPaymentInvoiceKind = salesVoucherKind{path: "/v1/down-payment-invoices/", resource: "down payment invoice",
-		op: "get down payment invoice", tool: "downpaymentinvoices", dueDate: true, closingInvoice: true}
+		op: "get down payment invoice", tool: "down-payment-invoices", dueDate: true, closingInvoice: true}
 )
 
 var (
@@ -175,7 +175,7 @@ func salesVoucherDescriptor(kind salesVoucherKind) capability.Descriptor {
 		Version:     1,
 		Title:       "Get a Lexware " + name,
 		Description: "Read one " + name + " of an explicit Lexware Office connection by its identifier",
-		Tags:        []string{"lexware", kind.tool, "get", "accounting"},
+		Tags:        []string{"lexware", strings.ReplaceAll(kind.tool, "-", ""), "get", "accounting"},
 		Risk:        lexwareReadRisk,
 		Provider:    Provider,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},` +
@@ -183,7 +183,7 @@ func salesVoucherDescriptor(kind salesVoucherKind) capability.Descriptor {
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + properties + `},` +
 			`"required":["id","archived","line_items"],"additionalProperties":false}`),
 		Arguments: []capability.Argument{{Name: "id", Required: true,
-			Description: "Identifier of the " + name + " as a UUID, as returned by lexware.voucherlist.list"}},
+			Description: "Identifier of the " + name + " as a UUID, as returned by lexware.voucher-list.list"}},
 		Fields: fields,
 		Examples: []capability.Example{{
 			Description: "Read one " + name + " by the identifier a voucher list reported",

@@ -159,8 +159,8 @@ func TestRecurringTemplateToolsSatisfyTheirContractThroughTheApplicationCore(t *
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	for _, call := range []struct{ tool, arguments, want string }{
-		{"lexware.recurringtemplates.list", `{"size":25,"sort":"created_date","direction":"desc"}`, `"templates"`},
-		{"lexware.recurringtemplates.get", `{"id":"` + templateID + `"}`, `"payment_term_label":"14 Tage"`},
+		{"lexware.recurring-templates.list", `{"size":25,"sort":"created_date","direction":"desc"}`, `"templates"`},
+		{"lexware.recurring-templates.get", `{"id":"` + templateID + `"}`, `"payment_term_label":"14 Tage"`},
 	} {
 		got, err := core.Invoke(context.Background(), application.InvokeRequest{
 			Operation: call.tool, Connection: "lexware-primary", Arguments: json.RawMessage(call.arguments)})
@@ -170,10 +170,10 @@ func TestRecurringTemplateToolsSatisfyTheirContractThroughTheApplicationCore(t *
 	}
 	refuse(t)
 	for _, call := range []struct{ tool, arguments string }{
-		{"lexware.recurringtemplates.list", `{"size":101}`},
-		{"lexware.recurringtemplates.list", `{"page":201}`},
-		{"lexware.recurringtemplates.list", `{"sort":"title"}`},
-		{"lexware.recurringtemplates.get", `{"id":"../../v1/contacts"}`},
+		{"lexware.recurring-templates.list", `{"size":101}`},
+		{"lexware.recurring-templates.list", `{"page":201}`},
+		{"lexware.recurring-templates.list", `{"sort":"title"}`},
+		{"lexware.recurring-templates.get", `{"id":"../../v1/contacts"}`},
 	} {
 		if _, err := core.Invoke(context.Background(), application.InvokeRequest{
 			Operation: call.tool, Connection: "lexware-primary", Arguments: json.RawMessage(call.arguments)}); err == nil {

@@ -48,7 +48,7 @@ attached. An unaccepted file (HTTP 406) is reported without the provider's text.
 `lexware.vouchers.create` records a bookkeeping voucher with the fixed status `unchecked` (`create`, always with
 confirmation) and sends exactly one request without a retry. It takes only the schema fields: type, number,
 dates, totals, tax type, either `contact_id` or `use_collective_contact`, and up to 100 positions with
-`category_id` from `lexware.postingcategories.list`. Lexware forbids net vouchers in this status, so
+`category_id` from `lexware.posting-categories.list`. Lexware forbids net vouchers in this status, so
 `tax_type` `net` is refused before any request; `lexware.vouchers.book` without `id` records them. After an
 unclear outcome the error says that the voucher may have been created.
 
@@ -80,8 +80,8 @@ missing contract scope.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing is a separate tool per voucher type: `lexware.invoices.issue`,
-`lexware.quotations.issue`, `lexware.orderconfirmations.issue`, `lexware.creditnotes.issue` and
-`lexware.deliverynotes.issue`. Lexware then assigns the voucher number, and its API can neither change nor
+`lexware.quotations.issue`, `lexware.order-confirmations.issue`, `lexware.credit-notes.issue` and
+`lexware.delivery-notes.issue`. Lexware then assigns the voucher number, and its API can neither change nor
 delete the voucher afterwards; a credit note linked to an invoice reduces its open amount at once. Each takes
 the inputs of its draft tool; invoices and credit notes may also be issued as the follow-up of another voucher
 with `preceding_voucher_id`, order confirmations and delivery notes not. A connection offers an issue tool
@@ -92,16 +92,16 @@ tools it is offered only when a connection's `tools` list names it, in addition 
 no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
 that the article may have been deleted.
 
-`lexware.eventsubscriptions.list` and `lexware.eventsubscriptions.get` read the webhook subscriptions of the
+`lexware.event-subscriptions.list` and `lexware.event-subscriptions.get` read the webhook subscriptions of the
 organization (`read`, in both profiles). Callback URLs are confidential: only scheme and host are shown, an
 unreadable URL is masked completely. Qatlas offers no tool to create a subscription, so no callback to a third
-party can be registered through it. `lexware.eventsubscriptions.delete` removes one subscription for good
+party can be registered through it. `lexware.event-subscriptions.delete` removes one subscription for good
 (`delete`), always with confirmation, and only when a connection's `tools` list names it, in addition to
 `delete` in `permissions`; no profile ticks it. A subscription may serve another application's integration,
 which then stops receiving events. A subscription also ends when the API key that created it is revoked.
 
-`lexware.quotations.create` (with a required `expiration_date`), `lexware.orderconfirmations.create`,
-`lexware.creditnotes.create`, `lexware.deliverynotes.create` and `lexware.dunnings.create` create a quotation,
+`lexware.quotations.create` (with a required `expiration_date`), `lexware.order-confirmations.create`,
+`lexware.credit-notes.create`, `lexware.delivery-notes.create` and `lexware.dunnings.create` create a quotation,
 an order confirmation, a credit note, a delivery note and a dunning as drafts (`create`), always with
 confirmation, and share the voucher structure of `lexware.invoices.create`. None finalizes;
 dunnings have no issue tool. A credit note carries no shipping or payment terms, a delivery note and a dunning
@@ -147,8 +147,8 @@ never extend its Lexware contract or organization rights. An optional `tools` li
 further to named tools, for example `[lexware.invoices.get]`, and never admits an effect `permissions`
 excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
 `[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the
-tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.orderconfirmations.create`,
-`lexware.creditnotes.create`, `lexware.deliverynotes.create`, `lexware.dunnings.create`,
+tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.order-confirmations.create`,
+`lexware.credit-notes.create`, `lexware.delivery-notes.create`, `lexware.dunnings.create`,
 `lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create`, `lexware.contacts.update`,
 `lexware.files.upload`, `lexware.vouchers.attach` and `lexware.vouchers.create`; the upload and attach tools
 take effect only with a `files.read` release.

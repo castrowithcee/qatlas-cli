@@ -51,7 +51,7 @@ var voucherSchema = `{"type":"object","properties":{` +
 const dateSchema = `{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}`
 
 var voucherlistList = capability.Descriptor{
-	ID:      Provider + ".voucherlist.list",
+	ID:      Provider + ".voucher-list.list",
 	Version: 1,
 	Title:   "List Lexware vouchers",
 	Description: "List one page of vouchers of every type and status of an explicit Lexware Office connection, " +

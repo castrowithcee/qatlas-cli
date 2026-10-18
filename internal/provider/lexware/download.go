@@ -88,7 +88,7 @@ var documentsDownload = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "voucher_type", Description: "invoice, credit_note, delivery_note, dunning, down_payment_invoice, " +
 			"order_confirmation, or quotation", Required: true},
-		{Name: "id", Description: "Sales voucher identifier as a UUID, as returned by lexware.voucherlist.list", Required: true},
+		{Name: "id", Description: "Sales voucher identifier as a UUID, as returned by lexware.voucher-list.list", Required: true},
 		{Name: "format", Description: "default (Lexware's own choice), pdf, or xml; default is the default"},
 		downloadPathArgument(),
 	},

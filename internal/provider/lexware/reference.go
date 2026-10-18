@@ -84,7 +84,7 @@ var countriesList = capability.Descriptor{
 }
 
 var paymentConditionsList = capability.Descriptor{
-	ID: Provider + ".paymentconditions.list", Version: 1, Title: "List Lexware payment conditions",
+	ID: Provider + ".payment-conditions.list", Version: 1, Title: "List Lexware payment conditions",
 	Description: "List the payment conditions of the organization to reference when creating vouchers, at most 200 entries",
 	Tags:        []string{"lexware", "payment", "conditions", "list", "reference"}, Risk: referenceReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(noArguments),
@@ -99,7 +99,7 @@ var paymentConditionsList = capability.Descriptor{
 }
 
 var postingCategoriesList = capability.Descriptor{
-	ID: Provider + ".postingcategories.list", Version: 1, Title: "List Lexware posting categories",
+	ID: Provider + ".posting-categories.list", Version: 1, Title: "List Lexware posting categories",
 	Description: "List the posting categories of the organization to reference when creating vouchers, at most 200 " +
 		"entries; an optional type filters locally",
 	Tags: []string{"lexware", "posting", "categories", "list", "reference"}, Risk: referenceReadRisk, Provider: Provider,
@@ -121,7 +121,7 @@ var postingCategoriesList = capability.Descriptor{
 }
 
 var printLayoutsList = capability.Descriptor{
-	ID: Provider + ".printlayouts.list", Version: 1, Title: "List Lexware print layouts",
+	ID: Provider + ".print-layouts.list", Version: 1, Title: "List Lexware print layouts",
 	Description: "List the print layouts of the organization, at most 200 entries; the Lexware contract needs the " +
 		"INVOICING_PRO scope, otherwise the call is refused as a missing contract scope",
 	Tags: []string{"lexware", "print", "layouts", "list", "reference"}, Risk: referenceReadRisk, Provider: Provider,

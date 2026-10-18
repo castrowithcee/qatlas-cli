@@ -78,7 +78,7 @@ var vouchersCreate = capability.Descriptor{
 	Description: "Record one bookkeeping voucher with the status unchecked, so that it awaits review in Lexware Office. " +
 		"Lexware does not allow net vouchers in this status, so tax_type must be gross. Name exactly one of " +
 		"contact_id or use_collective_contact true. Positions carry amount, tax_amount, tax_rate_percent and " +
-		"category_id from lexware.postingcategories.list. No files, remark or other fields are sent",
+		"category_id from lexware.posting-categories.list. No files, remark or other fields are sent",
 	Tags:     []string{"lexware", "vouchers", "create", "bookkeeping", "accounting"},
 	Provider: Provider, Risk: voucherCreateRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + voucherWriteProperties +

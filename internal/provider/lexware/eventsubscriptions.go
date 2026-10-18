@@ -52,7 +52,7 @@ var eventSubscriptionFields = []capability.Field{
 }
 
 var eventSubscriptionsList = capability.Descriptor{
-	ID: Provider + ".eventsubscriptions.list", Version: 1, Title: "List Lexware event subscriptions",
+	ID: Provider + ".event-subscriptions.list", Version: 1, Title: "List Lexware event subscriptions",
 	Description: "List the webhook subscriptions of the Lexware Office organization, at most 200 entries; the " +
 		"callback URL is shown only as scheme and host",
 	Tags:     []string{"lexware", "eventsubscriptions", "webhooks", "list", "integration"},
@@ -67,7 +67,7 @@ var eventSubscriptionsList = capability.Descriptor{
 }
 
 var eventSubscriptionsGet = capability.Descriptor{
-	ID: Provider + ".eventsubscriptions.get", Version: 1, Title: "Get a Lexware event subscription",
+	ID: Provider + ".event-subscriptions.get", Version: 1, Title: "Get a Lexware event subscription",
 	Description: "Read one webhook subscription of the Lexware Office organization by its identifier; the " +
 		"callback URL is shown only as scheme and host",
 	Tags:     []string{"lexware", "eventsubscriptions", "webhooks", "get", "integration"},
@@ -77,7 +77,7 @@ var eventSubscriptionsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + eventSubscriptionProperties +
 		`},"required":["id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "Subscription identifier as a UUID, as returned by lexware.eventsubscriptions.list"}},
+		Description: "Subscription identifier as a UUID, as returned by lexware.event-subscriptions.list"}},
 	Fields: eventSubscriptionFields,
 	Examples: []capability.Example{{
 		Description: "Read one subscription",
@@ -86,7 +86,7 @@ var eventSubscriptionsGet = capability.Descriptor{
 }
 
 var eventSubscriptionsDelete = capability.Descriptor{
-	ID: Provider + ".eventsubscriptions.delete", Version: 1, Title: "Delete a Lexware event subscription",
+	ID: Provider + ".event-subscriptions.delete", Version: 1, Title: "Delete a Lexware event subscription",
 	Description: "Permanently delete one webhook subscription of the Lexware Office organization; it cannot be " +
 		"restored. The subscription may serve another application's integration, which stops receiving events. " +
 		"Offered only by a connection whose tools list names it",
@@ -97,7 +97,7 @@ var eventSubscriptionsDelete = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},` +
 		`"deleted":{"type":"boolean"}},"required":["id","deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "Subscription identifier as a UUID, as returned by lexware.eventsubscriptions.list"}},
+		Description: "Subscription identifier as a UUID, as returned by lexware.event-subscriptions.list"}},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the deleted subscription"},
 		{Name: "deleted", Description: "Always true: Lexware confirmed the deletion"},

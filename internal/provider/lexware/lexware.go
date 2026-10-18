@@ -276,7 +276,7 @@ var voucherArguments = []capability.Argument{
 	{Name: "introduction", Description: "Introductory text above the positions, up to 4096 characters"},
 	{Name: "remark", Description: "Closing remark below the positions, up to 4096 characters"},
 	{Name: "payment_conditions", Description: "Payment terms object: label and duration_days, optionally discount_percentage and discount_range_days"},
-	{Name: "print_layout_id", Description: "Print layout as a UUID, as returned by lexware.printlayouts.list"},
+	{Name: "print_layout_id", Description: "Print layout as a UUID, as returned by lexware.print-layouts.list"},
 }
 
 var invoiceCreateArguments = append(append([]capability.Argument{}, voucherArguments...),
@@ -384,7 +384,7 @@ var quotationsCreate = capability.Descriptor{
 }
 
 var orderConfirmationsCreate = capability.Descriptor{
-	ID: Provider + ".orderconfirmations.create", Version: 1, Title: "Create a Lexware order confirmation draft",
+	ID: Provider + ".order-confirmations.create", Version: 1, Title: "Create a Lexware order confirmation draft",
 	Description: "Create one order confirmation as a draft, optionally as the successor of a quotation; a " +
 		"draft can still be changed in Lexware Office. Finalizing is not part of this tool",
 	Tags:     []string{"lexware", "orderconfirmations", "create", "draft", "accounting"},
@@ -403,7 +403,7 @@ var orderConfirmationsCreate = capability.Descriptor{
 }
 
 var creditNotesCreate = capability.Descriptor{
-	ID: Provider + ".creditnotes.create", Version: 1, Title: "Create a Lexware credit note draft",
+	ID: Provider + ".credit-notes.create", Version: 1, Title: "Create a Lexware credit note draft",
 	Description: "Create one credit note as a draft, optionally as the successor of an invoice; a draft can " +
 		"still be changed in Lexware Office. Lexware allows at most one credit note per invoice, and the " +
 		"open amount of the invoice is reduced only when the credit note is finalized. Finalizing is not " +
@@ -423,7 +423,7 @@ var creditNotesCreate = capability.Descriptor{
 }
 
 var deliveryNotesCreate = capability.Descriptor{
-	ID: Provider + ".deliverynotes.create", Version: 1, Title: "Create a Lexware delivery note draft",
+	ID: Provider + ".delivery-notes.create", Version: 1, Title: "Create a Lexware delivery note draft",
 	Description: "Create one delivery note as a draft, optionally as the successor of another voucher; positions " +
 		"may omit prices, and a draft can still be changed in Lexware Office. Finalizing is not part of this tool",
 	Tags:     []string{"lexware", "deliverynotes", "create", "draft", "accounting"},
@@ -484,17 +484,17 @@ func withExample(descriptor capability.Descriptor, description, arguments string
 var (
 	quotationsIssue = issueDescriptor(quotationsCreate, Provider+".quotations.issue", "Issue a Lexware quotation",
 		"quotation", "", quotationInputSchema, quotationArguments)
-	orderConfirmationsIssue = withExample(issueDescriptor(orderConfirmationsCreate, Provider+".orderconfirmations.issue",
+	orderConfirmationsIssue = withExample(issueDescriptor(orderConfirmationsCreate, Provider+".order-confirmations.issue",
 		"Issue a Lexware order confirmation", "order confirmation", "", orderConfirmationIssueInputSchema,
 		orderConfirmationIssueArguments), "Confirm one custom position", `{"voucher_date":"2026-09-12T00:00:00+02:00",`+
 		`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},`+
 		`"line_items":[{"type":"custom","name":"Consulting","quantity":2,"unit_name":"hour",`+
 		`"net_amount":120,"tax_rate_percentage":19}],`+
 		`"currency":"EUR","tax_type":"net","shipping_type":"none"}`)
-	creditNotesIssue = issueDescriptor(creditNotesCreate, Provider+".creditnotes.issue", "Issue a Lexware credit note",
+	creditNotesIssue = issueDescriptor(creditNotesCreate, Provider+".credit-notes.issue", "Issue a Lexware credit note",
 		"credit note", "; a credit note linked to an invoice reduces its open amount immediately",
 		creditNoteInputSchema, creditNoteArguments)
-	deliveryNotesIssue = issueDescriptor(deliveryNotesCreate, Provider+".deliverynotes.issue",
+	deliveryNotesIssue = issueDescriptor(deliveryNotesCreate, Provider+".delivery-notes.issue",
 		"Issue a Lexware delivery note", "delivery note", "", deliveryNoteIssueInputSchema, deliveryNoteIssueArguments)
 )
 
@@ -517,6 +517,7 @@ func Register(reg *capability.Registry) error {
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
 		Description:        "Online accounting and invoicing service for small businesses",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
+		RenamedTools:       renamedTools,
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Lexware private API key: the value shown once when you create a key under " +

@@ -26,10 +26,10 @@ func issueCases() []issueCase {
 		{"invoice", "lexware.invoices.issue", "lexware.invoices.create", "/v1/invoices",
 			func(extra string) json.RawMessage { return draftArgs(articleLine, extra) }, true},
 		{"quotation", "lexware.quotations.issue", "lexware.quotations.create", "/v1/quotations", quotation, false},
-		{"order confirmation", "lexware.orderconfirmations.issue", "lexware.orderconfirmations.create", "/v1/order-confirmations",
+		{"order confirmation", "lexware.order-confirmations.issue", "lexware.order-confirmations.create", "/v1/order-confirmations",
 			func(extra string) json.RawMessage { return draftArgs(articleLine, extra) }, false},
-		{"credit note", "lexware.creditnotes.issue", "lexware.creditnotes.create", "/v1/credit-notes", creditArgs, true},
-		{"delivery note", "lexware.deliverynotes.issue", "lexware.deliverynotes.create", "/v1/delivery-notes", deliveryArgs, false},
+		{"credit note", "lexware.credit-notes.issue", "lexware.credit-notes.create", "/v1/credit-notes", creditArgs, true},
+		{"delivery note", "lexware.delivery-notes.issue", "lexware.delivery-notes.create", "/v1/delivery-notes", deliveryArgs, false},
 	}
 }
 

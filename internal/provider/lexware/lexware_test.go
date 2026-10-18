@@ -164,31 +164,31 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 		t.Fatalf("operations = %d, want four invoice, four contact, five article, three voucher, thirteen sales voucher, two recurring template, two download, two voucher file, three voucher write, five account and reference, and three event subscription operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
-		"lexware.quotations.issue": 1, "lexware.orderconfirmations.issue": 1, "lexware.creditnotes.issue": 1,
-		"lexware.deliverynotes.issue": 1,
-		"lexware.quotations.create":   1, "lexware.orderconfirmations.create": 1,
-		"lexware.creditnotes.create": 1, "lexware.deliverynotes.create": 1, "lexware.dunnings.create": 1,
+		"lexware.quotations.issue": 1, "lexware.order-confirmations.issue": 1, "lexware.credit-notes.issue": 1,
+		"lexware.delivery-notes.issue": 1,
+		"lexware.quotations.create":    1, "lexware.order-confirmations.create": 1,
+		"lexware.credit-notes.create": 1, "lexware.delivery-notes.create": 1, "lexware.dunnings.create": 1,
 		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
 		"lexware.contacts.list": 1, "lexware.contacts.create": 1, "lexware.contacts.update": 1, "lexware.articles.get": 1, "lexware.articles.list": 1, "lexware.articles.create": 1, "lexware.articles.update": 1, "lexware.articles.delete": 1,
-		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
-		"lexware.profile.get": 1, "lexware.countries.list": 1, "lexware.paymentconditions.list": 1,
-		"lexware.postingcategories.list": 1, "lexware.printlayouts.list": 1,
-		"lexware.quotations.get": 1, "lexware.orderconfirmations.get": 1, "lexware.creditnotes.get": 1,
-		"lexware.deliverynotes.get": 1, "lexware.dunnings.get": 1, "lexware.downpaymentinvoices.get": 1,
-		"lexware.recurringtemplates.list": 1, "lexware.recurringtemplates.get": 1,
+		"lexware.voucher-list.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
+		"lexware.profile.get": 1, "lexware.countries.list": 1, "lexware.payment-conditions.list": 1,
+		"lexware.posting-categories.list": 1, "lexware.print-layouts.list": 1,
+		"lexware.quotations.get": 1, "lexware.order-confirmations.get": 1, "lexware.credit-notes.get": 1,
+		"lexware.delivery-notes.get": 1, "lexware.dunnings.get": 1, "lexware.down-payment-invoices.get": 1,
+		"lexware.recurring-templates.list": 1, "lexware.recurring-templates.get": 1,
 		"lexware.documents.download": 1, "lexware.files.download": 1, "lexware.files.upload": 1, "lexware.vouchers.attach": 1, "lexware.vouchers.create": 1, "lexware.vouchers.book": 1, "lexware.vouchers.update": 1,
-		"lexware.eventsubscriptions.list": 1, "lexware.eventsubscriptions.get": 1, "lexware.eventsubscriptions.delete": 1}
+		"lexware.event-subscriptions.list": 1, "lexware.event-subscriptions.get": 1, "lexware.event-subscriptions.delete": 1}
 	sensitivities := map[string]string{"lexware.contacts.get": contactSensitivity,
 		"lexware.contacts.list": contactSensitivity, "lexware.contacts.create": contactSensitivity,
 		"lexware.contacts.update": contactSensitivity, "lexware.articles.get": articleSensitivity,
 		"lexware.articles.list": articleSensitivity, "lexware.articles.create": articleSensitivity,
 		"lexware.articles.update": articleSensitivity, "lexware.articles.delete": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity, "lexware.files.download": bookkeepingSensitivity, "lexware.files.upload": bookkeepingSensitivity, "lexware.vouchers.attach": bookkeepingSensitivity, "lexware.vouchers.create": bookkeepingSensitivity, "lexware.vouchers.book": bookkeepingSensitivity, "lexware.vouchers.update": bookkeepingSensitivity,
 		"lexware.profile.get": accountSensitivity, "lexware.countries.list": referenceSensitivity,
-		"lexware.paymentconditions.list": referenceSensitivity, "lexware.postingcategories.list": referenceSensitivity,
-		"lexware.printlayouts.list": referenceSensitivity, "lexware.eventsubscriptions.list": integrationSensitivity,
-		"lexware.eventsubscriptions.get": integrationSensitivity, "lexware.eventsubscriptions.delete": integrationSensitivity}
+		"lexware.payment-conditions.list": referenceSensitivity, "lexware.posting-categories.list": referenceSensitivity,
+		"lexware.print-layouts.list": referenceSensitivity, "lexware.event-subscriptions.list": integrationSensitivity,
+		"lexware.event-subscriptions.get": integrationSensitivity, "lexware.event-subscriptions.delete": integrationSensitivity}
 	for _, descriptor := range operations {
-		write := descriptor.Risk.Effect == capability.EffectCreate && (strings.HasPrefix(descriptor.ID, "lexware.invoices.") || strings.HasSuffix(descriptor.ID, ".issue") || strings.HasSuffix(descriptor.ID, ".create") && strings.Contains("lexware.quotations.create lexware.orderconfirmations.create lexware.creditnotes.create lexware.deliverynotes.create lexware.dunnings.create", descriptor.ID))
+		write := descriptor.Risk.Effect == capability.EffectCreate && (strings.HasPrefix(descriptor.ID, "lexware.invoices.") || strings.HasSuffix(descriptor.ID, ".issue") || strings.HasSuffix(descriptor.ID, ".create") && strings.Contains("lexware.quotations.create lexware.order-confirmations.create lexware.credit-notes.create lexware.delivery-notes.create lexware.dunnings.create", descriptor.ID))
 		if descriptor.Version != versions[descriptor.ID] || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != cmpSensitivity(sensitivities, descriptor.ID) {
 			t.Errorf("descriptor %s = %+v, want a bounded operation",
@@ -314,7 +314,7 @@ func issueConfig() *config.Config {
 	cfg.Connections["lexware-issuer"] = config.Connection{Service: "lexware", Credential: "primary-key",
 		Permissions: []config.Permission{config.PermissionCreate},
 		Tools: []string{"lexware.invoices.create", "lexware.invoices.issue", "lexware.quotations.issue",
-			"lexware.orderconfirmations.issue", "lexware.creditnotes.issue", "lexware.deliverynotes.issue"}}
+			"lexware.order-confirmations.issue", "lexware.credit-notes.issue", "lexware.delivery-notes.issue"}}
 	return cfg
 }
 

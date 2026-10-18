@@ -39,7 +39,7 @@ var vouchersGet = capability.Descriptor{
 		`"updated_date":{"type":"string"},"version":{"type":"integer"}},` +
 		`"required":["id","voucher_items","files"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "Bookkeeping voucher identifier as a UUID, as returned by lexware.voucherlist.list", Required: true},
+		{Name: "id", Description: "Bookkeeping voucher identifier as a UUID, as returned by lexware.voucher-list.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Voucher identifier"},
