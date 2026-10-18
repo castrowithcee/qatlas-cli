@@ -17,7 +17,7 @@ import (
 const (
 	viewSortsPath = "/rest/metadata/viewSorts"
 
-	viewSortUncertain = "; this change may have taken effect, read the view with twentycrm.views.get before repeating it"
+	viewSortUncertain = "; this change may have taken effect, read the view with twenty-crm.views.get before repeating it"
 
 	errViewSortField = "the field is not an active, non-system field of the object of this view that can be sorted"
 	errViewSortSub   = "a FULL_NAME field is sorted by sub_field_name firstName or lastName; other fields take no sub_field_name"
@@ -46,7 +46,7 @@ const viewSortSchema = `{"type":"object","properties":{"id":{"type":"string"},"v
 	`"sub_field_name":{"type":"string"}},"required":["id","view_id","field_id","direction"],"additionalProperties":false}`
 
 var viewSortFields = []capability.Field{
-	{Name: "id", Description: "The sort; use it with twentycrm.viewsorts.update"},
+	{Name: "id", Description: "The sort; use it with twenty-crm.view-sorts.update"},
 	{Name: "view_id", Description: "The view that holds the sort"},
 	{Name: "field_id", Description: "The field the view is sorted by"},
 	{Name: "field", Description: "API name of the field, untrusted data"},
@@ -55,7 +55,7 @@ var viewSortFields = []capability.Field{
 }
 
 var viewsortsCreate = capability.Descriptor{
-	ID: Provider + ".viewsorts.create", Version: 1, Title: "Add a sort to a Twenty CRM view",
+	ID: Provider + ".view-sorts.create", Version: 1, Title: "Add a sort to a Twenty CRM view",
 	Description: "Add one sort to a view of the Twenty workspace of a connection. The field must belong to the object " +
 		"of the view, be active, not be a system field, and be of a sortable type (relation, array, multi-select, " +
 		"JSON, rich text, and composite fields other than FULL_NAME are refused), and must not be sorted by the view " +
@@ -68,8 +68,8 @@ var viewsortsCreate = capability.Descriptor{
 		`},"required":["view_id","field_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewSortSchema),
 	Arguments: []capability.Argument{
-		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twentycrm.views.list"},
-		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twentycrm.metaobjects.get"},
+		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twenty-crm.views.list"},
+		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twenty-crm.meta-objects.get"},
 		{Name: "direction", Description: "One of " + strings.Join(viewDirections, ", ") + "; ASC when omitted"},
 		{Name: "sub_field_name", Description: "One of " + strings.Join(viewSortSubFields, ", ") +
 			"; required for a FULL_NAME field, refused for any other"},
@@ -81,7 +81,7 @@ var viewsortsCreate = capability.Descriptor{
 }
 
 var viewsortsUpdate = capability.Descriptor{
-	ID: Provider + ".viewsorts.update", Version: 1, Title: "Update a sort of a Twenty CRM view",
+	ID: Provider + ".view-sorts.update", Version: 1, Title: "Update a sort of a Twenty CRM view",
 	Description: "Change the direction of one sort of a view of the Twenty workspace of a connection; the field of " +
 		"the sort does not change. " + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "sorts", "update"},
@@ -91,7 +91,7 @@ var viewsortsUpdate = capability.Descriptor{
 		enumSchema(viewDirections) + `},"required":["id","direction"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewSortSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the sort, as returned by twentycrm.viewsorts.create or twentycrm.views.get"},
+		{Name: "id", Required: true, Description: "UUID of the sort, as returned by twenty-crm.view-sorts.create or twenty-crm.views.get"},
 		{Name: "direction", Required: true, Description: "One of " + strings.Join(viewDirections, ", ")},
 	},
 	Fields: viewSortFields,
@@ -195,7 +195,7 @@ func (c *Client) CreateViewSort(ctx context.Context, body viewSortCreate) (*View
 	}
 	if found {
 		return nil, invalidRequest("this field is already sorted by the view (sort " + existing +
-			"); change it with twentycrm.viewsorts.update")
+			"); change it with twenty-crm.view-sorts.update")
 	}
 	var answer json.RawMessage
 	if err := c.changeWith(ctx, op, viewSortUncertain, http.MethodPost, viewSortsPath, body, &answer); err != nil {

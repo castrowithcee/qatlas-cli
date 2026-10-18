@@ -22,8 +22,8 @@ const (
 	viewNameMax = 100
 
 	viewCreateUncertain = "; this change may have taken effect, list the views of the object with " +
-		"twentycrm.views.list before repeating it, because repeating it can create a second view"
-	viewUpdateUncertain = "; this change may have taken effect, read the view with twentycrm.views.get " +
+		"twenty-crm.views.list before repeating it, because repeating it can create a second view"
+	viewUpdateUncertain = "; this change may have taken effect, read the view with twenty-crm.views.get " +
 		"before repeating it"
 
 	errViewPermission = "the workspace role of this API key may not change views; check the role in Twenty, " +
@@ -83,7 +83,7 @@ var viewsCreate = capability.Descriptor{
 	OutputSchema: viewResult,
 	Arguments: []capability.Argument{
 		{Name: "name", Required: true, Description: "View name, at most 100 characters, without ' \" \\ ; . = * /"},
-		{Name: "object_id", Required: true, Description: "UUID of the object, as returned by twentycrm.metaobjects.list"},
+		{Name: "object_id", Required: true, Description: "UUID of the object, as returned by twenty-crm.meta-objects.list"},
 		{Name: "type", Description: "View type, one of " + strings.Join(viewCreatableTypes, ", ") + "; TABLE when omitted"},
 		{Name: "icon", Description: "Icon name such as IconList, matching " + viewIconPattern + "; " + viewDefaultIcon + " when omitted"},
 		{Name: "main_group_by_field_id", Description: "UUID of a SELECT field of the object; required for KANBAN, refused otherwise"},
@@ -111,7 +111,7 @@ var viewsUpdate = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: viewResult,
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the view, as returned by twentycrm.views.list"},
+		{Name: "id", Required: true, Description: "UUID of the view, as returned by twenty-crm.views.list"},
 		{Name: "name", Description: "New view name, same rules as on create"},
 		{Name: "icon", Description: "New icon name, same rules as on create"},
 		{Name: "main_group_by_field_id", Description: "UUID of an active SELECT field of the object; replaces all " +

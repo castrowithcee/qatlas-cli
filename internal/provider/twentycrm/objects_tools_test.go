@@ -179,7 +179,7 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 		if strings.HasPrefix(id, Provider+".records.") {
 			want = recordsGroup
 		}
-		if strings.HasPrefix(id, Provider+".activitytargets.") {
+		if strings.HasPrefix(id, Provider+".activity-targets.") {
 			want = activityGroup
 		}
 		if strings.HasPrefix(id, Provider+".attachments.") {
@@ -191,24 +191,24 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 		if strings.HasPrefix(id, Provider+".webhooks.") {
 			want = webhooksGroup
 		}
-		if strings.HasPrefix(id, Provider+".workspacemembers.") || strings.HasPrefix(id, Provider+".roles.") {
+		if strings.HasPrefix(id, Provider+".workspace-members.") || strings.HasPrefix(id, Provider+".roles.") {
 			want = membersGroup
 		}
 		if strings.HasPrefix(id, Provider+".agents.") || strings.HasPrefix(id, Provider+".skills.") {
 			want = aiGroup
 		}
-		if strings.HasPrefix(id, Provider+".logicfunctions.") {
+		if strings.HasPrefix(id, Provider+".logic-functions.") {
 			want = logicFunctionsGroup
 		}
 		if strings.HasPrefix(id, Provider+".meta") {
 			want = metadataGroup
 		}
-		if strings.HasPrefix(id, Provider+".pagelayout") {
+		if strings.HasPrefix(id, Provider+".page-layout") {
 			want = dashboardsGroup
 		}
-		if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".viewfields.") ||
-			strings.HasPrefix(id, Provider+".viewfilters.") || strings.HasPrefix(id, Provider+".viewgroups.") ||
-			strings.HasPrefix(id, Provider+".viewsorts.") {
+		if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".view-fields.") ||
+			strings.HasPrefix(id, Provider+".view-filters.") || strings.HasPrefix(id, Provider+".view-groups.") ||
+			strings.HasPrefix(id, Provider+".view-sorts.") {
 			want = viewsGroup
 		}
 		if group != want {

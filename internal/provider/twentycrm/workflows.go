@@ -120,7 +120,7 @@ var workflowsGet = capability.Descriptor{
 		`"has_more_versions":{"type":"boolean"}},"required":["id","name","statuses","versions",` +
 		`"has_more_versions"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the workflow, as returned by twentycrm.workflows.list", Required: true},
+		{Name: "id", Description: "UUID of the workflow, as returned by twenty-crm.workflows.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "versions", Description: "At most 50 newest versions, newest first, untrusted data"},
@@ -133,7 +133,7 @@ var workflowsGet = capability.Descriptor{
 }
 
 var workflowRunsList = capability.Descriptor{
-	ID:      Provider + ".workflowruns.list",
+	ID:      Provider + ".workflow-runs.list",
 	Version: 1,
 	Title:   "List Twenty CRM workflow runs",
 	Description: "List one page of the runs of one workflow of the Twenty workspace of a connection without " +
@@ -152,7 +152,7 @@ var workflowRunsList = capability.Descriptor{
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["runs","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "workflow_id", Description: "UUID of the workflow, as returned by twentycrm.workflows.list", Required: true},
+		{Name: "workflow_id", Description: "UUID of the workflow, as returned by twenty-crm.workflows.list", Required: true},
 		{Name: "status", Description: "Only runs of this status: " + strings.Join(workflowRunStatuses, ", ") + "; all statuses when omitted"},
 		{Name: "limit", Description: "Runs per page, from 1 through 100; 25 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same workflow and status; the first page when omitted"},
@@ -501,7 +501,7 @@ func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, s
 	if status != "" && enumToken(workflowRunStatuses, status) == workflowUnknown {
 		return nil, invalidRequest("status must be one of " + strings.Join(workflowRunStatuses, ", "))
 	}
-	binding := provider.CursorBinding("workflowruns.list", connection, strings.ToLower(workflowID), status)
+	binding := provider.CursorBinding("workflow-runs.list", connection, strings.ToLower(workflowID), status)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err

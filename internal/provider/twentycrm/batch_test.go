@@ -281,7 +281,7 @@ func TestRecordsBatchDescriptorsDeclareTheirRisk(t *testing.T) {
 		}
 	}
 	if !strings.Contains(recordsBatchCreate.Description, "unique fields") {
-		t.Errorf("batchcreate description = %q", recordsBatchCreate.Description)
+		t.Errorf("batch-create description = %q", recordsBatchCreate.Description)
 	}
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
@@ -312,11 +312,11 @@ func TestRecordsBatchDeleteNeedsConfirmationAndTheAllowList(t *testing.T) {
 	request := application.InvokeRequest{Operation: recordsBatchDelete.ID, Connection: "crm",
 		Arguments: json.RawMessage(`{"object":"person","ids":` + idList(personID) + `}`), Confirmed: true}
 	if _, err := core.Invoke(context.Background(), request); err == nil {
-		t.Error("batchdelete was offered without a tools list")
+		t.Error("batch-delete was offered without a tools list")
 	}
 	request.Connection = "crm-internal"
 	request.Confirmed = false
 	if _, err := core.Invoke(context.Background(), request); err == nil {
-		t.Error("batchdelete ran without confirmation")
+		t.Error("batch-delete ran without confirmation")
 	}
 }

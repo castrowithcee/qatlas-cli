@@ -72,7 +72,7 @@ var skillsGet = capability.Descriptor{
 		`},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(skillItemSchema),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "UUID of the skill, as returned by twentycrm.skills.list"}},
+		Description: "UUID of the skill, as returned by twenty-crm.skills.list"}},
 	Examples: []capability.Example{{Description: "Read a skill",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},
 }

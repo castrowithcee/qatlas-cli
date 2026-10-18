@@ -83,7 +83,7 @@ var objectsGet = capability.Descriptor{
 		`"relation":{"type":"string"}},"required":["name","required","writable"],"additionalProperties":false}}},` +
 		`"required":["name","plural","fields"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
+		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "name", Description: "Singular API name of the object"},

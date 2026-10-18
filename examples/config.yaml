@@ -32,11 +32,11 @@ services:
   # Twenty CRM is either the managed cloud or a self-hosted workspace. Both are bare https origins: the
   # requests of a connection never leave the origin its service names.
   crm-cloud:
-    provider: twentycrm
+    provider: twenty-crm
     base_url: https://api.twenty.com
 
   crm-selfhosted:
-    provider: twentycrm
+    provider: twenty-crm
     base_url: https://crm.example.invalid
 
   # SeaTable is one instance per service: the managed cloud, a dedicated instance, or a self-hosted
@@ -132,11 +132,11 @@ credentials:
   # Twenty needs the single role api-key too. Assign each key a workspace role limited to the intended
   # company operations, and keep one key per workspace so the two never mix.
   crm-cloud-reader:
-    provider: twentycrm
+    provider: twenty-crm
     type: keyring
 
   crm-selfhosted-reader:
-    provider: twentycrm
+    provider: twenty-crm
     type: keyring
 
   # SeaTable needs the single role api-token. An API token belongs to exactly one base and carries its
@@ -555,7 +555,7 @@ connections:
 # BookStack tools; like a description, a note never holds a secret or personal data.
 provider_notes:
   bookstack: team wiki
-  twentycrm: CRM of the sales team
+  twenty-crm: CRM of the sales team
 
 # A call without a connection uses the default of its tool ID, then the default of its provider, then the
 # one connection of the current project that offers the tool. The key under connections is a tool

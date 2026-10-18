@@ -21,7 +21,7 @@ const (
 	viewColumnSizeMax     = 2000
 	viewColumnPositionMax = 1000000
 
-	viewColumnUncertain = "; this change may have taken effect, read the view with twentycrm.views.get before repeating it"
+	viewColumnUncertain = "; this change may have taken effect, read the view with twenty-crm.views.get before repeating it"
 
 	errViewWritePermission = "the workspace role of this API key may not change views; check the role in Twenty, " +
 		"the right is called Views"
@@ -54,14 +54,14 @@ const (
 )
 
 var viewColumnFields = []capability.Field{
-	{Name: "id", Description: "The column; use it with twentycrm.viewfields.update"},
+	{Name: "id", Description: "The column; use it with twenty-crm.view-fields.update"},
 	{Name: "view_id", Description: "The view that holds the column"},
 	{Name: "field_id", Description: "The field shown by the column"},
 	{Name: "field", Description: "API name of the field, untrusted data"},
 }
 
 var viewfieldsCreate = capability.Descriptor{
-	ID: Provider + ".viewfields.create", Version: 1, Title: "Add a column to a Twenty CRM view",
+	ID: Provider + ".view-fields.create", Version: 1, Title: "Add a column to a Twenty CRM view",
 	Description: "Add one field as a column to a view of the Twenty workspace of a connection. The field must belong " +
 		"to the object of the view, be active, and not be a system field, and must not be a column of the view yet. " +
 		"The new column is visible unless is_visible is false. " + viewPartWriteNote,
@@ -73,8 +73,8 @@ var viewfieldsCreate = capability.Descriptor{
 		`},"required":["view_id","field_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewColumnSchema),
 	Arguments: []capability.Argument{
-		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twentycrm.views.list"},
-		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twentycrm.metaobjects.get"},
+		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twenty-crm.views.list"},
+		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twenty-crm.meta-objects.get"},
 		{Name: "is_visible", Description: "Whether the column is shown; true when omitted"},
 		{Name: "size", Description: "Width of the column, an integer from 1 through 2000"},
 		{Name: "position", Description: "Position among the columns, a number from 0 through 1000000"},
@@ -86,7 +86,7 @@ var viewfieldsCreate = capability.Descriptor{
 }
 
 var viewfieldsUpdate = capability.Descriptor{
-	ID: Provider + ".viewfields.update", Version: 1, Title: "Update a column of a Twenty CRM view",
+	ID: Provider + ".view-fields.update", Version: 1, Title: "Update a column of a Twenty CRM view",
 	Description: "Show or hide one column of a view of the Twenty workspace of a connection, or change its position " +
 		"or width; only the given values change and at least one is required. " + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "columns", "update"},
@@ -97,7 +97,7 @@ var viewfieldsUpdate = capability.Descriptor{
 		`"minProperties":2,"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewColumnSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the column, as returned by twentycrm.viewfields.create"},
+		{Name: "id", Required: true, Description: "UUID of the column, as returned by twenty-crm.view-fields.create"},
 		{Name: "is_visible", Description: "Whether the column is shown"},
 		{Name: "size", Description: "Width of the column, an integer from 1 through 2000"},
 		{Name: "position", Description: "Position among the columns, a number from 0 through 1000000"},
@@ -253,7 +253,7 @@ func (c *Client) CreateViewColumn(ctx context.Context, body viewColumnCreate) (*
 	}
 	if found {
 		return nil, invalidRequest("this field is already a column of the view (column " + existing +
-			"); change it with twentycrm.viewfields.update")
+			"); change it with twenty-crm.view-fields.update")
 	}
 	var answer json.RawMessage
 	if err := c.changeWith(ctx, op, viewColumnUncertain, http.MethodPost, viewFieldsPath, body, &answer); err != nil {

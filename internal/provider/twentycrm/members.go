@@ -53,7 +53,7 @@ const (
 )
 
 var membersList = capability.Descriptor{
-	ID:      Provider + ".workspacemembers.list",
+	ID:      Provider + ".workspace-members.list",
 	Version: 1,
 	Title:   "List Twenty CRM workspace members",
 	Description: "List one page of the members of the Twenty workspace of a connection without object targets, " +
@@ -79,7 +79,7 @@ var membersList = capability.Descriptor{
 }
 
 var membersGet = capability.Descriptor{
-	ID:      Provider + ".workspacemembers.get",
+	ID:      Provider + ".workspace-members.get",
 	Version: 1,
 	Title:   "Get a Twenty CRM workspace member",
 	Description: "Read one member of the Twenty workspace of a connection without object targets: id, name, email, " +
@@ -91,7 +91,7 @@ var membersGet = capability.Descriptor{
 		`"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(memberItemSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the member, as returned by twentycrm.workspacemembers.list", Required: true},
+		{Name: "id", Description: "UUID of the member, as returned by twenty-crm.workspace-members.list", Required: true},
 	},
 	Examples: []capability.Example{{
 		Description: "Read a member",
@@ -163,7 +163,7 @@ func (r memberRecord) project(op string) (WorkspaceMember, error) {
 // ListWorkspaceMembers reads one page of members.
 func (c *Client) ListWorkspaceMembers(ctx context.Context, connection string, limit int, cursor string) (*WorkspaceMemberList, error) {
 	const op = "list workspace members"
-	binding := provider.CursorBinding("workspacemembers.list", connection)
+	binding := provider.CursorBinding("workspace-members.list", connection)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err

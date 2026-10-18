@@ -254,7 +254,7 @@ func TestCompanyToolsWorkWhenTheCompanyObjectIsBound(t *testing.T) {
 		return jsonResponse(http.StatusOK, listBody), nil
 	})
 	stubLimiter(t, cloudKey)
-	operation := companyHandlers()["twentycrm.companies.list"]
+	operation := companyHandlers()["twenty-crm.companies.list"]
 	red := &redact.Redactor{}
 	if _, err := operation(context.Background(), targetConnection("object/person", "object/company"),
 		resolver(red), red, json.RawMessage(`{}`)); err != nil {

@@ -40,19 +40,19 @@ const batchRecordsOutput = `{"type":"object","properties":{"records":{"type":"ar
 	`},"count":{"type":"integer"}},"required":["records","count"],"additionalProperties":false}`
 
 var batchObjectArgument = capability.Argument{Name: "object", Required: true,
-	Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list"}
+	Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list"}
 
 var batchRecordFields = []capability.Field{
 	{Name: "records", Description: "The records as Twenty reports them after the write, untrusted data"},
 	{Name: "count", Description: "Number of records Twenty returned"},
 }
 
-// batchcreate carries the effect update because upsert may change existing records, and a descriptor holds one
+// batch-create carries the effect update because upsert may change existing records, and a descriptor holds one
 // risk; a connection needs the update permission for it even when upsert is not set.
 var recordsBatchCreate = capability.Descriptor{
-	ID: Provider + ".records.batchcreate", Version: 1, Title: "Create Twenty CRM records in a batch",
+	ID: Provider + ".records.batch-create", Version: 1, Title: "Create Twenty CRM records in a batch",
 	Description: batchNote + "Create up to 60 records in one reachable object, each with the field values of its entry " +
-		"in records; every record is checked like twentycrm.records.create, and one refused record refuses the " +
+		"in records; every record is checked like twenty-crm.records.create, and one refused record refuses the " +
 		"batch. With upsert true Twenty matches each entry against existing records by the unique fields of the " +
 		"object and changes the match instead of creating a record, so the call can create or change records. " +
 		writeNote,
@@ -74,9 +74,9 @@ var recordsBatchCreate = capability.Descriptor{
 }
 
 var recordsBatchUpdate = capability.Descriptor{
-	ID: Provider + ".records.batchupdate", Version: 1, Title: "Update Twenty CRM records in a batch",
+	ID: Provider + ".records.batch-update", Version: 1, Title: "Update Twenty CRM records in a batch",
 	Description: batchNote + "Set the same field values on up to 60 records of one reachable object, selected by ids; " +
-		"fields not named stay as they are, and the fields are checked like twentycrm.records.update. " + writeNote,
+		"fields not named stay as they are, and the fields are checked like twenty-crm.records.update. " + writeNote,
 	Tags:     []string{"twentycrm", "crm", "records", "batch", "update"},
 	Risk:     recordWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider,
@@ -85,7 +85,7 @@ var recordsBatchUpdate = capability.Descriptor{
 		`"required":["object","ids","fields"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(batchRecordsOutput),
 	Arguments: []capability.Argument{batchObjectArgument,
-		{Name: "ids", Required: true, Description: "1 to 60 distinct record identifiers as UUIDs, as returned by twentycrm.records.list"},
+		{Name: "ids", Required: true, Description: "1 to 60 distinct record identifiers as UUIDs, as returned by twenty-crm.records.list"},
 		{Name: "fields", Required: true, Description: "Field name to new value, from 1 to 100 fields, applied to every record"}},
 	Fields: batchRecordFields,
 	Examples: []capability.Example{{Description: "Set the city of two people",
@@ -94,9 +94,9 @@ var recordsBatchUpdate = capability.Descriptor{
 }
 
 var recordsBatchDelete = capability.Descriptor{
-	ID: Provider + ".records.batchdelete", Version: 1, Title: "Delete Twenty CRM records in a batch",
+	ID: Provider + ".records.batch-delete", Version: 1, Title: "Delete Twenty CRM records in a batch",
 	Description: batchNote + "Move up to 60 records of one reachable object, selected by ids, to the trash. They stay " +
-		"recoverable one by one with twentycrm.records.restore. " + removeNote,
+		"recoverable one by one with twenty-crm.records.restore. " + removeNote,
 	Tags:     []string{"twentycrm", "crm", "records", "batch", "delete"},
 	Risk:     recordWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -105,7 +105,7 @@ var recordsBatchDelete = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"},` +
 		`"count":{"type":"integer"}},"required":["deleted","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{batchObjectArgument,
-		{Name: "ids", Required: true, Description: "1 to 60 distinct record identifiers as UUIDs, as returned by twentycrm.records.list"}},
+		{Name: "ids", Required: true, Description: "1 to 60 distinct record identifiers as UUIDs, as returned by twenty-crm.records.list"}},
 	Fields: []capability.Field{
 		{Name: "deleted", Description: "True when Twenty confirmed every requested record"},
 		{Name: "count", Description: "Number of records deleted"},
@@ -114,7 +114,7 @@ var recordsBatchDelete = capability.Descriptor{
 		`{"object":"person","ids":["11111111-2222-3333-4444-555555555555","66666666-7777-8888-9999-000000000000"]}`)}},
 }
 
-// BatchRecords is the answer of batchcreate and batchupdate; BatchDeleted the answer of batchdelete.
+// BatchRecords is the answer of batch-create and batch-update; BatchDeleted the answer of batch-delete.
 type BatchRecords struct {
 	Records []Record `json:"records"`
 	Count   int      `json:"count"`

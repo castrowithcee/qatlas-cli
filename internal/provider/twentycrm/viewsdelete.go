@@ -15,7 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const viewDeleteUncertain = "; this deletion may have taken effect, look for the view with twentycrm.views.list " +
+const viewDeleteUncertain = "; this deletion may have taken effect, look for the view with twenty-crm.views.list " +
 	"before repeating it"
 
 const viewsDeleteResult = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
@@ -33,7 +33,7 @@ var viewsDelete = capability.Descriptor{
 	InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewsDeleteResult),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the custom view, as returned by twentycrm.views.list"},
+		{Name: "id", Required: true, Description: "UUID of the custom view, as returned by twenty-crm.views.list"},
 	},
 	Examples: []capability.Example{{Description: "Delete a custom view",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},

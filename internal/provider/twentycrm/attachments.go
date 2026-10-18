@@ -73,7 +73,7 @@ var attachmentsList = capability.Descriptor{
 		attachmentSummarySchema + `},"omitted":{"type":"integer"},"next_cursor":{"type":"string"},` +
 		`"has_more":{"type":"boolean"}},"required":["attachments","omitted","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object of the record, as returned by twentycrm.objects.list", Required: true},
+		{Name: "object", Description: "Singular API name of the object of the record, as returned by twenty-crm.objects.list", Required: true},
 		{Name: "record_id", Description: "Record identifier as a UUID", Required: true},
 		{Name: "limit", Description: "Attachments per page, from 1 through 100; 25 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same list; the first page when omitted"},
@@ -107,7 +107,7 @@ var attachmentsGet = capability.Descriptor{
 		`"extension":{"type":"string"},"size":{"type":"integer"},"sha256":{"type":"string"},"` +
 		localfile.ContentArgument + `":{"type":"string"}},"required":["id","size","sha256"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "Attachment identifier as a UUID, as returned by twentycrm.attachments.list", Required: true},
+		{Name: "id", Description: "Attachment identifier as a UUID, as returned by twenty-crm.attachments.list", Required: true},
 		localfile.DownloadPathArgument(),
 	},
 	Fields: []capability.Field{

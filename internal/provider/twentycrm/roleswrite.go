@@ -28,7 +28,7 @@ var (
 )
 
 const (
-	roleUncertain = "; this change may have taken effect, read the roles with twentycrm.roles.list before " +
+	roleUncertain = "; this change may have taken effect, read the roles with twenty-crm.roles.list before " +
 		"repeating it"
 
 	errRoleID    = "id must be a role identifier in UUID form"
@@ -77,7 +77,7 @@ var roleFlagArguments = []capability.Argument{
 }
 
 var roleIDArgument = capability.Argument{Name: "id", Required: true,
-	Description: "UUID of the role, as returned by twentycrm.roles.list"}
+	Description: "UUID of the role, as returned by twenty-crm.roles.list"}
 
 var rolesCreate = capability.Descriptor{
 	ID: Provider + ".roles.create", Version: 1, Title: "Create a Twenty CRM role",

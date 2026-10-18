@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	viewGroupUncertain = "; this change may have taken effect, read the view with twentycrm.views.get before repeating it"
+	viewGroupUncertain = "; this change may have taken effect, read the view with twenty-crm.views.get before repeating it"
 
 	viewGroupResultSchema = `{"type":"object","properties":{"id":{"type":"string"},"view_id":{"type":"string"},` +
 		`"is_visible":{"type":"boolean"},"position":{"type":"number"}},` +
@@ -24,7 +24,7 @@ const (
 )
 
 var viewgroupsUpdate = capability.Descriptor{
-	ID: Provider + ".viewgroups.update", Version: 1, Title: "Update a group of a Twenty CRM view",
+	ID: Provider + ".view-groups.update", Version: 1, Title: "Update a group of a Twenty CRM view",
 	Description: "Show or hide one group of a view of the Twenty workspace of a connection, or change its position; " +
 		"only the given values change and at least one is required. The value the group stands for does not " +
 		"change. " + viewPartWriteNote,
@@ -35,7 +35,7 @@ var viewgroupsUpdate = capability.Descriptor{
 		`"position":` + viewColumnPositionSchema + `},"required":["id"],"minProperties":2,"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewGroupResultSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the group, as returned by twentycrm.views.get"},
+		{Name: "id", Required: true, Description: "UUID of the group, as returned by twenty-crm.views.get"},
 		{Name: "is_visible", Description: "Whether the group is shown"},
 		{Name: "position", Description: "Position among the groups, a number from 0 through 1000000"},
 	},

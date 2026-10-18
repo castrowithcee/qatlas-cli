@@ -119,7 +119,7 @@ func TestServerAnswersEveryOperation(t *testing.T) {
 		Value: "synthetic-other"}); err != nil {
 		t.Fatalf("set error = %v", err)
 	}
-	crm := &vault.Scope{Connection: "crm", Credential: "crm", Provider: "twentycrm", Origin: "https://crm.example.test"}
+	crm := &vault.Scope{Connection: "crm", Credential: "crm", Provider: "twenty-crm", Origin: "https://crm.example.test"}
 	// A credential set in the process has no entry id the vault bound to a connection yet.
 	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "crm", Role: "token", Scope: crm})
 	if !errors.Is(err, vault.ErrApprovalRequired) || resp.Value != "" {

@@ -23,7 +23,7 @@ import (
 // relation per linkable object), never from an argument. A link is visible to a connection only when the
 // activity and the target object are both reachable through it.
 const (
-	activityGroup = "activitytargets"
+	activityGroup = "activity-targets"
 
 	errActivityObject  = "this activity or object cannot be linked through this connection"
 	errActivityID      = "activity_id, record_id, and id must be identifiers in UUID form"
@@ -57,7 +57,7 @@ var activityLinkFields = []capability.Field{
 }
 
 var activitytargetsList = capability.Descriptor{
-	ID:      Provider + ".activitytargets.list",
+	ID:      Provider + ".activity-targets.list",
 	Version: 1,
 	Title:   "List Twenty CRM note and task links",
 	Description: "List one page of the links of one note or task, or of one record, to their counterparts. Give " +
@@ -92,7 +92,7 @@ var activitytargetsList = capability.Descriptor{
 }
 
 var activitytargetsCreate = capability.Descriptor{
-	ID:      Provider + ".activitytargets.create",
+	ID:      Provider + ".activity-targets.create",
 	Version: 1,
 	Title:   "Link a Twenty CRM note or task to a record",
 	Description: "Link one note or task to one record of one reachable object. " + activityNote +
@@ -106,7 +106,7 @@ var activitytargetsCreate = capability.Descriptor{
 	OutputSchema: json.RawMessage(activityLinkSchema),
 	Arguments: append(append([]capability.Argument{}, activityArguments...),
 		capability.Argument{Name: "activity_id", Description: "Identifier of the note or task", Required: true},
-		capability.Argument{Name: "object", Description: "Singular API name of the object of the record, as returned by twentycrm.objects.list", Required: true},
+		capability.Argument{Name: "object", Description: "Singular API name of the object of the record, as returned by twenty-crm.objects.list", Required: true},
 		capability.Argument{Name: "record_id", Description: "Identifier of the record to link, as a UUID", Required: true}),
 	Fields: activityLinkFields,
 	Examples: []capability.Example{{
@@ -117,7 +117,7 @@ var activitytargetsCreate = capability.Descriptor{
 }
 
 var activitytargetsDelete = capability.Descriptor{
-	ID:      Provider + ".activitytargets.delete",
+	ID:      Provider + ".activity-targets.delete",
 	Version: 1,
 	Title:   "Remove a Twenty CRM note or task link",
 	Description: "Remove one link between a note or task and a record; the note, the task, and the record stay. " +
@@ -130,7 +130,7 @@ var activitytargetsDelete = capability.Descriptor{
 		`},"required":["activity","id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
 	Arguments: append(append([]capability.Argument{}, activityArguments...),
-		capability.Argument{Name: "id", Description: "Link identifier as a UUID, as returned by twentycrm.activitytargets.list", Required: true}),
+		capability.Argument{Name: "id", Description: "Link identifier as a UUID, as returned by twenty-crm.activity-targets.list", Required: true}),
 	Examples: []capability.Example{{
 		Description: "Remove a link of a task",
 		Arguments:   json.RawMessage(`{"activity":"task","id":"11111111-2222-3333-4444-555555555555"}`),
@@ -207,7 +207,7 @@ func invokeActivityTargetsList(ctx context.Context, resolved *config.Resolved, s
 	if args.Limit < 1 || args.Limit > maxPageSize {
 		return nil, invalidRequest("limit must be between 1 and " + strconv.Itoa(maxPageSize))
 	}
-	binding := provider.CursorBinding("activitytargets.list", resolved.Name, args.Activity, args.ActivityID,
+	binding := provider.CursorBinding("activity-targets.list", resolved.Name, args.Activity, args.ActivityID,
 		args.Object, args.RecordID)
 	after := ""
 	if args.Cursor != "" {

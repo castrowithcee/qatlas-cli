@@ -194,27 +194,27 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
-		if descriptor.ID == "twentycrm.companies.delete" {
+		if descriptor.ID == "twenty-crm.companies.delete" {
 			wantVersion = 2
 		}
-		guarded := descriptor.ID == "twentycrm.companies.delete" || descriptor.ID == "twentycrm.companies.destroy" ||
-			descriptor.ID == "twentycrm.records.delete" || descriptor.ID == "twentycrm.records.destroy" ||
-			descriptor.ID == "twentycrm.records.batchdelete" || descriptor.ID == "twentycrm.records.merge" ||
-			descriptor.ID == "twentycrm.activitytargets.delete" || descriptor.ID == "twentycrm.webhooks.delete" ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.workflowversions.") ||
-			descriptor.ID == "twentycrm.workflowruns.stop" || descriptor.ID == "twentycrm.workflowruns.retry" ||
-			descriptor.ID == "twentycrm.roles.create" || descriptor.ID == "twentycrm.roles.update" ||
-			descriptor.ID == "twentycrm.roles.delete" || strings.HasPrefix(descriptor.ID, "twentycrm.roles.set") ||
-			descriptor.ID == "twentycrm.metaobjects.create" || descriptor.ID == "twentycrm.metaobjects.update" ||
-			descriptor.ID == "twentycrm.metafields.create" || descriptor.ID == "twentycrm.metafields.update" ||
-			descriptor.ID == "twentycrm.metaobjects.delete" || descriptor.ID == "twentycrm.metafields.delete" ||
-			descriptor.ID == "twentycrm.views.create" || descriptor.ID == "twentycrm.views.update" ||
-			descriptor.ID == "twentycrm.views.delete" ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.viewfields.") ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.viewfilters.") ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.viewgroups.") ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.viewsorts.") || strings.HasPrefix(descriptor.ID, "twentycrm.pagelayoutwidgets.") ||
-			strings.HasPrefix(descriptor.ID, "twentycrm.pagelayouttabs.")
+		guarded := descriptor.ID == "twenty-crm.companies.delete" || descriptor.ID == "twenty-crm.companies.destroy" ||
+			descriptor.ID == "twenty-crm.records.delete" || descriptor.ID == "twenty-crm.records.destroy" ||
+			descriptor.ID == "twenty-crm.records.batch-delete" || descriptor.ID == "twenty-crm.records.merge" ||
+			descriptor.ID == "twenty-crm.activity-targets.delete" || descriptor.ID == "twenty-crm.webhooks.delete" ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.workflow-versions.") ||
+			descriptor.ID == "twenty-crm.workflow-runs.stop" || descriptor.ID == "twenty-crm.workflow-runs.retry" ||
+			descriptor.ID == "twenty-crm.roles.create" || descriptor.ID == "twenty-crm.roles.update" ||
+			descriptor.ID == "twenty-crm.roles.delete" || strings.HasPrefix(descriptor.ID, "twenty-crm.roles.set") ||
+			descriptor.ID == "twenty-crm.meta-objects.create" || descriptor.ID == "twenty-crm.meta-objects.update" ||
+			descriptor.ID == "twenty-crm.meta-fields.create" || descriptor.ID == "twenty-crm.meta-fields.update" ||
+			descriptor.ID == "twenty-crm.meta-objects.delete" || descriptor.ID == "twenty-crm.meta-fields.delete" ||
+			descriptor.ID == "twenty-crm.views.create" || descriptor.ID == "twenty-crm.views.update" ||
+			descriptor.ID == "twenty-crm.views.delete" ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.view-fields.") ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.view-filters.") ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.view-groups.") ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.view-sorts.") || strings.HasPrefix(descriptor.ID, "twenty-crm.page-layout-widgets.") ||
+			strings.HasPrefix(descriptor.ID, "twenty-crm.page-layout-tabs.")
 		if descriptor.RequiresToolAllowList != guarded {
 			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
 		}
@@ -227,95 +227,95 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "twentycrm.activitytargets.create" ||
-		operations[1].ID != "twentycrm.activitytargets.delete" ||
-		operations[2].ID != "twentycrm.activitytargets.list" ||
-		operations[3].ID != "twentycrm.agents.get" ||
-		operations[4].ID != "twentycrm.agents.list" ||
-		operations[5].ID != "twentycrm.attachments.get" ||
-		operations[6].ID != "twentycrm.attachments.list" ||
-		operations[7].ID != "twentycrm.attachments.upload" ||
-		operations[8].ID != "twentycrm.companies.create" ||
-		operations[9].ID != "twentycrm.companies.delete" ||
-		operations[10].ID != "twentycrm.companies.destroy" ||
-		operations[11].ID != "twentycrm.companies.get" ||
-		operations[12].ID != "twentycrm.companies.list" ||
-		operations[13].ID != "twentycrm.companies.restore" ||
-		operations[14].ID != "twentycrm.companies.update" ||
-		operations[15].ID != "twentycrm.logicfunctions.get" ||
-		operations[16].ID != "twentycrm.logicfunctions.list" ||
-		operations[17].ID != "twentycrm.metafields.create" ||
-		operations[18].ID != "twentycrm.metafields.delete" ||
-		operations[19].ID != "twentycrm.metafields.get" ||
-		operations[20].ID != "twentycrm.metafields.update" ||
-		operations[21].ID != "twentycrm.metaobjects.create" ||
-		operations[22].ID != "twentycrm.metaobjects.delete" ||
-		operations[23].ID != "twentycrm.metaobjects.get" ||
-		operations[24].ID != "twentycrm.metaobjects.list" ||
-		operations[25].ID != "twentycrm.metaobjects.update" ||
-		operations[26].ID != "twentycrm.objects.get" ||
-		operations[27].ID != "twentycrm.objects.list" ||
-		operations[28].ID != "twentycrm.pagelayouts.get" ||
-		operations[29].ID != "twentycrm.pagelayouts.list" ||
-		operations[30].ID != "twentycrm.pagelayouttabs.create" ||
-		operations[31].ID != "twentycrm.pagelayouttabs.delete" ||
-		operations[32].ID != "twentycrm.pagelayoutwidgets.create" ||
-		operations[33].ID != "twentycrm.pagelayoutwidgets.delete" ||
-		operations[34].ID != "twentycrm.pagelayoutwidgets.update" ||
-		operations[35].ID != "twentycrm.records.batchcreate" ||
-		operations[36].ID != "twentycrm.records.batchdelete" ||
-		operations[37].ID != "twentycrm.records.batchupdate" ||
-		operations[38].ID != "twentycrm.records.create" ||
-		operations[39].ID != "twentycrm.records.delete" ||
-		operations[40].ID != "twentycrm.records.destroy" ||
-		operations[41].ID != "twentycrm.records.duplicates" ||
-		operations[42].ID != "twentycrm.records.get" ||
-		operations[43].ID != "twentycrm.records.groupby" ||
-		operations[44].ID != "twentycrm.records.list" ||
-		operations[45].ID != "twentycrm.records.merge" ||
-		operations[46].ID != "twentycrm.records.mergepreview" ||
-		operations[47].ID != "twentycrm.records.restore" ||
-		operations[48].ID != "twentycrm.records.search" ||
-		operations[49].ID != "twentycrm.records.searchall" ||
-		operations[50].ID != "twentycrm.records.update" ||
-		operations[51].ID != "twentycrm.roles.create" ||
-		operations[52].ID != "twentycrm.roles.delete" ||
-		operations[53].ID != "twentycrm.roles.list" ||
-		operations[54].ID != "twentycrm.roles.setfieldpermissions" ||
-		operations[55].ID != "twentycrm.roles.setobjectpermissions" ||
-		operations[56].ID != "twentycrm.roles.setpermissionflags" ||
-		operations[57].ID != "twentycrm.roles.update" ||
-		operations[58].ID != "twentycrm.skills.get" ||
-		operations[59].ID != "twentycrm.skills.list" ||
-		operations[60].ID != "twentycrm.viewfields.create" ||
-		operations[61].ID != "twentycrm.viewfields.delete" ||
-		operations[62].ID != "twentycrm.viewfields.update" ||
-		operations[63].ID != "twentycrm.viewfilters.create" ||
-		operations[64].ID != "twentycrm.viewfilters.delete" ||
-		operations[65].ID != "twentycrm.viewfilters.update" ||
-		operations[66].ID != "twentycrm.viewgroups.delete" ||
-		operations[67].ID != "twentycrm.viewgroups.update" ||
-		operations[68].ID != "twentycrm.views.create" ||
-		operations[69].ID != "twentycrm.views.delete" ||
-		operations[70].ID != "twentycrm.views.get" ||
-		operations[71].ID != "twentycrm.views.list" ||
-		operations[72].ID != "twentycrm.views.update" ||
-		operations[73].ID != "twentycrm.viewsorts.create" ||
-		operations[74].ID != "twentycrm.viewsorts.delete" ||
-		operations[75].ID != "twentycrm.viewsorts.update" ||
-		operations[76].ID != "twentycrm.webhooks.delete" ||
-		operations[77].ID != "twentycrm.webhooks.get" ||
-		operations[78].ID != "twentycrm.webhooks.list" ||
-		operations[79].ID != "twentycrm.webhooks.update" ||
-		operations[80].ID != "twentycrm.workflowruns.list" ||
-		operations[81].ID != "twentycrm.workflowruns.retry" ||
-		operations[82].ID != "twentycrm.workflowruns.stop" ||
-		operations[83].ID != "twentycrm.workflows.get" ||
-		operations[84].ID != "twentycrm.workflows.list" ||
-		operations[85].ID != "twentycrm.workflowversions.activate" ||
-		operations[86].ID != "twentycrm.workflowversions.deactivate" ||
-		operations[87].ID != "twentycrm.workspacemembers.get" ||
-		operations[88].ID != "twentycrm.workspacemembers.list" {
+	if operations[0].ID != "twenty-crm.activity-targets.create" ||
+		operations[1].ID != "twenty-crm.activity-targets.delete" ||
+		operations[2].ID != "twenty-crm.activity-targets.list" ||
+		operations[3].ID != "twenty-crm.agents.get" ||
+		operations[4].ID != "twenty-crm.agents.list" ||
+		operations[5].ID != "twenty-crm.attachments.get" ||
+		operations[6].ID != "twenty-crm.attachments.list" ||
+		operations[7].ID != "twenty-crm.attachments.upload" ||
+		operations[8].ID != "twenty-crm.companies.create" ||
+		operations[9].ID != "twenty-crm.companies.delete" ||
+		operations[10].ID != "twenty-crm.companies.destroy" ||
+		operations[11].ID != "twenty-crm.companies.get" ||
+		operations[12].ID != "twenty-crm.companies.list" ||
+		operations[13].ID != "twenty-crm.companies.restore" ||
+		operations[14].ID != "twenty-crm.companies.update" ||
+		operations[15].ID != "twenty-crm.logic-functions.get" ||
+		operations[16].ID != "twenty-crm.logic-functions.list" ||
+		operations[17].ID != "twenty-crm.meta-fields.create" ||
+		operations[18].ID != "twenty-crm.meta-fields.delete" ||
+		operations[19].ID != "twenty-crm.meta-fields.get" ||
+		operations[20].ID != "twenty-crm.meta-fields.update" ||
+		operations[21].ID != "twenty-crm.meta-objects.create" ||
+		operations[22].ID != "twenty-crm.meta-objects.delete" ||
+		operations[23].ID != "twenty-crm.meta-objects.get" ||
+		operations[24].ID != "twenty-crm.meta-objects.list" ||
+		operations[25].ID != "twenty-crm.meta-objects.update" ||
+		operations[26].ID != "twenty-crm.objects.get" ||
+		operations[27].ID != "twenty-crm.objects.list" ||
+		operations[28].ID != "twenty-crm.page-layout-tabs.create" ||
+		operations[29].ID != "twenty-crm.page-layout-tabs.delete" ||
+		operations[30].ID != "twenty-crm.page-layout-widgets.create" ||
+		operations[31].ID != "twenty-crm.page-layout-widgets.delete" ||
+		operations[32].ID != "twenty-crm.page-layout-widgets.update" ||
+		operations[33].ID != "twenty-crm.page-layouts.get" ||
+		operations[34].ID != "twenty-crm.page-layouts.list" ||
+		operations[35].ID != "twenty-crm.records.batch-create" ||
+		operations[36].ID != "twenty-crm.records.batch-delete" ||
+		operations[37].ID != "twenty-crm.records.batch-update" ||
+		operations[38].ID != "twenty-crm.records.create" ||
+		operations[39].ID != "twenty-crm.records.delete" ||
+		operations[40].ID != "twenty-crm.records.destroy" ||
+		operations[41].ID != "twenty-crm.records.duplicates" ||
+		operations[42].ID != "twenty-crm.records.get" ||
+		operations[43].ID != "twenty-crm.records.group-by" ||
+		operations[44].ID != "twenty-crm.records.list" ||
+		operations[45].ID != "twenty-crm.records.merge" ||
+		operations[46].ID != "twenty-crm.records.merge-preview" ||
+		operations[47].ID != "twenty-crm.records.restore" ||
+		operations[48].ID != "twenty-crm.records.search" ||
+		operations[49].ID != "twenty-crm.records.search-all" ||
+		operations[50].ID != "twenty-crm.records.update" ||
+		operations[51].ID != "twenty-crm.roles.create" ||
+		operations[52].ID != "twenty-crm.roles.delete" ||
+		operations[53].ID != "twenty-crm.roles.list" ||
+		operations[54].ID != "twenty-crm.roles.set-field-permissions" ||
+		operations[55].ID != "twenty-crm.roles.set-object-permissions" ||
+		operations[56].ID != "twenty-crm.roles.set-permission-flags" ||
+		operations[57].ID != "twenty-crm.roles.update" ||
+		operations[58].ID != "twenty-crm.skills.get" ||
+		operations[59].ID != "twenty-crm.skills.list" ||
+		operations[60].ID != "twenty-crm.view-fields.create" ||
+		operations[61].ID != "twenty-crm.view-fields.delete" ||
+		operations[62].ID != "twenty-crm.view-fields.update" ||
+		operations[63].ID != "twenty-crm.view-filters.create" ||
+		operations[64].ID != "twenty-crm.view-filters.delete" ||
+		operations[65].ID != "twenty-crm.view-filters.update" ||
+		operations[66].ID != "twenty-crm.view-groups.delete" ||
+		operations[67].ID != "twenty-crm.view-groups.update" ||
+		operations[68].ID != "twenty-crm.view-sorts.create" ||
+		operations[69].ID != "twenty-crm.view-sorts.delete" ||
+		operations[70].ID != "twenty-crm.view-sorts.update" ||
+		operations[71].ID != "twenty-crm.views.create" ||
+		operations[72].ID != "twenty-crm.views.delete" ||
+		operations[73].ID != "twenty-crm.views.get" ||
+		operations[74].ID != "twenty-crm.views.list" ||
+		operations[75].ID != "twenty-crm.views.update" ||
+		operations[76].ID != "twenty-crm.webhooks.delete" ||
+		operations[77].ID != "twenty-crm.webhooks.get" ||
+		operations[78].ID != "twenty-crm.webhooks.list" ||
+		operations[79].ID != "twenty-crm.webhooks.update" ||
+		operations[80].ID != "twenty-crm.workflow-runs.list" ||
+		operations[81].ID != "twenty-crm.workflow-runs.retry" ||
+		operations[82].ID != "twenty-crm.workflow-runs.stop" ||
+		operations[83].ID != "twenty-crm.workflow-versions.activate" ||
+		operations[84].ID != "twenty-crm.workflow-versions.deactivate" ||
+		operations[85].ID != "twenty-crm.workflows.get" ||
+		operations[86].ID != "twenty-crm.workflows.list" ||
+		operations[87].ID != "twenty-crm.workspace-members.get" ||
+		operations[88].ID != "twenty-crm.workspace-members.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -457,14 +457,14 @@ func TestDeletingToolsNeedTheToolAllowList(t *testing.T) {
 	bare.Permissions = all
 	cfg.Connections["crm"] = bare
 	listed := bare
-	listed.Tools = []string{"twentycrm.companies.delete", "twentycrm.companies.destroy"}
+	listed.Tools = []string{"twenty-crm.companies.delete", "twenty-crm.companies.destroy"}
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
 		Permissions: all, Tools: listed.Tools}
 	stubLimiter(t, internalKey)
 
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)
-	for _, operation := range []string{"twentycrm.companies.delete", "twentycrm.companies.destroy"} {
+	for _, operation := range []string{"twenty-crm.companies.delete", "twenty-crm.companies.destroy"} {
 		request := application.InvokeRequest{Operation: operation, Connection: "crm",
 			Arguments: json.RawMessage(`{"id":"` + companyID + `"}`), Confirmed: true}
 		if _, err := core.Invoke(context.Background(), request); err == nil {
@@ -1034,7 +1034,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 
 	list, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "twentycrm.companies.list", Connection: "crm",
+		Operation: "twenty-crm.companies.list", Connection: "crm",
 		Arguments: json.RawMessage(`{"name_contains":"Bike","limit":25,"sort":"created_at","direction":"desc"}`),
 	})
 	if err != nil {
@@ -1062,7 +1062,7 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	}
 
 	got, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "twentycrm.companies.get", Connection: "crm-internal",
+		Operation: "twenty-crm.companies.get", Connection: "crm-internal",
 		Arguments: json.RawMessage(`{"id":"` + companyID + `"}`),
 	})
 	if err != nil {
@@ -1086,30 +1086,30 @@ func TestTheCoreRefusesUnsupportedRequestsBeforeProviderIO(t *testing.T) {
 		request application.InvokeRequest
 	}{
 		{"two workspaces without an explicit connection", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Arguments: json.RawMessage(`{}`)}},
+			Operation: "twenty-crm.companies.list", Arguments: json.RawMessage(`{}`)}},
 		{"unknown argument", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"depth":1}`)}},
 		{"a base url as an argument", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"base_url":"https://attacker.example.invalid"}`)}},
 		{"page size above the bound", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"limit":200}`)}},
 		{"a filter separator in the search term", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"name_contains":"Acme\",or(name[ilike]:\"%"}`)}},
 		{"unknown sort property", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"sort":"annual_revenue"}`)}},
 		{"a cursor that carries a parameter", application.InvokeRequest{
-			Operation: "twentycrm.companies.list", Connection: "crm",
+			Operation: "twenty-crm.companies.list", Connection: "crm",
 			Arguments: json.RawMessage(`{"cursor":"abc&limit=200"}`)}},
 		{"identifier that is not a UUID", application.InvokeRequest{
-			Operation: "twentycrm.companies.get", Connection: "crm",
+			Operation: "twenty-crm.companies.get", Connection: "crm",
 			Arguments: json.RawMessage(`{"id":"../people/1234567890123456789012345"}`)}},
 		{"a connection of another provider", application.InvokeRequest{
-			Operation: "twentycrm.companies.get", Connection: "wiki",
+			Operation: "twenty-crm.companies.get", Connection: "wiki",
 			Arguments: json.RawMessage(`{"id":"` + companyID + `"}`)}},
 	}
 	for _, tt := range tests {
@@ -1133,7 +1133,7 @@ func TestTheAPIKeyNeverReachesTheOutput(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(), resolver(red), red)
 	response, err := core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: "twentycrm.companies.list", Connection: "crm", Arguments: json.RawMessage(`{}`),
+		Operation: "twenty-crm.companies.list", Connection: "crm", Arguments: json.RawMessage(`{}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke = %v", err)
@@ -1207,7 +1207,7 @@ func classOf(err error) provider.Class {
 
 // wantSensitivity is the data class a tool must declare: record tools carry their own.
 func wantSensitivity(id string) string {
-	if strings.HasPrefix(id, Provider+".records.") || strings.HasPrefix(id, Provider+".activitytargets.") ||
+	if strings.HasPrefix(id, Provider+".records.") || strings.HasPrefix(id, Provider+".activity-targets.") ||
 		strings.HasPrefix(id, Provider+".attachments.") {
 		return recordDataSensitivity
 	}
@@ -1217,24 +1217,24 @@ func wantSensitivity(id string) string {
 	if strings.HasPrefix(id, Provider+".webhooks.") {
 		return webhookDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".workspacemembers.") {
+	if strings.HasPrefix(id, Provider+".workspace-members.") {
 		return memberDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".roles.") {
 		return roleDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".logicfunctions.") {
+	if strings.HasPrefix(id, Provider+".logic-functions.") {
 		return logicFunctionDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".agents.") || strings.HasPrefix(id, Provider+".skills.") {
 		return aiDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".viewfields.") ||
-		strings.HasPrefix(id, Provider+".viewfilters.") || strings.HasPrefix(id, Provider+".viewgroups.") ||
-		strings.HasPrefix(id, Provider+".viewsorts.") {
+	if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".view-fields.") ||
+		strings.HasPrefix(id, Provider+".view-filters.") || strings.HasPrefix(id, Provider+".view-groups.") ||
+		strings.HasPrefix(id, Provider+".view-sorts.") {
 		return viewDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".pagelayout") {
+	if strings.HasPrefix(id, Provider+".page-layout") {
 		return layoutDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".meta") {

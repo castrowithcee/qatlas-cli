@@ -45,8 +45,8 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		SecretRoles: []SecretRole{{Name: "api-key", Description: "Lexware private API key"}},
 		Target:      TargetMetadata{Label: "target", Description: "not used by Lexware"},
 	},
-	"twentycrm": {
-		ID: "twentycrm", Name: "Twenty CRM", DefaultBaseURL: "https://api.twenty.com",
+	"twenty-crm": {
+		ID: "twenty-crm", Name: "Twenty CRM", DefaultBaseURL: "https://api.twenty.com",
 		SecretRoles: []SecretRole{{Name: "api-key", Description: "Twenty API key"}},
 		Target:      TargetMetadata{Label: "target", Description: "not used by Twenty CRM"},
 	},
@@ -213,7 +213,7 @@ defaults: {}
 		t.Fatalf("targets = %v", got)
 	}
 
-	for _, provider := range []string{"bookstack", "lexware", "nextcloud", "telegram", "twentycrm"} {
+	for _, provider := range []string{"bookstack", "lexware", "nextcloud", "telegram", "twenty-crm"} {
 		input := strings.Replace(prefix, "PROVIDER", provider, 1)
 		if _, err := Decode(strings.NewReader(input), testProviders); err == nil ||
 			!strings.Contains(err.Error(), "accepts only one") {

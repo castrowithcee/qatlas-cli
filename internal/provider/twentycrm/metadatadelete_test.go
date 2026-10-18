@@ -148,7 +148,7 @@ func TestMetaDeleteNeedsWorkspaceScopeAndMapsPermission(t *testing.T) {
 func TestMetaDeleteDescriptorsAreGuarded(t *testing.T) {
 	for _, want := range []string{"counterpart field on the other object", "links of all records", "both objects"} {
 		if !strings.Contains(metaFieldsDelete.Description, want) {
-			t.Errorf("metafields.delete omits %q", want)
+			t.Errorf("meta-fields.delete omits %q", want)
 		}
 	}
 	for _, d := range []capability.Descriptor{metaObjectsDelete, metaFieldsDelete} {

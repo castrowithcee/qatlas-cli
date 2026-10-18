@@ -23,9 +23,9 @@ const (
 	metaLabelMax       = 100
 	metaOptionValueMax = 63
 
-	metaObjectUncertain = "; this change may have taken effect, read the object with twentycrm.metaobjects.get " +
+	metaObjectUncertain = "; this change may have taken effect, read the object with twenty-crm.meta-objects.get " +
 		"before repeating it"
-	metaFieldUncertain = "; this change may have taken effect, read the field with twentycrm.metafields.get " +
+	metaFieldUncertain = "; this change may have taken effect, read the field with twenty-crm.meta-fields.get " +
 		"before repeating it"
 
 	errMetaPermission = "the workspace role of this API key may not change the data model; check the role in " +
@@ -100,7 +100,7 @@ var metaObjectResult = json.RawMessage(`{"type":"object","properties":{` + metaO
 	metaObjectRequired + `,"additionalProperties":false}`)
 
 var metaObjectsCreate = capability.Descriptor{
-	ID: Provider + ".metaobjects.create", Version: 1, Title: "Create a Twenty CRM custom object",
+	ID: Provider + ".meta-objects.create", Version: 1, Title: "Create a Twenty CRM custom object",
 	Description: "Create one custom object in the Twenty workspace of a connection. A new custom object is " +
 		"reachable at once by a connection without object targets; a connection with object targets reaches it " +
 		"only after it was entered there as a target, which Qatlas never does itself. " + metaWriteNote,
@@ -124,7 +124,7 @@ var metaObjectsCreate = capability.Descriptor{
 }
 
 var metaObjectsUpdate = capability.Descriptor{
-	ID: Provider + ".metaobjects.update", Version: 1, Title: "Update a Twenty CRM object",
+	ID: Provider + ".meta-objects.update", Version: 1, Title: "Update a Twenty CRM object",
 	Description: "Change labels, description, or the active state of one object of the Twenty workspace of a " +
 		"connection; API names never change. Deactivating an object hides it and its records from every user and " +
 		"integration of the workspace; activating it again shows it. Standard and system objects are changed like " +
@@ -137,7 +137,7 @@ var metaObjectsUpdate = capability.Descriptor{
 		`,"is_active":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: metaObjectResult,
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the object, as returned by twentycrm.metaobjects.list"},
+		{Name: "id", Required: true, Description: "UUID of the object, as returned by twenty-crm.meta-objects.list"},
 		{Name: "label_singular", Description: "New display label in the singular"},
 		{Name: "label_plural", Description: "New display label in the plural"},
 		{Name: "description", Description: "New description; an empty string clears it"},
@@ -148,7 +148,7 @@ var metaObjectsUpdate = capability.Descriptor{
 }
 
 var metaFieldsCreate = capability.Descriptor{
-	ID: Provider + ".metafields.create", Version: 1, Title: "Create a Twenty CRM field",
+	ID: Provider + ".meta-fields.create", Version: 1, Title: "Create a Twenty CRM field",
 	Description: "Create one field on one object of the Twenty workspace of a connection, standard or custom; " +
 		"Twenty decides whether the object accepts the field. " +
 		"Types: " + strings.Join(metaFieldCreateTypes, ", ") + "; options are required for SELECT and MULTI_SELECT " +
@@ -167,14 +167,14 @@ var metaFieldsCreate = capability.Descriptor{
 		`,"target_label":` + metaLabelSchema + `},"required":["object_id","type","name","label"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(metaFieldSchema),
 	Arguments: []capability.Argument{
-		{Name: "object_id", Required: true, Description: "UUID of the object, as returned by twentycrm.metaobjects.list"},
+		{Name: "object_id", Required: true, Description: "UUID of the object, as returned by twenty-crm.meta-objects.list"},
 		{Name: "type", Required: true, Description: "Field type, one of " + strings.Join(metaFieldCreateTypes, ", ")},
 		{Name: "name", Required: true, Description: "API name in camelCase, matching " + metaNamePattern},
 		{Name: "label", Required: true, Description: "Display label, at most 100 characters"},
 		{Name: "description", Description: "Description, at most 500 characters"},
 		{Name: "is_nullable", Description: "Whether a record may leave the field empty; true when omitted"},
 		{Name: "options", Description: "1 through 100 options of SELECT and MULTI_SELECT: label, value, optional color"},
-		{Name: "target_object_id", Description: "Only for RELATION, required there: UUID of the target object, as returned by twentycrm.metaobjects.list"},
+		{Name: "target_object_id", Description: "Only for RELATION, required there: UUID of the target object, as returned by twenty-crm.meta-objects.list"},
 		{Name: "relation_type", Description: "Only for RELATION, required there: MANY_TO_ONE or ONE_TO_MANY, seen from the new field"},
 		{Name: "target_label", Description: "Only for RELATION, required there: display label of the counterpart field on the target object, at most 100 characters"},
 	},
@@ -187,13 +187,13 @@ var metaFieldsCreate = capability.Descriptor{
 }
 
 var metaFieldsUpdate = capability.Descriptor{
-	ID: Provider + ".metafields.update", Version: 1, Title: "Update a Twenty CRM field",
+	ID: Provider + ".meta-fields.update", Version: 1, Title: "Update a Twenty CRM field",
 	Description: "Change label, description, options, or the active state of one field of the Twenty " +
 		"workspace of a connection, a relation field included but not a morph relation; the API name and type " +
 		"never change. " + metaRelationNote + "Options replace the whole list: " +
 		"records keep only values that are still listed, every removed option clears that value in all records " +
 		"of the workspace. On a standard field such as the stage of an opportunity this also affects pipelines, " +
-		"views, and workflow filters. Pass the id of an existing option, as returned by twentycrm.metafields.get, " +
+		"views, and workflow filters. Pass the id of an existing option, as returned by twenty-crm.meta-fields.get, " +
 		"to keep it. Deactivating a field hides it and its values from every user and integration of the " +
 		"workspace; activating it again shows it. Standard and system fields are changed like custom ones; " +
 		"Twenty refuses what it does not allow there. " + metaWriteNote,
@@ -205,7 +205,7 @@ var metaFieldsUpdate = capability.Descriptor{
 		`},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(metaFieldSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the field, as returned by twentycrm.metaobjects.get"},
+		{Name: "id", Required: true, Description: "UUID of the field, as returned by twenty-crm.meta-objects.get"},
 		{Name: "label", Description: "New display label"},
 		{Name: "description", Description: "New description; an empty string clears it"},
 		{Name: "is_active", Description: "False deactivates the field, true activates it again"},

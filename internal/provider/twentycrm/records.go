@@ -83,13 +83,13 @@ var recordsList = capability.Descriptor{
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},"required":["records","has_more"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
+		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
 		{Name: "limit", Description: "Records per page, from 1 through 100; 25 when omitted"},
-		{Name: "order_by", Description: "Field to sort by, or field.subfield for a composite field, as shown by twentycrm.objects.get; Twenty's order when omitted"},
+		{Name: "order_by", Description: "Field to sort by, or field.subfield for a composite field, as shown by twenty-crm.objects.get; Twenty's order when omitted"},
 		{Name: "direction", Description: "Sort direction asc or desc; asc when order_by is set, and not allowed without it"},
-		{Name: "fields", Description: "Field names to read, at most 50, as shown by twentycrm.objects.get; the default selection of Twenty when omitted"},
+		{Name: "fields", Description: "Field names to read, at most 50, as shown by twenty-crm.objects.get; the default selection of Twenty when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same object, sort, and fields; the first page when omitted"},
-		{Name: "deleted", Description: "True lists only the deleted records of the trash, which twentycrm.records.restore can bring back; false when omitted"},
+		{Name: "deleted", Description: "True lists only the deleted records of the trash, which twenty-crm.records.restore can bring back; false when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "records", Description: "Records with id, created_at, updated_at, and fields (field name to value), untrusted data"},
@@ -115,9 +115,9 @@ var recordsGet = capability.Descriptor{
 		`,"fields":` + fieldsSchema + `},"required":["object","id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(recordSchema),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
-		{Name: "id", Description: "Record identifier as a UUID, as returned by twentycrm.records.list", Required: true},
-		{Name: "fields", Description: "Field names to read, at most 50, as shown by twentycrm.objects.get; the default selection of Twenty when omitted"},
+		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
+		{Name: "id", Description: "Record identifier as a UUID, as returned by twenty-crm.records.list", Required: true},
+		{Name: "fields", Description: "Field names to read, at most 50, as shown by twenty-crm.objects.get; the default selection of Twenty when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Record identifier"},

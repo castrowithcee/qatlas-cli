@@ -55,7 +55,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	m.section = sectionServices
 	m.fields = m.buildFields("")
 	if got := m.fields[1].choices; len(got) != 6 || got[0] != "bookstack" || got[1] != "lexware" ||
-		got[2] != "nextcloud" || got[3] != "seatable" || got[4] != "telegram" || got[5] != "twentycrm" {
+		got[2] != "nextcloud" || got[3] != "seatable" || got[4] != "telegram" || got[5] != "twenty-crm" {
 		t.Fatalf("provider choices = %v, want the BookStack, Lexware, Nextcloud, SeaTable, Telegram and "+
 			"Twenty registry IDs", got)
 	}
@@ -99,8 +99,8 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	m.cfg.Services["telegram-main"] = config.Service{Provider: "telegram", BaseURL: "https://api.telegram.org"}
 	m.cfg.Services["lexware-main"] = config.Service{Provider: "lexware", BaseURL: "https://api.lexware.io"}
 	m.cfg.Services["wiki-main"] = config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}
-	m.cfg.Services["crm-cloud"] = config.Service{Provider: "twentycrm", BaseURL: "https://api.twenty.com"}
-	m.cfg.Services["crm-selfhosted"] = config.Service{Provider: "twentycrm", BaseURL: "https://crm.example.invalid"}
+	m.cfg.Services["crm-cloud"] = config.Service{Provider: "twenty-crm", BaseURL: "https://api.twenty.com"}
+	m.cfg.Services["crm-selfhosted"] = config.Service{Provider: "twenty-crm", BaseURL: "https://crm.example.invalid"}
 	m.cfg.Services["tables-cloud"] = config.Service{Provider: "seatable", BaseURL: "https://cloud.seatable.io"}
 	m.cfg.Services["tables-onprem"] = config.Service{
 		Provider: "seatable", BaseURL: "https://seatable.example.invalid",
@@ -301,11 +301,11 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 	}
 
 	providers := map[string][]string{
-		"bookstack": {"default", "read", "create", "update", "delete"},
-		"lexware":   {"default", "read", "create", "update", "delete"},
-		"nextcloud": {"default", "read", "create", "update", "delete"},
-		"telegram":  {"default", "read", "create", "update", "delete"},
-		"twentycrm": {"default", "read", "create", "update", "delete", "execute"},
+		"bookstack":  {"default", "read", "create", "update", "delete"},
+		"lexware":    {"default", "read", "create", "update", "delete"},
+		"nextcloud":  {"default", "read", "create", "update", "delete"},
+		"telegram":   {"default", "read", "create", "update", "delete"},
+		"twenty-crm": {"default", "read", "create", "update", "delete", "execute"},
 	}
 	for provider, want := range providers {
 		if got := m.permissionChoices(provider); !reflect.DeepEqual(got, want) {

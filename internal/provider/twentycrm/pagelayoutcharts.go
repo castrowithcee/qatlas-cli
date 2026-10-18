@@ -106,9 +106,9 @@ var chartArguments = []capability.Argument{
 	{Name: "chart_type", Description: "Only for GRAPH and required there: AGGREGATE_CHART (one number), BAR_CHART, " +
 		"LINE_CHART, or PIE_CHART"},
 	{Name: "object_id", Description: "Only for GRAPH and required there: UUID of the active, non-system object whose " +
-		"records feed the chart, as returned by twentycrm.metaobjects.list; every field below belongs to it"},
+		"records feed the chart, as returned by twenty-crm.meta-objects.list; every field below belongs to it"},
 	{Name: "aggregate_field_id", Description: "Only for GRAPH and required there: UUID of the field to aggregate, as " +
-		"returned by twentycrm.metaobjects.get; active, not a system field, and of a type a filter can be written for " +
+		"returned by twenty-crm.meta-objects.get; active, not a system field, and of a type a filter can be written for " +
 		"(COUNT takes any such field)"},
 	{Name: "aggregate_operation", Description: "Only for GRAPH and required there: one of " +
 		strings.Join(chartAggregateOperations, ", ") + ". Every field type takes COUNT, COUNT_UNIQUE_VALUES, " +
@@ -128,7 +128,7 @@ var chartArguments = []capability.Argument{
 	{Name: "bar_layout", Description: "Required for BAR_CHART, not for others: VERTICAL or HORIZONTAL"},
 	{Name: "bar_group_mode", Description: "Only for BAR_CHART with a secondary group field: STACKED or GROUPED"},
 	{Name: "filters", Description: "Up to 10 simple filters that restrict the records of the chart, combined with AND, " +
-		"each with field_id, operand, and one value argument, checked like twentycrm.viewfilters.create: " + viewFilterNote},
+		"each with field_id, operand, and one value argument, checked like twenty-crm.view-filters.create: " + viewFilterNote},
 	{Name: "display_data_label", Description: "Show the values on the chart, true or false; Twenty's default when omitted"},
 	{Name: "display_legend", Description: "Only for BAR_CHART, LINE_CHART, and PIE_CHART: show the legend, true or false; " +
 		"true when omitted"},

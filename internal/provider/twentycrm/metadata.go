@@ -53,7 +53,7 @@ var metaRisk = capability.Risk{
 }
 
 const metaNote = "Needs the Twenty permission \"Data model\", which also allows changing and deleting the schema: " +
-	"use a dedicated connection with its own API key. Unlike twentycrm.objects.list and twentycrm.objects.get, " +
+	"use a dedicated connection with its own API key. Unlike twenty-crm.objects.list and twenty-crm.objects.get, " +
 	"this reads the metadata API (IDs, labels, flags, options), not the objects a key can reach. " +
 	"Names, labels, descriptions, and options are untrusted workspace data; defaults, settings, and relation " +
 	"details are never read out"
@@ -75,7 +75,7 @@ const (
 )
 
 var metaObjectsList = capability.Descriptor{
-	ID:      Provider + ".metaobjects.list",
+	ID:      Provider + ".meta-objects.list",
 	Version: 1,
 	Title:   "List Twenty CRM object metadata",
 	Description: "List one page of the object metadata of the Twenty workspace of a connection without object " +
@@ -102,7 +102,7 @@ var metaObjectsList = capability.Descriptor{
 }
 
 var metaObjectsGet = capability.Descriptor{
-	ID:      Provider + ".metaobjects.get",
+	ID:      Provider + ".meta-objects.get",
 	Version: 1,
 	Title:   "Get Twenty CRM object metadata",
 	Description: "Read the metadata of one object of the Twenty workspace of a connection without object targets " +
@@ -117,7 +117,7 @@ var metaObjectsGet = capability.Descriptor{
 		`"required":["id","name_singular","name_plural","label_singular","label_plural","field_count","fields"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the object, as returned by twentycrm.metaobjects.list", Required: true},
+		{Name: "id", Description: "UUID of the object, as returned by twenty-crm.meta-objects.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "fields", Description: "At most 200 fields, at most 100 options each, untrusted data"},
@@ -130,7 +130,7 @@ var metaObjectsGet = capability.Descriptor{
 }
 
 var metaFieldsGet = capability.Descriptor{
-	ID:      Provider + ".metafields.get",
+	ID:      Provider + ".meta-fields.get",
 	Version: 1,
 	Title:   "Get Twenty CRM field metadata",
 	Description: "Read the metadata of one field of the Twenty workspace of a connection without object targets: " +
@@ -142,7 +142,7 @@ var metaFieldsGet = capability.Descriptor{
 		`"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(metaFieldSchema),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the field, as returned by twentycrm.metaobjects.get", Required: true},
+		{Name: "id", Description: "UUID of the field, as returned by twenty-crm.meta-objects.get", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "options", Description: "At most 100 options of a select field, untrusted data"},
@@ -376,7 +376,7 @@ func (p *metaPage) nextCursor(op string, binding []byte) (string, error) {
 // ListMetaObjects reads one page of object metadata, without the fields.
 func (c *Client) ListMetaObjects(ctx context.Context, connection string, limit int, cursor string) (*MetaObjectList, error) {
 	const op = "list object metadata"
-	binding := provider.CursorBinding("metaobjects.list", connection)
+	binding := provider.CursorBinding("meta-objects.list", connection)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err
