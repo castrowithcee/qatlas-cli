@@ -20,9 +20,9 @@ var removedToolCases = []struct {
 	{"make", "api-token", "https://eu1.make.com", "[team/1]", "make.hooks.list",
 		[]string{"make.hooks.create", "make.organization.invite"}},
 	{"n8n", "api-key", "https://n8n.example.invalid", "", "n8n.users.list", []string{"n8n.users.invite"}},
-	{"infomaniakdrive", "token", "", "[account/1]", "infomaniakdrive.links.get",
+	{"infomaniak.drive", "token", "", "[account/1]", "infomaniak.drive.links.get",
 		[]string{"infomaniakdrive.links.create", "infomaniakdrive.links.update"}},
-	{"infomaniakdrive", "token", "", "[account/1]", "infomaniakdrive.dropbox.get",
+	{"infomaniak.drive", "token", "", "[account/1]", "infomaniak.drive.dropbox.get",
 		[]string{"infomaniakdrive.dropbox.create", "infomaniakdrive.dropbox.update"}},
 }
 
@@ -147,6 +147,28 @@ func TestConfigValidateWarnsAboutRemovedTools(t *testing.T) {
 		if code == exitOK || !strings.Contains(stderr, "entry 2 is not a registered tool of provider") ||
 			strings.Contains(stderr, "nonexistent") {
 			t.Errorf("%s: another unknown entry: exit=%d stderr=%q", tc.provider, code, stderr)
+		}
+	}
+}
+
+// The removed kDrive tools keep their former IDs: a file that still names the former provider ID warns about
+// them as removed, next to the provider rename.
+func TestConfigValidateWarnsAboutRemovedToolsUnderTheFormerProviderID(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	cfg := writeConfig(t, strings.Replace(removedToolsConfig(4, "[infomaniakdrive.links.create, infomaniakdrive.links.get]"),
+		"provider: infomaniak.drive", "provider: infomaniakdrive", 1))
+	code, stdout, stderr := runTools(t, nil, "config", "validate", "--config", cfg)
+	if code != exitOK || !strings.HasPrefix(stdout, "configuration is valid") {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		`tool "infomaniakdrive.links.create" was removed from qatlas and is ignored`,
+		`tool "infomaniakdrive.links.get" was renamed to "infomaniak.drive.links.get"`,
+		`"infomaniak.drive"`,
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
 		}
 	}
 }

@@ -46,12 +46,12 @@ connection target, not the token, decides which single account is reachable.
 ```yaml
 services:
   infomaniak:
-    provider: infomaniakdrive
+    provider: infomaniak.drive
     base_url: https://api.infomaniak.com
 
 credentials:
   infomaniak-reader:
-    provider: infomaniakdrive
+    provider: infomaniak.drive
     type: keyring
 ```
 
@@ -77,7 +77,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
 
 1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
    secret is read or any request is sent.
-2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, `infomaniakdrive.links.*`, `infomaniakdrive.dropbox.*`, `infomaniakdrive.access.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
+2. Every `infomaniak.drive.files.*` (upload and download included), `infomaniak.drive.trash.*`, `infomaniak.drive.links.*`, `infomaniak.drive.dropbox.*`, `infomaniak.drive.access.*`, and `infomaniak.drive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
    `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
    the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
    own, because the same token can otherwise reach a drive of another account, and a drive named in an
@@ -86,7 +86,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
    endpoint.
 
 This second check doubles the number of requests a single `files.*` call spends against the shared 60
-requests per minute budget. `infomaniakdrive.drives.list` needs no such check: Infomaniak already answers it
+requests per minute budget. `infomaniak.drive.drives.list` needs no such check: Infomaniak already answers it
 scoped to one `account_id`, and every returned drive is still matched against that same `account_id` again
 defensively before it is reported. A successful `qatlas connection test` reads one page of at most one drive
 of the bound account: it proves the token is accepted and that it may list drives of that account, not that
@@ -96,30 +96,30 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 
 | Tool | Does |
 | --- | --- |
-| `infomaniakdrive.drives.list` | the kDrives of the bound account, filtered to the allow-list, page by page |
-| `infomaniakdrive.files.list` | the immediate children of one folder of one drive, cursor-paginated |
-| `infomaniakdrive.files.stat` | the metadata of exactly one file or folder |
-| `infomaniakdrive.files.get` | the bounded content of exactly one file, as base64 |
-| `infomaniakdrive.files.download` | writes exactly one file to a local path, returning only its metadata; needs a directory the connection releases for writing |
-| `infomaniakdrive.files.upload` | uploads one new file into a folder, or replaces the content of one file given its etag, from a local path or inline |
-| `infomaniakdrive.folders.create` | creates exactly one folder below an existing folder (`POST /3/drive/{d}/files/{id}/directory`) |
-| `infomaniakdrive.files.rename` | renames exactly one file or folder (`POST /2/drive/{d}/files/{id}/rename`) |
-| `infomaniakdrive.files.move` | moves exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/move/{dest}`) |
-| `infomaniakdrive.files.copy` | copies exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/copy/{dest}`) |
-| `infomaniakdrive.trash.list` | the top-level entries of the trash of one drive, cursor-paginated (`GET /3/drive/{d}/trash`) |
-| `infomaniakdrive.files.trash` | moves exactly one file or folder to the trash (`DELETE /2/drive/{d}/files/{id}`) |
-| `infomaniakdrive.trash.restore` | restores exactly one trash entry into a folder of the same drive (`POST /2/drive/{d}/trash/{id}/restore`) |
-| `infomaniakdrive.trash.delete` | deletes exactly one trash entry for good (`DELETE /2/drive/{d}/trash/{id}`) |
-| `infomaniakdrive.trash.empty` | deletes every entry of the trash of one drive for good (`DELETE /2/drive/{d}/trash`) |
-| `infomaniakdrive.links.get` | the share link of exactly one file or folder (`GET /2/drive/{d}/files/{id}/link`) |
-| `infomaniakdrive.links.list` | the files and folders of one drive that have a share link, cursor-paginated (`GET /3/drive/{d}/files/links`) |
-| `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
-| `infomaniakdrive.dropbox.get` | the dropbox of exactly one folder (`GET /2/drive/{d}/files/{id}/dropbox`) |
-| `infomaniakdrive.dropbox.delete` | deletes exactly one dropbox (`DELETE /2/drive/{d}/files/{id}/dropbox`) |
-| `infomaniakdrive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
-| `infomaniakdrive.access.grant` | gives existing users and teams of the drive access in one request (`POST /2/drive/{d}/files/{id}/access`) |
-| `infomaniakdrive.access.update` | changes the right of exactly one user or team (`PUT /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
-| `infomaniakdrive.access.revoke` | removes the access of exactly one user or team (`DELETE /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
+| `infomaniak.drive.drives.list` | the kDrives of the bound account, filtered to the allow-list, page by page |
+| `infomaniak.drive.files.list` | the immediate children of one folder of one drive, cursor-paginated |
+| `infomaniak.drive.files.stat` | the metadata of exactly one file or folder |
+| `infomaniak.drive.files.get` | the bounded content of exactly one file, as base64 |
+| `infomaniak.drive.files.download` | writes exactly one file to a local path, returning only its metadata; needs a directory the connection releases for writing |
+| `infomaniak.drive.files.upload` | uploads one new file into a folder, or replaces the content of one file given its etag, from a local path or inline |
+| `infomaniak.drive.folders.create` | creates exactly one folder below an existing folder (`POST /3/drive/{d}/files/{id}/directory`) |
+| `infomaniak.drive.files.rename` | renames exactly one file or folder (`POST /2/drive/{d}/files/{id}/rename`) |
+| `infomaniak.drive.files.move` | moves exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/move/{dest}`) |
+| `infomaniak.drive.files.copy` | copies exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/copy/{dest}`) |
+| `infomaniak.drive.trash.list` | the top-level entries of the trash of one drive, cursor-paginated (`GET /3/drive/{d}/trash`) |
+| `infomaniak.drive.files.trash` | moves exactly one file or folder to the trash (`DELETE /2/drive/{d}/files/{id}`) |
+| `infomaniak.drive.trash.restore` | restores exactly one trash entry into a folder of the same drive (`POST /2/drive/{d}/trash/{id}/restore`) |
+| `infomaniak.drive.trash.delete` | deletes exactly one trash entry for good (`DELETE /2/drive/{d}/trash/{id}`) |
+| `infomaniak.drive.trash.empty` | deletes every entry of the trash of one drive for good (`DELETE /2/drive/{d}/trash`) |
+| `infomaniak.drive.links.get` | the share link of exactly one file or folder (`GET /2/drive/{d}/files/{id}/link`) |
+| `infomaniak.drive.links.list` | the files and folders of one drive that have a share link, cursor-paginated (`GET /3/drive/{d}/files/links`) |
+| `infomaniak.drive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
+| `infomaniak.drive.dropbox.get` | the dropbox of exactly one folder (`GET /2/drive/{d}/files/{id}/dropbox`) |
+| `infomaniak.drive.dropbox.delete` | deletes exactly one dropbox (`DELETE /2/drive/{d}/files/{id}/dropbox`) |
+| `infomaniak.drive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
+| `infomaniak.drive.access.grant` | gives existing users and teams of the drive access in one request (`POST /2/drive/{d}/files/{id}/access`) |
+| `infomaniak.drive.access.update` | changes the right of exactly one user or team (`PUT /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
+| `infomaniak.drive.access.revoke` | removes the access of exactly one user or team (`DELETE /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
 
 `drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, `trash.list`, `links.get`, and `links.list`
 are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
@@ -177,8 +177,8 @@ setting of the connection.
   specification (`https://developer.infomaniak.com/openapi.json`).
 - The creation and the copy report the new folder or file as `entry`, as untrusted data.
 
-`infomaniakdrive.files.list` and `infomaniakdrive.files.stat` default `folder_id` and `file_id` to `1`, the
-fixed identifier of a drive's own root directory, as Infomaniak documents it. `infomaniakdrive.files.get`
+`infomaniak.drive.files.list` and `infomaniak.drive.files.stat` default `folder_id` and `file_id` to `1`, the
+fixed identifier of a drive's own root directory, as Infomaniak documents it. `infomaniak.drive.files.get`
 requires an explicit `file_id`: reading content is never defaulted to the root. A folder identifier passed to
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
@@ -320,13 +320,13 @@ than being refused or silently redirected to a listing.
 
 ## Pagination and cursors
 
-`infomaniakdrive.files.list`, `infomaniakdrive.trash.list`, and `infomaniakdrive.links.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
+`infomaniak.drive.files.list`, `infomaniak.drive.trash.list`, and `infomaniak.drive.links.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
 `has_more` and a `cursor` for the next page whenever Infomaniak announced one. Each call reads exactly one
 Infomaniak page; Qatlas never follows `has_more` on its own, and a complete-looking page can still have
 `has_more` true. The cursor is Infomaniak's own opaque value, passed back unchanged; Qatlas adds no binding
 of its own.
 
-`infomaniakdrive.drives.list` takes `page` (default 1) and reports the account's own `page`, `pages`, and
+`infomaniak.drive.drives.list` takes `page` (default 1) and reports the account's own `page`, `pages`, and
 `total` transparently, exactly as Infomaniak answers them for the bound account. `drives` and `count` are
 filtered to the connection's allow-list afterwards, so `count` can be lower than what an incomplete page
 alone would suggest, and a further page of the account may still hold an allow-listed drive that this page
@@ -334,8 +334,8 @@ did not.
 
 ## Content and size limits
 
-`infomaniakdrive.files.get` reads at most 4 MiB and returns it as base64; for a larger file, or to keep the
-content out of the answer, use `infomaniakdrive.files.download`, which writes up to 10 GiB to a path instead. Content over that limit is refused
+`infomaniak.drive.files.get` reads at most 4 MiB and returns it as base64; for a larger file, or to keep the
+content out of the answer, use `infomaniak.drive.files.download`, which writes up to 10 GiB to a path instead. Content over that limit is refused
 outright, never silently truncated, so a caller never receives a partial, possibly corrupt file. Infomaniak
 documents that its download endpoint may answer with a redirect to the actual storage location of the
 content; Qatlas follows at most one such redirect, only to an `https` location, and removes the
@@ -381,7 +381,7 @@ provider documents no plan-specific behaviour beyond that. The one documented di
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
 not depend on WebDAV at all; it is unaffected either way. A my kSuite account may hold fewer or more
 restricted drives than a Business kSuite account, which shows up only as fewer or no rows in
-`infomaniakdrive.drives.list`, never as a different error class.
+`infomaniak.drive.drives.list`, never as a different error class.
 
 ## Boundary
 

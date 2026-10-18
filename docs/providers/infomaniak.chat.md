@@ -65,7 +65,7 @@ connections:
 Without a `channel/CHANNEL_ID` target, every channel of the bound teams the token can reach is reachable,
 and so is every direct or group channel whose other participants are all members of a bound team. With one
 or more, only those channels are, direct and group channels included. A `channel_id`, a reply's `root_id`,
-and a `post_id` go through the same two checks `infomaniakdrive` applies to a `drive_id`:
+and a `post_id` go through the same two checks `infomaniak.drive` applies to a `drive_id`:
 
 1. A malformed ID, and a `channel_id` outside a configured allow-list, are refused locally, as an invalid
    request, before any secret is read or any request is sent.
@@ -191,7 +191,7 @@ Behaviour beyond the schemas:
   clears push notifications for the channel; its body holds `channel_id` only.
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
   its replies. Whether a token may edit or delete another author's message is kChat's decision (`permission`).
-- `files.upload` and `files.download` follow the local file contracts of `infomaniakdrive.files.upload` and
+- `files.upload` and `files.download` follow the local file contracts of `infomaniak.drive.files.upload` and
   `.download` (released directories, fixed size limits, no partial file, content never returned). The upload's
   multipart body holds only `channel_id` and the file; kChat cannot list or remove an upload no message holds,
   so it stays. A download redirect, for example to storage, is a `provider-error`.
@@ -265,7 +265,7 @@ it and never renders it, follows a link in it, or executes anything derived from
 ## Boundary
 
 This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate products with
-their own authentication, not this token; see the `infomaniakdrive` provider's documentation for why each is
+their own authentication, not this token; see the `infomaniak.drive` provider's documentation for why each is
 its own sibling provider. Within kChat, this provider offers no team creation, change, or deletion, no adding
 or removing of team members, no invitation, no permanent deletion, move, scheme, or moderation change of a
 channel, no membership change of a direct or group channel, no change of another user or of other profile

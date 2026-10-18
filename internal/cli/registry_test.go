@@ -210,9 +210,9 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 	}
 }
 
-// The kChat provider is listed under its current ID only; the former ID resolves through a rename and is not
-// a namespace of its own.
-func TestProvidersListsKChatUnderItsCurrentID(t *testing.T) {
+// The Infomaniak providers are listed under their current ID only; a former ID resolves through a rename and
+// is not a namespace of its own.
+func TestProvidersListsInfomaniakProvidersUnderTheirCurrentIDs(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	path := writeConfig(t, "version: 1\ndefaults: {}\n")
@@ -229,12 +229,14 @@ func TestProvidersListsKChatUnderItsCurrentID(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &listed); err != nil {
 		t.Fatal(err)
 	}
-	var current, former bool
-	for _, p := range listed.Providers {
-		current = current || p.Provider == "infomaniak.chat"
-		former = former || p.Provider == "infomaniakchat"
-	}
-	if !current || former {
-		t.Errorf("providers = %+v, want infomaniak.chat and not infomaniakchat", listed.Providers)
+	for current, former := range map[string]string{"infomaniak.chat": "infomaniakchat", "infomaniak.drive": "infomaniakdrive"} {
+		var hasCurrent, hasFormer bool
+		for _, p := range listed.Providers {
+			hasCurrent = hasCurrent || p.Provider == current
+			hasFormer = hasFormer || p.Provider == former
+		}
+		if !hasCurrent || hasFormer {
+			t.Errorf("providers = %+v, want %s and not %s", listed.Providers, current, former)
+		}
 	}
 }

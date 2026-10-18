@@ -76,7 +76,7 @@ import (
 
 // Provider is the provider name used in the configuration and as the operation namespace. It names the
 // kDrive surface alone, see the package doc for why Mail, CalDAV/CardDAV, and kChat are not part of it.
-const Provider = "infomaniakdrive"
+const Provider = "infomaniak.drive"
 
 // apiRoot is the fixed root of the Infomaniak REST API. The provider accepts no other origin: a personal
 // token belongs to this one service, so a second origin could only be a mistake or an exfiltration route.
@@ -431,7 +431,8 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // confirmed changes, share link deletion and access changes included.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
+		ID: Provider, Name: "Infomaniak kDrive", FormerIDs: []string{"infomaniakdrive"}, DefaultBaseURL: apiRoot,
+		RenamedTools: renamedTools,
 		RemovedTools: []string{"infomaniakdrive.links.create", "infomaniakdrive.links.update",
 			"infomaniakdrive.dropbox.create", "infomaniakdrive.dropbox.update"},
 		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API",
