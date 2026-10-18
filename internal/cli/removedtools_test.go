@@ -15,7 +15,7 @@ var removedToolCases = []struct {
 }{
 	{"penpot", "access-token", "", "[team/00000000-0000-0000-0000-000000000001]", "penpot.teams.list",
 		[]string{"penpot.webhooks.create", "penpot.invitations.create"}},
-	{"excalidrawplus", "api-key", "", "[\"*\"]", "excalidrawplus.scenes.list",
+	{"excalidraw-plus", "api-key", "", "[\"*\"]", "excalidraw-plus.scenes.list",
 		[]string{"excalidrawplus.invitations.create"}},
 	{"make", "api-token", "https://eu1.make.com", "[team/1]", "make.hooks.list",
 		[]string{"make.hooks.create", "make.organization.invite"}},

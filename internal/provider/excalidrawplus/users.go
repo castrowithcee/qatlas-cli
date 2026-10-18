@@ -72,7 +72,7 @@ var userFields = []capability.Field{
 const roleSchema = `{"type":"string","enum":["member","admin"]}`
 
 var userIDArgument = capability.Argument{Name: "user_id", Required: true,
-	Description: "User identifier, as returned by excalidrawplus.users.list"}
+	Description: "User identifier, as returned by excalidraw-plus.users.list"}
 
 var usersList = capability.Descriptor{
 	ID:      Provider + ".users.list",
