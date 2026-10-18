@@ -396,12 +396,12 @@ func descriptorViolations(d capability.Descriptor) []string {
 	fail := func(format string, args ...any) { violations = append(violations, fmt.Sprintf(format, args...)) }
 
 	segments := strings.Split(d.ID, ".")
-	validID := len(segments) == 3 && segments[0] == d.Provider
+	validID := (len(segments) == 3 || len(segments) == 4) && strings.HasPrefix(d.ID, d.Provider+".")
 	for _, segment := range segments {
 		validID = validID && operationSegment.MatchString(segment)
 	}
 	if !validID {
-		fail("operation ID %q is not <provider>.<object>.<action> of provider %q", d.ID, d.Provider)
+		fail("operation ID %q is not <provider>[.<service>].<object>.<action> of provider %q", d.ID, d.Provider)
 	}
 	if d.Version < 1 {
 		fail("version %d is not positive", d.Version)
@@ -505,7 +505,7 @@ func descriptorViolations(d capability.Descriptor) []string {
 	return violations
 }
 
-var operationSegment = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
+var operationSegment = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 
 // providerViolations checks the configuration contract of one provider against its registered operations:
 // a provider offers at least one operation, its supported permissions are exactly the effects of those

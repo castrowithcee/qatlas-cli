@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -185,11 +184,23 @@ func NewRegistry() *Registry {
 
 // RegisterProvider records the configuration metadata and optional safe connection test of one provider.
 func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester ConnectionTester) error {
-	if !validSegment(metadata.ID) {
-		return fmt.Errorf("provider ID %q must match [a-z][a-z0-9]*", metadata.ID)
+	if err := validProviderID(metadata.ID); err != nil {
+		return err
 	}
 	if _, exists := r.metadata[metadata.ID]; exists {
 		return fmt.Errorf("provider %q metadata is already registered", metadata.ID)
+	}
+	for existing := range r.metadata {
+		if vendorOf(existing) == vendorOf(metadata.ID) && strings.Count(existing, ".") != strings.Count(metadata.ID, ".") {
+			return fmt.Errorf("provider %q conflicts with provider %q: a vendor is either one single-segment "+
+				"provider or only <vendor>.<product> providers", metadata.ID, existing)
+		}
+	}
+	if metadata.ServiceLevel && strings.Contains(metadata.ID, ".") {
+		return fmt.Errorf("provider %q is <vendor>.<product> and must not declare a service level", metadata.ID)
+	}
+	if metadata.ServiceLevel && len(metadata.Groups) == 0 {
+		return fmt.Errorf("provider %q declares a service level and must declare groups", metadata.ID)
 	}
 	if strings.TrimSpace(metadata.Name) == "" {
 		return fmt.Errorf("provider %q must have a display name", metadata.ID)
@@ -223,8 +234,8 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 	}
 	groups := map[string]bool{}
 	for _, group := range metadata.Groups {
-		if !groupIDPattern.MatchString(group.ID) {
-			return fmt.Errorf("provider %q group %q must match %s", metadata.ID, group.ID, groupIDPattern)
+		if !validSegment(group.ID) {
+			return fmt.Errorf("provider %q group %q must be %s", metadata.ID, group.ID, segmentRule)
 		}
 		if groups[group.ID] {
 			return fmt.Errorf("provider %q declares group %q twice", metadata.ID, group.ID)
@@ -408,14 +419,15 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	if provider == "" {
 		return fmt.Errorf("a provider ID must not be empty")
 	}
-	if !validSegment(provider) {
-		return fmt.Errorf("provider ID %q must match [a-z][a-z0-9]*", provider)
+	if err := validProviderID(provider); err != nil {
+		return err
 	}
+	serviceLevel := r.metadata[provider].ServiceLevel
 	staged := make([]Operation, 0, len(operations))
 	batch := make(map[string]Operation, len(operations))
 	for _, operation := range operations {
 		d := operation.Descriptor
-		if err := d.validate(provider); err != nil {
+		if err := d.validate(provider, serviceLevel); err != nil {
 			return fmt.Errorf("provider %q: %w", provider, err)
 		}
 		if operation.Handler == nil {
@@ -482,8 +494,6 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	r.metadata[provider] = metadata
 	return nil
 }
-
-var groupIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // checkGroups verifies that a provider with groups sorts every tool into a declared group and that a provider without groups leaves every tool ungrouped.
 func (r *Registry) checkGroups(provider string) error {
@@ -572,7 +582,7 @@ func (d Descriptor) clone() Descriptor {
 	return out
 }
 
-func (d Descriptor) validate(provider string) error {
+func (d Descriptor) validate(provider string, serviceLevel bool) error {
 	if d.ID == "" {
 		return fmt.Errorf("an operation ID must not be empty")
 	}
@@ -581,17 +591,28 @@ func (d Descriptor) validate(provider string) error {
 			d.ID, d.Provider, provider)
 	}
 	segments := strings.Split(d.ID, ".")
-	if len(segments) != 3 {
-		return fmt.Errorf("operation ID %q must have exactly three segments: provider.object.action", d.ID)
-	}
 	for _, segment := range segments {
 		if !validSegment(segment) {
-			return fmt.Errorf("operation ID %q: segment %q must match [a-z][a-z0-9]*", d.ID, segment)
+			return fmt.Errorf("operation ID %q: segment %q must be %s", d.ID, segment, segmentRule)
 		}
 	}
-	if segments[0] != provider {
-		return fmt.Errorf("operation ID %q has provider prefix %q, want registered provider %q",
-			d.ID, segments[0], provider)
+	if !strings.HasPrefix(d.ID, provider+".") {
+		return fmt.Errorf("operation ID %q does not start with registered provider %q and a dot", d.ID, provider)
+	}
+	// The depth follows the provider's declaration, never the shape of the ID.
+	want, form := 3, "<provider>.<object>.<action>"
+	switch {
+	case strings.Contains(provider, "."):
+		want, form = 4, "<vendor>.<product>.<object>.<action>"
+	case serviceLevel:
+		want, form = 4, "<provider>.<service>.<object>.<action>"
+	}
+	if len(segments) != want {
+		return fmt.Errorf("operation ID %q must have exactly %d segments: %s", d.ID, want, form)
+	}
+	if serviceLevel && segments[1] != d.Group {
+		return fmt.Errorf("operation ID %q: service segment %q must equal the tool's group %q", d.ID, segments[1],
+			d.Group)
 	}
 	if d.Version <= 0 {
 		return fmt.Errorf("operation %q: version must be positive", d.ID)
@@ -689,18 +710,49 @@ func (r Risk) validate(id string) error {
 	return nil
 }
 
+// segmentRule states the grammar of one ID segment: words of lowercase ASCII letters and digits joined by
+// single hyphens, the segment starting with a letter.
+const segmentRule = "lowercase words of letters and digits joined by single '-', starting with a letter"
+
 func validSegment(segment string) bool {
-	for i := 0; i < len(segment); i++ {
-		b := segment[i]
-		if b >= 'a' && b <= 'z' {
-			continue
-		}
-		if i > 0 && b >= '0' && b <= '9' {
-			continue
-		}
+	if segment == "" || segment[0] < 'a' || segment[0] > 'z' {
 		return false
 	}
-	return segment != ""
+	previousHyphen := false
+	for i := 0; i < len(segment); i++ {
+		switch b := segment[i]; {
+		case b == '-':
+			if previousHyphen || i == len(segment)-1 {
+				return false
+			}
+			previousHyphen = true
+			continue
+		case (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9'):
+			previousHyphen = false
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validProviderID accepts one segment or <vendor>.<product>.
+func validProviderID(id string) error {
+	segments := strings.Split(id, ".")
+	if len(segments) > 2 {
+		return fmt.Errorf("provider ID %q must be one segment or <vendor>.<product>", id)
+	}
+	for _, segment := range segments {
+		if !validSegment(segment) {
+			return fmt.Errorf("provider ID %q: segment %q must be %s", id, segment, segmentRule)
+		}
+	}
+	return nil
+}
+
+func vendorOf(provider string) string {
+	vendor, _, _ := strings.Cut(provider, ".")
+	return vendor
 }
 
 func validateSchema(kind, id string, schema json.RawMessage) error {
