@@ -551,10 +551,15 @@ func providerViolations(metadata config.ProviderMetadata, descriptors []capabili
 			fail("default permission %q is not a registered effect", permission)
 		}
 	}
-	// A removed tool belongs to the provider, is declared once, and is never registered or profiled again.
+	// A removed tool belongs to the provider, under its current or a former ID, is declared once, and is never
+	// registered or profiled again.
 	removed := map[string]bool{}
 	for _, id := range metadata.RemovedTools {
-		if !strings.HasPrefix(id, metadata.ID+".") || removed[id] {
+		owned := strings.HasPrefix(id, metadata.ID+".")
+		for _, former := range metadata.FormerIDs {
+			owned = owned || strings.HasPrefix(id, former+".")
+		}
+		if !owned || removed[id] {
 			fail("removed tool %q is not a unique ID of provider %q", id, metadata.ID)
 		}
 		removed[id] = true
