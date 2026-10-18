@@ -24,7 +24,7 @@ const batchRowsOutput = `{"type":"object","properties":{"rows":{"type":"array","
 	`},"count":{"type":"integer"}},"required":["rows","count"],"additionalProperties":false}`
 
 var rowsBatchCreate = capability.Descriptor{
-	ID: Provider + ".rows.batchcreate", Version: 1, Title: "Create Baserow rows in a batch",
+	ID: Provider + ".rows.batch-create", Version: 1, Title: "Create Baserow rows in a batch",
 	Description: batchNote + "Create rows in a table; each entry of rows holds cell values keyed by field name. " + changeNote,
 	Tags:        []string{"baserow", "rows", "batch", "create", "records"}, Provider: Provider,
 	Risk: rowChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
@@ -43,7 +43,7 @@ var rowsBatchCreate = capability.Descriptor{
 }
 
 var rowsBatchUpdate = capability.Descriptor{
-	ID: Provider + ".rows.batchupdate", Version: 1, Title: "Update Baserow rows in a batch",
+	ID: Provider + ".rows.batch-update", Version: 1, Title: "Update Baserow rows in a batch",
 	Description: batchNote + "Change the given cells of several rows; cells not named stay as they are. Row ids " +
 		"must be distinct, and a field named id is refused. " + changeNote,
 	Tags: []string{"baserow", "rows", "batch", "update", "records"}, Provider: Provider,
@@ -64,7 +64,7 @@ var rowsBatchUpdate = capability.Descriptor{
 }
 
 var rowsBatchDelete = capability.Descriptor{
-	ID: Provider + ".rows.batchdelete", Version: 1, Title: "Delete Baserow rows in a batch",
+	ID: Provider + ".rows.batch-delete", Version: 1, Title: "Delete Baserow rows in a batch",
 	Description: batchNote + "Delete several rows of a table by id; ids must be distinct. Baserow may keep them in " +
 		"the trash for a while; Qatlas does not restore them",
 	Tags: []string{"baserow", "rows", "batch", "delete", "records"}, Provider: Provider, RequiresToolAllowList: true,
@@ -83,7 +83,7 @@ var rowsBatchDelete = capability.Descriptor{
 	Examples: []capability.Example{{Description: "Delete two rows", Arguments: json.RawMessage(`{"table_id":1,"row_ids":[7,8]}`)}},
 }
 
-// BatchResult is the answer of batchcreate and batchupdate; BatchDeleteResult the answer of batchdelete.
+// BatchResult is the answer of batch-create and batch-update; BatchDeleteResult the answer of batch-delete.
 type BatchResult struct {
 	Rows  []Row `json:"rows"`
 	Count int   `json:"count"`
@@ -202,7 +202,7 @@ func invokeRowsBatchUpdate(ctx context.Context, resolved *config.Resolved, secre
 	return changeRows(ctx, "update rows", "update", http.MethodPatch, "update", resolved, secrets, red, raw)
 }
 
-// changeRows runs batchcreate and batchupdate: one field read, then one request.
+// changeRows runs batch-create and batch-update: one field read, then one request.
 func changeRows(ctx context.Context, op, mode, method, right string, resolved *config.Resolved,
 	secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	tableID, cells, body, err := prepareBatch(op, mode, resolved, raw)
