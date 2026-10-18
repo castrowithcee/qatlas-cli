@@ -315,7 +315,7 @@ func stored(t *testing.T, f *fixture, name string) [][]byte {
 
 func sendMessage(t *testing.T, e *environment, connection, arguments string) SendResult {
 	t.Helper()
-	result, err := e.confirmed("infomaniakmail.messages.send", connection, arguments)
+	result, err := e.confirmed("infomaniak.mail.messages.send", connection, arguments)
 	if err != nil {
 		t.Fatalf("messages.send %s: %v", arguments, err)
 	}
@@ -469,7 +469,7 @@ func TestMessagesSendRefusesInjectionAndOpenRelayBeforeAnyConnection(t *testing.
 		"bad attachment":       `{"to":["a@example.net"],"attachments":[{"name":"a.txt","content_base64":"!!"}]}`,
 		"attachment path name": `{"to":["a@example.net"],"attachments":[{"name":"../a.txt","content_base64":"QQ=="}]}`,
 	} {
-		if _, err := e.confirmed("infomaniakmail.messages.send", "send", args); err == nil {
+		if _, err := e.confirmed("infomaniak.mail.messages.send", "send", args); err == nil {
 			t.Errorf("%s: no error", name)
 		}
 	}
@@ -485,8 +485,8 @@ func TestSendToolsNeedConfirmationToolsListAndFileRelease(t *testing.T) {
 	e.f.addRaw(t, "Drafts", header(mailbox, "d")+"\r\nbody\r\n", imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
 	cases := map[string]string{
-		"infomaniakmail.messages.send": `{"to":["a@example.net"]}`,
-		"infomaniakmail.drafts.send":   refArgs("Drafts", 1, validity, ""),
+		"infomaniak.mail.messages.send": `{"to":["a@example.net"]}`,
+		"infomaniak.mail.drafts.send":   refArgs("Drafts", 1, validity, ""),
 	}
 	for operation, args := range cases {
 		if _, err := e.invoke(operation, "send", args); err == nil {
@@ -498,7 +498,7 @@ func TestSendToolsNeedConfirmationToolsListAndFileRelease(t *testing.T) {
 			}
 		}
 	}
-	if _, err := e.confirmed("infomaniakmail.messages.send", "sendnofiles", cases["infomaniakmail.messages.send"]); err == nil {
+	if _, err := e.confirmed("infomaniak.mail.messages.send", "sendnofiles", cases["infomaniak.mail.messages.send"]); err == nil {
 		t.Errorf("messages.send ran without a file release")
 	}
 	if server.dials.Load() != 0 {
@@ -527,11 +527,11 @@ func TestSendNeedsOneAllowedSentFolderBeforeSending(t *testing.T) {
 			}
 			e.f.addRaw(t, "Drafts", header(mailbox, "d")+"\r\nbody\r\n", imap.FlagDraft)
 			validity := validityOf(t, e, "Drafts")
-			_, err := e.confirmed("infomaniakmail.messages.send", tc.connection, `{"to":["a@example.net"]}`)
+			_, err := e.confirmed("infomaniak.mail.messages.send", tc.connection, `{"to":["a@example.net"]}`)
 			if !isInvalidRequest(err) {
 				t.Fatalf("messages.send err = %v, want an invalid request", err)
 			}
-			_, err = e.confirmed("infomaniakmail.drafts.send", tc.connection, refArgs("Drafts", 1, validity, ""))
+			_, err = e.confirmed("infomaniak.mail.drafts.send", tc.connection, refArgs("Drafts", 1, validity, ""))
 			if !isInvalidRequest(err) {
 				t.Fatalf("drafts.send err = %v, want an invalid request", err)
 			}
@@ -558,7 +558,7 @@ func TestSMTPRequiresVerifiedSTARTTLSBeforeAuth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := sendEnvironment(t, t.TempDir())
 			server := newSMTPServer(t, tc.trusted, tc.config)
-			_, err := e.confirmed("infomaniakmail.messages.send", "send", `{"to":["a@example.net"]}`)
+			_, err := e.confirmed("infomaniak.mail.messages.send", "send", `{"to":["a@example.net"]}`)
 			if err == nil || classOf(err) != tc.class || !strings.Contains(err.Error(), tc.want) ||
 				!strings.Contains(err.Error(), "the message was not sent") {
 				t.Fatalf("err = %v (class %q), want %q and not sent", err, classOf(err), tc.want)
@@ -602,7 +602,7 @@ func TestSendErrorsCarryNoServerTextOrPassword(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := sendEnvironment(t, t.TempDir())
 			newSMTPServer(t, true, tc.config)
-			_, err := e.confirmed("infomaniakmail.messages.send", "send", `{"to":["a@example.net","bad@example.net"]}`)
+			_, err := e.confirmed("infomaniak.mail.messages.send", "send", `{"to":["a@example.net","bad@example.net"]}`)
 			if err == nil || classOf(err) != tc.class {
 				t.Fatalf("err = %v", err)
 			}
@@ -620,7 +620,7 @@ func TestSendErrorsCarryNoServerTextOrPassword(t *testing.T) {
 func TestSMTPLoginRefusalIsAnAuthErrorWithoutServerText(t *testing.T) {
 	e := sendEnvironment(t, t.TempDir())
 	server := newSMTPServer(t, true, func(s *smtpServer) { s.password = passwordVal + "0other" })
-	_, err := e.confirmed("infomaniakmail.messages.send", "send", `{"to":["a@example.net"]}`)
+	_, err := e.confirmed("infomaniak.mail.messages.send", "send", `{"to":["a@example.net"]}`)
 	if classOf(err) != provider.ClassAuth || !strings.Contains(err.Error(), "the message was not sent") {
 		t.Fatalf("err = %v, want class auth and not sent", err)
 	}
@@ -657,7 +657,7 @@ func TestSendNeverRepeatsAfterTheEndOfData(t *testing.T) {
 			e := sendEnvironment(t, t.TempDir())
 			server := newSMTPServer(t, true, tc.config)
 			body := strings.Repeat("line of text\n", 400)
-			_, err := e.confirmed("infomaniakmail.messages.send", "send",
+			_, err := e.confirmed("infomaniak.mail.messages.send", "send",
 				fmt.Sprintf(`{"to":["a@example.net"],"body":%s}`, jsonString(body)))
 			if err == nil {
 				t.Fatal("no error")
@@ -712,10 +712,10 @@ func TestSendRespectsTheSenderTargets(t *testing.T) {
 	server := newSMTPServer(t, true, nil)
 	e.f.addRaw(t, "Drafts", header(mailbox, "d")+"\r\nbody\r\n", imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
-	if _, err := e.confirmed("infomaniakmail.messages.send", "sendsenders", `{"to":["a@example.net"]}`); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.messages.send", "sendsenders", `{"to":["a@example.net"]}`); !isInvalidRequest(err) {
 		t.Errorf("messages.send err = %v, want an invalid request", err)
 	}
-	if _, err := e.confirmed("infomaniakmail.drafts.send", "sendsenders", refArgs("Drafts", 1, validity, "")); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.drafts.send", "sendsenders", refArgs("Drafts", 1, validity, "")); !isInvalidRequest(err) {
 		t.Errorf("drafts.send err = %v, want an invalid request", err)
 	}
 	if server.dials.Load() != 0 {
@@ -733,13 +733,13 @@ func TestDraftsSendSendsACheckedDraftWithoutBccAndKeepsIt(t *testing.T) {
 	e := sendEnvironment(t, dir)
 	server := newSMTPServer(t, true, nil)
 	file := []byte("attachment bytes \x00\x01")
-	created, err := e.confirmed("infomaniakmail.drafts.create", "send", fmt.Sprintf(
+	created, err := e.confirmed("infomaniak.mail.drafts.create", "send", fmt.Sprintf(
 		`{"to":["a@example.net"],"cc":["c@example.net"],"bcc":["secret-bcc@example.net"],"subject":"Grüße","body":"Hallo\nBODY-CANARY",`+
 			`"in_reply_to":"<x@example.net>","attachments":[{"name":"f.bin","content_base64":%q}]}`, base64.StdEncoding.EncodeToString(file)))
 	if err == nil {
 		t.Fatalf("drafts.create accepted reply fields: %s", created)
 	}
-	created, err = e.confirmed("infomaniakmail.drafts.create", "send", fmt.Sprintf(
+	created, err = e.confirmed("infomaniak.mail.drafts.create", "send", fmt.Sprintf(
 		`{"to":["a@example.net"],"cc":["c@example.net"],"bcc":["secret-bcc@example.net"],"subject":"Grüße","body":"Hallo\nBODY-CANARY",`+
 			`"attachments":[{"name":"f.bin","content_base64":%q}]}`, base64.StdEncoding.EncodeToString(file)))
 	if err != nil {
@@ -751,7 +751,7 @@ func TestDraftsSendSendsACheckedDraftWithoutBccAndKeepsIt(t *testing.T) {
 		t.Fatalf("the draft holds no Bcc header")
 	}
 
-	result, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", draft.UID, draft.UIDValidity, ""))
+	result, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", draft.UID, draft.UIDValidity, ""))
 	if err != nil {
 		t.Fatalf("drafts.send: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestDraftsSendRefusesWhatItCannotValidate(t *testing.T) {
 			server := newSMTPServer(t, true, nil)
 			uid := e.f.addRaw(t, "Drafts", tc.raw, tc.flags...)
 			validity := validityOf(t, e, "Drafts")
-			_, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", uid, validity, ""))
+			_, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", uid, validity, ""))
 			if err == nil {
 				t.Fatal("the draft was sent")
 			}
@@ -836,19 +836,19 @@ func TestDraftsSendIsBoundToTheDraftsFolderAndUIDValidity(t *testing.T) {
 	inbox := e.f.addRaw(t, "INBOX", rawDraft(mailbox, "", "text/plain", "body\r\n"), imap.FlagDraft)
 	draft := e.f.addRaw(t, "Drafts", rawDraft(mailbox, "", "text/plain", "body\r\n"), imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
-	if _, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("INBOX", inbox, validityOf(t, e, "INBOX"), "")); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("INBOX", inbox, validityOf(t, e, "INBOX"), "")); !isInvalidRequest(err) {
 		t.Errorf("a draft flagged message in INBOX: err = %v", err)
 	}
-	if _, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", draft, validity+1, "")); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", draft, validity+1, "")); !isInvalidRequest(err) {
 		t.Errorf("a stale uidvalidity: err = %v", err)
 	}
-	if _, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", draft+5, validity, "")); classOf(err) != provider.ClassNotFound {
+	if _, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", draft+5, validity, "")); classOf(err) != provider.ClassNotFound {
 		t.Errorf("a missing uid: err = %v", err)
 	}
 	if server.dials.Load() != 0 {
 		t.Errorf("SMTP was contacted")
 	}
-	if _, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", draft, validity, "")); err != nil {
+	if _, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", draft, validity, "")); err != nil {
 		t.Errorf("the plain text draft: %v", err)
 	}
 }
@@ -858,7 +858,7 @@ func TestDraftsSendNeverRepeatsAfterTheEndOfData(t *testing.T) {
 	server := newSMTPServer(t, true, func(s *smtpServer) { s.dropAfter = true })
 	uid := e.f.addRaw(t, "Drafts", rawDraft(mailbox, "", "text/plain", "body\r\n"), imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
-	_, err := e.confirmed("infomaniakmail.drafts.send", "send", refArgs("Drafts", uid, validity, ""))
+	_, err := e.confirmed("infomaniak.mail.drafts.send", "send", refArgs("Drafts", uid, validity, ""))
 	if err == nil || !strings.Contains(err.Error(), "may have been sent") {
 		t.Fatalf("err = %v", err)
 	}

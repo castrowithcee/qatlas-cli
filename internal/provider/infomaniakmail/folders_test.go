@@ -29,7 +29,7 @@ func TestFoldersListIsFilteredToTheAllowlist(t *testing.T) {
 		e.f.folder(t, name)
 	}
 
-	result, err := e.invoke("infomaniakmail.folders.list", "open", `{}`)
+	result, err := e.invoke("infomaniak.mail.folders.list", "open", `{}`)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestFoldersListIsFilteredToTheAllowlist(t *testing.T) {
 	}
 
 	seen := len(e.f.wire.String())
-	result, err = e.invoke("infomaniakmail.folders.list", "folders", `{}`)
+	result, err = e.invoke("infomaniak.mail.folders.list", "folders", `{}`)
 	if err != nil {
 		t.Fatalf("folders: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestFoldersListIsFilteredToTheAllowlist(t *testing.T) {
 func TestFoldersListWithoutAMatchingFolderIsEmpty(t *testing.T) {
 	e := newEnvironment(t)
 	e.f.folder(t, "Secret")
-	result, err := e.invoke("infomaniakmail.folders.list", "allowed", `{}`)
+	result, err := e.invoke("infomaniak.mail.folders.list", "allowed", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}

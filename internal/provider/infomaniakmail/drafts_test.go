@@ -61,7 +61,7 @@ func draftEnvironment(t *testing.T, dir string) *environment {
 
 func createDraft(t *testing.T, e *environment, connection, arguments string) DraftResult {
 	t.Helper()
-	result, err := e.confirmed("infomaniakmail.drafts.create", connection, arguments)
+	result, err := e.confirmed("infomaniak.mail.drafts.create", connection, arguments)
 	if err != nil {
 		t.Fatalf("drafts.create %s: %v", arguments, err)
 	}
@@ -159,7 +159,7 @@ func TestDraftToolsNeedConfirmationToolsListAndAFileRelease(t *testing.T) {
 	update := refArgs("Drafts", 1, validity, `,"to":["a@example.net"]`)
 	del := refArgs("Drafts", 1, validity, "")
 	for _, tool := range []struct{ name, args string }{{"create", create}, {"update", update}, {"delete", del}} {
-		operation := "infomaniakmail.drafts." + tool.name
+		operation := "infomaniak.mail.drafts." + tool.name
 		var needed *application.ConfirmationRequiredError
 		if _, err := e.invoke(operation, "draft", tool.args); !asError(err, &needed) {
 			t.Errorf("%s without confirm: err = %v, want confirmation required", tool.name, err)
@@ -173,14 +173,14 @@ func TestDraftToolsNeedConfirmationToolsListAndAFileRelease(t *testing.T) {
 	}
 	// create and update read local files and need a release; delete does not.
 	for _, tool := range []struct{ name, args string }{{"create", create}, {"update", update}} {
-		if _, err := e.confirmed("infomaniakmail.drafts."+tool.name, "draftnofiles", tool.args); err == nil {
+		if _, err := e.confirmed("infomaniak.mail.drafts."+tool.name, "draftnofiles", tool.args); err == nil {
 			t.Errorf("%s ran through a connection without a file release", tool.name)
 		}
 	}
 	if e.f.dials.Load() != dials || commands(e, appendCommand)+commands(e, expungeCommand)+commands(e, storeCommand) != 0 {
 		t.Errorf("a refused call reached the server:\n%s", e.f.wire.String())
 	}
-	if _, err := e.confirmed("infomaniakmail.drafts.delete", "draftnofiles", del); err != nil {
+	if _, err := e.confirmed("infomaniak.mail.drafts.delete", "draftnofiles", del); err != nil {
 		t.Errorf("delete without a file release: %v", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestDraftsFolderIsTheOneAllowedDraftsFolder(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t, e)
 			}
-			_, err := e.confirmed("infomaniakmail.drafts.create", tc.connection, args)
+			_, err := e.confirmed("infomaniak.mail.drafts.create", tc.connection, args)
 			if !isInvalidRequest(err) {
 				t.Fatalf("err = %v, want an invalid request", err)
 			}
@@ -281,7 +281,7 @@ func TestDraftsCreateRefusesHeaderInjectionInEveryField(t *testing.T) {
 		`{"to":["a@example.net"],"subject":"`+strings.Repeat("x", 257)+`"}`,
 	)
 	for _, args := range cases {
-		_, err := e.confirmed("infomaniakmail.drafts.create", "draft", args)
+		_, err := e.confirmed("infomaniak.mail.drafts.create", "draft", args)
 		if err == nil {
 			t.Errorf("accepted %s", args)
 			continue
@@ -380,7 +380,7 @@ func TestDraftsUpdateReplacesOneDraftWithOneAppendAndOneExpunge(t *testing.T) {
 	validity := validityOf(t, e, "Drafts")
 	before := commands(e, appendCommand)
 
-	result, err := e.confirmed("infomaniakmail.drafts.update", "draft",
+	result, err := e.confirmed("infomaniak.mail.drafts.update", "draft",
 		refArgs("Drafts", old.UID, validity, `,"to":["b@example.net"],"subject":"new","body":"NEW-CANARY","attachments":[{"name":"a.txt","content_base64":"aGk="}]`))
 	if err != nil {
 		t.Fatal(err)
@@ -451,7 +451,7 @@ func TestDraftChangesAreBoundToDraftsInTheDraftsFolder(t *testing.T) {
 		{"update stale validity", "update", update("Drafts", draft.UID, validity+1), false},
 		{"delete stale validity", "delete", refArgs("Drafts", draft.UID, validity+1, ""), false},
 	} {
-		_, err := e.confirmed("infomaniakmail.drafts."+tc.tool, "draft", tc.args)
+		_, err := e.confirmed("infomaniak.mail.drafts."+tc.tool, "draft", tc.args)
 		switch {
 		case tc.missing && classOf(err) != provider.ClassNotFound, !tc.missing && !isInvalidRequest(err):
 			t.Errorf("%s: err = %v", tc.name, err)
@@ -476,7 +476,7 @@ func TestDraftsDeleteRemovesOnlyThatDraft(t *testing.T) {
 	marked := e.f.addRaw(t, "Drafts", header(mailbox, "marked")+"\r\nbody\r\n", imap.FlagDraft, imap.FlagDeleted)
 	validity := validityOf(t, e, "Drafts")
 
-	result, err := e.confirmed("infomaniakmail.drafts.delete", "draftfolders", refArgs("Drafts", gone.UID, validity, ""))
+	result, err := e.confirmed("infomaniak.mail.drafts.delete", "draftfolders", refArgs("Drafts", gone.UID, validity, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,7 @@ func TestDraftsUpdateAndDeleteNeedUIDPlusBeforeAnyWrite(t *testing.T) {
 	uid := e.f.addRaw(t, "Drafts", header(mailbox, "d")+"\r\nbody\r\n", imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
 	for tool, extra := range map[string]string{"update": `,"to":["a@example.net"]`, "delete": ``} {
-		_, err := e.confirmed("infomaniakmail.drafts."+tool, "draft", refArgs("Drafts", uid, validity, extra))
+		_, err := e.confirmed("infomaniak.mail.drafts."+tool, "draft", refArgs("Drafts", uid, validity, extra))
 		if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "nothing was changed") {
 			t.Errorf("%s: err = %v, want a provider error that says nothing was changed", tool, err)
 		}
@@ -546,7 +546,7 @@ func TestDraftChangesWithAnUnclearOutcomeAreReportedAndNeverRepeated(t *testing.
 			t.Cleanup(func() { dialIMAP = real })
 			dials := e.f.dials.Load()
 
-			_, err := e.confirmed("infomaniakmail.drafts."+tc.tool, "draft", arguments)
+			_, err := e.confirmed("infomaniak.mail.drafts."+tc.tool, "draft", arguments)
 			if err == nil {
 				t.Fatal("no error")
 			}
@@ -579,7 +579,7 @@ func TestDraftsUpdateRemovalRefusedAfterTheNewDraftExists(t *testing.T) {
 		return &rewriteStore{Conn: conn}, nil
 	}
 	t.Cleanup(func() { dialIMAP = real })
-	_, err := e.confirmed("infomaniakmail.drafts.update", "draft", refArgs("Drafts", uid, validity, `,"to":["a@example.net"]`))
+	_, err := e.confirmed("infomaniak.mail.drafts.update", "draft", refArgs("Drafts", uid, validity, `,"to":["a@example.net"]`))
 	if err == nil || !strings.Contains(err.Error(), "new draft was created as uid") || !strings.Contains(err.Error(), "old draft may still exist") {
 		t.Fatalf("err = %v", err)
 	}
@@ -640,7 +640,7 @@ func TestDraftLimitsAndLocalFileRelease(t *testing.T) {
 		"body NUL":     `{"to":["a@example.net"],"body":"a\u0000b"}`,
 		"unknown":      `{"to":["a@example.net"],"headers":{"X":"y"}}`,
 	} {
-		_, err := e.confirmed("infomaniakmail.drafts.create", "draft", args)
+		_, err := e.confirmed("infomaniak.mail.drafts.create", "draft", args)
 		if err == nil {
 			t.Errorf("%s: accepted", name)
 			continue
@@ -664,14 +664,14 @@ func TestDraftLimitsAndLocalFileRelease(t *testing.T) {
 func TestDraftsRespectTheSenderTargets(t *testing.T) {
 	e := draftEnvironment(t, t.TempDir())
 	// The mailbox is not on the sender list, so its drafts could not be read back: refused up front.
-	if _, err := e.confirmed("infomaniakmail.drafts.create", "draftsenders", `{"to":["a@example.net"]}`); !isInvalidRequest(err) {
+	if _, err := e.confirmed("infomaniak.mail.drafts.create", "draftsenders", `{"to":["a@example.net"]}`); !isInvalidRequest(err) {
 		t.Errorf("err = %v, want an invalid request", err)
 	}
 	// A draft whose From is not on the sender list answers not-found for update and delete.
 	uid := e.f.addRaw(t, "Drafts", header("mallory@example.org", "d")+"\r\nbody\r\n", imap.FlagDraft)
 	validity := validityOf(t, e, "Drafts")
 	for tool, extra := range map[string]string{"update": `,"to":["a@example.net"]`, "delete": ``} {
-		if _, err := e.confirmed("infomaniakmail.drafts."+tool, "draftsenders", refArgs("Drafts", uid, validity, extra)); err == nil {
+		if _, err := e.confirmed("infomaniak.mail.drafts."+tool, "draftsenders", refArgs("Drafts", uid, validity, extra)); err == nil {
 			t.Errorf("%s reached a draft of a foreign sender", tool)
 		}
 	}
@@ -683,7 +683,7 @@ func TestDraftsRespectTheSenderTargets(t *testing.T) {
 func TestDraftErrorsCarryNoServerTextOrPassword(t *testing.T) {
 	e := draftEnvironment(t, t.TempDir())
 	e.f.password.Store("wrong")
-	_, err := e.confirmed("infomaniakmail.drafts.create", "draft", `{"to":["a@example.net"]}`)
+	_, err := e.confirmed("infomaniak.mail.drafts.create", "draft", `{"to":["a@example.net"]}`)
 	if classOf(err) != provider.ClassAuth {
 		t.Fatalf("err = %v, want auth", err)
 	}

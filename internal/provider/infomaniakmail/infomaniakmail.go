@@ -91,7 +91,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "infomaniakmail"
+const Provider = "infomaniak.mail"
 
 // roleMailPassword is the single secret role: the mailbox password created in Infomaniak for the mailbox.
 const roleMailPassword = "password"
@@ -357,7 +357,7 @@ func validBaseURL(raw string) error {
 // message changes, its three draft changes, and its two sending tools.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Infomaniak Mail", DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
+		ID: Provider, Name: "Infomaniak Mail", FormerIDs: []string{"infomaniakmail"}, RenamedTools: renamedTools, DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Description: "Infomaniak mailbox over IMAP and SMTP: folders, envelopes, messages, attachments, plus " +
 			"confirmed message changes, drafts with attachments, and confirmed sending for one mailbox",

@@ -359,7 +359,7 @@ func TestWrongPasswordIsAnAuthErrorWithoutProviderText(t *testing.T) {
 	e := newEnvironment(t)
 	e.f.folder(t, "INBOX")
 	e.f.password.Store("wrong-password-value")
-	_, err := e.invoke("infomaniakmail.folders.list", "open", `{}`)
+	_, err := e.invoke("infomaniak.mail.folders.list", "open", `{}`)
 	if classOf(err) != provider.ClassAuth {
 		t.Fatalf("error = %v, want class auth", err)
 	}
@@ -374,7 +374,7 @@ func TestWrongPasswordIsAnAuthErrorWithoutProviderText(t *testing.T) {
 func TestSecretIsRegisteredWithTheRedactor(t *testing.T) {
 	e := newEnvironment(t)
 	e.f.folder(t, "INBOX")
-	if _, err := e.invoke("infomaniakmail.folders.list", "open", `{}`); err != nil {
+	if _, err := e.invoke("infomaniak.mail.folders.list", "open", `{}`); err != nil {
 		t.Fatalf("folders.list: %v", err)
 	}
 	if got := e.red.Apply("x " + passwordVal + " y"); strings.Contains(got, passwordVal) {

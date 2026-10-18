@@ -83,7 +83,7 @@ func attachmentArgs(folder string, uid, validity uint32, part string, extra stri
 
 func getMessage(t *testing.T, e *environment, connection, arguments string) MessageContent {
 	t.Helper()
-	result, err := e.invoke("infomaniakmail.messages.get", connection, arguments)
+	result, err := e.invoke("infomaniak.mail.messages.get", connection, arguments)
 	if err != nil {
 		t.Fatalf("messages.get %s: %v", arguments, err)
 	}
@@ -197,7 +197,7 @@ func TestReadingKeepsFlagsUnchangedAndUsesPeek(t *testing.T) {
 
 	for _, uid := range []uint32{unread, seen} {
 		getMessage(t, e, "open", getArgs("INBOX", uid, validity))
-		if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", "")); err != nil {
+		if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", "")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -243,7 +243,7 @@ func TestAttachmentsGetNeedsAReleasedDirectory(t *testing.T) {
 	e.f.folder(t, "INBOX")
 	uid := e.f.addRaw(t, "INBOX", mixed("alice@example.net", "x", pdfPart("a.pdf", []byte("data"))))
 	validity := validityOf(t, e, "INBOX")
-	_, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
+	_, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
 	if application.ErrorCode(err) != "unsupported-capability" {
 		t.Errorf("err = %v, want unsupported-capability", err)
 	}
@@ -260,13 +260,13 @@ func TestReadRefusesForeignScopeBeforeSecretAndNetwork(t *testing.T) {
 		if tool == "attachments.get" {
 			arguments = attachmentArgs("Secret", 1, 1, "2", "")
 		}
-		_, err := e.invoke("infomaniakmail."+tool, "allowed", arguments)
+		_, err := e.invoke("infomaniak.mail."+tool, "allowed", arguments)
 		if !isInvalidRequest(err) || strings.Contains(err.Error(), "Allowed") {
 			t.Errorf("%s err = %v, want an invalid request that names no allowed folder", tool, err)
 		}
 		for _, bad := range []string{`{"folder":"INBOX","uid":0,"uidvalidity":1}`, `{"folder":"INBOX","uid":1}`,
 			`{"folder":"IN*","uid":1,"uidvalidity":1}`, `{"folder":"INBOX","uid":1,"uidvalidity":1,"section":"HEADER"}`} {
-			if _, err := e.invoke("infomaniakmail."+tool, "open", bad); err == nil {
+			if _, err := e.invoke("infomaniak.mail."+tool, "open", bad); err == nil {
 				t.Errorf("%s accepted %s", tool, bad)
 			}
 		}
@@ -284,21 +284,21 @@ func TestReadChecksUIDValiditySenderAndExistence(t *testing.T) {
 	lookalike := e.f.addRaw(t, "INBOX", mixed("\"alice@example.net\" <mallory@example.org>", "no", pdfPart("a.pdf", []byte("data"))))
 	validity := validityOf(t, e, "INBOX")
 
-	if _, err := e.invoke("infomaniakmail.messages.get", "open", getArgs("INBOX", allowed, validity+1)); !isInvalidRequest(err) {
+	if _, err := e.invoke("infomaniak.mail.messages.get", "open", getArgs("INBOX", allowed, validity+1)); !isInvalidRequest(err) {
 		t.Errorf("wrong uidvalidity: err = %v, want invalid request", err)
 	}
-	if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", allowed, validity+1, "2", "")); !isInvalidRequest(err) {
+	if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", allowed, validity+1, "2", "")); !isInvalidRequest(err) {
 		t.Errorf("wrong uidvalidity: err = %v, want invalid request", err)
 	}
 	for _, uid := range []uint32{foreign, lookalike, 9999} {
-		_, err := e.invoke("infomaniakmail.messages.get", "senders", getArgs("INBOX", uid, validity))
+		_, err := e.invoke("infomaniak.mail.messages.get", "senders", getArgs("INBOX", uid, validity))
 		if classOf(err) != provider.ClassNotFound {
 			t.Errorf("messages.get %d: err = %v, want not-found", uid, err)
 		}
 		if err != nil && (strings.Contains(err.Error(), "example.org") || strings.Contains(err.Error(), "alice")) {
 			t.Errorf("error %q leaks details", err)
 		}
-		_, err = e.invoke("infomaniakmail.attachments.get", "senders", attachmentArgs("INBOX", uid, validity, "2", ""))
+		_, err = e.invoke("infomaniak.mail.attachments.get", "senders", attachmentArgs("INBOX", uid, validity, "2", ""))
 		if classOf(err) != provider.ClassNotFound {
 			t.Errorf("attachments.get %d: err = %v, want not-found", uid, err)
 		}
@@ -319,7 +319,7 @@ func TestAttachmentsGetInline(t *testing.T) {
 			"Content-Transfer-Encoding: quoted-printable\r\n\r\na=3Db,=\r\nc\r\n"))
 	validity := validityOf(t, e, "INBOX")
 
-	result, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
+	result, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +334,7 @@ func TestAttachmentsGetInline(t *testing.T) {
 		out.Folder != "INBOX" || out.UIDValidity != validity {
 		t.Errorf("result = %+v", out)
 	}
-	result, err = e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "3", ""))
+	result, err = e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "3", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,13 +346,13 @@ func TestAttachmentsGetInline(t *testing.T) {
 	// Only a part the message's own structure lists as an attachment can be read: not the text, not a part
 	// that does not exist, not a malformed number.
 	for _, part := range []string{"1", "1.1", "1.2", "4", "9"} {
-		_, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, part, ""))
+		_, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, part, ""))
 		if classOf(err) != provider.ClassNotFound {
 			t.Errorf("part %s: err = %v, want not-found", part, err)
 		}
 	}
 	for _, part := range []string{"", "0", "1.", "a", "1..2", "../1", "1.2.3.4.5.6.7.8.9", "HEADER", "2 ", "2.TEXT"} {
-		if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, part, "")); err == nil {
+		if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, part, "")); err == nil {
 			t.Errorf("part %q was accepted", part)
 		}
 	}
@@ -374,12 +374,12 @@ func TestAttachmentsGetInlineLimit(t *testing.T) {
 	validity := validityOf(t, e, "INBOX")
 
 	for _, uid := range []uint32{overUID, hugeUID} {
-		_, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
+		_, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", ""))
 		if !isInvalidRequest(err) || !strings.Contains(err.Error(), "local_path") {
 			t.Errorf("uid %d: err = %v, want an invalid request that points to local_path", uid, err)
 		}
 	}
-	result, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", exactUID, validity, "2", ""))
+	result, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", exactUID, validity, "2", ""))
 	if err != nil {
 		t.Fatalf("a 4 MiB attachment must pass: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestAttachmentsGetToLocalPath(t *testing.T) {
 	validity := validityOf(t, e, "INBOX")
 	path := filepath.Join(dir, "big.pdf")
 
-	result, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path)))
+	result, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,19 +437,19 @@ func TestAttachmentsGetToLocalPath(t *testing.T) {
 	}
 
 	// An existing file is kept without confirmation and replaced with it.
-	if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); application.ErrorCode(err) != "confirmation-required" {
+	if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); application.ErrorCode(err) != "confirmation-required" {
 		t.Fatalf("err = %v, want the overwrite confirmation", err)
 	}
 	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); application.ErrorCode(err) != "confirmation-required" {
+	if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); application.ErrorCode(err) != "confirmation-required" {
 		t.Fatalf("err = %v, want the overwrite confirmation", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "old" {
 		t.Fatalf("file = %d bytes, want it unchanged", len(got))
 	}
-	if _, err := e.invokeConfirmed("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); err != nil {
+	if _, err := e.invokeConfirmed("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(path))); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(path); !bytes.Equal(got, content) {
@@ -470,7 +470,7 @@ func TestAttachmentsGetToLocalPathRefusalsLeaveNothing(t *testing.T) {
 	dials, reads := e.f.dials.Load(), e.f.reads.Load()
 
 	// A path outside the release is refused before secret and network, without naming either directory.
-	_, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(filepath.Join(other, "x"))))
+	_, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", localArg(filepath.Join(other, "x"))))
 	if err == nil || strings.Contains(err.Error(), other) || strings.Contains(err.Error(), released) {
 		t.Errorf("err = %v", err)
 	}
@@ -483,7 +483,7 @@ func TestAttachmentsGetToLocalPathRefusalsLeaveNothing(t *testing.T) {
 		attachmentArgs("INBOX", 9999, validity, "2", localArg(filepath.Join(released, "x"))),
 		attachmentArgs("INBOX", uid, validity+1, "2", localArg(filepath.Join(released, "x"))),
 	} {
-		if _, err := e.invoke("infomaniakmail.attachments.get", "open", arguments); err == nil {
+		if _, err := e.invoke("infomaniak.mail.attachments.get", "open", arguments); err == nil {
 			t.Errorf("%s was accepted", arguments)
 		}
 	}
@@ -501,7 +501,7 @@ func TestMailContentIsRedactedAndErrorsCarryNoServerText(t *testing.T) {
 		if tool == "attachments.get" {
 			arguments = attachmentArgs("INBOX", 1, 1, "2", "")
 		}
-		_, err := e.invoke("infomaniakmail."+tool, "open", arguments)
+		_, err := e.invoke("infomaniak.mail."+tool, "open", arguments)
 		if classOf(err) != provider.ClassAuth {
 			t.Fatalf("%s err = %v, want auth", tool, err)
 		}
@@ -559,7 +559,7 @@ func TestAttachmentsGetCorruptContentLeavesNoFile(t *testing.T) {
 		"Content-Type: application/pdf; name=\"a.pdf\"\r\nContent-Transfer-Encoding: base64\r\n"+
 			"Content-Disposition: attachment; filename=\"a.pdf\"\r\n\r\n!!!!not base64!!!!\r\n"))
 	validity := validityOf(t, e, "INBOX")
-	_, err := e.invoke("infomaniakmail.attachments.get", "open",
+	_, err := e.invoke("infomaniak.mail.attachments.get", "open",
 		attachmentArgs("INBOX", uid, validity, "2", localArg(filepath.Join(dir, "a.pdf"))))
 	if classOf(err) != provider.ClassInvalidResponse {
 		t.Errorf("err = %v, want invalid-provider-response", err)
@@ -567,7 +567,7 @@ func TestAttachmentsGetCorruptContentLeavesNoFile(t *testing.T) {
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Errorf("directory holds %d entries, want none", len(entries))
 	}
-	if _, err := e.invoke("infomaniakmail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", "")); classOf(err) != provider.ClassInvalidResponse {
+	if _, err := e.invoke("infomaniak.mail.attachments.get", "open", attachmentArgs("INBOX", uid, validity, "2", "")); classOf(err) != provider.ClassInvalidResponse {
 		t.Errorf("inline: err = %v, want invalid-provider-response", err)
 	}
 }
