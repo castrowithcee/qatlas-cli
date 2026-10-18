@@ -23,11 +23,11 @@
 // token can reach several teams, which matters for a person who holds tokens, or is a member of teams, of
 // several customers. A channel_id argument outside a configured channel allow-list is refused locally, before
 // any request is sent; every operation that names a channel_id directly (messages.list, messages.send,
-// users.list, users.search, pins.list, channels.unread, channels.markread) also confirms live, see
+// users.list, users.search, pins.list, channels.unread, channels.mark-read) also confirms live, see
 // verifyChannelScope, that the channel belongs to a bound team or is a direct or group channel with their
 // members only, and is refused before the matching endpoint is reached when it does not. Every operation that
 // names a post_id (messages.thread, messages.get, messages.files, messages.update, messages.delete,
-// messages.pin, messages.unpin, messages.flag, messages.unflag, messages.remind, messages.markunread, the reactions tools, and the threads tools, which also
+// messages.pin, messages.unpin, messages.flag, messages.unflag, messages.remind, messages.mark-unread, the reactions tools, and the threads tools, which also
 // require the root post's channel to be a reachable channel of the named team) reads the post first and binds
 // it to its channel the same way, see verifyPostScope; flagged.list names a team or a channel and drops every post outside the
 // reachable channels of that team or outside that verified channel, and the flag tools only write the fixed
@@ -135,7 +135,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "infomaniakchat"
+const Provider = "infomaniak.chat"
 
 // roleToken is the single secret role a kChat credential must supply. It is used as a bearer token.
 const roleToken = "token"
@@ -514,10 +514,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // Register adds Infomaniak kChat metadata, its read-only connection test, and its operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Infomaniak kChat",
+		ID: Provider, Name: "Infomaniak kChat", FormerIDs: []string{"infomaniakchat"},
 		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, slash commands, and instance-wide administration",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
+		RenamedTools:       renamedTools,
 		ValidateBaseURL: func(raw string) error {
 			_, err := parseInstance(raw)
 			return err

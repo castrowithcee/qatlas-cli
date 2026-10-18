@@ -21,7 +21,7 @@ var userGroupSchema = `{"type":"object","properties":{` +
 	`"additionalProperties":false}`
 
 var usergroupsList = capability.Descriptor{
-	ID:      Provider + ".usergroups.list",
+	ID:      Provider + ".user-groups.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat user groups",
 	Description: "List the user groups of one bound team or of one channel this connection may reach, one page at " +

@@ -70,7 +70,7 @@ var directOpen = capability.Descriptor{
 }
 
 var groupMessagesOpen = capability.Descriptor{
-	ID:      Provider + ".groupmessages.open",
+	ID:      Provider + ".group-messages.open",
 	Version: 1,
 	Title:   "Open an Infomaniak kChat group channel",
 	Description: "Open, after confirmation, the group message channel of the token's own user and " +

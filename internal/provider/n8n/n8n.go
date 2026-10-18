@@ -261,7 +261,7 @@ var errConflict = errors.New("n8n reported a conflict")
 // decodes the answer into out when out is not nil. A non-nil conflict receives the body of an HTTP 409
 // (best effort, never an error) and makes do return errConflict. changing marks a request that may change n8n's state:
 // every failure of it that could mean the request nonetheless arrived is marked uncertain, so this provider
-// never repeats it by itself, the same contract infomaniakchat and todoist give their own change requests.
+// never repeats it by itself, the same contract infomaniak.chat and todoist give their own change requests.
 func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body, out any, maxBytes int,
 	changing bool, conflict any) error {
 	if err := c.limiter.Wait(ctx); err != nil {

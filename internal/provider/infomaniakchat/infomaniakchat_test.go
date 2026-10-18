@@ -388,10 +388,10 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		t.Fatalf("profiles = %+v, want members.list in read and members.add in channel-admin", profiles)
 	}
 	if !has("read", teamsGet.ID) || !has("read", teamMembersList.ID) {
-		t.Fatalf("profiles = %+v, want teams.get and teammembers.list in read", profiles)
+		t.Fatalf("profiles = %+v, want teams.get and team-members.list in read", profiles)
 	}
 	if !has("read", archivedChannelsList.ID) || has("channel-admin", archivedChannelsList.ID) {
-		t.Fatalf("profiles = %+v, want archivedchannels.list in read", profiles)
+		t.Fatalf("profiles = %+v, want archived-channels.list in read", profiles)
 	}
 	if !has("read", categoriesList.ID) || !has("messaging", categoriesList.ID) ||
 		!has("messaging", categoriesCreate.ID) || !has("messaging", categoriesUpdate.ID) ||
@@ -474,7 +474,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Fatalf("channels.archive metadata = %+v", tool)
 		}
 		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
-			t.Fatalf("archivedchannels.list metadata = %+v", tool)
+			t.Fatalf("archived-channels.list metadata = %+v", tool)
 		}
 		if tool.ID == categoriesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("categories.delete metadata = %+v", tool)
@@ -483,8 +483,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == channelNotificationsUpdate.ID) && (tool.RequiresToolAllowList || tool.Group != "channels") {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
-		if (strings.HasPrefix(tool.ID, Provider+".incomingwebhooks.") ||
-			strings.HasPrefix(tool.ID, Provider+".outgoingwebhooks.") ||
+		if (strings.HasPrefix(tool.ID, Provider+".incoming-webhooks.") ||
+			strings.HasPrefix(tool.ID, Provider+".outgoing-webhooks.") ||
 			strings.HasPrefix(tool.ID, Provider+".commands.")) &&
 			(!tool.RequiresToolAllowList || tool.Group != "integrations") {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)

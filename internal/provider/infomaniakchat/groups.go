@@ -23,25 +23,25 @@ var toolGroups = []config.ToolGroup{
 		"changing), the custom emoji catalog (listing, creating from a released local image, and deleting), and role definitions by name; only on a connection that binds every team of its token and has no channel target"},
 }
 
-// groupOf returns the group of a kChat tool ID (infomaniakchat.<segment>.<action>), or "" for an ID outside
+// groupOf returns the group of a kChat tool ID (infomaniak.chat.<object>.<action>), or "" for an ID outside
 // every group.
 func groupOf(id string) string {
 	parts := strings.Split(id, ".")
-	if len(parts) < 3 {
+	if len(parts) != 4 {
 		return ""
 	}
-	switch parts[1] {
+	switch parts[2] {
 	case "teams", "channels", "messages", "reactions", "files", "users", "threads":
-		return parts[1]
-	case "status", "customstatus", "profile", "usergroups":
+		return parts[2]
+	case "status", "custom-status", "profile", "user-groups":
 		return "users"
-	case "channelmembers", "archivedchannels", "categories", "channelnotifications":
+	case "channel-members", "archived-channels", "categories", "channel-notifications":
 		return "channels"
-	case "teammembers", "insights":
+	case "team-members", "insights":
 		return "teams"
-	case "direct", "groupmessages", "pins", "flagged":
+	case "direct", "group-messages", "pins", "flagged":
 		return "messages"
-	case "incomingwebhooks", "outgoingwebhooks", "commands":
+	case "incoming-webhooks", "outgoing-webhooks", "commands":
 		return "integrations"
 	case "bots", "emoji", "roles":
 		return "administration"

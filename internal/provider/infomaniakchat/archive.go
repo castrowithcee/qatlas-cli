@@ -22,7 +22,7 @@ const (
 )
 
 var archivedChannelsList = capability.Descriptor{
-	ID:      Provider + ".archivedchannels.list",
+	ID:      Provider + ".archived-channels.list",
 	Version: 1,
 	Title:   "List archived Infomaniak kChat channels",
 	Description: "List the archived public and private channels of one team this connection is bound to, one " +

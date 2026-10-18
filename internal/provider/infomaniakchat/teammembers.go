@@ -58,7 +58,7 @@ var teamsGet = capability.Descriptor{
 }
 
 var teamMembersList = capability.Descriptor{
-	ID:      Provider + ".teammembers.list",
+	ID:      Provider + ".team-members.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat team members",
 	Description: "List the members of one team this connection is bound to, one page at a time; each entry " +
@@ -94,7 +94,7 @@ var teamMembersList = capability.Descriptor{
 }
 
 var teamMembersRoles = capability.Descriptor{
-	ID:      Provider + ".teammembers.roles",
+	ID:      Provider + ".team-members.roles",
 	Version: 1,
 	Title:   "Change an Infomaniak kChat team role",
 	Description: "Set the team role of exactly one current member of one team this connection is bound to with " +

@@ -34,7 +34,7 @@ var notificationsSchema = `{"type":"object","properties":{"channel_id":` + idSch
 	`,"mark_unread":` + enumSchema(notifyUnreadModes) + `},"required":["channel_id"],"additionalProperties":false}`
 
 var channelNotificationsUpdate = capability.Descriptor{
-	ID:      Provider + ".channelnotifications.update",
+	ID:      Provider + ".channel-notifications.update",
 	Version: 1,
 	Title:   "Change Infomaniak kChat channel notifications",
 	Description: "Change the notification settings of the token's own user for exactly one public or private " +
