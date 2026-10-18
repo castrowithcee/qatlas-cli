@@ -155,7 +155,7 @@ func TestMemberRemoveIsOnlyOfferedByAToolsListAndProfilesAreSeparate(t *testing.
 			if id == membersRemove.ID {
 				t.Fatalf("profile %q selects remove", profile.ID)
 			}
-			if strings.HasPrefix(id, "n8n.projectmembers.") && !strings.HasPrefix(profile.ID, "members") {
+			if strings.HasPrefix(id, "n8n.project-members.") && !strings.HasPrefix(profile.ID, "members") {
 				t.Fatalf("profile %q selects %s", profile.ID, id)
 			}
 		}

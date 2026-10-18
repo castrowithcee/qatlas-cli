@@ -141,15 +141,15 @@ func coreConfig() *config.Config {
 }
 
 var allProjectTools = []string{"n8n.projects.list", "n8n.projects.create", "n8n.projects.update",
-	"n8n.projects.delete", "n8n.projectmembers.list", "n8n.projectmembers.add",
-	"n8n.projectmembers.setrole", "n8n.projectmembers.remove", "n8n.datatables.list", "n8n.datatables.get",
-	"n8n.datatables.create", "n8n.datatables.rename", "n8n.datatables.delete",
-	"n8n.datacolumns.list", "n8n.datacolumns.add", "n8n.datacolumns.update", "n8n.datacolumns.delete",
-	"n8n.datarows.list", "n8n.datarows.insert", "n8n.datarows.update", "n8n.datarows.upsert", "n8n.datarows.delete",
+	"n8n.projects.delete", "n8n.project-members.list", "n8n.project-members.add",
+	"n8n.project-members.set-role", "n8n.project-members.remove", "n8n.data-tables.list", "n8n.data-tables.get",
+	"n8n.data-tables.create", "n8n.data-tables.rename", "n8n.data-tables.delete",
+	"n8n.data-columns.list", "n8n.data-columns.add", "n8n.data-columns.update", "n8n.data-columns.delete",
+	"n8n.data-rows.list", "n8n.data-rows.insert", "n8n.data-rows.update", "n8n.data-rows.upsert", "n8n.data-rows.delete",
 	"n8n.variables.list", "n8n.variables.create", "n8n.variables.update", "n8n.variables.delete",
 	"n8n.tags.list", "n8n.tags.get", "n8n.tags.create", "n8n.tags.update", "n8n.tags.delete",
-	"n8n.users.list", "n8n.users.get", "n8n.users.setrole", "n8n.users.delete",
-	"n8n.audit.generate", "n8n.sourcecontrol.status", "n8n.sourcecontrol.pull", "n8n.sourcecontrol.push",
+	"n8n.users.list", "n8n.users.get", "n8n.users.set-role", "n8n.users.delete",
+	"n8n.audit.generate", "n8n.source-control.status", "n8n.source-control.pull", "n8n.source-control.push",
 	"n8n.credentials.list", "n8n.credentials.get", "n8n.credentials.test", "n8n.credentials.schema"}
 
 type environment struct {

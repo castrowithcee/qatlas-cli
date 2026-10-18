@@ -59,7 +59,7 @@ var memberRoleArgument = capability.Argument{Name: "role",
 	Description: "Project role: " + strings.Join(memberRoles, ", "), Required: true}
 
 var membersList = capability.Descriptor{
-	ID: Provider + ".projectmembers.list", Version: 1, Title: "List n8n project members",
+	ID: Provider + ".project-members.list", Version: 1, Title: "List n8n project members",
 	Description: "List the members of one project of the bound n8n instance with id, email, name, and role; " +
 		"only projects inside the project allow-list, so a connection without one refuses it",
 	Tags: []string{"n8n", "projects", "members", "list", "automation"}, Risk: memberReadRisk, Provider: Provider,
@@ -88,7 +88,7 @@ var membersList = capability.Descriptor{
 }
 
 var membersAdd = capability.Descriptor{
-	ID: Provider + ".projectmembers.add", Version: 1, Title: "Add an n8n project member",
+	ID: Provider + ".project-members.add", Version: 1, Title: "Add an n8n project member",
 	Description: "Give one existing n8n user a role in one project of the bound instance. It creates and " +
 		"invites no user; a repeated call is sent again. Only projects inside the project allow-list",
 	Tags: []string{"n8n", "projects", "members", "add", "automation"},
@@ -108,7 +108,7 @@ var membersAdd = capability.Descriptor{
 }
 
 var membersSetRole = capability.Descriptor{
-	ID: Provider + ".projectmembers.setrole", Version: 1, Title: "Change an n8n project member's role",
+	ID: Provider + ".project-members.set-role", Version: 1, Title: "Change an n8n project member's role",
 	Description: "Set the role of one existing member of one project of the bound instance. Only projects " +
 		"inside the project allow-list",
 	Tags: []string{"n8n", "projects", "members", "role", "automation"},
@@ -125,7 +125,7 @@ var membersSetRole = capability.Descriptor{
 }
 
 var membersRemove = capability.Descriptor{
-	ID: Provider + ".projectmembers.remove", Version: 1, Title: "Remove an n8n project member",
+	ID: Provider + ".project-members.remove", Version: 1, Title: "Remove an n8n project member",
 	Description: "Remove one member's access to one project of the bound instance; the user itself is kept. " +
 		"Only projects inside the project allow-list",
 	Tags: []string{"n8n", "projects", "members", "remove", "automation"},

@@ -72,7 +72,7 @@ const sourceControlResultSchema = `{"type":"object","properties":{"outcome":{"ty
 	`"required":["outcome","conflict","files","count"],"additionalProperties":false}`
 
 var sourceControlStatus = capability.Descriptor{
-	ID: Provider + ".sourcecontrol.status", Version: 1, Title: "Preview n8n source control changes",
+	ID: Provider + ".source-control.status", Version: 1, Title: "Preview n8n source control changes",
 	Description: "Preview the pending changes between the bound n8n instance and its connected Git branch in " +
 		"one direction: push (local changes not yet in Git) or pull (remote changes not yet imported). It " +
 		"changes nothing. " + sourceControlInstanceNote,
@@ -96,7 +96,7 @@ var sourceControlStatus = capability.Descriptor{
 }
 
 var sourceControlPull = capability.Descriptor{
-	ID: Provider + ".sourcecontrol.pull", Version: 1, Title: "Pull n8n changes from Git",
+	ID: Provider + ".source-control.pull", Version: 1, Title: "Pull n8n changes from Git",
 	Description: "Import the connected Git branch into the bound n8n instance. This can overwrite the " +
 		"instance's workflows, credentials, variables, and other objects with the repository's versions. " +
 		"force: true discards local changes that would otherwise block the pull. auto_publish all publishes " +
@@ -120,7 +120,7 @@ var sourceControlPull = capability.Descriptor{
 }
 
 var sourceControlPush = capability.Descriptor{
-	ID: Provider + ".sourcecontrol.push", Version: 1, Title: "Push n8n changes to Git",
+	ID: Provider + ".source-control.push", Version: 1, Title: "Push n8n changes to Git",
 	Description: "Commit the named objects and push them to the connected Git branch, an external change. " +
 		"files names 1 to 50 objects by id and type (credential, workflow, tags, variables, folders, " +
 		"project, datatable). force: true pushes even objects with unresolved conflicts. When n8n refuses " +
@@ -190,7 +190,7 @@ type SourceControlFile struct {
 	PolicyCheckErrors     int               `json:"policy_check_errors,omitempty"`
 }
 
-// SourceControlStatus is what sourcecontrol.status reports.
+// SourceControlStatus is what source-control.status reports.
 type SourceControlStatus struct {
 	Direction string              `json:"direction"`
 	Files     []SourceControlFile `json:"files"`
@@ -198,7 +198,7 @@ type SourceControlStatus struct {
 	Truncated bool                `json:"truncated,omitempty"`
 }
 
-// SourceControlResult is what sourcecontrol.pull and sourcecontrol.push report. Outcome conflict is n8n's
+// SourceControlResult is what source-control.pull and source-control.push report. Outcome conflict is n8n's
 // refusal, not a failure: nothing was changed.
 type SourceControlResult struct {
 	Outcome   string              `json:"outcome"`

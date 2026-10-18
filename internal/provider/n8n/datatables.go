@@ -74,7 +74,7 @@ var dataTableSummaryFields = []capability.Field{
 }
 
 var dataTablesList = capability.Descriptor{
-	ID: Provider + ".datatables.list", Version: 1, Title: "List n8n data tables",
+	ID: Provider + ".data-tables.list", Version: 1, Title: "List n8n data tables",
 	Description: "List the data tables of the bound n8n instance, restricted to its project allow-list when it " +
 		"has one, optionally of one project; page by page with an opaque cursor. Refused on a connection that " +
 		"restricts workflows by an allow-list",
@@ -101,7 +101,7 @@ var dataTablesList = capability.Descriptor{
 }
 
 var dataTablesGet = capability.Descriptor{
-	ID: Provider + ".datatables.get", Version: 1, Title: "Read an n8n data table",
+	ID: Provider + ".data-tables.get", Version: 1, Title: "Read an n8n data table",
 	Description: "Read one data table's name, project, and column definitions (never its rows); only tables of " +
 		"the project allow-list. Refused on a connection that restricts workflows by an allow-list",
 	Tags: []string{"n8n", "datatables", "get", "automation"}, Risk: dataTableReadRisk, Provider: Provider,
@@ -116,7 +116,7 @@ var dataTablesGet = capability.Descriptor{
 }
 
 var dataTablesCreate = capability.Descriptor{
-	ID: Provider + ".datatables.create", Version: 1, Title: "Create an n8n data table",
+	ID: Provider + ".data-tables.create", Version: 1, Title: "Create an n8n data table",
 	Description: "Create one data table without columns from its name, in one project: with a project allow-list " +
 		"project_id is required and must be on it; without one, an omitted project_id means the key owner's " +
 		"personal project. A repeated call may create a second table or be refused as a name conflict. Refused " +
@@ -140,7 +140,7 @@ var dataTablesCreate = capability.Descriptor{
 }
 
 var dataTablesRename = capability.Descriptor{
-	ID: Provider + ".datatables.rename", Version: 1, Title: "Rename an n8n data table",
+	ID: Provider + ".data-tables.rename", Version: 1, Title: "Rename an n8n data table",
 	Description: "Change the name of one data table, the only field n8n's update endpoint accepts. The table is " +
 		"read first and must belong to the project allow-list. Refused on a connection that restricts workflows " +
 		"by an allow-list",
@@ -162,7 +162,7 @@ var dataTablesRename = capability.Descriptor{
 }
 
 var dataTablesDelete = capability.Descriptor{
-	ID: Provider + ".datatables.delete", Version: 1, Title: "Delete an n8n data table",
+	ID: Provider + ".data-tables.delete", Version: 1, Title: "Delete an n8n data table",
 	Description: "Delete one data table of the bound n8n instance together with all its rows; the deletion cannot " +
 		"be undone. The table is read first and must belong to the project allow-list. Refused on a connection " +
 		"that restricts workflows by an allow-list",

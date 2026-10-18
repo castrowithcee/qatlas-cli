@@ -57,7 +57,7 @@ var dataColumnFields = []capability.Field{
 }
 
 var dataColumnsList = capability.Descriptor{
-	ID: Provider + ".datacolumns.list", Version: 1, Title: "List the columns of an n8n data table",
+	ID: Provider + ".data-columns.list", Version: 1, Title: "List the columns of an n8n data table",
 	Description: "List the columns (id, name, type, position) of one data table of the project allow-list; the " +
 		"table is read first and never its rows. Refused on a connection that restricts workflows by an allow-list",
 	Tags: []string{"n8n", "datacolumns", "list", "automation"}, Risk: dataTableReadRisk, Provider: Provider,
@@ -76,7 +76,7 @@ var dataColumnsList = capability.Descriptor{
 }
 
 var dataColumnsAdd = capability.Descriptor{
-	ID: Provider + ".datacolumns.add", Version: 1, Title: "Add a column to an n8n data table",
+	ID: Provider + ".data-columns.add", Version: 1, Title: "Add a column to an n8n data table",
 	Description: "Add one column to a data table of the project allow-list, from a name and a type, appended " +
 		"unless an index is given. The table is read first. A repeated call may add a second column or be " +
 		"refused as a name conflict. Refused on a connection that restricts workflows by an allow-list",
@@ -96,7 +96,7 @@ var dataColumnsAdd = capability.Descriptor{
 }
 
 var dataColumnsUpdate = capability.Descriptor{
-	ID: Provider + ".datacolumns.update", Version: 1, Title: "Rename or move a column of an n8n data table",
+	ID: Provider + ".data-columns.update", Version: 1, Title: "Rename or move a column of an n8n data table",
 	Description: "Rename and/or move one column of a data table of the project allow-list; at least one of name " +
 		"and index is required, the type cannot change. The table is read first and the column must belong to " +
 		"it. Refused on a connection that restricts workflows by an allow-list",
@@ -120,7 +120,7 @@ var dataColumnsUpdate = capability.Descriptor{
 }
 
 var dataColumnsDelete = capability.Descriptor{
-	ID: Provider + ".datacolumns.delete", Version: 1, Title: "Delete a column of an n8n data table",
+	ID: Provider + ".data-columns.delete", Version: 1, Title: "Delete a column of an n8n data table",
 	Description: "Delete one column of a data table of the project allow-list together with all its data in " +
 		"every row; the deletion cannot be undone. The table is read first and the column must belong to it. " +
 		"Refused on a connection that restricts workflows by an allow-list",

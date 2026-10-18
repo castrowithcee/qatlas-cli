@@ -115,7 +115,7 @@ var usersGet = capability.Descriptor{
 }
 
 var usersSetRole = capability.Descriptor{
-	ID: Provider + ".users.setrole", Version: 1, Title: "Change an n8n user's instance role",
+	ID: Provider + ".users.set-role", Version: 1, Title: "Change an n8n user's instance role",
 	Description: "Set the instance role of one existing user (global:admin, global:member, global:chatUser; " +
 		"never global:owner). " + userInstanceNote,
 	Tags: []string{"n8n", "users", "role", "automation"},
@@ -194,7 +194,7 @@ type InstanceUsersPage struct {
 	Count   int            `json:"count"`
 }
 
-// UserRoleChanged is what users.setrole reports.
+// UserRoleChanged is what users.set-role reports.
 type UserRoleChanged struct {
 	UserID  string `json:"user_id"`
 	Role    string `json:"role"`
