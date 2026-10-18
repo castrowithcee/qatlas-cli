@@ -84,8 +84,8 @@ var recordsCreate = capability.Descriptor{
 		`"fields":{"type":"object","maxProperties":100}},"required":["object","fields"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(recordSchema),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
-		{Name: "fields", Description: "Field name to value, at most 100; every field twentycrm.objects.get shows as required must be given", Required: true},
+		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
+		{Name: "fields", Description: "Field name to value, at most 100; every field twenty-crm.objects.get shows as required must be given", Required: true},
 	},
 	Fields: recordWriteFields,
 	Examples: []capability.Example{{
@@ -109,8 +109,8 @@ var recordsUpdate = capability.Descriptor{
 		`"required":["object","id","fields"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(recordSchema),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
-		{Name: "id", Description: "Record identifier as a UUID, as returned by twentycrm.records.list", Required: true},
+		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
+		{Name: "id", Description: "Record identifier as a UUID, as returned by twenty-crm.records.list", Required: true},
 		{Name: "fields", Description: "Field name to new value, from 1 to 100 fields", Required: true},
 	},
 	Fields: recordWriteFields,

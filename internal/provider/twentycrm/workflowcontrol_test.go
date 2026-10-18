@@ -385,7 +385,7 @@ func TestControlDescriptorsDeclareRiskAndStayOutOfProfiles(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, id := range profile.Tools {
-			if strings.HasPrefix(id, Provider+".workflowversions.") || id == workflowRunsStop.ID || id == workflowRunsRetry.ID {
+			if strings.HasPrefix(id, Provider+".workflow-versions.") || id == workflowRunsStop.ID || id == workflowRunsRetry.ID {
 				t.Errorf("profile %s holds %s", profile.ID, id)
 			}
 		}
@@ -407,7 +407,7 @@ func TestControlNeedsTheToolsListAndConfirmation(t *testing.T) {
 	core := application.New(registry(t), cfg, resolver(red), red)
 	for _, id := range ids {
 		args := activateArgs()
-		if strings.Contains(id, "workflowruns") {
+		if strings.Contains(id, "workflow-runs") {
 			args = runArgs()
 		}
 		request := application.InvokeRequest{Operation: id, Connection: "crm", Arguments: json.RawMessage(args), Confirmed: true}

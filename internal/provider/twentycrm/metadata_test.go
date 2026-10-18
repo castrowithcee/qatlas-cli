@@ -246,7 +246,7 @@ func TestMetadataListPaginationUsesTheBoundUUIDCursor(t *testing.T) {
 	// A cursor of another connection or a manipulated one never reaches the network.
 	refuse(t)
 	red := &redact.Redactor{}
-	forged := provider.EncodeCursor(provider.CursorBinding("metaobjects.list", "crm"), "not-a-uuid")
+	forged := provider.EncodeCursor(provider.CursorBinding("meta-objects.list", "crm"), "not-a-uuid")
 	for name, resolved := range map[string]string{page.NextCursor: "other", forged: "crm", page.NextCursor + "x": "crm"} {
 		conn := targetConnection()
 		conn.Name = resolved

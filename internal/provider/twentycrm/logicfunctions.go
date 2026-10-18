@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	logicFunctionsGroup = "logicfunctions"
+	logicFunctionsGroup = "logic-functions"
 
 	// logicFunctionDataSensitivity classifies the logic function metadata of a workspace.
 	logicFunctionDataSensitivity = "twentycrm-logic-function-data"
@@ -51,7 +51,7 @@ const logicFunctionNote = "Never reads source code, handler paths, logs, or trig
 	"schedules, event names, or input schemas: each trigger kind is only a flag. Values are untrusted workspace data"
 
 var logicFunctionsList = capability.Descriptor{
-	ID:      Provider + ".logicfunctions.list",
+	ID:      Provider + ".logic-functions.list",
 	Version: 1,
 	Title:   "List Twenty CRM logic functions",
 	Description: "List the logic functions of the Twenty workspace of a connection without object targets: name, " +
@@ -72,7 +72,7 @@ var logicFunctionsList = capability.Descriptor{
 }
 
 var logicFunctionsGet = capability.Descriptor{
-	ID:      Provider + ".logicfunctions.get",
+	ID:      Provider + ".logic-functions.get",
 	Version: 1,
 	Title:   "Get a Twenty CRM logic function",
 	Description: "Read one logic function of the Twenty workspace of a connection without object targets: name, " +
@@ -84,7 +84,7 @@ var logicFunctionsGet = capability.Descriptor{
 		`},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(logicFunctionItemSchema),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "UUID of the logic function, as returned by twentycrm.logicfunctions.list"}},
+		Description: "UUID of the logic function, as returned by twenty-crm.logic-functions.list"}},
 	Fields: []capability.Field{{Name: "triggers", Description: "One flag per trigger kind, without its settings"}},
 	Examples: []capability.Example{{Description: "Read a logic function",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},

@@ -39,7 +39,7 @@ const (
 	errWebhookOps  = "operations must hold 1 to 50 events of the form <object>.<created|updated|deleted|destroyed|" +
 		"restored|upserted>, or *.*, with the camelCase singular name of an object"
 
-	webhookUncertain = "; this change may have taken effect, read the webhook with twentycrm.webhooks.get before repeating it"
+	webhookUncertain = "; this change may have taken effect, read the webhook with twenty-crm.webhooks.get before repeating it"
 
 	errWebhookPermission = "the workspace role of this API key may not manage webhooks; check the role in Twenty, " +
 		"the right is called API keys and webhooks"
@@ -61,7 +61,7 @@ const webhookSchema = `{"type":"object","properties":{"id":{"type":"string"},"ta
 
 const webhookIDOnlyInput = `{"type":"object","properties":{"id":` + recordIDSchema + `},"required":["id"],"additionalProperties":false}`
 
-var webhookIDArgument = capability.Argument{Name: "id", Description: "Webhook identifier as a UUID, as returned by twentycrm.webhooks.list", Required: true}
+var webhookIDArgument = capability.Argument{Name: "id", Description: "Webhook identifier as a UUID, as returned by twenty-crm.webhooks.list", Required: true}
 
 var webhookFields = []capability.Field{
 	{Name: "id", Description: "Webhook identifier"},

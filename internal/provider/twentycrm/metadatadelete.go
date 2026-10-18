@@ -24,7 +24,7 @@ const metaDeleteResult = `{"type":"object","properties":{"id":` + uuidSchema +
 	`,"deleted":{"type":"boolean"}},"required":["id","deleted"],"additionalProperties":false}`
 
 var metaObjectsDelete = capability.Descriptor{
-	ID: Provider + ".metaobjects.delete", Version: 1, Title: "Delete a Twenty CRM custom object",
+	ID: Provider + ".meta-objects.delete", Version: 1, Title: "Delete a Twenty CRM custom object",
 	Description: "Permanently delete one custom object of the Twenty workspace of a connection together with all " +
 		"of its records and fields; the loss is final and cannot be undone. " + metaDeleteNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "objects", "delete"},
@@ -33,14 +33,14 @@ var metaObjectsDelete = capability.Descriptor{
 	InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(metaDeleteResult),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the deactivated custom object, as returned by twentycrm.metaobjects.list"},
+		{Name: "id", Required: true, Description: "UUID of the deactivated custom object, as returned by twenty-crm.meta-objects.list"},
 	},
 	Examples: []capability.Example{{Description: "Delete a custom object",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},
 }
 
 var metaFieldsDelete = capability.Descriptor{
-	ID: Provider + ".metafields.delete", Version: 1, Title: "Delete a Twenty CRM custom field",
+	ID: Provider + ".meta-fields.delete", Version: 1, Title: "Delete a Twenty CRM custom field",
 	Description: "Permanently delete one custom field, a relation field included, of the Twenty workspace of a " +
 		"connection together with its values in all records; the loss is final and cannot be undone. Deleting a " +
 		"relation field also deletes the counterpart field on the other object, and the links of all records " +
@@ -51,7 +51,7 @@ var metaFieldsDelete = capability.Descriptor{
 	InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(metaDeleteResult),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the deactivated custom field, as returned by twentycrm.metaobjects.get"},
+		{Name: "id", Required: true, Description: "UUID of the deactivated custom field, as returned by twenty-crm.meta-objects.get"},
 	},
 	Examples: []capability.Example{{Description: "Delete a custom field",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},
@@ -114,7 +114,7 @@ func (c *Client) DeleteMetaObject(ctx context.Context, change *metaWriteChange) 
 		return nil, invalidRequest("only custom objects can be deleted through Qatlas")
 	}
 	if current.IsActive == nil || *current.IsActive {
-		return nil, invalidRequest("deactivate the object first with twentycrm.metaobjects.update and is_active false")
+		return nil, invalidRequest("deactivate the object first with twenty-crm.meta-objects.update and is_active false")
 	}
 	return c.sendMetaDelete(ctx, op, metaObjectUncertain, path, "deleteOneObject", change.id)
 }
@@ -135,7 +135,7 @@ func (c *Client) DeleteMetaField(ctx context.Context, change *metaWriteChange) (
 		return nil, invalidRequest("only custom fields other than morph relations can be deleted through Qatlas")
 	}
 	if current.IsActive == nil || *current.IsActive {
-		return nil, invalidRequest("deactivate the field first with twentycrm.metafields.update and is_active false")
+		return nil, invalidRequest("deactivate the field first with twenty-crm.meta-fields.update and is_active false")
 	}
 	return c.sendMetaDelete(ctx, op, metaFieldUncertain, path, "deleteOneField", change.id)
 }

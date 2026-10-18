@@ -78,7 +78,7 @@ var attachmentsUpload = capability.Descriptor{
 		`"label":{"type":"string"},"size":{"type":"integer"}},"required":["id","file_id","label","size"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "object", Description: "Singular API name of the object of the record, as returned by twentycrm.objects.list", Required: true},
+		{Name: "object", Description: "Singular API name of the object of the record, as returned by twenty-crm.objects.list", Required: true},
 		{Name: "record_id", Description: "Record identifier as a UUID", Required: true},
 		{Name: "name", Description: "File name shown in Twenty; required with " + localfile.ContentArgument +
 			", not allowed with " + localfile.LocalPathArgument + ", which uses the name of the local file"},

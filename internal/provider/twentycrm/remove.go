@@ -20,8 +20,8 @@ import (
 // part of the route of delete and absent from destroy; nothing in the arguments selects between them.
 const (
 	// removeUncertain is appended to a failure of a removal or restore whose request may have reached Twenty.
-	removeUncertain = "; this change may have taken effect, look the record up with twentycrm.records.get or in " +
-		"the trash with twentycrm.records.list deleted true before repeating it"
+	removeUncertain = "; this change may have taken effect, look the record up with twenty-crm.records.get or in " +
+		"the trash with twenty-crm.records.list deleted true before repeating it"
 
 	errDeletePermission = "the workspace role of this API key may not delete records of this object; check the " +
 		"object permissions of the role in Twenty, the right is called Delete Records"
@@ -35,8 +35,8 @@ var removeInput = json.RawMessage(`{"type":"object","properties":{"object":` + o
 	`},"required":["object","id"],"additionalProperties":false}`)
 
 var removeArguments = []capability.Argument{
-	{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list", Required: true},
-	{Name: "id", Description: "Record identifier as a UUID, as returned by twentycrm.records.list", Required: true},
+	{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
+	{Name: "id", Description: "Record identifier as a UUID, as returned by twenty-crm.records.list", Required: true},
 }
 
 const removeNote = "Acts on one record of one reachable object. A connection offers this tool only when its tools list names it"
@@ -60,19 +60,19 @@ func removeDescriptor(action, title, description string, effect capability.Effec
 
 var recordsDelete = removeDescriptor("delete", "Delete a Twenty CRM record",
 	"Move one record of one reachable object of the Twenty workspace of a connection to the trash. The record stays "+
-		"recoverable with twentycrm.records.restore and is found with twentycrm.records.list deleted true. "+removeNote,
+		"recoverable with twenty-crm.records.restore and is found with twenty-crm.records.list deleted true. "+removeNote,
 	capability.EffectDelete, removeOutput, true)
 
 var recordsDestroy = removeDescriptor("destroy", "Destroy a Twenty CRM record",
 	"Permanently delete one record of one reachable object of the Twenty workspace of a connection. This cannot be "+
-		"undone: the record is not moved to the trash and twentycrm.records.restore cannot bring it back. Twenty's "+
+		"undone: the record is not moved to the trash and twenty-crm.records.restore cannot bring it back. Twenty's "+
 		"answer does not tell a soft from a permanent deletion, so the result only confirms that Twenty accepted the "+
 		"request. "+removeNote,
 	capability.EffectDelete, removeOutput, true)
 
 var recordsRestore = removeDescriptor("restore", "Restore a Twenty CRM record",
 	"Restore one record of the trash of one reachable object of the Twenty workspace of a connection, as found with "+
-		"twentycrm.records.list deleted true",
+		"twenty-crm.records.list deleted true",
 	capability.EffectUpdate, json.RawMessage(recordSchema), false)
 
 // recordRemoval is the locally checked request of a delete, restore, or destroy.

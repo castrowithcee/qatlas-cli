@@ -36,7 +36,7 @@ const (
 
 	// mergeUncertain is appended to a failure of a merge whose request may have reached Twenty.
 	mergeUncertain = "; this merge may have taken effect and deleted the source records, look the records up " +
-		"with twentycrm.records.get before repeating it"
+		"with twenty-crm.records.get before repeating it"
 )
 
 func idsSchema(min, max int) string {
@@ -45,7 +45,7 @@ func idsSchema(min, max int) string {
 }
 
 var duplicatesObjectArgument = capability.Argument{Name: "object", Required: true,
-	Description: "Singular API name of the object in camelCase, as returned by twentycrm.objects.list"}
+	Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list"}
 
 var mergeArguments = []capability.Argument{
 	duplicatesObjectArgument,
@@ -100,12 +100,12 @@ var recordsDuplicates = capability.Descriptor{
 }
 
 var recordsMergePreview = capability.Descriptor{
-	ID:      Provider + ".records.mergepreview",
+	ID:      Provider + ".records.merge-preview",
 	Version: 1,
 	Title:   "Preview the merge of Twenty CRM records",
 	Description: "Show the record that merging from 2 to 9 records of one reachable object of the Twenty workspace of " +
 		"a connection would leave, without merging: Twenty computes the result in a dry run and changes nothing. " +
-		"Use twentycrm.records.merge to merge. " + recordNote,
+		"Use twenty-crm.records.merge to merge. " + recordNote,
 	Tags:         []string{"twentycrm", "crm", "records", "merge", "preview"},
 	Risk:         recordsRisk,
 	Provider:     Provider,
@@ -125,7 +125,7 @@ var recordsMerge = capability.Descriptor{
 	Title:   "Merge Twenty CRM records",
 	Description: "Merge from 2 to 9 records of one reachable object of the Twenty workspace of a connection into " +
 		"the record at conflict_priority_index: the other records are deleted and their relations are moved to " +
-		"the remaining record. Look at the result with twentycrm.records.mergepreview first. Twenty's answer does " +
+		"the remaining record. Look at the result with twenty-crm.records.merge-preview first. Twenty's answer does " +
 		"not say whether the deleted records can be restored. A connection offers this tool only when its tools " +
 		"list names it. " + recordNote,
 	Tags:                  []string{"twentycrm", "crm", "records", "merge"},
@@ -261,7 +261,7 @@ func (c *Client) FindDuplicates(ctx context.Context, request *recordMerge) (*Dup
 	}
 	if len(response.Data) != len(request.IDs) {
 		return nil, provider.InvalidResponse(op, "Twenty did not answer once for every given record; check that "+
-			"all of them exist with twentycrm.records.get")
+			"all of them exist with twenty-crm.records.get")
 	}
 	result := &DuplicateResult{Matches: make([]DuplicateMatch, 0, len(request.IDs))}
 	for i, entry := range response.Data {

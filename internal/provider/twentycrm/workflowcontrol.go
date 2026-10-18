@@ -36,8 +36,8 @@ var (
 )
 
 const (
-	workflowUncertain = "; this change may have taken effect, read the version with twentycrm.workflows.get or " +
-		"the run with twentycrm.workflowruns.list before repeating it"
+	workflowUncertain = "; this change may have taken effect, read the version with twenty-crm.workflows.get or " +
+		"the run with twenty-crm.workflow-runs.list before repeating it"
 
 	errWorkflowPermission = "the workspace role of this API key may not control workflows; check the role in " +
 		"Twenty, the right is called Workflows"
@@ -62,13 +62,13 @@ func workflowControlRisk(effect capability.Effect, idempotency capability.Idempo
 }
 
 var versionIDArgument = capability.Argument{Name: "workflow_version_id", Required: true,
-	Description: "UUID of the workflow version, as returned by twentycrm.workflows.get"}
+	Description: "UUID of the workflow version, as returned by twenty-crm.workflows.get"}
 
 var runIDArgument = capability.Argument{Name: "workflow_run_id", Required: true,
-	Description: "UUID of the workflow run, as returned by twentycrm.workflowruns.list"}
+	Description: "UUID of the workflow run, as returned by twenty-crm.workflow-runs.list"}
 
 var workflowVersionsActivate = capability.Descriptor{
-	ID: Provider + ".workflowversions.activate", Version: 1, Title: "Activate a Twenty CRM workflow version",
+	ID: Provider + ".workflow-versions.activate", Version: 1, Title: "Activate a Twenty CRM workflow version",
 	Description: "Activate one workflow version of the Twenty workspace of a connection. Qatlas reads the version " +
 		"first and activates it only when its trigger is one of " + strings.Join(activatableTriggerTypes, ", ") +
 		" and every step is one of " + strings.Join(activatableStepTypes, ", ") + "; any other version is refused " +
@@ -86,7 +86,7 @@ var workflowVersionsActivate = capability.Descriptor{
 }
 
 var workflowVersionsDeactivate = capability.Descriptor{
-	ID: Provider + ".workflowversions.deactivate", Version: 1, Title: "Deactivate a Twenty CRM workflow version",
+	ID: Provider + ".workflow-versions.deactivate", Version: 1, Title: "Deactivate a Twenty CRM workflow version",
 	Description: "Deactivate one workflow version of the Twenty workspace of a connection so that its trigger " +
 		"no longer starts runs. " + workflowControlNote,
 	Tags:     []string{"twentycrm", "workflows", "automation", "deactivate"},
@@ -101,7 +101,7 @@ var workflowVersionsDeactivate = capability.Descriptor{
 }
 
 var workflowRunsStop = capability.Descriptor{
-	ID: Provider + ".workflowruns.stop", Version: 1, Title: "Stop a Twenty CRM workflow run",
+	ID: Provider + ".workflow-runs.stop", Version: 1, Title: "Stop a Twenty CRM workflow run",
 	Description: "Stop one workflow run of the Twenty workspace of a connection. Returns the run id and its " +
 		"status; steps that already ran stay done. " + workflowControlNote,
 	Tags:     []string{"twentycrm", "workflows", "automation", "runs", "stop"},
@@ -119,7 +119,7 @@ var workflowRunsStop = capability.Descriptor{
 }
 
 var workflowRunsRetry = capability.Descriptor{
-	ID: Provider + ".workflowruns.retry", Version: 1, Title: "Retry a Twenty CRM workflow run",
+	ID: Provider + ".workflow-runs.retry", Version: 1, Title: "Retry a Twenty CRM workflow run",
 	Description: "Retry one workflow run of the Twenty workspace of a connection. The run executes its steps " +
 		"again, including steps with effects outside Twenty such as sent emails or HTTP requests, which are " +
 		"repeated. Not idempotent. " + workflowControlNote,

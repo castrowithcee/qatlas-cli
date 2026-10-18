@@ -20,7 +20,7 @@ const (
 
 	dashboardTabTitleMax = 100
 
-	pageLayoutTabUncertain = "; this change may have taken effect, read the layout with twentycrm.pagelayouts.get " +
+	pageLayoutTabUncertain = "; this change may have taken effect, read the layout with twenty-crm.page-layouts.get " +
 		"before repeating it, because repeating it can create a second tab"
 
 	errPageLayoutWritePermission = "the workspace role of this API key may not change dashboard layouts; check the " +
@@ -36,7 +36,7 @@ var pageLayoutWriteRisk = capability.Risk{
 }
 
 var pagelayouttabsCreate = capability.Descriptor{
-	ID: Provider + ".pagelayouttabs.create", Version: 1, Title: "Add a tab to a Twenty CRM dashboard",
+	ID: Provider + ".page-layout-tabs.create", Version: 1, Title: "Add a tab to a Twenty CRM dashboard",
 	Description: "Add one empty tab in grid mode to a dashboard layout of the Twenty workspace of a connection. The " +
 		"layout is read first and must be a live dashboard layout. The tab is visible to all members of the " +
 		"workspace. Needs the Twenty permission \"Layouts\" and a connection without object targets, and is " +
@@ -52,7 +52,7 @@ var pagelayouttabsCreate = capability.Descriptor{
 		`"title":{"type":"string"},"position":{"type":"number"}},"required":["id","layout_id","title","position"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "layout_id", Required: true, Description: "UUID of the dashboard layout, as returned by twentycrm.pagelayouts.list"},
+		{Name: "layout_id", Required: true, Description: "UUID of the dashboard layout, as returned by twenty-crm.page-layouts.list"},
 		{Name: "title", Required: true, Description: "Tab title, 1 through 100 characters, without control characters"},
 		{Name: "position", Required: true, Description: "Position among the tabs, a number from 0 through 1000000"},
 	},

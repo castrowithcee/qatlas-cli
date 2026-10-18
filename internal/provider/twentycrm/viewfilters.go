@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	viewFilterUncertain = "; this change may have taken effect, read the view with twentycrm.views.get before repeating it"
+	viewFilterUncertain = "; this change may have taken effect, read the view with twenty-crm.views.get before repeating it"
 
 	errViewFilterField = "the field is not an active, non-system field of the object of this view with a type that " +
 		"a filter can be written for"
@@ -54,7 +54,7 @@ const viewFilterSchema = `{"type":"object","properties":{"id":{"type":"string"},
 	`"required":["id","view_id","field_id","operand"],"additionalProperties":false}`
 
 var viewFilterFields = []capability.Field{
-	{Name: "id", Description: "The filter; use it with twentycrm.viewfilters.update"},
+	{Name: "id", Description: "The filter; use it with twenty-crm.view-filters.update"},
 	{Name: "view_id", Description: "The view that holds the filter"},
 	{Name: "field_id", Description: "The field the filter is on"},
 	{Name: "field", Description: "API name of the field, untrusted data"},
@@ -73,7 +73,7 @@ var viewFilterValueArguments = []capability.Argument{
 }
 
 var viewfiltersCreate = capability.Descriptor{
-	ID: Provider + ".viewfilters.create", Version: 1, Title: "Add a filter to a Twenty CRM view",
+	ID: Provider + ".view-filters.create", Version: 1, Title: "Add a filter to a Twenty CRM view",
 	Description: "Add one simple filter to a view of the Twenty workspace of a connection. The field must belong to " +
 		"the object of the view, be active, and not be a system field. " + viewFilterNote + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "filters", "create"},
@@ -84,8 +84,8 @@ var viewfiltersCreate = capability.Descriptor{
 		`},"required":["view_id","field_id","operand"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewFilterSchema),
 	Arguments: append([]capability.Argument{
-		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twentycrm.views.list"},
-		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twentycrm.metaobjects.get"},
+		{Name: "view_id", Required: true, Description: "UUID of the view, as returned by twenty-crm.views.list"},
+		{Name: "field_id", Required: true, Description: "UUID of the field, as returned by twenty-crm.meta-objects.get"},
 		{Name: "operand", Required: true, Description: "One of " + strings.Join(filterOperands, ", ")},
 	}, viewFilterValueArguments...),
 	Fields: viewFilterFields,
@@ -95,7 +95,7 @@ var viewfiltersCreate = capability.Descriptor{
 }
 
 var viewfiltersUpdate = capability.Descriptor{
-	ID: Provider + ".viewfilters.update", Version: 1, Title: "Update a filter of a Twenty CRM view",
+	ID: Provider + ".view-filters.update", Version: 1, Title: "Update a filter of a Twenty CRM view",
 	Description: "Change the operand and the value of one simple filter of a view of the Twenty workspace of a " +
 		"connection; the field of the filter does not change. A filter on a sub field or a relation, and a filter " +
 		"with an operand Qatlas does not write, is refused. A valued operand always needs its value, also when " +
@@ -108,7 +108,7 @@ var viewfiltersUpdate = capability.Descriptor{
 		`},"required":["id"],"minProperties":2,"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(viewFilterSchema),
 	Arguments: append([]capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the filter, as returned by twentycrm.viewfilters.create or twentycrm.views.get"},
+		{Name: "id", Required: true, Description: "UUID of the filter, as returned by twenty-crm.view-filters.create or twenty-crm.views.get"},
 		{Name: "operand", Description: "One of " + strings.Join(filterOperands, ", ") + "; the operand of the filter when omitted"},
 	}, viewFilterValueArguments...),
 	Fields: viewFilterFields,

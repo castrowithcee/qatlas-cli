@@ -84,7 +84,7 @@ const (
 )
 
 var pageLayoutsList = capability.Descriptor{
-	ID:      Provider + ".pagelayouts.list",
+	ID:      Provider + ".page-layouts.list",
 	Version: 1,
 	Title:   "List Twenty CRM dashboard layouts",
 	Description: "List one page of the dashboard layouts of the Twenty workspace of a connection without object " +
@@ -111,7 +111,7 @@ var pageLayoutsList = capability.Descriptor{
 }
 
 var pageLayoutsGet = capability.Descriptor{
-	ID:      Provider + ".pagelayouts.get",
+	ID:      Provider + ".page-layouts.get",
 	Version: 1,
 	Title:   "Get a Twenty CRM dashboard layout",
 	Description: "Read one dashboard layout of the Twenty workspace of a connection without object targets with its " +
@@ -124,7 +124,7 @@ var pageLayoutsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + pageLayoutSchemaProps + `},` +
 		`"required":["id","name","type","tabs"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the dashboard layout, as returned by twentycrm.pagelayouts.list", Required: true},
+		{Name: "id", Description: "UUID of the dashboard layout, as returned by twenty-crm.page-layouts.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "tabs", Description: "The tabs with their widgets; at most 50 tabs of at most 100 widgets each"},
@@ -363,7 +363,7 @@ func (r pageLayoutRecord) project(op string, objects map[string]string) (*PageLa
 // ListPageLayouts reads one page of dashboard layouts.
 func (c *Client) ListPageLayouts(ctx context.Context, connection string, limit int, cursor string) (*PageLayoutList, error) {
 	const op = "list dashboard layouts"
-	binding := provider.CursorBinding("pagelayouts.list", connection)
+	binding := provider.CursorBinding("page-layouts.list", connection)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err

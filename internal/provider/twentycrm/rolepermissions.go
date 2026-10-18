@@ -47,7 +47,7 @@ const (
 	errPermFields = "fields must hold 1 to 100 entries with distinct field_id values"
 	errPermFlags  = "flags must be a list of distinct known permission flags; an empty list withdraws every flag"
 	errPermTarget = "the object or a field is unknown, a field belongs to another object, or the object or a " +
-		"field is a system one; read the object with twentycrm.metaobjects.get"
+		"field is a system one; read the object with twenty-crm.meta-objects.get"
 
 	rolePermNote = "The change applies to every member of the role at once. Needs the Twenty permissions " +
 		"\"Roles\" and \"Data model\" (the object is read first) and a connection without object targets, and is " +
@@ -65,12 +65,12 @@ func rolePermFlagSchema() string {
 }
 
 var rolePermRoleArgument = capability.Argument{Name: "role_id", Required: true,
-	Description: "UUID of the role, as returned by twentycrm.roles.list"}
+	Description: "UUID of the role, as returned by twenty-crm.roles.list"}
 var rolePermObjectArgument = capability.Argument{Name: "object_id", Required: true,
-	Description: "UUID of the object, as returned by twentycrm.metaobjects.list"}
+	Description: "UUID of the object, as returned by twenty-crm.meta-objects.list"}
 
 var rolesSetObjectPermissions = capability.Descriptor{
-	ID: Provider + ".roles.setobjectpermissions", Version: 1, Title: "Set the object rights of a Twenty CRM role",
+	ID: Provider + ".roles.set-object-permissions", Version: 1, Title: "Set the object rights of a Twenty CRM role",
 	Description: "Set the rights of one role on the records of one object of the Twenty workspace of a connection: " +
 		"read, update, soft delete, and destroy; only the given rights change and at least one is required. " +
 		rolePermNote,
@@ -98,7 +98,7 @@ var rolesSetObjectPermissions = capability.Descriptor{
 }
 
 var rolesSetFieldPermissions = capability.Descriptor{
-	ID: Provider + ".roles.setfieldpermissions", Version: 1, Title: "Set the field rights of a Twenty CRM role",
+	ID: Provider + ".roles.set-field-permissions", Version: 1, Title: "Set the field rights of a Twenty CRM role",
 	Description: "Set the rights of one role on the values of 1 to 100 fields of one object of the Twenty workspace " +
 		"of a connection: read and update per field; only the given rights change. " + rolePermNote,
 	Tags:     []string{"twentycrm", "roles", "permissions", "fields", "update"},
@@ -114,7 +114,7 @@ var rolesSetFieldPermissions = capability.Descriptor{
 		`"required":["role_id","object_id","fields_set"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{rolePermRoleArgument, rolePermObjectArgument,
 		{Name: "fields", Required: true, Description: "1 to 100 entries {field_id, can_read, can_update} of fields " +
-			"of this object, as returned by twentycrm.metaobjects.get; field_id values must differ"}},
+			"of this object, as returned by twenty-crm.meta-objects.get; field_id values must differ"}},
 	Fields: []capability.Field{{Name: "role_id", Description: "The changed role"},
 		{Name: "object_id", Description: "The object"}, {Name: "fields_set", Description: "Number of fields sent"}},
 	Examples: []capability.Example{{Description: "Hide a field from a role",
@@ -124,7 +124,7 @@ var rolesSetFieldPermissions = capability.Descriptor{
 }
 
 var rolesSetPermissionFlags = capability.Descriptor{
-	ID: Provider + ".roles.setpermissionflags", Version: 1, Title: "Set the settings rights of a Twenty CRM role",
+	ID: Provider + ".roles.set-permission-flags", Version: 1, Title: "Set the settings rights of a Twenty CRM role",
 	Description: "Replace the settings permission flags of one role of the Twenty workspace of a connection with " +
 		"exactly the given list: a flag that is not named is withdrawn, an empty list withdraws all. " +
 		"Flags such as ROLES, API_KEYS_AND_WEBHOOKS, SECURITY, or DATA_MODEL are ordinary values of the list. " +
@@ -183,7 +183,7 @@ func decodePermArgs(raw json.RawMessage, out any) error {
 	return nil
 }
 
-// RoleObjectPermissions is the checked content of setobjectpermissions. A nil right is not sent.
+// RoleObjectPermissions is the checked content of set-object-permissions. A nil right is not sent.
 type RoleObjectPermissions struct {
 	RoleID, ObjectID                              string
 	CanRead, CanUpdate, CanSoftDelete, CanDestroy *bool

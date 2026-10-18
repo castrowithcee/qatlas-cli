@@ -66,14 +66,14 @@ Relation, array, and rich-text fields cannot be sorted by.
 
 ## Filtering and counting records
 
-`records.search` and `records.groupby` (`read`) take no filter expression. The agent gives structured
+`records.search` and `records.group-by` (`read`) take no filter expression. The agent gives structured
 conditions and Qatlas builds Twenty's filter from checked parts only: Twenty's grammar has no escaping, so no
 value may carry a quote, bracket, colon, comma, backslash, parenthesis, or percent sign.
 
 - `records.search` reads a page like `records.list` for 1 to 5 AND-linked conditions
   `{field, operator, value}`. The cursor is also bound to the normalized conditions, whose order and repeats
   do not matter.
-- `records.groupby` counts the records per value of 1 or 2 different fields, optionally limited by the same
+- `records.group-by` counts the records per value of 1 or 2 different fields, optionally limited by the same
   conditions.
 - A condition field is a top-level field of the object's response shape or `field.subfield` of a composite
   field, only when the schema names the subfield. Relation fields, `deletedAt`, rich text, arrays and
@@ -86,14 +86,14 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
-- `records.groupby` groups by selections, booleans, dates (by day, UTC), and relation identifiers, not by text,
+- `records.group-by` groups by selections, booleans, dates (by day, UTC), and relation identifiers, not by text,
   numbers, composite subfields, or the record `id`. Twenty cuts a longer group list silently, so an answer
   with 200 or more groups is refused as possibly incomplete; narrow it with conditions. Group values are
   untrusted workspace data of the same data class as records.
 
 ## Searching across objects
 
-`records.searchall` (`read`) finds records by full-text search over all reachable objects in one call and
+`records.search-all` (`read`) finds records by full-text search over all reachable objects in one call and
 returns per hit `object`, `id`, and a capped `label`, plus `omitted`. Qatlas sends one fixed query with the
 checked arguments as variables only; there is no free GraphQL. A failed query shows no text of Twenty.
 
@@ -105,14 +105,14 @@ checked arguments as variables only; there is no free GraphQL. A failed query sh
 
 ## Reading workflows
 
-`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide.
+`workflows.list`, `workflows.get`, and `workflow-runs.list` (`read`) are workspace-wide.
 
 - Step and trigger settings, run outputs, context, state, and error texts are never read out.
 - A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
 
 ## Controlling workflows
 
-`workflowversions.activate`, `deactivate` (`update`), `workflowruns.stop`, and `retry` (`execute`) are
+`workflow-versions.activate`, `deactivate` (`update`), `workflow-runs.stop`, and `retry` (`execute`) are
 workspace-wide, need the settings right Workflows and a `tools` entry; no profile ticks them.
 
 - `activate` reads the version first and activates it only if it opens no lasting path to the outside through
@@ -123,37 +123,37 @@ workspace-wide, need the settings right Workflows and a `tools` entry; no profil
 
 ## Members and roles
 
-`workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide. Members are
+`workspace-members.list`, `workspace-members.get`, and `roles.list` (`read`) are workspace-wide. Members are
 personal data with their own data class; avatars, user identifiers, and member and key names are never read.
 
-`roles.create`, `update`, `delete`, `setobjectpermissions`, `setfieldpermissions`, and `setpermissionflags` are
+`roles.create`, `update`, `delete`, `set-object-permissions`, `set-field-permissions`, and `set-permission-flags` are
 confirmed, need a `tools` entry, and assign nothing. They change only a role that a first read shows editable and
 without API keys. A rights call covers one non-system object checked against the data model ("Data model"). Flags
 are replaced as a whole. All need "Roles", so use a key of its own; no profile ticks them.
 
 ## Logic functions and AI agents (read-only)
 
-`agents.list`, `agents.get`, `skills.list`, `skills.get` (Twenty right "AI"), `logicfunctions.list`, and
-`logicfunctions.get` (no right) are workspace-wide `read` tools. Prompts, skill content, code, handler paths,
+`agents.list`, `agents.get`, `skills.list`, `skills.get` (Twenty right "AI"), `logic-functions.list`, and
+`logic-functions.get` (no right) are workspace-wide `read` tools. Prompts, skill content, code, handler paths,
 logs, and the instructions and settings of triggers are never read out; a trigger shows only its kind.
 
 ## Data model
 
-`metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
+`meta-objects.list`, `meta-objects.get`, and `meta-fields.get` (`read`) are workspace-wide and read Twenty's
 metadata API for all objects and fields; default values, settings, and relation details are never read.
 
-`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` change the schema for
+`meta-objects.create`, `update`, `delete` and `meta-fields.create`, `update`, `delete` change the schema for
 every user and integration of the workspace. All nine tools need the Twenty right "Data model": use a
 connection with an API key of its own. The writers need a `tools` entry; no profile ticks them.
-`metafields.create` adds a field to any object Twenty accepts, standard or custom; Twenty decides, Qatlas
+`meta-fields.create` adds a field to any object Twenty accepts, standard or custom; Twenty decides, Qatlas
 does not pre-check the object. A field added to a standard object is a custom field.
-`metaobjects.update` and `metafields.update` change standard and system objects and fields too, with every
+`meta-objects.update` and `meta-fields.update` change standard and system objects and fields too, with every
 argument Twenty accepts there; Twenty refuses the rest. Replacing the options of a field, a standard one
 included, clears every removed value in all records.
 
-`metafields.create` with the type `RELATION` links two objects and creates one field on each, so it changes the
-schema of both; the target may be any object Twenty accepts, workspace members included. `metafields.update`
-changes label, description, and active state of a relation field; `metafields.delete` removes a deactivated
+`meta-fields.create` with the type `RELATION` links two objects and creates one field on each, so it changes the
+schema of both; the target may be any object Twenty accepts, workspace members included. `meta-fields.update`
+changes label, description, and active state of a relation field; `meta-fields.delete` removes a deactivated
 custom relation field together with its counterpart on the other object and the links of all records. Morph
 relations cannot be created, changed, or deleted.
 
@@ -163,21 +163,21 @@ relations cannot be created, changed, or deleted.
 sorts, and groups. Only views visible to the whole workspace are read; `get` answers a personal or widget view
 like an unknown one. Filter and group values are untrusted workspace data of their own data class.
 
-`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`, `viewgroups.update`, and
+`views.create`, `update`, `delete`, `view-fields.*`, `view-sorts.*`, `view-filters.*`, `view-groups.update`, and
 `delete` are confirmed, need a `tools` entry and the Twenty right "Views" (also for other users' personal views;
 use a key of its own); no profile ticks them. Each first reads its view and refuses what `get` would not read and
 standard and index views. `update` changes name, icon, and the grouping field of a TABLE or KANBAN view (active
-SELECT only; Twenty recreates all groups, losing visibility and order); `viewgroups.update` changes visibility
+SELECT only; Twenty recreates all groups, losing visibility and order); `view-groups.update` changes visibility
 and position. New views are workspace-wide and empty; `delete` is permanent. Column, sort, and filter `create`
 refuse a foreign, inactive, or system field, column and sort also an unsortable or used one. Filters are simple
 (no group, relation, or sub field) and checked by field type per the tool help; their `update` keeps the field.
 
 ## Dashboards
 
-`pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
+`page-layouts.list` and `page-layouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
 widgets. Other layout types and trashed layouts are unknown to both. A widget shows only type, title, position,
 object, and chart type (`unknown` if unknown); an embedded page shows only its origin. Titles are untrusted data
-of their own data class. On the object `dashboard`, `records.create` and `records.batchcreate` without a layout
+of their own data class. On the object `dashboard`, `records.create` and `records.batch-create` without a layout
 identifier also create a layout with one tab; `records.destroy` also destroys its layouts, `delete` leaves them.
 
 The tab and widget write tools are confirmed, need a `tools` entry and the right "Layouts"; no profile ticks
@@ -212,7 +212,7 @@ every field from the workspace catalog and builds the request body from the chec
 
 ## Linking notes and tasks
 
-`activitytargets.list`, `activitytargets.create`, and `activitytargets.delete` (`read`, `create`, `delete`)
+`activity-targets.list`, `activity-targets.create`, and `activity-targets.delete` (`read`, `create`, `delete`)
 read, set, and remove the links between a note or a task (`activity`) and a record of any reachable object,
 standard or custom. The field that carries the link comes from the workspace schema of the link object, never
 from an argument. An object that the schema gives no single link relation cannot be linked.
@@ -258,18 +258,18 @@ signing key.
 
 ## Batches
 
-`records.batchcreate`, `records.batchupdate`, and `records.batchdelete` act on one reachable object with 1 to
+`records.batch-create`, `records.batch-update`, and `records.batch-delete` act on one reachable object with 1 to
 60 records in one confirmed request that Qatlas sends once; no profile ticks them.
 
-- `batchcreate` takes a list of records; each is checked like a `create`, and one refused record refuses the
+- `batch-create` takes a list of records; each is checked like a `create`, and one refused record refuses the
   batch before anything is written. With `upsert` Twenty matches the entries against existing records by the
   unique fields of the object and changes the match instead of creating a record. Because `upsert` can change
   records, the tool carries the effect `update` and is not idempotent: a connection needs the `update`
   permission for it even without `upsert`.
-- `batchupdate` sets one set of fields, checked like an `update`, on a list of record identifiers.
-- `batchdelete` moves a list of records to the trash like `delete` and is offered only by a connection whose
+- `batch-update` sets one set of fields, checked like an `update`, on a list of record identifiers.
+- `batch-delete` moves a list of records to the trash like `delete` and is offered only by a connection whose
   `tools` list names it. Permanent deletion and restore have no batch form.
-- `batchupdate` and `batchdelete` select their records only by the identifier list, sent as a filter on `id`.
+- `batch-update` and `batch-delete` select their records only by the identifier list, sent as a filter on `id`.
   An invalid list is refused before any request, because Twenty acts on every record without a filter.
 - It is not established whether Twenty applies a batch as a whole when one record fails. An unclear result, or an
   answer that does not name exactly the requested records (for `upsert`, another count), is reported as an
@@ -282,7 +282,7 @@ identifiers are distinct UUIDs of that object.
 
 - `records.duplicates` reports the possible duplicates of each given record by the criteria Twenty defines
   for the object and changes nothing. An identifier that does not exist makes the whole call fail.
-- `records.mergepreview` shows the record a merge would leave and changes nothing; Twenty computes the
+- `records.merge-preview` shows the record a merge would leave and changes nothing; Twenty computes the
   preview in a dry run that no argument controls.
 - `records.merge` takes the arguments of the preview and merges for real: the other records are deleted and
   their relations are moved to the remaining record. Whether the deleted records can be restored is not

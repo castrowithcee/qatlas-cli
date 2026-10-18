@@ -19,7 +19,7 @@ const (
 	viewFiltersPath = "/rest/metadata/viewFilters"
 	viewGroupsPath  = "/rest/metadata/viewGroups"
 
-	viewPartDeleteUncertain = "; this deletion may have taken effect, read the view with twentycrm.views.get " +
+	viewPartDeleteUncertain = "; this deletion may have taken effect, read the view with twenty-crm.views.get " +
 		"before repeating it"
 
 	viewPartDeleteResult = `{"type":"object","properties":{"id":{"type":"string"},"kind":{"type":"string"},` +
@@ -57,7 +57,7 @@ func viewPartDeleteDescriptor(id, title, noun, part, extra string) capability.De
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(viewPartDeleteResult),
 		Arguments: []capability.Argument{
-			{Name: "id", Required: true, Description: "UUID of the " + noun + ", as returned by twentycrm.views.get"},
+			{Name: "id", Required: true, Description: "UUID of the " + noun + ", as returned by twenty-crm.views.get"},
 		},
 		Fields: []capability.Field{
 			{Name: "id", Description: "The deleted " + noun},
@@ -71,13 +71,13 @@ func viewPartDeleteDescriptor(id, title, noun, part, extra string) capability.De
 }
 
 var (
-	viewfieldsDelete = viewPartDeleteDescriptor("viewfields", "Delete a column of a Twenty CRM view", "column",
+	viewfieldsDelete = viewPartDeleteDescriptor("view-fields", "Delete a column of a Twenty CRM view", "column",
 		"one column", "")
-	viewsortsDelete = viewPartDeleteDescriptor("viewsorts", "Delete a sort of a Twenty CRM view", "sort",
+	viewsortsDelete = viewPartDeleteDescriptor("view-sorts", "Delete a sort of a Twenty CRM view", "sort",
 		"one sort", "")
-	viewfiltersDelete = viewPartDeleteDescriptor("viewfilters", "Delete a filter of a Twenty CRM view", "filter",
+	viewfiltersDelete = viewPartDeleteDescriptor("view-filters", "Delete a filter of a Twenty CRM view", "filter",
 		"one filter", "")
-	viewgroupsDelete = viewPartDeleteDescriptor("viewgroups", "Delete a group of a Twenty CRM view", "group",
+	viewgroupsDelete = viewPartDeleteDescriptor("view-groups", "Delete a group of a Twenty CRM view", "group",
 		"one group", "")
 
 	viewPartDeleteKinds = []viewPartDeleteKind{

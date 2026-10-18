@@ -144,8 +144,8 @@ func TestPageLayoutDeleteDescriptorsAreGuarded(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := reg.Lookup(Provider + ".pagelayouts.delete"); ok {
-		t.Error("pagelayouts.delete is registered")
+	if _, _, ok := reg.Lookup(Provider + ".page-layouts.delete"); ok {
+		t.Error("page-layouts.delete is registered")
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, tt := range layoutDeleteCases() {

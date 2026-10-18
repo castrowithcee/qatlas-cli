@@ -32,9 +32,9 @@ const (
 	widgetTypeTable    = "RECORD_TABLE"
 
 	pageLayoutWidgetCreateUncertain = "; this change may have taken effect, read the layout with " +
-		"twentycrm.pagelayouts.get before repeating it, because repeating it can create a second widget"
+		"twenty-crm.page-layouts.get before repeating it, because repeating it can create a second widget"
 	pageLayoutWidgetUpdateUncertain = "; this change may have taken effect, read the layout with " +
-		"twentycrm.pagelayouts.get before repeating it"
+		"twenty-crm.page-layouts.get before repeating it"
 
 	errWidgetPosition = "position needs row from 0 through 99, column from 0 through 11, row_span from 1 through 100, " +
 		"and column_span from 1 through 12 as integers, with column + column_span at most 12 and row + row_span at most 100"
@@ -93,14 +93,14 @@ var widgetPositionArgument = capability.Argument{Name: "position", Required: tru
 	"column_span at most 12 and row + row_span at most 100"}
 
 var pagelayoutwidgetsCreate = capability.Descriptor{
-	ID: Provider + ".pagelayoutwidgets.create", Version: 1, Title: "Add a widget to a Twenty CRM dashboard tab",
+	ID: Provider + ".page-layout-widgets.create", Version: 1, Title: "Add a widget to a Twenty CRM dashboard tab",
 	Description: "Add one rich text widget (Markdown), one table widget, or one chart widget (GRAPH) to a tab of a " +
 		"dashboard layout of the Twenty workspace of a connection. Tab and layout are read first; the layout must be " +
 		"a live dashboard layout. A table widget shows a custom table view of the whole workspace that is read first " +
 		"too, never an index, standard, personal, or widget view, and takes the object of that view. A chart widget " +
 		"is an aggregate number, bar, line, or pie chart of the records of one object, whose schema is read first and " +
 		"needs the Twenty permission \"Data model\" too; every field must belong to the object, be active, and not be " +
-		"a system field. Filters are simple and checked like those of twentycrm.viewfilters.create: " + viewFilterNote +
+		"a system field. Filters are simple and checked like those of twenty-crm.view-filters.create: " + viewFilterNote +
 		"Display options are only the ones named as arguments. Qatlas builds the widget configuration itself. Other " +
 		"widget types are not offered. " + widgetWriteNote,
 	Tags:     []string{"twentycrm", "dashboards", "pagelayoutwidgets", "create"},
@@ -113,17 +113,17 @@ var pagelayoutwidgetsCreate = capability.Descriptor{
 		`},"required":["tab_id","type","title","position"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(widgetResultSchema),
 	Arguments: append([]capability.Argument{
-		{Name: "tab_id", Required: true, Description: "UUID of the dashboard tab, as returned by twentycrm.pagelayouts.get"},
+		{Name: "tab_id", Required: true, Description: "UUID of the dashboard tab, as returned by twenty-crm.page-layouts.get"},
 		{Name: "type", Required: true, Description: "STANDALONE_RICH_TEXT, RECORD_TABLE, or GRAPH"},
 		{Name: "title", Required: true, Description: "Widget title, 1 through 100 characters, without control characters"},
 		widgetPositionArgument,
 		{Name: "markdown", Description: "Only for STANDALONE_RICH_TEXT and required there: the text as Markdown, 1 through " +
 			"20000 characters, without control characters other than line breaks and tabs"},
 		{Name: "view_id", Description: "Only for RECORD_TABLE and required there: UUID of a custom table view of the " +
-			"whole workspace, as returned by twentycrm.views.list; never an index, standard, or personal view"},
+			"whole workspace, as returned by twenty-crm.views.list; never an index, standard, or personal view"},
 	}, chartArguments...),
 	Fields: []capability.Field{
-		{Name: "id", Description: "The new widget; use it with twentycrm.pagelayoutwidgets.update"},
+		{Name: "id", Description: "The new widget; use it with twenty-crm.page-layout-widgets.update"},
 		{Name: "tab_id", Description: "The dashboard tab that holds the widget"},
 		{Name: "title", Description: "Title of the widget, untrusted data"},
 		{Name: "chart_type", Description: "Type of a chart widget"},
@@ -140,12 +140,12 @@ var pagelayoutwidgetsCreate = capability.Descriptor{
 }
 
 var pagelayoutwidgetsUpdate = capability.Descriptor{
-	ID: Provider + ".pagelayoutwidgets.update", Version: 1, Title: "Update a widget of a Twenty CRM dashboard",
+	ID: Provider + ".page-layout-widgets.update", Version: 1, Title: "Update a widget of a Twenty CRM dashboard",
 	Description: "Change the title, the position, the chart, or any of them for one widget of a dashboard layout of the " +
 		"Twenty workspace of a connection; nothing else changes, and the position is changed as a whole. Widget, tab, " +
 		"and layout are read first; the layout must be a live dashboard layout. The chart arguments are only for a " +
 		"chart widget (GRAPH) and replace its whole chart configuration: give chart_type, aggregate field and " +
-		"operation, and everything else the chart should keep, as on twentycrm.pagelayoutwidgets.create; the object " +
+		"operation, and everything else the chart should keep, as on twenty-crm.page-layout-widgets.create; the object " +
 		"stays the one of the widget, whose schema is read first and needs the Twenty permission \"Data model\" too. " +
 		"The type of a widget cannot change. " + widgetWriteNote,
 	Tags:     []string{"twentycrm", "dashboards", "pagelayoutwidgets", "update"},
@@ -156,7 +156,7 @@ var pagelayoutwidgetsUpdate = capability.Descriptor{
 		`},"required":["id"],"minProperties":2,"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(widgetResultSchema),
 	Arguments: append([]capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the widget, as returned by twentycrm.pagelayouts.get"},
+		{Name: "id", Required: true, Description: "UUID of the widget, as returned by twenty-crm.page-layouts.get"},
 		{Name: "title", Description: "New title, 1 through 100 characters, without control characters"},
 		{Name: "position", Description: "New place in the grid, all four members together: row 0 through 99, column " +
 			"0 through 11, row_span 1 through 100, column_span 1 through 12, integers; column + column_span at most " +

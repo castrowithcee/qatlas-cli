@@ -110,7 +110,7 @@ var viewsList = capability.Descriptor{
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "object", Description: "Singular API name of an object whose views are listed; not together with object_id"},
-		{Name: "object_id", Description: "UUID of an object whose views are listed, as returned by twentycrm.metaobjects.list"},
+		{Name: "object_id", Description: "UUID of an object whose views are listed, as returned by twenty-crm.meta-objects.list"},
 		{Name: "limit", Description: "Views per page, from 1 through 100; 25 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page; the first page when omitted"},
 	},
@@ -137,7 +137,7 @@ var viewsGet = capability.Descriptor{
 		`"required":["id","name","object_metadata_id","type","fields","filters","filter_groups","sorts","groups"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "UUID of the view, as returned by twentycrm.views.list", Required: true},
+		{Name: "id", Description: "UUID of the view, as returned by twenty-crm.views.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "fields", Description: "The columns in the view, at most 200"},

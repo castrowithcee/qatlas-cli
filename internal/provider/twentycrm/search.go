@@ -56,7 +56,7 @@ const conditionNote = "Conditions are AND-linked and use fixed operators per fie
 	"up to 20 values. Dates are YYYY-MM-DD, date-times YYYY-MM-DDTHH:MM:SSZ. Text values use letters, digits, " +
 	"spaces, and . _ + @ & - only"
 
-const conditionsDescription = "objects with field (a field of twentycrm.objects.get, or field.subfield of a " +
+const conditionsDescription = "objects with field (a field of twenty-crm.objects.get, or field.subfield of a " +
 	"composite field), operator, and value (a list for in)"
 
 var recordsSearch = capability.Descriptor{

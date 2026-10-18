@@ -32,7 +32,7 @@ import (
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
-const Provider = "twentycrm"
+const Provider = "twenty-crm"
 
 // cloudOrigin is the managed Twenty Cloud origin and the default a new service starts from. A self-hosted
 // workspace configures its own HTTPS origin instead; the agent never supplies one.
@@ -150,7 +150,7 @@ var companiesGet = capability.Descriptor{
 		`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
 		`"required":["id","name"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "id", Description: "Company record identifier as a UUID, as returned by twentycrm.companies.list", Required: true},
+		{Name: "id", Description: "Company record identifier as a UUID, as returned by twenty-crm.companies.list", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Company record identifier"},
@@ -176,14 +176,14 @@ var companiesUpdate = companyMutationDescriptor("update", capability.EffectUpdat
 const companyIDOnlyInput = `{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`
 
 var companiesDelete = companyDeleteDescriptor("delete", 2, "Move one company of the workspace of a connection to the Twenty trash. "+
-	"The company stays recoverable with twentycrm.companies.restore and is found with twentycrm.companies.list deleted true. "+
+	"The company stays recoverable with twenty-crm.companies.restore and is found with twenty-crm.companies.list deleted true. "+
 	"A connection offers this tool only when its tools list names it")
 var companiesDestroy = companyDeleteDescriptor("destroy", 1, "Permanently delete one company of the workspace of a connection. "+
-	"This cannot be undone: the company is not moved to the trash and twentycrm.companies.restore cannot bring it back. "+
+	"This cannot be undone: the company is not moved to the trash and twenty-crm.companies.restore cannot bring it back. "+
 	"A connection offers this tool only when its tools list names it")
 var companiesRestore = withDescription(companyMutationDescriptor("restore", capability.EffectUpdate, capability.IdempotencyIdempotent,
 	companyIDOnlyInput, companiesCreate.OutputSchema, companyIDArgument),
-	"Restore one company of the Twenty trash in the workspace of a connection, as found with twentycrm.companies.list deleted true")
+	"Restore one company of the Twenty trash in the workspace of a connection, as found with twenty-crm.companies.list deleted true")
 
 func withDescription(d capability.Descriptor, description string) capability.Descriptor {
 	d.Description = description
@@ -199,7 +199,7 @@ func companyDeleteDescriptor(action string, version int, description string) cap
 }
 
 var (
-	companyIDArgument     = capability.Argument{Name: "id", Description: "Company identifier of 36 characters, as returned by twentycrm.companies.list", Required: true}
+	companyIDArgument     = capability.Argument{Name: "id", Description: "Company identifier of 36 characters, as returned by twenty-crm.companies.list", Required: true}
 	companyNameArgument   = capability.Argument{Name: "name", Description: "Name of the company, 1 to 255 characters"}
 	companyDomainArgument = capability.Argument{Name: "domain", Description: "Primary domain of the company, up to 253 characters"}
 )
@@ -227,7 +227,7 @@ var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, obje
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Twenty CRM", DefaultBaseURL: cloudOrigin,
+		ID: Provider, Name: "Twenty CRM", FormerIDs: []string{"twentycrm"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
 		Description:        "Open-source customer relationship management (CRM) system",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{

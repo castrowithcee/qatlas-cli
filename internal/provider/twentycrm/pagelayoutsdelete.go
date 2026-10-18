@@ -15,7 +15,7 @@ import (
 
 const (
 	dashboardDeleteUncertain = "; this deletion may have taken effect, read the layout with " +
-		"twentycrm.pagelayouts.get before repeating it"
+		"twenty-crm.page-layouts.get before repeating it"
 
 	layoutDeleteNote = "Needs the Twenty permission \"Layouts\" and a connection without object targets, and is " +
 		"offered only by a connection whose tools list names it. Only elements of live dashboard layouts are " +
@@ -38,7 +38,7 @@ var pageLayoutDeleteRisk = capability.Risk{
 }
 
 var pagelayoutwidgetsDelete = capability.Descriptor{
-	ID: Provider + ".pagelayoutwidgets.delete", Version: 1, Title: "Delete a widget of a Twenty CRM dashboard",
+	ID: Provider + ".page-layout-widgets.delete", Version: 1, Title: "Delete a widget of a Twenty CRM dashboard",
 	Description: "Permanently delete one widget of a dashboard layout of the Twenty workspace of a connection; the " +
 		"loss is final and the widget cannot be restored. The widget disappears for all members of the workspace. " +
 		"Widget, tab, and layout are read first. " + layoutDeleteNote,
@@ -48,14 +48,14 @@ var pagelayoutwidgetsDelete = capability.Descriptor{
 	InputSchema:  json.RawMessage(deleteIDSchema),
 	OutputSchema: json.RawMessage(dashboardWidgetDeleteResult),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the widget, as returned by twentycrm.pagelayouts.get"},
+		{Name: "id", Required: true, Description: "UUID of the widget, as returned by twenty-crm.page-layouts.get"},
 	},
 	Examples: []capability.Example{{Description: "Delete a widget",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},
 }
 
 var pagelayouttabsDelete = capability.Descriptor{
-	ID: Provider + ".pagelayouttabs.delete", Version: 1, Title: "Delete a tab of a Twenty CRM dashboard",
+	ID: Provider + ".page-layout-tabs.delete", Version: 1, Title: "Delete a tab of a Twenty CRM dashboard",
 	Description: "Permanently delete one tab of a dashboard layout of the Twenty workspace of a connection together " +
 		"with all widgets of the tab; the loss is final and the tab and its widgets cannot be restored. The tab " +
 		"disappears for all members of the workspace. Tab and layout are read first. " + layoutDeleteNote,
@@ -65,7 +65,7 @@ var pagelayouttabsDelete = capability.Descriptor{
 	InputSchema:  json.RawMessage(deleteIDSchema),
 	OutputSchema: json.RawMessage(dashboardTabDeleteResult),
 	Arguments: []capability.Argument{
-		{Name: "id", Required: true, Description: "UUID of the tab, as returned by twentycrm.pagelayouts.get"},
+		{Name: "id", Required: true, Description: "UUID of the tab, as returned by twenty-crm.page-layouts.get"},
 	},
 	Examples: []capability.Example{{Description: "Delete a tab",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},

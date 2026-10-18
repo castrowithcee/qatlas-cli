@@ -88,7 +88,7 @@ var agentsGet = capability.Descriptor{
 		`},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(agentItemSchema),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
-		Description: "UUID of the AI agent, as returned by twentycrm.agents.list"}},
+		Description: "UUID of the AI agent, as returned by twenty-crm.agents.list"}},
 	Fields: []capability.Field{{Name: "trigger_kinds", Description: "One kind per trigger, without its instructions or settings"}},
 	Examples: []capability.Example{{Description: "Read an AI agent",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},

@@ -475,7 +475,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace", []string{"bookstack", "--query", "bookstack"}, registryToolIDs(t, "bookstack", nil)},
 		{"namespace telegram", []string{"telegram", "--query", "telegram"}, registryToolIDs(t, "telegram", nil)},
 		{"namespace lexware", []string{"lexware"}, registryToolIDs(t, "lexware", nil)},
-		{"namespace twentycrm", []string{"twentycrm", "--query", "twentycrm"}, registryToolIDs(t, "twentycrm", nil)},
+		{"namespace twenty-crm", []string{"twenty-crm", "--query", "twentycrm"}, registryToolIDs(t, "twenty-crm", nil)},
 		{"namespace seatable", []string{"seatable"}, registryToolIDs(t, "seatable", nil)},
 		{"namespace github", []string{"github", "--query", "github"}, registryToolIDs(t, "github", nil)},
 		{"namespace nextcloud", []string{"nextcloud", "--query", "nextcloud"}, registryToolIDs(t, "nextcloud", nil)},

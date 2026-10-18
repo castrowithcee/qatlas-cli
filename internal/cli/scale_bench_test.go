@@ -73,7 +73,7 @@ var scaleProviders = []scaleProvider{
 	{"seatable", "https://seatable-%d.example.invalid", []string{"api-token"}, "Table"},
 	{"bookstack", "https://wiki-%d.example.invalid", []string{"token-id", "token-secret"}, ""},
 	{"nextcloud", "https://cloud-%d.example.invalid", []string{"user-id", "app-password"}, "Folder"},
-	{"twentycrm", "https://crm-%d.example.invalid", []string{"api-key"}, ""},
+	{"twenty-crm", "https://crm-%d.example.invalid", []string{"api-key"}, ""},
 	{"n8n", "https://n8n-%d.example.invalid", []string{"api-key"}, ""},
 }
 

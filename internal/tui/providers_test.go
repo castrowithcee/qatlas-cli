@@ -158,7 +158,7 @@ func TestTheProviderTableSearchesNameAndIDIgnoringCase(t *testing.T) {
 		{55, "PROVIDER 042", []string{"p042"}},
 		{55, "pRoViDeR 042", []string{"p042"}},
 		{8, "HUB", []string{"github"}},
-		{8, "crm", []string{"twentycrm"}},
+		{8, "crm", []string{"twenty-crm"}},
 		{8, "Lexware Office", []string{"lexware"}},
 		{8, "TODO", []string{"todoist"}},
 	}
