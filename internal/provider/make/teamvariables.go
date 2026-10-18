@@ -92,7 +92,7 @@ var variableFields = []capability.Field{
 }
 
 var teamVariablesList = capability.Descriptor{
-	ID: Provider + ".teamvariables.list", Version: 1, Title: "List the variables of the bound Make team",
+	ID: Provider + ".team-variables.list", Version: 1, Title: "List the variables of the bound Make team",
 	Description: "List the custom and system variables of the bound team, each with name, type, capped value, " +
 		"and is_system; takes no arguments, the team is always the connection's own. Values may be secret. " +
 		"Without the customVariables license Make reports only system variables, so custom_count 0 can mean " +
@@ -118,7 +118,7 @@ var teamVariablesList = capability.Descriptor{
 }
 
 var teamVariablesCreate = capability.Descriptor{
-	ID: Provider + ".teamvariables.create", Version: 1, Title: "Create a variable in the bound Make team",
+	ID: Provider + ".team-variables.create", Version: 1, Title: "Create a variable in the bound Make team",
 	Description: "Create one custom variable in the bound team; the team is always the connection's own. Needs " +
 		"the customVariables license, which Make's reference ties to the plan. Sends one request and never " +
 		"repeats it. Refused on a connection with a scenario allow-list. Needs the team-variables:write scope",
@@ -138,7 +138,7 @@ var teamVariablesCreate = capability.Descriptor{
 }
 
 var teamVariablesUpdate = capability.Descriptor{
-	ID: Provider + ".teamvariables.update", Version: 1, Title: "Update a variable of the bound Make team",
+	ID: Provider + ".team-variables.update", Version: 1, Title: "Update a variable of the bound Make team",
 	Description: "Set the type and value of one existing custom variable of the bound team; the name cannot be " +
 		"changed. The variable is listed first and a system variable or an unknown name is refused without " +
 		"changing anything. Sends one changing request and never repeats it. Refused on a connection with a " +
@@ -159,7 +159,7 @@ var teamVariablesUpdate = capability.Descriptor{
 }
 
 var teamVariablesDelete = capability.Descriptor{
-	ID: Provider + ".teamvariables.delete", Version: 1, Title: "Delete a variable of the bound Make team",
+	ID: Provider + ".team-variables.delete", Version: 1, Title: "Delete a variable of the bound Make team",
 	Description: "Delete one custom variable of the bound team for good. The variable is listed first and a " +
 		"system variable or an unknown name is refused. Make requires its confirmed flag, which is sent only " +
 		"when confirmed is true. Scenarios of the team that read the variable by name lose its value; Qatlas " +
@@ -267,7 +267,7 @@ func (c *Client) customVariable(ctx context.Context, op, name string) error {
 	return invalidRequest(noCustomVariables)
 }
 
-// TeamVariables is the answer of teamvariables.list.
+// TeamVariables is the answer of team-variables.list.
 type TeamVariables struct {
 	TeamID      int64          `json:"team_id"`
 	Variables   []VariableView `json:"variables"`
@@ -368,7 +368,7 @@ func variableInput(raw json.RawMessage, op string) (variableArguments, any, erro
 	return input, value, err
 }
 
-// TeamVariableChange is the answer of teamvariables.create and teamvariables.update.
+// TeamVariableChange is the answer of team-variables.create and team-variables.update.
 type TeamVariableChange struct {
 	TeamID   int64        `json:"team_id"`
 	Variable VariableView `json:"variable"`
@@ -423,7 +423,7 @@ func invokeTeamVariablesUpdate(ctx context.Context, resolved *config.Resolved, s
 		input.Name)
 }
 
-// TeamVariableDeletion is the answer of teamvariables.delete.
+// TeamVariableDeletion is the answer of team-variables.delete.
 type TeamVariableDeletion struct {
 	TeamID  int64  `json:"team_id"`
 	Name    string `json:"name"`

@@ -183,10 +183,10 @@ func TestRecordsInputIsBoundedBeforeAnyRequest(t *testing.T) {
 func TestRecordsDeleteIsOnlyOfferedThroughAToolsListAndInNoProfile(t *testing.T) {
 	h := newRecordsEnv(t)
 	if _, err := h.confirmed(dataStoreRecordsDelete.ID, "open", `{"datastore_id":7,"keys":["a"]}`); err == nil {
-		t.Fatal("datastorerecords.delete was offered without a tools list")
+		t.Fatal("data-store-records.delete was offered without a tools list")
 	}
 	if !dataStoreRecordsDelete.RequiresToolAllowList {
-		t.Fatal("datastorerecords.delete must require a tools list")
+		t.Fatal("data-store-records.delete must require a tools list")
 	}
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {

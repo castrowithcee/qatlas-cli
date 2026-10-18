@@ -60,7 +60,7 @@ var dataStructuresReadRisk = capability.Risk{
 }
 
 var dataStructuresList = capability.Descriptor{
-	ID: Provider + ".datastructures.list", Version: 1, Title: "List Make data structures",
+	ID: Provider + ".data-structures.list", Version: 1, Title: "List Make data structures",
 	Description: "List the data structures of the bound team by name, id, and strictness, sorted by name, page by " +
 		"page; the field specification is read with get. Refused on a connection with a scenario allow-list. " +
 		"Needs the udts:read scope",
@@ -88,7 +88,7 @@ var dataStructuresList = capability.Descriptor{
 }
 
 var dataStructuresGet = capability.Descriptor{
-	ID: Provider + ".datastructures.get", Version: 1, Title: "Get a Make data structure",
+	ID: Provider + ".data-structures.get", Version: 1, Title: "Get a Make data structure",
 	Description: "Read one data structure of the bound team with its field specification, bounded and without " +
 		"default values. Refused on a connection with a scenario allow-list. Needs the udts:read scope",
 	Tags: []string{"make", "datastructures", "get", "automation"}, Risk: dataStructuresReadRisk, Provider: Provider,

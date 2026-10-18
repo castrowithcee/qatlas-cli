@@ -187,10 +187,10 @@ func TestTeamVariablesInputIsValidatedBeforeAnyRequest(t *testing.T) {
 func TestTeamVariablesDeleteIsOnlyOfferedThroughAToolsListAndInNoProfile(t *testing.T) {
 	h := newVariablesEnv(t)
 	if _, err := h.confirmed(teamVariablesDelete.ID, "open", `{"name":"region","confirmed":true}`); err == nil {
-		t.Fatal("teamvariables.delete was offered without a tools list")
+		t.Fatal("team-variables.delete was offered without a tools list")
 	}
 	if !teamVariablesDelete.RequiresToolAllowList {
-		t.Fatal("teamvariables.delete must require a tools list")
+		t.Fatal("team-variables.delete must require a tools list")
 	}
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
