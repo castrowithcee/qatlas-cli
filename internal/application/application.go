@@ -516,6 +516,15 @@ type ProvidersResponse struct {
 	Providers []ProviderSummary `json:"providers"`
 }
 
+// UnknownProviderHint phrases what to add to an unknown provider name: the current name when it is a former
+// ID from a rename table, otherwise the closest registered provider.
+func UnknownProviderHint(registry *capability.Registry, name string) string {
+	if current, ok := config.CurrentProviderID(registry, name); ok {
+		return fmt.Sprintf(" (renamed to %q)", current)
+	}
+	return DidYouMean(Suggest(name, ProviderIDs(registry)))
+}
+
 // ProviderIDs returns the ID of every provider the registry knows, sorted.
 func ProviderIDs(registry *capability.Registry) []string {
 	all := registry.ProviderMetadataAll()
@@ -773,7 +782,7 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 	if request.Provider != "" {
 		if _, ok := c.registry.ProviderMetadata(request.Provider); !ok {
 			return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown provider %q", request.Provider) +
-				DidYouMean(Suggest(request.Provider, ProviderIDs(c.registry))) +
+				UnknownProviderHint(c.registry, request.Provider) +
 				"; leave the provider out to search every provider"}
 		}
 	}
@@ -1257,6 +1266,9 @@ func (c *Core) operation(id string, version int) (capability.Descriptor, capabil
 	}
 	descriptor, handler, ok := c.registry.Lookup(id)
 	if !ok {
+		if current, renamed := config.CurrentToolID(c.registry, id); renamed {
+			return capability.Descriptor{}, nil, &UnknownOperationError{Operation: id, RenamedTo: current}
+		}
 		all := c.registry.All()
 		ids := make([]string, len(all))
 		for i, known := range all {

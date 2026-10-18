@@ -20,16 +20,21 @@ import (
 type InvalidRequestError = provider.InvalidRequestError
 
 // UnknownOperationError reports an operation ID or requested version absent from the registry. Suggestion
-// is the registered ID the unknown one most likely misspells, or empty.
+// is the registered ID the unknown one most likely misspells, or empty. RenamedTo is the current ID when
+// Operation is a former one from a provider's rename table.
 type UnknownOperationError struct {
 	Operation  string
 	Version    int
 	Suggestion string
+	RenamedTo  string
 }
 
 func (e *UnknownOperationError) Error() string {
 	if e.Version > 0 {
 		return fmt.Sprintf("unknown tool %q at version %d", e.Operation, e.Version)
+	}
+	if e.RenamedTo != "" {
+		return fmt.Sprintf("unknown tool %q: it was renamed to %q", e.Operation, e.RenamedTo)
 	}
 	return fmt.Sprintf("unknown tool %q", e.Operation) + DidYouMean(e.Suggestion)
 }

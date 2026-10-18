@@ -228,7 +228,13 @@ type ProviderMetadata struct {
 	// RemovedTools lists tool IDs qatlas no longer offers. A tools list may still name one: the entry is
 	// ignored with a warning instead of failing the configuration.
 	RemovedTools []string
-	Profiles     []ToolProfile
+	// RenamedTools maps a former tool ID to the registered tool that replaced it. A configuration naming
+	// the former ID is read as the current one; discovery, describe and invoke refuse the former ID and
+	// name the current one. A former ID is never registered and never a target itself.
+	RenamedTools map[string]string
+	// FormerIDs lists earlier IDs of this provider, read the same way as a renamed tool.
+	FormerIDs []string
+	Profiles  []ToolProfile
 	// Groups, when set, sorts every tool of the provider into exactly one of these groups.
 	Groups []ToolGroup
 	// ServiceLevel makes the group of a tool its second ID segment (<provider>.<group>.<object>.<action>).
@@ -283,3 +289,24 @@ func (emptyProviderCatalog) ProviderMetadata(string) (ProviderMetadata, bool) {
 	return ProviderMetadata{}, false
 }
 func (emptyProviderCatalog) ProviderMetadataAll() []ProviderMetadata { return nil }
+
+// CurrentProviderID returns the provider that carries former as an earlier ID. A provider that is
+// registered under that ID itself is not a rename.
+func CurrentProviderID(catalog ProviderCatalog, former string) (string, bool) {
+	for _, metadata := range catalog.ProviderMetadataAll() {
+		if metadata.ID != former && contains(metadata.FormerIDs, former) {
+			return metadata.ID, true
+		}
+	}
+	return "", false
+}
+
+// CurrentToolID returns the tool that replaced old in some provider's rename table.
+func CurrentToolID(catalog ProviderCatalog, old string) (string, bool) {
+	for _, metadata := range catalog.ProviderMetadataAll() {
+		if current, ok := metadata.RenamedTools[old]; ok {
+			return current, true
+		}
+	}
+	return "", false
+}
