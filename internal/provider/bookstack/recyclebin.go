@@ -25,7 +25,7 @@ const deletionIDSchema = `{"type":"object","properties":{"deletion_id":{"type":"
 
 var (
 	recycleBinList = capability.Descriptor{
-		ID: Provider + ".recyclebin.list", Version: 1, Title: "List the BookStack recycle bin",
+		ID: Provider + ".recycle-bin.list", Version: 1, Title: "List the BookStack recycle bin",
 		Description: "List the deleted pages, chapters, books, and shelves in the recycle bin with their deletion identifier. " +
 			recycleBinRoles,
 		Tags: []string{"administration", "recyclebin", "bookstack"},
@@ -55,7 +55,7 @@ var (
 	}
 
 	recycleBinRestore = capability.Descriptor{
-		ID: Provider + ".recyclebin.restore", Version: 1, Title: "Restore from the BookStack recycle bin",
+		ID: Provider + ".recycle-bin.restore", Version: 1, Title: "Restore from the BookStack recycle bin",
 		Description: "Restore one deletion from the recycle bin together with the content deleted with it. " +
 			recycleBinRoles,
 		Tags: []string{"administration", "recyclebin", "bookstack", "update"}, Provider: Provider,
@@ -66,7 +66,7 @@ var (
 	}
 
 	recycleBinDestroy = capability.Descriptor{
-		ID: Provider + ".recyclebin.destroy", Version: 1, Title: "Permanently destroy from the BookStack recycle bin",
+		ID: Provider + ".recycle-bin.destroy", Version: 1, Title: "Permanently destroy from the BookStack recycle bin",
 		Description: "Permanently destroy one deletion in the recycle bin together with the content deleted with it. " +
 			"This cannot be undone. " + recycleBinRoles,
 		Tags: []string{"administration", "recyclebin", "bookstack", "delete"}, Provider: Provider,

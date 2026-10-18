@@ -37,7 +37,7 @@ func TestRecycleBinDescriptors(t *testing.T) {
 		}
 	}
 	for _, d := range reg.Provider(Provider) {
-		if strings.Contains(d.ID, ".recyclebin.") {
+		if strings.Contains(d.ID, ".recycle-bin.") {
 			if d.Group != "administration" || d.RequiresToolAllowList != strings.HasSuffix(d.ID, ".destroy") {
 				t.Errorf("%s: group %q allowlist %v", d.ID, d.Group, d.RequiresToolAllowList)
 			}

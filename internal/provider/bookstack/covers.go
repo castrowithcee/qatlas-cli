@@ -20,7 +20,7 @@ const coverFileNote = "Allowed file types are png, jpg, jpeg, gif, and webp, at 
 
 var (
 	booksSetCover = capability.Descriptor{
-		ID: Provider + ".books.setcover", Version: 1, Title: "Set the cover image of a BookStack book",
+		ID: Provider + ".books.set-cover", Version: 1, Title: "Set the cover image of a BookStack book",
 		Description: "Set the cover image of one book from a local image file. " + coverFileNote +
 			". On a connection bound to books the book must be a bound book",
 		Tags: []string{"knowledge", "books", "bookstack", "update", "cover"}, Provider: Provider,
@@ -34,7 +34,7 @@ var (
 	}
 
 	shelvesSetCover = capability.Descriptor{
-		ID: Provider + ".shelves.setcover", Version: 1, Title: "Set the cover image of a BookStack shelf",
+		ID: Provider + ".shelves.set-cover", Version: 1, Title: "Set the cover image of a BookStack shelf",
 		Description: "Set the cover image of one shelf from a local image file. " + coverFileNote +
 			". Shelves span the whole instance, so a connection bound to books cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack", "update", "cover"}, Provider: Provider,
