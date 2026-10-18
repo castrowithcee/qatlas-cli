@@ -42,10 +42,10 @@ const (
 		"lists organizations:read instead, which contradicts every other data store endpoint, so if " +
 		"datastores:read is present and a single read is still refused, add organizations:read"
 	needDataStoresWrite = "the datastores:write scope (and datastores:read, which binds the data store; Make's " +
-		"reference lists organizations:read for that read, see make.datastores.get)"
+		"reference lists organizations:read for that read, see make.data-stores.get)"
 	needDataStoresCreate = "the datastores:write scope and udts:read, which binds the data structure"
 	needDataStoresChange = "the datastores:write scope, datastores:read, which binds the data store (Make's " +
-		"reference lists organizations:read for that read, see make.datastores.get), and, when " +
+		"reference lists organizations:read for that read, see make.data-stores.get), and, when " +
 		"datastructure_id is given, udts:read, which binds the data structure"
 )
 
@@ -92,7 +92,7 @@ func dataStoresChangeRisk(effect capability.Effect, idempotency capability.Idemp
 }
 
 var dataStoresList = capability.Descriptor{
-	ID: Provider + ".datastores.list", Version: 1, Title: "List Make data stores",
+	ID: Provider + ".data-stores.list", Version: 1, Title: "List Make data stores",
 	Description: "List the data stores of the bound team, sorted by name, page by page; never their records. " +
 		"Refused on a connection with a scenario allow-list. Needs the datastores:read scope",
 	Tags: []string{"make", "datastores", "list", "automation"}, Risk: dataStoresReadRisk, Provider: Provider,
@@ -119,7 +119,7 @@ var dataStoresList = capability.Descriptor{
 }
 
 var dataStoresGet = capability.Descriptor{
-	ID: Provider + ".datastores.get", Version: 1, Title: "Get a Make data store",
+	ID: Provider + ".data-stores.get", Version: 1, Title: "Get a Make data store",
 	Description: "Read one data store of the bound team, never its records. Refused on a connection with a " +
 		"scenario allow-list. Needs the datastores:read scope; Make's API reference lists organizations:read " +
 		"for this one endpoint, which contradicts the other data store endpoints, so a refusal with " +
@@ -134,7 +134,7 @@ var dataStoresGet = capability.Descriptor{
 }
 
 var dataStoresCreate = capability.Descriptor{
-	ID: Provider + ".datastores.create", Version: 1, Title: "Create a Make data store",
+	ID: Provider + ".data-stores.create", Version: 1, Title: "Create a Make data store",
 	Description: "Create one data store in the bound team, always the connection's own team. The data " +
 		"structure must belong to the bound team, which is read from Make first; otherwise nothing is " +
 		"created. A repeated call creates a second store. Refused on a connection with a scenario " +
@@ -156,7 +156,7 @@ var dataStoresCreate = capability.Descriptor{
 }
 
 var dataStoresUpdate = capability.Descriptor{
-	ID: Provider + ".datastores.update", Version: 1, Title: "Update a Make data store",
+	ID: Provider + ".data-stores.update", Version: 1, Title: "Update a Make data store",
 	Description: "Change the name, data structure, or maximum size of one data store of the bound team; fields " +
 		"not given stay as they are, and its records are not touched. A data structure must belong to the " +
 		"bound team, which is read from Make first. Needs the datastores:write and datastores:read scopes, " +
@@ -178,7 +178,7 @@ var dataStoresUpdate = capability.Descriptor{
 }
 
 var dataStoresDelete = capability.Descriptor{
-	ID: Provider + ".datastores.delete", Version: 1, Title: "Delete a Make data store",
+	ID: Provider + ".data-stores.delete", Version: 1, Title: "Delete a Make data store",
 	Description: "Delete one data store of the bound team, with all its records, for good. A scenario that " +
 		"includes the store stops working without it, so Make refuses the deletion until it is confirmed: " +
 		"without confirm_scenarios_affected this tool sends no confirmation and, when Make refuses and names " +
@@ -479,7 +479,7 @@ type dataStoreDeleteArguments struct {
 	ConfirmScenariosAffected bool  `json:"confirm_scenarios_affected"`
 }
 
-// DataStoreDeletion is the answer of datastores.delete: deleted, or refused by Make until scenarios are
+// DataStoreDeletion is the answer of data-stores.delete: deleted, or refused by Make until scenarios are
 // confirmed.
 type DataStoreDeletion struct {
 	DataStoreID          int64              `json:"datastore_id"`

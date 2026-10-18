@@ -244,10 +244,10 @@ func TestDataStoresDeleteConfirmationAndScenarioConflict(t *testing.T) {
 		t.Fatalf("confirmed = %s, %v, %+v", result, err, ch)
 	}
 	if _, err := h.confirmed(dataStoresDelete.ID, "open", `{"datastore_id":`+storeID+`}`); err == nil {
-		t.Fatal("datastores.delete was offered without a tools list")
+		t.Fatal("data-stores.delete was offered without a tools list")
 	}
 	if !dataStoresDelete.RequiresToolAllowList {
-		t.Fatal("datastores.delete must require a tools list")
+		t.Fatal("data-stores.delete must require a tools list")
 	}
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {

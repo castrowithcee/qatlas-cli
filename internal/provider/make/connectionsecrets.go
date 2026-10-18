@@ -32,7 +32,6 @@ import (
 //     missing is set empty. An OAuth connection must afterwards be reauthorized in Make's web interface by a
 //     person; any other type uses the new data at once. A connection that cannot be edited is refused by
 //     Make ("Cannot edit this connection").
-// Operation IDs have three segments, so set-data is make.connections.setdata.
 
 const (
 	// connectionSecretsSensitivity labels the secrets these tools send to Make.
@@ -126,11 +125,11 @@ var connectionsCreate = capability.Descriptor{
 }
 
 var connectionsSetData = capability.Descriptor{
-	ID: Provider + ".connections.setdata", Version: 1, Title: "Set the data of a Make connection",
+	ID: Provider + ".connections.set-data", Version: 1, Title: "Set the data of a Make connection",
 	Description: "Set the data of one connection of the bound team. The new data REPLACE the stored data: a " +
 		"field that is in neither fields nor the referenced forward credential is set empty by Make, a stored " +
 		"secret included, so give every plain field in fields and every secret field through secret_ref; " +
-		"make.connections.editableschema lists the parameter names. A connection of an OAuth type must " +
+		"make.connections.editable-schema lists the parameter names. A connection of an OAuth type must " +
 		"afterwards be reauthorized by a person in Make's web interface (the Reauthorize button) before it " +
 		"works again; any other type uses the new data at once. Make refuses a connection it cannot edit. " +
 		"The connection is read and bound to the bound team first; one of fields or secret_ref is required. " +

@@ -43,17 +43,17 @@ additionally need `scenarios:write`, and its run tool additionally needs `scenar
 through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
 `hooks:read`, as does `make.hooks.url`; the `hooks-manage` profile (`make.hooks.rename`, `enable`,
 `disable`, plus the hooks-read tools) additionally needs `hooks:write`, as does the separately offered
-`make.hooks.delete`; the `hookqueue-read` profile (`make.hookqueue.list`, `get`, `stats`) needs `hooks:read`, and
-the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:read`, which binds the hook); the `connections-read` profile (`make.connections.list`, `get`,
-`editableschema`) needs `connections:read`, and its separate `connections-test` profile
+`make.hooks.delete`; the `hookqueue-read` profile (`make.hook-queue.list`, `get`, `stats`) needs `hooks:read`, and
+the separately offered `make.hook-queue.delete` needs `hooks:write` (with `hooks:read`, which binds the hook); the `connections-read` profile (`make.connections.list`, `get`,
+`editable-schema`) needs `connections:read`, and its separate `connections-test` profile
 (`make.connections.test`) additionally needs `connections:write`, as do the `connections-manage` profile
-(`make.connections.rename`), the `connections-access-manage` profile (`make.connectionaccess.set`, which additionally needs `user:read`), and the
-separately offered `make.connections.delete`, `make.connections.create`, and `make.connections.setdata`
-(`setdata` additionally needs `connections:read`, which binds the connection first); the `connections-access-read` profile
-(`make.connectionaccess.list`) needs `connections:read`; the `credentialrequests-read` profile
-(`make.credentialrequests.list`, `get`) needs `credential-requests:read`, its `credentialrequests-manage`
+(`make.connections.rename`), the `connections-access-manage` profile (`make.connection-access.set`, which additionally needs `user:read`), and the
+separately offered `make.connections.delete`, `make.connections.create`, and `make.connections.set-data`
+(`set-data` additionally needs `connections:read`, which binds the connection first); the `connections-access-read` profile
+(`make.connection-access.list`) needs `connections:read`; the `credentialrequests-read` profile
+(`make.credential-requests.list`, `get`) needs `credential-requests:read`, its `credentialrequests-manage`
 profile (plus `create`, which additionally needs `user:read`) and the
-separately offered `make.credentialrequests.delete` need `credential-requests:write`. A 403 names the missing scope. The `org-admin` profile
+separately offered `make.credential-requests.delete` need `credential-requests:write`. A 403 names the missing scope. The `org-admin` profile
 (`make.teams.list`, `create`, `update`, organization mode only) needs `teams:read` and `teams:write`, as does the
 separately offered `make.teams.delete`. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
@@ -159,40 +159,40 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.hooks.rename` | update | required | renames one hook of the bound team (`PATCH /hooks/{id}`, body `name`) |
 | `make.hooks.enable` / `make.hooks.disable` | update | required | enables or disables one hook (`POST /hooks/{id}/enable` or `/disable`), then re-reads it |
 | `make.hooks.delete` | delete | required | deletes one hook (`DELETE /hooks/{id}`); offered only when a connection's `tools` list names it, in no profile |
-| `make.hookqueue.list` | read | none | lists a hook's waiting incoming items as metadata only (`GET /hooks/{id}/incomings`: id, scope, size, time), never payloads |
-| `make.hookqueue.get` | read | none | reads one waiting item (`GET /hooks/{id}/incomings/{incomingId}`) with a capped, untrusted payload and a `truncated` flag |
-| `make.hookqueue.stats` | read | none | reads the queue count, capacity, and enabled state (`GET /hooks/{id}/incomings/stats`) |
-| `make.hookqueue.delete` | delete | required | deletes explicitly named items (`DELETE /hooks/{id}/incomings`, body `ids` only); offered only when a connection's `tools` list names it, in no profile |
+| `make.hook-queue.list` | read | none | lists a hook's waiting incoming items as metadata only (`GET /hooks/{id}/incomings`: id, scope, size, time), never payloads |
+| `make.hook-queue.get` | read | none | reads one waiting item (`GET /hooks/{id}/incomings/{incomingId}`) with a capped, untrusted payload and a `truncated` flag |
+| `make.hook-queue.stats` | read | none | reads the queue count, capacity, and enabled state (`GET /hooks/{id}/incomings/stats`) |
+| `make.hook-queue.delete` | delete | required | deletes explicitly named items (`DELETE /hooks/{id}/incomings`, body `ids` only); offered only when a connection's `tools` list names it, in no profile |
 | `make.connections.list` | read | none | lists the bound team's Make connections (always `teamId` of the connection) by allow-listed metadata, at most 200 |
 | `make.connections.get` | read | none | reads one Make connection by allow-listed metadata, with its team confirmed live |
-| `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
+| `make.connections.editable-schema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
 | `make.connections.test` | execute | required | asks Make to verify one connection's stored credential against its third-party service; one request, never retried |
 | `make.connections.rename` | update | required | renames one connection of the bound team (`PATCH /connections/{id}`, name up to 128 characters), then reads it again |
 | `make.connections.create` | create | required | creates one connection in the bound team from plain fields and a `secret_ref` (`POST /connections?teamId=`); only offered by a tools list |
-| `make.connections.setdata` | update | required | replaces the data of one connection of the bound team from plain fields and a `secret_ref` (`POST /connections/{id}/set-data`); OAuth connections need a reauthorization in Make; only offered by a tools list |
+| `make.connections.set-data` | update | required | replaces the data of one connection of the bound team from plain fields and a `secret_ref` (`POST /connections/{id}/set-data`); OAuth connections need a reauthorization in Make; only offered by a tools list |
 | `make.connections.delete` | delete | required | deletes one connection for good; without `confirm_scenarios_affected` it sends no `confirmed` and returns the scenarios Make names when it refuses; offered only through a tools list |
-| `make.connectionaccess.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
-| `make.connectionaccess.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
-| `make.datastores.list` | read | none | lists the bound team's data stores (always `teamId` of the connection), sorted by name, page by page; never records |
-| `make.datastores.get` | read | none | reads one data store, with its team confirmed live; never records |
-| `make.datastores.create` | create | required | creates one data store in the bound team (`POST /data-stores`) after reading that its data structure belongs to the team |
-| `make.datastores.update` | update | required | changes a data store's name, data structure, or maximum size (`PATCH /data-stores/{id}`), after reading the store and any named structure |
-| `make.datastores.delete` | delete | required | deletes one data store with its records (`DELETE /data-stores`, body `ids` with exactly one id); without `confirm_scenarios_affected` it sends no `confirmed`; offered only through a tools list |
-| `make.datastorerecords.list` | read | none | lists records (key and capped data) of one data store of the bound team after binding the store; at most 50 per page, each record capped; untrusted personal data |
-| `make.datastorerecords.create` | create | required | creates one record (`POST /data-stores/{id}/data`, optional `key` and a bounded `data` object) after binding the store |
-| `make.datastorerecords.replace` | update | required | replaces one record by key (`PUT /data-stores/{id}/data/{key}`, body is the non-empty `data` object) after binding the store |
-| `make.datastorerecords.update` | update | required | changes only the named top-level fields of one record by key (`PATCH`, same path and body form) after binding the store |
-| `make.datastorerecords.delete` | delete | required | deletes explicitly named records (`DELETE /data-stores/{id}/data`, body `keys`, 1 to 50 distinct); never `all`, `exceptKeys`, or `confirmed`; offered only through a tools list |
-| `make.teamvariables.list` | read | none | lists the bound team's custom and system variables (name, type, capped value, `is_system`); values may be secret |
-| `make.teamvariables.create` | create | required | creates one custom variable in the bound team (`POST /teams/{teamId}/variables`) |
-| `make.teamvariables.update` | update | required | sets type and value of one existing custom variable (`PATCH /teams/{teamId}/variables/{name}`) after listing it; never a system variable |
-| `make.teamvariables.delete` | delete | required | deletes one custom variable (`DELETE /teams/{teamId}/variables/{name}?confirmed=true`) after listing it, only with `confirmed: true`; offered only through a tools list |
-| `make.datastructures.list` | read | none | lists the bound team's data structures (id, name, strict), sorted by name, page by page |
-| `make.datastructures.get` | read | none | reads one data structure with its bounded field specification, with its team confirmed live |
-| `make.credentialrequests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
-| `make.credentialrequests.get` | read | none | reads one credential request, with its team confirmed live; never the link or an email |
-| `make.credentialrequests.create` | create | required | creates one credential request in the bound team (`POST /credential-requests/requests/v2`); the only tool that returns the request link |
-| `make.credentialrequests.delete` | delete | required | deletes one credential request; without `confirm_credentials_deleted` it sends no `confirmed`; offered only through a tools list |
+| `make.connection-access.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
+| `make.connection-access.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
+| `make.data-stores.list` | read | none | lists the bound team's data stores (always `teamId` of the connection), sorted by name, page by page; never records |
+| `make.data-stores.get` | read | none | reads one data store, with its team confirmed live; never records |
+| `make.data-stores.create` | create | required | creates one data store in the bound team (`POST /data-stores`) after reading that its data structure belongs to the team |
+| `make.data-stores.update` | update | required | changes a data store's name, data structure, or maximum size (`PATCH /data-stores/{id}`), after reading the store and any named structure |
+| `make.data-stores.delete` | delete | required | deletes one data store with its records (`DELETE /data-stores`, body `ids` with exactly one id); without `confirm_scenarios_affected` it sends no `confirmed`; offered only through a tools list |
+| `make.data-store-records.list` | read | none | lists records (key and capped data) of one data store of the bound team after binding the store; at most 50 per page, each record capped; untrusted personal data |
+| `make.data-store-records.create` | create | required | creates one record (`POST /data-stores/{id}/data`, optional `key` and a bounded `data` object) after binding the store |
+| `make.data-store-records.replace` | update | required | replaces one record by key (`PUT /data-stores/{id}/data/{key}`, body is the non-empty `data` object) after binding the store |
+| `make.data-store-records.update` | update | required | changes only the named top-level fields of one record by key (`PATCH`, same path and body form) after binding the store |
+| `make.data-store-records.delete` | delete | required | deletes explicitly named records (`DELETE /data-stores/{id}/data`, body `keys`, 1 to 50 distinct); never `all`, `exceptKeys`, or `confirmed`; offered only through a tools list |
+| `make.team-variables.list` | read | none | lists the bound team's custom and system variables (name, type, capped value, `is_system`); values may be secret |
+| `make.team-variables.create` | create | required | creates one custom variable in the bound team (`POST /teams/{teamId}/variables`) |
+| `make.team-variables.update` | update | required | sets type and value of one existing custom variable (`PATCH /teams/{teamId}/variables/{name}`) after listing it; never a system variable |
+| `make.team-variables.delete` | delete | required | deletes one custom variable (`DELETE /teams/{teamId}/variables/{name}?confirmed=true`) after listing it, only with `confirmed: true`; offered only through a tools list |
+| `make.data-structures.list` | read | none | lists the bound team's data structures (id, name, strict), sorted by name, page by page |
+| `make.data-structures.get` | read | none | reads one data structure with its bounded field specification, with its team confirmed live |
+| `make.credential-requests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
+| `make.credential-requests.get` | read | none | reads one credential request, with its team confirmed live; never the link or an email |
+| `make.credential-requests.create` | create | required | creates one credential request in the bound team (`POST /credential-requests/requests/v2`); the only tool that returns the request link |
+| `make.credential-requests.delete` | delete | required | deletes one credential request; without `confirm_credentials_deleted` it sends no `confirmed`; offered only through a tools list |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
@@ -394,7 +394,7 @@ and at most eight integer sizes); request headers, bodies, parsers, and udids ar
 
 ### Hook queue
 
-The queue tools are named `make.hookqueue.*` because operation IDs have exactly three segments. Each reads the
+The queue tools `make.hook-queue.*` each read the
 hook first and refuses a hook of another team, or outside a scenario allow-list, before any queue request.
 Queued payloads are untrusted and may hold personal data: they carry the data sensitivity
 `make-webhook-payloads-personal-data`. `list` returns metadata only. `get` returns the payload capped to
@@ -403,7 +403,7 @@ payload had to be dropped; the hook's trigger URL, `udid`, and mailhook address 
 values of `authorization`, `cookie`, `set-cookie`, `host`, `referer`, and `origin` keys are replaced. Incoming
 ids must be 1 to 64 letters, digits, underscores, or hyphens, checked before any secret or request.
 
-`make.hookqueue.delete` takes 1 to 50 distinct explicit `ids`, needs its own confirmation, sends exactly one
+`make.hook-queue.delete` takes 1 to 50 distinct explicit `ids`, needs its own confirmation, sends exactly one
 `DELETE` with only `ids` (never `all`, `exceptIds`, or Make's `confirmed` flag, which Make requires only for
 deleting everything), and is never repeated. After a 5xx, a dropped connection, an unreadable answer, or an
 error in the answer it reports that items may have been deleted; the queue should be read before trying again.
@@ -440,7 +440,7 @@ Only an allow-list of fields leaves Qatlas: `id`, `name`, `accountName`, `accoun
 `cols[]`, and the answer is decoded into a struct holding only them, so tokens, `metadata`, `data`, scope
 lists, and any other field are dropped; strings are capped at 256 characters. Make's connection answer is not
 documented field by field beyond property names, which is why an allow-list decides, not a deny-list.
-`make.connections.editableschema` reads `GET /connections/{id}/editable-data-schema`, which Make documents as
+`make.connections.editable-schema` reads `GET /connections/{id}/editable-data-schema`, which Make documents as
 `editableParameters`, an array of strings; only those names are returned (at most 64, 128 characters each),
 never a value or default. Updating a connection's data is not offered.
 
@@ -464,7 +464,7 @@ ordinary error. With `confirm_scenarios_affected` true it sends `confirmed=true`
 connection stop working. A connection that is not in any scenario is deleted by the first request. Because the
 deletion is final, the tool is in no profile and is offered only when a connection's `tools` list names it.
 
-`make.connectionaccess.list` and `make.connectionaccess.set` use Make's access-list endpoints
+`make.connection-access.list` and `make.connection-access.set` use Make's access-list endpoints
 (`GET /teams/{teamId}/connections/{id}/access-list`, `POST .../access-list/users`, and
 `PATCH .../access-list/users/{userId}`; the team is always the bound team and the connection is bound first).
 Make answers them only when its locked connections feature is enabled for the organization (otherwise HTTP
@@ -478,20 +478,20 @@ list with another role). The rest of the list is untouched and no tool removes a
 a change that would leave the connection without an administrator. Because the list read may show only the
 members visible to the token, a user it does not show can answer 409 on the `POST`, which is reported, never
 retried. A change is not repeated after a timeout, reset, 5xx, or unreadable answer; the result is then
-reported as uncertain. Both tools are named `connectionaccess` because tool ids have three segments.
+reported as uncertain.
 
 ### Creating connections and setting their data
 
-`make.connections.create` and `make.connections.setdata` send secrets to Make. A value is never an argument:
+`make.connections.create` and `make.connections.set-data` send secrets to Make. A value is never an argument:
 `secret_ref` names a forward credential that the Qatlas connection releases in `forward_secrets`; the core
 checks it before the confirmation gate and refuses an unreleased or unknown name (`secret-ref-not-allowed`).
-The values are read only after the confirmation and, for `setdata`, after the connection was read and bound
+The values are read only after the confirmation and, for `set-data`, after the connection was read and bound
 to the bound team, for the one request, registered with the redactor, and set into the request body under the
 field names of the forward credential. A plain field with the same name as a secret field, or with a member
 the tool sets itself, is refused, never overwritten. The plain `fields` argument is not redacted: put no
 secret into it. Because of `secret_ref`, both tools need a tools list entry, the `create` or `update`
 permission, and their own confirmation; they are in no profile. The secret role of the API token needs
-`connections:write` for them (and `connections:read` for `setdata`).
+`connections:write` for them (and `connections:read` for `set-data`).
 
 - **Create.** `POST /connections?teamId=TEAM` with `accountName` (the `name`, 1 to 128 characters),
   `accountType` (`connection_type`, letters, digits, `.`, `_`, `:`, `-`, at most 100 characters), optional
@@ -508,7 +508,7 @@ permission, and their own confirmation; they are in no profile. The secret role 
   first and refused, before any secret is read, unless Make reports it in the bound team (and organization,
   when bound), without naming any other team. **Make replaces the stored data**: a field that is in neither
   `fields` nor the referenced forward credential is set empty, a stored secret included, so give every plain
-  field in `fields` and every secret field through `secret_ref`; `make.connections.editableschema` lists the
+  field in `fields` and every secret field through `secret_ref`; `make.connections.editable-schema` lists the
   parameter names. At least one of `fields` and `secret_ref` is required. For an OAuth connection a person must
   afterwards log in to Make and confirm the change with the Reauthorize button; other types use the new data
   at once. Make refuses a connection it cannot edit ("Cannot edit this connection"). The result is
@@ -519,21 +519,21 @@ permission, and their own confirmation; they are in no profile. The secret role 
 
 ## Data stores and data structures
 
-`make.datastores.*` manage the data stores (tables scenarios keep data in) of the bound team; the records inside
-a store are not touched. `make.datastructures.list` and `make.datastructures.get` read the field layouts stores
+`make.data-stores.*` manage the data stores (tables scenarios keep data in) of the bound team; the records inside
+a store are not touched. `make.data-structures.list` and `make.data-structures.get` read the field layouts stores
 follow; creating, changing, or deleting a structure is not offered. A Qatlas connection with a scenario
 allow-list reaches none of them: they belong to no scenario, so the narrower reading is refusal, locally and
 before any secret is read.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
-| `make.datastores.list` | `GET /data-stores?teamId=` (`cols[]`, `pg[offset]`, `pg[limit]`, sorted by name) | `datastores:read` |
-| `make.datastores.get` | `GET /data-stores/{id}` | `datastores:read` (see below) |
-| `make.datastores.create` | `POST /data-stores` with `name`, `teamId`, `datastructureId`, `maxSizeMB` | `datastores:write`, plus `udts:read` for the structure check |
-| `make.datastores.update` | `PATCH /data-stores/{id}` with the given fields of `name`, `datastructureId`, `maxSizeMB` | `datastores:write`, `datastores:read`, plus `udts:read` when a structure is named |
-| `make.datastores.delete` | `DELETE /data-stores?teamId=[&confirmed=true]` with body `{"ids":[id]}` | `datastores:write`, `datastores:read` |
-| `make.datastructures.list` | `GET /data-structures?teamId=` | `udts:read` |
-| `make.datastructures.get` | `GET /data-structures/{id}` | `udts:read` |
+| `make.data-stores.list` | `GET /data-stores?teamId=` (`cols[]`, `pg[offset]`, `pg[limit]`, sorted by name) | `datastores:read` |
+| `make.data-stores.get` | `GET /data-stores/{id}` | `datastores:read` (see below) |
+| `make.data-stores.create` | `POST /data-stores` with `name`, `teamId`, `datastructureId`, `maxSizeMB` | `datastores:write`, plus `udts:read` for the structure check |
+| `make.data-stores.update` | `PATCH /data-stores/{id}` with the given fields of `name`, `datastructureId`, `maxSizeMB` | `datastores:write`, `datastores:read`, plus `udts:read` when a structure is named |
+| `make.data-stores.delete` | `DELETE /data-stores?teamId=[&confirmed=true]` with body `{"ids":[id]}` | `datastores:write`, `datastores:read` |
+| `make.data-structures.list` | `GET /data-structures?teamId=` | `udts:read` |
+| `make.data-structures.get` | `GET /data-structures/{id}` | `udts:read` |
 
 **Scope contradiction in Make's reference.** The reference lists `organizations:read` as the scope of
 `GET /data-stores/{id}` while every other data store endpoint, including the list, lists `datastores:read`. This
@@ -557,7 +557,7 @@ required, multiline, sequence, codepage, and nested spec, at most 200 fields and
 string, without default values; `spec_truncated` marks a cut. All of it is untrusted data. Lists return at most
 200 entries per page.
 
-`make.datastores.delete` reads and binds the store, then sends one `DELETE /data-stores` with the bound `teamId`
+`make.data-stores.delete` reads and binds the store, then sends one `DELETE /data-stores` with the bound `teamId`
 and exactly one id; the delete-all form is never used. Make requires `confirmed=true` when a scenario includes
 the store and otherwise refuses and deletes nothing. Without `confirm_scenarios_affected` the tool never sends
 `confirmed`: when Make refuses and names scenarios, it returns `confirmation_required` with those ids and names
@@ -571,18 +571,18 @@ reported as uncertain, and a result outside the bound team after the change as a
 
 ## Data store records
 
-`make.datastorerecords.list`, `.create`, `.replace`, `.update`, and `.delete` work on the records of one data
-store of the bound team. Tool ids have three segments, so the object is named `datastorerecords`. Every
+`make.data-store-records.list`, `.create`, `.replace`, `.update`, and `.delete` work on the records of one data
+store of the bound team. Every
 `datastore_id` is read and bound to the bound team first (see above), before the list or the one changing
 request; a store of another team is refused without naming it. A connection with a scenario allow-list reaches none of them.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
-| `make.datastorerecords.list` | `GET /data-stores/{id}/data` (`pg[offset]`, `pg[limit]`) | `datastores:read` |
-| `make.datastorerecords.create` | `POST /data-stores/{id}/data` with `data` and optional `key` | `datastores:write`, `datastores:read` |
-| `make.datastorerecords.replace` | `PUT /data-stores/{id}/data/{key}` with the record data as body | `datastores:write`, `datastores:read` |
-| `make.datastorerecords.update` | `PATCH /data-stores/{id}/data/{key}` with the changed fields as body | `datastores:write`, `datastores:read` |
-| `make.datastorerecords.delete` | `DELETE /data-stores/{id}/data` with body `{"keys":[...]}` | `datastores:write`, `datastores:read` |
+| `make.data-store-records.list` | `GET /data-stores/{id}/data` (`pg[offset]`, `pg[limit]`) | `datastores:read` |
+| `make.data-store-records.create` | `POST /data-stores/{id}/data` with `data` and optional `key` | `datastores:write`, `datastores:read` |
+| `make.data-store-records.replace` | `PUT /data-stores/{id}/data/{key}` with the record data as body | `datastores:write`, `datastores:read` |
+| `make.data-store-records.update` | `PATCH /data-stores/{id}/data/{key}` with the changed fields as body | `datastores:write`, `datastores:read` |
+| `make.data-store-records.delete` | `DELETE /data-stores/{id}/data` with body `{"keys":[...]}` | `datastores:write`, `datastores:read` |
 
 Source: developers.make.com API reference, Data stores, Data (checked against the published reference, not a
 live account). Record contents are untrusted user data and likely personal data (sensitivity
@@ -605,17 +605,16 @@ keeps unnamed top-level fields. Whether Make creates the record for an unknown k
 
 ## Team variables
 
-`make.teamvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the bound team. Tool ids
-have three segments, so the object is named `teamvariables`. None takes a team argument: the team is always the
+`make.team-variables.list`, `.create`, `.update`, and `.delete` work on the variables of the bound team. None takes a team argument: the team is always the
 connection's own target. A connection with a scenario allow-list reaches none of them, refused before any secret
 is read. Organization variables are in the next section.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
-| `make.teamvariables.list` | `GET /teams/{teamId}/variables` | `team-variables:read` |
-| `make.teamvariables.create` | `POST /teams/{teamId}/variables` with `typeId`, `name`, `value` | `team-variables:write` |
-| `make.teamvariables.update` | `PATCH /teams/{teamId}/variables/{name}` with `typeId`, `value` | `team-variables:write`, `team-variables:read` |
-| `make.teamvariables.delete` | `DELETE /teams/{teamId}/variables/{name}?confirmed=true` | `team-variables:write`, `team-variables:read` |
+| `make.team-variables.list` | `GET /teams/{teamId}/variables` | `team-variables:read` |
+| `make.team-variables.create` | `POST /teams/{teamId}/variables` with `typeId`, `name`, `value` | `team-variables:write` |
+| `make.team-variables.update` | `PATCH /teams/{teamId}/variables/{name}` with `typeId`, `value` | `team-variables:write`, `team-variables:read` |
+| `make.team-variables.delete` | `DELETE /teams/{teamId}/variables/{name}?confirmed=true` | `team-variables:write`, `team-variables:read` |
 
 Source: developers.make.com API reference, Teams, team variables (checked 2026-10-05 against the published
 reference, not a live account). Types are `number` (1), `text` (2, Make's string), `boolean` (3), and `date`
@@ -641,17 +640,17 @@ connection reset, a 5xx, or an unreadable answer is reported as uncertain.
 
 ## Organization variables
 
-`make.organizationvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the organization
+`make.organization-variables.list`, `.create`, `.update`, and `.delete` work on the variables of the organization
 a connection in organization mode is bound to; a team connection is refused before any secret is read. None
 takes an organization argument. They behave like the team variables: same names, types, caps, validation, system
 variable refusal, and uncertain-result handling.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
-| `make.organizationvariables.list` | `GET /organizations/{organizationId}/variables` | `organization-variables:read` |
-| `make.organizationvariables.create` | `POST /organizations/{organizationId}/variables` with `typeId`, `name`, `value` | `organization-variables:write` |
-| `make.organizationvariables.update` | `PATCH /organizations/{organizationId}/variables/{name}` with `typeId`, `value` | `organization-variables:write`, `organization-variables:read` |
-| `make.organizationvariables.delete` | `DELETE /organizations/{organizationId}/variables/{name}?confirmed=true` | `organization-variables:write`, `organization-variables:read` |
+| `make.organization-variables.list` | `GET /organizations/{organizationId}/variables` | `organization-variables:read` |
+| `make.organization-variables.create` | `POST /organizations/{organizationId}/variables` with `typeId`, `name`, `value` | `organization-variables:write` |
+| `make.organization-variables.update` | `PATCH /organizations/{organizationId}/variables/{name}` with `typeId`, `value` | `organization-variables:write`, `organization-variables:read` |
+| `make.organization-variables.delete` | `DELETE /organizations/{organizationId}/variables/{name}?confirmed=true` | `organization-variables:write`, `organization-variables:read` |
 
 Source: developers.make.com API reference, Organizations (checked 2026-10-06 against the published reference,
 not a live account). The list answer is read as an array under `organizationVariables`, an assumption from the
@@ -664,8 +663,7 @@ create, update); neither is recommended. A 403 names `organization-variables:rea
 
 A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
 serves; no secret value is accepted, sent, or returned by these tools. They sit in their own sensitivity class
-(`make-credential-requests`) because the link is a way to enter secrets. Tool ids have three segments, so the
-object is named `credentialrequests`. A Qatlas connection with a scenario allow-list reaches no credential
+(`make-credential-requests`) because the link is a way to enter secrets. A Qatlas connection with a scenario allow-list reaches no credential
 requests (they belong to no scenario), refused locally before any secret is read.
 
 `list` always sends the bound team as `teamId` (optional `status` and `name` filters). `get` and `delete` take

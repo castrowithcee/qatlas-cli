@@ -47,7 +47,7 @@ const (
 )
 
 var organizationVariablesList = capability.Descriptor{
-	ID: Provider + ".organizationvariables.list", Version: 1, Title: "List the variables of the bound Make organization",
+	ID: Provider + ".organization-variables.list", Version: 1, Title: "List the variables of the bound Make organization",
 	Description: "List the custom and system variables of the bound organization, each with name, type, capped value, " +
 		"and is_system; takes no arguments, the organization is always the connection's own. Values may be secret. " +
 		"Without the customVariables license Make reports only system variables, so custom_count 0 can mean " +
@@ -73,7 +73,7 @@ var organizationVariablesList = capability.Descriptor{
 }
 
 var organizationVariablesCreate = capability.Descriptor{
-	ID: Provider + ".organizationvariables.create", Version: 1, Title: "Create a variable in the bound Make organization",
+	ID: Provider + ".organization-variables.create", Version: 1, Title: "Create a variable in the bound Make organization",
 	Description: "Create one custom variable in the bound organization; the organization is always the connection's own. Needs " +
 		"the customVariables license, which Make's reference ties to the plan. Sends one request and never " +
 		"repeats it. Offered only on an organization connection. Needs the organization-variables:write scope",
@@ -93,7 +93,7 @@ var organizationVariablesCreate = capability.Descriptor{
 }
 
 var organizationVariablesUpdate = capability.Descriptor{
-	ID: Provider + ".organizationvariables.update", Version: 1, Title: "Update a variable of the bound Make organization",
+	ID: Provider + ".organization-variables.update", Version: 1, Title: "Update a variable of the bound Make organization",
 	Description: "Set the type and value of one existing custom variable of the bound organization; the name cannot be " +
 		"changed. The variable is listed first and a system variable or an unknown name is refused without " +
 		"changing anything. Sends one changing request and never repeats it. Offered only on an organization " +
@@ -114,7 +114,7 @@ var organizationVariablesUpdate = capability.Descriptor{
 }
 
 var organizationVariablesDelete = capability.Descriptor{
-	ID: Provider + ".organizationvariables.delete", Version: 1, Title: "Delete a variable of the bound Make organization",
+	ID: Provider + ".organization-variables.delete", Version: 1, Title: "Delete a variable of the bound Make organization",
 	Description: "Delete one custom variable of the bound organization for good. The variable is listed first and a " +
 		"system variable or an unknown name is refused. Make requires its confirmed flag, which is sent only " +
 		"when confirmed is true. Scenarios of the organization that read the variable by name lose its value; Qatlas " +
@@ -177,7 +177,7 @@ func (c *Client) customOrganizationVariable(ctx context.Context, op, name string
 	return invalidRequest(noCustomOrganizationVariables)
 }
 
-// OrganizationVariables is the answer of organizationvariables.list.
+// OrganizationVariables is the answer of organization-variables.list.
 type OrganizationVariables struct {
 	OrganizationID int64          `json:"organization_id"`
 	Variables      []VariableView `json:"variables"`
@@ -215,7 +215,7 @@ func invokeOrganizationVariablesList(ctx context.Context, resolved *config.Resol
 	return result, nil
 }
 
-// OrganizationVariableChange is the answer of organizationvariables.create and .update.
+// OrganizationVariableChange is the answer of organization-variables.create and .update.
 type OrganizationVariableChange struct {
 	OrganizationID int64        `json:"organization_id"`
 	Variable       VariableView `json:"variable"`
@@ -271,7 +271,7 @@ func invokeOrganizationVariablesUpdate(ctx context.Context, resolved *config.Res
 		organizationVariablePath(client.scope.orgID, input.Name), body, input.Name)
 }
 
-// OrganizationVariableDeletion is the answer of organizationvariables.delete.
+// OrganizationVariableDeletion is the answer of organization-variables.delete.
 type OrganizationVariableDeletion struct {
 	OrganizationID int64  `json:"organization_id"`
 	Name           string `json:"name"`

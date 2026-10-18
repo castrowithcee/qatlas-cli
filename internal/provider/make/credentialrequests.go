@@ -35,7 +35,6 @@ import (
 //     which also deletes the credentials (connections and keys) made from the request; answering
 //     {"deleted":boolean}.
 // Make documents the public link only on the create answer, so only create returns it; list and get never do.
-// Tool ids have three segments, so the object is named credentialrequests.
 
 const (
 	// credentialRequestsSensitivity labels the request link, which is a way to enter secrets.
@@ -123,7 +122,7 @@ var credentialItemSchema = `{"type":"object","properties":{` +
 	`"required":["app_name","app_modules"],"additionalProperties":false}`
 
 var credentialRequestsCreate = capability.Descriptor{
-	ID: Provider + ".credentialrequests.create", Version: 1, Title: "Create a Make credential request",
+	ID: Provider + ".credential-requests.create", Version: 1, Title: "Create a Make credential request",
 	Description: "Create one credential request in the bound team (always the connection's own team): Make asks " +
 		"the named person to enter the secrets of the listed apps themselves through a link, so no secret value " +
 		"passes through Qatlas and none is accepted. The person is an existing Make user of the bound team " +
@@ -164,7 +163,7 @@ var credentialRequestsCreate = capability.Descriptor{
 }
 
 var credentialRequestsList = capability.Descriptor{
-	ID: Provider + ".credentialrequests.list", Version: 1, Title: "List Make credential requests",
+	ID: Provider + ".credential-requests.list", Version: 1, Title: "List Make credential requests",
 	Description: "List the credential requests of the bound team by allow-listed metadata, never a link, " +
 		"secret, or email address. Refused on a connection with a scenario allow-list. Needs the " +
 		"credential-requests:read scope",
@@ -189,7 +188,7 @@ var credentialRequestsList = capability.Descriptor{
 }
 
 var credentialRequestsGet = capability.Descriptor{
-	ID: Provider + ".credentialrequests.get", Version: 1, Title: "Get a Make credential request",
+	ID: Provider + ".credential-requests.get", Version: 1, Title: "Get a Make credential request",
 	Description: "Read one credential request of the bound team by allow-listed metadata, with its team " +
 		"confirmed live; never the link, a secret, or an email address. Needs the credential-requests:read scope",
 	Tags: []string{"make", "credentialrequests", "get", "automation"}, Risk: credentialRequestsReadRisk,
@@ -204,7 +203,7 @@ var credentialRequestsGet = capability.Descriptor{
 }
 
 var credentialRequestsDelete = capability.Descriptor{
-	ID: Provider + ".credentialrequests.delete", Version: 1, Title: "Delete a Make credential request",
+	ID: Provider + ".credential-requests.delete", Version: 1, Title: "Delete a Make credential request",
 	Description: "Delete one credential request of the bound team. Without confirm_credentials_deleted only " +
 		"the request is deleted and the credentials already entered stay; with it true Make also deletes " +
 		"the connections and keys created from the request, and every scenario using them stops working. " +
@@ -422,7 +421,7 @@ type credentialRequestDeleteArguments struct {
 	ConfirmCredentialsDelete bool   `json:"confirm_credentials_deleted"`
 }
 
-// CredentialRequestDeletion is the answer of credentialrequests.delete.
+// CredentialRequestDeletion is the answer of credential-requests.delete.
 type CredentialRequestDeletion struct {
 	RequestID          string `json:"request_id"`
 	Deleted            bool   `json:"deleted"`
@@ -538,7 +537,7 @@ func buildCredentialRequestBody(input credentialRequestCreateArguments, teamID i
 	return body, nil
 }
 
-// CredentialRequestCreated is the answer of credentialrequests.create.
+// CredentialRequestCreated is the answer of credential-requests.create.
 type CredentialRequestCreated struct {
 	Request    CredentialRequestSummary `json:"request"`
 	PublicLink string                   `json:"public_link"`

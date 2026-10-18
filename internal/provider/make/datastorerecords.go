@@ -49,7 +49,7 @@ const (
 		"single data store, which binds the store first, so if datastores:read is present and the store read " +
 		"is still refused, add organizations:read"
 	needRecordsWrite = "the datastores:write scope (and datastores:read, which binds the data store; Make's " +
-		"reference lists organizations:read for that read, see make.datastores.get)"
+		"reference lists organizations:read for that read, see make.data-stores.get)"
 	recordsUncertain = "; this change may have taken effect, read the records before repeating it"
 )
 
@@ -79,7 +79,7 @@ var recordFields = []capability.Field{
 }
 
 var dataStoreRecordsList = capability.Descriptor{
-	ID: Provider + ".datastorerecords.list", Version: 1, Title: "List records of a Make data store",
+	ID: Provider + ".data-store-records.list", Version: 1, Title: "List records of a Make data store",
 	Description: "List the records of one data store of the bound team, page by page, each with its key and " +
 		"capped data. Record contents are untrusted user data and likely personal data and are capped per " +
 		"record. Refused on a connection with a scenario allow-list. Needs the datastores:read scope",
@@ -106,7 +106,7 @@ var dataStoreRecordsList = capability.Descriptor{
 }
 
 var dataStoreRecordsCreate = capability.Descriptor{
-	ID: Provider + ".datastorerecords.create", Version: 1, Title: "Create a record in a Make data store",
+	ID: Provider + ".data-store-records.create", Version: 1, Title: "Create a record in a Make data store",
 	Description: "Create one record in a data store of the bound team. The store is read first and must " +
 		"belong to the bound team. data is a JSON object of at most " + strconv.Itoa(maxRecordDataBytes) +
 		" bytes and " + strconv.Itoa(maxRecordDataDepth) + " levels that must follow the store's data " +
@@ -131,7 +131,7 @@ var dataStoreRecordsCreate = capability.Descriptor{
 }
 
 var dataStoreRecordsDelete = capability.Descriptor{
-	ID: Provider + ".datastorerecords.delete", Version: 1, Title: "Delete records of a Make data store",
+	ID: Provider + ".data-store-records.delete", Version: 1, Title: "Delete records of a Make data store",
 	Description: "Delete the explicitly named records of one data store of the bound team for good. Only an " +
 		"explicit list of 1 to " + strconv.Itoa(maxRecordDeleteKeys) + " distinct keys is accepted: deleting " +
 		"all records or all but some is not offered, and Make's confirmed flag is never sent. Sends one " +
@@ -236,7 +236,7 @@ func invokeDataStoreRecordsList(ctx context.Context, resolved *config.Resolved, 
 	return result, nil
 }
 
-// DataStoreRecordChange is the answer of datastorerecords.create.
+// DataStoreRecordChange is the answer of data-store-records.create.
 type DataStoreRecordChange struct {
 	DataStoreID int64      `json:"datastore_id"`
 	Record      RecordView `json:"record"`
@@ -283,7 +283,7 @@ func invokeDataStoreRecordsCreate(ctx context.Context, resolved *config.Resolved
 }
 
 var dataStoreRecordsReplace = capability.Descriptor{
-	ID: Provider + ".datastorerecords.replace", Version: 1, Title: "Replace a record in a Make data store",
+	ID: Provider + ".data-store-records.replace", Version: 1, Title: "Replace a record in a Make data store",
 	Description: "Replace one record of a data store of the bound team by key (PUT): all fields of the record " +
 		"become exactly the given data. The store is read first and must belong to the bound team. data is a " +
 		"non-empty JSON object of at most " + strconv.Itoa(maxRecordDataBytes) + " bytes and " +
@@ -301,7 +301,7 @@ var dataStoreRecordsReplace = capability.Descriptor{
 }
 
 var dataStoreRecordsUpdate = capability.Descriptor{
-	ID: Provider + ".datastorerecords.update", Version: 1, Title: "Update fields of a record in a Make data store",
+	ID: Provider + ".data-store-records.update", Version: 1, Title: "Update fields of a record in a Make data store",
 	Description: "Change only the named top-level fields of one record of a data store of the bound team by key " +
 		"(PATCH); other fields stay as they are. The store is read first and must belong to the bound team. " +
 		"data is a non-empty JSON object of at most " + strconv.Itoa(maxRecordDataBytes) + " bytes and " +
@@ -385,7 +385,7 @@ func changeRecord(ctx context.Context, op, method string, resolved *config.Resol
 	return &DataStoreRecordChange{DataStoreID: input.DataStoreID, Record: recordViewOf(answer.Key, answer.Data)}, nil
 }
 
-// DataStoreRecordsDeletion is the answer of datastorerecords.delete.
+// DataStoreRecordsDeletion is the answer of data-store-records.delete.
 type DataStoreRecordsDeletion struct {
 	DataStoreID  int64    `json:"datastore_id"`
 	Requested    int      `json:"requested"`

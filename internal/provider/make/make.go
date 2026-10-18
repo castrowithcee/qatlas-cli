@@ -598,6 +598,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Make", DefaultPermissions: []config.Permission{config.PermissionRead},
 		RemovedTools: []string{"make.hooks.create", "make.organization.invite"},
+		RenamedTools: renamedTools,
 		Description: "Visual automation platform, scenarios and their run history read, created, changed, " +
 			"started, stopped, and run through its zone-scoped REST API",
 		ValidateBaseURL: func(raw string) error {
@@ -636,7 +637,7 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
-				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update, make.organization.members) and refuses every team tool; or " +
+				"target, which offers only the organization tools (make.teams.*, make.organization-variables.*, make.organization.update, make.organization.members) and refuses every team tool; or " +
 				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
 				"targets of that team; without a scenario target, every scenario of the bound team the token " +

@@ -30,8 +30,7 @@ import (
 //     .../users/{userId} with {"role"}, connections:write, each answering {"member":{...}}. Roles are
 //     entity:entity-admin and entity:entity-member. All need the locked connections feature enabled for the
 //     organization (otherwise 400 IM903) and the entity manage permission to change.
-// Removing an access-list member is deliberately not offered. Operation IDs have three segments, so the
-// access-list tools are make.connectionaccess.list and make.connectionaccess.set.
+// Removing an access-list member is deliberately not offered.
 
 const (
 	// maxConnectionNameLength is the documented bound of a connection's name.
@@ -115,7 +114,7 @@ var connectionsDelete = capability.Descriptor{
 }
 
 var connectionsAccessList = capability.Descriptor{
-	ID: Provider + ".connectionaccess.list", Version: 1, Title: "List a Make connection's access list",
+	ID: Provider + ".connection-access.list", Version: 1, Title: "List a Make connection's access list",
 	Description: "List the members of one locked connection's access list in the bound team as user ids and " +
 		"roles only, never a name or email. Make answers only when its locked connections feature is " +
 		"enabled for the organization. Needs the connections:read scope",
@@ -142,7 +141,7 @@ var connectionsAccessList = capability.Descriptor{
 }
 
 var connectionsAccessSet = capability.Descriptor{
-	ID: Provider + ".connectionaccess.set", Version: 1, Title: "Set a user's role on a Make connection",
+	ID: Provider + ".connection-access.set", Version: 1, Title: "Set a user's role on a Make connection",
 	Description: "Give one user of the bound team a role on one locked connection's access list: the user is " +
 		"added when not on the list and changed when on it with another role, with exactly one changing " +
 		"request after the reads; the rest of the list stays as it is, and no member is removed. Granting " +

@@ -107,7 +107,7 @@ var connectionsGet = capability.Descriptor{
 }
 
 var connectionsEditableSchema = capability.Descriptor{
-	ID: Provider + ".connections.editableschema", Version: 1, Title: "List a Make connection's editable parameters",
+	ID: Provider + ".connections.editable-schema", Version: 1, Title: "List a Make connection's editable parameters",
 	Description: "List the names of the parameters Make allows to be updated on one connection of the bound " +
 		"team; names only, never a value or default",
 	Tags: []string{"make", "connections", "schema", "automation"}, Risk: connectionsReadRisk, Provider: Provider,
