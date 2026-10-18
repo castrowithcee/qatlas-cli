@@ -70,7 +70,7 @@ type scaleProvider struct {
 var scaleProviders = []scaleProvider{
 	{"todoist", "https://api.todoist.com/api/v1", []string{"token"}, "p1"},
 	{"github", "https://api.github.com", []string{"token"}, ""},
-	{"seatable", "https://seatable-%d.example.invalid", []string{"api-token"}, "Table"},
+	{"seatable.base", "https://seatable-%d.example.invalid", []string{"api-token"}, "Table"},
 	{"bookstack", "https://wiki-%d.example.invalid", []string{"token-id", "token-secret"}, ""},
 	{"nextcloud", "https://cloud-%d.example.invalid", []string{"user-id", "app-password"}, "Folder"},
 	{"twenty-crm", "https://crm-%d.example.invalid", []string{"api-key"}, ""},
