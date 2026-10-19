@@ -138,6 +138,8 @@ const (
 	// screenTemplate asks whether a new entry or the guided setup starts empty or from an existing entry, and
 	// lists the entries to start from in a searchable picker; see template.go.
 	screenTemplate
+	// screenRename is the new-name prompt and the dry run of renaming a list entry; see rename.go.
+	screenRename
 )
 
 type fieldKind int
@@ -254,7 +256,7 @@ const (
 		"route is for"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
-	lockedHint = "read-only; delete this entry and create it again to rename it"
+	lockedHint = "read-only; press r on the list to rename it"
 	// toolsHint says what each tools mode means, including the two consequences that are easy to miss: a
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
 	toolsHint = "all allowed by permissions also offers tools a later version adds, but never a tool marked " +
@@ -412,8 +414,10 @@ type Model struct {
 	copyFrom string
 	// template is the question or picker of screenTemplate while it is open.
 	template *templateChoice
-	fields   []field
-	focus    int
+	// rename is the prompt or dry run of screenRename while it is open.
+	rename *renameState
+	fields []field
+	focus  int
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
 	// when a value is taken.
 	picker filterList
@@ -825,6 +829,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateLogDetail(msg)
 		case screenTemplate:
 			cmd = m.updateTemplate(msg)
+		case screenRename:
+			cmd = m.updateRename(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -994,6 +1000,8 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.newEntry()
 	case "p":
 		return m.duplicateSelected()
+	case "r":
+		return m.askRename()
 	case "s":
 		if m.section == sectionCredentials {
 			return m.openPayloadNew()
@@ -1148,6 +1156,9 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenTemplate:
 		m.template = nil
 		m.screen = m.templateFromScreen()
+		return nil
+	case screenRename:
+		m.cancelRename()
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -3457,6 +3468,8 @@ func (m *Model) editorView() string {
 		return m.logDetailView() + m.notes()
 	case screenTemplate:
 		return m.templateView()
+	case screenRename:
+		return m.renameView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -3812,13 +3825,14 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionTokens:
 		keys = "/ filter · n new · p duplicate · enter show · d revoke · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · p duplicate · enter edit · d delete · t test · c guided setup · 1-8 or " + back +
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c guided setup · " +
+			"1-8 or " + back +
 			" · ? help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · d delete · c guided setup · " +
+		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c guided setup · " +
 			"1-8 or " + back + " · ? help · q quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter edit · d delete · c guided setup · 1-8 or " + back +
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c guided setup · 1-8 or " + back +
 			" · ? help · q quit"
 	default:
 		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or " + back + " · ? help · q quit"

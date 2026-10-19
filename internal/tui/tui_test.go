@@ -1904,7 +1904,7 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	press(t, m, "enter")
 
 	view := screenOf(m)
-	if !strings.Contains(view, "read-only") || !strings.Contains(view, "create it again to rename") {
+	if !strings.Contains(view, "read-only") || !strings.Contains(view, "press r on the list to rename it") {
 		t.Errorf("the locked field does not say that it is locked:\n%s", view)
 	}
 	if strings.Contains(view, "connections and --connection refer to it") {
