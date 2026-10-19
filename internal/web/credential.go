@@ -285,6 +285,12 @@ func (s *Server) handleCredentialForm(w http.ResponseWriter, r *http.Request) {
 		}
 		notice += warning
 	}
+	if extra := s.takeNotice(); extra != "" {
+		if notice != "" {
+			notice += " "
+		}
+		notice += extra
+	}
 	s.renderCredential(w, cfg, name, cred, notice, "")
 }
 
@@ -558,6 +564,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{if not .Roles}}<p class="empty">No roles.</p>{{end}}
 </div>
 </section>
+{{template "rename-credential" .}}
 {{template "layout-bottom"}}
 {{end}}
 
@@ -821,6 +828,8 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 </table>
 </div>
 </section>
+
+{{template "rename-connection" .}}
 
 {{if .ShowForward}}
 <section class="section" aria-labelledby="forward-heading">

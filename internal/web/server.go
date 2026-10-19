@@ -172,7 +172,7 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *man
 		_ = listener.Close()
 		return nil, err
 	}
-	credTmpl, err := template.New("credentials").Funcs(layoutFuncs).Parse(layoutTemplates + credentialTemplates + payloadTemplates)
+	credTmpl, err := template.New("credentials").Funcs(layoutFuncs).Parse(layoutTemplates + credentialTemplates + payloadTemplates + renameTemplates)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
@@ -297,11 +297,15 @@ func (s *Server) mux() http.Handler {
 	mux.HandleFunc("GET /credentials/{name}", s.withSession(s.handleCredentialForm))
 	mux.HandleFunc("POST /credentials/{name}/payload", s.withAdminGuard(s.handleSavePayload))
 	mux.HandleFunc("POST /credentials/{name}/role", s.withAdminGuard(s.handleReplaceRole))
+	mux.HandleFunc("GET /credentials/{name}/rename", s.withSession(s.handleRenameCredentialPlan))
+	mux.HandleFunc("POST /credentials/{name}/rename", s.withAdminGuard(s.handleRenameCredentialConfirm))
 	mux.HandleFunc("GET /connections/new", s.withSession(s.handleConnectionsNew))
 	mux.HandleFunc("GET /connections/new/review", s.withSession(s.handleConnectionReview))
 	mux.HandleFunc("POST /connections/new/review", s.withAdminGuard(s.handleCreateConnection))
 	mux.HandleFunc("GET /connections/{name}", s.withSession(s.handleConnectionResult))
 	mux.HandleFunc("POST /connections/{name}/forward", s.withAdminGuard(s.handleSetForward))
+	mux.HandleFunc("GET /connections/{name}/rename", s.withSession(s.handleRenameConnectionPlan))
+	mux.HandleFunc("POST /connections/{name}/rename", s.withAdminGuard(s.handleRenameConnectionConfirm))
 	mux.HandleFunc("POST /connections/{name}/test", s.withSessionGuard(s.handleTestConnection))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }

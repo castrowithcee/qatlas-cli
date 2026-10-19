@@ -480,6 +480,7 @@ const payloadTemplates = `
 
 <div class="actions"><button type="submit">{{if .Edit}}Save{{else}}Create payload credential{{end}}</button></div>
 </form>
+{{if .Edit}}{{template "rename-credential" .}}{{end}}
 {{template "layout-bottom"}}
 {{end}}
 `
