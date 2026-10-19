@@ -41,7 +41,8 @@ import (
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
 // another version rather than guessing what it meant. Version 7 adds handover, which hands the vault over to
 // a successor started from an updated program, and the answer replaced, which sends a client on to it.
-const Version = 7
+// Version 8 adds the session ID to a log entry; an older process would drop it and sign an entry without it.
+const Version = 8
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.

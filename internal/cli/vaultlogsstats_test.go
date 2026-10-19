@@ -154,3 +154,49 @@ func TestVaultLogsStatsRejectsBadDays(t *testing.T) {
 		}
 	}
 }
+
+func sessionEntry(hour, session, op, result string, req, resp int64) invokelog.Entry {
+	e := statsEntry("2026-05-04", hour, op, "", &resp)
+	e.Session, e.Effect, e.Result, e.ReqBytes = session, "", result, &req
+	return e
+}
+
+// Sessions are summed up from the same entries as the groups: baseline, navigation, and invoke, error
+// responses included, while the groups keep counting only invokes.
+func TestVaultLogsStatsSessions(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	s := "0123456789abcdef"
+	invoke := sessionEntry("12", s, "wiki.pages.get", "not-found", 30, 90)
+	invoke.Connection, invoke.Effect = "wiki", "read"
+	writeStatsLog(t, dir, []invokelog.Entry{
+		sessionEntry("10", s, invokelog.OperationMCPInitialize, "success", 100, 1000),
+		sessionEntry("10", s, invokelog.OperationMCPToolsList, "success", 50, 9000),
+		sessionEntry("11", s, invokelog.OperationMCPSearch, "invalid-request", 70, 200),
+		invoke,
+		statsEntry("2026-05-04", "13", "old.tool", "wiki", nil),
+	})
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "logs", "stats", "--config", configIn(dir),
+		"--output", "json")
+	want := `"sessions":[{"session":"` + s + `","areas":[` +
+		`{"area":"baseline","calls":2,"req_bytes":150,"resp_bytes":10000,"total_bytes":10150,"tools":[` +
+		`{"operation":"mcp/tools-list","calls":1,"req_bytes":50,"resp_bytes":9000,"total_bytes":9050},` +
+		`{"operation":"mcp/initialize","calls":1,"req_bytes":100,"resp_bytes":1000,"total_bytes":1100}]},` +
+		`{"area":"navigation","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"tools":[` +
+		`{"operation":"qatlas.search","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270}]},` +
+		`{"area":"invoke","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"tools":[` +
+		`{"operation":"wiki.pages.get","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120}]}]}]}` + "\n"
+	if code != exitOK || stderr != "" || !strings.HasSuffix(stdout, want) {
+		t.Fatalf("stats = exit %d, stdout %q, stderr %q, want a suffix\n%s", code, stdout, stderr, want)
+	}
+	groups := strings.SplitN(stdout, `"sessions"`, 2)[0]
+	if strings.Contains(groups, "mcp/") || strings.Contains(groups, "qatlas.search") ||
+		!strings.Contains(groups, `"operation":"wiki.pages.get"`) || !strings.Contains(groups, `"old.tool"`) {
+		t.Errorf("groups = %s, want only the invokes", stdout)
+	}
+
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "logs", "stats", "--config", configIn(dir))
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, "sessions") || !strings.Contains(stdout, "mcp/tools-list") ||
+		strings.HasPrefix(stdout, "{") {
+		t.Errorf("default stats = exit %d, %q, %q, want TOON with sessions", code, stdout, stderr)
+	}
+}

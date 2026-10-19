@@ -121,6 +121,40 @@ func TestServerLogsSizeCounters(t *testing.T) {
 	}
 }
 
+// The session ID and the mcp baseline and navigation operations cross the protocol, are signed with the rest
+// of the line, and an error response keeps its size on the mcp path.
+func TestServerSignsSessionEntries(t *testing.T) {
+	dir := t.TempDir()
+	s := testServer()
+	s.KeepLog(dir, 90)
+	c := testClient()
+	const session = "0123456789abcdef"
+
+	baseline := &logEntry{Path: "mcp", Operation: invokelog.OperationMCPToolsList, Result: "success",
+		Session: session, ReqBytes: int64Ptr(60), RespBytes: int64Ptr(9000)}
+	failedSearch := &logEntry{Path: "mcp", Operation: invokelog.OperationMCPSearch, Result: "invalid-request",
+		Session: session, ReqBytes: int64Ptr(80), RespBytes: int64Ptr(200)}
+	for _, e := range []*logEntry{baseline, failedSearch, goodEntry()} {
+		if _, err := exchangeOverPipe(t, s, c, request{Op: opLog, Entry: e}); err != nil {
+			t.Fatalf("log error = %v", err)
+		}
+	}
+	lines := logLines(t, dir)
+	if len(lines) != 3 || !bytes.Contains(lines[0], []byte(`"session":"`+session+`","prev_hash"`)) ||
+		bytes.Contains(lines[2], []byte("session")) {
+		t.Fatalf("lines = %q, want the session before prev_hash on the first two only", lines)
+	}
+	report, err := invokelog.VerifyWith(dir, testLogKey(t))
+	if err != nil || report.Broken || report.Days[0].Unverified != 0 {
+		t.Fatalf("VerifyWith() = %+v, %v, want an intact signed chain", report, err)
+	}
+	changed := bytes.Replace(lines[0], []byte(session), []byte("fedcba9876543210"), 1)
+	resp, err := exchangeOverPipe(t, s, c, request{Op: opLogCheck, Lines: [][]byte{lines[0], changed}})
+	if err != nil || len(resp.Valid) != 2 || !resp.Valid[0] || resp.Valid[1] {
+		t.Fatalf("logcheck = %+v, %v, want the changed session detected", resp, err)
+	}
+}
+
 // TestLogEntryDecodesAcrossVersions covers a client of the same protocol version that predates the
 // counters, and one that adds fields this server does not know.
 func TestLogEntryDecodesAcrossVersions(t *testing.T) {
@@ -161,7 +195,13 @@ func TestServerRefusesInvalidLogFields(t *testing.T) {
 		"huge req_bytes":       func(e *logEntry) { e.ReqBytes = int64Ptr(invokelog.MaxReqBytes + 1) },
 		"negative resp_bytes":  func(e *logEntry) { e.RespBytes = int64Ptr(-1) },
 		"huge resp_bytes":      func(e *logEntry) { e.RespBytes = int64Ptr(invokelog.MaxRespBytes + 1) },
-		"resp_bytes on error":  func(e *logEntry) { e.Result = "not-found"; e.RespBytes = int64Ptr(1) },
+		"resp_bytes on error":  func(e *logEntry) { e.Path = "cli"; e.Result = "not-found"; e.RespBytes = int64Ptr(1) },
+		"session on cli":       func(e *logEntry) { e.Path = "cli"; e.Session = "0123456789abcdef" },
+		"malformed session":    func(e *logEntry) { e.Session = "ABC" },
+		"search with a connection": func(e *logEntry) {
+			e.Operation, e.Session, e.Effect, e.Version = invokelog.OperationMCPSearch, "0123456789abcdef", "", 0
+			e.ReqBytes, e.RespBytes = int64Ptr(1), int64Ptr(1)
+		},
 	}
 	for name, change := range bad {
 		entry := goodEntry()

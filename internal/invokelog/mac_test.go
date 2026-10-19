@@ -327,7 +327,7 @@ func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 		"huge req_bytes":         func(f *Fields) { f.ReqBytes = int64Ptr(MaxReqBytes + 1) },
 		"negative resp_bytes":    func(f *Fields) { f.RespBytes = int64Ptr(-1) },
 		"huge resp_bytes":        func(f *Fields) { f.RespBytes = int64Ptr(MaxRespBytes + 1) },
-		"resp_bytes on failure":  func(f *Fields) { f.RespBytes = int64Ptr(5); f.Result = "not-found" },
+		"resp_bytes on failure":  func(f *Fields) { f.Path = "cli"; f.RespBytes = int64Ptr(5); f.Result = "not-found" },
 		"counter on a connection change": func(f *Fields) {
 			f.Path, f.Operation, f.Effect, f.Connection = "web", OperationConnectionCreate, "create", "wiki"
 			f.ReqBytes = int64Ptr(0)

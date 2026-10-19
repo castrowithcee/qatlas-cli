@@ -16,6 +16,7 @@ package invokelog
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -83,12 +84,16 @@ type Entry struct {
 	Effect     string      `json:"effect,omitempty"`
 	Result     string      `json:"result,omitempty"`
 	DurationMS int64       `json:"duration_ms,omitempty"`
-	// ReqBytes and RespBytes are the exact sizes of an invoke's arguments and successful result; nil
-	// means not recorded, which is different from a recorded 0.
+	// ReqBytes and RespBytes are the exact sizes of a CLI invoke's arguments and successful result. On the
+	// mcp path they are the sizes of the whole JSON-RPC request and response messages, an error response
+	// included. nil means not recorded, which is different from a recorded 0.
 	ReqBytes  *int64 `json:"req_bytes,omitempty"`
 	RespBytes *int64 `json:"resp_bytes,omitempty"`
 	// Token is the name of the agent token an approval was made with, never its value; empty otherwise.
-	Token    string `json:"token,omitempty"`
+	Token string `json:"token,omitempty"`
+	// Session is the random ID of the MCP process that wrote the entry; see NewSession. It is absent on
+	// the CLI and on entries written before it existed.
+	Session  string `json:"session,omitempty"`
 	Cut      *Cut   `json:"cut,omitempty"`
 	PrevHash string `json:"prev_hash"`
 	// MAC is the check value of a signed entry, empty for an unsigned one; see Key.mac.
@@ -108,13 +113,18 @@ type Fields struct {
 	// Result is "success" or the failure's error code, the same value application.auditResult uses.
 	Result   string
 	Duration time.Duration
-	// ReqBytes is the size of the invoke's arguments and RespBytes the size of its compact result, nil
-	// where not recorded: RespBytes stays nil for a failed invoke, both for anything but an invoke.
+	// ReqBytes and RespBytes are nil where not recorded. On the cli path they are the size of the invoke's
+	// arguments and of its compact result, and RespBytes stays nil for a failed invoke. On the mcp path
+	// they are the sizes of the whole JSON-RPC request and response messages, and RespBytes is also
+	// recorded for an error response. Neither is ever set for anything but an invoke or an mcp operation.
 	ReqBytes  *int64
 	RespBytes *int64
 	// Token names the agent token an approval of a connection change was made with, never its value; empty
 	// for an invoke.
 	Token string
+	// Session is the NewSession ID of the MCP process; only the mcp path has one, and the operations of
+	// the mcp baseline and navigation need it.
+	Session string
 }
 
 // The bounds Validate holds the fields of an entry to.
@@ -125,7 +135,8 @@ const (
 )
 
 // MaxReqBytes and MaxRespBytes bound the size counters Validate accepts. The request bound is the CLI's
-// limit for one agent request, which this package cannot import.
+// limit for one agent request, which this package cannot import; the MCP reader refuses a longer message
+// line, so a request message never exceeds it either.
 const (
 	MaxReqBytes  int64 = 8 << 20
 	MaxRespBytes int64 = 1 << 30
@@ -133,6 +144,19 @@ const (
 
 // MaxDuration is the longest duration Validate accepts for one invoke.
 const MaxDuration = 30 * 24 * time.Hour
+
+// sessionPattern is the form of Fields.Session: 8 random bytes as lowercase hex.
+var sessionPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// NewSession returns a random session ID for one MCP process. It is not derived from the client, the user,
+// or anything a call carries, so entries of one session can be grouped but traced to nothing.
+func NewSession() (string, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("create a session ID: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
 
 // resultPattern is the form of Fields.Result: "success" or an error code, a lowercase word with dashes.
 var resultPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
@@ -159,8 +183,26 @@ const (
 	OperationHandover = "vault.handover"
 )
 
-// managementOperations holds every operation an entry can carry that is not an invoke; IsInvoke excludes
-// them, so a new one is added here.
+// The operations an MCP session logs besides the invokes it forwards, one entry per JSON-RPC exchange. The
+// baseline pair is what every session loads before its first call; search and describe are the navigation
+// that finds a tool. None of them names a connection, an effect, or anything the agent asked for. The
+// baseline names contain a slash, which a tool ID segment never does, and the navigation names have two
+// segments where a tool ID has at least three, so none can be the ID of a tool.
+const (
+	OperationMCPInitialize = "mcp/initialize"
+	OperationMCPToolsList  = "mcp/tools-list"
+	OperationMCPSearch     = "qatlas.search"
+	OperationMCPDescribe   = "qatlas.describe"
+)
+
+// mcpOperations maps each reserved mcp operation to its area.
+var mcpOperations = map[string]Area{
+	OperationMCPInitialize: AreaBaseline, OperationMCPToolsList: AreaBaseline,
+	OperationMCPSearch: AreaNavigation, OperationMCPDescribe: AreaNavigation,
+}
+
+// managementOperations holds every operation an entry can carry that is not an invoke, besides the mcp
+// ones; IsInvoke excludes them, so a new one is added here.
 var managementOperations = map[string]bool{
 	OperationApprove: true, OperationLock: true, OperationHandover: true,
 	OperationConnectionCreate: true, OperationConnectionChange: true, OperationConnectionDelete: true,
@@ -188,6 +230,21 @@ func (f Fields) Validate() error {
 	default:
 		return errors.New("path must be cli, mcp, tui, or web")
 	}
+	if f.Session != "" && (f.Path != "mcp" || !sessionPattern.MatchString(f.Session)) {
+		return errors.New("session must be a NewSession ID on the mcp path")
+	}
+	if _, reserved := mcpOperations[f.Operation]; reserved {
+		// Nothing the agent supplied may be left in such an entry, so it has no connection even where the
+		// call was filtered by one.
+		switch {
+		case f.Path != "mcp" || f.Session == "":
+			return errors.New("an mcp operation needs the mcp path and a session")
+		case f.Connection != "" || f.Effect != "" || f.Version != 0:
+			return errors.New("an mcp operation has no connection, effect, or version")
+		case f.ReqBytes == nil || f.RespBytes == nil:
+			return errors.New("an mcp operation needs both size counters")
+		}
+	}
 	if effect, ok := connectionOperations[f.Operation]; ok && (f.Effect != effect || f.Connection == "") {
 		return errors.New("a connection change needs its effect and a connection")
 	}
@@ -207,7 +264,7 @@ func (f Fields) Validate() error {
 		if connectionOperations[f.Operation] != "" {
 			return errors.New("a connection change has no size counters")
 		}
-		if f.RespBytes != nil && f.Result != "success" {
+		if f.RespBytes != nil && f.Result != "success" && f.Path != "mcp" {
 			return errors.New("resp_bytes needs a successful result")
 		}
 	}
@@ -351,7 +408,7 @@ func (l *Logger) Append(f Fields) error {
 	entry := Entry{
 		Seq: seq, Time: now, Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version,
 		Connection: f.Connection, Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
-		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Token: f.Token, PrevHash: prevHash,
+		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Token: f.Token, Session: f.Session, PrevHash: prevHash,
 	}
 	raw, err := l.encode(entry)
 	if err != nil {
