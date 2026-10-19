@@ -220,7 +220,7 @@ func TestAToolTheFormPermissionsExcludeIsRefused(t *testing.T) {
 	typeText(t, m, "delete")
 	press(t, m, " ", "enter")
 	pump(t, m, "f2")
-	if !strings.Contains(m.fail, `tool "bookstack.pages.delete" has effect delete`) {
+	if !strings.Contains(refusal(m), `tool "bookstack.pages.delete" has effect delete`) {
 		t.Fatalf("fail = %q, want the refused effect", m.fail)
 	}
 	if got := savedTools(t, path, reg, "wiki"); got != nil {

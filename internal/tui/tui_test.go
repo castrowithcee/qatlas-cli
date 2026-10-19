@@ -1135,8 +1135,8 @@ func TestValidationErrorsAreShown(t *testing.T) {
 
 			tt.build(t, m)
 
-			if !strings.Contains(m.fail, tt.wantIn) {
-				t.Errorf("error = %q, want it to contain %q", m.fail, tt.wantIn)
+			if shown := refusal(m); !strings.Contains(shown, tt.wantIn) {
+				t.Errorf("refusal = %q, want it to contain %q", shown, tt.wantIn)
 			}
 			if _, err := os.Stat(path); err == nil {
 				t.Error("a file was written although the entry was invalid")
@@ -1311,8 +1311,8 @@ func TestPastedSecretIsRefusedWithoutEchoingIt(t *testing.T) {
 	if strings.Contains(m.fail, pasted) {
 		t.Errorf("the error message echoes the pasted secret: %q", m.fail)
 	}
-	if !strings.Contains(m.fail, "token-id") {
-		t.Errorf("error = %q, want it to name the role", m.fail)
+	if len(m.problems.rows["token-id"]) == 0 {
+		t.Errorf("problems %v, want one under the role row", m.problems.rows)
 	}
 	if _, ok := m.cfg.Credentials["reader"]; ok {
 		t.Error("the refused credential reached the model")
@@ -1351,8 +1351,8 @@ func TestNameWithASpaceIsRefused(t *testing.T) {
 	if m.fail == "" {
 		t.Fatal("a name with a space was accepted")
 	}
-	if !strings.Contains(m.fail, "must consist of letters, digits") {
-		t.Errorf("error = %q, want it to state the name rule", m.fail)
+	if view := screenOf(m); !strings.Contains(view, "must consist of letters, digits") {
+		t.Errorf("view = %q, want the name row to state the name rule", view)
 	}
 	if m.screen != screenForm {
 		t.Errorf("screen = %v, want to stay in the form", m.screen)
@@ -1559,8 +1559,8 @@ func TestATooLongConnectionDescriptionIsRefused(t *testing.T) {
 	typeText(t, m, strings.Repeat("a", 201))
 	press(t, m, "f2")
 
-	if m.fail == "" || !strings.Contains(m.fail, "201 characters") {
-		t.Errorf("fail = %q, want the reason the core gave", m.fail)
+	if shown := refusal(m); m.fail == "" || !strings.Contains(shown, "201 characters") {
+		t.Errorf("refusal = %q, want the reason the core gave", shown)
 	}
 	saved, err := store.Load()
 	if err != nil {

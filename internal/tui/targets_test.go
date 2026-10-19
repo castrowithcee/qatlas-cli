@@ -198,7 +198,7 @@ func TestTelegramTakesSeveralChats(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "chat")
 	press(t, m, "f2")
-	if !strings.Contains(m.fail, "requires chat ID") {
+	if !strings.Contains(refusal(m), "requires chat ID") {
 		t.Fatalf("a connection without a chat was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
@@ -230,7 +230,7 @@ func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
 		t.Fatalf("a second base was offered: editing %d, error %q", m.targetEdit, m.fail)
 	}
 	press(t, m, "d", "y", "f2")
-	if !strings.Contains(m.fail, "requires base") {
+	if !strings.Contains(refusal(m), "requires base") {
 		t.Fatalf("a connection without a base was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
@@ -249,7 +249,7 @@ func TestARequiredTargetListTakesSeveral(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "rows")
 	press(t, m, "f2")
-	if !strings.Contains(m.fail, "requires table") {
+	if !strings.Contains(refusal(m), "requires table") {
 		t.Fatalf("a connection without a table was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
