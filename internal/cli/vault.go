@@ -416,7 +416,9 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 			"instructions and the tools/list response with the tool descriptions), navigation (qatlas.search\n" +
 			"and qatlas.describe), and invoke (qatlas.invoke, failed calls included). Per area and per\n" +
 			"operation it has calls, req_bytes and resp_bytes (the byte lengths of the whole JSON-RPC request\n" +
-			"and response messages, an error response included; a missing counter adds 0), and total_bytes.\n" +
+			"and response messages, an error response included; a missing counter adds 0), total_bytes, and\n" +
+			"est_tokens_total (total_bytes at 3.5 bytes per token, the figure the editor's Logs screen shows\n" +
+			"as ~tokens, an estimate only the model's own count can replace).\n" +
 			"Baseline and navigation operations are named mcp/initialize (also for server/discover),\n" +
 			"mcp/tools-list, qatlas.search, and qatlas.describe; an invoke without a tool ID has an empty\n" +
 			"operation. Entries without a session ID, written before it existed or over the CLI, appear\n" +
@@ -462,15 +464,19 @@ type logsStatsTool struct {
 	ReqBytes   int64  `json:"req_bytes"`
 	RespBytes  int64  `json:"resp_bytes"`
 	TotalBytes int64  `json:"total_bytes"`
+	// EstTokensTotal estimates total_bytes the way the groups' est_tokens_* do.
+	EstTokensTotal int64 `json:"est_tokens_total"`
 }
 
 type logsStatsArea struct {
-	Area       string          `json:"area"`
-	Calls      int             `json:"calls"`
-	ReqBytes   int64           `json:"req_bytes"`
-	RespBytes  int64           `json:"resp_bytes"`
-	TotalBytes int64           `json:"total_bytes"`
-	Tools      []logsStatsTool `json:"tools"`
+	Area       string `json:"area"`
+	Calls      int    `json:"calls"`
+	ReqBytes   int64  `json:"req_bytes"`
+	RespBytes  int64  `json:"resp_bytes"`
+	TotalBytes int64  `json:"total_bytes"`
+	// EstTokensTotal estimates total_bytes the way the groups' est_tokens_* do.
+	EstTokensTotal int64           `json:"est_tokens_total"`
+	Tools          []logsStatsTool `json:"tools"`
 }
 
 type logsStatsSession struct {
@@ -519,10 +525,10 @@ func logsStatsSessions(sessions []invokelog.SessionSummary) []logsStatsSession {
 		out[i] = logsStatsSession{Session: s.Session, Areas: make([]logsStatsArea, len(s.Areas))}
 		for j, a := range s.Areas {
 			area := logsStatsArea{Area: string(a.Area), Calls: a.Calls, ReqBytes: a.ReqBytes, RespBytes: a.RespBytes,
-				TotalBytes: a.Total(), Tools: make([]logsStatsTool, len(a.Tools))}
+				TotalBytes: a.Total(), EstTokensTotal: invokelog.EstimateTokens(a.Total()), Tools: make([]logsStatsTool, len(a.Tools))}
 			for k, t := range a.Tools {
 				area.Tools[k] = logsStatsTool{Operation: t.Operation, Calls: t.Calls, ReqBytes: t.ReqBytes,
-					RespBytes: t.RespBytes, TotalBytes: t.Total()}
+					RespBytes: t.RespBytes, TotalBytes: t.Total(), EstTokensTotal: invokelog.EstimateTokens(t.Total())}
 			}
 			out[i].Areas[j] = area
 		}

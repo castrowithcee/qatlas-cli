@@ -178,13 +178,13 @@ func TestVaultLogsStatsSessions(t *testing.T) {
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "logs", "stats", "--config", configIn(dir),
 		"--output", "json")
 	want := `"sessions":[{"session":"` + s + `","areas":[` +
-		`{"area":"baseline","calls":2,"req_bytes":150,"resp_bytes":10000,"total_bytes":10150,"tools":[` +
-		`{"operation":"mcp/tools-list","calls":1,"req_bytes":50,"resp_bytes":9000,"total_bytes":9050},` +
-		`{"operation":"mcp/initialize","calls":1,"req_bytes":100,"resp_bytes":1000,"total_bytes":1100}]},` +
-		`{"area":"navigation","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"tools":[` +
-		`{"operation":"qatlas.search","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270}]},` +
-		`{"area":"invoke","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"tools":[` +
-		`{"operation":"wiki.pages.get","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120}]}]}]}` + "\n"
+		`{"area":"baseline","calls":2,"req_bytes":150,"resp_bytes":10000,"total_bytes":10150,"est_tokens_total":2900,"tools":[` +
+		`{"operation":"mcp/tools-list","calls":1,"req_bytes":50,"resp_bytes":9000,"total_bytes":9050,"est_tokens_total":2585},` +
+		`{"operation":"mcp/initialize","calls":1,"req_bytes":100,"resp_bytes":1000,"total_bytes":1100,"est_tokens_total":314}]},` +
+		`{"area":"navigation","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"est_tokens_total":77,"tools":[` +
+		`{"operation":"qatlas.search","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"est_tokens_total":77}]},` +
+		`{"area":"invoke","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"est_tokens_total":34,"tools":[` +
+		`{"operation":"wiki.pages.get","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"est_tokens_total":34}]}]}]}` + "\n"
 	if code != exitOK || stderr != "" || !strings.HasSuffix(stdout, want) {
 		t.Fatalf("stats = exit %d, stdout %q, stderr %q, want a suffix\n%s", code, stdout, stderr, want)
 	}
