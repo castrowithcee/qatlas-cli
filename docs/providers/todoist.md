@@ -148,20 +148,19 @@ The structure changes:
 
 "Any" means a `*` connection or a project connection within its projects. A tool marked listed only takes more
 than itself with it, so it is offered only by a connection whose `tools` list names it, whatever its
-`permissions`; a connection without a `tools` list never offers it.
+`effects`; a connection that selects by `effects` never offers it.
 
 Lists return compact tasks: ID, content, project, section, parent, labels, priority (1 normal to 4 urgent),
 due date, deadline, and comment count. Only `todoist.tasks.get` adds the description and timestamps, and
 only `todoist.comments.list` returns comments. A comment attachment is described by file name and type,
 never by its address. Location reminders are not read.
 
-The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and every
+The terminal editor starts a new connection on the setup profile `read`, which selects every
 read tool except `todoist.filters.list`. The profile `account-read` adds the saved filters for a `*`
-connection. The profile `tasks` adds the task, comment, and reminder changes except the deletes and ticks
-`[read, create, update]`. The profile `organize`, for a `*` connection, adds to `account-read` and `tasks`
-the creates, updates, reorders, and moves of projects, sections, and labels. No profile ticks an archive, an
-unarchive, or a delete: tick `delete` and those tools deliberately. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved.
+connection. The profile `tasks` adds the task, comment, and reminder changes except the deletes. The profile `organize`, for a `*` connection, adds to `account-read` and `tasks`
+the creates, updates, reorders, and moves of projects, sections, and labels. No profile selects an archive, an
+unarchive, or a delete: select those tools deliberately. A profile is a visible starting
+selection, not a role: only the ticked `tools` are saved.
 
 ```sh
 qatlas invoke todoist.tasks.list --connection todoist-work
@@ -178,8 +177,8 @@ echo '{"name":"Waiting","project_id":"6XGgm6PHrGgMpCFX"}' |
 
 ## Changes
 
-Every change needs `--confirm` (or `confirm` over MCP) in its own request, on a connection whose
-`permissions` hold its effect and whose `tools` list, when present, names it; otherwise it is refused before
+Every change needs `--confirm` (or `confirm` over MCP) in its own request, on a connection that
+offers it, by its `effects` or by naming it in its `tools` list; otherwise it is refused before
 a secret is read or Todoist is contacted. Moving, closing, reopening, and deleting are tools of their own, so
 an update never moves or completes a task, and a close never reopens one.
 

@@ -23,8 +23,7 @@ adding the one-time password where two-factor authentication is on, and stores t
 credential (`qatlas credential set`).
 
 **The token is broad.** It acts as the person who created it and reaches everything that account reaches, far
-beyond one base. Qatlas narrows what a connection exposes through its base target, its `tools` list, and its
-`permissions`; it does not narrow what the token itself could do. Keep the credential out of connections that
+beyond one base. Qatlas narrows what a connection exposes through its base target, its `tools` list or `effects`; it does not narrow what the token itself could do. Keep the credential out of connections that
 do not need it, and revoke the token in SeaTable when it is no longer needed.
 
 Open risk: accounts that sign in only through single sign-on may have no username and password to call
@@ -68,7 +67,7 @@ connections:
 | `seatable.account.snapshots.restore` | create | required | restores one snapshot into a new base |
 
 The read profile offers `snapshots.list` only. `snapshots.restore` has no profile: a connection offers it
-only when its `tools` list names it and its `permissions` include `create`.
+only when its `tools` list names it.
 
 ```yaml
 connections:
@@ -76,7 +75,6 @@ connections:
     service: seatable-account
     credential: seatable-account-token
     target: 42/Customer base
-    permissions: [read, create]
     tools: [seatable.account.snapshots.list, seatable.account.snapshots.restore]
 ```
 

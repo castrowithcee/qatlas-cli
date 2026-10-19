@@ -138,7 +138,6 @@ connections:
   automation:
     service: n8n-a
     credential: n8n-a-key
-    permissions: [read, update]
     tools: [n8n.datatables.list, n8n.sourcecontrol.status, n8n.users.setrole]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

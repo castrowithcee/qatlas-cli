@@ -178,8 +178,8 @@ func TestDuplicateConnectionKeepsToolsAndPaths(t *testing.T) {
 	if m.screen != screenForm || m.fieldValue("name") != "github-ops-copy" {
 		t.Fatalf("p: screen %v name %q", m.screen, m.fieldValue("name"))
 	}
-	if got := m.fieldValue(toolsLabel); got != toolsSelected {
-		t.Errorf("tools mode = %q, want %q kept", got, toolsSelected)
+	if got := m.fieldValue(accessLabel); got != accessTools {
+		t.Errorf("tools mode = %q, want %q kept", got, accessTools)
 	}
 	view := screenOf(m)
 	for _, want := range []string{"New connection, from github-ops", "wiki for customer A"} {
@@ -400,10 +400,10 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 	if m.wizard.step != stepEffects {
 		t.Fatalf("step %d fail %q, want permissions", m.wizard.step, m.fail)
 	}
-	if m.fieldValue("permissions") != "" || m.fieldValue(toolsLabel) != toolsSelected ||
+	if m.fieldValue(effectsLabel) != "" || m.fieldValue(accessLabel) != accessTools ||
 		m.fieldValue(toolListLabel) != "bookstack.pages.list, bookstack.pages.create" {
 		t.Fatalf("permissions %q tools mode %q tools %q, want those of the original (no recommended profile)",
-			m.fieldValue("permissions"), m.fieldValue(toolsLabel), m.fieldValue(toolListLabel))
+			m.fieldValue(effectsLabel), m.fieldValue(accessLabel), m.fieldValue(toolListLabel))
 	}
 	press(t, m, "f2")
 	if m.screen != screenSummary {

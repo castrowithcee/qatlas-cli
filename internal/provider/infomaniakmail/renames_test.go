@@ -93,7 +93,6 @@ connections:
     service: mail
     credential: mail-secret
     targets: [mailbox/user@example.net]
-    permissions: [read]
     tools: [infomaniakmail.folders.list, infomaniakmail.messages.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

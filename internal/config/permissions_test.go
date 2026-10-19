@@ -390,3 +390,18 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 		})
 	}
 }
+
+func TestFormerPermissionsInACurrentFileAreAStructuredProblem(t *testing.T) {
+	for _, lines := range []string{"    permissions: [read]\n", "    permissions: [read]\n    effects: [read]\n"} {
+		current := strings.Replace(withTools(lines), "version: 1", "version: 3", 1)
+		_, err := Decode(strings.NewReader(current), testProviders)
+		var p Problem
+		if !errors.As(err, &p) || p.Code != CodePermissionsRenamed || p.Field != "effects" || !strings.Contains(p.Hint(), "effects") {
+			t.Errorf("%q: error = %v, want the problem %s with a hint", lines, err, CodePermissionsRenamed)
+		}
+	}
+	older := strings.Replace(withTools("    permissions: [read]\n"), "version: 1", "version: 2", 1)
+	if _, err := Decode(strings.NewReader(older), testProviders); err != nil {
+		t.Errorf("a version 2 file with permissions is still read: %v", err)
+	}
+}

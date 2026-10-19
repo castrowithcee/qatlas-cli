@@ -194,7 +194,7 @@ func approvalList(values []string) string {
 
 func approvalTools(values []string) string {
 	if values == nil {
-		return "(every tool the permissions allow)"
+		return "(every tool of its effects)"
 	}
 	return approvalList(values)
 }

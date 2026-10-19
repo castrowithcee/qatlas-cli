@@ -36,17 +36,17 @@ connections:
     vault-wiki:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     second-wiki:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     widened:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     mail:
         service: mail

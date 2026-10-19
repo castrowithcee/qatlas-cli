@@ -186,6 +186,8 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh.effects", CodeEffectsAndTools, "connections.gh.effects: effects and tools are both given", "effects", -1},
 		{"permissions and effects", func(c *Config) { conn(c, "gh", func(v *Connection) { v.bothEffectFields = true }) },
 			"connections.gh.effects", CodePermissionsAndEffects, "connections.gh.effects: both effects and its former name", "effects", -1},
+		{"permissions in a current file", func(c *Config) { conn(c, "gh", func(v *Connection) { v.permissionsInCurrent = true }) },
+			"connections.gh.effects", CodePermissionsRenamed, "connections.gh.effects: permissions is the former name", "effects", -1},
 		{"tool of other provider", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Tools = []string{"bookstack.pages.get"} }) },
 			"connections.gh.tools", CodeToolOfOtherProvider, "connections.gh.tools: tool \"bookstack.pages.get\" belongs to provider \"bookstack\"", "tools", -1},
 		{"unknown tool entry", func(c *Config) {

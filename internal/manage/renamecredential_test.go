@@ -143,8 +143,8 @@ func TestRenameVaultCredentialWithoutAdminSessionLeavesApprovals(t *testing.T) {
 func TestRenameForwardCredentialCarriesTheReleasingConnection(t *testing.T) {
 	text := strings.Replace(renameConfig, "    mail-key:\n", "    shared:\n        type: vault\n        forward: true\n"+
 		"        fields:\n            - user\n    mail-key:\n", 1)
-	text = strings.Replace(text, "        credential: vault-reader\n        permissions:\n            - read\n    second-wiki:",
-		"        credential: vault-reader\n        forward_secrets:\n            - shared\n        permissions:\n"+
+	text = strings.Replace(text, "        credential: vault-reader\n        effects:\n            - read\n    second-wiki:",
+		"        credential: vault-reader\n        forward_secrets:\n            - shared\n        effects:\n"+
 			"            - read\n    second-wiki:", 1)
 	w := newRenameWorldWith(t, text)
 	plan, _ := w.rename(t, RenameCredential, "shared", "login", true)

@@ -96,7 +96,7 @@ type Example struct {
 // Descriptor is the versioned contract of one provider operation, for example bookstack.pages.list.
 // Schemas use JSON Schema's object form. Every configured connection of Provider shares the descriptor.
 //
-// RequiresToolAllowList marks a high-risk operation that no connection offers because of its permissions
+// RequiresToolAllowList marks a high-risk operation that no connection offers because of its effects
 // alone: only a connection whose tools list names it does, see config.ToolMetadata.
 type Descriptor struct {
 	ID                    string   `json:"id"`
@@ -636,7 +636,7 @@ func (r *Registry) checkGroups(provider string) error {
 	return nil
 }
 
-// Tool is the configuration view of the operation: what a connection's permissions and tools list are
+// Tool is the configuration view of the operation: what a connection's effects and tools list are
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
 	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Effect(d.Risk.Effect),

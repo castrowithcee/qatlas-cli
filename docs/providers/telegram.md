@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Telegram message, update, file, media, and sticker operations, fixed chat targets, connection
-  permissions, and safety boundaries.
+  effects, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -46,12 +46,11 @@ reading to upload, for writing to download. A path outside it is refused before 
 upload's size is checked before the file is read. A local file is sent under a neutral name, so path and file
 name stay local.
 
-The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes; they do
-not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further to named tools,
-for example `[telegram.messages.send]` for a chat that may receive but never lose messages, and never admits an
-effect `permissions` excludes. Mutations are never retried after an ambiguous network result.
+The credential provides `bot-token`. Connection effects only reduce what Qatlas exposes and executes; they do
+not broaden the bot's provider-side rights. A connection may instead select named tools with a `tools` list,
+for example `[telegram.messages.send]` for a chat that may receive but never lose messages. Mutations are never retried after an ambiguous network result.
 
-`telegram.messages.delete` is offered only through a `tools` list, since no permission offers it. Its reach is
+`telegram.messages.delete` is offered only through a `tools` list, since no effect offers it. Its reach is
 that of the Bot API `deleteMessage`: in a bound chat the bot deletes its own messages and, as an administrator,
 those of others; in a private chat it also deletes incoming messages.
 
@@ -298,9 +297,9 @@ and an omitted mask position or thumbnail or an empty keyword list removes the v
 
 ## Setup profiles
 
-The terminal editor starts a new connection on the setup profile `send` (`[create]`, `[telegram.messages.send]`):
+The terminal editor starts a new connection on the setup profile `send` (`[telegram.messages.send]`):
 the read tools expose incoming message content, while a send reaches only a bound chat after confirmation. The
 profiles `read`, `messaging` (also `telegram.messages.delete`), `pins`, `media`, `moderation` (only
-`telegram.members.unban`), `chat-admin`, and `payments-read` (the Stars and gifts tools) tick the tools their titles
+`telegram.members.unban`), `chat-admin`, and `payments-read` (the Stars and gifts tools) select the tools their titles
 name. Every other Telegram tool is in no profile. A profile is only a visible starting selection: every tick can be
 changed before saving, and a saved connection never follows a profile.

@@ -102,11 +102,11 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openEntryForm(t, m, sectionConnections, "wiki")
-	if got := m.fieldValue(toolsLabel); got != toolsAll {
-		t.Fatalf("tools mode = %q, want %q", got, toolsAll)
+	if got := m.fieldValue(accessLabel); got != accessEffects {
+		t.Fatalf("tools mode = %q, want %q", got, accessEffects)
 	}
-	if !m.field(toolListLabel).readOnly {
-		t.Fatal("the tool list takes focus although every permitted tool is offered")
+	if !m.field(toolListLabel).hidden || m.field(effectsLabel).hidden {
+		t.Fatal("the rows do not follow the access mode by effect")
 	}
 	pump(t, m, "f2")
 	if m.fail != "" {
@@ -139,8 +139,8 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openEntryForm(t, m, sectionConnections, "wiki")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	// The row takes no text: typing a tool ID changes nothing.
 	typeText(t, m, "pages.create")
@@ -186,7 +186,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 
 	openEntryForm(t, m, sectionConnections, "wiki")
-	if got := m.fieldValue(toolsLabel); got != toolsSelected {
+	if got := m.fieldValue(accessLabel); got != accessTools {
 		t.Fatalf("a listed connection opens in mode %q", got)
 	}
 	focusField(t, m, toolListLabel)
@@ -201,8 +201,8 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 
 	openEntryForm(t, m, sectionConnections, "wiki")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsAll)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessEffects)
 	pump(t, m, "f2")
 	if got := savedTools(t, path, reg, "wiki"); got != nil {
 		t.Fatalf("saved tools = %#v, want no tools list", got)
@@ -215,8 +215,8 @@ func TestSelectedToolsAreSavedWithoutTheEffects(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openEntryForm(t, m, sectionConnections, "wiki")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "/")
 	typeText(t, m, "delete")
@@ -318,15 +318,15 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	m, _ := toolsModel(t, reg, map[string]config.Connection{"repo": {Service: "wiki", Credential: "reader",
 		Target: "repos/octo-org/example"}})
 	openEntryForm(t, m, sectionConnections, "repo")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
 	typeText(t, m, "workflow-files")
 	// Columns pad to the longest ID on screen, so compare with collapsed whitespace.
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"github.workflow-files.get read (listed only)",
-		"github.workflow-files.update update (listed only) (not permitte"} {
+		"github.workflow-files.update update (listed only)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}

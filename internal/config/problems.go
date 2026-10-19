@@ -64,6 +64,7 @@ const (
 	CodeToolEffectNotPermitted       = "tool-effect-not-permitted"
 	CodeEffectsAndTools              = "effects-and-tools"
 	CodePermissionsAndEffects        = "permissions-and-effects"
+	CodePermissionsRenamed           = "permissions-renamed"
 	CodeToolOfOtherProvider          = "tool-of-other-provider"
 	CodeUnknownToolEntry             = "unknown-tool-entry"
 	CodeFilesEmpty                   = "files-empty"
@@ -112,8 +113,8 @@ var hints = map[string]string{
 	CodePathsEmpty:                   "List at least one directory, or leave the list out to use the connection everywhere.",
 	CodeInvalidPath:                  "Use an absolute directory or one starting with '~/', without glob patterns.",
 	CodeDuplicatePath:                "Remove the repeated directory.",
-	CodeUnknownEffect:                "Use one of the supported permissions.",
-	CodeDuplicateEffect:              "Remove the repeated permission.",
+	CodeUnknownEffect:                "Use one of the supported effects.",
+	CodeDuplicateEffect:              "Remove the repeated effect.",
 	CodeTargetRequired:               "Set the target the provider requires.",
 	CodeTargetAndTargets:             "Use either a single target or a list of targets, not both.",
 	CodeTargetsSingleOnly:            "Keep a single target, as the provider accepts only one.",
@@ -126,6 +127,7 @@ var hints = map[string]string{
 	CodeToolEffectNotPermitted:       "Remove these tools, or list their effect among the former permissions.",
 	CodeEffectsAndTools:              "Keep either effects, to offer every tool of those effects, or tools, to offer exactly the listed tools, and remove the other.",
 	CodePermissionsAndEffects:        "Remove permissions; effects is its current name.",
+	CodePermissionsRenamed:           "Rename permissions to effects.",
 	CodeToolOfOtherProvider:          "Remove the tool; it belongs to another provider.",
 	CodeUnknownToolEntry:             "Remove the entry, or choose a registered tool of the provider.",
 	CodeFilesEmpty:                   "List at least one directory, or leave the direction out to release none.",

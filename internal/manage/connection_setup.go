@@ -62,9 +62,9 @@ const (
 	// StageCredential also applies the credential.
 	StageCredential
 	// StageScope also adds the connection with its name, targets, description and the entries a surface
-	// carries over, still without permissions and tools.
+	// carries over, still without effects and tools.
 	StageScope
-	// StageRights also applies permissions and tools. The candidate is complete.
+	// StageRights also applies effects or tools. The candidate is complete.
 	StageRights
 )
 
@@ -148,7 +148,7 @@ func credentialServes(cfg *config.Config, name string, cred config.Credential, p
 }
 
 // BuildConnectionCandidate applies the draft, up to stage, to a copy of cfg and lets the core validate the
-// result. Nothing decides on its own whether a target, a permission or a tool is allowed: the
+// result. Nothing decides on its own whether a target, an effect or a tool is allowed: the
 // configuration's own methods do. A connection never gets a credential that belongs to another provider
 // than its service. The errors are the types of this file, or the configuration's own.
 func BuildConnectionCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage) (ConnectionCandidate, error) {

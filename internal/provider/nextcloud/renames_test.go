@@ -93,7 +93,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read, create]
     targets: [folder]
     tools: [nextcloud.files.list, nextcloud.folders.create]
 `

@@ -591,7 +591,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{define "connection-build"}}
 {{template "layout-top" (page "Set up a connection" "connections")}}
 <h1>Set up a connection</h1>
-<p class="step">Step 2 of 3 · Service, credential, scope, permissions</p>
+<p class="step">Step 2 of 3 · Service, credential, scope, access</p>
 <p class="actions"><a href="/connections/new">Choose another provider</a></p>
 {{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 <form method="get" action="/connections/new/review">
@@ -679,16 +679,23 @@ Type a passphrase, twice, to encrypt it instead.</p>
 </section>
 {{end}}
 
-<section class="section" aria-labelledby="permissions-heading">
-<h2 id="permissions-heading">Permissions</h2>
+<section class="section" aria-labelledby="access-heading">
+<h2 id="access-heading">Access</h2>
 <fieldset class="field">
-<legend>Permission mode</legend>
+<legend>Access</legend>
+<div class="choice"><input id="access-effects" type="radio" name="access" value="effects"{{if eq .Form.Access "effects"}} checked{{end}}> <label for="access-effects">by effect: offer every tool of the effects chosen below</label></div>
+<div class="choice"><input id="access-tools" type="radio" name="access" value="tools"{{if eq .Form.Access "tools"}} checked{{end}}> <label for="access-tools">selected tools: offer only the tools ticked below</label></div>
+<p class="hint">Only the choices under the access mode selected here are saved; the others are ignored.</p>
+</fieldset>
+<fieldset class="field">
+<legend>Effects (access by effect)</legend>
 <div class="choice"><input id="permmode-default" type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> <label for="permmode-default">use the provider's default</label></div>
 <div class="choice"><input id="permmode-custom" type="radio" name="permmode" value="custom"{{if eq .Form.PermMode "custom"}} checked{{end}}> <label for="permmode-custom">choose explicitly</label></div>
-</fieldset>
-{{if .Effects}}<fieldset class="field">
-<legend>Permissions</legend>
 {{range $i, $p := .Effects}}<div class="choice"><input id="perm-{{$i}}" type="checkbox" name="perm" value="{{$p.Value}}"{{if $p.Selected}} checked{{end}}> <label for="perm-{{$i}}">{{$p.Label}}</label></div>
+{{end}}</fieldset>
+{{if .Tools}}<fieldset class="field">
+<legend>Tools (access by selected tools)</legend>
+{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}})</label></div>
 {{end}}</fieldset>{{end}}
 </section>
 
@@ -703,19 +710,6 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{end}}</fieldset>
 </section>
 {{end}}
-
-<section class="section" aria-labelledby="tools-heading">
-<h2 id="tools-heading">Tools</h2>
-<fieldset class="field">
-<legend>Tool mode</legend>
-<div class="choice"><input id="toolsmode-all" type="radio" name="toolsmode" value="all"{{if eq .Form.ToolsMode "all"}} checked{{end}}> <label for="toolsmode-all">offer every tool the permissions allow</label></div>
-<div class="choice"><input id="toolsmode-selected" type="radio" name="toolsmode" value="selected"{{if eq .Form.ToolsMode "selected"}} checked{{end}}> <label for="toolsmode-selected">offer only the tools ticked below</label></div>
-</fieldset>
-{{if .Tools}}<fieldset class="field">
-<legend>Tools</legend>
-{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}})</label></div>
-{{end}}</fieldset>{{end}}
-</section>
 
 <div class="actions"><button type="submit">Review</button></div>
 </form>
@@ -764,7 +758,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{end}}
 {{range .Form.Forward}}<input type="hidden" name="forward" value="{{.}}">
 {{end}}
-<input type="hidden" name="toolsmode" value="{{.Form.ToolsMode}}">
+<input type="hidden" name="access" value="{{.Form.Access}}">
 {{range .Form.Tools}}<input type="hidden" name="tool" value="{{.}}">
 {{end}}
 
@@ -822,7 +816,7 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th scope="row">Targets</th><td>{{.Targets}}</td></tr>
 <tr><th scope="row">Files</th><td>{{.Files}}</td></tr>
 <tr><th scope="row">Description</th><td>{{.Description}}</td></tr>
-<tr><th scope="row">Permissions</th><td>{{.Effects}}</td></tr>
+<tr><th scope="row">Effects</th><td>{{.Effects}}</td></tr>
 <tr><th scope="row">Tools</th><td>{{.Tools}}</td></tr>
 </tbody>
 </table>

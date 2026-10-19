@@ -26,7 +26,7 @@ management, workspace settings, or restoring from the trash.
 The credential provides `api-key`: a workspace API key from the workspace settings. A key belongs to one workspace and
 carries the right `read`, `full`, or routes, and an expiry date; reading needs `read` or the routes for collections and
 scenes. It is sent as `Authorization: Bearer ...` and registered with the redactor. Qatlas does not narrow the key;
-it narrows a connection through its targets, its `tools` list, and its `permissions`.
+it narrows a connection through its targets, its `tools` list or `effects`.
 
 `base_url` is `https://api.excalidraw.com`, the only accepted value: any other host, `http`, a port, path, user info,
 query, or fragment is refused before a secret is read. Redirects are never followed.
@@ -139,7 +139,7 @@ the answer shows every sent element at the sent version. A patch element is a co
 **Replace.** This is an authoritative, final replacement: every element not sent is removed, embedded images and
 files are removed (`files` is sent empty), and connected editors are forced to reload instead of merging. The tool
 requires `confirm` and is offered only to a connection whose `tools` list names it (it has the effect `delete`, so
-the connection also needs the `delete` permission); the `manage` profile does not make it available on its own. An
+the connection also needs the `delete` effect); the `manage` profile does not make it available on its own. An
 empty element list is refused. `view_background_color` defaults to `#ffffff`.
 
 **Elements.** An element is a closed, structured subset of the Excalidraw element format, never a free body:
@@ -164,7 +164,7 @@ and, for a patch, `not_applied`.
 ## Deleting scenes and collections
 
 The `manage` profile also lists two deleting tools. Both have the effect `delete`, need `confirm`, are offered only to
-a connection whose `tools` list names them (and with the `delete` permission), send exactly one request, and are never
+a connection whose `tools` list names them (and with the `delete` effect), send exactly one request, and are never
 repeated.
 
 | Tool | Request | Does |

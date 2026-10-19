@@ -4,7 +4,7 @@ description: >
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
   writes, article deletion, receipt file uploads, recording, booking and changing of vouchers, reading and
-  deleting webhook subscriptions, permissions, and credentials.
+  deleting webhook subscriptions, effects, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -60,8 +60,7 @@ with a full set as in create; an omitted optional field is removed, positions ar
 read the voucher first, refuse any other status without a write and send one request with the version they
 read; a conflict is reported as such. Members outside the schema, above all the attached files, stay as read.
 After an unclear outcome the error says that the voucher may have been created or changed. Both tools are
-offered only to a connection whose `tools` list names them and whose `permissions` contain `update`; no
-profile selects them.
+offered only to a connection whose `tools` list names them; no profile selects them.
 
 A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
 protects connections whose keys belong to different customers: before the first request of a tool, Qatlas
@@ -85,19 +84,17 @@ confirmation. Issuing is a separate tool per voucher type: `lexware.invoices.iss
 delete the voucher afterwards; a credit note linked to an invoice reduces its open amount at once. Each takes
 the inputs of its draft tool; invoices and credit notes may also be issued as the follow-up of another voucher
 with `preceding_voucher_id`, order confirmations and delivery notes not. A connection offers an issue tool
-only when its `tools` list names it, in addition to `create` in `permissions`; no profile ticks it.
+only when its `tools` list names it; no profile ticks it.
 
 `lexware.articles.delete` deletes one article for good (`delete`), always with confirmation. Like the issue
-tools it is offered only when a connection's `tools` list names it, in addition to `delete` in `permissions`;
-no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
+tools it is offered only when a connection's `tools` list names it; no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
 that the article may have been deleted.
 
 `lexware.event-subscriptions.list` and `lexware.event-subscriptions.get` read the webhook subscriptions of the
 organization (`read`, in both profiles). Callback URLs are confidential: only scheme and host are shown, an
 unreadable URL is masked completely. Qatlas offers no tool to create a subscription, so no callback to a third
 party can be registered through it. `lexware.event-subscriptions.delete` removes one subscription for good
-(`delete`), always with confirmation, and only when a connection's `tools` list names it, in addition to
-`delete` in `permissions`; no profile ticks it. A subscription may serve another application's integration,
+(`delete`), always with confirmation, and only when a connection's `tools` list names it; no profile ticks it. A subscription may serve another application's integration,
 which then stops receiving events. A subscription also ends when the API key that created it is revoked.
 
 `lexware.quotations.create` (with a required `expiration_date`), `lexware.order-confirmations.create`,
@@ -142,15 +139,14 @@ unclear outcome of the write the error says the object may have been created or 
 repeating.
 
 Lexware's public invoice API does not expose update or delete endpoints, so Qatlas does not invent uniform
-CRUD operations. The credential provides `api-key`; local connection permissions may restrict that key but
-never extend its Lexware contract or organization rights. An optional `tools` list narrows a connection
-further to named tools, for example `[lexware.invoices.get]`, and never admits an effect `permissions`
-excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
-`[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the
-tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.order-confirmations.create`,
+CRUD operations. The credential provides `api-key`; local connection effects may restrict that key but
+never extend its Lexware contract or organization rights. A connection selects by `effects` or by a `tools`
+list naming exactly the tools it offers, for example `[lexware.invoices.get]`. The terminal editor starts a
+new connection on the recommended setup profile `read`, which selects every list and get tool; the profile
+`write` adds the tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.order-confirmations.create`,
 `lexware.credit-notes.create`, `lexware.delivery-notes.create`, `lexware.dunnings.create`,
 `lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create`, `lexware.contacts.update`,
 `lexware.files.upload`, `lexware.vouchers.attach` and `lexware.vouchers.create`; the upload and attach tools
 take effect only with a `files.read` release.
-A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
-every tick can be changed before saving, and a saved connection never follows a profile.
+A profile is a visible starting selection, not a role: only the ticked `tools` are saved, every tick can
+be changed before saving, and a saved connection never follows a profile.

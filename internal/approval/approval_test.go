@@ -109,7 +109,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "https://moved.example.invalid"},
 		{Field: FieldEffects, Before: "create read", After: "(none)", Removed: []string{"create", "read"}},
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2", Added: []string{"shelf-1", "shelf-2"}},
-		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
+		{Field: FieldTools, Before: "(every tool of its effects)", After: "(none)"},
 		{Field: FieldPaths, Before: "(every project)", After: "~/repos/kunde-a"},
 		{Field: FieldFiles, Before: "(no local files)", After: "read: ~/in; write: ~/out"},
 	}
@@ -289,7 +289,7 @@ func TestDiffModeSwitchesStayBeforeAndAfter(t *testing.T) {
 			t.Errorf("%s is a mode switch, got sets: %+v", name, f)
 		}
 	}
-	if f := fieldOf(t, fields, FieldTools); f.After != "(every tool the permissions allow)" ||
+	if f := fieldOf(t, fields, FieldTools); f.After != "(every tool of its effects)" ||
 		f.Before != "github.issues.get github.issues.list github.pull-requests.list" {
 		t.Errorf("tools mode switch: %+v", f)
 	}

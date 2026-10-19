@@ -52,8 +52,7 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if m == nil {
 		return
 	}
-	fmt.Fprintf(stderr, "qatlas: migrated %s to configuration schema %d: services, credentials, and connections "+
-		"now have stable ids\n", m.Path, config.Version)
+	fmt.Fprintf(stderr, "qatlas: migrated %s to configuration schema %d: %s\n", m.Path, config.Version, migrationChange(m.From))
 	fmt.Fprintf(stderr, "qatlas: the previous file is backed up as %s\n", m.Backup)
 	if len(m.VaultCopies) > 0 {
 		fmt.Fprintf(stderr, "qatlas: the vault files are backed up as %s\n", strings.Join(m.VaultCopies, ", "))
@@ -77,4 +76,13 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if m.Warning != "" {
 		fmt.Fprintln(stderr, withQatlasPrefix(m.Warning))
 	}
+}
+
+// migrationChange says what a migration from the schema from changed, one clause per schema step it passed.
+func migrationChange(from int) string {
+	const effects = "a connection offers its tools by effects or by a tools list, and permissions is now called effects"
+	if from >= 2 {
+		return effects
+	}
+	return "services, credentials, and connections now have stable ids; " + effects
 }

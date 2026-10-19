@@ -122,7 +122,6 @@ connections:
     service: tables
     credential: tables-secret
     targets: ["*"]
-    permissions: [read, create]
     tools: [seatable.tables.list, seatable.rows.batchcreate]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

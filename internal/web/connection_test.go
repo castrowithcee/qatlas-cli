@@ -19,7 +19,7 @@ import (
 )
 
 // bookMetadata and otherMetadata are two synthetic test providers, large enough to exercise a connection's
-// target, permissions, and tools, without pulling in a real provider package this test has no business
+// target, effects, and tools, without pulling in a real provider package this test has no business
 // depending on. book's target must not contain a space, so a malformed target has something concrete to be
 // rejected for.
 var bookMetadata = config.ProviderMetadata{
@@ -130,7 +130,7 @@ func TestGuidedConnectionCreatesNewServiceAndCredential(t *testing.T) {
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"keyring"},
 		"connname": {"book-conn"}, "targets": {"lib1,lib2"}, "description": {"a test connection"},
 		"permmode": {"custom"}, "perm": {"read"},
-		"toolsmode": {"selected"}, "tool": {"book.read"},
+		"access": {"tools"}, "tool": {"book.read"},
 	}.Encode()
 	review := s.request(t, http.MethodGet, reviewURL, s.addr, cookie, nil)
 	if review.Code != http.StatusOK {
@@ -148,7 +148,7 @@ func TestGuidedConnectionCreatesNewServiceAndCredential(t *testing.T) {
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"keyring"},
 		"connname": {"book-conn"}, "targets": {"lib1,lib2"}, "description": {"a test connection"},
 		"permmode": {"custom"}, "perm": {"read"},
-		"toolsmode": {"selected"}, "tool": {"book.read"},
+		"access": {"tools"}, "tool": {"book.read"},
 		"cfgver":              {cfgver},
 		"secret_token-id":     {newConnCanaryID},
 		"secret_token-secret": {newConnCanaryValue},
@@ -220,7 +220,7 @@ func TestGuidedConnectionReusesExistingServiceAndCredential(t *testing.T) {
 
 	reviewURL := "/connections/new/review?" + url.Values{
 		"provider": {"book"}, "service": {"book-cloud"}, "credential": {"book-reader"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 	}.Encode()
 	review := s.request(t, http.MethodGet, reviewURL, s.addr, cookie, nil)
 	if review.Code != http.StatusOK {
@@ -230,7 +230,7 @@ func TestGuidedConnectionReusesExistingServiceAndCredential(t *testing.T) {
 
 	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, url.Values{
 		"provider": {"book"}, "service": {"book-cloud"}, "credential": {"book-reader"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"}, "cfgver": {cfgver},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"}, "cfgver": {cfgver},
 	})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
@@ -272,7 +272,7 @@ func TestGuidedConnectionRejectsForeignCredentialProvider(t *testing.T) {
 	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, url.Values{
 		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
 		"svcbaseurl": {"https://books.example.test"}, "credential": {"other-cred"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"}, "cfgver": {"stale-or-whatever"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"}, "cfgver": {"stale-or-whatever"},
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (rejected back onto the build page)", rec.Code)
@@ -295,7 +295,7 @@ func TestGuidedConnectionRejectsInvalidTarget(t *testing.T) {
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
 		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
 		"connname": {"book-conn"}, "targets": {"has a space"},
-		"permmode": {"default"}, "toolsmode": {"all"}, "cfgver": {"whatever"},
+		"permmode": {"default"}, "access": {"effects"}, "cfgver": {"whatever"},
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (rejected)", rec.Code)
@@ -318,7 +318,7 @@ func TestGuidedConnectionStoresSelectedToolsWithoutEffects(t *testing.T) {
 		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
 		"connname": {"book-conn"},
 		"permmode": {"custom"}, "perm": {"read"},
-		"toolsmode": {"selected"}, "tool": {"book.create"},
+		"access": {"tools"}, "tool": {"book.create"},
 	}
 	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
 	if review.Code != http.StatusOK {
@@ -340,6 +340,40 @@ func TestGuidedConnectionStoresSelectedToolsWithoutEffects(t *testing.T) {
 	}
 }
 
+// TestGuidedConnectionStoresEffectsWithoutToolsWhenAccessIsByEffect proves the access radio decides the
+// stored field: ticked tools of the other mode are ignored.
+func TestGuidedConnectionStoresEffectsWithoutToolsWhenAccessIsByEffect(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	form := url.Values{
+		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
+		"svcbaseurl": {"https://books.example.test"},
+		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
+		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
+		"connname": {"book-conn"},
+		"permmode": {"custom"}, "perm": {"read"},
+		"access": {"effects"}, "tool": {"book.create"},
+	}
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	if review.Code != http.StatusOK {
+		t.Fatalf("GET review page status = %d, want 200, body: %s", review.Code, review.Body.String())
+	}
+	form.Set("cfgver", extractHiddenValue(t, review.Body.String(), "cfgver"))
+
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := cfg.Connections["book-conn"]
+	if conn.Tools != nil || len(conn.Effects) != 1 || conn.Effects[0] != config.EffectRead {
+		t.Fatalf("connection = %+v, want only the effect read", conn)
+	}
+}
+
 // TestGuidedConnectionWithoutAdminApprovalHasNoEffect proves the admin guard actually protects the guided
 // connection route.
 func TestGuidedConnectionWithoutAdminApprovalHasNoEffect(t *testing.T) {
@@ -357,7 +391,7 @@ func TestGuidedConnectionWithoutAdminApprovalHasNoEffect(t *testing.T) {
 		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"keyring"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 		"secret_token-id": {newConnCanaryID}, "secret_token-secret": {newConnCanaryValue},
 	})
 	if rec.Code != http.StatusForbidden {
@@ -380,7 +414,7 @@ func TestGuidedConnectionStaleConfigConflict(t *testing.T) {
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
 		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 	}.Encode()
 	review := s.request(t, http.MethodGet, reviewURL, s.addr, cookie, nil)
 	staleCfgver := extractHiddenValue(t, review.Body.String(), "cfgver")
@@ -401,7 +435,7 @@ func TestGuidedConnectionStaleConfigConflict(t *testing.T) {
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
 		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"}, "cfgver": {staleCfgver},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"}, "cfgver": {staleCfgver},
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (conflict, not a redirect)", rec.Code)
@@ -422,7 +456,7 @@ func TestGuidedConnectionBuildPageKeepsInputsOnError(t *testing.T) {
 		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {""}, // empty service name is refused
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"keyring"},
 		"connname": {"book-conn"}, "description": {"kept across the error"},
-		"permmode": {"default"}, "toolsmode": {"all"},
+		"permmode": {"default"}, "access": {"effects"},
 	}.Encode()
 	rec := s.request(t, http.MethodGet, reviewURL, s.addr, cookie, nil)
 	if rec.Code != http.StatusOK {
@@ -447,7 +481,7 @@ func TestGuidedConnectionNoSecretInAnyResponse(t *testing.T) {
 		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"keyring"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 		"secret_token-id": {newConnCanaryValue}, // token-secret left empty on purpose
 	})
 	assertNoCanaryValueIn(t, "the failed commit's response", rec.Body.String())
@@ -491,7 +525,7 @@ func filesFormValues(extra url.Values) url.Values {
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
 		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 	}
 	for key, vals := range extra {
 		v[key] = vals
@@ -651,7 +685,7 @@ func TestGuidedConnectionKeepsStableIDs(t *testing.T) {
 
 	values := url.Values{
 		"provider": {"book"}, "service": {"book-cloud"}, "credential": {"book-reader"},
-		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
 	}
 	review := s.request(t, http.MethodGet, "/connections/new/review?"+values.Encode(), s.addr, cookie, nil)
 	if review.Code != http.StatusOK {

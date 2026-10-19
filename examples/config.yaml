@@ -266,7 +266,7 @@ credentials:
 # encrypted, a change of paths needs a new approval.
 #
 # The TUI starts a new connection on its provider's recommended setup profile, for example read, which
-# ticks effects and the concrete tools it names; every tick can be changed before saving. A profile is
+# selects the concrete tools it names; every tick can be changed before saving. A profile is
 # a visible starting selection, not a role: this file stores only effects or tools, never a profile,
 # and a saved connection never follows one. The credential still decides what the provider allows.
 connections:
@@ -459,7 +459,7 @@ connections:
       github.workflow-jobs.list, github.workflow-jobs.get, github.workflow-jobs.log, github.workflow-artifacts.list]
 
   # An operator also dispatches workflows and re-runs or cancels runs. It needs execute, which no planning
-  # permission implies, and every execution needs confirmation in its own invoke request.
+  # effect implies, and every execution needs confirmation in its own invoke request.
   ci-operator:
     service: github
     credential: github-operator

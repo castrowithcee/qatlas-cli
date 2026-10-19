@@ -38,16 +38,16 @@ connections:
   customer:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
     paths: [%q]
   shared:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
   ghost:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
     paths: [%q]
 defaults:
   connections:

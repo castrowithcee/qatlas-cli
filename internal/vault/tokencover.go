@@ -75,7 +75,7 @@ type model struct {
 //
 // A change is covered when a vorbild V of the token, as V is approved, not as it may be configured now, has
 // the same service (provider and endpoint) and the same credential entry, and the change stays inside V:
-// its permissions a subset of V's; its tools a subset of V's tools list, where V has one; its targets among
+// its effects a subset of V's; its tools a subset of V's tools list, where V has one; its targets among
 // V's, where V has any; its paths inside V's, where V is bound to any; its local file directories, per
 // direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
 // V's, each with the same fields. A delete is covered when the
@@ -252,7 +252,7 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if !subset(change.Effects, ceiling.Effects) {
 		gaps = append(gaps, GapEffects)
 	}
-	// A vorbild without a tools list admits every tool its permissions do; one with a list admits only a
+	// A vorbild without a tools list admits every tool of its effects; one with a list admits only a
 	// change whose own list stays inside it, never one without a list.
 	if ceiling.Tools != nil && (change.Tools == nil || !subset(change.Tools, ceiling.Tools)) {
 		gaps = append(gaps, GapTools)

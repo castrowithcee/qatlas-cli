@@ -122,9 +122,9 @@ func scaleYAML(shape scaleShape) []byte {
 		}
 		fmt.Fprintf(&b, "    description: synthetic %s route %d for load profile %s\n", p.id, k, shape.name)
 		if k%2 == 0 {
-			b.WriteString("    permissions: [read]\n")
+			b.WriteString("    effects: [read]\n")
 		} else {
-			b.WriteString("    permissions: [read, create]\n")
+			b.WriteString("    effects: [read, create]\n")
 		}
 	}
 	b.WriteString("defaults: {}\n")

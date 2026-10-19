@@ -174,3 +174,13 @@ connections:
 		t.Errorf("stderr does not name exactly the narrowed connection:\n%s", stderr)
 	}
 }
+
+// The migration message names only the schema steps the file actually passed.
+func TestMigrationChangeNamesOnlyThePassedSteps(t *testing.T) {
+	if got := migrationChange(1); !strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") {
+		t.Errorf("v1 message = %q, want both steps", got)
+	}
+	if got := migrationChange(2); strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") {
+		t.Errorf("v2 message = %q, want the effects step alone", got)
+	}
+}

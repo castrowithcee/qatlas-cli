@@ -260,8 +260,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Short: "Release open connections to read the vault credential they are configured for",
 		Long: "Lists every connection that is not approved to read its vault credential as it is configured now:\n" +
 			"'new connection, not yet approved' for one never approved, or one entry per field that changed since,\n" +
-			"among origin, provider, permissions, targets, tools, paths, files, forward, and credential. A single\n" +
-			"value, or a switch between a mode and a list ('every tool the permissions allow', 'every project',\n" +
+			"among origin, provider, effects, targets, tools, paths, files, forward, and credential. A single\n" +
+			"value, or a switch between a mode and a list ('every tool of its effects', 'every project',\n" +
 			"'no local files'), shows before -> after; a list that stays a list shows what is newly asked for\n" +
 			"(+) and what falls away (-), then only how many entries are unchanged. Each entry starts with a\n" +
 			"source line saying where the change came from. 'changed in qatlas tui' (or web, cli) with the time names the\n" +
@@ -299,7 +299,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"each decision in the invocation log with the token's name, never its value. No token, an unknown,\n" +
 			"revoked, or expired one, a vault that is not encrypted, or a change the token does not cover fails\n" +
 			"with admin-required, naming each change left open and what of it the token does not cover:\n" +
-			"service, credential, permissions, tools, targets, paths, or that it is a vorbild itself. Without a\n" +
+			"service, credential, effects, tools, targets, paths, or that it is a vorbild itself. Without a\n" +
 			"vault process, the vault locked, it fails with vault-locked, since only that process can check a\n" +
 			"token. The stale approval of a connection removed or renamed is a change of kind delete: a token\n" +
 			"that covers the connection it belonged to removes it.",

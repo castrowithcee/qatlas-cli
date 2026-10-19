@@ -66,7 +66,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: [acmechat.messages.fetch, acme.chat.messages.list, acmechat.messages.purge]
 provider_notes:
   acmechat: team chat
@@ -216,7 +215,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: ` + tools + "\n"
 	if err := os.WriteFile(configIn(dir), []byte(body), 0o600); err != nil {
 		t.Fatal(err)

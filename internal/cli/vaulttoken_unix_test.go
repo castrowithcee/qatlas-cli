@@ -27,7 +27,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 	config, _ := os.ReadFile(configIn(dir))
 	extended := strings.Replace(string(config), "defaults:", "  wiki-agent:\n    service: wiki\n"+
 		"    credential: wiki-vault\n  wiki-wide:\n    service: wiki\n    credential: wiki-vault\n"+
-		"    permissions: [read, create]\ndefaults:", 1)
+		"    effects: [read, create]\ndefaults:", 1)
 	if err := os.WriteFile(configIn(dir), []byte(extended), 0o600); err != nil {
 		t.Fatal(err)
 	}

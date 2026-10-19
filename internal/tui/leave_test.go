@@ -54,7 +54,7 @@ func TestEscClosesAPickerAndATargetListOneLevelAtATime(t *testing.T) {
 	m, _ := toolsModel(t, reg, map[string]config.Connection{
 		"gh": {Service: "wiki", Credential: "reader", Target: "repos/octo/a"}})
 	openConnection(t, m, "gh")
-	focusField(t, m, "permissions")
+	focusField(t, m, effectsLabel)
 	press(t, m, "enter")
 	if m.screen != screenPicker {
 		t.Fatalf("enter opened screen %v, want the picker", m.screen)
@@ -141,7 +141,7 @@ func TestATypedTargetOrPathAsksBeforeItIsDropped(t *testing.T) {
 func TestTicksAndAHalfBuiltTargetAskTheSameQuestion(t *testing.T) {
 	m, _, _ := knownTargetsModel(t)
 	openConnection(t, m, "gh-a")
-	focusField(t, m, "permissions")
+	focusField(t, m, effectsLabel)
 	press(t, m, "enter")
 	typeText(t, m, "create")
 	press(t, m, " ", "esc")

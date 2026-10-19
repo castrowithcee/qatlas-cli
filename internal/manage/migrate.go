@@ -13,7 +13,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
-// Migration is what one migration of the configuration file to the current schema did. Backup is the copy of
+// Migration is what one migration of the configuration file to the current schema did. From is the schema
+// the file had. Backup is the copy of
 // the file as it was and VaultCopies the copies of the vault's files, all in the backups directory beside the
 // file; together they are the way back. VaultIDs counts the vault entries that got their credential id, or,
 // with Pending, the pending writes of a locked vault that carry them until its next unlock. Renamings are the
@@ -25,6 +26,7 @@ import (
 // it, and "" otherwise.
 type Migration struct {
 	Path        string
+	From        int
 	Backup      string
 	VaultCopies []string
 	VaultIDs    int
@@ -104,7 +106,7 @@ func (s *Service) MigrateSchema() (*Migration, error) {
 // migrate runs one attempt on cfg, read at revision rev. The returned Migration has Backup set once the file
 // was written, also when the read-back failed.
 func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, error) {
-	m := &Migration{Path: s.store.Path(), Renamings: cfg.Renamings()}
+	m := &Migration{Path: s.store.Path(), From: cfg.Version, Renamings: cfg.Renamings()}
 	v := s.vault()
 	if v != nil && v.Dir() != vault.New(filepath.Dir(s.store.Path())).Dir() {
 		v = nil

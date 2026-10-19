@@ -24,7 +24,7 @@ import (
 
 // Schema versions this build reads. Version 2 adds the stable id of a service, a credential and a
 // connection. Version 3 replaces the two overlapping allow-lists of a connection by either effects or tools
-// and names the effects field "effects"; "permissions" is accepted when reading.
+// and names the effects field "effects"; a file of an older version may still say "permissions".
 const (
 	versionNames   = 1
 	versionIDs     = 2
@@ -149,12 +149,15 @@ type Connection struct {
 	legacyEffects []Effect
 	// bothEffectFields is set when a file names both effects and its former name permissions.
 	bothEffectFields bool
+	// permissionsInCurrent is set when a file of the current schema still names the former permissions field.
+	permissionsInCurrent bool
 }
 
 // foldLegacyEffects moves the former permissions field of every connection into the current model. Alone it
 // is the effects list. Next to tools it is dropped, since the bound that the former validation enforced
 // (every listed tool's effect is among the permissions) made the tools the whole offer; the list stays in
-// legacyEffects for the migration report. Next to effects it is a problem, reported by Validate.
+// legacyEffects for the migration report. Next to effects it is a problem, reported by Validate. A file of
+// the current schema never folds: it must say effects, and the field is a problem instead.
 func (c *Config) foldLegacyEffects() {
 	for name, conn := range c.Connections {
 		legacy := conn.LegacyPermissions
@@ -163,6 +166,8 @@ func (c *Config) foldLegacyEffects() {
 		}
 		conn.LegacyPermissions = nil
 		switch {
+		case c.Version >= versionEffects:
+			conn.permissionsInCurrent = true
 		case conn.Effects != nil:
 			conn.bothEffectFields = true
 		case conn.Tools != nil:
@@ -676,7 +681,10 @@ func (c *Config) Validate() error {
 			report(problem(SectionConnections, name, "description", CodeInvalidDescription, "%v", err))
 		}
 		validatePaths(name, conn.Paths, report)
-		if conn.bothEffectFields {
+		if conn.permissionsInCurrent {
+			report(problem(SectionConnections, name, "effects", CodePermissionsRenamed,
+				"permissions is the former name of effects"))
+		} else if conn.bothEffectFields {
 			report(problem(SectionConnections, name, "effects", CodePermissionsAndEffects,
 				"both effects and its former name permissions are given"))
 		}

@@ -104,7 +104,6 @@ connections:
     service: drive
     credential: drive-token
     targets: [account/1]
-    permissions: [read]
     tools: [infomaniakdrive.drives.list, infomaniakdrive.files.stat]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

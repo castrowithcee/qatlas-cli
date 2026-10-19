@@ -95,15 +95,16 @@ widens the targets, so a call reaches only what both allow. The single `target: 
 such as a project followed by the repositories it plans in, stay valid and are read as the same allow-list.
 
 One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
-offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
-needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
-connection with a `tools` list offers only the tools it lists, never one added in a later version.
+offers is decided by `effects` or `tools` alone. Reads are a connection's only default: a connection that
+selects by `effects` needs `create` or `update` among them for a change and `execute` for an Actions
+execution, and a connection with a `tools` list offers only the tools it lists, never one added in a later
+version.
 `github.projects.delete`, `github.project-fields.delete`, `github.project-field-options.delete`,
 `github.project-iterations.replace`, `github.project-views.delete`, `github.project-items.delete`,
 `github.project-status.delete`, and `github.project-workflows.delete` need `delete`. They, the
 [access tools](#project-collaborators-and-teams) that change who reaches a project, and the workflow
 maintainer and Actions administrator tools are listed only: a connection without a `tools` list never offers
-them, whatever its permissions.
+them, whatever its `effects`.
 
 ### The target of a call
 
@@ -136,7 +137,7 @@ the next step without echoing the value:
 | the targets name no target of the tool's kind | add one to the targets, or use another connection |
 | a malformed argument, or a pattern as an argument | the argument's form |
 
-A tool that the connection's `permissions` or `tools` exclude stays an unsupported capability, refused before
+A tool that the connection's `effects` or `tools` exclude stays an unsupported capability, refused before
 a secret is read as well.
 
 Every result names the target the tool acted on in a field named like its argument, whether the argument
@@ -206,14 +207,14 @@ their own permission messages, listed under [Tokens for Actions](#tokens-for-act
 
 ### Setup profiles
 
-The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads
+The terminal editor starts a new connection on the setup profile `read`, which selects the reads
 `github.projects.list`, `github.repositories.list`, `github.project-items.list`, `github.project-items.get`,
 `github.issues.list`, `github.issues.get`, and `github.comments.list`. The profile `planning` ticks
 `[read, create, update]` with the owner lists, the project reads, `github.project-items.update`,
 `github.project-items.add`, `github.project-items.move`, `github.project-drafts.create`,
 `github.project-drafts.update`, `github.project-drafts.convert`, and `github.project-issues.create`; archiving
 and restoring stay unticked. The profile
-`projects` ticks `[read, create, update]` with the owner lists, the
+`projects` selects the owner lists, the
 [project lifecycle](#project-lifecycle) tools except `github.projects.delete`, the template tools,
 `github.project-fields.list`, `create`, and `update` of the [project fields](#project-fields),
 `github.project-views.list`, `create`, and `update` of the [project views](#project-views),
@@ -253,7 +254,7 @@ and repository security advisories, and code quality findings under [Security al
 changes nothing. The not-recommended profile `copilot` assigns Copilot to an issue and requests a Copilot review
 of a pull request under [Copilot](#copilot); every change needs its own confirmation. A
 profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
+visible starting selection, not a role: only the ticked `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
 
 ```yaml
@@ -262,7 +263,6 @@ connections:
     service: github
     credential: github-planner
     targets: [orgs/octo-org/projects/7, repos/octo-org/*]
-    permissions: [read, create, update]
     tools: [github.project-items.list, github.project-items.get, github.project-items.update,
       github.project-issues.create, github.issues.list, github.issues.get]
 ```
@@ -359,11 +359,11 @@ for private ones, or Starring read access on a fine-grained token. Starring and 
 on a classic token, `repo` as well for a private repository, or Starring read and write access on a
 fine-grained token.
 
-The terminal editor's setup profile `discovery` ticks `[read]` with `github.accounts.me`,
+The terminal editor's setup profile `discovery` selects `github.accounts.me`,
 `github.teams.list`, `github.team-members.list`, `github.stars.list`, and the seven
 [search tools](#search-repositories-code-issues-pull-requests-commits-users-and-organizations); it changes
 nothing. The setup profile
-`stars` ticks `[read, create, delete]` with `github.stars.list`, `github.stars.add`, and
+`stars` selects `github.stars.list`, `github.stars.add`, and
 `github.stars.remove`; every star or unstar needs its own confirmation. Neither is the recommended profile,
 which stays `read`, unchanged.
 
@@ -552,7 +552,7 @@ or the following for a private one:
 | --- | --- | --- |
 | `github.contents.get`, `github.trees.get`, `github.blame.get`, `github.commits.list`, `github.commits.get`, `github.branches.list`, `github.tags.list`, `github.tags.get` | `repo` | Contents: read |
 
-The terminal editor's setup profile `repository-reader` ticks `[read]` with the eight; it is not the
+The terminal editor's setup profile `repository-reader` selects the eight; it is not the
 recommended profile, which stays `read`, unchanged.
 
 ## Repository writes: branches and file contents
@@ -634,7 +634,7 @@ files as one commit need for either kind of repository:
 | --- | --- | --- |
 | `github.branches.create`, `github.contents.put`, `github.contents.delete`, `github.files.push` | `repo` | Contents: read and write |
 
-The terminal editor's setup profile `repository-writer` (not recommended) ticks `[read, create, update]` with
+The terminal editor's setup profile `repository-writer` (not recommended) selects
 the read eight plus `github.branches.create` and `github.contents.put`; `github.contents.delete` and
 `github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
 `github.releases.delete`.
@@ -709,7 +709,7 @@ collaborators needs `repo` on a classic token, or Metadata: read on a fine-grain
 | `github.repositories.delete` | `repo` and `delete_repo` | Administration: read and write |
 | `github.collaborators.list` | `repo` | Metadata: read |
 
-The terminal editor's setup profile `repository-admin-reader` (not recommended) ticks `[read]` with
+The terminal editor's setup profile `repository-admin-reader` (not recommended) selects
 `github.collaborators.list`, `github.rulesets.list`, `github.rulesets.get`, and `github.custom-properties.get`;
 it is not the recommended profile, which stays `read`, unchanged.
 
@@ -1569,7 +1569,7 @@ echo '{"project":"orgs/octo-org/projects/7","repository":"octo-org/example"}' |
 the targets, or a connection without targets; `owner` may be left out when the targets name exactly one owner
 entry. Every other lifecycle tool, and the source of a copy, needs the project inside the targets like any
 project tool, and a link or an unlink needs the repository inside them as well. `github.projects.delete`
-needs `delete` in the connection's `permissions` and its name in the connection's `tools`:
+needs its name in the connection's `tools`:
 
 ```yaml
 connections:
@@ -1577,7 +1577,6 @@ connections:
     service: github
     credential: github-planner
     targets: [orgs/octo-org, orgs/octo-org/projects/*, repos/octo-org/*]
-    permissions: [read, create, update, delete]
     tools: [github.projects.list, github.repositories.list, github.projects.create, github.projects.update,
       github.projects.copy, github.projects.link, github.projects.unlink, github.projects.delete]
 ```
@@ -1642,7 +1641,7 @@ keeps together with its identifier: renamed, recolored, and reordered options ke
 option left out of `options` stays as it is.
 
 The value-losing changes are separate tools with the effect `delete`, offered only by a connection whose
-`permissions` include `delete` and whose `tools` list names them:
+`tools` list names them:
 
 - `github.project-field-options.delete` removes the named `options` of a select field. Every item that holds a
   removed option loses it; at least one option stays, and deleting the field removes the last one.
@@ -1666,7 +1665,6 @@ connections:
     service: github
     credential: github-planner
     targets: [orgs/octo-org/projects/7]
-    permissions: [read, create, update, delete]
     tools: [github.project-fields.list, github.project-fields.create, github.project-fields.update,
       github.project-field-options.delete, github.project-iterations.replace, github.project-fields.delete]
 ```
@@ -1721,8 +1719,8 @@ including when the filter may have been set without a confirmation; set it with 
 then, instead of creating the view again. A repeated create makes a second view.
 
 A view number the project lacks is refused before any change and names the project's view numbers, and an
-unknown field names the project's fields. `github.project-views.delete` needs `delete` in the connection's
-`permissions` and its name in the connection's `tools`. GitHub keeps the last view of a project, so Qatlas
+unknown field names the project's fields. `github.project-views.delete` needs its name in the connection's
+`tools`. GitHub keeps the last view of a project, so Qatlas
 refuses to delete it. A repeated delete is refused once the number is gone; its idempotency stays `unknown`,
 because a delete addresses the view by number.
 
@@ -1829,8 +1827,7 @@ A new project starts with GitHub's default workflows. GitHub's API neither creat
 configures a workflow, and a deleted workflow cannot be created again through it: change them in GitHub
 itself. A workflow number the project lacks is refused before any change and names the project's workflow
 numbers; a repeated delete ends that way. Its idempotency stays `unknown`, because a delete addresses the
-workflow by number. `github.project-workflows.delete` needs `delete` in the connection's `permissions` and its
-name in the connection's `tools`, and the tools need the same token as the [status updates](#project-status-updates).
+workflow by number. `github.project-workflows.delete` needs its name in the connection's `tools`, and the tools need the same token as the [status updates](#project-status-updates).
 
 ```yaml
 connections:
@@ -1838,7 +1835,6 @@ connections:
     service: github
     credential: github-planner
     targets: [orgs/octo-org/projects/7]
-    permissions: [read, create, update, delete]
     tools: [github.project-status.list, github.project-status.delete, github.project-teams.list,
       github.project-collaborators.update,
       github.projects.link-team, github.projects.unlink-team, github.project-workflows.list,
@@ -1878,7 +1874,7 @@ comments.
 ## Changes
 
 Every change requires confirmation in its own invoke request (`--confirm`, or `confirm: true` over MCP).
-An unconfirmed change, and a change the connection's permissions or tools exclude, ends before a secret is
+An unconfirmed change, and a change the connection's effects or tools exclude, ends before a secret is
 read and before GitHub is contacted. The changes of projects themselves are listed under
 [project lifecycle](#project-lifecycle).
 
@@ -2080,14 +2076,14 @@ runners, deployments, or an organization.
 
 ### Observer and operator
 
-An observer is a connection whose `permissions` lack `execute`, or whose `tools` list names no
+An observer is a connection whose `effects` lack `execute`, or whose `tools` list names no
 operator tool. It neither discovers nor runs an operator tool: `qatlas tools`, `qatlas.search`, and
 `qatlas.describe` do not offer them for it, and an invocation is refused as an unsupported capability before
-a secret is read. Planning permissions (`create`, `update`) never allow an execution; only `execute` does.
+a secret is read. Planning effects (`create`, `update`) never allow an execution; only `execute` does.
 
-The terminal editor offers two setup profiles that are never preselected. `actions-observer` ticks `[read]`
-and the nine observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
-operator tools. No profile ticks `github.workflow-run-logs.delete`. The recommended profile `read` stays without Actions tools. A connection without a
+The terminal editor offers two setup profiles that are never preselected. `actions-observer` selects
+the nine observer tools. `actions-operator` selects the observer tools and the four
+operator tools. No profile selects `github.workflow-run-logs.delete`. The recommended profile `read` stays without Actions tools. A connection without a
 `tools` list offers every read, the observer tools included, but never a listed-only tool; give it a `tools`
 list to narrow that.
 
@@ -2097,7 +2093,6 @@ connections:
     service: github
     credential: github-reader
     target: repos/octo-org/example
-    permissions: [read]
     tools: [github.workflows.list, github.workflows.get, github.workflow-runs.list, github.workflow-runs.get,
       github.workflow-jobs.list, github.workflow-jobs.get, github.workflow-jobs.log, github.workflow-artifacts.list,
       github.workflow-runs.usage]
@@ -2105,7 +2100,6 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, execute]
     tools: [github.workflow-runs.list, github.workflow-runs.get, github.workflow-jobs.list,
       github.workflow-jobs.log, github.workflows.dispatch, github.workflow-runs.rerun-failed,
       github.workflow-runs.cancel]
@@ -2167,7 +2161,7 @@ offered: a signed link acts like a short-lived credential.
 
 `github.workflow-run-logs.delete` takes `run_id`, deletes all logs of that run in the chosen repository, and
 cannot be undone. It is listed-only: a connection offers it only while its `tools` list names it, and it needs
-`delete` in `permissions` and confirmation (`--confirm`). No profile selects it. Qatlas reads the run first,
+confirmation (`--confirm`). No profile selects it. Qatlas reads the run first,
 so a missing run is answered not found. It answers `run_id`, `deleted`, and `already_deleted`. GitHub
 documents only the success answer `204`; when GitHub answers the delete of an existing run with not found,
 Qatlas reads the logs as already deleted and answers `deleted: true` with `already_deleted: true`. The delete
@@ -2175,9 +2169,9 @@ is sent once and never repeated.
 
 ### Executions
 
-Every execution needs `execute` in the connection's `permissions`, the tool in its `tools` list if it has
-one, and confirmation in its own invoke request (`--confirm`, or `confirm: true` over MCP). A missing
-permission or confirmation ends the request before a secret is read and before GitHub is contacted. An
+Every execution needs the tool offered by the connection, by `execute` in its `effects` or by name in its
+`tools` list, and confirmation in its own invoke request (`--confirm`, or `confirm: true` over MCP). A missing
+confirmation ends the request before a secret is read and before GitHub is contacted. An
 execution is sent exactly once; an unclear outcome (a timeout, a dropped connection, a server error) says
 that the execution may have happened, is never repeated by Qatlas, and must be checked with
 `github.workflow-runs.list` or `github.workflow-runs.get` before a repetition. After each execution the next
@@ -2252,7 +2246,6 @@ connections:
     service: github
     credential: github-reader
     target: repos/octo-org/example
-    permissions: [read]
     tools: [github.pull-requests.list, github.pull-requests.get, github.pull-request-files.list,
       github.pull-request-commits.list, github.pull-request-diffs.get, github.pull-request-checks.list]
 ```
@@ -2326,7 +2319,7 @@ without queuing anything.
 
 `github.pull-requests.merge` merges one pull request with a REST `PUT`. It is high risk, on the scale of the
 [listed-only workflow maintenance tools](#workflow-maintenance-and-actions-administration): a connection
-offers it only while its `tools` list names it, whatever its permissions, and no profile a new connection
+offers it only while its `tools` list names it, whatever its `effects`, and no profile a new connection
 starts with, recommended or not, may select it.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
@@ -2354,7 +2347,6 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, create, update]
     tools: [github.pull-requests.list, github.pull-requests.get, github.pull-request-files.list,
       github.pull-request-commits.list, github.pull-request-diffs.get, github.pull-request-checks.list,
       github.pull-requests.create, github.pull-requests.update, github.pull-requests.close,
@@ -2363,7 +2355,6 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, update]
     tools: [github.pull-requests.get, github.pull-requests.merge]
 ```
 
@@ -2373,7 +2364,7 @@ echo '{"number":42,"sha":"6cb1a1e...","method":"squash"}' |
   qatlas invoke github.pull-requests.merge --connection pull-merger --confirm
 ```
 
-`pull-operator` never offers the merge, whatever its permissions, because its `tools` list does not name it;
+`pull-operator` never offers the merge, whatever its effects, because its `tools` list does not name it;
 `pull-merger` offers only the read `github.pull-requests.get` and the merge, so a caller reads the current head
 commit and merges with it in two calls on the same connection.
 
@@ -2420,7 +2411,6 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, create, update]
     tools: [github.pull-request-comments.list, github.pull-request-comments.create,
       github.pull-request-reviews.list, github.pull-request-reviews.create,
       github.pull-request-review-comments.list, github.pull-request-review-comments.reply,
@@ -2431,7 +2421,6 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, create]
     tools: [github.pull-request-reviews.approve]
 ```
 
@@ -2520,7 +2509,6 @@ connections:
     service: github
     credential: github-reader
     target: repos/octo-org/example
-    permissions: [read]
     tools: [github.releases.list, github.releases.get, github.release-assets.list]
 ```
 
@@ -2562,7 +2550,7 @@ echo '{"id":1,"draft":false}' | qatlas invoke github.releases.update --connectio
 
 `github.releases.delete` deletes one release by `id`, with its release notes and asset attachments; the tag
 it was cut from stays. It is high risk, on the scale of the [pull request merge](#merge-and-conflicts): a
-connection offers it only while its `tools` list names it, whatever its permissions, and no profile a new
+connection offers it only while its `tools` list names it, whatever its `effects`, and no profile a new
 connection starts with, recommended or not, may select it. A release already deleted answers `not-found`
 naming it, like the other delete tools in this provider.
 
@@ -2572,14 +2560,12 @@ connections:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, create, update]
     tools: [github.releases.list, github.releases.get, github.release-assets.list, github.releases.create,
       github.releases.update]
   release-deleter:
     service: github
     credential: github-operator
     target: repos/octo-org/example
-    permissions: [read, delete]
     tools: [github.releases.get, github.releases.delete]
 ```
 
@@ -2598,10 +2584,9 @@ administrator decides whether Actions run at all, which actions they may use, wh
 every run may do, and how the repository accepts merges (the merge and branch settings). They are high risk,
 and Qatlas keeps them behind a boundary of their own:
 
-- **Listed only.** A connection offers such a tool only when its `tools` list names it and its `permissions`
-  allow the tool's effect. A connection without a `tools` list never offers one, whatever its permissions: a
-  planning connection with `create` and `update`, an operator with `execute`, or a connection with every
-  permission neither discovers nor runs them. `qatlas tools`, `qatlas describe`, `qatlas.search`,
+- **Listed only.** A connection offers such a tool only when its `tools` list names it. A connection that
+  selects by `effects` never offers one: a planning connection with `create` and `update`, an operator with
+  `execute`, or a connection with every effect neither discovers nor runs them. `qatlas tools`, `qatlas describe`, `qatlas.search`,
   `qatlas.describe`, route selection, and invoke apply the same rule, and the complete tool contract
   (`qatlas describe --full`) shows `requires_tool_allow_list: true`. The terminal editor marks these tools
   `(listed only)`.
@@ -2739,14 +2724,12 @@ connections:
     service: github
     credential: github-maintainer
     target: repos/octo-org/example
-    permissions: [read, create, update]
     tools: [github.workflows.list, github.workflows.get, github.workflow-files.list, github.workflow-files.get,
       github.workflow-files.create, github.workflow-files.update, github.workflows.enable, github.workflows.disable]
   ci-admin:
     service: github
     credential: github-maintainer
     target: repos/octo-org/example
-    permissions: [read, update]
     tools: [github.actions-permissions.get, github.actions-permissions.update, github.workflow-permissions.get,
       github.workflow-permissions.update, github.repository-settings.get, github.repository-settings.update]
 ```

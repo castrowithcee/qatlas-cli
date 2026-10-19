@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes BookStack page, book, chapter, and shelf operations, credentials, connection permissions, and safety boundaries.
+  Describes BookStack page, book, chapter, and shelf operations, credentials, connection effects, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -15,18 +15,18 @@ changing or moving pages and attachments and changing books, chapters, shelves, 
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
-Credentials provide `token-id` and `token-secret`. The connection's `permissions` list is an independent
-local ceiling: it may hide and block operations even when the BookStack token could perform them, but it
-cannot grant rights the token lacks. An optional `tools` list narrows a connection further to named tools,
-for example `[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never
-admits an effect `permissions` excludes. Page content is treated as untrusted data. The terminal editor
-starts a new connection on the setup profile `read`, which ticks `[read]` and
+Credentials provide `token-id` and `token-secret`. A connection selects its tools by `effects`, which offers
+every tool of the listed effects, or by a `tools` list, which offers exactly the named tools, for example
+`[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never holds both. Either
+way the selection is an independent local ceiling: it may hide and block operations even when the BookStack
+token could perform them, but it cannot grant rights the token lacks. Page content is treated as untrusted
+data. The terminal editor starts a new connection on the setup profile `read`, which selects the tools
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
 bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get,
 bookstack.attachments.list, bookstack.attachments.get, bookstack.images.list, bookstack.images.get, bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+selection, not a role: only the ticked `tools` are saved, every tick can be changed before saving, and a
+saved connection never follows a profile.
 
 ## Credential and base URL
 
@@ -265,7 +265,7 @@ undone. BookStack requires the role permissions `settings-manage` and `restricti
 The recycle bin spans the whole instance, so the tools are refused on a connection with book targets. Each
 change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
 reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
-that names it and the `delete` permission.
+that names it and the `delete` effect.
 
 ## Users, roles, and audit log
 
@@ -377,7 +377,7 @@ errors from BookStack is not shown.
 
 Upload and run are not idempotent and ask for confirmation. Each sends exactly one request without retry; after
 a timeout or a 5xx answer the result is reported as uncertain. `delete` additionally requires a tool allow list
-that names it and the `delete` permission.
+that names it and the `delete` effect.
 
 ## Tool groups
 
@@ -514,7 +514,7 @@ Each call sends exactly one change request without retry; after a timeout, a los
 result is reported as uncertain, and the attachments of the page should be read before repeating it. All five
 tools require confirmation and are part of no profile. `link` and `upload` create and are not idempotent; `update`
 is idempotent; `replace` updates and is not idempotent; `delete` requires an entry in the `tools` list and the
-`delete` permission (see Deleting).
+`delete` effect (see Deleting).
 
 ## Images
 
@@ -578,7 +578,7 @@ the shelf; its books stay. Each call sends exactly one `DELETE` without retry; a
 the result is reported as uncertain.
 
 These tools require a tool allow list and are part of no profile. A connection offers one only when its `tools`
-list names it and its `permissions` include `delete`; a connection without a `tools` list does not offer them.
+list names it; a connection that selects by `effects` does not offer them.
 On a connection bound to books, `books.delete` checks `id` against the books before any request, and
 `chapters.delete` proves the chapter's book by one read; deleting a bound book is allowed, but the target then
 points at nothing. `shelves.delete` is instance-wide and refused on a connection with book targets.

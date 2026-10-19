@@ -1252,11 +1252,11 @@ connections:
   kunde-a:
     service: gh
     credential: token
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
   kunde-b:
     service: gh
     credential: token
-    permissions: [read]
+    effects: [read]
 defaults: {}
 `)
 	code, stdout, stderr := runTools(t, nil, "tools", "--config", cfg, "--query", "issues", "--output", "json")

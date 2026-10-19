@@ -257,24 +257,21 @@ const (
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
 	lockedHint = "read-only; press r on the list to rename it"
-	// toolsHint says what each tools mode means, including the two consequences that are easy to miss: a
+	// accessHint says what each access mode means, including the two consequences that are easy to miss: a
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
-	toolsHint = "all allowed by permissions also offers tools a later version adds, but never a tool marked " +
-		"listed only; only selected tools offers exactly the tools ticked below, and none ticked offers no tool at all"
+	accessHint = "by effect offers every tool of the effects ticked, also one a later version adds, but never a " +
+		"tool marked listed only; selected tools offers exactly the tools ticked, and none ticked offers no tool at all"
 	// pathsHint says what the path list of a connection does.
 	pathsHint = "the connection is offered only in projects inside these directories, absolute or starting " +
 		"with ~/; none means every project"
 	// filesHint says what the two directory lists of a connection release.
 	filesHint = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
 		"directory gives access to it and everything below; none releases no local files"
-	toolListHint = "enter opens this provider's tools to tick; a tool is offered only when the permissions " +
-		"above allow its effect as well"
-	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
-		"tools above to pick them"
+	toolListHint = "enter opens this provider's tools to tick; the effects of the ticked tools follow from them"
 )
 
 // The profile row of a connection. A profile is a provider's named starting selection: choosing one ticks
-// the permissions and tools it expands to, and nothing else. The row shows the profile the ticks match, or
+// the tools it expands to as selected tools, and nothing else. The row shows the profile the ticks match, or
 // custom, so it holds no state of its own and nothing of it is saved.
 const (
 	profileLabel  = "profile"
@@ -291,13 +288,15 @@ const (
 	stateDisabled = "disabled"
 )
 
-// The tools modes of a connection. The first one is a connection without a tools list, the second one a
-// list, which may also be empty.
+// The access modes of a connection. The first one is a connection that offers by effect, the second one a
+// connection that offers its tools list, which may also be empty. Only the row of the mode in use is shown,
+// and only its field is saved.
 const (
-	toolsLabel    = "tools"
-	toolListLabel = "tool list"
-	toolsAll      = "all allowed by permissions"
-	toolsSelected = "only selected tools"
+	accessLabel   = "access"
+	effectsLabel  = "effects"
+	toolListLabel = "tools"
+	accessEffects = "by effect"
+	accessTools   = "selected tools"
 )
 
 // providerLabel is the field that names the system an entry belongs to. A service always has one; a
@@ -423,7 +422,7 @@ type Model struct {
 	picker filterList
 	// templateList holds the entries of screenTemplate's picker.
 	templateList filterList
-	// pickerMarks holds the ticks of a tool list or the permissions while their picker is open, and is nil
+	// pickerMarks holds the ticks of a tool list or the effects while their picker is open, and is nil
 	// for a single choice. The row takes them over only when they are kept.
 	pickerMarks map[string]bool
 	// pickerGroups is set while the picker of a tool list of a grouped provider is open; nil otherwise.
@@ -450,7 +449,7 @@ type Model struct {
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
-	// pendingProfile names the profile the confirmation would apply to the permission and tool ticks of the
+	// pendingProfile names the profile the confirmation would apply to the access and tool ticks of the
 	// form. Empty means the confirmation is about something else.
 	pendingProfile string
 	// approvalDetail names the connection the Approvals detail screen shows, "" otherwise. approveAllConfirm
@@ -1623,8 +1622,8 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 		}
 	case "service":
 		m.targetChosen()
-	case toolsLabel:
-		m.toolsModeChosen()
+	case accessLabel:
+		m.accessModeChosen()
 	}
 	return nil
 }
@@ -1665,8 +1664,8 @@ func (m *Model) openPicker() {
 // value and esc leaves the row as it was.
 func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 	if m.pickerMarks != nil {
-		// A tool list or the permissions take any number of values: space ticks the selected one instead of
-		// typing a blank, which no tool ID or permission contains, and enter keeps every tick at once.
+		// A tool list or the effects take any number of values: space ticks the selected one instead of
+		// typing a blank, which no tool ID or effect contains, and enter keeps every tick at once.
 		switch key.String() {
 		case " ":
 			if choice, ok := m.picker.selected(); ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
@@ -1877,17 +1876,16 @@ func (m *Model) connectionProviderChosen() {
 	}
 }
 
-// toolsModeChosen opens the tool list for ticking only while only selected tools are offered; otherwise the
-// row is stepped over, and keeps its ticks for when that mode is chosen again.
-func (m *Model) toolsModeChosen() {
-	list := m.field(toolListLabel)
-	if list == nil {
-		return
+// accessModeChosen shows the row of the chosen access mode and hides the other one. A hidden row keeps its
+// ticks for when its mode is chosen again.
+func (m *Model) accessModeChosen() {
+	byTools := m.fieldValue(accessLabel) == accessTools
+	if effects := m.field(effectsLabel); effects != nil {
+		effects.hidden = byTools
 	}
-	list.readOnly = m.fieldValue(toolsLabel) != toolsSelected
-	list.hint = toolListHint
-	if list.readOnly {
-		list.hint = toolListOffHint
+	if list := m.field(toolListLabel); list != nil {
+		list.hidden = !byTools
+		list.hint = toolListHint
 	}
 }
 
@@ -1913,8 +1911,8 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 	return choices
 }
 
-// toolText is how one tool reads in the picker: its ID and effect, whether it is offered only when ticked
-// here, and whether the permissions of the form allow that effect at all. The same text is what the filter
+// toolText is how one tool reads in the picker: its ID and effect, and whether it is offered only when
+// ticked here. The same text is what the filter
 // searches.
 func (m *Model) toolText(id string) string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
@@ -1925,9 +1923,6 @@ func (m *Model) toolText(id string) string {
 		text := id + "  " + string(tool.Effect)
 		if tool.RequiresToolAllowList {
 			text += "  (listed only)"
-		}
-		if !m.permittedEffects(metadata)[tool.Effect] {
-			text += "  (not permitted)"
 		}
 		return text
 	}
@@ -1943,24 +1938,24 @@ func (m *Model) formProvider() string {
 	return m.fieldValue(providerLabel)
 }
 
-// toolFields are the tools mode row and the tool list row of a connection, over the tools it lists now.
-func (m *Model) toolFields(provider string, current []string) []field {
-	// A connection without a tools list offers every tool its permissions allow, and a new one starts
-	// that way too, so the editor writes a list only when one is chosen here.
-	mode := toolsAll
+// accessFields are the access mode row, the effects row and the tool list row of a connection, over the
+// effects and tools it holds now. A connection selects by tools when it lists any, also an empty list; a new
+// one starts by effect, so the editor writes a tool list only when selected tools is chosen here.
+func (m *Model) accessFields(provider string, effects []config.Effect, current []string) []field {
+	mode := accessEffects
 	if current != nil {
-		mode = toolsSelected
+		mode = accessTools
 	}
+	permissions := permissionField(m.permissionChoicesFor(provider, effects), effects)
+	permissions.hint = m.permissionHint(provider)
 	tools := field{label: toolListLabel, kind: fieldToolList,
 		choices: m.toolChoices(provider, current), selected: map[string]bool{}}
 	for _, tool := range current {
 		tools.selected[tool] = true
 	}
-	tools.readOnly, tools.hint = current == nil, toolListOffHint
-	if current != nil {
-		tools.hint = toolListHint
-	}
-	return []field{choiceField(toolsLabel, []string{toolsAll, toolsSelected}, mode).withHint(toolsHint), tools}
+	permissions.hidden, tools.hidden, tools.hint = current != nil, current == nil, toolListHint
+	return []field{choiceField(accessLabel, []string{accessEffects, accessTools}, mode).withHint(accessHint),
+		permissions, tools}
 }
 
 // profileChosen applies the profile now shown on the profile row. Ticks changed by hand, and the ticks of a
@@ -1988,22 +1983,16 @@ func (m *Model) applyRecommendedProfile() {
 	m.syncProfile()
 }
 
-// applyProfile expands one profile into the rows below it: the permissions its tools need, only selected
-// tools, and exactly its tools ticked. Every tick stays free to change before saving.
+// applyProfile expands one profile into the rows below it: selected tools, and exactly its tools ticked. Every tick stays
+// free to change before saving.
 func (m *Model) applyProfile(id string) {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	profile, ok := findProfile(metadata, id)
 	if !ok {
 		return
 	}
-	if permissions := m.field("permissions"); permissions != nil {
-		permissions.selected = map[string]bool{}
-		for _, permission := range metadata.ProfileEffects(profile) {
-			permissions.selected[string(permission)] = true
-		}
-	}
-	if mode := m.field(toolsLabel); mode != nil {
-		*mode = choiceField(toolsLabel, mode.choices, toolsSelected).withHint(mode.hint)
+	if mode := m.field(accessLabel); mode != nil {
+		*mode = choiceField(accessLabel, mode.choices, accessTools).withHint(mode.hint)
 	}
 	if list := m.field(toolListLabel); list != nil {
 		list.selected = map[string]bool{}
@@ -2011,7 +2000,7 @@ func (m *Model) applyProfile(id string) {
 			list.selected[tool] = true
 		}
 	}
-	m.toolsModeChosen()
+	m.accessModeChosen()
 	m.syncProfile()
 }
 
@@ -2024,11 +2013,10 @@ func findProfile(metadata config.ProviderMetadata, id string) (config.ToolProfil
 	return config.ToolProfile{}, false
 }
 
-// matchingProfile is the profile whose expansion the permission and tool ticks equal, or empty when they
-// match none.
+// matchingProfile is the profile whose tools the tool ticks equal, or empty when they match none.
 func (m *Model) matchingProfile() string {
 	list := m.field(toolListLabel)
-	if list == nil || m.fieldValue(toolsLabel) != toolsSelected {
+	if list == nil || m.fieldValue(accessLabel) != accessTools {
 		return ""
 	}
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
@@ -2037,7 +2025,6 @@ func (m *Model) matchingProfile() string {
 	for _, profile := range metadata.Profiles {
 		tools := append([]string(nil), profile.Tools...)
 		sort.Strings(tools)
-		// The permissions row is not stored beside a tool selection, so only the tools identify a profile.
 		if strings.Join(tools, ",") == strings.Join(ticked, ",") {
 			return profile.ID
 		}
@@ -2075,24 +2062,8 @@ func profileText(metadata config.ProviderMetadata, profile config.ToolProfile) s
 	if profile.MutationReason != "" {
 		text += "; it preselects a change because " + profile.MutationReason
 	}
-	return text + "; ticks permissions " + config.FormatEffects(metadata.ProfileEffects(profile)) +
-		" and tools " + strings.Join(profile.Tools, ", ")
-}
-
-// permittedEffects are the effects the permissions row of the form allows right now.
-func (m *Model) permittedEffects(metadata config.ProviderMetadata) map[config.Effect]bool {
-	permissions, err := config.ParseEffects(m.fieldValue("permissions"))
-	if err != nil {
-		return nil
-	}
-	if permissions == nil {
-		permissions = manage.DefaultEffects(metadata)
-	}
-	permitted := map[config.Effect]bool{}
-	for _, permission := range permissions {
-		permitted[permission] = true
-	}
-	return permitted
+	return text + "; selects tools " + strings.Join(profile.Tools, ", ") + " (effects " +
+		config.FormatEffects(metadata.ProfileEffects(profile)) + ")"
 }
 
 // replaceChoices puts a new set of options on one choice row, keeping the current value when it is still
@@ -2125,7 +2096,7 @@ func (m *Model) permissionHint(provider string) string {
 	for i, permission := range permissions {
 		defaults[i] = string(permission)
 	}
-	return "enter opens the local agent permissions offered by this provider to tick; default currently means " +
+	return "enter opens this provider's effects to tick; every tool of the ticked effects is offered; default currently means " +
 		strings.Join(defaults, ", ") + "; selecting none denies every operation"
 }
 
@@ -2157,7 +2128,7 @@ func (m *Model) permissionChoicesFor(provider string, current []config.Effect) [
 }
 
 func (m *Model) replaceEffectChoices(provider string) {
-	f := m.field("permissions")
+	f := m.field(effectsLabel)
 	if f == nil || f.kind != fieldMultiChoice {
 		return
 	}
@@ -2271,7 +2242,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.pendingProfile, m.screen = "", screenForm
 			m.applyProfile(profile)
-			m.status = "Profile " + profile + " ticked; review the permissions and tools before saving"
+			m.status = "Profile " + profile + " ticked; review the selected tools before saving"
 		case "n", "esc":
 			m.pendingProfile, m.screen = "", screenForm
 			m.status = "Profile not applied; the ticks are unchanged"
@@ -2763,8 +2734,6 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		if provider == "" {
 			provider = m.firstProviderWithService()
 		}
-		permissions := permissionField(m.permissionChoicesFor(provider, conn.Effects), conn.Effects)
-		permissions.hint = m.permissionHint(provider)
 		fields = append(fields,
 			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint),
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
@@ -2774,15 +2743,14 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			pathsField(conn.Paths).withHint(pathsHint),
 			filesField(filesReadLabel, conn.Files.Read),
 			filesField(filesWriteLabel, conn.Files.Write),
-			// Description and permissions explain the route the fields above define. Only the description
+			// Description and access explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
 			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
 				withHint(stateHint),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
-			permissions,
 		)
-		fields = append(fields, m.toolFields(provider, conn.Tools)...)
+		fields = append(fields, m.accessFields(provider, conn.Effects, conn.Tools)...)
 		if m.wantsForwardRow(conn) {
 			fields = append(fields, m.forwardField(conn.ForwardSecrets))
 		}
@@ -2912,17 +2880,18 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		return cfg.SetCredential(name, cred)
 	case sectionConnections:
-		permissions, err := config.ParseEffects(m.fieldValue("permissions"))
-		if err != nil {
-			return err
+		// The access mode decides which one field is stored; the other row's ticks are not saved.
+		var permissions []config.Effect
+		var tools []string
+		if list := m.field(toolListLabel); list != nil && m.fieldValue(accessLabel) == accessTools {
+			tools = list.marked()
+		} else {
+			var err error
+			if permissions, err = config.ParseEffects(m.fieldValue(effectsLabel)); err != nil {
+				return err
+			}
 		}
 		target, targets := manage.SplitTargets(targetEntries(m.fields))
-		var tools []string
-		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
-			tools = list.marked()
-			// A tool selection is stored alone; the effects follow from the tools.
-			permissions = nil
-		}
 		// No paths are written as none at all: an empty list would be refused.
 		var paths []string
 		if entries := pathEntries(m.fields); len(entries) > 0 {
@@ -3235,7 +3204,7 @@ func providerField(choices []string, value string) field {
 }
 
 func permissionField(choices []string, permissions []config.Effect) field {
-	f := field{label: "permissions", kind: fieldMultiChoice, choices: choices, selected: map[string]bool{}}
+	f := field{label: effectsLabel, kind: fieldMultiChoice, choices: choices, selected: map[string]bool{}}
 	if permissions == nil {
 		f.selected["default"] = true
 		return f
@@ -3246,7 +3215,7 @@ func permissionField(choices []string, permissions []config.Effect) field {
 	return f
 }
 
-// toggleMark ticks or unticks one value of a set of ticks. In the permissions, default stands for the
+// toggleMark ticks or unticks one value of a set of ticks. In the effects, default stands for the
 // provider's own set, so ticking it drops every explicit permission and ticking one of those drops default.
 func toggleMark(marks map[string]bool, choice string, permissions bool) {
 	if permissions && choice == "default" {
@@ -4646,7 +4615,7 @@ func (m *Model) fieldHintText(f field, full bool) string {
 	if f.kind == fieldProvider {
 		return providerHint(f)
 	}
-	if f.kind == fieldToolList && f.label != forwardLabel && !f.readOnly && len(f.marked()) > 0 {
+	if f.kind == fieldToolList && f.label != forwardLabel && len(f.marked()) > 0 {
 		// The ticks are what is saved, so they stand in full under the row that holds them.
 		return f.hint + "; ticked: " + strings.Join(f.marked(), ", ")
 	}
@@ -4843,8 +4812,6 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = hintStyle.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
 	case f.kind == fieldToolList && f.label == vorbilderLabel:
 		value = strings.Join(f.marked(), ", ")
-	case f.kind == fieldToolList && f.readOnly:
-		value = hintStyle.Render("(every tool the permissions allow)")
 	case f.kind == fieldToolList && len(f.marked()) == 0:
 		value = fmt.Sprintf("none of %d ticked: no tool is offered", len(f.choices))
 	case f.kind == fieldToolList:
@@ -5048,12 +5015,12 @@ func Run(svc *manage.Service, store *config.Store, tester Tester, suggester Targ
 }
 
 // profileConfirmView asks before a profile replaces ticks that were changed by hand or that belong to a
-// saved connection. It names exactly what the profile ticks.
+// saved connection. It names exactly what the profile selects.
 func (m *Model) profileConfirmView() string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	profile, _ := findProfile(metadata, m.pendingProfile)
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Replace the permission and tool ticks with profile %s?\n", profile.ID))
+	b.WriteString(fmt.Sprintf("Replace the access and tool ticks with profile %s?\n", profile.ID))
 	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
 	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
 	b.WriteString(m.keyHint("y replace the ticks · n/esc keep them · ? help"))

@@ -564,7 +564,7 @@ func (c *Core) Providers() ProvidersResponse {
 
 // The ways a connection's tools list shapes what it offers, as ConnectionSummary publishes them.
 const (
-	// ToolsAllPermitted: no tools list; every tool whose effect the permissions allow, except a tool that
+	// ToolsAllPermitted: no tools list; every tool of the connection's effects, except a tool that
 	// requires an allow-list.
 	ToolsAllPermitted = "all-permitted"
 	// ToolsListed: a tools list; only the tools it names.

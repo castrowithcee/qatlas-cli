@@ -1042,7 +1042,7 @@ connections:
   wiki2:
     service: wiki
     credential: wiki-vault
-    permissions: [read, create]
+    effects: [read, create]
 defaults:
   connections:
     knowledge: wiki
@@ -1362,7 +1362,7 @@ connections:
   wiki2:
     service: wiki
     credential: wiki-vault
-    permissions: %s
+    effects: %s
 %s`
 
 // A list that changed is told as what is new and what falls away, with only the count of what stays; a

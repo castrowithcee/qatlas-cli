@@ -47,8 +47,7 @@ credentials:
 connections:
   conn:
     service: svc
-    credential: cred
-    permissions: [read, create, update, delete, execute]%s
+    credential: cred%s
     tools: %s
 `, tc.provider, baseURL, tc.role, targets, tools)
 }

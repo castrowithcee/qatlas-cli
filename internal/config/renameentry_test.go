@@ -24,15 +24,15 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
+    effects: [read]
   other:
     service: svc
     credential: cred
-    permissions: [read]
+    effects: [read]
   spare:
     service: spare
     credential: cred
-    permissions: [read]
+    effects: [read]
 defaults:
   connections:
     acme.chat: conn
@@ -100,8 +100,8 @@ func TestRenameEntriesRefuse(t *testing.T) {
 func TestRenameCredentialRewritesReadersAndForwardsAndKeepsTheID(t *testing.T) {
 	in := strings.Replace(renameEntryConfig, "connections:\n  conn:\n", "  shared:\n    type: vault\n    forward: true\n    fields: [user]\n"+
 		"  spare-cred:\n    type: env\n    values:\n      token: SPARE_TOKEN\nconnections:\n  conn:\n", 1)
-	in = strings.Replace(in, "  other:\n    service: svc\n    credential: cred\n    permissions: [read]\n",
-		"  other:\n    service: svc\n    credential: cred\n    permissions: [read]\n    forward_secrets: [shared]\n", 1)
+	in = strings.Replace(in, "  other:\n    service: svc\n    credential: cred\n    effects: [read]\n",
+		"  other:\n    service: svc\n    credential: cred\n    effects: [read]\n    forward_secrets: [shared]\n", 1)
 	in = strings.Replace(in, "  spare:\n    service: spare\n    credential: cred\n",
 		"  spare:\n    service: spare\n    credential: spare-cred\n", 1)
 	cfg, err := Decode(strings.NewReader(in), renameProviders)

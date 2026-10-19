@@ -155,7 +155,7 @@ func TestSetupProblemNamesItsStep(t *testing.T) {
 	}
 	view := screenOf(m)
 	for _, want := range []string{"Shorten the text", "step service: ", "Choose a service that exists",
-		"step permissions: ", "Use one of the supported permissions"} {
+		"step access: ", "Use one of the supported effects"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the view lacks %q:\n%s", want, view)
 		}
