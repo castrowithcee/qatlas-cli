@@ -42,7 +42,8 @@ import (
 // another version rather than guessing what it meant. Version 7 adds handover, which hands the vault over to
 // a successor started from an updated program, and the answer replaced, which sends a client on to it.
 // Version 8 adds the session ID to a log entry; an older process would drop it and sign an entry without it.
-const Version = 8
+// Version 9 lets an invoke entry carry the connection ID; an older process would drop it likewise.
+const Version = 9
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.
