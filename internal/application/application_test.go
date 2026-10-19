@@ -1472,7 +1472,18 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 // The connection listing publishes names, providers, descriptions, permitted effects, and the tools mode,
 // and nothing about where a route leads or what it authenticates with.
 func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
-	cfg := config.New()
+	registry := capability.NewRegistry()
+	noop := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		return map[string]any{"ok": true}, nil
+	})
+	if err := registry.Register("fake",
+		capability.Operation{Descriptor: testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone), Handler: noop},
+		capability.Operation{Descriptor: testDescriptor("fake.pages.delete", capability.EffectDelete, capability.ConfirmationRequired), Handler: noop},
+	); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New(registry)
 	cfg.Services["wiki"] = config.Service{Provider: "fake", BaseURL: "https://wiki.example.invalid"}
 	cfg.Services["chat"] = config.Service{Provider: "chat", BaseURL: "https://chat.example.invalid"}
 	cfg.Credentials["shared"] = config.Credential{
@@ -1480,8 +1491,7 @@ func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
 	}
 	cfg.Connections["writer"] = config.Connection{
 		Service: "wiki", Credential: "shared", Description: "writes pages", Target: "team-space",
-		Effects: []config.Effect{config.EffectDelete, config.EffectRead},
-		Tools:   []string{"fake.pages.get"},
+		Tools: []string{"fake.pages.get", "fake.pages.delete"},
 	}
 	cfg.Connections["reader"] = config.Connection{Service: "wiki", Credential: "shared"}
 	cfg.Connections["closed"] = config.Connection{Service: "wiki", Credential: "shared", Tools: []string{}}
@@ -1492,7 +1502,7 @@ func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
 
 	want := []ConnectionSummary{
 		{Name: "alerts", Provider: "chat", Effects: "", Tools: ToolsAllPermitted},
-		{Name: "closed", Provider: "fake", Effects: "read", Tools: ToolsNone},
+		{Name: "closed", Provider: "fake", Effects: "", Tools: ToolsNone},
 		{Name: "reader", Provider: "fake", Effects: "read", Tools: ToolsAllPermitted},
 		{Name: "writer", Provider: "fake", Description: "writes pages", Effects: "read delete", Tools: ToolsListed},
 	}

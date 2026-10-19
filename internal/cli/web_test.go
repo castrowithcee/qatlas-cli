@@ -26,7 +26,7 @@ import (
 const webSyntheticSecret = "WEB_TEST_SYNTHETIC_SECRET_TOKEN"
 
 const webTestConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack

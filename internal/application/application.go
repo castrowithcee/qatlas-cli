@@ -589,7 +589,7 @@ type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`
 	Description string  `json:"description"`
-	Effects     string  `json:"permissions"`
+	Effects     string  `json:"effects"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
 	// State is "disabled" while the connection is switched off, and empty for an active one. It is no

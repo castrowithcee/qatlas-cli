@@ -44,7 +44,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 		t.Errorf("approve: stdout %q, want the covered change approved", stdout)
 	}
 	if !strings.Contains(stderr, "admin-required: agent token kunde-a does not cover 1 open change, which stays "+
-		"open: wiki-wide (create): permissions") {
+		"open: wiki-wide (create): effects") {
 		t.Errorf("approve: stderr %q, want the open change and its field named", stderr)
 	}
 	if strings.Contains(stdout+stderr, value) {

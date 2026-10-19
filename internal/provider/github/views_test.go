@@ -102,8 +102,8 @@ func viewsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
 	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Effects: permissions, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets},
+			permissions, tools)
 	}
 	add("views", planningTargets, changes, nil)
 	add("admin", planningTargets, config.Effects(), viewTools)

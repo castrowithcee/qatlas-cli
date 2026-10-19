@@ -266,7 +266,7 @@ func TestMigrateSchemaInEveryVaultState(t *testing.T) {
 			}
 			lines := logEntries(t, w.dir)
 			if len(lines) != 1 || !strings.Contains(lines[0], `"path":"cli","operation":"config.migrate"`) ||
-				!strings.Contains(lines[0], `"version":2`) {
+				!strings.Contains(lines[0], `"version":3`) {
 				t.Errorf("log = %v, want exactly the migration", lines)
 			}
 

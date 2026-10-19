@@ -142,7 +142,7 @@ func TestSetupProblemNamesItsStep(t *testing.T) {
 			Code: config.CodeInvalidDescription},
 		config.Problem{Section: config.SectionConnections, Name: "personal", Field: "service",
 			Code: config.CodeUnknownService},
-		config.Problem{Section: config.SectionConnections, Name: "personal", Field: "permissions",
+		config.Problem{Section: config.SectionConnections, Name: "personal", Field: "effects",
 			Code: config.CodeUnknownEffect},
 	)
 	m.reportSaveError(err, "", true)

@@ -19,14 +19,14 @@ const (
 // The gaps an agent token can leave in a change: the fields of a connection no vorbild covers, and two
 // reasons that are no field. None ever holds a value, only the name of what is missing.
 const (
-	GapService     = "service"
-	GapCredential  = "credential"
-	GapPermissions = "permissions"
-	GapTools       = "tools"
-	GapTargets     = "targets"
-	GapPaths       = "paths"
-	GapFiles       = "files"
-	GapForward     = "forward"
+	GapService    = "service"
+	GapCredential = "credential"
+	GapEffects    = "effects"
+	GapTools      = "tools"
+	GapTargets    = "targets"
+	GapPaths      = "paths"
+	GapFiles      = "files"
+	GapForward    = "forward"
 	// GapState marks a switch of a connection from disabled to active, which no token covers.
 	GapState = "state"
 	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
@@ -250,7 +250,7 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 		gaps = append(gaps, GapCredential)
 	}
 	if !subset(change.Effects, ceiling.Effects) {
-		gaps = append(gaps, GapPermissions)
+		gaps = append(gaps, GapEffects)
 	}
 	// A vorbild without a tools list admits every tool its permissions do; one with a list admits only a
 	// change whose own list stays inside it, never one without a list.

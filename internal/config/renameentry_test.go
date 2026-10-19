@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const renameEntryConfig = `version: 2
+const renameEntryConfig = `version: 3
 services:
   svc:
     provider: acme.chat

@@ -54,7 +54,7 @@ var problemRows = map[string]map[string]string{
 	},
 	config.SectionConnections: {
 		"": "name", "service": "service", "credential": "credential", "forward_secrets": forwardLabel,
-		"description": "description", "permissions": "permissions", "target": targetsLabel,
+		"description": "description", "effects": "permissions", "target": targetsLabel,
 		"targets": targetsLabel, "paths": pathsLabel, "tools": toolListLabel,
 		"files.read": filesReadLabel, "files.write": filesWriteLabel,
 	},

@@ -91,7 +91,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	}
 	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "https://moved.example.invalid"}
 	write := cfg.Connections["wiki-write"]
-	write.Effects = append(write.Effects, config.EffectDelete)
+	write.Effects = nil
 	write.Tools = []string{}
 	write.Targets = []string{"shelf-2", "shelf-1"}
 	write.Paths = []string{"~/repos/kunde-a"}
@@ -107,8 +107,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	}
 	want := []FieldChange{
 		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "https://moved.example.invalid"},
-		{Field: FieldEffects, Before: "create read", After: "create delete read",
-			Added: []string{"delete"}, Kept: []string{"create", "read"}},
+		{Field: FieldEffects, Before: "create read", After: "(none)", Removed: []string{"create", "read"}},
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2", Added: []string{"shelf-1", "shelf-2"}},
 		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
 		{Field: FieldPaths, Before: "(every project)", After: "~/repos/kunde-a"},

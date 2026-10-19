@@ -69,6 +69,10 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	for _, r := range m.Renamings {
 		fmt.Fprintf(stderr, "qatlas: %s.%s: the former %s %q is now written as %q\n", r.Section, r.Name, r.Kind, r.Old, r.New)
 	}
+	if len(m.Reapproval) > 0 {
+		fmt.Fprintf(stderr, "qatlas: the effects of these connections now follow their tools, so each needs its vault "+
+			"approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n", strings.Join(m.Reapproval, ", "))
+	}
 	fmt.Fprintln(stderr, "qatlas: to go back, copy the backups back in place and install the previous qatlas version")
 	if m.Warning != "" {
 		fmt.Fprintln(stderr, withQatlasPrefix(m.Warning))

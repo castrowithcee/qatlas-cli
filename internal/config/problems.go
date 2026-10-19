@@ -62,6 +62,8 @@ const (
 	CodeWildcardNotAlone             = "wildcard-not-alone"
 	CodeDuplicateTool                = "duplicate-tool"
 	CodeToolEffectNotPermitted       = "tool-effect-not-permitted"
+	CodeEffectsAndTools              = "effects-and-tools"
+	CodePermissionsAndEffects        = "permissions-and-effects"
 	CodeToolOfOtherProvider          = "tool-of-other-provider"
 	CodeUnknownToolEntry             = "unknown-tool-entry"
 	CodeFilesEmpty                   = "files-empty"
@@ -121,7 +123,9 @@ var hints = map[string]string{
 	CodeInvalidTargetSet:             "Correct the list of targets to the combination the provider accepts.",
 	CodeWildcardNotAlone:             "Keep only the wildcard as target, or list explicit targets without it.",
 	CodeDuplicateTool:                "Remove the repeated tool.",
-	CodeToolEffectNotPermitted:       "Tick the effect again or untick these tools.",
+	CodeToolEffectNotPermitted:       "Remove these tools, or list their effect among the former permissions.",
+	CodeEffectsAndTools:              "Keep either effects, to offer every tool of those effects, or tools, to offer exactly the listed tools, and remove the other.",
+	CodePermissionsAndEffects:        "Remove permissions; effects is its current name.",
 	CodeToolOfOtherProvider:          "Remove the tool; it belongs to another provider.",
 	CodeUnknownToolEntry:             "Remove the entry, or choose a registered tool of the provider.",
 	CodeFilesEmpty:                   "List at least one directory, or leave the direction out to release none.",

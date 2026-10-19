@@ -306,13 +306,12 @@ func TestGuidedConnectionRejectsInvalidTarget(t *testing.T) {
 	assertStoreUnchanged(t, store, 0, 0, 0)
 }
 
-// TestGuidedConnectionRejectsDisallowedTool proves a tool whose effect the chosen permissions do not admit
-// is refused before any write.
-func TestGuidedConnectionRejectsDisallowedTool(t *testing.T) {
+// TestGuidedConnectionStoresSelectedToolsWithoutEffects proves a selected tool is saved as the tools alone,
+// whatever effects the form ticks: the effects follow from the tools, so a connection never carries both.
+func TestGuidedConnectionStoresSelectedToolsWithoutEffects(t *testing.T) {
 	s, store, _, _ := newConnectionTestServer(t, nil)
 	cookie, csrf := coupleAndApprove(t, s, nil)
-
-	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, url.Values{
+	form := url.Values{
 		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
 		"svcbaseurl": {"https://books.example.test"},
 		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
@@ -320,15 +319,25 @@ func TestGuidedConnectionRejectsDisallowedTool(t *testing.T) {
 		"connname": {"book-conn"},
 		"permmode": {"custom"}, "perm": {"read"},
 		"toolsmode": {"selected"}, "tool": {"book.create"},
-		"cfgver": {"whatever"},
-	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (rejected)", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "book.create") {
-		t.Fatalf("body does not report the disallowed tool:\n%s", rec.Body.String())
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	if review.Code != http.StatusOK {
+		t.Fatalf("GET review page status = %d, want 200, body: %s", review.Code, review.Body.String())
 	}
-	assertStoreUnchanged(t, store, 0, 0, 0)
+	form.Set("cfgver", extractHiddenValue(t, review.Body.String(), "cfgver"))
+
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := cfg.Connections["book-conn"]
+	if conn.Effects != nil || len(conn.Tools) != 1 || conn.Tools[0] != "book.create" {
+		t.Fatalf("connection = %+v, want only the tool book.create", conn)
+	}
 }
 
 // TestGuidedConnectionWithoutAdminApprovalHasNoEffect proves the admin guard actually protects the guided
@@ -632,7 +641,7 @@ func TestCreatedNoticeKeepsTheWarningsOwnPrefix(t *testing.T) {
 func TestGuidedConnectionKeepsStableIDs(t *testing.T) {
 	s, store, _, path := newConnectionTestServer(t, nil)
 	const idSvc, idCred = "00000000000000000000000000000001", "00000000000000000000000000000002"
-	file := "version: 2\nservices:\n  book-cloud:\n    id: " + idSvc + "\n    provider: book\n" +
+	file := "version: 3\nservices:\n  book-cloud:\n    id: " + idSvc + "\n    provider: book\n" +
 		"    base_url: https://books.example.test\ncredentials:\n  book-reader:\n    id: " + idCred +
 		"\n    provider: book\n    type: keyring\n"
 	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {

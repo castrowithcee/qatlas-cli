@@ -21,7 +21,7 @@ func githubConfig(t *testing.T) string {
 	t.Helper()
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	return writeConfig(t, `version: 2
+	return writeConfig(t, `version: 3
 services:
   gh:
     provider: github
@@ -347,7 +347,7 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 func TestGitHubRepositoryNeverComesFromTheWorkingDirectory(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, `version: 2
+	path := writeConfig(t, `version: 3
 services:
   gh:
     provider: github

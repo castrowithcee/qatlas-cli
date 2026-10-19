@@ -98,8 +98,8 @@ func fieldsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
 	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	add := func(name string, permissions []config.Effect, tools []string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets,
-			Effects: permissions, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets},
+			permissions, tools)
 	}
 	add("fields", changes, nil)
 	add("admin", config.Effects(), fieldTools)

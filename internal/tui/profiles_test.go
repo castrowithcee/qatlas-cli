@@ -113,8 +113,8 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	if !reflect.DeepEqual(saved.Tools, every) {
 		t.Fatalf("saved tools = %#v, want every registered tool %v", saved.Tools, every)
 	}
-	if got := config.FormatEffects(saved.Effects); got != "read, create, update, delete" {
-		t.Fatalf("saved permissions = %q", got)
+	if saved.Effects != nil {
+		t.Fatalf("saved effects = %q, want none beside the tool selection", config.FormatEffects(saved.Effects))
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -187,9 +187,8 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 	m, path := toolsModel(t, reg, map[string]config.Connection{
 		"all": {Service: "wiki", Credential: "reader"},
 		"listed": {Service: "wiki", Credential: "reader",
-			Effects: []config.Effect{config.EffectRead, config.EffectCreate},
-			Tools:   []string{"bookstack.pages.list", "bookstack.pages.create"}},
-		"matching": {Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
+			Tools: []string{"bookstack.pages.list", "bookstack.pages.create"}},
+		"matching": {Service: "wiki", Credential: "reader",
 			Tools: []string{"bookstack.pages.list", "bookstack.pages.get", "bookstack.content.search", "bookstack.books.list",
 				"bookstack.books.get", "bookstack.chapters.list", "bookstack.chapters.get", "bookstack.shelves.list", "bookstack.shelves.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.comments.list", "bookstack.comments.get", "bookstack.attachments.list", "bookstack.attachments.get", "bookstack.images.list", "bookstack.images.get", "bookstack.system.get", "bookstack.content.export"}},
 	})
@@ -230,7 +229,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 	pump(t, m, "f2")
 	saved := savedConnection(t, path, reg, "all")
 	if !reflect.DeepEqual(saved.Tools, strings.Split("bookstack.attachments.get, bookstack.attachments.list, bookstack.books.get, bookstack.books.list, bookstack.chapters.get, bookstack.chapters.list, bookstack.comments.get, bookstack.comments.list, bookstack.content.export, bookstack.content.search, bookstack.images.get, bookstack.images.list, bookstack.pages.get, bookstack.pages.list, bookstack.shelves.get, bookstack.shelves.list, bookstack.system.get, bookstack.tags.list, bookstack.tags.values", ", ")) ||
-		config.FormatEffects(saved.Effects) != "read" {
+		saved.Effects != nil {
 		t.Fatalf("a confirmed profile saved %+v", saved)
 	}
 }
@@ -239,8 +238,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{
-		"wiki": {Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
-			Tools: []string{"bookstack.pages.list"}},
+		"wiki": {Service: "wiki", Credential: "reader", Tools: []string{"bookstack.pages.list"}},
 	})
 	if err := reg.Register("bookstack", capability.Operation{
 		Descriptor: capability.Descriptor{
@@ -312,7 +310,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	}
 	saved := savedConnection(t, path, reg, "personal")
 	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.pages.get"}) ||
-		config.FormatEffects(saved.Effects) != "read" {
+		saved.Effects != nil {
 		t.Fatalf("saved connection = %+v", saved)
 	}
 }

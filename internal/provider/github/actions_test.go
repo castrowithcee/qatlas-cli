@@ -277,8 +277,8 @@ func actionsConfig(base string) *config.Config {
 	all := append(append([]string{}, observerTools...), operatorTools...)
 	execute := []config.Effect{config.EffectRead, config.EffectExecute}
 	repo := func(permissions []config.Effect, tools []string) config.Connection {
-		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Effects: permissions,
-			Tools: tools}
+		return connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget},
+			permissions, tools)
 	}
 	cfg.Connections["observer"] = repo([]config.Effect{config.EffectRead}, observer)
 	cfg.Connections["reader"] = repo(nil, nil)

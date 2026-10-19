@@ -94,8 +94,8 @@ func lifecycleConfig(base string) *config.Config {
 	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	admin := []string{"orgs/octo-org", projectTarget, repoTarget}
 	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Effects: permissions, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets},
+			permissions, tools)
 	}
 	add("admin", admin, config.Effects(), lifecycleTools)
 	add("nodelete", admin, changes, lifecycleTools)

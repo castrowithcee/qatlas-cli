@@ -664,6 +664,9 @@ func (m *Model) summaryRows() []string {
 		defaults := manage.DefaultEffects(metadata)
 		permissions = "default: " + config.FormatEffects(defaults)
 	}
+	if conn.Tools != nil {
+		permissions = config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools))
+	}
 	tools := toolsAll
 	switch {
 	case conn.Tools == nil:

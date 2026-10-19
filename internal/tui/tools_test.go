@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -208,8 +209,9 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 }
 
-// A tool whose effect the permissions exclude is refused by the core, and the editor shows why.
-func TestAToolTheFormPermissionsExcludeIsRefused(t *testing.T) {
+// A tool selection is saved as the tools alone: the permissions row neither refuses a tool of another effect
+// nor reaches the file, since the effects follow from the tools.
+func TestSelectedToolsAreSavedWithoutTheEffects(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openEntryForm(t, m, sectionConnections, "wiki")
@@ -220,11 +222,20 @@ func TestAToolTheFormPermissionsExcludeIsRefused(t *testing.T) {
 	typeText(t, m, "delete")
 	press(t, m, " ", "enter")
 	pump(t, m, "f2")
-	if !strings.Contains(refusal(m), `tool "bookstack.pages.delete" has effect delete`) {
-		t.Fatalf("fail = %q, want the refused effect", m.fail)
+	if m.fail != "" {
+		t.Fatalf("fail = %q, want the save to pass", m.fail)
 	}
-	if got := savedTools(t, path, reg, "wiki"); got != nil {
-		t.Fatalf("a refused list reached the file: %#v", got)
+	cfg, err := config.Load(path, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := cfg.Connections["wiki"]
+	// The filter ticks every tool it shows, all of them deleting.
+	if len(conn.Tools) == 0 || conn.Effects != nil || !slices.Contains(conn.Tools, "bookstack.pages.delete") {
+		t.Fatalf("saved connection = %+v, want only the ticked tools", conn)
+	}
+	if got := cfg.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []config.Effect{config.EffectDelete}) {
+		t.Fatalf("effects = %v, want those derived from the tool", got)
 	}
 }
 

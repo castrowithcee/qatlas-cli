@@ -380,6 +380,9 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 	if conn.Effects != nil {
 		permissions = config.FormatEffects(conn.Effects)
 	}
+	if conn.Tools != nil {
+		permissions = config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools)) + " (from the selected tools)"
+	}
 	tools := "all tools its permissions allow"
 	switch {
 	case conn.Tools == nil:

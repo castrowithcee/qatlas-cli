@@ -320,7 +320,7 @@ func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	path := writeConfig(t, `version: 2
+	path := writeConfig(t, `version: 3
 services:
   fake:
     provider: fake
@@ -381,7 +381,7 @@ defaults: {}
 // without a description, and one whose description contains a value the redactor knows. The service,
 // credential, environment variables and target are canaries that no diagnostic may carry.
 const ambiguousConfig = `
-version: 2
+version: 3
 services:
   service-canary:
     provider: bookstack
@@ -835,7 +835,7 @@ func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return registry, writeConfig(t, `version: 2
+	return registry, writeConfig(t, `version: 3
 services:
   fake:
     provider: fake
@@ -1128,7 +1128,7 @@ func mcpTestRegistry(t *testing.T, handler capability.Handler) (*capability.Regi
 	if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
 		t.Fatal(err)
 	}
-	path := writeConfig(t, `version: 2
+	path := writeConfig(t, `version: 3
 services:
   fake:
     provider: fake

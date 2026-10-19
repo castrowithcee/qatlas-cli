@@ -29,7 +29,7 @@ const (
 	FieldCredential = "credential"
 	FieldProvider   = "provider"
 	FieldOrigin     = "origin"
-	FieldEffects    = "permissions"
+	FieldEffects    = "effects"
 	FieldTargets    = "targets"
 	FieldTools      = "tools"
 	FieldPaths      = "paths"

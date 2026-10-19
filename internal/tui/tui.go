@@ -2037,8 +2037,8 @@ func (m *Model) matchingProfile() string {
 	for _, profile := range metadata.Profiles {
 		tools := append([]string(nil), profile.Tools...)
 		sort.Strings(tools)
-		if m.fieldValue("permissions") == config.FormatEffects(metadata.ProfileEffects(profile)) &&
-			strings.Join(tools, ",") == strings.Join(ticked, ",") {
+		// The permissions row is not stored beside a tool selection, so only the tools identify a profile.
+		if strings.Join(tools, ",") == strings.Join(ticked, ",") {
 			return profile.ID
 		}
 	}
@@ -2920,6 +2920,8 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		var tools []string
 		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
 			tools = list.marked()
+			// A tool selection is stored alone; the effects follow from the tools.
+			permissions = nil
 		}
 		// No paths are written as none at all: an empty list would be refused.
 		var paths []string

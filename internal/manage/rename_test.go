@@ -19,7 +19,7 @@ import (
 
 const renamePassphrase = "synthetic-passphrase-91ab"
 
-const renameConfig = `version: 2
+const renameConfig = `version: 3
 services:
     wiki:
         provider: docs

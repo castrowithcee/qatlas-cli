@@ -90,7 +90,8 @@ type ConnectionDraft struct {
 
 	// The connection. Effects is the comma-separated form of config.ParseEffects: empty keeps the
 	// provider's defaults, "none" allows nothing. With ToolsSelected, Tools is the explicit selection, and
-	// no tool outside it is enabled, an empty one included; without it the connection offers every tool.
+	// no tool outside it is enabled, an empty one included; only Tools is stored then and Effects is
+	// ignored. Without it the connection offers every tool of its effects.
 	Name          string
 	Targets       []string
 	Description   string
@@ -230,12 +231,14 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 			if err != nil {
 				return cand, err
 			}
-			conn.Effects = permissions
+			// A connection selects by effect or by tools, never both: a tool selection stores only the tools.
 			if d.ToolsSelected {
 				conn.Tools = slices.Clone(d.Tools)
 				if conn.Tools == nil {
 					conn.Tools = []string{}
 				}
+			} else {
+				conn.Effects = permissions
 			}
 		}
 		if err := cand.Config.SetConnection(d.Name, conn); err != nil {
