@@ -217,7 +217,7 @@ func TestEndToEnd(t *testing.T) {
 		[]map[string]any{page(1, "Archived Runbook")}, "<p>archived</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki-primary:
     provider: bookstack
@@ -326,7 +326,7 @@ defaults:
 		if code != 0 || stderr != "" {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "connections[2]{name,provider,description,permissions,tools}:\n") ||
+		if !strings.HasPrefix(stdout, "connections[2]{name,provider,description,effects,tools}:\n") ||
 			!strings.Contains(stdout, "  primary,bookstack,") || !strings.Contains(stdout, "  archive,bookstack,") ||
 			strings.Contains(stdout, "http") {
 			t.Errorf("stdout = %q, want the two BookStack connections without their endpoints", stdout)
@@ -814,7 +814,7 @@ func TestOperationsMVPEndToEnd(t *testing.T) {
 		[]map[string]any{page(1, "MVP Runbook")}, "<p>MVP</p>")
 	telegram, certificatePath, probe := telegramMock(t, dir)
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -1078,7 +1078,7 @@ func TestAPastedSecretNeverReachesTheOutput(t *testing.T) {
 			// The canary is quoted, so the file is well-formed YAML and the failure happens in
 			// validation or in resolution, not in the parser.
 			configPath := filepath.Join(dir, "config.yaml")
-			config := fmt.Sprintf(`version: 2
+			config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -1171,7 +1171,7 @@ func TestCredentialStoreEndToEnd(t *testing.T) {
 	server := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Vault Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -1445,7 +1445,7 @@ func TestEnvCredentialDoesNotFallThrough(t *testing.T) {
 	server := mock(t, "Token "+fileID+":"+fileSecret, []map[string]any{page(1, "Fallback Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	template := `version: 2
+	template := `version: 3
 services:
   wiki:
     provider: bookstack
@@ -1468,7 +1468,7 @@ defaults:
 	}
 
 	// The fallback is the one a developer would have on the same machine, complete and switched on.
-	fallback := fmt.Sprintf("version: 2\nallow_plaintext: true\ncredentials:\n  reader:\n    token-id: %s\n    token-secret: %s\n",
+	fallback := fmt.Sprintf("version: 3\nallow_plaintext: true\ncredentials:\n  reader:\n    token-id: %s\n    token-secret: %s\n",
 		fileID, fileSecret)
 	if err := os.WriteFile(filepath.Join(dir, secret.FileName), []byte(fallback), 0o600); err != nil {
 		t.Fatalf("writing the fallback: %v", err)
@@ -1576,7 +1576,7 @@ func TestDebugLogsCarryNoSecret(t *testing.T) {
 		t.Fatalf("writing the test CA: %v", err)
 	}
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack

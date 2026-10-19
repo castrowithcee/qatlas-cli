@@ -21,7 +21,7 @@ func githubConfig(t *testing.T) string {
 	t.Helper()
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	return writeConfig(t, `version: 2
+	return writeConfig(t, `version: 3
 services:
   gh:
     provider: github
@@ -37,25 +37,23 @@ connections:
     service: gh
     credential: gh-reader
     target: orgs/octo-org/projects/7
-    permissions: [read]
     tools: [github.project-items.list, github.project-items.get]
   code:
     service: gh
     credential: gh-reader
     target: repos/octo-org/example
-    permissions: [read]
+    effects: [read]
   roadmap:
     service: gh
     credential: gh-reader
     targets: [orgs/octo-org/projects/7, repos/octo-org/example]
-    permissions: [read, create, update]
     tools: [github.project-items.list, github.project-items.update, github.project-issues.create]
 defaults: {}
 `)
 }
 
 // The GitHub namespace publishes the read tools and the changes; a project connection limited by its tools
-// list offers only the project tools, and only a connection whose permissions allow a change offers it.
+// list offers only the project tools, and only a connection whose effects allow a change offers it.
 func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	path := githubConfig(t)
 	var reads atomic.Int32
@@ -347,7 +345,7 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 func TestGitHubRepositoryNeverComesFromTheWorkingDirectory(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, `version: 2
+	path := writeConfig(t, `version: 3
 services:
   gh:
     provider: github

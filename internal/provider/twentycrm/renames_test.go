@@ -167,7 +167,6 @@ connections:
   sales:
     service: crm
     credential: crm-key
-    permissions: [read, create]
     tools: [twentycrm.viewfields.create, twentycrm.records.mergepreview, twentycrm.companies.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

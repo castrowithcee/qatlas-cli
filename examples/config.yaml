@@ -6,7 +6,7 @@
 # Check your edits with:       qatlas config validate
 # See where secrets come from: qatlas config validate --secrets
 
-version: 2
+version: 3
 
 # A service is one technical API endpoint of one provider.
 services:
@@ -234,21 +234,23 @@ credentials:
 # candidates of a connection-ambiguous diagnostic. It is never sent to a provider, and it never selects a
 # route on its own. Because it is published, never write a secret or personal data into it.
 #
-# permissions is Qatlas' independent local allow-list. It can only restrict a provider credential, never
-# expand it. Supported effects are read, create, update, delete, and execute. When omitted, the provider's
-# compatibility default preserves only operations that existed before connection permissions were added.
-# An explicit YAML list `permissions: []` disables the connection without deleting it; the TUI spells
-# this value `none` and uses an empty field for the compatibility default.
+# A connection offers tools in one of two ways, never both; giving effects and tools together makes the
+# file invalid.
 #
-# tools is an optional second allow-list of complete tool IDs of this connection's provider, as listed by
-# 'qatlas tools <provider> --all'. A tool is offered only when both lists admit it: tools never grants an effect
-# that permissions excludes, and it never widens what the provider credential or the target allows. When
-# tools is omitted, every tool whose effect permissions allows is offered, including tools a later version
-# adds, except high-risk tools marked as listed only: those are offered only by a connection whose tools
-# list names them, whatever its permissions. A listed connection offers exactly the listed tools, and a tool
-# added later joins only when you add it. `tools: []` offers no tool at all. Every entry must be a registered tool of the connection's provider,
-# listed once, with an effect that permissions allows; anything else makes the file invalid. Each connection
-# keeps its own lists, even when it shares the provider, the service, or the credential with another one.
+# effects offers by effect: every tool of these effects, including tools a later version adds. Supported
+# effects are read, create, update, delete, and execute. Qatlas' local selection can only restrict a
+# provider credential, never expand it. When omitted, the provider's compatibility default applies, which
+# preserves only operations that existed before connection effects were added. An explicit YAML list
+# `effects: []` offers no tool; the TUI spells this value `none` and uses an empty field for the default.
+# High-risk tools marked as listed only are never offered by effect.
+#
+# tools offers selected tools: complete tool IDs of this connection's provider, as listed by
+# 'qatlas tools <provider> --all'. A connection offers exactly the listed tools, and a tool added later
+# joins only when you add it; the effects it covers follow from the tools and are not written. It never
+# widens what the provider credential or the target allows. `tools: []` offers no tool at all. Every entry
+# must be a registered tool of the connection's provider, listed once; anything else makes the file
+# invalid. Each connection keeps its own selection, even when it shares the provider, the service, or the
+# credential with another one.
 #
 # paths optionally binds a connection to projects: a list of directories, absolute or starting with ~/, each
 # covering itself and everything below it, compared by whole directory names, so ~/repos/kunde-a does not
@@ -264,15 +266,15 @@ credentials:
 # encrypted, a change of paths needs a new approval.
 #
 # The TUI starts a new connection on its provider's recommended setup profile, for example read, which
-# ticks permissions and the concrete tools it names; every tick can be changed before saving. A profile is
-# a visible starting selection, not a role: this file stores only permissions and tools, never a profile,
+# selects the concrete tools it names; every tick can be changed before saving. A profile is
+# a visible starting selection, not a role: this file stores only effects or tools, never a profile,
 # and a saved connection never follows one. The credential still decides what the provider allows.
 connections:
   wiki:
     service: wiki-primary
     credential: wiki-reader
     description: the live team wiki, everyone reads this one
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
 
   # A connection releases a forward credential to its tools with forward_secrets: a tool argument marked as a
   # secret reference may then name shared-login, and the tool sends its fields on without anyone typing
@@ -282,7 +284,7 @@ connections:
     service: wiki-primary
     credential: wiki-standby
     description: the standby wiki account, may pass the partner portal login to tools
-    permissions: [read, create]
+    effects: [read, create]
     forward_secrets: [shared-login]
 
   # The same service with a different key, for example a more restricted account. Its tools list offers
@@ -291,7 +293,6 @@ connections:
     service: wiki-primary
     credential: wiki-auditor
     description: the same instance read with the restricted audit account
-    permissions: [read]
     tools: [bookstack.pages.get, bookstack.pages.list]
 
   # A different service reusing the same credential, optionally scoped with target.
@@ -300,7 +301,7 @@ connections:
     credential: wiki-reader
     target: books
     description: retired wiki content, read-only reference
-    permissions: [read]
+    effects: [read]
 
   # Telegram requires a fixed non-secret target on every connection. Two connections can bind the same
   # bot to different chats without mixing their targets.
@@ -308,19 +309,19 @@ connections:
     service: telegram-main
     credential: telegram-notifier
     target: "-1001111111111"
-    permissions: [create, update, delete]
+    effects: [create, update, delete]
   telegram-operations:
     service: telegram-main
     credential: telegram-notifier
     target: "-1002222222222"
-    permissions: [create]
+    effects: [create]
 
   # Lexware needs no target: the organization follows from the API key. This connection is bound to the
   # projects under one customer's directory and exists nowhere else.
   accounting:
     service: books
     credential: books-accountant
-    permissions: [read, create]
+    effects: [read, create]
     paths: ["~/repos/kunde-a"]
 
   # Twenty needs no target either: the workspace follows from the API key. Two workspaces stay two
@@ -329,13 +330,13 @@ connections:
     service: crm-cloud
     credential: crm-cloud-reader
     description: the managed Twenty workspace used by sales
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
 
   crm-internal:
     service: crm-selfhosted
     credential: crm-selfhosted-reader
     description: the self-hosted Twenty workspace for internal accounts
-    permissions: [read]
+    effects: [read]
 
   # A SeaTable connection binds one instance and one base token to one table, an explicit allow-list, or
   # the explicit * wildcard. The optional view after a slash narrows listing; id:TABLEID and id:VIEWID
@@ -344,25 +345,25 @@ connections:
     service: tables-cloud
     credential: sales-base-reader
     target: Kunden
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
 
   sales-rows-audit:
     service: tables-cloud
     credential: sales-base-auditor
     target: Kunden/Aktive
-    permissions: [read]
+    effects: [read]
 
   support-rows:
     service: tables-cloud
     credential: support-base-reader
     target: id:0001
-    permissions: [read]
+    effects: [read]
 
   sales-selected-tables:
     service: tables-cloud
     credential: sales-base-reader
     targets: ["id:0000", "id:0001"]
-    permissions: [read]
+    effects: [read]
 
   # This deliberately exposes every table in the base to the agent. Prefer targets when a smaller scope
   # is enough. Row and column operations then require a table reference from seatable.base.tables.list.
@@ -370,13 +371,13 @@ connections:
     service: tables-cloud
     credential: sales-base-reader
     target: "*"
-    permissions: [read]
+    effects: [read]
 
   onprem-rows:
     service: tables-onprem
     credential: onprem-base-reader
     target: Tickets
-    permissions: [read]
+    effects: [read]
 
   # A Nextcloud connection binds one instance, one identity, and one fixed root folder below the Files of
   # that identity. A read may address a path below that folder and nothing above it. A single / would
@@ -385,48 +386,46 @@ connections:
     service: cloud-main
     credential: cloud-reader
     target: Reports
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
 
   files-archive:
     service: cloud-main
     credential: cloud-reader
     target: Archive/2026
-    permissions: [read]
+    effects: [read]
 
   # The same instance read as a second identity, with its own app password and its own root folder.
   files-audit:
     service: cloud-main
     credential: cloud-auditor
     target: Audit
-    permissions: [read]
+    effects: [read]
 
   files-partner:
     service: cloud-partner
     credential: partner-reader
     target: Shared/Qatlas
-    permissions: [read]
+    effects: [read]
 
   # A GitHub connection may list targets, an optional allow-list of repositories (repos/OWNER/REPO),
   # projects (users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER), and patterns with * as the last
   # segment (repos/OWNER/*, orgs/LOGIN/projects/*). Without targets it reaches whatever its token reaches.
   # Every tool takes the repository or project it acts on; the argument may be left out only when the
-  # targets allow exactly one of its kind. Which tools a connection offers is decided by permissions and
+  # targets allow exactly one of its kind. Which tools a connection offers is decided by effects or
   # tools alone.
   # Work selection starts at the project; the issue connection is the fallback for single issues.
-  # Reads are the only default: a change needs create or update in permissions and confirmation per call.
+  # Reads are the only default: a change needs create or update in effects and confirmation per call.
   planning:
     service: github
     credential: github-reader
     target: orgs/octo-org/projects/7
     description: the planning project of the example repository
-    permissions: [read]
     tools: [github.project-items.get, github.project-items.list]
 
   planning-issues:
     service: github
     credential: github-reader
     target: repos/octo-org/example
-    permissions: [read]
     tools: [github.issues.get, github.issues.list]
 
   # A project listed with the repositories it plans in: github.project-items.add and
@@ -437,7 +436,6 @@ connections:
     credential: github-planner
     targets: [orgs/octo-org/projects/7, repos/octo-org/example]
     description: maintains the planning project and creates its issues
-    permissions: [read, create, update]
     tools: [github.project-items.list, github.project-items.get, github.project-items.update,
       github.project-items.add, github.project-issues.create]
 
@@ -447,7 +445,6 @@ connections:
     service: github
     credential: github-planner
     target: repos/octo-org/example
-    permissions: [read, create, update]
     tools: [github.issues.get, github.issues.update, github.issues.close, github.issues.reopen,
       github.comments.list, github.comments.create]
 
@@ -458,18 +455,16 @@ connections:
     credential: github-reader
     target: repos/octo-org/example
     description: diagnoses the workflow runs of the example repository
-    permissions: [read]
     tools: [github.workflows.list, github.workflows.get, github.workflow-runs.list, github.workflow-runs.get,
       github.workflow-jobs.list, github.workflow-jobs.get, github.workflow-jobs.log, github.workflow-artifacts.list]
 
   # An operator also dispatches workflows and re-runs or cancels runs. It needs execute, which no planning
-  # permission implies, and every execution needs confirmation in its own invoke request.
+  # effect implies, and every execution needs confirmation in its own invoke request.
   ci-operator:
     service: github
     credential: github-operator
     target: repos/octo-org/example
     description: re-runs and dispatches the workflows of the example repository
-    permissions: [read, execute]
     tools: [github.workflow-runs.list, github.workflow-runs.get, github.workflow-jobs.list, github.workflow-jobs.log,
       github.workflows.dispatch, github.workflow-runs.rerun, github.workflow-runs.rerun-failed,
       github.workflow-runs.cancel]
@@ -483,7 +478,6 @@ connections:
     credential: github-maintainer
     target: repos/octo-org/example
     description: maintains the workflow files of the example repository
-    permissions: [read, create, update]
     tools: [github.workflows.list, github.workflows.get, github.workflow-files.list, github.workflow-files.get,
       github.workflow-files.create, github.workflow-files.update, github.workflows.enable, github.workflows.disable]
 
@@ -494,7 +488,6 @@ connections:
     credential: github-maintainer
     target: repos/octo-org/example
     description: administers the Actions settings of the example repository
-    permissions: [read, update]
     tools: [github.actions-permissions.get, github.actions-permissions.update, github.workflow-permissions.get,
       github.workflow-permissions.update, github.repository-settings.get, github.repository-settings.update]
 
@@ -506,7 +499,6 @@ connections:
     credential: todoist-reader
     targets: ["6XGgm6PHrGgMpCFX", "6Jf8VQXxpwv56VQ7"]
     description: the work projects of the personal Todoist account
-    permissions: [read]
     tools: [todoist.projects.list, todoist.projects.get, todoist.sections.list, todoist.tasks.list,
       todoist.tasks.filter, todoist.tasks.get, todoist.completed-tasks.list, todoist.comments.list,
       todoist.reminders.list]
@@ -521,7 +513,6 @@ connections:
     credential: todoist-reader
     target: "6XGgm6PHrGgMpCFX"
     description: manages the tasks of one personal Todoist project
-    permissions: [read, create, update]
     tools: [todoist.projects.get, todoist.sections.list, todoist.tasks.list, todoist.tasks.get,
       todoist.comments.list, todoist.reminders.list, todoist.tasks.create, todoist.tasks.update,
       todoist.tasks.move, todoist.tasks.close, todoist.tasks.reopen, todoist.comments.create,
@@ -535,7 +526,6 @@ connections:
     credential: todoist-reader
     target: "*"
     description: organizes the projects, sections, and labels of the personal Todoist account
-    permissions: [read, create, update]
     tools: [todoist.projects.list, todoist.projects.get, todoist.sections.list, todoist.labels.list,
       todoist.projects.create, todoist.projects.update, todoist.sections.create, todoist.sections.update,
       todoist.sections.reorder, todoist.sections.move, todoist.labels.create, todoist.labels.update,
@@ -547,7 +537,7 @@ connections:
     service: todoist
     credential: todoist-reader
     target: "*"
-    permissions: [read]
+    effects: [read]
 
 # A provider note says in one optional line what a provider stands for here, in the words a task uses for
 # it. The provider's own description already says what kind of system it is, and a connection description

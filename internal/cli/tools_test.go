@@ -43,7 +43,7 @@ func catalogEnvironment(t *testing.T) (string, *atomic.Int32, string) {
 
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, fmt.Sprintf(`version: 2
+	cfg := writeConfig(t, fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -296,7 +296,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	})
 
 	t.Run("a connection that offers no tool is listed but not counted, as the help says", func(t *testing.T) {
-		empty := writeConfig(t, `version: 2
+		empty := writeConfig(t, `version: 3
 services:
   telegram:
     provider: telegram
@@ -849,7 +849,7 @@ func commandNames(cmd *cobra.Command) []string {
 func TestLargeCatalogGrowsOnlyTheData(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, "version: 2\n")
+	cfg := writeConfig(t, "version: 3\n")
 
 	small := newRootCommand(&Options{}, syntheticRegistry(t, 1))
 	large := newRootCommand(&Options{}, syntheticRegistry(t, 128))
@@ -1099,7 +1099,7 @@ func TestConnectionsListTheConfiguredRoutes(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	want := "connections[2]{name,provider,description,permissions,tools}:\n" +
+	want := "connections[2]{name,provider,description,effects,tools}:\n" +
 		"  wiki,bookstack,read-only account on the team wiki,read,all-permitted\n" +
 		"  alerts,telegram,\"\",create,all-permitted\n"
 	if stdout != want {
@@ -1124,7 +1124,7 @@ func TestConnectionsListTheConfiguredRoutes(t *testing.T) {
 
 	code, stdout, stderr = runTools(t, &reads, "connections", "telegram", "--config", cfg)
 	if code != exitOK || stderr != "" ||
-		stdout != "connections[1]{name,provider,description,permissions,tools}:\n  alerts,telegram,\"\",create,all-permitted\n" {
+		stdout != "connections[1]{name,provider,description,effects,tools}:\n  alerts,telegram,\"\",create,all-permitted\n" {
 		t.Errorf("connections telegram: exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runTools(t, &reads, "connections", "lexware", "--config", cfg)
@@ -1238,7 +1238,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 func TestToolsQueryFindsByDescriptionAndCarriesTheCallContract(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, `version: 2
+	cfg := writeConfig(t, `version: 3
 services:
   gh:
     provider: github
@@ -1252,11 +1252,11 @@ connections:
   kunde-a:
     service: gh
     credential: token
-    permissions: [read, create, update, delete]
+    effects: [read, create, update, delete]
   kunde-b:
     service: gh
     credential: token
-    permissions: [read]
+    effects: [read]
 defaults: {}
 `)
 	code, stdout, stderr := runTools(t, nil, "tools", "--config", cfg, "--query", "issues", "--output", "json")

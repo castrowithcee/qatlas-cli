@@ -14,7 +14,7 @@ import (
 )
 
 const validConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack
@@ -50,7 +50,7 @@ func TestConfigValidate(t *testing.T) {
 	t.Setenv("QATLAS_CLI_HOME", "")
 
 	valid := writeConfig(t, validConfig)
-	broken := writeConfig(t, "version: 2\nservices:\n  wiki:\n    provider: confluence\n    base_url: x\n")
+	broken := writeConfig(t, "version: 3\nservices:\n  wiki:\n    provider: confluence\n    base_url: x\n")
 	missing := filepath.Join(t.TempDir(), "absent.yaml")
 
 	tests := []struct {
@@ -112,7 +112,7 @@ func TestConfigValidateReportsSuccessMachineReadably(t *testing.T) {
 func TestConfigValidateUsesTelegramProviderMetadata(t *testing.T) {
 	const canary = "canary-telegram-secret-must-not-appear-441"
 	t.Setenv("TELEGRAM_BOT_TOKEN", canary)
-	valid := `version: 2
+	valid := `version: 3
 services:
   telegram-main:
     provider: telegram
@@ -161,7 +161,7 @@ defaults:
 }
 
 func TestConfigValidateTelegramTargetLists(t *testing.T) {
-	const head = `version: 2
+	const head = `version: 3
 services:
   telegram-main:
     provider: telegram
@@ -204,7 +204,7 @@ connections:
 // A connection that offers no tool is valid but useless to an agent, so validate still succeeds and names it
 // on stderr, with the reason, in name order.
 func TestConfigValidateWarnsAboutAConnectionThatOffersNoTool(t *testing.T) {
-	path := writeConfig(t, `version: 2
+	path := writeConfig(t, `version: 3
 services:
   telegram-main:
     provider: telegram
@@ -228,13 +228,13 @@ connections:
     service: telegram-main
     credential: notifier
     target: "-1003333333333"
-    permissions: []
+    effects: []
 defaults: {}
 `)
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"config", "validate", "--config", path}, &stdout, &stderr)
-	want := "qatlas: warning: connection \"closed\" offers no tool: its permissions are empty " +
-		"('permissions: []'), so no agent can use it\n" +
+	want := "qatlas: warning: connection \"closed\" offers no tool: its effects are empty " +
+		"('effects: []'), so no agent can use it\n" +
 		"qatlas: warning: connection \"muted\" offers no tool: its tools list is empty ('tools: []'), so no " +
 		"agent can use it\n"
 	if code != exitOK || !strings.HasPrefix(stdout.String(), "configuration is valid: ") || stderr.String() != want {
@@ -246,7 +246,7 @@ defaults: {}
 func TestConfigValidateIsDeterministic(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, "version: 2\nservices:\n  b:\n    provider: nope\n    base_url: x\n  a:\n    provider: nope\n    base_url: y\n")
+	path := writeConfig(t, "version: 3\nservices:\n  b:\n    provider: nope\n    base_url: x\n  a:\n    provider: nope\n    base_url: y\n")
 
 	run := func() string {
 		var stdout, stderr bytes.Buffer

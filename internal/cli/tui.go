@@ -72,7 +72,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
 			"say warning: or error:. Colour only supports these marks; NO_COLOR turns it off.\n\n" +
 			"c sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
-			"permissions, and a summary that saves the connection and can test it right away. Each step offers\n" +
+			"access, and a summary that saves the connection and can test it right away. Each step offers\n" +
 			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
 			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
 			"refuse a step before the next one opens, and a refused step keeps its input. A new credential\n" +
@@ -212,11 +212,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Every other choice row opens the same way: enter or / on the row opens a searchable\n" +
 			"picker that filters as you type, ignoring case; up/down, pgup/pgdown and home/end move, and esc\n" +
 			"leaves the row unchanged. On a row that holds one value, such as service, credential, secrets,\n" +
-			"profile, tools, or the connection of a default, the picker marks the current value and enter\n" +
+			"profile, access, or the connection of a default, the picker marks the current value and enter\n" +
 			"takes the selected one; left/right also step through the values in place. On a row that holds\n" +
-			"several values, the permissions and the tool list, space ticks the selected value, enter keeps\n" +
-			"the ticks, and esc drops them. default in the permissions stands for the provider's own set, so\n" +
-			"ticking it drops the explicit permissions and ticking one of those drops default.\n" +
+			"several values, the effects and the tool list, space ticks the selected value, enter keeps\n" +
+			"the ticks, and esc drops them. default in the effects stands for the provider's own set, so\n" +
+			"ticking it drops the explicit effects and ticking one of those drops default.\n" +
 			"For a provider that sorts its tools into groups, such as GitHub, the tool list opens as a list of\n" +
 			"groups, folded, each with its tool count and how many of its tools are ticked, and the head shows\n" +
 			"the ticks of all tools. left/right fold and unfold the group under the cursor; space on a group\n" +
@@ -258,24 +258,23 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"enter on a text row goes on to the next row, and on the last one does nothing; it never saves.\n" +
 			"F2 saves the form from every row, or goes on to the next step of the guided setup; the summary of\n" +
 			"the guided setup saves with F2 too. The hint under the focused row stands in full, wrapped.\n\n" +
-			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
-			"connection without a tools list behaves, and only selected tools. In the second mode the tool\n" +
-			"list opens the tools the chosen provider registers, with their effect, to tick. Nothing ticked\n" +
-			"stores an explicit empty list, which offers no tool at all. A tool marked listed only, such as\n" +
-			"a high-risk administration tool, is offered only while it is ticked in the second mode; the first\n" +
-			"mode never offers it. A change of provider clears the ticks, because tool IDs belong to their\n" +
-			"provider.\n\n" +
+			"A connection's access row decides between by effect and selected tools, and only the row of the\n" +
+			"chosen mode is shown and saved. By effect offers every tool of the ticked effects, and also a tool\n" +
+			"a later version adds; a tool marked listed only, such as a high-risk administration tool, is never\n" +
+			"offered this way. Selected tools offers exactly the tools ticked in the tools row, which opens\n" +
+			"the tools the chosen provider registers, with their effect; the effects follow from the ticked\n" +
+			"tools and are not stored. Nothing ticked stores an explicit empty list, which offers no tool at\n" +
+			"all. A change of provider clears the ticks, because tool IDs belong to their provider.\n\n" +
 			"A new connection, in its form and in the guided setup, starts on the provider's recommended\n" +
-			"setup profile: a named starting selection that ticks the permissions its tools need, only\n" +
-			"selected tools, and exactly the tools it names, all visible and each changeable before saving.\n" +
-			"A recommended profile ticks reads only, unless the provider states why a change is safe, as\n" +
-			"Telegram does for sending to the configured chat. The profile row shows the profile the ticks\n" +
-			"match, or custom after a change by hand; choosing another profile replaces the ticks at once\n" +
-			"while they are a profile's, and asks first once they were changed by hand or belong to a saved\n" +
-			"connection. A saved connection opens and saves as it is; a profile is never applied to it on its\n" +
-			"own. A profile is a starting selection, not a role: the configuration keeps only permissions\n" +
-			"and the concrete tool IDs, so a tool a later version adds joins no saved connection, and no\n" +
-			"local tick narrows what the credential itself may do at the provider.\n\n" +
+			"setup profile: a named starting selection that chooses selected tools and exactly the tools it\n" +
+			"names, visible and changeable before saving. A recommended profile ticks reads only, unless the\n" +
+			"provider states why a change is safe, as Telegram does for sending to the configured chat. The\n" +
+			"profile row shows the profile the ticks match, or custom after a change by hand; choosing another\n" +
+			"profile replaces the ticks at once while they are a profile's, and asks first once they were\n" +
+			"changed by hand or belong to a saved connection. A saved connection opens and saves as it is; a\n" +
+			"profile is never applied to it on its own. A profile is a starting selection, not a role: the\n" +
+			"configuration keeps only the concrete tool IDs, so a tool a later version adds joins no saved\n" +
+			"connection, and no local tick narrows what the credential itself may do at the provider.\n\n" +
 			"? shows the help topics start, agents, and configuration, the same text as 'qatlas help start'\n" +
 			"and the others, on every screen that takes no typed text: the sidebar, the lists, every question,\n" +
 			"the target and path lists, the setup summary, and the details of an approval, a token, and a log\n" +

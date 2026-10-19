@@ -215,7 +215,7 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 func TestProvidersListsVendorFamilyProvidersUnderTheirCurrentIDs(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, "version: 2\ndefaults: {}\n")
+	path := writeConfig(t, "version: 3\ndefaults: {}\n")
 	var reads atomic.Int32
 	code, stdout, stderr := runTools(t, &reads, "providers", "--config", path, "--output", "json")
 	if code != exitOK || stderr != "" {

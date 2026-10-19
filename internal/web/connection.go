@@ -21,7 +21,7 @@ import (
 // permission policy of its own, only HTML pages over the same checks.
 //
 // The journey is two GET pages, without a script: a provider chooser, and a build page that carries every
-// later choice (service, credential, scope, permissions, tools) as ordinary visible or hidden fields. The
+// later choice (service, credential, scope, access) as ordinary visible or hidden fields. The
 // build page's own form leads, by an ordinary GET, to a review page that shows what would be saved,
 // secretfree, and, only for a new credential, the fields to type its secrets: exactly there, and nowhere
 // earlier, because a GET request would otherwise have carried them in the URL. The review page's own form is
@@ -49,10 +49,16 @@ type connectionForm struct {
 	FilesRead, FilesWrite             string
 	PermMode                          string
 	Perms                             []string
-	ToolsMode                         string
+	Access                            string
 	Tools                             []string
 	Forward                           []string
 }
+
+// The values of the access radio group: a connection offers by effect or by its selected tools.
+const (
+	accessEffects = "effects"
+	accessTools   = "tools"
+)
 
 // parseConnectionForm reads a connectionForm back out of a request's query values (the build and review
 // pages, both reached by GET) or its posted form values (the review page's own commit).
@@ -79,14 +85,14 @@ func parseConnectionForm(v url.Values) connectionForm {
 		FilesWrite:  v.Get("fileswrite"),
 		PermMode:    v.Get("permmode"),
 		Perms:       v["perm"],
-		ToolsMode:   v.Get("toolsmode"),
+		Access:      v.Get("access"),
 		Tools:       v["tool"],
 		Forward:     v["forward"],
 	}
 }
 
 // connectionDraft reads f into the draft the core builds the candidate from. The core checks everything:
-// nothing here decides whether a target, a permission or a tool is allowed. A new credential's secret
+// nothing here decides whether a target, an effect or a tool is allowed. A new credential's secret
 // roles are never given a value here, except the plain variable names of an env credential, which are
 // configuration, not a secret.
 func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraft {
@@ -114,15 +120,15 @@ func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraf
 		}
 	}
 	d.Targets = splitTargetInput(f.Targets)
-	if f.PermMode == "custom" {
+	// A connection selects by effect or by tools, never both: only the chosen mode's choices are read.
+	if f.Access == accessTools {
+		d.ToolsSelected, d.Tools = true, f.Tools
+	} else if f.PermMode == "custom" {
 		// A custom list without any entry allows nothing; it never falls back to the defaults.
 		d.Effects = strings.Join(f.Perms, ",")
 		if strings.TrimSpace(d.Effects) == "" {
 			d.Effects = "none"
 		}
-	}
-	if f.ToolsMode == "selected" {
-		d.ToolsSelected, d.Tools = true, f.Tools
 	}
 	return d
 }
@@ -179,14 +185,14 @@ func applyConnectionDefaults(cfg *config.Config, f *connectionForm) {
 		f.CredStorage = start.Storage
 	}
 	if start.ProfileID != "" {
-		f.PermMode, f.ToolsMode = "custom", "selected"
+		f.PermMode, f.Access = "custom", accessTools
 		f.Perms = make([]string, len(start.Effects))
 		for i, permission := range start.Effects {
 			f.Perms[i] = string(permission)
 		}
 		f.Tools = start.Tools
 	} else {
-		f.PermMode, f.ToolsMode = "default", "all"
+		f.PermMode, f.Access = "default", accessEffects
 	}
 }
 
@@ -226,7 +232,7 @@ type connectionProviderData struct {
 }
 
 // connectionBuildData is what the build page renders: the provider's own services, credentials, secret
-// roles, permissions, and tools, each already marked with whatever this page's own form last chose.
+// roles, effects, and tools, each already marked with whatever this page's own form last chose.
 type connectionBuildData struct {
 	Provider    string
 	Services    []optionRow
@@ -282,7 +288,7 @@ func (s *Server) renderConnectionProvider(w http.ResponseWriter, cfg *config.Con
 	}
 }
 
-// renderConnectionBuild shows the build page: service, credential, scope, and permissions/tools, all at
+// renderConnectionBuild shows the build page: service, credential, scope, and access, all at
 // once, the same way /credentials/new shows a new credential's name, storage, and roles at once once a
 // provider is chosen.
 func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config, f connectionForm, errText string) {
@@ -376,11 +382,16 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		storage = cand.Credentials[conn.Credential].Type
 	}
 
-	permissions := "default: " + config.FormatEffects(manage.DefaultEffects(metadata))
+	access := "by effect"
+	effects := "default: " + config.FormatEffects(manage.DefaultEffects(metadata))
 	if conn.Effects != nil {
-		permissions = config.FormatEffects(conn.Effects)
+		effects = config.FormatEffects(conn.Effects)
 	}
-	tools := "all tools its permissions allow"
+	if conn.Tools != nil {
+		access = "selected tools"
+		effects = config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools)) + " (from the selected tools)"
+	}
+	tools := "every tool of its effects"
 	switch {
 	case conn.Tools == nil:
 	case len(conn.Tools) == 0:
@@ -401,7 +412,8 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		{"targets", targets},
 		{"description", conn.Description},
 		{"files", approval.FilesText(conn.Files.Read, conn.Files.Write)},
-		{"permissions", permissions},
+		{"access", access},
+		{"effects", effects},
 		{"tools", tools},
 	}
 	bindingNote := ""
@@ -449,7 +461,7 @@ func (s *Server) handleConnectionsNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := parseConnectionForm(q)
-	if !q.Has("toolsmode") {
+	if !q.Has("access") {
 		applyConnectionDefaults(cfg, &f)
 	}
 	s.renderConnectionBuild(w, cfg, f, "")
@@ -641,7 +653,7 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Config, name string,
 	conn config.Connection, notice, testResult string) {
 	targets := strings.Join(conn.TargetValues(), ", ")
-	tools := "all tools its permissions allow"
+	tools := "every tool of its effects"
 	switch {
 	case conn.Tools == nil:
 	case len(conn.Tools) == 0:
@@ -719,7 +731,7 @@ func stateText(disabled bool) string {
 func toolsSummary(tools []string) string {
 	switch {
 	case tools == nil:
-		return "all"
+		return "by effect"
 	case len(tools) == 0:
 		return "none"
 	default:

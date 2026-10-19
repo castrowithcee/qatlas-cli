@@ -99,8 +99,8 @@ func notificationsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
 	all := config.Effects()
 	add := func(name string, targets []string, tools ...string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Effects: all, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets},
+			all, tools)
 	}
 	add("open", nil)
 	add("open-listed", nil, notificationsMarkAll.ID)

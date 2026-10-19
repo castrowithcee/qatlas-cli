@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 
 func TestConnectionEffectsAreIndependentFromCredentials(t *testing.T) {
 	cfg, err := Decode(strings.NewReader(strings.Replace(minimal,
-		"    credential: reader\n", "    credential: reader\n    permissions: [read, update]\n", 1)), testProviders)
+		"    credential: reader\n", "    credential: reader\n    effects: [read, update]\n", 1)), testProviders)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +36,7 @@ func TestConnectionEffectsRoundTripMissingAndDenyAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), "permissions:") {
+	if strings.Contains(string(encoded), "effects:") {
 		t.Fatalf("missing permissions were materialized:\n%s", encoded)
 	}
 
@@ -46,7 +47,7 @@ func TestConnectionEffectsRoundTripMissingAndDenyAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(encoded), "permissions: []") {
+	if !strings.Contains(string(encoded), "effects: []") {
 		t.Fatalf("deny-all was omitted:\n%s", encoded)
 	}
 	roundTrip, err := Decode(strings.NewReader(string(encoded)), testProviders)
@@ -68,7 +69,7 @@ func TestMissingAndEmptyConnectionPermissionsStaySafe(t *testing.T) {
 	}
 
 	empty, err := Decode(strings.NewReader(strings.Replace(minimal,
-		"    credential: reader\n", "    credential: reader\n    permissions: []\n", 1)), testProviders)
+		"    credential: reader\n", "    credential: reader\n    effects: []\n", 1)), testProviders)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestMissingAndEmptyConnectionPermissionsStaySafe(t *testing.T) {
 func TestConnectionEffectsRejectUnknownAndDuplicateValues(t *testing.T) {
 	for _, permissions := range []string{"[read, publish]", "[read, read]"} {
 		input := strings.Replace(minimal, "    credential: reader\n",
-			"    credential: reader\n    permissions: "+permissions+"\n", 1)
+			"    credential: reader\n    effects: "+permissions+"\n", 1)
 		if _, err := Decode(strings.NewReader(input), testProviders); err == nil {
 			t.Fatalf("permissions %s were accepted", permissions)
 		}
@@ -142,34 +143,36 @@ func withTools(lines string) string {
 	return strings.Replace(minimal, "    credential: reader\n", "    credential: reader\n"+lines, 1)
 }
 
-func TestConnectionToolsNarrowThePermissions(t *testing.T) {
+func TestConnectionToolsOfferExactlyTheListedAndDeriveTheEffects(t *testing.T) {
 	missing, err := Decode(strings.NewReader(minimal), testProviders)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
 		!missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
-		t.Fatal("a connection without tools no longer offers every tool its permissions admit")
+		t.Fatal("a connection by effect without a field no longer offers every tool of the provider's defaults")
+	}
+	if got := missing.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead}) {
+		t.Fatalf("default effects = %v", got)
 	}
 
 	listed, err := Decode(strings.NewReader(withTools(
-		"    permissions: [read, create]\n    tools: [bookstack.pages.list]\n")), testProviders)
+		"    tools: [bookstack.pages.create, bookstack.pages.list]\n")), testProviders)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !listed.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
-		t.Fatal("a listed tool is refused")
-	}
-	for _, tool := range []struct{ id, effect string }{
-		{"bookstack.pages.get", "read"}, {"bookstack.pages.create", "create"}, {"bookstack.pages.search", "read"},
-	} {
-		if listed.ConnectionAllows("wiki", ToolMetadata{ID: tool.id, Effect: Effect(tool.effect)}) {
-			t.Errorf("%s is offered although the tools list does not name it", tool.id)
+	for _, id := range []string{"bookstack.pages.list", "bookstack.pages.create"} {
+		if !listed.ConnectionAllows("wiki", ToolMetadata{ID: id, Effect: EffectRead}) {
+			t.Errorf("the listed tool %s is refused", id)
 		}
 	}
-	// The tools list never widens the permissions: a listed tool still needs its effect.
-	if listed.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "delete"}) {
-		t.Error("a listed tool is offered for an effect the permissions exclude")
+	for _, id := range []string{"bookstack.pages.get", "bookstack.pages.search"} {
+		if refusal := listed.ConnectionRefusal("wiki", ToolMetadata{ID: id, Effect: EffectRead}); refusal != RefusalToolsList {
+			t.Errorf("%s: refusal = %q, want %q", id, refusal, RefusalToolsList)
+		}
+	}
+	if got := listed.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead, EffectCreate}) {
+		t.Errorf("derived effects = %v, want read and create", got)
 	}
 
 	empty, err := Decode(strings.NewReader(withTools("    tools: []\n")), testProviders)
@@ -178,6 +181,54 @@ func TestConnectionToolsNarrowThePermissions(t *testing.T) {
 	}
 	if empty.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
 		t.Fatal("an explicit empty tools list does not deny every tool")
+	}
+	if got := empty.ConnectionEffects("wiki"); got == nil || len(got) != 0 {
+		t.Fatalf("effects of an empty tools list = %#v, want a non-nil empty list", got)
+	}
+}
+
+func TestEffectsAndToolsTogetherAreAStructuredProblem(t *testing.T) {
+	for _, lines := range []string{
+		"    effects: [read]\n    tools: [bookstack.pages.list]\n",
+		"    effects: []\n    tools: []\n",
+	} {
+		_, err := Decode(strings.NewReader(withTools(lines)), testProviders)
+		var p Problem
+		if !errors.As(err, &p) || p.Code != CodeEffectsAndTools || p.Field != "effects" || p.Hint() == "" {
+			t.Errorf("%q: error = %v, want the problem %s with a hint", lines, err, CodeEffectsAndTools)
+		}
+	}
+	_, err := Decode(strings.NewReader(withTools("    permissions: [read]\n    effects: [read]\n")), testProviders)
+	var p Problem
+	if !errors.As(err, &p) || p.Code != CodePermissionsAndEffects || p.Hint() == "" {
+		t.Errorf("both field names: error = %v, want the problem %s", err, CodePermissionsAndEffects)
+	}
+}
+
+func TestFormerPermissionsAreReadAsEffectsOrDroppedNextToTools(t *testing.T) {
+	alone, err := Decode(strings.NewReader(withTools("    permissions: [read, create]\n")), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := alone.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead, EffectCreate}) {
+		t.Errorf("former permissions = %v, want them as effects", got)
+	}
+	encoded, _ := yaml.Marshal(alone)
+	if !strings.Contains(string(encoded), "effects:") || strings.Contains(string(encoded), "permissions:") {
+		t.Errorf("the former name was written again:\n%s", encoded)
+	}
+
+	withList, err := Decode(strings.NewReader(withTools(
+		"    permissions: [read, create]\n    tools: [bookstack.pages.list]\n")), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := withList.Connections["wiki"]
+	if conn.Effects != nil || !reflect.DeepEqual(conn.Tools, []string{"bookstack.pages.list"}) {
+		t.Errorf("connection = %+v, want only the tools", conn)
+	}
+	if got := withList.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead}) {
+		t.Errorf("effects = %v, want those of the tool", got)
 	}
 }
 
@@ -222,7 +273,7 @@ func TestConnectionToolsRoundTripMissingEmptyAndListed(t *testing.T) {
 	}
 }
 
-func TestConnectionToolsRejectUnknownForeignDuplicateAndExcludedTools(t *testing.T) {
+func TestConnectionToolsRejectUnknownForeignDuplicateAndFormerlyExcludedTools(t *testing.T) {
 	for _, tc := range []struct{ lines, want string }{
 		{"    tools: [bookstack.pages.search]\n",
 			`connections.wiki.tools: entry 1 is not a registered tool of provider "bookstack"`},
@@ -232,12 +283,9 @@ func TestConnectionToolsRejectUnknownForeignDuplicateAndExcludedTools(t *testing
 			`connections.wiki.tools: tool "telegram.messages.send" belongs to provider "telegram", not to "bookstack"`},
 		{"    tools: [bookstack.pages.list, bookstack.pages.list]\n",
 			`connections.wiki.tools: tool "bookstack.pages.list" is listed more than once`},
-		{"    tools: [bookstack.pages.create]\n",
-			`connections.wiki.tools: tool "bookstack.pages.create" has effect create, which the connection's ` +
-				`permissions do not allow`},
 		{"    permissions: []\n    tools: [bookstack.pages.list]\n",
-			`connections.wiki.tools: tool "bookstack.pages.list" has effect read, which the connection's ` +
-				`permissions do not allow`},
+			`connections.wiki.tools: tool "bookstack.pages.list" has effect read, which the former permissions ` +
+				`of the connection do not allow`},
 	} {
 		_, err := Decode(strings.NewReader(withTools(tc.lines)), testProviders)
 		if err == nil || err.Error() != tc.want {
@@ -274,7 +322,7 @@ func TestRemovedToolsAreIgnoredWithAWarning(t *testing.T) {
 	// The removed entry is skipped even where the permissions exclude its former effect.
 	if _, err := Decode(strings.NewReader(withTools("    permissions: []\n    tools: [bookstack.pages.publish]\n")),
 		testProviders); err != nil {
-		t.Errorf("a removed tool failed the permission check: %v", err)
+		t.Errorf("a removed tool failed the former permission check: %v", err)
 	}
 	plain, err := Decode(strings.NewReader(minimal), testProviders)
 	if err != nil {
@@ -313,9 +361,9 @@ defaults:`, 1)
 	}
 }
 
-// A tool that requires an allow-list is offered only by a connection whose tools list names it: neither a
-// missing list nor any permission exposes it, a list that names it still needs its effect, and an ordinary
-// tool keeps its behaviour on the same connection.
+// A tool that requires an allow-list is offered only by a connection whose tools list names it: no
+// selection by effect exposes it, whatever the effects, and an ordinary tool keeps its behaviour on the same
+// connection.
 func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 	guarded := ToolMetadata{ID: "bookstack.pages.create", Effect: EffectCreate, RequiresToolAllowList: true}
 	ordinary := ToolMetadata{ID: "bookstack.pages.list", Effect: EffectRead}
@@ -323,10 +371,10 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 		name, lines           string
 		guarded, ordinaryWant bool
 	}{
-		{"no tools list", "    permissions: [read, create, update, delete, execute]\n", false, true},
-		{"a list without it", "    permissions: [read, create]\n    tools: [bookstack.pages.list]\n", false, true},
-		{"a list naming it", "    permissions: [read, create]\n    tools: [bookstack.pages.create]\n", true, false},
-		{"an empty list", "    permissions: [read, create]\n    tools: []\n", false, false},
+		{"by effect", "    effects: [read, create, update, delete, execute]\n", false, true},
+		{"a list without it", "    tools: [bookstack.pages.list]\n", false, true},
+		{"a list naming it", "    tools: [bookstack.pages.create]\n", true, false},
+		{"an empty list", "    tools: []\n", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := Decode(strings.NewReader(withTools(tc.lines)), testProviders)
@@ -341,16 +389,19 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 			}
 		})
 	}
-	// Naming the tool is not enough when the permissions exclude its effect. Validation refuses such a list,
-	// so the check is made on a configuration changed after decoding.
-	cfg, err := Decode(strings.NewReader(minimal), testProviders)
-	if err != nil {
-		t.Fatal(err)
+}
+
+func TestFormerPermissionsInACurrentFileAreAStructuredProblem(t *testing.T) {
+	for _, lines := range []string{"    permissions: [read]\n", "    permissions: [read]\n    effects: [read]\n"} {
+		current := strings.Replace(withTools(lines), "version: 1", "version: 3", 1)
+		_, err := Decode(strings.NewReader(current), testProviders)
+		var p Problem
+		if !errors.As(err, &p) || p.Code != CodePermissionsRenamed || p.Field != "effects" || !strings.Contains(p.Hint(), "effects") {
+			t.Errorf("%q: error = %v, want the problem %s with a hint", lines, err, CodePermissionsRenamed)
+		}
 	}
-	conn := cfg.Connections["wiki"]
-	conn.Effects, conn.Tools = []Effect{EffectRead}, []string{guarded.ID}
-	cfg.Connections["wiki"] = conn
-	if cfg.ConnectionAllows("wiki", guarded) {
-		t.Error("a listed tool is offered although the permissions exclude its effect")
+	older := strings.Replace(withTools("    permissions: [read]\n"), "version: 1", "version: 2", 1)
+	if _, err := Decode(strings.NewReader(older), testProviders); err != nil {
+		t.Errorf("a version 2 file with permissions is still read: %v", err)
 	}
 }

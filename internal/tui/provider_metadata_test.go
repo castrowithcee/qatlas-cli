@@ -265,7 +265,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 	m.fields = m.buildFields("all-tables")
 	m.width, m.height = 120, 80
 
-	permissions := m.field("permissions")
+	permissions := m.field(effectsLabel)
 	wantChoices := []string{"default", "read", "create", "update", "delete"}
 	if permissions == nil || permissions.kind != fieldMultiChoice ||
 		!reflect.DeepEqual(permissions.choices, wantChoices) || !permissions.selected["default"] {

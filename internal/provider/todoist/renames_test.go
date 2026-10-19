@@ -42,7 +42,6 @@ connections:
     service: todoist
     credential: reader
     targets: ["6XGgm6PHrGgMpCFX"]
-    permissions: [read]
     tools: [todoist.completedtasks.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), registry(t))

@@ -98,8 +98,8 @@ var accessTools = []string{teamsList.ID, collaboratorsUpdate.ID, teamsLink.ID, t
 func accessConfig(base string) *config.Config {
 	cfg := coreConfig(base)
 	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Effects: permissions, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets},
+			permissions, tools)
 	}
 	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	add("unlisted", planningTargets, config.Effects(), nil)

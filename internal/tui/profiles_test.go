@@ -63,7 +63,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	for label, want := range map[string]string{
-		profileLabel: "read", "permissions": "read", toolsLabel: toolsSelected,
+		profileLabel: "read", accessLabel: accessTools,
 		toolListLabel: "bookstack.attachments.get, bookstack.attachments.list, bookstack.books.get, bookstack.books.list, bookstack.chapters.get, bookstack.chapters.list, bookstack.comments.get, bookstack.comments.list, bookstack.content.export, bookstack.content.search, bookstack.images.get, bookstack.images.list, bookstack.pages.get, bookstack.pages.list, bookstack.shelves.get, bookstack.shelves.list, bookstack.system.get, bookstack.tags.list, bookstack.tags.values",
 	} {
 		if got := m.fieldValue(label); got != want {
@@ -75,7 +75,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 		t.Errorf("the tool list does not name its ticks: %q", hint)
 	}
 	for _, want := range []string{"not a role", "do not narrow what the credential itself may do",
-		"ticks permissions read and tools bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list, bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list, bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get, bookstack.attachments.list, bookstack.attachments.get, bookstack.images.list, bookstack.images.get, bookstack.system.get, bookstack.content.export"} {
+		"selects tools bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list, bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list, bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get, bookstack.attachments.list, bookstack.attachments.get, bookstack.images.list, bookstack.images.get, bookstack.system.get, bookstack.content.export (effects read)"} {
 		if hint := m.field(profileLabel).hint; !strings.Contains(hint, want) {
 			t.Errorf("the profile row does not say %q: %q", want, hint)
 		}
@@ -97,9 +97,6 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	if got := m.fieldValue(profileLabel); got != profileCustom {
 		t.Fatalf("profile = %q after a change by hand, want %q", got, profileCustom)
 	}
-	for _, permission := range []string{"create", "update", "delete"} {
-		tick(t, m, "permissions", permission)
-	}
 	var every []string
 	for _, descriptor := range reg.Provider("bookstack") {
 		toggleTool(t, m, descriptor.ID)
@@ -113,8 +110,8 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	if !reflect.DeepEqual(saved.Tools, every) {
 		t.Fatalf("saved tools = %#v, want every registered tool %v", saved.Tools, every)
 	}
-	if got := config.FormatEffects(saved.Effects); got != "read, create, update, delete" {
-		t.Fatalf("saved permissions = %q", got)
+	if saved.Effects != nil {
+		t.Fatalf("saved effects = %q, want none beside the tool selection", config.FormatEffects(saved.Effects))
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -134,16 +131,15 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 	pressNew(t, m)
 	focusField(t, m, providerLabel)
 	selectChoice(t, m, "telegram")
-	check := func(profile, permissions, tools string) {
+	check := func(profile, tools string) {
 		t.Helper()
-		for label, want := range map[string]string{profileLabel: profile, "permissions": permissions,
-			toolListLabel: tools} {
+		for label, want := range map[string]string{profileLabel: profile, toolListLabel: tools} {
 			if got := m.fieldValue(label); got != want {
 				t.Fatalf("%s = %q, want %q", label, got, want)
 			}
 		}
 	}
-	check("send", "create", "telegram.messages.send")
+	check("send", "telegram.messages.send")
 	if hint := m.field(profileLabel).hint; !strings.Contains(hint, "preselects a change because") {
 		t.Errorf("the recommended change is not explained: %q", hint)
 	}
@@ -154,30 +150,30 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 		t.Fatalf("an untouched profile asked before switching: screen %v", m.screen)
 	}
 	all := "telegram.messages.delete, telegram.messages.edit, telegram.messages.send"
-	check("messaging", "create, update, delete", all)
+	check("messaging", all)
 
 	// Not delete or edit: their IDs prefix other tools, so the picker filter would match several.
 	toggleTool(t, m, "telegram.messages.send")
-	check(profileCustom, "create, update, delete", "telegram.messages.delete, telegram.messages.edit")
+	check(profileCustom, "telegram.messages.delete, telegram.messages.edit")
 	focusField(t, m, profileLabel)
 	press(t, m, "right")
 	if m.screen != screenConfirm {
 		t.Fatalf("a change by hand was replaced without asking: screen %v", m.screen)
 	}
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Replace the permission and tool ticks with profile send?",
-		"ticks permissions create and tools telegram.messages.send"} {
+	for _, want := range []string{"Replace the access and tool ticks with profile send?",
+		"selects tools telegram.messages.send (effects create)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the question lacks %q:\n%s", want, view)
 		}
 	}
 	press(t, m, "n")
-	check(profileCustom, "create, update, delete", "telegram.messages.delete, telegram.messages.edit")
+	check(profileCustom, "telegram.messages.delete, telegram.messages.edit")
 	press(t, m, "right", "y")
 	if m.screen != screenForm {
 		t.Fatalf("screen = %v after confirming, want the form", m.screen)
 	}
-	check("send", "create", "telegram.messages.send")
+	check("send", "telegram.messages.send")
 }
 
 // A saved connection opens as it was saved and is saved unchanged: the profile row only says which profile
@@ -187,9 +183,8 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 	m, path := toolsModel(t, reg, map[string]config.Connection{
 		"all": {Service: "wiki", Credential: "reader"},
 		"listed": {Service: "wiki", Credential: "reader",
-			Effects: []config.Effect{config.EffectRead, config.EffectCreate},
-			Tools:   []string{"bookstack.pages.list", "bookstack.pages.create"}},
-		"matching": {Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
+			Tools: []string{"bookstack.pages.list", "bookstack.pages.create"}},
+		"matching": {Service: "wiki", Credential: "reader",
 			Tools: []string{"bookstack.pages.list", "bookstack.pages.get", "bookstack.content.search", "bookstack.books.list",
 				"bookstack.books.get", "bookstack.chapters.list", "bookstack.chapters.get", "bookstack.shelves.list", "bookstack.shelves.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.comments.list", "bookstack.comments.get", "bookstack.attachments.list", "bookstack.attachments.get", "bookstack.images.list", "bookstack.images.get", "bookstack.system.get", "bookstack.content.export"}},
 	})
@@ -222,15 +217,15 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 		t.Fatalf("a profile replaced the ticks of a saved connection without asking: screen %v", m.screen)
 	}
 	press(t, m, "n")
-	if m.fieldValue(toolsLabel) != toolsAll || m.fieldValue("permissions") != "" {
-		t.Fatalf("declining changed the form: tools %q, permissions %q", m.fieldValue(toolsLabel),
-			m.fieldValue("permissions"))
+	if m.fieldValue(accessLabel) != accessEffects || m.fieldValue(effectsLabel) != "" {
+		t.Fatalf("declining changed the form: tools %q, permissions %q", m.fieldValue(accessLabel),
+			m.fieldValue(effectsLabel))
 	}
 	press(t, m, "right", "y")
 	pump(t, m, "f2")
 	saved := savedConnection(t, path, reg, "all")
 	if !reflect.DeepEqual(saved.Tools, strings.Split("bookstack.attachments.get, bookstack.attachments.list, bookstack.books.get, bookstack.books.list, bookstack.chapters.get, bookstack.chapters.list, bookstack.comments.get, bookstack.comments.list, bookstack.content.export, bookstack.content.search, bookstack.images.get, bookstack.images.list, bookstack.pages.get, bookstack.pages.list, bookstack.shelves.get, bookstack.shelves.list, bookstack.system.get, bookstack.tags.list, bookstack.tags.values", ", ")) ||
-		config.FormatEffects(saved.Effects) != "read" {
+		saved.Effects != nil {
 		t.Fatalf("a confirmed profile saved %+v", saved)
 	}
 }
@@ -239,8 +234,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{
-		"wiki": {Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
-			Tools: []string{"bookstack.pages.list"}},
+		"wiki": {Service: "wiki", Credential: "reader", Tools: []string{"bookstack.pages.list"}},
 	})
 	if err := reg.Register("bookstack", capability.Operation{
 		Descriptor: capability.Descriptor{
@@ -284,10 +278,10 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
 	walkSetup(t, m, stepEffects)
-	if m.fieldValue(profileLabel) != "read" || m.fieldValue("permissions") != "read" ||
+	if m.fieldValue(profileLabel) != "read" || m.fieldValue(accessLabel) != accessTools ||
 		m.fieldValue(toolListLabel) != "bookstack.attachments.get, bookstack.attachments.list, bookstack.books.get, bookstack.books.list, bookstack.chapters.get, bookstack.chapters.list, bookstack.comments.get, bookstack.comments.list, bookstack.content.export, bookstack.content.search, bookstack.images.get, bookstack.images.list, bookstack.pages.get, bookstack.pages.list, bookstack.shelves.get, bookstack.shelves.list, bookstack.system.get, bookstack.tags.list, bookstack.tags.values" {
-		t.Fatalf("permissions step = profile %q, permissions %q, tools %q", m.fieldValue(profileLabel),
-			m.fieldValue("permissions"), m.fieldValue(toolListLabel))
+		t.Fatalf("access step = profile %q, access %q, tools %q", m.fieldValue(profileLabel),
+			m.fieldValue(accessLabel), m.fieldValue(toolListLabel))
 	}
 	toggleTool(t, m, "bookstack.pages.list")
 	toggleTool(t, m, "bookstack.content.search")
@@ -301,7 +295,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, error %q, want the summary", m.screen, m.fail)
 	}
-	for _, want := range []string{"permissions  read", "tools        bookstack.pages.get"} {
+	for _, want := range []string{"access       selected tools", "tools        bookstack.pages.get", "effects      read (from the tools)"} {
 		if !strings.Contains(screenOf(m), want) {
 			t.Fatalf("summary lacks %q:\n%s", want, screenOf(m))
 		}
@@ -312,7 +306,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	}
 	saved := savedConnection(t, path, reg, "personal")
 	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.pages.get"}) ||
-		config.FormatEffects(saved.Effects) != "read" {
+		saved.Effects != nil {
 		t.Fatalf("saved connection = %+v", saved)
 	}
 }

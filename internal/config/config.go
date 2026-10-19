@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -22,15 +23,17 @@ import (
 )
 
 // Schema versions this build reads. Version 2 adds the stable id of a service, a credential and a
-// connection.
+// connection. Version 3 replaces the two overlapping allow-lists of a connection by either effects or tools
+// and names the effects field "effects"; a file of an older version may still say "permissions".
 const (
-	versionNames = 1
-	versionIDs   = 2
+	versionNames   = 1
+	versionIDs     = 2
+	versionEffects = 3
 )
 
-// Version is the schema version every configuration is written in. A schema-1 file is still read and
-// becomes schema 2 when it is next saved.
-const Version = versionIDs
+// Version is the schema version every configuration is written in. A file of an older schema is still read
+// and becomes the current one when it is next saved.
+const Version = versionEffects
 
 // Config is the whole configuration file.
 //
@@ -99,11 +102,12 @@ type Credential struct {
 // Connection binds exactly one service to exactly one credential. Target is an optional provider-specific
 // scope inside that service.
 //
-// Effects and Tools are two independent local allow-lists, and an operation is offered only when both
-// admit it. Effects admits operation effects. Tools, when present, admits individual provider-qualified
-// operation IDs of this connection's provider; missing keeps every operation the permissions admit, except
-// those that require an allow-list, and an explicit empty list admits none. A tool registered later is never
-// added to an existing list.
+// A connection selects what it offers in one of two modes, never both. By effect (Effects, or the provider's
+// defaults when missing) offers every tool of those effects, also one registered later, except the tools
+// that require an allow-list; an explicit empty list offers none. By selected tools (Tools) offers exactly
+// the listed provider-qualified tool IDs of this connection's provider, and a tool registered later is never
+// added; the effects it covers are derived from the tools (see ConnectionEffects) and not stored. An empty
+// Tools offers none.
 //
 // Description is optional prose the user maintains. A name like "personal" or "crm-internal" is a stable
 // selector, not an explanation, so this one line says what the route is for and lets a reader tell two
@@ -126,21 +130,58 @@ type Connection struct {
 	Target      string   `yaml:"target,omitempty"`
 	Targets     []string `yaml:"targets,omitempty"`
 	Description string   `yaml:"description,omitempty"`
-	Effects     []Effect `yaml:"permissions,omitempty"`
+	Effects     []Effect `yaml:"effects,omitempty"`
 	Tools       []string `yaml:"tools,omitempty"`
-	Paths       []string `yaml:"paths,omitempty"`
-	Files       Files    `yaml:"files,omitempty"`
+	// LegacyPermissions only receives the former name of Effects while a file is read; reading folds it into
+	// Effects and leaves it empty, and it is never written.
+	LegacyPermissions []Effect `yaml:"permissions,omitempty"`
+	Paths             []string `yaml:"paths,omitempty"`
+	Files             Files    `yaml:"files,omitempty"`
 	// ForwardSecrets lists the forward credentials a tool of this connection may use as a reference argument.
 	// Missing releases none.
 	ForwardSecrets []string `yaml:"forward_secrets,omitempty"`
 	// Disabled switches the connection off: it offers no tool while the rest of its selection stays. Missing
 	// means active.
 	Disabled bool `yaml:"disabled,omitempty"`
+
+	// legacyEffects is the former permissions list of a connection that also lists tools, kept from reading
+	// the file so a migration can name the connections whose approval it narrows. It is no configuration.
+	legacyEffects []Effect
+	// bothEffectFields is set when a file names both effects and its former name permissions.
+	bothEffectFields bool
+	// permissionsInCurrent is set when a file of the current schema still names the former permissions field.
+	permissionsInCurrent bool
 }
 
-// MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
-// compatibility default, or every tool the permissions admit) and an explicit empty list (deny all). A plain
-// omitempty slice cannot represent both states when a configuration is saved through the TUI.
+// foldLegacyEffects moves the former permissions field of every connection into the current model. Alone it
+// is the effects list. Next to tools it is dropped, since the bound that the former validation enforced
+// (every listed tool's effect is among the permissions) made the tools the whole offer; the list stays in
+// legacyEffects for the migration report. Next to effects it is a problem, reported by Validate. A file of
+// the current schema never folds: it must say effects, and the field is a problem instead.
+func (c *Config) foldLegacyEffects() {
+	for name, conn := range c.Connections {
+		legacy := conn.LegacyPermissions
+		if legacy == nil {
+			continue
+		}
+		conn.LegacyPermissions = nil
+		switch {
+		case c.Version >= versionEffects:
+			conn.permissionsInCurrent = true
+		case conn.Effects != nil:
+			conn.bothEffectFields = true
+		case conn.Tools != nil:
+			conn.legacyEffects = legacy
+		default:
+			conn.Effects = legacy
+		}
+		c.Connections[name] = conn
+	}
+}
+
+// MarshalYAML preserves the semantic difference between a missing effects or tools field (the provider's
+// default effects) and an explicit empty list (offer nothing). A plain omitempty slice cannot represent both
+// states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
 		ID             string    `yaml:"id,omitempty"`
@@ -149,17 +190,17 @@ func (c Connection) MarshalYAML() (any, error) {
 		Target         string    `yaml:"target,omitempty"`
 		Targets        []string  `yaml:"targets,omitempty"`
 		Description    string    `yaml:"description,omitempty"`
-		Effects        *[]Effect `yaml:"permissions,omitempty"`
+		Effects        *[]Effect `yaml:"effects,omitempty"`
 		Tools          *[]string `yaml:"tools,omitempty"`
 		Paths          []string  `yaml:"paths,omitempty"`
 		Files          Files     `yaml:"files,omitempty"`
 		ForwardSecrets []string  `yaml:"forward_secrets,omitempty"`
 		Disabled       bool      `yaml:"disabled,omitempty"`
 	}
-	var permissions *[]Effect
+	var effects *[]Effect
 	if c.Effects != nil {
 		copy := append(make([]Effect, 0, len(c.Effects)), c.Effects...)
-		permissions = &copy
+		effects = &copy
 	}
 	var tools *[]string
 	if c.Tools != nil {
@@ -167,7 +208,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Effects: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
+		Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
 		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled}, nil
 }
 
@@ -364,6 +405,7 @@ func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.foldLegacyEffects()
 	if err := cfg.applyRenames(); err != nil {
 		return nil, err
 	}
@@ -410,9 +452,9 @@ func decodeRaw(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	return &cfg, nil
 }
 
-const versionWant = "1 or 2"
+const versionWant = "1, 2 or 3"
 
-func knownVersion(v int) bool { return v == versionNames || v == versionIDs }
+func knownVersion(v int) bool { return v == versionNames || v == versionIDs || v == versionEffects }
 
 // yamlLine matches the position the YAML library puts in front of a message it can locate.
 var yamlLine = regexp.MustCompile(`^line (\d+): `)
@@ -639,16 +681,27 @@ func (c *Config) Validate() error {
 			report(problem(SectionConnections, name, "description", CodeInvalidDescription, "%v", err))
 		}
 		validatePaths(name, conn.Paths, report)
+		if conn.permissionsInCurrent {
+			report(problem(SectionConnections, name, "effects", CodePermissionsRenamed,
+				"permissions is the former name of effects"))
+		} else if conn.bothEffectFields {
+			report(problem(SectionConnections, name, "effects", CodePermissionsAndEffects,
+				"both effects and its former name permissions are given"))
+		}
+		if conn.Effects != nil && conn.Tools != nil {
+			report(problem(SectionConnections, name, "effects", CodeEffectsAndTools,
+				"effects and tools are both given, a connection offers by effect or by selected tools"))
+		}
 		seenEffects := map[Effect]bool{}
 		for _, permission := range conn.Effects {
 			if !validEffect(permission) {
-				report(problem(SectionConnections, name, "permissions", CodeUnknownEffect,
+				report(problem(SectionConnections, name, "effects", CodeUnknownEffect,
 					"unknown permission %q, supported permissions are %s", permission, permissionNames()).
 					with("supported", permissionNames()))
 				continue
 			}
 			if seenEffects[permission] {
-				report(problem(SectionConnections, name, "permissions", CodeDuplicateEffect,
+				report(problem(SectionConnections, name, "effects", CodeDuplicateEffect,
 					"permission %q is listed more than once", permission).with("permission", string(permission)))
 			}
 			seenEffects[permission] = true
@@ -826,9 +879,9 @@ func validateForward(name string, cred Credential, report func(Problem)) {
 }
 
 // validateTools checks the tools allow-list of one connection against the tools its provider registered.
-// Every entry must be a registered tool of that provider, listed once, whose effect the connection's
-// permissions admit: an entry the permissions exclude could never be offered, so it is refused rather than
-// kept as a line that reads like a grant. An ID the provider lists as removed is skipped, and ToolWarnings
+// Every entry must be a registered tool of that provider, listed once. A file that still carries the former
+// permissions next to the tools keeps its former bound: a tool whose effect they exclude was never offered,
+// so it is refused rather than offered now. An ID the provider lists as removed is skipped, and ToolWarnings
 // names it. Only registered IDs are quoted; an unknown entry is named by its position, because free text in
 // a configuration file is where a pasted secret ends up.
 func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(Problem)) {
@@ -842,10 +895,7 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 			owners[tool.ID] = other.ID
 		}
 	}
-	permitted := map[Effect]bool{}
-	for _, permission := range c.ConnectionEffects(name) {
-		permitted[permission] = true
-	}
+	legacy := c.Connections[name].legacyEffects
 	seen := map[string]bool{}
 	for i, tool := range c.Connections[name].Tools {
 		effect, registered := effects[tool]
@@ -855,9 +905,9 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 		case registered && seen[tool]:
 			report(problem(SectionConnections, name, "tools", CodeDuplicateTool,
 				"tool %q is listed more than once", tool).with("tool", tool))
-		case registered && !permitted[effect]:
+		case registered && legacy != nil && !slices.Contains(legacy, effect):
 			report(problem(SectionConnections, name, "tools", CodeToolEffectNotPermitted,
-				"tool %q has effect %s, which the connection's permissions do not allow", tool, effect).
+				"tool %q has effect %s, which the former permissions of the connection do not allow", tool, effect).
 				with("tool", tool).with("effect", string(effect)))
 		case registered:
 		case owners[tool] != "":
@@ -991,13 +1041,19 @@ func permissionNames() string {
 	return strings.Join(names, ", ")
 }
 
-// ConnectionEffects returns the explicit local effects of a connection. A missing field keeps
-// only the provider's pre-permission operation classes, so adding a new mutation never grants it silently.
-// An explicitly empty list disables every operation on the connection.
+// ConnectionEffects returns the effective effects of a connection: what it offers, as effects. Selecting by
+// effect, it is the effects field, or the provider's default effects when the field is missing so adding a
+// new mutation never grants it silently; an explicitly empty list offers nothing. Selecting tools, the
+// effects are derived from the registered tools it lists, in the order of Effects, and none is stored.
+// Approvals and agent tokens cover exactly these.
 func (c *Config) ConnectionEffects(name string) []Effect {
 	conn, ok := c.Connections[name]
 	if !ok {
 		return nil
+	}
+	if conn.Tools != nil {
+		metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
+		return EffectsOfTools(metadata, conn.Tools)
 	}
 	if conn.Effects != nil {
 		return append(make([]Effect, 0, len(conn.Effects)), conn.Effects...)
@@ -1010,17 +1066,65 @@ func (c *Config) ConnectionEffects(name string) []Effect {
 	return []Effect{EffectRead}
 }
 
+// EffectsOfTools returns the effects of the tools of metadata that tools names, in the order of Effects and
+// never nil. A name the provider registers no tool for adds none.
+func EffectsOfTools(metadata ProviderMetadata, tools []string) []Effect {
+	derived := map[Effect]bool{}
+	for _, tool := range metadata.Tools {
+		if slices.Contains(tools, tool.ID) {
+			derived[tool.Effect] = true
+		}
+	}
+	effects := []Effect{}
+	for _, effect := range Effects() {
+		if derived[effect] {
+			effects = append(effects, effect)
+		}
+	}
+	return effects
+}
+
+// NarrowedEffects names, sorted, the connections of a configuration read from an older schema that list tools
+// and whose former effects (the permissions, or the provider's defaults without them) were broader than the
+// effects the tools derive now. A change of the effective effects changes the approval fingerprint of such a
+// connection. It answers only for a configuration read before the migration that writes the current schema.
+func (c *Config) NarrowedEffects() []string {
+	var names []string
+	for _, name := range sortedKeys(c.Connections) {
+		conn := c.Connections[name]
+		if conn.Tools == nil {
+			continue
+		}
+		former := conn.legacyEffects
+		if former == nil {
+			metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
+			former = metadata.DefaultEffects
+			if len(former) == 0 {
+				former = []Effect{EffectRead}
+			}
+		}
+		derived := c.ConnectionEffects(name)
+		for _, effect := range former {
+			if !slices.Contains(derived, effect) {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names
+}
+
 // Refusal names why a connection does not offer a tool. The values are stable: discovery publishes them
 // and an unsupported-capability diagnostic carries them, so a caller branches on the value, not the text.
 type Refusal string
 
 // The refusals, in the order ConnectionRefusal checks them.
 const (
-	// RefusalEffect: the connection's permissions do not allow the tool's effect.
+	// RefusalEffect: the connection offers by effect, and its effects do not include the tool's effect.
 	RefusalEffect Refusal = "effect-not-permitted"
-	// RefusalToolAllowList: the tool requires an allow-list, and the connection has no tools list.
+	// RefusalToolAllowList: the tool requires an allow-list, and the connection offers by effect.
 	RefusalToolAllowList Refusal = "requires-tool-allow-list"
-	// RefusalToolsList: the connection has a tools list, and it does not name the tool.
+	// RefusalToolsList: the connection offers selected tools, and its list does not name the tool.
 	RefusalToolsList Refusal = "not-in-tools-list"
 	// RefusalNoLocalFiles: the tool reads or writes local files, and the connection releases no directory
 	// for that direction.
@@ -1034,10 +1138,9 @@ const (
 )
 
 // ConnectionRefusal answers whether the local configuration exposes one operation on a connection, and if
-// not, why. The empty refusal means the connection offers the tool: its effect is among the connection's
-// permissions and, when the connection lists tools, its ID is among them. A tool that requires an
-// allow-list is exposed only by a connection whose tools list names it. The effect is checked first,
-// because it is the coarser of the two lists. An unknown connection offers nothing.
+// not, why. The empty refusal means the connection offers the tool: by effect, the tool's effect is among
+// the connection's effects and it does not require an allow-list; by selected tools, its ID is among them.
+// An unknown connection offers nothing.
 func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 	conn, ok := c.Connections[name]
 	if !ok {
@@ -1052,20 +1155,16 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 // selectionRefusal is the refusal by the connection's selection alone, ignoring whether it is disabled, so a
 // disabled connection reports connection-disabled only for a tool it would otherwise offer.
 func (c *Config) selectionRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
-	permitted := false
-	for _, permission := range c.ConnectionEffects(name) {
-		if permission == tool.Effect {
-			permitted = true
-			break
+	if conn.Tools != nil {
+		if !contains(conn.Tools, tool.ID) {
+			return RefusalToolsList
 		}
+	} else if !slices.Contains(c.ConnectionEffects(name), tool.Effect) {
+		return RefusalEffect
+	} else if tool.RequiresToolAllowList {
+		return RefusalToolAllowList
 	}
 	switch {
-	case !permitted:
-		return RefusalEffect
-	case conn.Tools == nil && tool.RequiresToolAllowList:
-		return RefusalToolAllowList
-	case conn.Tools != nil && !contains(conn.Tools, tool.ID):
-		return RefusalToolsList
 	case tool.LocalFiles == LocalFilesRead && len(conn.Files.Read) == 0,
 		tool.LocalFiles == LocalFilesWrite && len(conn.Files.Write) == 0:
 		return RefusalNoLocalFiles
@@ -1099,10 +1198,10 @@ func (c *Config) IdleWarning(name string) string {
 			return ""
 		}
 	}
-	reason := "its permissions and tools list allow none of its provider's tools"
+	reason := "its effects or tools list allow none of its provider's tools"
 	switch {
 	case conn.Effects != nil && len(conn.Effects) == 0:
-		reason = "its permissions are empty ('permissions: []')"
+		reason = "its effects are empty ('effects: []')"
 	case conn.Tools != nil && len(conn.Tools) == 0:
 		reason = "its tools list is empty ('tools: []')"
 	}

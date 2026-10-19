@@ -50,7 +50,7 @@ func SplitTargets(values []string) (target string, targets []string) {
 	return "", append([]string(nil), values...)
 }
 
-// DefaultEffects are what a connection without a permissions list allows: the provider's declared
+// DefaultEffects are what a connection without an effects list offers: the provider's declared
 // defaults, or read alone. Changes, execution and administration are never among the fallback.
 func DefaultEffects(metadata config.ProviderMetadata) []config.Effect {
 	if len(metadata.DefaultEffects) > 0 {

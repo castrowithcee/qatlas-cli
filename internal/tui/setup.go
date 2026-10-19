@@ -33,22 +33,23 @@ const (
 	setupSteps
 )
 
-var setupTitles = [setupSteps]string{"Provider", "Service", "Credential", "Scope", "Permissions", "Summary"}
+var setupTitles = [setupSteps]string{"Provider", "Service", "Credential", "Scope", "Access", "Summary"}
 
 // setupLeads say in context what a step decides, including the part about scope and rights that is easy to
-// get wrong: local permissions narrow what the credential may do, they never widen it.
+// get wrong: local effects and tools narrow what the credential may do, they never widen it.
 var setupLeads = [setupSteps]string{
 	"Choose the system to connect to. The next steps offer only what this provider defines: its services, " +
-		"secret roles, scope and permissions.",
+		"secret roles, scope and access.",
 	"A service is the API endpoint of one instance and can serve several connections. Reuse a configured " +
 		"one, or add a new one.",
 	"A credential says where the secrets come from; the configuration file never holds a secret. Reuse one " +
 		"of this provider, or add one. Nothing is stored before you save in the last step.",
 	"The connection is what agents and --connection select by name. Its targets narrow it to scopes inside " +
 		"the service; the credential still decides what the provider lets it reach.",
-	"Permissions limit locally what agents may do through this connection. They never grant more than the " +
-		"credential is allowed at the provider, and they do not take away what it is allowed there. A new " +
-		"connection starts on the provider's recommended profile; every tick stays yours to change.",
+	"Access limits locally what agents may do through this connection, by effect or by selected tools. It " +
+		"never grants more than the credential is allowed at the provider, and it does not take away what it " +
+		"is allowed there. A new connection starts on the provider's recommended profile; every tick stays " +
+		"yours to change.",
 	"Nothing is written yet. F2 stores the new secrets first and then the configuration; if the " +
 		"configuration cannot be saved, those secrets are removed again.",
 }
@@ -78,7 +79,7 @@ type setup struct {
 	// template names the connection the setup started from, "" for one that started empty; see template.go.
 	template string
 	pages    [][]field
-	// candidate and plan are what the permissions step left behind: the configuration to save, and what
+	// candidate and plan are what the access step left behind: the configuration to save, and what
 	// has to be written besides it.
 	candidate *config.Config
 	// built is the core's candidate behind candidate, the one saving hands back to the core.
@@ -148,7 +149,7 @@ func (m *Model) setupShow(step int) {
 	m.fields = w.pages[step]
 	m.screen = screenForm
 	if fresh && step == stepEffects && w.template == "" {
-		// The permissions of a new connection start on the provider's recommended profile, ticked and
+		// The access of a new connection starts on the provider's recommended profile, ticked and
 		// visible; going back and forth keeps whatever was changed since.
 		m.applyRecommendedProfile()
 	}
@@ -208,10 +209,8 @@ func (m *Model) setupPage(step int) []field {
 			textField("description", "", false).withHint(descriptionHint),
 		}
 	case stepEffects:
-		permissions := permissionField(m.permissionChoices(provider), nil)
-		permissions.hint = m.permissionHint(provider)
-		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}, permissions},
-			m.toolFields(provider, nil)...)
+		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}},
+			m.accessFields(provider, nil, nil)...)
 	}
 	return nil
 }
@@ -261,7 +260,7 @@ func (m *Model) setupRefresh() {
 				"choose %s to add one", chosen, m.storagePlace(chosen, m.cfg.Credentials[chosen]), newCredential)
 		}
 	case stepEffects:
-		m.toolsModeChosen()
+		m.accessModeChosen()
 		m.syncProfile()
 	}
 }
@@ -394,8 +393,9 @@ func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan,
 		if upto >= stepEffects {
 			stage = manage.StageRights
 			page := w.pages[stepEffects]
-			draft.Effects = pageValue(page, "permissions")
-			if pageValue(page, toolsLabel) == toolsSelected {
+			if pageValue(page, accessLabel) != accessTools {
+				draft.Effects = pageValue(page, effectsLabel)
+			} else {
 				draft.ToolsSelected = true
 				for _, f := range page {
 					if f.kind == fieldToolList {
@@ -659,21 +659,27 @@ func (m *Model) summaryRows() []string {
 		secrets = plan.storage + ": " + roles
 	}
 
-	permissions := config.FormatEffects(conn.Effects)
-	if conn.Effects == nil {
-		defaults := manage.DefaultEffects(metadata)
-		permissions = "default: " + config.FormatEffects(defaults)
-	}
-	tools := toolsAll
-	switch {
-	case conn.Tools == nil:
-	case len(conn.Tools) == 0:
-		tools = "none: no tool is offered"
-	default:
-		tools = strings.Join(conn.Tools, ", ")
+	// Only the field the access mode stores is listed; the effects of selected tools follow from them.
+	access := []string{fmt.Sprintf("%-12s %s", accessLabel, accessEffects)}
+	if conn.Tools == nil {
+		effects := config.FormatEffects(conn.Effects)
+		if conn.Effects == nil {
+			effects = "default: " + config.FormatEffects(manage.DefaultEffects(metadata))
+		}
+		access = append(access, fmt.Sprintf("%-12s %s", effectsLabel, effects))
+	} else {
+		tools := "none: no tool is offered"
+		if len(conn.Tools) > 0 {
+			tools = strings.Join(conn.Tools, ", ")
+		}
+		access = []string{
+			fmt.Sprintf("%-12s %s", accessLabel, accessTools),
+			fmt.Sprintf("%-12s %s", toolListLabel, tools),
+			fmt.Sprintf("%-12s %s", effectsLabel, config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools))+" (from the tools)"),
+		}
 	}
 
-	return []string{
+	return append([]string{
 		fmt.Sprintf("%-12s %s", "provider", metadata.Name),
 		fmt.Sprintf("%-12s %s (%s) · %s", "service", plan.service, state(plan.newService),
 			cfg.Services[plan.service].BaseURL),
@@ -681,7 +687,5 @@ func (m *Model) summaryRows() []string {
 		fmt.Sprintf("%-12s %s", "connection", plan.connection),
 		fmt.Sprintf("%-12s %s", targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
 		fmt.Sprintf("%-12s %s", "description", choiceText(conn.Description)),
-		fmt.Sprintf("%-12s %s", "permissions", permissions),
-		fmt.Sprintf("%-12s %s", "tools", tools),
-	}
+	}, access...)
 }

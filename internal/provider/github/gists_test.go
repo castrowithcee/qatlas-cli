@@ -70,8 +70,8 @@ func gistRig(t *testing.T) (*fakeGitHub, *application.Core, *int) {
 	cfg := coreConfig(serve(t, f))
 	all := config.Effects()
 	add := func(name string, targets []string, tools ...string) {
-		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Effects: all, Tools: tools}
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets},
+			all, tools)
 	}
 	add("open", nil)
 	all5 := []string{gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID}

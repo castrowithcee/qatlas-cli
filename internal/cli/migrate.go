@@ -52,8 +52,7 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if m == nil {
 		return
 	}
-	fmt.Fprintf(stderr, "qatlas: migrated %s to configuration schema %d: services, credentials, and connections "+
-		"now have stable ids\n", m.Path, config.Version)
+	fmt.Fprintf(stderr, "qatlas: migrated %s to configuration schema %d: %s\n", m.Path, config.Version, migrationChange(m.From))
 	fmt.Fprintf(stderr, "qatlas: the previous file is backed up as %s\n", m.Backup)
 	if len(m.VaultCopies) > 0 {
 		fmt.Fprintf(stderr, "qatlas: the vault files are backed up as %s\n", strings.Join(m.VaultCopies, ", "))
@@ -69,8 +68,21 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	for _, r := range m.Renamings {
 		fmt.Fprintf(stderr, "qatlas: %s.%s: the former %s %q is now written as %q\n", r.Section, r.Name, r.Kind, r.Old, r.New)
 	}
+	if len(m.Reapproval) > 0 {
+		fmt.Fprintf(stderr, "qatlas: the effects of these connections now follow their tools, so each needs its vault "+
+			"approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n", strings.Join(m.Reapproval, ", "))
+	}
 	fmt.Fprintln(stderr, "qatlas: to go back, copy the backups back in place and install the previous qatlas version")
 	if m.Warning != "" {
 		fmt.Fprintln(stderr, withQatlasPrefix(m.Warning))
 	}
+}
+
+// migrationChange says what a migration from the schema from changed, one clause per schema step it passed.
+func migrationChange(from int) string {
+	const effects = "a connection offers its tools by effects or by a tools list, and permissions is now called effects"
+	if from >= 2 {
+		return effects
+	}
+	return "services, credentials, and connections now have stable ids; " + effects
 }

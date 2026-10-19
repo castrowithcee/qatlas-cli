@@ -37,7 +37,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: [acmechat.messages.fetch, acme.chat.messages.list, acmechat.messages.purge]
 provider_notes:
   acmechat: team chat
@@ -176,7 +175,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: [acmechat.messages.purge]
 `
 	cfg, err := Load(writeRenamed(t, text), renameProviders)

@@ -1,6 +1,6 @@
 // Package approval decides which connections an encrypted vault hands a vault credential's secret to. A
 // connection is approved for its scope as it is configured at that moment (see vault.Scope); any later
-// change of its endpoint, provider, permissions, targets, tools list, paths, files, forward credentials with
+// change of its endpoint, provider, effects, targets, tools list, paths, files, forward credentials with
 // their fields, state, or credential entry leaves it
 // open until a person approves it again. The approvals themselves live inside the encrypted vault.
 //
@@ -29,7 +29,7 @@ const (
 	FieldCredential = "credential"
 	FieldProvider   = "provider"
 	FieldOrigin     = "origin"
-	FieldEffects    = "permissions"
+	FieldEffects    = "effects"
 	FieldTargets    = "targets"
 	FieldTools      = "tools"
 	FieldPaths      = "paths"
@@ -55,9 +55,9 @@ func StateText(disabled bool) string {
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
 // a person reads it. It never holds a secret.
 //
-// A list field (permissions, targets, tools, paths, files, forward) that stays a list on both sides also
+// A list field (effects, targets, tools, paths, files, forward) that stays a list on both sides also
 // carries what the change means: Added is what is newly asked for, Removed what falls away, and Kept what
-// stays, each sorted. A change between a mode and a list - tools "(every tool the permissions allow)" and a
+// stays, each sorted. A change between a mode and a list - tools "(every tool of its effects)" and a
 // list, paths "(every project)" and a list, files "(no local files)" and a list - and every single-value
 // field carries only Before and After; IsListChange tells the two apart. Before and After are set in both
 // cases.
@@ -418,14 +418,14 @@ func ForwardText(forward []vault.ForwardSecret) string {
 
 func tools(values []string) string {
 	if values == nil {
-		return "(every tool the permissions allow)"
+		return "(every tool of its effects)"
 	}
 	return list(values)
 }
 
 // DirectApprovable reports whether change - a connection's own open change, found right after some action
 // that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
-// browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
+// browser, that just created it) - is made entirely of fields that action's own form shows: effects,
 // targets, tools, its state, or a plain rename of its credential, never one "stored anew" (the vault holds
 // a different entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
 // connection that was never approved at all (change.New) counts the same way: nothing in the form hid that

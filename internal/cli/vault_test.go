@@ -92,7 +92,7 @@ func connectionScope(t *testing.T, dir, name string) vault.Scope {
 }
 
 const vaultCredentialConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack
@@ -542,7 +542,7 @@ func TestVaultDecryptNeedsConfirmFlag(t *testing.T) {
 
 // keyringVaultMigrationConfig has one keyring credential whose secrets a legacy credentials.yaml holds.
 const keyringVaultMigrationConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack
@@ -572,7 +572,7 @@ func migrationFixture(t *testing.T) string {
 
 func writeLegacyCredentials(t *testing.T, dir string, allowPlaintext bool) {
 	t.Helper()
-	body := fmt.Sprintf("version: 2\nallow_plaintext: %t\ncredentials:\n  wiki-reader:\n    token-id: %s\n"+
+	body := fmt.Sprintf("version: 3\nallow_plaintext: %t\ncredentials:\n  wiki-reader:\n    token-id: %s\n"+
 		"    token-secret: %s\n", allowPlaintext, canaryVault, "second-"+canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -782,7 +782,7 @@ func TestVaultMigrateRerunKeepsTheKeyringValueInTheVault(t *testing.T) {
 func TestVaultMigrateRerunAddsAStillMissingRole(t *testing.T) {
 	dir := migrationFixture(t)
 	// The first run only ever sees token-id.
-	body := fmt.Sprintf("version: 2\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
+	body := fmt.Sprintf("version: 3\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
 		canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -930,7 +930,7 @@ func vaultFiles(t *testing.T, dir string) map[string][]byte {
 func TestVaultMigrateCarriesOverAKeyringOnlyRole(t *testing.T) {
 	dir := migrationFixture(t)
 	// credentials.yaml only ever names token-id; token-secret sits in the keyring alone.
-	body := fmt.Sprintf("version: 2\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
+	body := fmt.Sprintf("version: 3\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
 		canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -1027,7 +1027,7 @@ func TestVaultMigrateWarnsWhenTheKeyringCannotBeChecked(t *testing.T) {
 // 'vault encrypt' or 'vault credential set' fixture can be extended into a report with more than one open
 // connection at a time.
 const twoConnectionVaultConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack
@@ -1042,7 +1042,7 @@ connections:
   wiki2:
     service: wiki
     credential: wiki-vault
-    permissions: [read, create]
+    effects: [read, create]
 defaults:
   connections:
     knowledge: wiki
@@ -1347,7 +1347,7 @@ func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
 }
 
 const approveListsConfig = `
-version: 2
+version: 3
 services:
   wiki:
     provider: bookstack
@@ -1362,7 +1362,7 @@ connections:
   wiki2:
     service: wiki
     credential: wiki-vault
-    permissions: %s
+    effects: %s
 %s`
 
 // A list that changed is told as what is new and what falls away, with only the count of what stays; a
@@ -1396,7 +1396,7 @@ func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 		t.Fatalf("text run: exit %d, stderr %q", code, stderr)
 	}
 	for _, want := range []string{
-		"1 connection is open:\n", "wiki2\n", "  permissions  1 new, 1 removed\n", "    + update\n", "    - create\n",
+		"1 connection is open:\n", "wiki2\n", "  effects  1 new, 1 removed\n", "    + update\n", "    - create\n",
 		"    unchanged: 1\n", "  paths  (every project) -> ~/repos/a\n", "approved 1 connection: wiki2",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -1436,7 +1436,7 @@ func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 		t.Fatalf("open = %+v", got.Open)
 	}
 	f := got.Open[0].Fields[0]
-	if f.Field != "permissions" || !reflect.DeepEqual(f.Added, []string{"delete"}) ||
+	if f.Field != "effects" || !reflect.DeepEqual(f.Added, []string{"delete"}) ||
 		!reflect.DeepEqual(f.Removed, []string{"update"}) || !reflect.DeepEqual(f.Kept, []string{"read"}) ||
 		f.Before != nil || f.After != nil {
 		t.Errorf("field = %+v", f)

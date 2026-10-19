@@ -213,7 +213,6 @@ connections:
     service: tg
     credential: tg-bot
     target: "-1001111111111"
-    permissions: [create, update]
     tools: [telegram.messages.editreplymarkup, telegram.stickersets.create, telegram.chats.setphoto]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

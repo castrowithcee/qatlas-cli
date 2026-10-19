@@ -41,7 +41,7 @@ Twenty apply to their own self-hosted origin: n8n documents no local-only `http`
 
 The credential provides `api-key`, a Public API key created under Settings, n8n API, Create an API key. On an
 Enterprise plan that key may itself be scoped to a subset of resources and actions; that scope is a further
-ceiling this connection's own targets and permissions narrow, never widen. The n8n Public API is not
+ceiling this connection's own targets and effects narrow, never widen. The n8n Public API is not
 available on a free trial; upgrading to a paid plan is a prerequisite this provider cannot detect ahead of a
 failed request.
 
@@ -221,7 +221,7 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 `n8n.credentials.update`, `n8n.credentials.transfer`, `n8n.credentials.delete`, `n8n.source-control.pull`,
 and `n8n.source-control.push` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
-in addition to the `delete` permission and the per-call confirmation.
+in addition to the `delete` effect and the per-call confirmation.
 
 ## Changes and their retry contract
 

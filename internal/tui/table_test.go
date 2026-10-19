@@ -23,6 +23,10 @@ func newTableModel(t *testing.T, width int) *Model {
 		ID: "tracker", Name: "Tracker",
 		SecretRoles: []config.SecretRole{{Name: "token", Description: "tracker API token"}},
 		Target:      config.TargetMetadata{Label: "repository", Multiple: true},
+		Tools: []config.ToolMetadata{
+			{ID: "tracker.issues.list", Effect: config.EffectRead},
+			{ID: "tracker.issues.create", Effect: config.EffectCreate},
+		},
 	}, nil); err != nil {
 		t.Fatalf("register tracker: %v", err)
 	}
@@ -48,12 +52,11 @@ func newTableModel(t *testing.T, width int) *Model {
 		"wiki-docs": {Service: "wiki-main", Credential: "wiki-reader",
 			Description: "handbook pages for onboarding, read only"},
 		"tracker-issues": {Service: "tracker-main", Credential: "tracker-bot", Targets: []string{"octo/test-repo"},
-			Effects:     []config.Effect{config.EffectRead, config.EffectCreate},
 			Tools:       []string{"tracker.issues.list", "tracker.issues.create"},
 			Description: "issues in the test repository, read and create"},
 		"tracker-triage": {Service: "tracker-main", Credential: "tracker-bot",
 			Targets: []string{"octo/a", "octo/b", "octo/c"},
-			Effects: []config.Effect{config.EffectRead, config.EffectUpdate}, Tools: []string{}},
+			Tools:   []string{}},
 	}
 	m.cfg.Defaults.Connections = map[string]string{
 		"bookstack": "wiki-docs", "tracker": "tracker-issues", "tracker.issues.create": "tracker-issues",
@@ -109,7 +112,7 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 		sectionConnections: {
 			"tracker-issues": {"tracker-issues", stateActive, "tracker-main", "read,create", "listed 2",
 				"octo/test-repo", "issues in the test repository, read and create"},
-			"tracker-triage": {"tracker-triage", stateActive, "tracker-main", "read,update", "none", "3 targets",
+			"tracker-triage": {"tracker-triage", stateActive, "tracker-main", "", "none", "3 targets",
 				undescribedMarker},
 			"wiki-docs": {"wiki-docs", stateActive, "wiki-main", "read", "all", "-",
 				"handbook pages for onboarding, read only"},

@@ -35,7 +35,7 @@ func removedToolsConfig(c int, tools string) string {
 	if tc.targets != "" {
 		targets = "\n    targets: " + tc.targets
 	}
-	return fmt.Sprintf(`version: 2
+	return fmt.Sprintf(`version: 3
 services:
   svc:
     provider: %s%s
@@ -47,8 +47,7 @@ credentials:
 connections:
   conn:
     service: svc
-    credential: cred
-    permissions: [read, create, update, delete, execute]%s
+    credential: cred%s
     tools: %s
 `, tc.provider, baseURL, tc.role, targets, tools)
 }

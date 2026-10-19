@@ -3,7 +3,7 @@ description: >
   Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
   operations, note and task links, attachment read, download, and upload, workflow read and control, member,
   role, AI agent, skill, and logic function, view, dashboard, and data model read and write, webhooks,
-  object targets, connection permissions, and safety boundaries.
+  object targets, connection effects, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -307,12 +307,12 @@ a filter, so there is no deletion or restore by filter. A refused object is reje
 read, and the answer must name the requested record. A 403 on `delete` and `destroy` points to the right of
 the role of the key (Delete Records, Destroy Records); Twenty's own text is never shown. `delete` and
 `destroy`, for companies and records, are offered only by a connection whose `tools` list names them;
-`permissions` alone does not admit them. No profile ticks them or `records.restore`.
+a connection that selects by `effects` does not admit them. No profile ticks them or `records.restore`.
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
-connection's local `permissions` list can only narrow it, and an optional `tools` list narrows it further to
-named tools without admitting an effect `permissions` excludes. The `companies.*` tools expose core company
+connection's local selection can only narrow it, by `effects` or by a `tools` list naming exactly the tools it
+offers. The `companies.*` tools expose core company
 fields only; custom fields are written through `records.create` and `records.update`. Invocation arguments
 never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
-A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+A profile is a visible starting selection, not a role: only the ticked `tools` are saved,
 and a saved connection never follows a profile.

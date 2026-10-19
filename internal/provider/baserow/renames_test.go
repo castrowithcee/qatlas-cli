@@ -75,7 +75,6 @@ connections:
     service: br
     credential: br-token
     target: table/1
-    permissions: [create, update, delete]
     tools: [baserow.rows.batchcreate, baserow.rows.batchupdate, baserow.rows.batchdelete]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

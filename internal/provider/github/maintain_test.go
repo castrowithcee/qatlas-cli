@@ -174,15 +174,15 @@ func serveMaintain(t *testing.T) (*fakeGitHub, *fakeMaintain, string) {
 func maintainConfig(base string) *config.Config {
 	cfg := actionsConfig(base)
 	repo := func(permissions []config.Effect, tools []string) config.Connection {
-		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Effects: permissions,
-			Tools: tools}
+		return connectionOf(config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget},
+			permissions, tools)
 	}
 	cfg.Connections["open"] = repo(config.Effects(), nil)
 	cfg.Connections["maintainer"] = repo([]config.Effect{config.EffectRead, config.EffectCreate,
 		config.EffectUpdate}, append([]string{workflowsList.ID, workflowsGet.ID}, maintainerTools...))
 	cfg.Connections["admin"] = repo([]config.Effect{config.EffectRead, config.EffectUpdate}, adminTools)
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Effects: config.Effects(), Tools: guardedTools}
+		Tools: guardedTools}
 	return cfg
 }
 

@@ -279,6 +279,13 @@ func selectChoice(t *testing.T, m *Model, want string) {
 	t.Fatalf("choice %q not reachable in %v", want, f.choices)
 }
 
+// selectAccess sets the access row of the open connection form to the given mode.
+func selectAccess(t *testing.T, m *Model, mode string) {
+	t.Helper()
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, mode)
+}
+
 // chooseProvider opens the table of the focused provider row and takes the wanted provider by moving down
 // to it, the way a person without a search term does.
 func chooseProvider(t *testing.T, m *Model, want string) {
@@ -2198,8 +2205,8 @@ func TestReturningFromAPickerShowsOnlyTheFocusedHint(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	openEntryForm(t, m, sectionConnections, "wiki")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
 	if m.screen != screenPicker {

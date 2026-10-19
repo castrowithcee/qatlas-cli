@@ -45,8 +45,8 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"A change, creating, changing, or deleting a connection that reads a vault credential, is covered\n" +
 			"when a vorbild V has the same service (provider and endpoint) and the same credential, and the\n" +
 			"change stays inside V:\n" +
-			"its permissions among V's; its tools among V's tools list, where V has one (without one, every\n" +
-			"tool the permissions allow); its targets among V's, where V has any; and its paths inside V's,\n" +
+			"its effects among V's; its tools among V's tools list, where V has one (without one, every\n" +
+			"tool of its effects); its targets among V's, where V has any; and its paths inside V's,\n" +
 			"where V is bound to any, so a bound vorbild never covers a connection without paths. V counts as\n" +
 			"it is approved, not as it may be configured now. A change partly outside stays open whole, and a\n" +
 			"connection that is the vorbild of any token is never changed or deleted with a token. A vorbild\n" +

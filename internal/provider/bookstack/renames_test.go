@@ -64,7 +64,6 @@ connections:
   wiki:
     service: wiki
     credential: wiki-token
-    permissions: [read, update]
     tools: [bookstack.recyclebin.list, bookstack.auditlog.list, bookstack.books.setcover]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

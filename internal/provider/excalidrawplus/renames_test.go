@@ -80,7 +80,6 @@ connections:
     service: board
     credential: board-key
     targets: [collection/c1]
-    permissions: [read]
     tools: [excalidrawplus.scenes.list, excalidrawplus.users.get]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

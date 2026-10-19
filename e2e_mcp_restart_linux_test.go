@@ -57,7 +57,7 @@ func TestMCPServerRestartsAfterAnUpdate(t *testing.T) {
 	server := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Restart Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack

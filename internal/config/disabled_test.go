@@ -47,7 +47,7 @@ func TestConnectionDisabledRoundTripsAndDefaultsToActive(t *testing.T) {
 
 func TestDisabledRefusalNamesOnlyWhatWouldBeOffered(t *testing.T) {
 	cfg, err := Decode(strings.NewReader(strings.Replace(minimal,
-		"    credential: reader\n", "    credential: reader\n    permissions: [read]\n    disabled: true\n", 1)),
+		"    credential: reader\n", "    credential: reader\n    effects: [read]\n    disabled: true\n", 1)),
 		testProviders)
 	if err != nil {
 		t.Fatal(err)

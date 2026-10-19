@@ -171,7 +171,6 @@ connections:
     service: chat
     credential: chat-token
     targets: [team/` + teamA + `]
-    permissions: [read, update]
     tools: [infomaniakchat.channelmembers.list, infomaniakchat.channels.markread, infomaniakchat.usergroups.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

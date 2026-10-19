@@ -33,7 +33,7 @@ func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Co
 			"here (provider_notes, empty where there is none), the number of tools it offers, the number of\n" +
 			"connections that can run them, and the number of connections configured for it at all.\n\n" +
 			"connections counts a connection when it offers at least one tool of the provider, so one whose\n" +
-			"permissions allow none of its tools, or whose tools list is empty ('tools: []'), is left out of\n" +
+			"effects offer none of its tools, or whose tools list is empty ('tools: []'), is left out of\n" +
 			"it while configured still counts it, and 'qatlas connections' still lists it. 'qatlas config\n" +
 			"validate' warns about such a connection. A provider without any connection stays listed with\n" +
 			"zero. It is answered from the local configuration alone: no provider is contacted, no secret is\n" +
@@ -67,9 +67,10 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 		Long: "Connections lists every configured connection, or those of one provider, sorted by provider\n" +
 			"and name. Each one is published with its name, which --connection takes, its provider, the\n" +
 			"one-line description its owner maintains, which is empty where there is none, the effects its\n" +
-			"permissions allow, separated by spaces, and how its tools list shapes what it offers:\n\n" +
-			"  all-permitted  no tools list: every tool whose effect is permitted, except a tool whose\n" +
-			"                 contract says requires_tool_allow_list\n" +
+			"effects it offers, separated by spaces (with a tools list, the effects of the listed tools), and\n" +
+			"how its tools list shapes what it offers:\n\n" +
+			"  all-permitted  no tools list: every tool of its effects, except a tool whose contract says\n" +
+			"                 requires_tool_allow_list\n" +
 			"  listed         only the tools its tools list names\n" +
 			"  none           an empty tools list: no tool at all\n\n" +
 			"A connection with a paths list is bound to projects: it is listed, and offered by every other\n" +
@@ -154,17 +155,19 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"offers the tool, so a word such as wiki or crm finds the provider or route it names. The best\n" +
 			"matches come first: a term in the ID or title outweighs one in the description or tags, which\n" +
 			"outweighs one in the provider or connection text; equal matches keep the ID order.\n\n" +
-			"A connection offers a tool when its permissions allow the tool's effect and, if the connection\n" +
-			"has a tools list, that list names the tool; without a tools list every tool of an allowed effect\n" +
-			"is offered, except a high-risk tool whose contract says requires_tool_allow_list, which only a\n" +
-			"list that names it offers, and 'tools: []' offers none. Each connection is judged on its own\n" +
-			"lists, even when it shares the provider, the service, or the credential with another one.\n" +
+			"A connection offers by effect or by selected tools, never both. By effect (its effects field, or\n" +
+			"the provider's defaults) it offers every tool of those effects, also one added later, except a\n" +
+			"high-risk tool whose contract says requires_tool_allow_list. By selected tools (its tools list) it\n" +
+			"offers exactly the listed tools, and 'tools: []' offers none. Each connection is judged on its own\n" +
+			"selection, even when it shares the provider, the service, or the credential with another one.\n" +
 			"Describe, invoke and the MCP broker apply the same rule, and invoke refuses before any secret is\n" +
 			"read or any provider is contacted.\n\n" +
 			"--connection keeps only the tools that connection offers. --all lists the tools no connection\n" +
 			"offers as well, each with a reason, one of\n\n" +
-			"  effect-not-permitted      the permissions do not allow the tool's effect\n" +
-			"  requires-tool-allow-list  the tool needs a tools list that names it, and there is none\n" +
+			"  effect-not-permitted      the connection offers by effect, and its effects do not include the\n" +
+			"                            tool's effect\n" +
+			"  requires-tool-allow-list  the tool needs a tools list that names it, and the connection offers\n" +
+			"                            by effect\n" +
 			"  not-in-tools-list         the tools list does not name the tool\n" +
 			"  no-local-files            the tool reads or writes local files, and the connection's files\n" +
 			"                            list releases no directory for that direction\n" +
