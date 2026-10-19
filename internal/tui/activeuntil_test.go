@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 var tuiNow = time.Date(2030, 1, 2, 9, 0, 0, 0, time.UTC)
@@ -148,4 +150,17 @@ func TestCopyKeepsTheInstantOfItsOriginal(t *testing.T) {
 func stateCell(m *Model) string {
 	m.section = sectionConnections
 	return m.cells("wiki")[1]
+}
+
+// The Approvals detail names a changed limit, so extending it is never approved unseen.
+func TestApprovalDetailShowsTheActiveUntilChange(t *testing.T) {
+	change := approval.Change{
+		Fields: []approval.FieldChange{{Field: approval.FieldActiveUntil, Before: "unlimited",
+			After: "2030-01-02 10:00:00 UTC"}},
+		After: vault.Scope{ActiveUntil: "2030-01-02T10:00:00Z"},
+	}
+	got := strings.Join(approvalDetailRows(change), "\n")
+	if !strings.Contains(got, approval.FieldActiveUntil) || !strings.Contains(got, "unlimited") {
+		t.Fatalf("detail lacks the active until change:\n%s", got)
+	}
 }

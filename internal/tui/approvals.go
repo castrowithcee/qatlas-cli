@@ -82,7 +82,7 @@ func approvalSummary(c approval.Change) string {
 var approvalFields = []string{
 	approval.FieldCredential, approval.FieldProvider, approval.FieldOrigin,
 	approval.FieldEffects, approval.FieldTargets, approval.FieldTools, approval.FieldPaths,
-	approval.FieldFiles, approval.FieldForward, approval.FieldState,
+	approval.FieldFiles, approval.FieldForward, approval.FieldState, approval.FieldActiveUntil,
 }
 
 // approvalRow is one line of the Approvals detail screen. item rows are the entries of a list change,
@@ -113,16 +113,17 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		changed[f.Field] = f
 	}
 	current := map[string]string{
-		approval.FieldCredential: choiceText(c.After.Credential),
-		approval.FieldProvider:   choiceText(c.After.Provider),
-		approval.FieldOrigin:     choiceText(c.After.Origin),
-		approval.FieldEffects:    approvalList(c.After.Effects),
-		approval.FieldTargets:    approvalList(c.After.Targets),
-		approval.FieldTools:      approvalTools(c.After.Tools),
-		approval.FieldPaths:      approval.PathsText(c.After.Paths),
-		approval.FieldFiles:      approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
-		approval.FieldForward:    approval.ForwardText(c.After.Forward),
-		approval.FieldState:      approval.StateText(c.After.Disabled),
+		approval.FieldCredential:  choiceText(c.After.Credential),
+		approval.FieldProvider:    choiceText(c.After.Provider),
+		approval.FieldOrigin:      choiceText(c.After.Origin),
+		approval.FieldEffects:     approvalList(c.After.Effects),
+		approval.FieldTargets:     approvalList(c.After.Targets),
+		approval.FieldTools:       approvalTools(c.After.Tools),
+		approval.FieldPaths:       approval.PathsText(c.After.Paths),
+		approval.FieldFiles:       approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
+		approval.FieldForward:     approval.ForwardText(c.After.Forward),
+		approval.FieldState:       approval.StateText(c.After.Disabled),
+		approval.FieldActiveUntil: approval.ActiveUntilText(c.After.ActiveUntil),
 	}
 	rows := make([]approvalRow, 0, len(approvalFields))
 	for _, field := range approvalFields {
@@ -194,7 +195,7 @@ func approvalList(values []string) string {
 
 func approvalTools(values []string) string {
 	if values == nil {
-		return "(every tool the permissions allow)"
+		return "(every tool of its effects)"
 	}
 	return approvalList(values)
 }
