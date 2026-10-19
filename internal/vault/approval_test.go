@@ -219,3 +219,62 @@ func TestFingerprintCoversFiles(t *testing.T) {
 		t.Error("another directory does not change the fingerprint")
 	}
 }
+
+// Carrying an approval to a new name keeps it matching under that name, leaves the original until it is
+// revoked, refuses a name another connection's approval holds, and undoes to the very bytes it found.
+func TestCarryApproval(t *testing.T) {
+	lowWorkFactor(t)
+	dir := t.TempDir()
+	v := New(dir)
+	if err := v.Set("wiki-reader", "token", "synthetic-token", offering("s3cret-phrase")); err != nil {
+		t.Fatalf("Set() = %v", err)
+	}
+	other := wikiScope()
+	other.Connection = "other"
+	if err := v.Approve([]Scope{wikiScope(), other}); err != nil {
+		t.Fatalf("Approve() = %v", err)
+	}
+	const id = "0123456789abcdef0123456789abcdef"
+	if _, _, err := v.CarryApproval("wiki", "other", id); !errors.Is(err, ErrApprovalTaken) {
+		t.Fatalf("CarryApproval() onto another approval = %v, want ErrApprovalTaken", err)
+	}
+	if carried, _, err := v.CarryApproval("missing", "fresh", id); err != nil || carried {
+		t.Fatalf("CarryApproval() without an approval = %v, %v, want nothing carried", carried, err)
+	}
+
+	before, err := os.ReadFile(v.secretsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	carried, undo, err := v.CarryApproval("wiki", "wiki-main", id)
+	if err != nil || !carried {
+		t.Fatalf("CarryApproval() = %v, %v", carried, err)
+	}
+	renamed := wikiScope()
+	renamed.Connection = "wiki-main"
+	if err := v.CheckApproval(renamed); err != nil {
+		t.Errorf("CheckApproval() under the new name = %v", err)
+	}
+	if err := v.CheckApproval(wikiScope()); err != nil {
+		t.Errorf("CheckApproval() under the old name = %v, want it kept until revoked", err)
+	}
+	approvals, _ := v.Approvals()
+	if approvals["wiki-main"].ConnectionID != id || approvals["wiki"].ConnectionID != id ||
+		approvals["wiki-main"].Scope.Connection != "wiki-main" {
+		t.Errorf("approvals = %+v, want both naming the connection id", approvals)
+	}
+	// The rest of the same rename may be carried again.
+	if _, _, err := v.CarryApproval("wiki", "wiki-main", id); err != nil {
+		t.Errorf("CarryApproval() again = %v", err)
+	}
+
+	if err := undo(); err != nil {
+		t.Fatalf("undo() = %v", err)
+	}
+	if after, _ := os.ReadFile(v.secretsPath()); string(after) != string(before) {
+		t.Error("undo() did not restore secrets.age byte for byte")
+	}
+	if err := v.CheckApproval(renamed); !errors.Is(err, ErrApprovalRequired) {
+		t.Errorf("CheckApproval() under the new name after undo() = %v, want ErrApprovalRequired", err)
+	}
+}

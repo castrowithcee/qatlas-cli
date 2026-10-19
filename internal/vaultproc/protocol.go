@@ -130,17 +130,22 @@ type logEntry struct {
 	Operation  string                `json:"operation,omitempty"`
 	Version    int                   `json:"version,omitempty"`
 	Connection string                `json:"connection,omitempty"`
-	Effect     string                `json:"effect,omitempty"`
-	Result     string                `json:"result"`
-	DurationMS int64                 `json:"duration_ms,omitempty"`
-	ReqBytes   *int64                `json:"req_bytes,omitempty"`
-	RespBytes  *int64                `json:"resp_bytes,omitempty"`
-	Session    string                `json:"session,omitempty"`
+	// ConnectionID and FormerConnection are those of invokelog.Fields. A process of an earlier version
+	// drops them and logs the entry without.
+	ConnectionID     string `json:"connection_id,omitempty"`
+	FormerConnection string `json:"former_connection,omitempty"`
+	Effect           string `json:"effect,omitempty"`
+	Result           string `json:"result"`
+	DurationMS       int64  `json:"duration_ms,omitempty"`
+	ReqBytes         *int64 `json:"req_bytes,omitempty"`
+	RespBytes        *int64 `json:"resp_bytes,omitempty"`
+	Session          string `json:"session,omitempty"`
 }
 
 func (e logEntry) fields() invokelog.Fields {
 	return invokelog.Fields{
 		Path: e.Path, Client: e.Client, Operation: e.Operation, Version: e.Version, Connection: e.Connection,
+		ConnectionID: e.ConnectionID, FormerConnection: e.FormerConnection,
 		Effect: e.Effect, Result: e.Result, Duration: time.Duration(e.DurationMS) * time.Millisecond,
 		ReqBytes: e.ReqBytes, RespBytes: e.RespBytes, Session: e.Session,
 	}
@@ -149,6 +154,7 @@ func (e logEntry) fields() invokelog.Fields {
 func logEntryOf(f invokelog.Fields) *logEntry {
 	return &logEntry{
 		Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version, Connection: f.Connection,
+		ConnectionID: f.ConnectionID, FormerConnection: f.FormerConnection,
 		Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
 		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Session: f.Session,
 	}

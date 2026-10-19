@@ -81,9 +81,14 @@ type Entry struct {
 	Operation  string      `json:"operation,omitempty"`
 	Version    int         `json:"version,omitempty"`
 	Connection string      `json:"connection,omitempty"`
-	Effect     string      `json:"effect,omitempty"`
-	Result     string      `json:"result,omitempty"`
-	DurationMS int64       `json:"duration_ms,omitempty"`
+	// ConnectionID is the config id of the connection a connection change names, which links entries
+	// written under an earlier name; FormerConnection is the name a rename replaced. Both are absent
+	// elsewhere and on entries written before they existed.
+	ConnectionID     string `json:"connection_id,omitempty"`
+	FormerConnection string `json:"former_connection,omitempty"`
+	Effect           string `json:"effect,omitempty"`
+	Result           string `json:"result,omitempty"`
+	DurationMS       int64  `json:"duration_ms,omitempty"`
 	// ReqBytes and RespBytes are the exact sizes of a CLI invoke's arguments and successful result. On the
 	// mcp path they are the sizes of the whole JSON-RPC request and response messages, an error response
 	// included. nil means not recorded, which is different from a recorded 0.
@@ -109,7 +114,10 @@ type Fields struct {
 	Operation  string
 	Version    int
 	Connection string
-	Effect     string
+	// ConnectionID and FormerConnection are those of Entry; only a connection change carries them.
+	ConnectionID     string
+	FormerConnection string
+	Effect           string
 	// Result is "success" or the failure's error code, the same value application.auditResult uses.
 	Result   string
 	Duration time.Duration
@@ -178,11 +186,13 @@ var validEffects = map[string]bool{"": true, "read": true, "create": true, "upda
 
 // The operations that log a change qatlas made to a connection in the configuration file, one entry per
 // changed connection, with the connection's name and no value of it. Their Path is the surface that made the
-// change, "tui", "web" or "cli", and their Effect is create, update, or delete respectively.
+// change, "tui", "web" or "cli", and their Effect is create, update, or delete respectively; a rename is an
+// update that names the new name as Connection and the old one as FormerConnection.
 const (
 	OperationConnectionCreate = "config.connection.create"
 	OperationConnectionChange = "config.connection.change"
 	OperationConnectionDelete = "config.connection.delete"
+	OperationConnectionRename = "config.connection.rename"
 )
 
 // The operations the vault process logs for its own decisions, which are not invokes: an approval with an
@@ -220,7 +230,7 @@ var mcpOperations = map[string]Area{
 var managementOperations = map[string]bool{
 	OperationApprove: true, OperationLock: true, OperationHandover: true,
 	OperationConnectionCreate: true, OperationConnectionChange: true, OperationConnectionDelete: true,
-	OperationConfigMigrate: true,
+	OperationConnectionRename: true, OperationConfigMigrate: true,
 }
 
 // connectionOperations maps each connection operation to the effect it must carry.
@@ -228,7 +238,11 @@ var connectionOperations = map[string]string{
 	OperationConnectionCreate: "create",
 	OperationConnectionChange: "update",
 	OperationConnectionDelete: "delete",
+	OperationConnectionRename: "update",
 }
+
+// connectionIDPattern is the form of Fields.ConnectionID: a config id, 16 random bytes in lower-case hex.
+var connectionIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Validate reports whether f is something an invoke of this program could log: a known path, a result of
 // the form auditResult gives, a known effect, non-negative numbers, and text fields of bounded length that
@@ -263,6 +277,13 @@ func (f Fields) Validate() error {
 	if effect, ok := connectionOperations[f.Operation]; ok && (f.Effect != effect || f.Connection == "") {
 		return errors.New("a connection change needs its effect and a connection")
 	}
+	if f.ConnectionID != "" && (connectionOperations[f.Operation] == "" || !connectionIDPattern.MatchString(f.ConnectionID)) {
+		return errors.New("connection_id must be a config id, and only on a connection change")
+	}
+	rename := f.Operation == OperationConnectionRename
+	if rename != (f.FormerConnection != "") || rename && f.FormerConnection == f.Connection {
+		return errors.New("a rename needs the former connection name, and only a rename has one")
+	}
 	if !resultPattern.MatchString(f.Result) {
 		return errors.New("result must be success or an error code")
 	}
@@ -293,6 +314,9 @@ func (f Fields) Validate() error {
 		return err
 	}
 	if err := checkText("connection", f.Connection, maxTextLength); err != nil {
+		return err
+	}
+	if err := checkText("former connection", f.FormerConnection, maxTextLength); err != nil {
 		return err
 	}
 	if err := checkText("token", f.Token, maxTextLength); err != nil {
@@ -422,7 +446,8 @@ func (l *Logger) Append(f Fields) error {
 
 	entry := Entry{
 		Seq: seq, Time: now, Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version,
-		Connection: f.Connection, Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
+		Connection: f.Connection, ConnectionID: f.ConnectionID, FormerConnection: f.FormerConnection,
+		Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
 		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Token: f.Token, Session: f.Session, PrevHash: prevHash,
 	}
 	raw, err := l.encode(entry)

@@ -266,7 +266,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"(+) and what falls away (-), then only how many entries are unchanged. Each entry starts with a\n" +
 			"source line saying where the change came from. 'changed in qatlas tui' (or web, cli) with the time names the\n" +
 			"latest entry of the invocation log, config.connection.create or .change, written after the\n" +
-			"connection was last approved, marked (unverified) when its check value could not be matched; 'changed\n" +
+			"connection was last approved, under its current name or, past a config.connection.rename, the name it\n" +
+			"had then, marked (unverified) when its check value could not be matched; 'changed\n" +
 			"outside qatlas' means no such entry exists, so something that is not qatlas, an agent among others,\n" +
 			"edited config.yaml, last modified at the time shown; 'the vault entry of <credential> was stored\n" +
 			"anew' means only the credential's vault entry was replaced; an unreadable log gives 'origin unknown'.\n" +
@@ -277,10 +278,12 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"--connection (repeatable), and hands the change to a running vault process the way every other vault\n" +
 			"change does. What is approved is always the whole scope as configured now, however the change reads.\n\n" +
 			"An approval a connection no longer belongs to, because it was renamed, removed, or switched away\n" +
-			"from the vault, is stale; approving every open connection also removes it and names it. --connection\n" +
-			"leaves a stale approval untouched. A name given with --connection that does not read a stored vault\n" +
-			"credential at all is refused before anything is approved; one that is already approved as it is\n" +
-			"configured now is reported and left alone, nothing written.\n\n" +
+			"from the vault, is stale; approving every open connection also removes it and names it. One that\n" +
+			"a 'qatlas config rename' left when it stopped early is also named with its connection and the\n" +
+			"rename that gives the connection that name; --output json lists it under rename_leftovers.\n" +
+			"--connection leaves a stale approval untouched. A name given with --connection that does not read a\n" +
+			"stored vault credential at all is refused before anything is approved; one that is already approved\n" +
+			"as it is configured now is reported and left alone, nothing written.\n\n" +
 			"Run against a vault that is not encrypted, which binds no connection to any approval, it says so and\n" +
 			"changes nothing; with nothing open it says so too. Run from an interactive terminal it asks, like\n" +
 			"every 'vault' command but status, unlock, and lock, for the passphrase of an encrypted vault there\n" +
@@ -1224,6 +1227,17 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		}
 	}
 
+	for _, left := range report.Leftovers {
+		fmt.Fprintf(out, "the approval of %s is left over from an unfinished rename of connection %s: 'qatlas "+
+			"config rename connection %s %s' gives the connection that name, and approving every open "+
+			"connection removes the leftover and keeps the name %s\n",
+			opts.Redactor.Apply(left.Approval), opts.Redactor.Apply(left.Connection),
+			opts.Redactor.Apply(left.Connection), opts.Redactor.Apply(left.Approval),
+			opts.Redactor.Apply(left.Connection))
+		doc.RenameLeftovers = append(doc.RenameLeftovers, renameLeftoverDocument{
+			Approval: opts.Redactor.Apply(left.Approval), Connection: opts.Redactor.Apply(left.Connection)})
+	}
+
 	ctx := contextOrBackground(c.Context())
 	if len(names) == 0 || len(toApprove) > 0 {
 		approved, warning, err := approval.Approve(ctx, cfg, v, toApprove)
@@ -1312,18 +1326,26 @@ func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approv
 }
 
 // vaultApproveDocument is what 'vault approve --output json' writes: the connections that were open, each
-// with its changed fields, then which were approved, which were named but already approved, and which stale
-// approvals were removed.
+// with its changed fields, then which were approved, which were named but already approved, which stale
+// approvals were removed, and which stale approvals an unfinished rename left, with the connection they
+// belong to.
 type vaultApproveDocument struct {
 	Open            []approvalChangeDocument `json:"open"`
 	Approved        []string                 `json:"approved"`
 	AlreadyApproved []string                 `json:"already_approved"`
 	RemovedStale    []string                 `json:"removed_stale"`
+	RenameLeftovers []renameLeftoverDocument `json:"rename_leftovers"`
+}
+
+type renameLeftoverDocument struct {
+	Approval   string `json:"approval"`
+	Connection string `json:"connection"`
 }
 
 func newVaultApproveDocument() vaultApproveDocument {
 	return vaultApproveDocument{
 		Open: []approvalChangeDocument{}, Approved: []string{}, AlreadyApproved: []string{}, RemovedStale: []string{},
+		RenameLeftovers: []renameLeftoverDocument{},
 	}
 }
 

@@ -533,8 +533,13 @@ func TestAppendFailureIsReportedNotPanicked(t *testing.T) {
 }
 
 func TestValidateConnectionChangeEntries(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
 	good := func(path, operation, effect string) Fields {
-		return Fields{Path: path, Operation: operation, Connection: "wiki", Effect: effect, Result: "success"}
+		f := Fields{Path: path, Operation: operation, Connection: "wiki", ConnectionID: id, Effect: effect, Result: "success"}
+		if operation == OperationConnectionRename {
+			f.FormerConnection = "old-wiki"
+		}
+		return f
 	}
 	for _, path := range []string{"tui", "web", "cli"} {
 		for operation, effect := range connectionOperations {
@@ -544,15 +549,24 @@ func TestValidateConnectionChangeEntries(t *testing.T) {
 		}
 	}
 	bad := map[string]Fields{
-		"unknown path":              {Path: "ssh", Operation: OperationConnectionChange, Connection: "wiki", Effect: "update", Result: "success"},
-		"tui with an invoke":        {Path: "tui", Operation: "bookstack.read", Effect: "read", Result: "success"},
-		"web without operation":     {Path: "web", Result: "success"},
-		"wrong effect":              good("tui", OperationConnectionDelete, "update"),
-		"no connection":             {Path: "web", Operation: OperationConnectionCreate, Effect: "create", Result: "success"},
-		"control character in name": {Path: "tui", Operation: OperationConnectionCreate, Connection: "a\nb", Effect: "create", Result: "success"},
-		"overlong name":             {Path: "tui", Operation: OperationConnectionCreate, Connection: strings.Repeat("x", 300), Effect: "create", Result: "success"},
-		"invalid utf-8 in name":     {Path: "tui", Operation: OperationConnectionCreate, Connection: "\xff", Effect: "create", Result: "success"},
-		"result is not a code":      {Path: "tui", Operation: OperationConnectionCreate, Connection: "wiki", Effect: "create", Result: "Bad Result"},
+		"unknown path":               {Path: "ssh", Operation: OperationConnectionChange, Connection: "wiki", Effect: "update", Result: "success"},
+		"tui with an invoke":         {Path: "tui", Operation: "bookstack.read", Effect: "read", Result: "success"},
+		"web without operation":      {Path: "web", Result: "success"},
+		"wrong effect":               good("tui", OperationConnectionDelete, "update"),
+		"no connection":              {Path: "web", Operation: OperationConnectionCreate, Effect: "create", Result: "success"},
+		"control character in name":  {Path: "tui", Operation: OperationConnectionCreate, Connection: "a\nb", Effect: "create", Result: "success"},
+		"overlong name":              {Path: "tui", Operation: OperationConnectionCreate, Connection: strings.Repeat("x", 300), Effect: "create", Result: "success"},
+		"invalid utf-8 in name":      {Path: "tui", Operation: OperationConnectionCreate, Connection: "\xff", Effect: "create", Result: "success"},
+		"result is not a code":       {Path: "tui", Operation: OperationConnectionCreate, Connection: "wiki", Effect: "create", Result: "Bad Result"},
+		"rename without former name": {Path: "cli", Operation: OperationConnectionRename, Connection: "wiki", Effect: "update", Result: "success"},
+		"rename onto its own name": {Path: "cli", Operation: OperationConnectionRename, Connection: "wiki", FormerConnection: "wiki",
+			Effect: "update", Result: "success"},
+		"former name on a change": {Path: "cli", Operation: OperationConnectionChange, Connection: "wiki", FormerConnection: "old",
+			Effect: "update", Result: "success"},
+		"connection id on an invoke": {Path: "cli", Operation: "bookstack.read", Connection: "wiki", ConnectionID: id, Effect: "read",
+			Result: "success"},
+		"malformed connection id": {Path: "cli", Operation: OperationConnectionCreate, Connection: "wiki", ConnectionID: "x",
+			Effect: "create", Result: "success"},
 	}
 	for name, f := range bad {
 		if err := f.Validate(); err == nil {
@@ -569,6 +583,8 @@ func TestSignedConnectionEntriesVerify(t *testing.T) {
 		{Path: "cli", Operation: "bookstack.read", Effect: "read", Result: "success"},
 		{Path: "tui", Operation: OperationConnectionCreate, Connection: "wiki", Effect: "create", Result: "success"},
 		{Path: "web", Operation: OperationConnectionChange, Connection: "wiki", Effect: "update", Result: "success"},
+		{Path: "cli", Operation: OperationConnectionRename, Connection: "wiki-main", FormerConnection: "wiki",
+			ConnectionID: "0123456789abcdef0123456789abcdef", Effect: "update", Result: "success"},
 	} {
 		if err := f.Validate(); err != nil {
 			t.Fatal(err)

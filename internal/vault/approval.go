@@ -162,12 +162,15 @@ func Fingerprint(scope Scope, credentialID string) string {
 
 // Approval is what the vault keeps for one approved connection: the fingerprint an access must match, and the
 // scope and the credential entry it was given for, so a change can be shown field by field. It never holds a
-// secret.
+// secret. ConnectionID is the config id of the connection, recorded by a rename (see CarryApproval) so a copy
+// left behind by one that did not finish names the connection it belongs to; it is no trust anchor, and an
+// older build ignores it.
 type Approval struct {
 	Fingerprint  string    `json:"fingerprint"`
 	Scope        Scope     `json:"scope"`
 	CredentialID string    `json:"credential_id"`
 	Approved     time.Time `json:"approved"`
+	ConnectionID string    `json:"connection_id,omitempty"`
 }
 
 // Bindings is what a vault process needs to check an access without the document: the entry id of every
@@ -348,6 +351,56 @@ func (v *Vault) Revoke(connections []string) (int, error) {
 		return 0, nil
 	}
 	return removed, v.writeApprovals(doc, next)
+}
+
+// ErrApprovalTaken reports a rename onto a name the vault already holds an approval for that belongs to
+// another connection.
+var ErrApprovalTaken = errors.New("the vault holds an approval of another connection under the new name")
+
+// CarryApproval copies the approval of the connection named from to the name to, for a rename of the
+// connection whose config id is connectionID, in the vault unlocked in this process. The copy and the
+// original both record connectionID, and the original stays until the caller revokes it once the rename is
+// committed: a rename cut short leaves only an extra approval that names its connection. An approval already
+// under to is replaced only when it records the same connectionID, the rest of such a rename; any other one
+// fails with ErrApprovalTaken. Without an approval under from nothing is written and carried is false. undo
+// puts the approvals back as this call found them, without a passphrase; it is nil when err is not.
+func (v *Vault) CarryApproval(from, to, connectionID string) (carried bool, undo func() error, err error) {
+	doc, err := v.unlockedDocument()
+	if err != nil {
+		return false, nil, err
+	}
+	if taken, ok := doc.Approvals[to]; ok && (taken.ConnectionID == "" || taken.ConnectionID != connectionID) {
+		return false, nil, ErrApprovalTaken
+	}
+	approval, ok := doc.Approvals[from]
+	if !ok {
+		return false, func() error { return nil }, nil
+	}
+	// An approval exists only in a document that was read from secrets.age, so the file exists. Undo writes
+	// back its very bytes, not a new encryption of the same document.
+	original, err := readFile(v.secretsPath())
+	if err != nil {
+		return false, nil, fmt.Errorf("cannot read %s: %w", v.secretsPath(), err)
+	}
+	previous := doc.Approvals
+	next := make(map[string]Approval, len(previous)+1)
+	for name, a := range previous {
+		next[name] = a
+	}
+	approval.ConnectionID = connectionID
+	next[from] = approval
+	approval.Scope.Connection = to
+	next[to] = approval
+	if err := v.writeApprovals(doc, next); err != nil {
+		return false, nil, err
+	}
+	return true, func() error {
+		if err := writeFile(v.secretsPath(), original); err != nil {
+			return err
+		}
+		doc.Approvals = previous
+		return nil
+	}, nil
 }
 
 // writeApprovals writes doc with approvals in place of its own and adopts them only once the write

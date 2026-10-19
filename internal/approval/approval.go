@@ -95,6 +95,17 @@ type Report struct {
 	// Stale names the approvals of connections that no longer exist, were renamed, or no longer read a vault
 	// credential, sorted. Revoke removes them.
 	Stale []string
+	// Leftovers are the stale approvals a rename that did not finish left behind, sorted by approval.
+	Leftovers []Leftover
+}
+
+// Leftover is a stale approval that records the config id of a connection that exists under another name:
+// what remains of renaming that connection, from or to the name of the approval, when the rename stopped
+// between the vault and the configuration. Renaming the connection to Approval, or revoking the approval,
+// clears it; neither releases anything the vault had not approved.
+type Leftover struct {
+	Approval   string
+	Connection string
 }
 
 // candidate is one connection of cfg that reads a vault credential the vault holds an entry for.
@@ -161,9 +172,25 @@ func Pending(cfg *config.Config, v *vault.Vault) (Report, error) {
 		if connection, ok := cfgConnection(cfg, name); !ok ||
 			cfg.Credentials[connection.Credential].Type != config.CredentialTypeVault {
 			report.Stale = append(report.Stale, name)
+			if owner := connectionWithID(cfg, approvals[name].ConnectionID); owner != "" && owner != name {
+				report.Leftovers = append(report.Leftovers, Leftover{Approval: name, Connection: owner})
+			}
 		}
 	}
 	return report, nil
+}
+
+// connectionWithID is the name of the connection of cfg whose config id is id, "" for none or an empty id.
+func connectionWithID(cfg *config.Config, id string) string {
+	if cfg == nil || id == "" {
+		return ""
+	}
+	for name, connection := range cfg.Connections {
+		if connection.ID == id {
+			return name
+		}
+	}
+	return ""
 }
 
 func cfgConnection(cfg *config.Config, name string) (config.Connection, bool) {
