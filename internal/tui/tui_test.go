@@ -1111,7 +1111,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 				typeText(t, m, "wiki")
 				press(t, m, "f2")
 			},
-			wantIn: "base_url",
+			wantIn: "must not be empty",
 		},
 		{
 			name: "an unusable base url is refused by the core",

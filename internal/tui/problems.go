@@ -71,6 +71,16 @@ var problemCodeRows = map[string]string{
 
 // problemRow returns the label of the open form's row that shows p, or "" when none does.
 func (m *Model) problemRow(p config.Problem, name string) string {
+	if m.wizard != nil {
+		step, label := m.setupProblemLabel(p)
+		if step != m.wizard.step || m.screen != screenForm {
+			return ""
+		}
+		if label == toolListLabel && m.shownRow(label) == "" {
+			label = toolsLabel
+		}
+		return m.shownRow(label)
+	}
 	if m.fields == nil || problemSections[m.section] != p.Section && p.Section != config.SectionProviderNotes {
 		return ""
 	}
@@ -116,18 +126,73 @@ func (m *Model) problemRow(p config.Problem, name string) string {
 	return m.shownRow(label)
 }
 
+// setupLabelSteps places the connection rows of the guided setup on the step that edits them.
+var setupLabelSteps = map[string]int{
+	"service": stepService, "credential": stepCredential, "name": stepScope, "description": stepScope,
+	targetsLabel: stepScope, "permissions": stepPermissions, toolListLabel: stepPermissions,
+	toolsLabel: stepPermissions,
+}
+
+// setupProblemLabel returns the step of the guided setup whose rows edit p and the label of the row there.
+// The step is -1 when no step does, and the label "" when the step has no row for it. It reuses the pairing
+// of problemRows; only the step is added, because the same label, such as the name, exists on several steps.
+func (m *Model) setupProblemLabel(p config.Problem) (int, string) {
+	field := p.Field
+	switch p.Section {
+	case config.SectionServices:
+		if field == "provider" {
+			return stepProvider, providerLabel
+		}
+		return stepService, problemRows[p.Section][field]
+	case config.SectionCredentials:
+		switch {
+		case field == "provider":
+			return stepProvider, providerLabel
+		case strings.HasPrefix(field, "values"):
+			label := strings.TrimPrefix(strings.TrimPrefix(field, "values"), ".")
+			if label == "" && m.wizard.step == stepCredential {
+				label = m.firstRoleRow()
+			}
+			return stepCredential, label
+		}
+		return stepCredential, problemRows[p.Section][field]
+	case config.SectionConnections:
+		label := problemRows[p.Section][field]
+		if field == "" {
+			label = problemCodeRows[p.Code]
+			if label == "" {
+				label = "name"
+			}
+		}
+		if step, ok := setupLabelSteps[label]; ok {
+			return step, label
+		}
+	}
+	return -1, ""
+}
+
 // shownRow returns label when the open form has a visible row of that name.
 func (m *Model) shownRow(label string) string {
-	if f := m.field(label); f != nil && !f.hidden {
+	if m.visibleField(label) != nil {
 		return label
 	}
 	return ""
 }
 
-// firstRoleRow is the first secret role row of a credential form, "" when there is none.
+// visibleField is the visible row with the label; a setup step keeps a hidden twin of some rows.
+func (m *Model) visibleField(label string) *field {
+	for i := range m.fields {
+		if m.fields[i].label == label && !m.fields[i].hidden {
+			return &m.fields[i]
+		}
+	}
+	return nil
+}
+
+// firstRoleRow is the first visible secret role row of a credential form, "" when there is none.
 func (m *Model) firstRoleRow() string {
 	for _, f := range m.fields {
-		if f.kind == fieldEnvName {
+		if !f.hidden && (f.kind == fieldEnvName || f.kind == fieldMasked) {
 			return f.label
 		}
 	}
@@ -143,8 +208,14 @@ func (m *Model) problemLine(p config.Problem) string {
 	return m.redactor.Apply(line)
 }
 
-// problemOtherLine names the entry a problem concerns, for a problem without a row to stand under.
+// problemOtherLine names where a problem belongs, for a problem without a row to stand under: the step in
+// the guided setup, otherwise the entry it concerns.
 func (m *Model) problemOtherLine(p config.Problem) string {
+	if m.wizard != nil {
+		if step, _ := m.setupProblemLabel(p); step >= 0 {
+			return "step " + strings.ToLower(setupTitles[step]) + ": " + m.problemLine(p)
+		}
+	}
 	who := problemKinds[p.Section]
 	name := p.Name
 	if domain, ok := strings.CutPrefix(p.Field, "connections."); ok && p.Section == config.SectionDefaults {
@@ -177,10 +248,10 @@ func (m *Model) reportSaveError(err error, name string, form bool) {
 			continue
 		}
 		state.rows[label] = append(state.rows[label], m.problemLine(p))
-		state.at[label] = m.field(label).value()
+		state.at[label] = m.visibleField(label).value()
 		if first < 0 {
 			for i := range m.fields {
-				if m.fields[i].label == label {
+				if m.fields[i].label == label && !m.fields[i].hidden {
 					first = i
 					break
 				}

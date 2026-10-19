@@ -214,9 +214,10 @@ func (m *Model) saveVault() tea.Cmd {
 		}
 	}
 	// Only the vault settings differ, so no connection changes and nothing is logged.
+	m.problems = problemState{}
 	if _, err := m.svc.SaveConfig(m.cfg, candidate, m.rev); err != nil {
 		if !m.conflicted(err) {
-			m.fail = m.redactor.Apply(err.Error())
+			m.reportSaveError(err, "", true)
 		}
 		return nil
 	}

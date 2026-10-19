@@ -3710,8 +3710,8 @@ func (m *Model) notes() string {
 			b.WriteString("\n\n" + m.wrapped(hintStyle, note+" ... (the editor stays usable)"))
 		}
 	}
-	if m.fields == nil {
-		// A refused deletion has no form to stand above.
+	if m.fields == nil || m.screen == screenSummary {
+		// A refused deletion has no form to stand above, nor has the summary of the setup.
 		if other := m.otherProblems(); other != "" {
 			b.WriteString("\n\n" + strings.TrimRight(other, "\n"))
 		}
