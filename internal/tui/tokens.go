@@ -259,23 +259,17 @@ func (m *Model) newToken() tea.Cmd {
 	return m.requireAdmin(func() tea.Cmd { return m.openForm("") })
 }
 
-// parseTokenExpiry reads the expires row: empty for no expiry, else a date, meaning its start in local time,
-// or an RFC 3339 time, which must lie ahead of now. It is the rule 'qatlas vault token create --expires'
-// follows too.
+// parseTokenExpiry reads the expires row through the shared expiry rule, which 'qatlas vault token create
+// --expires' follows too.
 func parseTokenExpiry(text string, now time.Time) (*time.Time, error) {
-	if text == "" {
-		return nil, nil
-	}
-	at, err := time.ParseInLocation("2006-01-02", text, time.Local)
-	if err != nil {
-		if at, err = time.Parse(time.RFC3339, text); err != nil {
-			return nil, errors.New("expires takes a date as YYYY-MM-DD or an RFC 3339 time")
-		}
-	}
-	if !at.After(now) {
+	at, err := config.ParseExpiry(text, now)
+	switch {
+	case errors.Is(err, config.ErrExpiryFormat):
+		return nil, errors.New("expires takes a date as YYYY-MM-DD or an RFC 3339 time")
+	case errors.Is(err, config.ErrExpiryPast):
 		return nil, errors.New("expires lies in the past; the token would never work")
 	}
-	return &at, nil
+	return at, err
 }
 
 // tokenActionMsg carries the outcome of createToken or revokeToken back into the event loop. It names the

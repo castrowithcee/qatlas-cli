@@ -206,22 +206,16 @@ func runVaultTokenList(c *cobra.Command, opts *Options, reg *capability.Registry
 	})
 }
 
-// parseExpiry reads --expires: a date, meaning its start in local time, or an RFC 3339 time. It must lie
-// ahead.
+// parseExpiry reads --expires through the shared expiry rule.
 func parseExpiry(text string) (*time.Time, error) {
-	if text == "" {
-		return nil, nil
-	}
-	at, err := time.ParseInLocation("2006-01-02", text, time.Local)
-	if err != nil {
-		if at, err = time.Parse(time.RFC3339, text); err != nil {
-			return nil, &UsageError{errors.New("--expires takes a date as YYYY-MM-DD or an RFC 3339 time")}
-		}
-	}
-	if !at.After(tokenNow()) {
+	at, err := config.ParseExpiry(text, tokenNow())
+	switch {
+	case errors.Is(err, config.ErrExpiryFormat):
+		return nil, &UsageError{errors.New("--expires takes a date as YYYY-MM-DD or an RFC 3339 time")}
+	case errors.Is(err, config.ErrExpiryPast):
 		return nil, &UsageError{errors.New("--expires lies in the past; a token would never work")}
 	}
-	return &at, nil
+	return at, err
 }
 
 func runVaultTokenCreate(c *cobra.Command, opts *Options, reg *capability.Registry, name string, models []string,
