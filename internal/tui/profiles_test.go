@@ -29,6 +29,7 @@ func tick(t *testing.T, m *Model, label, value string) {
 	focusField(t, m, label)
 	press(t, m, "/")
 	typeText(t, m, value)
+	m.picker.selectName(value)
 	press(t, m, " ", "enter")
 	if m.screen != screenForm {
 		t.Fatalf("the %s picker did not close: screen %v", label, m.screen)

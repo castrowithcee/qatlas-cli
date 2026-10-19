@@ -224,7 +224,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"row ticks all its tools, or unticks them when all are ticked, and the all groups row does so for\n" +
 			"every group; space on a tool ticks that tool. Typing a search shows the matching tools under their\n" +
 			"groups, folded or not, and space on a group row then acts on the matches only. The groups only\n" +
-			"arrange the list: the saved tools are the same IDs as without them.\n\n" +
+			"arrange the list: the saved tools are the same IDs as without them.\n" +
+			"Above the groups, the tool list has one row per effect its tools have, such as [-] read 3/12: [x]\n" +
+			"all, [-] some, [ ] none of that effect's tools ticked. space on it ticks all its tools, or unticks\n" +
+			"them when all are ticked, and during a search acts on the matches only. Tools that are listed only\n" +
+			"are never ticked this way, only one by one; space unticks them with the rest. The tools row of\n" +
+			"the form shows how many tools are ticked and their effects.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
 			"holds a list. enter or / opens it: a adds a target, enter edits the selected one, and\n" +
 			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +

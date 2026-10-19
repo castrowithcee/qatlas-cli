@@ -220,6 +220,7 @@ func TestSelectedToolsAreSavedWithoutTheEffects(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	press(t, m, "/")
 	typeText(t, m, "delete")
+	cursorTo(t, m, "bookstack.pages.delete")
 	press(t, m, " ", "enter")
 	pump(t, m, "f2")
 	if m.fail != "" {
@@ -230,7 +231,6 @@ func TestSelectedToolsAreSavedWithoutTheEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn := cfg.Connections["wiki"]
-	// The filter ticks every tool it shows, all of them deleting.
 	if len(conn.Tools) == 0 || conn.Effects != nil || !slices.Contains(conn.Tools, "bookstack.pages.delete") {
 		t.Fatalf("saved connection = %+v, want only the ticked tools", conn)
 	}
