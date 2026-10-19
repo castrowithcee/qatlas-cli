@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -94,7 +95,7 @@ func cloneStrings(m map[string]string) map[string]string {
 // New returns an empty configuration of the current schema version.
 func New(providers ...ProviderCatalog) *Config {
 	return &Config{
-		Version:     writeVersion,
+		Version:     Version,
 		Services:    map[string]Service{},
 		Credentials: map[string]Credential{},
 		Connections: map[string]Connection{},
@@ -126,6 +127,22 @@ func (s *Store) New() *Config { return New(s.providers) }
 // Load reads the configuration through the same loader the CLI uses.
 func (s *Store) Load() (*Config, error) { return Load(s.path, s.providers) }
 
+// HasCurrentSchema reports from the top-level version line alone, without decoding the file, whether the
+// configuration is already in the current schema. It is the cheap check every start makes before it would
+// migrate; false only means the file has to be loaded to know more.
+func (s *Store) HasCurrentSchema() bool {
+	data, err := readFile(s.path)
+	if err != nil {
+		return false
+	}
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if value, ok := bytes.CutPrefix(line, []byte("version:")); ok {
+			return string(bytes.TrimSpace(value)) == strconv.Itoa(Version)
+		}
+	}
+	return false
+}
+
 // Save validates the configuration, encodes it, checks that the encoded form loads back, backs up the current
 // file (see backupBeforeReplace), and only then replaces the target file. Any failure before the replacement
 // leaves the target byte-identical.
@@ -154,16 +171,12 @@ func (s *Store) Save(cfg *Config) error {
 	return s.replace(data)
 }
 
-// encode returns the file form of cfg. A configuration is written in schema 2 once either the file was read
-// as schema 2 or writeVersion says so; the ids missing from it are assigned first, in cfg itself. Otherwise
-// it is written in schema 1 without ids, because released versions reject an id key.
+// encode returns the file form of cfg in the current schema. The ids missing from cfg are assigned first, in
+// cfg itself, so a caller that keeps cfg holds what was written.
 func (s *Store) encode(cfg *Config) ([]byte, error) {
-	if cfg.Version >= versionIDs || writeVersion >= versionIDs {
-		cfg.assignIDs()
-		cfg.Version = versionIDs
-		return s.marshal(cfg)
-	}
-	return s.marshal(cfg.withoutIDs())
+	cfg.AssignIDs()
+	cfg.Version = Version
+	return s.marshal(cfg)
 }
 
 // replace writes data next to the target and moves it into place. Both steps happen inside the target

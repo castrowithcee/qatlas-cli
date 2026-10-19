@@ -98,7 +98,7 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 
 	// An encrypted vault beside the configuration.
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: 1\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: 2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := vault.New(dir).Set("seed", "role", "canary-seed",

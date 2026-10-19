@@ -48,7 +48,7 @@ func TestVaultProcessEndToEnd(t *testing.T) {
 	server := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Vault Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 1
+	config := fmt.Sprintf(`version: 2
 services:
   wiki:
     provider: bookstack

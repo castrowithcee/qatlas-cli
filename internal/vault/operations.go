@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -117,7 +118,7 @@ func (v *Vault) SetUndoableWithID(name, credentialID, role, value string, offer 
 			return v.writePlain(doc)
 		}, nil
 	case StateLocked:
-		path, err := v.addPending(name, credentialID, role, value)
+		path, err := v.addPending(name, credentialID, map[string]string{role: value})
 		if err != nil {
 			return nil, err
 		}
@@ -139,6 +140,94 @@ func (v *Vault) SetUndoableWithID(name, credentialID, role, value string, offer 
 		}, nil
 	}
 	return nil, fmt.Errorf("vault: unreachable state %q", state)
+}
+
+// RecordCredentialIDs records ids, the config id of each credential by name, in the vault entry of that name
+// where the entry has none yet. It creates no entry and changes no secret. An encrypted, locked vault takes
+// each id as a pending write instead, which needs no passphrase and is merged on the next unlock; an absent
+// vault is left alone. It reports how many ids it recorded or queued, and undo, which puts the vault back as
+// this call found it without a passphrase. undo is nil when err is not.
+func (v *Vault) RecordCredentialIDs(ids map[string]string) (recorded int, undo func() error, err error) {
+	unchanged := func() error { return nil }
+	state, err := v.State()
+	if err != nil {
+		return 0, nil, err
+	}
+	switch state {
+	case StateAbsent:
+		return 0, unchanged, nil
+	case StateUnencrypted:
+		original, err := readFile(v.plainPath())
+		if err != nil {
+			return 0, nil, fmt.Errorf("cannot read %s: %w", v.plainPath(), err)
+		}
+		doc, err := loadPlainDocument(v.plainPath())
+		if err != nil {
+			return 0, nil, err
+		}
+		changed := doc.recordCredentialIDs(ids)
+		if len(changed) == 0 {
+			return 0, unchanged, nil
+		}
+		if err := v.writePlain(doc); err != nil {
+			return 0, nil, err
+		}
+		return len(changed), func() error { return writeFile(v.plainPath(), original) }, nil
+	case StateLocked:
+		var written []string
+		remove := func() error {
+			var failed error
+			for _, path := range written {
+				if err := os.Remove(path); err != nil && !isNotExist(err) {
+					failed = err
+				}
+			}
+			return failed
+		}
+		names := make([]string, 0, len(ids))
+		for name, id := range ids {
+			if id != "" {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			path, err := v.addPending(name, ids[name], nil)
+			if err != nil {
+				_ = remove()
+				return 0, nil, err
+			}
+			written = append(written, path)
+		}
+		return len(written), remove, nil
+	case StateUnlocked:
+		changed := v.doc.recordCredentialIDs(ids)
+		if len(changed) == 0 {
+			return 0, unchanged, nil
+		}
+		forget := func() {
+			for _, id := range changed {
+				entry := v.doc.Entries[id]
+				entry.CredentialID = ""
+				v.doc.Entries[id] = entry
+			}
+		}
+		// A document with an entry was read from, or written to, secrets.age, so the file exists.
+		original, err := readFile(v.secretsPath())
+		if err != nil {
+			forget()
+			return 0, nil, fmt.Errorf("cannot read %s: %w", v.secretsPath(), err)
+		}
+		if err := v.writeEncrypted(v.doc); err != nil {
+			forget()
+			return 0, nil, err
+		}
+		return len(changed), func() error {
+			forget()
+			return writeFile(v.secretsPath(), original)
+		}, nil
+	}
+	return 0, nil, fmt.Errorf("vault: unreachable state %q", state)
 }
 
 // restoreRole sets a role back to the value it had, or removes it when it had none.

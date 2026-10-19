@@ -56,8 +56,10 @@ func (c *Config) validateIDs(report func(string, ...any)) {
 	check("connections", connections)
 }
 
-// assignIDs gives every entry without an id a fresh one. Existing ids are never touched.
-func (c *Config) assignIDs() {
+// AssignIDs gives every entry without an id a fresh one. Existing ids are never touched. A save does it
+// anyway; a caller that must know an id before it saves, such as the one it records in the vault, calls it
+// first.
+func (c *Config) AssignIDs() {
 	for name, s := range c.Services {
 		if s.ID == "" {
 			s.ID = newID()
@@ -76,22 +78,4 @@ func (c *Config) assignIDs() {
 			c.Connections[name] = cn
 		}
 	}
-}
-
-// withoutIDs returns a copy for the schema-1 file, which has no id key.
-func (c *Config) withoutIDs() *Config {
-	out := c.Clone()
-	for name, s := range out.Services {
-		s.ID = ""
-		out.Services[name] = s
-	}
-	for name, cr := range out.Credentials {
-		cr.ID = ""
-		out.Credentials[name] = cr
-	}
-	for name, cn := range out.Connections {
-		cn.ID = ""
-		out.Connections[name] = cn
-	}
-	return out
 }

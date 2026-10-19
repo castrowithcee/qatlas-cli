@@ -32,7 +32,7 @@ func bookstackConfig(t *testing.T, baseURL string) string {
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
 
 	return writeConfig(t, fmt.Sprintf(`
-version: 1
+version: 2
 services:
   wiki:
     provider: bookstack
@@ -307,7 +307,7 @@ func TestBookStackInvokeKeepsConnectionsSeparate(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	cfg := writeConfig(t, fmt.Sprintf(`
-version: 1
+version: 2
 services:
   primary:
     provider: bookstack
@@ -559,7 +559,7 @@ func bookstackTargetsConfig(t *testing.T, baseURL string, targets ...string) str
 		fmt.Fprintf(&list, "      - %q\n", target)
 	}
 	return writeConfig(t, fmt.Sprintf(`
-version: 1
+version: 2
 services:
   wiki:
     provider: bookstack

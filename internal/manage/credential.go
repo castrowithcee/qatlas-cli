@@ -151,7 +151,7 @@ func (s *Service) SetSecret(ctx context.Context, cfg *config.Config, w SecretWri
 		return out, s.secrets.Set(w.Name, w.Role, w.Value)
 	}
 	before := s.snapshotFor(cfg, w.Approval)
-	if err := s.secrets.SetVault(w.Name, w.Role, w.Value, w.Offer); err != nil {
+	if _, err := s.secrets.SetVaultUndoable(w.Name, cfg.Credentials[w.Name].ID, w.Role, w.Value, w.Offer); err != nil {
 		return out, err
 	}
 	out.ProcessWarning = s.SyncVaultProcess(ctx, func(ctx context.Context, client *vaultproc.Client) error {

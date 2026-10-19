@@ -187,7 +187,13 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			}
 			return nil
 		},
-		PersistentPreRunE: func(c *cobra.Command, _ []string) error { return resolveFormat(c, opts) },
+		PersistentPreRunE: func(c *cobra.Command, _ []string) error {
+			if err := resolveFormat(c, opts); err != nil {
+				return err
+			}
+			migrateConfig(c, opts, reg)
+			return nil
+		},
 		// Without a subcommand there is nothing to do yet, so the root command prints its own help.
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}

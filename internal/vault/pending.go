@@ -41,14 +41,15 @@ func (v *Vault) pendingFiles() ([]string, error) {
 	return names, nil
 }
 
-// addPending writes one role's secret as a pending entry, encrypted to the vault's public recipient alone,
-// so it needs no passphrase. It is how Set stores a new or changed secret while the vault is locked.
-func (v *Vault) addPending(name, credentialID, role, value string) (path string, err error) {
+// addPending writes roles as a pending entry, encrypted to the vault's public recipient alone, so it needs no
+// passphrase. It is how Set stores a new or changed secret while the vault is locked; without roles it
+// carries only the credential id.
+func (v *Vault) addPending(name, credentialID string, roles map[string]string) (path string, err error) {
 	recipientPEM, err := readFile(v.recipientPath())
 	if err != nil {
 		return "", fmt.Errorf("cannot read %s: %w", v.recipientPath(), err)
 	}
-	payload := pendingPayload{Name: name, CredentialID: credentialID, Roles: map[string]string{role: value}, Modified: time.Now().UTC()}
+	payload := pendingPayload{Name: name, CredentialID: credentialID, Roles: roles, Modified: time.Now().UTC()}
 	plain, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("cannot encode the pending entry for %s: %w", name, err)
@@ -69,6 +70,8 @@ func (v *Vault) mergePending(id *identity, doc *document) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// A payload with only a credential id goes last, so it finds an entry a pending secret creates.
+	var idsOnly []pendingPayload
 	for _, name := range names {
 		path := filepath.Join(v.pendingPath(), name)
 		data, err := readFile(path)
@@ -83,6 +86,13 @@ func (v *Vault) mergePending(id *identity, doc *document) (int, error) {
 		if err := json.Unmarshal(plain, &payload); err != nil {
 			return 0, fmt.Errorf("%s does not hold a valid pending entry", path)
 		}
+		if len(payload.Roles) == 0 {
+			idsOnly = append(idsOnly, payload)
+			continue
+		}
+		doc.mergePending(payload)
+	}
+	for _, payload := range idsOnly {
 		doc.mergePending(payload)
 	}
 	return len(names), nil
@@ -98,10 +108,14 @@ func (v *Vault) removePending(names []string) {
 }
 
 // mergePending applies one pending payload to the document: an existing entry of the same name gets the
-// payload's roles merged in, a name not yet present becomes a new entry.
+// payload's roles merged in, a name not yet present becomes a new entry. A payload with only a credential id
+// never creates an entry and leaves the modification time alone, since no secret changed.
 func (d *document) mergePending(p pendingPayload) {
 	entry, ok := d.byName(p.Name)
 	if !ok {
+		if len(p.Roles) == 0 {
+			return
+		}
 		entry = Entry{ID: newID(), Name: p.Name, Roles: map[string]string{}, Created: p.Modified}
 	}
 	if entry.CredentialID == "" {
@@ -113,6 +127,8 @@ func (d *document) mergePending(p pendingPayload) {
 	for role, value := range p.Roles {
 		entry.Roles[role] = value
 	}
-	entry.Modified = p.Modified
+	if len(p.Roles) > 0 {
+		entry.Modified = p.Modified
+	}
 	d.Entries[entry.ID] = entry
 }

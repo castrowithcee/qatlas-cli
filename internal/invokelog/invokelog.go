@@ -193,6 +193,10 @@ const (
 	OperationHandover = "vault.handover"
 )
 
+// OperationConfigMigrate logs that qatlas moved the configuration file to the schema named by Version. Its
+// Path is "cli", whichever command migrated.
+const OperationConfigMigrate = "config.migrate"
+
 // The operations an MCP session logs besides the invokes it forwards, one entry per JSON-RPC exchange. The
 // baseline pair is what every session loads before its first call; search and describe are the navigation
 // that finds a tool. None of them names a connection, an effect, or anything the agent asked for. The
@@ -216,6 +220,7 @@ var mcpOperations = map[string]Area{
 var managementOperations = map[string]bool{
 	OperationApprove: true, OperationLock: true, OperationHandover: true,
 	OperationConnectionCreate: true, OperationConnectionChange: true, OperationConnectionDelete: true,
+	OperationConfigMigrate: true,
 }
 
 // connectionOperations maps each connection operation to the effect it must carry.
