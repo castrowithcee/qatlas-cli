@@ -15,8 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
-// The kinds of entry a rename applies to. RenameCredential is named so every surface asks for it the same
-// way; renaming a credential is not offered yet and fails with ErrRenameUnsupported.
+// The kinds of entry a rename applies to.
 const (
 	RenameService    = "service"
 	RenameConnection = "connection"
@@ -27,8 +26,8 @@ const (
 var ErrRenameUnsupported = errors.New("this kind of entry cannot be renamed")
 
 // RenameRefusedError reports a rename that the names themselves rule out, before anything was written: the
-// kind or the entry is unknown, the new name is invalid or taken, or the vault already gives that name
-// something.
+// kind or the entry is unknown, the new name is invalid or taken, or the vault or, for a credential, the
+// system keyring or the unencrypted fallback file already gives that name something.
 type RenameRefusedError struct{ Err error }
 
 func (e *RenameRefusedError) Error() string { return e.Err.Error() }
@@ -46,7 +45,7 @@ const (
 // RenamePlan is what renaming one entry changes, found without changing anything: the dry run every surface
 // shows, and what Rename carries out once it was confirmed.
 type RenamePlan struct {
-	// Kind is RenameService or RenameConnection; Old and New are the names.
+	// Kind is RenameService, RenameConnection or RenameCredential; Old and New are the names.
 	Kind, Old, New string
 	// ID is the config id of the entry, which the rename keeps.
 	ID string
@@ -57,13 +56,18 @@ type RenamePlan struct {
 	// is, so a valid one stays valid and an open one stays open.
 	Approval      string
 	CarryApproval bool
-	// LapsedTokens names the agent tokens that name the connection as a vorbild; the rename ends that cover.
+	// LapsedTokens names the agent tokens that name the connection as a vorbild, or, for a credential, whose
+	// vorbild has an approval naming the credential that the rename does not carry over; the rename ends that
+	// cover.
 	LapsedTokens []string
 	// VaultUnread is true when the vault is encrypted but not unlocked in this process, so approvals and agent
 	// tokens are neither shown nor checked; Rename refuses such a plan.
 	VaultUnread bool
 	// Outside names what may refer to the entry by its name and is out of qatlas's reach.
 	Outside []string
+
+	// The rest describes a credential's rename.
+	CredentialPlan
 
 	cfg  *config.Config
 	base config.Revision
@@ -75,12 +79,17 @@ type RenamePlan struct {
 type RenameResult struct {
 	VaultCopies []string
 	Warnings    []string
+	// Carried names the connections whose approvals a credential's rename carried over; EnvVars are the
+	// plan's.
+	Carried []string
+	EnvVars []EnvRename
 }
 
 // PlanRename finds what renaming the entry old of kind to name changes, reading the configuration and, for a
-// connection, the approvals and agent tokens of a vault unlocked in this process. It writes nothing. approve
-// says that the surface acts in an active admin session, where saving counts as approval: only then does the
-// rename carry the connection's approval over; without it the vault is left as it is.
+// connection or a credential, the approvals and agent tokens of a vault unlocked in this process; for a
+// credential also what the vault and the system keyring hold for it (see planCredential). It writes nothing.
+// approve says that the surface acts in an active admin session, where saving counts as approval: only then
+// does the rename carry approvals over; without it the approvals are left as they are.
 //
 // A name that is no valid name, is taken, or would inherit what the vault holds for another connection - an
 // approval under that name that is not the rest of renaming this one, or an agent token that names it as a
@@ -92,6 +101,7 @@ func (s *Service) PlanRename(kind, old, name string, approve bool) (*RenamePlan,
 	}
 	cand := cfg.Clone()
 	cand.AssignIDs()
+	before := cand.Clone()
 	plan := &RenamePlan{Kind: kind, Old: old, New: name, cfg: cand, base: rev}
 	switch kind {
 	case RenameService:
@@ -107,6 +117,9 @@ func (s *Service) PlanRename(kind, old, name string, approve bool) (*RenamePlan,
 			"invocation log entries written before keep the name " + old,
 			"environment variables: none is named after a connection",
 		}
+	case RenameCredential:
+		plan.References, err = cand.RenameCredential(old, name)
+		plan.ID = cand.Credentials[name].ID
 	default:
 		return nil, &RenameRefusedError{fmt.Errorf("%s: %w", kind, ErrRenameUnsupported)}
 	}
@@ -116,8 +129,13 @@ func (s *Service) PlanRename(kind, old, name string, approve bool) (*RenamePlan,
 	if err := cand.Validate(); err != nil {
 		return nil, &config.InvalidError{Path: s.store.Path(), Err: err}
 	}
-	if kind == RenameConnection {
+	switch kind {
+	case RenameConnection:
 		if err := s.planVault(plan, cfg, approve); err != nil {
+			return nil, err
+		}
+	case RenameCredential:
+		if err := s.planCredential(plan, before, approve); err != nil {
 			return nil, err
 		}
 	}
@@ -191,7 +209,8 @@ var saveRename = func(save func(*config.Config) error, cfg *config.Config) error
 // Once committed it removes the approval under the old name, hands the approvals to a vault process that
 // holds the vault unlocked, and logs a connection's rename as one config.connection.rename entry. A failure
 // there leaves at most a stale approval that names its connection (see approval.Leftover) and is returned as
-// a warning.
+// a warning. A credential's rename is carried out by renameCredential, and a plan of PlanRevertRename by
+// revertCredential.
 func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, error) {
 	var res RenameResult
 	if plan == nil || plan.cfg == nil {
@@ -209,6 +228,12 @@ func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, e
 		if state == vault.StateLocked {
 			return res, vault.ErrNotUnlocked
 		}
+	}
+	if plan.Revert {
+		return s.revertCredential(ctx, plan, v)
+	}
+	if plan.Kind == RenameCredential {
+		return s.renameCredential(ctx, plan, v)
 	}
 	carried := false
 	err := s.store.Transact(plan.base, func(save func(*config.Config) error) error {

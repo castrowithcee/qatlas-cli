@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -214,19 +215,216 @@ func TestConfigRenameService(t *testing.T) {
 // A rename that stopped after the vault but before the configuration leaves an extra approval that names its
 // connection; 'vault approve' says where it comes from and how to finish.
 func TestVaultApproveNamesARenameLeftover(t *testing.T) {
-	dir := renameVault(t)
-	v := vault.New(dir)
-	if _, err := v.Unlock("s3cret-phrase"); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := v.CarryApproval("wiki", "wiki-main", loadConfig(t, dir).Connections["wiki"].ID); err != nil {
-		t.Fatal(err)
+	stopConnectionRename := func() string {
+		dir := renameVault(t)
+		v := vault.New(dir)
+		if _, err := v.Unlock("s3cret-phrase"); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := v.CarryApproval("wiki", "wiki-main", loadConfig(t, dir).Connections["wiki"].ID); err != nil {
+			t.Fatal(err)
+		}
+		return dir
 	}
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
-	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	dir := stopConnectionRename()
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--output", "json", "--config", configIn(dir))
+	var doc vaultApproveDocument
+	if code != exitOK || json.Unmarshal([]byte(stdout), &doc) != nil || !reflect.DeepEqual(doc.RenameLeftovers,
+		[]renameLeftoverDocument{{Kind: "connection", Approval: "wiki-main", Connection: "wiki"}}) {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+
+	dir = stopConnectionRename()
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
 	if code != exitOK || !strings.Contains(stdout, "the approval of wiki-main is left over from an unfinished rename "+
 		"of connection wiki: 'qatlas config rename connection wiki wiki-main' gives the connection that name") ||
 		!strings.Contains(stdout, "removed 1 stale approval no longer read from the vault: wiki-main") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+}
+
+func TestConfigRenameCredentialCarriesApprovalsAndNamesEnvVars(t *testing.T) {
+	dir := renameVault(t)
+	id := loadConfig(t, dir).Credentials["wiki-vault"].ID
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	var question string
+	withVaultConfirm(t, func(prompt string) (bool, error) {
+		question = prompt
+		return true, nil
+	})
+
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "config", "rename", "credential", "wiki-vault", "wiki-cred",
+		"--config", configIn(dir))
+	if code != exitOK || stderr != "" {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		"rename credential wiki-vault -> wiki-cred\n", "  id        " + id + ", kept\n",
+		"  rewrites  connections.wiki.credential\n", "  rewrites  connections.wiki2.credential\n",
+		"  vault     entry wiki-vault -> wiki-cred, keeping its id and its secrets\n",
+		"  reader    wiki: approved; carried over, so wiki stays approved\n",
+		"  env       QATLAS_WIKI_VAULT_TOKEN_ID -> QATLAS_WIKI_CRED_TOKEN_ID (token-id)\n",
+		"  outside   environment variables named after the credential, which override its stored secrets: it reads " +
+			"them under its new name from now on, and qatlas changes no environment, not changed\n",
+		"the vault files are backed up as ",
+		"approvals carried over to wiki-cred: wiki, wiki2\n",
+		"environment variables that override the stored secrets are read under the new name: ",
+		", QATLAS_WIKI_VAULT_TOKEN_ID -> QATLAS_WIKI_CRED_TOKEN_ID, ", "; qatlas changed no environment\n",
+		"renamed credential wiki-vault to wiki-cred\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout = %q, want it to contain %q", stdout, want)
+		}
+	}
+	if question != "rename credential wiki-vault to wiki-cred? [y/N] " || strings.Contains(stdout, canaryVault) {
+		t.Errorf("question = %q, or a secret reached the output", question)
+	}
+	cfg := loadConfig(t, dir)
+	if cfg.Credentials["wiki-cred"].ID != id || cfg.Connections["wiki2"].Credential != "wiki-cred" {
+		t.Errorf("configuration = %+v", cfg)
+	}
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki")); err != nil {
+		t.Errorf("CheckApproval(wiki) = %v, want it approved without a new approval", err)
+	}
+	if report, err := approval.Pending(cfg, fresh); err != nil || len(report.Open) != 0 || len(report.Stale) != 0 {
+		t.Errorf("Pending() = %+v, %v, want nothing open or stale", report, err)
+	}
+}
+
+// A dry run lists every field of a credential's plan and changes nothing; without a terminal it reads no
+// locked vault, and the rename itself is refused there.
+func TestConfigRenameCredentialDryRunAndAdmin(t *testing.T) {
+	dir := renameVault(t)
+	before := treeIn(t, dir)
+
+	withInteractive(t, false)
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "config", "rename", "credential", "wiki-vault", "wiki-cred",
+		"--dry-run", "--output", "json", "--config", configIn(dir))
+	var doc renameDocument
+	if code != exitOK || json.Unmarshal([]byte(stdout), &doc) != nil {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if !doc.DryRun || doc.Renamed || !doc.VaultUnread || doc.Kind != "credential" || doc.Credential == nil ||
+		doc.Credential.VaultEntry || len(doc.Credential.Readers) != 2 || doc.Credential.Readers[0].Connection != "wiki" ||
+		!slices.Contains(doc.Credential.EnvVars, envRenameDocument{Role: "token-id",
+			Old: "QATLAS_WIKI_VAULT_TOKEN_ID", New: "QATLAS_WIKI_CRED_TOKEN_ID"}) {
+		t.Errorf("document = %+v, %+v", doc, doc.Credential)
+	}
+	code, _, stderr = runWithInput(t, &Options{}, "", "config", "rename", "credential", "wiki-vault", "wiki-cred",
+		"--config", configIn(dir))
+	if code != exitUsage || !strings.Contains(stderr, "admin-required") {
+		t.Errorf("without a terminal: exit %d, stderr %q, want admin-required", code, stderr)
+	}
+
+	withInteractive(t, true)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "config", "rename", "credential", "wiki-vault", "wiki-cred",
+		"--dry-run", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "  reader    wiki2: approved; carried over") ||
+		!strings.Contains(stdout, "  vault     entry wiki-vault -> wiki-cred") ||
+		!strings.Contains(stdout, "dry run: nothing was changed") {
+		t.Errorf("dry run at a terminal: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if after := treeIn(t, dir); !reflect.DeepEqual(after, before) {
+		t.Error("a dry run or a refused rename changed a file")
+	}
+}
+
+// stopCredentialRename leaves the vault in dir the way a rename of wiki-vault to wiki-cred that stopped before
+// the configuration does: the entry and the approvals of both connections under the new name.
+func stopCredentialRename(t *testing.T, dir string) {
+	t.Helper()
+	cfg := loadConfig(t, dir)
+	v := vault.New(dir)
+	if _, err := v.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	var carry []vault.ScopeRename
+	for _, name := range []string{"wiki", "wiki2"} {
+		scope := connectionScope(t, dir, name)
+		renamed := scope
+		renamed.Credential = "wiki-cred"
+		carry = append(carry, vault.ScopeRename{Before: scope, After: renamed, ConnectionID: cfg.Connections[name].ID})
+	}
+	if _, _, err := v.RenameCredential(vault.CredentialRename{From: "wiki-vault", To: "wiki-cred",
+		CredentialID: cfg.Credentials["wiki-vault"].ID, Entry: true, Carry: carry}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVaultApproveNamesACredentialLeftover(t *testing.T) {
+	dir := renameVault(t)
+	stopCredentialRename(t, dir)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "the vault holds credential wiki-vault under the name wiki-cred, "+
+		"with the approvals of wiki, wiki2, left over from an unfinished rename; until it is resolved, wiki-vault is "+
+		"not read from the vault: 'qatlas config rename credential wiki-vault wiki-cred' finishes the rename, and "+
+		"'qatlas config rename credential wiki-vault wiki-cred --revert' puts it back under wiki-vault\n") ||
+		!strings.Contains(stdout, "nothing is open") {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--output", "json", "--config", configIn(dir))
+	var doc vaultApproveDocument
+	if code != exitOK || json.Unmarshal([]byte(stdout), &doc) != nil {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	want := []renameLeftoverDocument{{Kind: "credential", Credential: "wiki-vault", New: "wiki-cred",
+		Approvals: []string{"wiki", "wiki2"}}}
+	if !reflect.DeepEqual(doc.RenameLeftovers, want) || len(doc.Approved) != 0 {
+		t.Errorf("document = %+v", doc)
+	}
+}
+
+// The same rename finishes what a stopped one left; --revert puts it back instead. Either way the connections
+// are approved as they are configured then, without a new approval.
+func TestConfigRenameCredentialResolvesALeftover(t *testing.T) {
+	for _, revert := range []bool{false, true} {
+		dir := renameVault(t)
+		stopCredentialRename(t, dir)
+		configBefore, _ := os.ReadFile(configIn(dir))
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		withVaultConfirm(t, confirming(true))
+		args := []string{"config", "rename", "credential", "wiki-vault", "wiki-cred", "--config", configIn(dir)}
+		want := []string{"  resumes   a rename to wiki-cred that stopped", "  reader    wiki: approved; carried over",
+			"approvals carried over to wiki-cred: wiki, wiki2\n", "renamed credential wiki-vault to wiki-cred\n"}
+		if revert {
+			args = append(args, "--revert")
+			want = []string{"revert the stopped rename of credential wiki-vault -> wiki-cred\n",
+				"  vault     entry wiki-cred -> wiki-vault", "  reader    wiki: approval carried back to wiki-vault\n",
+				"  config    not changed\n", "approvals carried back to wiki-vault: wiki, wiki2\n",
+				"put credential wiki-vault back as it was before the rename to wiki-cred\n"}
+		}
+		code, stdout, stderr := runWithInput(t, &Options{}, "", args...)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("revert %v: exit %d, stdout %q, stderr %q", revert, code, stdout, stderr)
+		}
+		for _, w := range want {
+			if !strings.Contains(stdout, w) {
+				t.Errorf("revert %v: stdout = %q, want it to contain %q", revert, stdout, w)
+			}
+		}
+		configAfter, _ := os.ReadFile(configIn(dir))
+		if changed := string(configAfter) != string(configBefore); changed == revert {
+			t.Errorf("revert %v: configuration changed = %v", revert, changed)
+		}
+		fresh := vault.New(dir)
+		if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+			t.Fatal(err)
+		}
+		cfg := loadConfig(t, dir)
+		if report, err := approval.Pending(cfg, fresh); err != nil || len(report.Open) != 0 || len(report.Stale) != 0 {
+			t.Errorf("revert %v: Pending() = %+v, %v, want nothing open or stale", revert, report, err)
+		}
+		for _, name := range []string{"wiki", "wiki2"} {
+			if err := fresh.CheckApproval(connectionScope(t, dir, name)); err != nil {
+				t.Errorf("revert %v: CheckApproval(%s) = %v", revert, name, err)
+			}
+		}
 	}
 }
