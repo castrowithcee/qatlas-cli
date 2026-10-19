@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -707,12 +708,14 @@ func (s *Server) connectionRows() ([]ConnectionRow, error) {
 	}
 	sort.Strings(names)
 	rows := make([]ConnectionRow, 0, len(names))
+	now := time.Now()
 	for _, name := range names {
 		conn := cfg.Connections[name]
 		rows = append(rows, ConnectionRow{
 			Name: name, Provider: cfg.Services[conn.Service].Provider, Description: conn.Description,
 			Effects: config.FormatEffects(cfg.ConnectionEffects(name)),
-			Tools:   toolsSummary(conn.Tools), State: stateText(conn.Disabled),
+			Tools:   toolsSummary(conn.Tools), State: stateText(conn.Off(now)),
+			ActiveUntil: conn.ActiveUntilCanonical(),
 		})
 	}
 	return rows, nil

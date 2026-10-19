@@ -32,6 +32,8 @@ type Resolved struct {
 	Forward map[string]Credential
 	// Disabled is set while the connection is switched off.
 	Disabled bool
+	// ActiveUntil is the limit as Connection.ActiveUntilCanonical gives it, empty when there is none.
+	ActiveUntil string
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -110,5 +112,6 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		ForwardSecrets: append([]string(nil), conn.ForwardSecrets...),
 		Forward:        c.ForwardCredentials(conn),
 		Disabled:       conn.Disabled,
+		ActiveUntil:    conn.ActiveUntilCanonical(),
 	}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -105,11 +106,11 @@ func TestAuditLogIsOfferedOnlyWithAToolsListEntry(t *testing.T) {
 	for name, want := range map[string]config.Refusal{
 		"open": config.RefusalToolAllowList, "other": config.RefusalToolsList, "listed": "",
 	} {
-		if got := cfg.ConnectionRefusal(name, tool); got != want {
+		if got := cfg.ConnectionRefusal(name, tool, time.Time{}); got != want {
 			t.Errorf("%s: refusal = %q, want %q", name, got, want)
 		}
 	}
-	if !cfg.ConnectionAllows("open", usersList.Tool()) {
+	if !cfg.ConnectionAllows("open", usersList.Tool(), time.Time{}) {
 		t.Error("users.list must be offered without a tools list")
 	}
 }

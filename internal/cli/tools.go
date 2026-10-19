@@ -85,8 +85,9 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"vault unlocked; 'qatlas vault unlock' starts one. An encrypted vault also hands its secrets only\n" +
 			"to a connection a person approved as it is configured now; one that was never approved or changed\n" +
 			"since gets unusable: approval-required. Without such a connection the column is left out.\n\n" +
-			"A connection a person switched off gets state: disabled, a column of its own that is left out\n" +
-			"while none is. It keeps its selection and offers no tool; naming it fails with\n" +
+			"A connection a person switched off, or whose active_until has passed, gets state: disabled, a column\n" +
+			"of its own that is left out while none is; active_until, the instant of the limit, is shown for\n" +
+			"every connection that has one. It keeps its selection and offers no tool; naming it fails with\n" +
 			"unsupported-capability and the reason connection-disabled.\n\n" +
 			"It is answered from the local configuration and the vault's state alone: no provider is\n" +
 			"contacted, no secret is read, and no passphrase is asked for. No URL, credential, target, or\n" +
