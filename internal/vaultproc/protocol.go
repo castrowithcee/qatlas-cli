@@ -135,13 +135,14 @@ type logEntry struct {
 	DurationMS int64                 `json:"duration_ms,omitempty"`
 	ReqBytes   *int64                `json:"req_bytes,omitempty"`
 	RespBytes  *int64                `json:"resp_bytes,omitempty"`
+	Session    string                `json:"session,omitempty"`
 }
 
 func (e logEntry) fields() invokelog.Fields {
 	return invokelog.Fields{
 		Path: e.Path, Client: e.Client, Operation: e.Operation, Version: e.Version, Connection: e.Connection,
 		Effect: e.Effect, Result: e.Result, Duration: time.Duration(e.DurationMS) * time.Millisecond,
-		ReqBytes: e.ReqBytes, RespBytes: e.RespBytes,
+		ReqBytes: e.ReqBytes, RespBytes: e.RespBytes, Session: e.Session,
 	}
 }
 
@@ -149,7 +150,7 @@ func logEntryOf(f invokelog.Fields) *logEntry {
 	return &logEntry{
 		Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version, Connection: f.Connection,
 		Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
-		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes,
+		ReqBytes: f.ReqBytes, RespBytes: f.RespBytes, Session: f.Session,
 	}
 }
 

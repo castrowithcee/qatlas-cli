@@ -27,10 +27,9 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if err != nil {
 		return
 	}
+	// Even under 'qatlas mcp' the migration runs before any MCP session exists, and the log keeps the mcp
+	// path for the entries of a session.
 	surface := connlog.SurfaceCLI
-	if c.Name() == "mcp" && c.Parent() == c.Root() {
-		surface = "mcp"
-	}
 	// The vault beside the file, not the run's resolver: building that here would fix its prompting before
 	// the command could make it unattended.
 	v := vault.New(filepath.Dir(path))

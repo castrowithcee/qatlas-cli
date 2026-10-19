@@ -40,8 +40,9 @@ func TestMain(m *testing.M) {
 	vaultProcessSupported = false
 	// No test finds an agent token of the machine it runs on; a test that needs one sets its own.
 	lookupAgentToken = func() (string, string, error) { return "", "", nil }
-	// Every start may migrate the configuration it finds, so not even a test that names no configuration
-	// may reach the one of the machine it runs on.
+	// Every start may migrate the configuration it finds and an MCP server logs to the vault directory of
+	// its configuration, so no test may resolve the default one of the machine it runs on; a test that needs
+	// its own sets QATLAS_CONFIG or Options.Config.
 	home, err := os.MkdirTemp("", "qatlas-cli-test-home-")
 	if err != nil {
 		panic(err)
@@ -49,7 +50,7 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("HOME", home)
 	_ = os.Setenv("USERPROFILE", home)
 	_ = os.Unsetenv("QATLAS_CONFIG")
-	_ = os.Unsetenv("QATLAS_CLI_HOME")
+	_ = os.Setenv("QATLAS_CLI_HOME", home)
 	code := m.Run()
 	_ = os.RemoveAll(home)
 	os.Exit(code)

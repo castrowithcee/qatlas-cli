@@ -89,7 +89,7 @@ func TestMCPMigratesWithoutTouchingStdout(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("logs = %v", logs)
 	}
-	if data, _ := os.ReadFile(logs[0]); !strings.Contains(string(data), `"path":"mcp","operation":"config.migrate"`) {
+	if data, _ := os.ReadFile(logs[0]); !strings.Contains(string(data), `"path":"cli","operation":"config.migrate"`) {
 		t.Errorf("log = %s", data)
 	}
 }

@@ -66,7 +66,7 @@ var saveMigration = func(save func(*config.Config) error, cfg *config.Config) er
 // A vault that is encrypted and locked takes the ids as pending writes, merged on its next unlock; until then
 // entries are matched by name, as they always were. No vault is created, and a vault other than the one
 // beside the file is never written. The migration is logged as invokelog.OperationConfigMigrate with the
-// service's surface as its path, which is "cli" or "mcp" for the log to accept it. It logs no connection
+// service's surface as its path, which is "cli" for the log to accept it. It logs no connection
 // change and touches no approval, since ids are part of neither.
 func (s *Service) MigrateSchema() (*Migration, error) {
 	if s.store.HasCurrentSchema() {

@@ -174,9 +174,19 @@ defaults:
 		t.Fatalf("MCP invoke = %s", invoke.Result.Structured)
 	}
 
-	file, entries := readLog(t)
-	if len(entries) != 4 {
-		t.Fatalf("the log holds %d entries, want 4", len(entries))
+	if search := broker.call(t, `{"query":"pages"}`, "qatlas.search"); search.Result.IsError {
+		t.Fatalf("MCP search = %s", search.Result.Structured)
+	}
+	// An entry is appended after its response was written, so it may follow the answer by a moment.
+	var file string
+	var entries []map[string]any
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if file, entries = readLog(t); len(entries) >= 5 || time.Now().After(deadline) {
+			break
+		}
+	}
+	if len(entries) != 5 {
+		t.Fatalf("the log holds %d entries, want 5", len(entries))
 	}
 	for i, entry := range entries {
 		signed := entry["mac"] != ""
@@ -184,22 +194,24 @@ defaults:
 			t.Fatalf("entry %d = %v, want only the entry written while locked unsigned", i, entry)
 		}
 	}
-	if entries[3]["path"] != "mcp" {
-		t.Fatalf("last entry = %v, want the broker's invoke", entries[3])
+	if entries[3]["path"] != "mcp" || entries[4]["path"] != "mcp" || entries[4]["operation"] != "qatlas.search" ||
+		entries[3]["session"] == nil || entries[3]["session"] != entries[4]["session"] || entries[4]["connection"] != nil {
+		t.Fatalf("last entries = %v, %v, want the broker's invoke and search under one session", entries[3], entries[4])
 	}
 
 	code, macCheck, days, stderr := verify(t)
-	if code != 0 || macCheck != "checked" || len(days) != 1 || days[0].Entries != 4 || days[0].Unverified != 1 ||
+	if code != 0 || macCheck != "checked" || len(days) != 1 || days[0].Entries != 5 || days[0].Unverified != 1 ||
 		days[0].Unchecked != 0 || days[0].Changed != 0 || stderr != "" {
 		t.Fatalf("verify: exit %d, mac_check %q, days %+v, stderr %q", code, macCheck, days, stderr)
 	}
 
 	// The last line by hand: its chain stays intact, since nothing follows it, but its check value fails.
 	original, _ := os.ReadFile(file)
-	tampered := strings.Replace(string(original), `"path":"mcp"`, `"path":"cli"`, 1)
-	if tampered == string(original) {
+	at := strings.LastIndex(string(original), `"path":"mcp"`)
+	if at < 0 {
 		t.Fatal("the broker's entry was not found to change")
 	}
+	tampered := string(original[:at]) + `"path":"cli"` + string(original[at+len(`"path":"mcp"`):])
 	if err := os.WriteFile(file, []byte(tampered), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +236,7 @@ defaults:
 	processID = 0
 
 	code, macCheck, days, stderr = verify(t)
-	if code != 0 || macCheck != "vault-locked" || days[0].Unchecked != 3 || days[0].Unverified != 1 || stderr != "" {
+	if code != 0 || macCheck != "vault-locked" || days[0].Unchecked != 4 || days[0].Unverified != 1 || stderr != "" {
 		t.Fatalf("verify after lock: exit %d, mac_check %q, days %+v, stderr %q", code, macCheck, days, stderr)
 	}
 

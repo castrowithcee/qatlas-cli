@@ -305,7 +305,8 @@ func TestValidateAcceptsSizeCountersAtTheirBounds(t *testing.T) {
 
 func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 	good := Fields{Path: "mcp", Client: &ClientInfo{Name: "client", Version: "1.0"}, Operation: "wiki.pages.list",
-		Version: 1, Connection: "wiki", Effect: "read", Result: "success", Duration: time.Second}
+		Version: 1, Connection: "wiki", Effect: "read", Result: "success", Duration: time.Second,
+		Session: "0123456789abcdef"}
 	if err := good.Validate(); err != nil {
 		t.Fatalf("Validate(good) = %v", err)
 	}
@@ -327,7 +328,7 @@ func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 		"huge req_bytes":         func(f *Fields) { f.ReqBytes = int64Ptr(MaxReqBytes + 1) },
 		"negative resp_bytes":    func(f *Fields) { f.RespBytes = int64Ptr(-1) },
 		"huge resp_bytes":        func(f *Fields) { f.RespBytes = int64Ptr(MaxRespBytes + 1) },
-		"resp_bytes on failure":  func(f *Fields) { f.RespBytes = int64Ptr(5); f.Result = "not-found" },
+		"resp_bytes on failure":  func(f *Fields) { f.Path = "cli"; f.RespBytes = int64Ptr(5); f.Result = "not-found" },
 		"counter on a connection change": func(f *Fields) {
 			f.Path, f.Operation, f.Effect, f.Connection = "web", OperationConnectionCreate, "create", "wiki"
 			f.ReqBytes = int64Ptr(0)
