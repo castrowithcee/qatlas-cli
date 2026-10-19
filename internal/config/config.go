@@ -339,6 +339,25 @@ func Load(path string, providers ...ProviderCatalog) (*Config, error) {
 
 // Decode reads a configuration from r. Unknown keys and duplicate keys are errors.
 func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
+	cfg, err := decodeRaw(r, providers...)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.applyRenames(); err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	// A decoded configuration is directly editable, and an absent section round-trips to the same model
+	// as an empty one.
+	cfg.ensure()
+	cfg.normalize()
+	return cfg, nil
+}
+
+// decodeRaw parses exactly one document into the model without mapping former names or validating it.
+func decodeRaw(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 
@@ -354,17 +373,6 @@ func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	if err := dec.Decode(new(Config)); !errors.Is(err, io.EOF) {
 		return nil, errors.New("the configuration file must contain exactly one document")
 	}
-
-	if err := cfg.applyRenames(); err != nil {
-		return nil, err
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	// A decoded configuration is directly editable, and an absent section round-trips to the same model
-	// as an empty one.
-	cfg.ensure()
-	cfg.normalize()
 	return &cfg, nil
 }
 

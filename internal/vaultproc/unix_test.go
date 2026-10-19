@@ -13,7 +13,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // socketIn returns a socket path below a fresh test directory, in a run directory that does not exist yet.
@@ -240,4 +242,56 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	if dir := beside(); dir != filepath.Join(explicit, "qatlas") {
 		t.Fatalf("SocketPath() with XDG_RUNTIME_DIR = %s, want the variable to win", dir)
 	}
+}
+
+// A vault process that ends stops serving its socket before it releases its lock. Whoever finds it not running
+// in that moment and starts a new one at once, as 'ctrl+l' and 'qatlas vault unlock' do after ending a process
+// whose program was replaced, gets the socket as soon as the lock is released instead of ErrRunning.
+func TestListenRightAfterAProcessEndedWaitsForItsLock(t *testing.T) {
+	path := socketIn(t)
+	ending, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	held, release := make(chan struct{}), make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	original := beforeUnlock
+	t.Cleanup(func() { beforeUnlock = original })
+	t.Cleanup(releaseOnce)
+	var holdOnce sync.Once
+	beforeUnlock = func() { holdOnce.Do(func() { close(held); <-release }) }
+	closed := make(chan struct{})
+	go func() { _ = ending.Close(); close(closed) }()
+	<-held
+
+	if _, err := NewClient(path, testRecipient).Status(context.Background()); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("Status() while the process ends error = %v, want ErrNotRunning", err)
+	}
+	type listened struct {
+		l   net.Listener
+		err error
+	}
+	started := make(chan listened, 1)
+	go func() {
+		l, err := Listen(path)
+		started <- listened{l, err}
+	}()
+	select {
+	case got := <-started:
+		t.Fatalf("Listen() while the ending process still holds its lock = %v, want it to wait for the lock",
+			got.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	releaseOnce()
+	<-closed
+	got := <-started
+	if got.err != nil {
+		t.Fatalf("Listen() once the lock is released error = %v", got.err)
+	}
+	t.Cleanup(func() { _ = got.l.Close() })
+	conn, err := rawDial(path)
+	if err != nil {
+		t.Fatalf("the new socket does not answer once the ending process closed: %v", err)
+	}
+	_ = conn.Close()
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -167,8 +166,8 @@ func TestSwitchCredentialsBacksUpAndSwitches(t *testing.T) {
 	if cfg.Credentials["reader"].Type != config.CredentialTypeVault {
 		t.Errorf("type = %q, want vault", cfg.Credentials["reader"].Type)
 	}
-	if _, err := os.Stat(path + ".bak"); err != nil {
-		t.Errorf("config.yaml.bak was not written: %v", err)
+	if backups, _ := filepath.Glob(filepath.Join(dir, "backups", "config-*.yaml")); len(backups) != 1 {
+		t.Errorf("configuration backups = %v, want one", backups)
 	}
 	reloaded, err := config.Load(path)
 	if err != nil {
@@ -207,6 +206,7 @@ func TestSwitchCredentialsConflictLeavesFile(t *testing.T) {
 		t.Fatalf("ReadFile() = %v", err)
 	}
 
+	backupsBefore, _ := filepath.Glob(filepath.Join(dir, "backups", "*"))
 	err = SwitchCredentials(store, cfg, rev, []string{"reader"})
 	if !errors.Is(err, config.ErrConflict) {
 		t.Fatalf("SwitchCredentials() = %v, want a conflict", err)
@@ -215,31 +215,7 @@ func TestSwitchCredentialsConflictLeavesFile(t *testing.T) {
 	if err != nil || string(after) != string(before) {
 		t.Errorf("the file changed: %v", err)
 	}
-	if _, err := os.Stat(path + ".bak"); err == nil {
+	if backups, _ := filepath.Glob(filepath.Join(dir, "backups", "*")); len(backups) != len(backupsBefore) {
 		t.Errorf("a backup was made for a conflicting change")
-	}
-}
-
-// BackupConfig copies the file byte for byte, atomically and at mode 0600.
-func TestBackupConfigIsAtomicAndPrivate(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	content := []byte("version: 1\ncredentials: {}\n")
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-
-	if err := BackupConfig(path); err != nil {
-		t.Fatalf("BackupConfig() = %v", err)
-	}
-	got, err := os.ReadFile(path + ".bak")
-	if err != nil || string(got) != string(content) {
-		t.Fatalf("backup content = %q, %v, want %q, nil", got, err, content)
-	}
-	if runtime.GOOS != "windows" {
-		info, err := os.Stat(path + ".bak")
-		if err != nil || info.Mode().Perm() != 0o600 {
-			t.Errorf(".bak mode = %v, %v, want 0600", info, err)
-		}
 	}
 }

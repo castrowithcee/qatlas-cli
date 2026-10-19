@@ -9,8 +9,6 @@ package vaultmigrate
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -177,20 +175,17 @@ func Verify(v *vault.Vault, plan []Entry) error {
 	return nil
 }
 
-// SwitchCredentials backs up the configuration store's file first, atomically and at mode 0600 (see
-// BackupConfig), and switches every named credential's type to vault in cfg, then saves it through store.
-// base is the revision of the file cfg was loaded from (config.Store.LoadVersioned): if the file changed
-// since, the result is a *config.ConflictError and the file is left as it is and no backup is made. A failed
-// backup stops before the configuration file is touched. Called with no names, it does nothing and leaves
-// cfg and the file untouched.
+// SwitchCredentials switches every named credential's type to vault in cfg, then saves it through store,
+// which backs the configuration file up first (see config.Store.Save). base is the revision of the file cfg
+// was loaded from (config.Store.LoadVersioned): if the file changed since, the result is a
+// *config.ConflictError and the file is left as it is and no backup is made. A failed backup stops before
+// the configuration file is touched. Called with no names, it does nothing and leaves cfg and the file
+// untouched.
 func SwitchCredentials(store *config.Store, cfg *config.Config, base config.Revision, switched []string) error {
 	if len(switched) == 0 {
 		return nil
 	}
 	return store.Transact(base, func(save func(*config.Config) error) error {
-		if err := BackupConfig(store.Path()); err != nil {
-			return err
-		}
 		for _, name := range switched {
 			cred := cfg.Credentials[name]
 			cred.Type = config.CredentialTypeVault
@@ -200,48 +195,4 @@ func SwitchCredentials(store *config.Store, cfg *config.Config, base config.Revi
 		}
 		return save(cfg)
 	})
-}
-
-// BackupConfig writes a byte-for-byte copy of the file at path to path+".bak", atomically and at mode 0600,
-// the same write-then-rename idiom every other file the configuration package writes uses. A partial or
-// failed backup therefore never leaves a truncated or wrongly permissioned copy behind, and an existing .bak
-// is replaced outright rather than inheriting whatever mode it happened to have.
-func BackupConfig(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("cannot read %s to back it up: %w", path, err)
-	}
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".qatlas-config-bak-*.tmp")
-	if err != nil {
-		return fmt.Errorf("cannot write a backup of %s: %w", path, err)
-	}
-	name := tmp.Name()
-	moved := false
-	defer func() {
-		if !moved {
-			_ = os.Remove(name)
-		}
-	}()
-	if err := os.Chmod(name, 0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("cannot set the permissions of %s: %w", name, err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("cannot write %s: %w", name, err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("cannot write %s: %w", name, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("cannot write %s: %w", name, err)
-	}
-	backup := path + ".bak"
-	if err := os.Rename(name, backup); err != nil {
-		return fmt.Errorf("cannot replace %s: %w", backup, err)
-	}
-	moved = true
-	return nil
 }
