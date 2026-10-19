@@ -81,7 +81,7 @@ func (m *Model) tokensReport() (entries []tokenEntry, unavailable string) {
 	entries = make([]tokenEntry, 0, len(tokens))
 	for _, token := range tokens {
 		entry := tokenEntry{token: token}
-		entry.lapsed, err = approval.LapsedModels(m.cfg, v, token)
+		entry.lapsed, err = approval.LapsedModels(m.cfg, v, token, m.timeNow())
 		if err != nil {
 			entry.checkErr = m.redactor.Apply(err.Error())
 		}

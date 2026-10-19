@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -20,7 +21,7 @@ func TestConnectionEffectsAreIndependentFromCredentials(t *testing.T) {
 		t.Fatalf("permissions = %v, want %v", got, want)
 	}
 	allows := func(effect Effect) bool {
-		return cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: effect})
+		return cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: effect}, time.Time{})
 	}
 	if !allows(EffectRead) || !allows(EffectUpdate) || allows(EffectCreate) || allows(EffectDelete) {
 		t.Fatal("connection permission check does not match the explicit local allow-list")
@@ -148,8 +149,8 @@ func TestConnectionToolsOfferExactlyTheListedAndDeriveTheEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
-		!missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
+	if !missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}, time.Time{}) ||
+		!missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}, time.Time{}) {
 		t.Fatal("a connection by effect without a field no longer offers every tool of the provider's defaults")
 	}
 	if got := missing.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead}) {
@@ -162,12 +163,12 @@ func TestConnectionToolsOfferExactlyTheListedAndDeriveTheEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"bookstack.pages.list", "bookstack.pages.create"} {
-		if !listed.ConnectionAllows("wiki", ToolMetadata{ID: id, Effect: EffectRead}) {
+		if !listed.ConnectionAllows("wiki", ToolMetadata{ID: id, Effect: EffectRead}, time.Time{}) {
 			t.Errorf("the listed tool %s is refused", id)
 		}
 	}
 	for _, id := range []string{"bookstack.pages.get", "bookstack.pages.search"} {
-		if refusal := listed.ConnectionRefusal("wiki", ToolMetadata{ID: id, Effect: EffectRead}); refusal != RefusalToolsList {
+		if refusal := listed.ConnectionRefusal("wiki", ToolMetadata{ID: id, Effect: EffectRead}, time.Time{}); refusal != RefusalToolsList {
 			t.Errorf("%s: refusal = %q, want %q", id, refusal, RefusalToolsList)
 		}
 	}
@@ -179,7 +180,7 @@ func TestConnectionToolsOfferExactlyTheListedAndDeriveTheEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
+	if empty.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}, time.Time{}) {
 		t.Fatal("an explicit empty tools list does not deny every tool")
 	}
 	if got := empty.ConnectionEffects("wiki"); got == nil || len(got) != 0 {
@@ -315,8 +316,8 @@ func TestRemovedToolsAreIgnoredWithAWarning(t *testing.T) {
 	if got := cfg.ToolWarnings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("ToolWarnings() = %q, want %q", got, want)
 	}
-	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
-		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
+	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}, time.Time{}) ||
+		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}, time.Time{}) {
 		t.Error("the remaining listed tool is not offered exactly")
 	}
 	// The removed entry is skipped even where the permissions exclude its former effect.
@@ -351,12 +352,12 @@ defaults:`, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
-		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
+	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}, time.Time{}) ||
+		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}, time.Time{}) {
 		t.Error("wiki does not offer exactly its own tool")
 	}
-	if !cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) ||
-		cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
+	if !cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}, time.Time{}) ||
+		cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}, time.Time{}) {
 		t.Error("wiki-reader does not offer exactly its own tool")
 	}
 }
@@ -381,10 +382,10 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := cfg.ConnectionAllows("wiki", guarded); got != tc.guarded {
+			if got := cfg.ConnectionAllows("wiki", guarded, time.Time{}); got != tc.guarded {
 				t.Errorf("guarded tool offered = %t, want %t", got, tc.guarded)
 			}
-			if got := cfg.ConnectionAllows("wiki", ordinary); got != tc.ordinaryWant {
+			if got := cfg.ConnectionAllows("wiki", ordinary, time.Time{}); got != tc.ordinaryWant {
 				t.Errorf("ordinary tool offered = %t, want %t", got, tc.ordinaryWant)
 			}
 		})

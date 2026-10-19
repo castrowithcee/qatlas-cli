@@ -216,6 +216,7 @@ func buildOverview(registry *capability.Registry, cfg *config.Config) web.Overvi
 		overview.Connections = append(overview.Connections, web.ConnectionRow{
 			Name: cn.Name, Provider: cn.Provider, Description: cn.Description,
 			Effects: cn.Effects, Tools: cn.Tools, State: webState(cn.State),
+			ActiveUntil: cn.ActiveUntil,
 		})
 	}
 	return overview

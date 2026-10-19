@@ -73,8 +73,11 @@ type ConnectionRow struct {
 	Description string
 	Effects     string
 	Tools       string
-	// State is "active" or "disabled"; a disabled connection keeps its selection but serves nothing.
+	// State is "active" or "disabled"; a disabled connection, or one past its active_until, keeps its
+	// selection but serves nothing.
 	State string
+	// ActiveUntil is the limit of the connection as RFC 3339, empty without one.
+	ActiveUntil string
 }
 
 // Overview is the secretfree snapshot a coupled browser is shown. It is built once by the caller before
@@ -609,7 +612,7 @@ var overviewTemplate = strings.TrimSpace(`
 <table>
 <thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Effects</th><th scope="col">Tools</th><th scope="col">State</th></tr></thead>
 <tbody>
-{{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Effects}}</td><td>{{.Tools}}</td><td>{{.State}}</td></tr>
+{{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Effects}}</td><td>{{.Tools}}</td><td>{{.State}}{{if .ActiveUntil}} (until {{.ActiveUntil}}){{end}}</td></tr>
 {{end}}</tbody>
 </table>
 {{if not .Connections}}<p class="empty">No connections yet.</p>{{end}}
