@@ -20,7 +20,7 @@ func newID() string {
 
 // validateIDs reports a malformed id and ids that appear twice within one type. A duplicate names both
 // keys and is never repaired: choosing which entry keeps the id would be a guess.
-func (c *Config) validateIDs(report func(string, ...any)) {
+func (c *Config) validateIDs(report func(Problem)) {
 	check := func(section string, ids map[string]string) {
 		first := map[string]string{}
 		for _, name := range sortedKeys(ids) {
@@ -29,11 +29,12 @@ func (c *Config) validateIDs(report func(string, ...any)) {
 				continue
 			}
 			if !idPattern.MatchString(id) {
-				report("%s.%s.id: must be 32 lower-case hex digits", section, name)
+				report(problem(section, name, "id", CodeInvalidID, "must be 32 lower-case hex digits"))
 				continue
 			}
 			if other, dup := first[id]; dup {
-				report("%s.%s.id: duplicate of %s.%s.id", section, name, section, other)
+				report(problem(section, name, "id", CodeDuplicateID, "duplicate of %s.%s.id", section, other).
+					with("other", other))
 				continue
 			}
 			first[id] = name

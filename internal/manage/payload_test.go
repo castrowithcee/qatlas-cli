@@ -29,6 +29,19 @@ func TestPayloadFieldProblem(t *testing.T) {
 	}
 }
 
+// TestPayloadFieldProblemText pins the exact refusal text, which the structured problem of the core must
+// still produce.
+func TestPayloadFieldProblemText(t *testing.T) {
+	const want = "the field name is refused: a field name must consist of letters, digits, '-', '_' or '.' and " +
+		"must start and end with a letter or a digit"
+	if got := PayloadFieldProblem("has space"); got != want {
+		t.Errorf("PayloadFieldProblem() = %q, want %q", got, want)
+	}
+	if got := PayloadFieldProblem(""); got != "the field name is refused: a field name must not be empty" {
+		t.Errorf("PayloadFieldProblem(\"\") = %q", got)
+	}
+}
+
 // payloadFixture is a service over a configuration that holds the payload credential "shared" with the
 // fields user and pass, both stored.
 type payloadFixture struct {

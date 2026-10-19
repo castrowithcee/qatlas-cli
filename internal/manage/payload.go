@@ -24,9 +24,9 @@ func PayloadFieldProblem(name string) string {
 	if err == nil {
 		return ""
 	}
-	for _, line := range strings.Split(err.Error(), "\n") {
-		if _, rule, ok := strings.Cut(line, "fields[0]: "); ok {
-			return "the field name is refused: " + rule
+	for _, p := range config.Problems(err) {
+		if p.Section == config.SectionCredentials && p.Field == "fields" && p.HasIndex && p.Index == 0 {
+			return "the field name is refused: " + p.Detail()
 		}
 	}
 	return "the field name is refused"

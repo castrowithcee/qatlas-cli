@@ -154,6 +154,16 @@ func TestInvokeLogFallsBackOnAnOldVaultProcess(t *testing.T) {
 	if e, _ := logEntries(t, dir); len(e) != 2 || e[1].Session != session.Session || e[1].MAC != "" {
 		t.Fatalf("entries = %+v, want the session entry written unsigned", e)
 	}
+	// An invoke entry with a connection id likewise: written unsigned, with the id.
+	withID := logFields("op.direct")
+	withID.Connection, withID.ConnectionID = "wiki", "0123456789abcdef0123456789abcdef"
+	err = writer.Append(withID)
+	if !errors.As(err, &unsigned) || !errors.Is(err, vaultproc.ErrVersion) {
+		t.Fatalf("Append(entry with a connection id) = %v, want an UnsignedError wrapping ErrVersion", err)
+	}
+	if e, _ := logEntries(t, dir); len(e) != 3 || e[2].ConnectionID != withID.ConnectionID || e[2].MAC != "" {
+		t.Fatalf("entries = %+v, want the entry with its connection id written unsigned", e)
+	}
 
 	code, _, stderr := runWithInput(t, &Options{}, "", "invoke", "bookstack.pages.nope", "--config", configIn(dir))
 	if code == exitOK || !strings.HasPrefix(stderr, "qatlas: unknown-operation") ||
@@ -161,12 +171,12 @@ func TestInvokeLogFallsBackOnAnOldVaultProcess(t *testing.T) {
 		t.Fatalf("invoke: exit %d, stderr %q, want the invoke's own error and the warning", code, stderr)
 	}
 	entries, _ := logEntries(t, dir)
-	if len(entries) != 3 || entries[0].MAC != "" || entries[1].MAC != "" || entries[2].MAC != "" {
-		t.Fatalf("entries = %+v, want three unsigned entries", entries)
+	if len(entries) != 4 || entries[0].MAC != "" || entries[1].MAC != "" || entries[2].MAC != "" || entries[3].MAC != "" {
+		t.Fatalf("entries = %+v, want four unsigned entries", entries)
 	}
 
 	code, doc, stderr := verifyJSON(t, dir)
-	if code != exitOK || doc.Broken || doc.MACCheck != macVaultLocked || doc.Days[0].Unverified != 3 ||
+	if code != exitOK || doc.Broken || doc.MACCheck != macVaultLocked || doc.Days[0].Unverified != 4 ||
 		!strings.Contains(stderr, "the vault process cannot check") {
 		t.Fatalf("verify: exit %d, report %+v, stderr %q", code, doc, stderr)
 	}
