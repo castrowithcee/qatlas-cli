@@ -126,8 +126,9 @@ func (s *Store) New() *Config { return New(s.providers) }
 // Load reads the configuration through the same loader the CLI uses.
 func (s *Store) Load() (*Config, error) { return Load(s.path, s.providers) }
 
-// Save validates the configuration, encodes it, checks that the encoded form loads back, and only then
-// replaces the target file. Any failure before the replacement leaves the target byte-identical.
+// Save validates the configuration, encodes it, checks that the encoded form loads back, backs up the current
+// file (see backupBeforeReplace), and only then replaces the target file. Any failure before the replacement
+// leaves the target byte-identical.
 //
 // Save takes no cross-process lock and checks no revision, so it is not a transaction: a change based on an
 // earlier read can overwrite a concurrent change. Use Update or LoadVersioned with SaveIfUnchanged for that.
@@ -145,6 +146,11 @@ func (s *Store) Save(cfg *Config) error {
 		return &InvalidError{Path: s.path, Err: fmt.Errorf("the encoded configuration is not loadable: %w", err)}
 	}
 
+	// The backup comes last, so a configuration that is rejected leaves none, and it fails the save rather
+	// than letting the file be replaced without one.
+	if err := s.backupBeforeReplace(); err != nil {
+		return err
+	}
 	return s.replace(data)
 }
 
