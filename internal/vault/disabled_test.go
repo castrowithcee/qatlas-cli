@@ -25,7 +25,7 @@ func TestTokenNeverCoversSwitchingOn(t *testing.T) {
 	vorbild := vorbildScope(t.TempDir())
 	vorbild.Paths = nil
 	covered := vorbild
-	covered.Connection, covered.Permissions, covered.Disabled = "covered", []string{"read"}, true
+	covered.Connection, covered.Effects, covered.Disabled = "covered", []string{"read"}, true
 	approveScopes(t, v, vorbild, covered)
 	token := createToken(t, v, "agent", "vorbild")
 
@@ -60,7 +60,7 @@ func TestDisabledVorbildCoversNothing(t *testing.T) {
 	vorbild := vorbildScope(t.TempDir())
 	vorbild.Paths = nil
 	covered := vorbild
-	covered.Connection, covered.Permissions = "covered", []string{"read"}
+	covered.Connection, covered.Effects = "covered", []string{"read"}
 	approveScopes(t, v, vorbild)
 	token := createToken(t, v, "agent", "vorbild")
 

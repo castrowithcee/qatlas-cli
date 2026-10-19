@@ -596,7 +596,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // Register adds Make metadata, its connection test, and its read and change operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Make", DefaultPermissions: []config.Permission{config.PermissionRead},
+		ID: Provider, Name: "Make", DefaultEffects: []config.Effect{config.EffectRead},
 		RemovedTools: []string{"make.hooks.create", "make.organization.invite"},
 		RenamedTools: renamedTools,
 		Description: "Visual automation platform, scenarios and their run history read, created, changed, " +

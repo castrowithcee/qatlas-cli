@@ -71,7 +71,7 @@ type ConnectionRow struct {
 	Name        string
 	Provider    string
 	Description string
-	Permissions string
+	Effects     string
 	Tools       string
 	// State is "active" or "disabled"; a disabled connection keeps its selection but serves nothing.
 	State string
@@ -605,7 +605,7 @@ var overviewTemplate = strings.TrimSpace(`
 <table>
 <thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Permissions</th><th scope="col">Tools</th><th scope="col">State</th></tr></thead>
 <tbody>
-{{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Permissions}}</td><td>{{.Tools}}</td><td>{{.State}}</td></tr>
+{{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Effects}}</td><td>{{.Tools}}</td><td>{{.State}}</td></tr>
 {{end}}</tbody>
 </table>
 {{if not .Connections}}<p class="empty">No connections yet.</p>{{end}}

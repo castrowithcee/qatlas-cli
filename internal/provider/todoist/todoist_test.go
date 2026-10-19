@@ -240,17 +240,17 @@ func coreConfig() *config.Config {
 			"one":     {Service: "td", Credential: "td-reader", Target: ownProject},
 			"multi":   {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject}},
 			"account": {Service: "td", Credential: "td-reader", Target: wildcard},
-			"writer":  {Service: "td", Credential: "td-reader", Target: ownProject, Permissions: changePermissions},
+			"writer":  {Service: "td", Credential: "td-reader", Target: ownProject, Effects: changePermissions},
 			"multiwriter": {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject},
-				Permissions: changePermissions},
-			"accountwriter": {Service: "td", Credential: "td-reader", Target: wildcard, Permissions: changePermissions},
-			"limited": {Service: "td", Credential: "td-reader", Target: ownProject, Permissions: changePermissions,
+				Effects: changePermissions},
+			"accountwriter": {Service: "td", Credential: "td-reader", Target: wildcard, Effects: changePermissions},
+			"limited": {Service: "td", Credential: "td-reader", Target: ownProject, Effects: changePermissions,
 				Tools: []string{"todoist.tasks.get", "todoist.tasks.create"}},
 			// The organizers list every tool, so they also offer the deletes a tools list must name.
-			"organizer": {Service: "td", Credential: "td-reader", Target: wildcard, Permissions: changePermissions,
+			"organizer": {Service: "td", Credential: "td-reader", Target: wildcard, Effects: changePermissions,
 				Tools: allTools()},
 			"multiorganizer": {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject},
-				Permissions: changePermissions, Tools: allTools()},
+				Effects: changePermissions, Tools: allTools()},
 		},
 	}
 }
@@ -298,11 +298,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != "token" {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if !reflect.DeepEqual(metadata.DefaultPermissions, []config.Permission{config.PermissionRead}) ||
-		!reflect.DeepEqual(metadata.SupportedPermissions, []config.Permission{config.PermissionRead,
-			config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}) {
-		t.Errorf("permissions = %v / %v, want reads by default and no execute", metadata.DefaultPermissions,
-			metadata.SupportedPermissions)
+	if !reflect.DeepEqual(metadata.DefaultEffects, []config.Effect{config.EffectRead}) ||
+		!reflect.DeepEqual(metadata.SupportedEffects, []config.Effect{config.EffectRead,
+			config.EffectCreate, config.EffectUpdate, config.EffectDelete}) {
+		t.Errorf("permissions = %v / %v, want reads by default and no execute", metadata.DefaultEffects,
+			metadata.SupportedEffects)
 	}
 	target := metadata.Target
 	if !target.Required || !target.Multiple || target.Wildcard != "*" || target.WildcardWarning == "" {

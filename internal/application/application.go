@@ -589,7 +589,7 @@ type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`
 	Description string  `json:"description"`
-	Permissions string  `json:"permissions"`
+	Effects     string  `json:"permissions"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
 	// State is "disabled" while the connection is switched off, and empty for an active one. It is no
@@ -685,12 +685,12 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 			continue
 		}
 		owner := c.config.Services[connection.Service].Provider
-		permitted := map[config.Permission]bool{}
-		for _, permission := range c.config.ConnectionPermissions(name) {
+		permitted := map[config.Effect]bool{}
+		for _, permission := range c.config.ConnectionEffects(name) {
 			permitted[permission] = true
 		}
 		effects := make([]string, 0, len(permitted))
-		for _, permission := range config.Permissions() {
+		for _, permission := range config.Effects() {
 			if permitted[permission] {
 				effects = append(effects, string(permission))
 			}
@@ -704,7 +704,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		}
 		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
-			Permissions: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
+			Effects: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
 			ForwardSecrets: c.forwardRefs(name, unusable != nil),
 		}
 		if connection.Disabled {
@@ -1373,7 +1373,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
 		Service: connection.Service, Credential: connection.Credential,
 		Secrets:        c.config.Credentials[connection.Credential],
-		Permissions:    c.config.ConnectionPermissions(name),
+		Effects:        c.config.ConnectionEffects(name),
 		Tools:          connection.ToolsList(),
 		Paths:          append([]string(nil), connection.Paths...),
 		Files:          connection.Files.Clone(),

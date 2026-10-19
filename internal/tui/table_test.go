@@ -48,12 +48,12 @@ func newTableModel(t *testing.T, width int) *Model {
 		"wiki-docs": {Service: "wiki-main", Credential: "wiki-reader",
 			Description: "handbook pages for onboarding, read only"},
 		"tracker-issues": {Service: "tracker-main", Credential: "tracker-bot", Targets: []string{"octo/test-repo"},
-			Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
+			Effects:     []config.Effect{config.EffectRead, config.EffectCreate},
 			Tools:       []string{"tracker.issues.list", "tracker.issues.create"},
 			Description: "issues in the test repository, read and create"},
 		"tracker-triage": {Service: "tracker-main", Credential: "tracker-bot",
-			Targets:     []string{"octo/a", "octo/b", "octo/c"},
-			Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: []string{}},
+			Targets: []string{"octo/a", "octo/b", "octo/c"},
+			Effects: []config.Effect{config.EffectRead, config.EffectUpdate}, Tools: []string{}},
 	}
 	m.cfg.Defaults.Connections = map[string]string{
 		"bookstack": "wiki-docs", "tracker": "tracker-issues", "tracker.issues.create": "tracker-issues",

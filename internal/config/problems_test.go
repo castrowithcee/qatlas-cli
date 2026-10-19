@@ -142,11 +142,11 @@ func TestProblemsAreStructured(t *testing.T) {
 		{"duplicate path", func(c *Config) {
 			conn(c, "gh", func(v *Connection) { v.Paths = []string{drive + "/srv/a", drive + "/srv/a"} })
 		}, "connections.gh.paths[1]", CodeDuplicatePath, "connections.gh.paths[1]: a directory is listed", "paths", 1},
-		{"unknown permission", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Permissions = []Permission{"fly"} }) },
-			"connections.gh.permissions", CodeUnknownPermission, "connections.gh.permissions: unknown permission \"fly\"", "permissions", -1},
+		{"unknown permission", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Effects = []Effect{"fly"} }) },
+			"connections.gh.permissions", CodeUnknownEffect, "connections.gh.permissions: unknown permission \"fly\"", "permissions", -1},
 		{"duplicate permission", func(c *Config) {
-			conn(c, "gh", func(v *Connection) { v.Permissions = []Permission{PermissionRead, PermissionRead} })
-		}, "connections.gh.permissions", CodeDuplicatePermission, "connections.gh.permissions: permission \"read\" is listed", "permissions", -1},
+			conn(c, "gh", func(v *Connection) { v.Effects = []Effect{EffectRead, EffectRead} })
+		}, "connections.gh.permissions", CodeDuplicateEffect, "connections.gh.permissions: permission \"read\" is listed", "permissions", -1},
 		{"target required", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Target = "" }) },
 			"connections.gh.target", CodeTargetRequired, "connections.gh.target: provider \"github\" requires", "target", -1},
 		{"target and targets", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Targets = []string{"repos/a/b"} }) },
@@ -173,7 +173,7 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh.tools", CodeDuplicateTool, "connections.gh.tools: tool \"github.issues.get\" is listed", "tools", -1},
 		{"tool effect", func(c *Config) {
 			conn(c, "gh", func(v *Connection) {
-				v.Permissions = []Permission{PermissionRead}
+				v.Effects = []Effect{EffectRead}
 				v.Tools = []string{"github.issues.create"}
 			})
 		}, "connections.gh.tools", CodeToolEffectNotPermitted,
@@ -297,7 +297,7 @@ func TestProblemParametersCarryNoFreeValue(t *testing.T) {
 		Fields: []string{"user"}}
 	cfg.Connections["docs"] = Connection{Service: canary + "-service", Credential: canary + "-credential",
 		ForwardSecrets: []string{canary + "-forward", canary + "-forward"}, Description: canary + strings.Repeat("a", 200),
-		Paths: []string{canary + "/relative"}, Permissions: []Permission{Permission(canary + "-perm")},
+		Paths: []string{canary + "/relative"}, Effects: []Effect{Effect(canary + "-perm")},
 		Files: Files{Read: []string{canary + "/relative"}}}
 	cfg.Connections["gh"] = Connection{Service: "wiki", Credential: "wikikey", Target: canary + "-target",
 		Tools: []string{canary + "-tool"}}

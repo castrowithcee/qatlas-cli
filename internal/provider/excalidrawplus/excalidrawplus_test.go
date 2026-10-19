@@ -74,23 +74,23 @@ func registry(t *testing.T) *capability.Registry {
 
 func coreConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAPIKey: apiKeyEnv}}
-	perms := config.Permissions()
+	perms := config.Effects()
 	return &config.Config{
 		Version:     1,
 		Services:    map[string]config.Service{"excalidraw": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"excalidraw-reader": credential},
 		Connections: map[string]config.Connection{
-			"one": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection},
-			"two": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Targets: []string{"collection/" + ownCollection, "collection/" + otherAllowed}},
-			"listed": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection,
+			"one": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "collection/" + ownCollection},
+			"two": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Targets: []string{"collection/" + ownCollection, "collection/" + otherAllowed}},
+			"listed": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "collection/" + ownCollection,
 				Tools: []string{scenesGet.ID, contentPatch.ID, contentReplace.ID, scenesDelete.ID, collectionsDelete.ID}},
-			"listedAll": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*",
+			"listedAll": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "*",
 				Tools: []string{collectionsDelete.ID}},
-			"peopleOne": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection,
+			"peopleOne": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "collection/" + ownCollection,
 				Tools: peopleToolIDs},
-			"peopleAll": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*",
+			"peopleAll": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "*",
 				Tools: peopleToolIDs},
-			"every": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*"},
+			"every": {Service: "excalidraw", Credential: "excalidraw-reader", Effects: perms, Target: "*"},
 		},
 	}
 }

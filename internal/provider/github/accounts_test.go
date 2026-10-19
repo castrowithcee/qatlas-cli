@@ -15,14 +15,14 @@ import (
 // repository the star change tools act on with every permission.
 func discoveryConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := config.Permissions()
-	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
+	all := config.Effects()
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
 	cfg.Connections["org"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"orgs/octo-org"}, Permissions: all}
+		Targets: []string{"orgs/octo-org"}, Effects: all}
 	cfg.Connections["user"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"users/octocat"}, Permissions: all}
+		Targets: []string{"users/octocat"}, Effects: all}
 	cfg.Connections["starrepo"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{repoTarget}, Permissions: all}
+		Targets: []string{repoTarget}, Effects: all}
 	return cfg
 }
 

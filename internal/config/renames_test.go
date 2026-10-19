@@ -13,8 +13,8 @@ var renameProviders ProviderCatalog = testProviderCatalog{
 		ID: "acme.chat", Name: "Acme Chat",
 		SecretRoles: []SecretRole{{Name: "token"}},
 		Tools: []ToolMetadata{
-			{ID: "acme.chat.messages.get", Effect: PermissionRead},
-			{ID: "acme.chat.messages.list", Effect: PermissionRead},
+			{ID: "acme.chat.messages.get", Effect: EffectRead},
+			{ID: "acme.chat.messages.list", Effect: EffectRead},
 		},
 		RenamedTools: map[string]string{"acmechat.messages.fetch": "acme.chat.messages.get"},
 		FormerIDs:    []string{"acmechat"},

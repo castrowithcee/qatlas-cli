@@ -813,7 +813,7 @@ func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
 	t.Helper()
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{
-		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+		ID: "fake", Name: "Fake", DefaultEffects: []config.Effect{config.EffectCreate},
 	}, nil); err != nil {
 		t.Fatal(err)
 	}

@@ -271,12 +271,12 @@ func (w *fakeContentsWrite) contentRoute(rw http.ResponseWriter, r *http.Request
 func contentsWriteConfig(base string) *config.Config {
 	cfg := coreChangeConfig(base)
 	repo := cfg.Connections["repo"]
-	repo.Permissions = config.Permissions()
+	repo.Effects = config.Effects()
 	cfg.Connections["repo"] = repo
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: config.Permissions(), Tools: []string{contentsDelete.ID, filesPush.ID}}
+		Effects: config.Effects(), Tools: []string{contentsDelete.ID, filesPush.ID}}
 	cfg.Connections["project-only"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: config.Permissions()}
+		Effects: config.Effects()}
 	return cfg
 }
 

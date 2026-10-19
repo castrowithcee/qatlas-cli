@@ -113,7 +113,7 @@ func serveAlerts(t *testing.T, mode string) (*fakeGitHub, *alertFake, *applicati
 	red := &redact.Redactor{}
 	cfg := coreConfig(base)
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead}}
+		Effects: []config.Effect{config.EffectRead}}
 	return f, a, application.New(registry(t), cfg, resolver(red, &reads), red), &reads
 }
 
@@ -227,7 +227,7 @@ func TestSecurityProfileIsReadOnlyAndNotRecommended(t *testing.T) {
 			if profile.Recommended || len(profile.Tools) != 11 {
 				t.Errorf("security = %+v", profile)
 			}
-			if got := metadata.ProfilePermissions(profile); len(got) != 1 || got[0] != config.PermissionRead {
+			if got := metadata.ProfileEffects(profile); len(got) != 1 || got[0] != config.EffectRead {
 				t.Errorf("security permissions = %v", got)
 			}
 		case "read":

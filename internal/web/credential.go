@@ -679,9 +679,9 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <div class="choice"><input id="permmode-default" type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> <label for="permmode-default">use the provider's default</label></div>
 <div class="choice"><input id="permmode-custom" type="radio" name="permmode" value="custom"{{if eq .Form.PermMode "custom"}} checked{{end}}> <label for="permmode-custom">choose explicitly</label></div>
 </fieldset>
-{{if .Permissions}}<fieldset class="field">
+{{if .Effects}}<fieldset class="field">
 <legend>Permissions</legend>
-{{range $i, $p := .Permissions}}<div class="choice"><input id="perm-{{$i}}" type="checkbox" name="perm" value="{{$p.Value}}"{{if $p.Selected}} checked{{end}}> <label for="perm-{{$i}}">{{$p.Label}}</label></div>
+{{range $i, $p := .Effects}}<div class="choice"><input id="perm-{{$i}}" type="checkbox" name="perm" value="{{$p.Value}}"{{if $p.Selected}} checked{{end}}> <label for="perm-{{$i}}">{{$p.Label}}</label></div>
 {{end}}</fieldset>{{end}}
 </section>
 
@@ -815,7 +815,7 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th scope="row">Targets</th><td>{{.Targets}}</td></tr>
 <tr><th scope="row">Files</th><td>{{.Files}}</td></tr>
 <tr><th scope="row">Description</th><td>{{.Description}}</td></tr>
-<tr><th scope="row">Permissions</th><td>{{.Permissions}}</td></tr>
+<tr><th scope="row">Permissions</th><td>{{.Effects}}</td></tr>
 <tr><th scope="row">Tools</th><td>{{.Tools}}</td></tr>
 </tbody>
 </table>

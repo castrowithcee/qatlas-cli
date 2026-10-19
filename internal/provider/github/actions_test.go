@@ -275,22 +275,22 @@ func actionsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
 	observer := append([]string{}, observerTools...)
 	all := append(append([]string{}, observerTools...), operatorTools...)
-	execute := []config.Permission{config.PermissionRead, config.PermissionExecute}
-	repo := func(permissions []config.Permission, tools []string) config.Connection {
-		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Permissions: permissions,
+	execute := []config.Effect{config.EffectRead, config.EffectExecute}
+	repo := func(permissions []config.Effect, tools []string) config.Connection {
+		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Effects: permissions,
 			Tools: tools}
 	}
-	cfg.Connections["observer"] = repo([]config.Permission{config.PermissionRead}, observer)
+	cfg.Connections["observer"] = repo([]config.Effect{config.EffectRead}, observer)
 	cfg.Connections["reader"] = repo(nil, nil)
-	cfg.Connections["planner"] = repo([]config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate}, nil)
+	cfg.Connections["planner"] = repo([]config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate}, nil)
 	cfg.Connections["listed"] = repo(execute, observer)
 	cfg.Connections["operator"] = repo(execute, all)
-	cfg.Connections["cleaner"] = repo([]config.Permission{config.PermissionRead, config.PermissionDelete},
+	cfg.Connections["cleaner"] = repo([]config.Effect{config.EffectRead, config.EffectDelete},
 		[]string{runLogsDelete.ID})
-	cfg.Connections["nolist"] = repo([]config.Permission{config.PermissionRead, config.PermissionDelete}, nil)
+	cfg.Connections["nolist"] = repo([]config.Effect{config.EffectRead, config.EffectDelete}, nil)
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: execute}
+		Effects: execute}
 	return cfg
 }
 
@@ -315,12 +315,12 @@ func TestActionsProfilesSeparateObserverAndOperator(t *testing.T) {
 	if observer.Recommended || operator.Recommended || !read.Recommended || len(read.Tools) != 7 {
 		t.Errorf("profiles = %+v, want the read profile unchanged and both Actions profiles not recommended", profiles)
 	}
-	if got := metadata.ProfilePermissions(observer); len(got) != 1 || got[0] != config.PermissionRead ||
+	if got := metadata.ProfileEffects(observer); len(got) != 1 || got[0] != config.EffectRead ||
 		len(observer.Tools) != 9 {
 		t.Errorf("observer = %v with %v, want the nine reads only", observer.Tools, got)
 	}
-	got := metadata.ProfilePermissions(operator)
-	if len(got) != 2 || got[1] != config.PermissionExecute || len(operator.Tools) != 13 {
+	got := metadata.ProfileEffects(operator)
+	if len(got) != 2 || got[1] != config.EffectExecute || len(operator.Tools) != 13 {
 		t.Errorf("operator = %v with %v, want the reads and the four executions", operator.Tools, got)
 	}
 }

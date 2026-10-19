@@ -728,11 +728,11 @@ func TestFileToolsThroughTheCoreNeedReleasedDirectoriesAndConfirmation(t *testin
 	cfg := coreConfig()
 	dir := t.TempDir()
 	connection := cfg.Connections["sales"]
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	connection.Files = config.Files{Read: []string{dir}, Write: []string{dir}}
 	cfg.Connections["sales"] = connection
 	plain := cfg.Connections["support"]
-	plain.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	plain.Effects = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	cfg.Connections["support"] = plain
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

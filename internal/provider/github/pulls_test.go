@@ -504,7 +504,7 @@ func TestPullRequestsProfileOffersExactlySixReadsAndIsNotRecommended(t *testing.
 	if strings.Join(profile.Tools, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v", profile.Tools, want)
 	}
-	if got := metadata.ProfilePermissions(profile); len(got) != 1 || got[0] != config.PermissionRead {
+	if got := metadata.ProfileEffects(profile); len(got) != 1 || got[0] != config.EffectRead {
 		t.Errorf("permissions = %v, want read only", got)
 	}
 }
@@ -1021,8 +1021,8 @@ func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["merger"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-		Tools:       []string{pullsGet.ID, pullsMerge.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+		Tools:   []string{pullsGet.ID, pullsMerge.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
 	result, err := invoke(t, core, "github.pull-requests.merge", "merger",
@@ -1117,8 +1117,8 @@ func TestPullRequestChangesSatisfyTheirContractThroughTheApplicationCoreWithAudi
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["merger"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-		Tools:       []string{pullsGet.ID, pullsMerge.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+		Tools:   []string{pullsGet.ID, pullsMerge.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 	var audit strings.Builder
 	core.SetAudit(&audit)

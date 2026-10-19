@@ -196,7 +196,7 @@ func TestConnectionRefusalNeedsFilesOfTheToolsDirection(t *testing.T) {
 	}{
 		{"", ""}, {LocalFilesRead, ""}, {LocalFilesWrite, RefusalNoLocalFiles},
 	} {
-		tool := ToolMetadata{ID: "filer.files.x", Effect: PermissionRead, LocalFiles: tt.direction}
+		tool := ToolMetadata{ID: "filer.files.x", Effect: EffectRead, LocalFiles: tt.direction}
 		if got := cfg.ConnectionRefusal("docs", tool); got != tt.want {
 			t.Errorf("ConnectionRefusal(%q) = %q, want %q", tt.direction, got, tt.want)
 		}

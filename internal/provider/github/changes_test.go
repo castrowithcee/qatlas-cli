@@ -421,8 +421,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		}
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
-	if len(metadata.DefaultPermissions) != 1 || metadata.DefaultPermissions[0] != config.PermissionRead {
-		t.Errorf("default permissions = %v, want reads only", metadata.DefaultPermissions)
+	if len(metadata.DefaultEffects) != 1 || metadata.DefaultEffects[0] != config.EffectRead {
+		t.Errorf("default permissions = %v, want reads only", metadata.DefaultEffects)
 	}
 }
 
@@ -1173,15 +1173,15 @@ func TestChangesAreSpaced(t *testing.T) {
 // allowed to change, and two connections that may not.
 func coreChangeConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["planning"] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["reader"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget}
 	cfg.Connections["listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets,
-		Permissions: all, Tools: []string{"github.project-items.list", "github.project-items.update"}}
-	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
+		Effects: all, Tools: []string{"github.project-items.list", "github.project-items.update"}}
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
 	return cfg
 }
 

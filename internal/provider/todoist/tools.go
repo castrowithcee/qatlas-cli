@@ -324,9 +324,9 @@ var projectTools = []string{projectsList.ID, projectsGet.ID, sectionsList.ID, se
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Todoist", DefaultBaseURL: apiRoot,
-		Description:        "Personal task manager and to-do list service",
-		RenamedTools:       renamedTools,
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "Personal task manager and to-do list service",
+		RenamedTools:   renamedTools,
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "Todoist personal API token from Settings, Integrations, Developer; it reaches the whole " +

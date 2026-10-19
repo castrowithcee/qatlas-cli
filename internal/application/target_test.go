@@ -59,7 +59,7 @@ func targetCore(t *testing.T, kinds bool, connections map[string][]string) *Core
 	for name, targets := range connections {
 		cfg.Connections[name] = config.Connection{
 			Service: "service", Credential: "shared", Targets: targets,
-			Permissions: []config.Permission{config.PermissionRead},
+			Effects: []config.Effect{config.EffectRead},
 		}
 	}
 	return New(registry, cfg, nil, nil)

@@ -52,8 +52,8 @@ func TestDisabledRefusalNamesOnlyWhatWouldBeOffered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	read := ToolMetadata{ID: "bookstack.pages.list", Effect: PermissionRead}
-	update := ToolMetadata{ID: "bookstack.pages.update", Effect: PermissionUpdate}
+	read := ToolMetadata{ID: "bookstack.pages.list", Effect: EffectRead}
+	update := ToolMetadata{ID: "bookstack.pages.update", Effect: EffectUpdate}
 	if got := cfg.ConnectionRefusal("wiki", read); got != RefusalDisabled {
 		t.Errorf("refusal of an offered tool = %q, want %q", got, RefusalDisabled)
 	}

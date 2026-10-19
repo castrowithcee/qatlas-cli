@@ -350,9 +350,9 @@ func (m *Model) setupPrefill(step int, page []field) {
 		page[0].input.SetValue(freeCopyName(w.template, taken))
 		page[1].entries = slices.Clone(conn.TargetValues())
 		page[2].input.SetValue(conn.Description)
-	case stepPermissions:
+	case stepEffects:
 		provider := w.provider
-		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
+		permissions := permissionField(m.permissionChoicesFor(provider, conn.Effects), conn.Effects)
 		permissions.hint = m.permissionHint(provider)
 		page[1] = permissions
 		copy(page[2:], m.toolFields(provider, slices.Clone(conn.Tools)))

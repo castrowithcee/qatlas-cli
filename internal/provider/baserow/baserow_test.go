@@ -87,22 +87,22 @@ func registry(t *testing.T) *capability.Registry {
 
 func testConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleDatabaseToken: tokenEnv}}
-	read := []config.Permission{config.PermissionRead}
-	allRights := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	read := []config.Effect{config.EffectRead}
+	allRights := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	writeTools := []string{rowsCreate.ID, rowsUpdate.ID, rowsDelete.ID, rowsMove.ID, rowsBatchCreate.ID, rowsBatchUpdate.ID, rowsBatchDelete.ID, fieldsList.ID, rowsGet.ID, filesUpload.ID, filesGet.ID}
 	return &config.Config{
 		Version:     1,
 		Services:    map[string]config.Service{"baserow": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"token": credential},
 		Connections: map[string]config.Connection{
-			"one":  {Service: "baserow", Credential: "token", Permissions: read, Target: "table/11"},
-			"list": {Service: "baserow", Credential: "token", Permissions: read, Targets: []string{"table/11", "table/12"}},
-			"all":  {Service: "baserow", Credential: "token", Permissions: read, Target: "*"},
-			"write": {Service: "baserow", Credential: "token", Permissions: allRights, Targets: []string{"table/11", "table/12"},
+			"one":  {Service: "baserow", Credential: "token", Effects: read, Target: "table/11"},
+			"list": {Service: "baserow", Credential: "token", Effects: read, Targets: []string{"table/11", "table/12"}},
+			"all":  {Service: "baserow", Credential: "token", Effects: read, Target: "*"},
+			"write": {Service: "baserow", Credential: "token", Effects: allRights, Targets: []string{"table/11", "table/12"},
 				Tools: writeTools},
-			"writeall": {Service: "baserow", Credential: "token", Permissions: allRights, Target: "*", Tools: writeTools},
-			"writenodelete": {Service: "baserow", Credential: "token", Permissions: allRights, Target: "table/11",
+			"writeall": {Service: "baserow", Credential: "token", Effects: allRights, Target: "*", Tools: writeTools},
+			"writenodelete": {Service: "baserow", Credential: "token", Effects: allRights, Target: "table/11",
 				Tools: []string{rowsCreate.ID, rowsUpdate.ID, rowsMove.ID}},
 		},
 	}
@@ -150,13 +150,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		metadata.Target.Wildcard != "*" || metadata.Target.WildcardWarning == "" {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	want := map[string]config.Permission{tablesList.ID: config.PermissionRead, fieldsList.ID: config.PermissionRead,
-		rowsList.ID: config.PermissionRead, rowsGet.ID: config.PermissionRead, rowsSearch.ID: config.PermissionRead,
-		rowsCreate.ID: config.PermissionCreate, rowsUpdate.ID: config.PermissionUpdate,
-		rowsDelete.ID: config.PermissionDelete, rowsMove.ID: config.PermissionUpdate,
-		rowsBatchCreate.ID: config.PermissionCreate, rowsBatchUpdate.ID: config.PermissionUpdate,
-		rowsBatchDelete.ID: config.PermissionDelete,
-		filesUpload.ID:     config.PermissionUpdate, filesGet.ID: config.PermissionRead}
+	want := map[string]config.Effect{tablesList.ID: config.EffectRead, fieldsList.ID: config.EffectRead,
+		rowsList.ID: config.EffectRead, rowsGet.ID: config.EffectRead, rowsSearch.ID: config.EffectRead,
+		rowsCreate.ID: config.EffectCreate, rowsUpdate.ID: config.EffectUpdate,
+		rowsDelete.ID: config.EffectDelete, rowsMove.ID: config.EffectUpdate,
+		rowsBatchCreate.ID: config.EffectCreate, rowsBatchUpdate.ID: config.EffectUpdate,
+		rowsBatchDelete.ID: config.EffectDelete,
+		filesUpload.ID:     config.EffectUpdate, filesGet.ID: config.EffectRead}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
@@ -302,7 +302,7 @@ func TestBadOriginAndTargetFailBeforeSecret(t *testing.T) {
 		Services:    map[string]config.Service{"baserow": {Provider: Provider, BaseURL: "http://insecure.example.test"}},
 		Credentials: testConfig().Credentials,
 		Connections: map[string]config.Connection{"bad": {Service: "baserow", Credential: "token",
-			Permissions: []config.Permission{config.PermissionRead}, Target: "table/11"}},
+			Effects: []config.Effect{config.EffectRead}, Target: "table/11"}},
 	}, resolver(env.red, env.reads), env.red)
 	if _, err := env.invoke(tablesList.ID, "bad", `{}`); err == nil {
 		t.Fatal("an http base URL must be refused")

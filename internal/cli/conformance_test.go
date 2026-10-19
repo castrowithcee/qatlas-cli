@@ -353,15 +353,15 @@ func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 			"description"},
 		{"no operation", func(*config.ProviderMetadata) {}, []capability.Descriptor{}, "no operation"},
 		{"supported permissions without a registered effect", func(m *config.ProviderMetadata) {
-			m.SupportedPermissions = []config.Permission{config.PermissionRead}
+			m.SupportedEffects = []config.Effect{config.EffectRead}
 		}, nil, "supported permissions"},
 		{"supported permissions with an unregistered effect", func(m *config.ProviderMetadata) {
-			m.SupportedPermissions = append(m.SupportedPermissions, config.PermissionDelete)
+			m.SupportedEffects = append(m.SupportedEffects, config.EffectDelete)
 		}, nil, "supported permissions"},
 		{"a tool list that misses an operation", func(m *config.ProviderMetadata) { m.Tools = m.Tools[:1] }, nil,
 			"tools"},
 		{"a default permission it does not support", func(m *config.ProviderMetadata) {
-			m.DefaultPermissions = []config.Permission{config.PermissionDelete}
+			m.DefaultEffects = []config.Effect{config.EffectDelete}
 		}, nil, "default permission"},
 	}
 	for _, tt := range providerCases {
@@ -380,7 +380,7 @@ func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 	// supported permissions than the operations need is caught by that behaviour alone, not only by the
 	// comparison with the registered effects.
 	metadata := conformantMetadata()
-	metadata.SupportedPermissions = []config.Permission{config.PermissionRead}
+	metadata.SupportedEffects = []config.Effect{config.EffectRead}
 	assertViolation(t, permissionViolations(metadata, conformantOperations()), "is not offered")
 }
 
@@ -527,26 +527,26 @@ func providerViolations(metadata config.ProviderMetadata, descriptors []capabili
 	if len(descriptors) == 0 {
 		fail("provider %q registers no operation and is missing from discovery", metadata.ID)
 	}
-	effects := map[config.Permission]bool{}
+	effects := map[config.Effect]bool{}
 	tools := []config.ToolMetadata{}
 	for _, descriptor := range descriptors {
-		effects[config.Permission(descriptor.Risk.Effect)] = true
+		effects[config.Effect(descriptor.Risk.Effect)] = true
 		tools = append(tools, descriptor.Tool())
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].ID < tools[j].ID })
-	supported := []config.Permission{}
-	for _, permission := range config.Permissions() {
+	supported := []config.Effect{}
+	for _, permission := range config.Effects() {
 		if effects[permission] {
 			supported = append(supported, permission)
 		}
 	}
-	if !reflect.DeepEqual(append([]config.Permission{}, metadata.SupportedPermissions...), supported) {
-		fail("supported permissions %v, want the registered effects %v", metadata.SupportedPermissions, supported)
+	if !reflect.DeepEqual(append([]config.Effect{}, metadata.SupportedEffects...), supported) {
+		fail("supported permissions %v, want the registered effects %v", metadata.SupportedEffects, supported)
 	}
 	if !reflect.DeepEqual(append([]config.ToolMetadata{}, metadata.Tools...), tools) {
 		fail("tools %+v, want the registered operations %+v", metadata.Tools, tools)
 	}
-	for _, permission := range metadata.DefaultPermissions {
+	for _, permission := range metadata.DefaultEffects {
 		if !effects[permission] {
 			fail("default permission %q is not a registered effect", permission)
 		}
@@ -589,17 +589,17 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 	for i, descriptor := range descriptors {
 		ids[i] = descriptor.ID
 	}
-	var unsupported []config.Permission
-	for _, permission := range config.Permissions() {
-		if !slices.Contains(metadata.SupportedPermissions, permission) {
+	var unsupported []config.Effect
+	for _, permission := range config.Effects() {
+		if !slices.Contains(metadata.SupportedEffects, permission) {
 			unsupported = append(unsupported, permission)
 		}
 	}
 	// A tool with local file access needs a released directory of its direction to be offered at all.
 	files := config.Files{Read: []string{"/srv/qatlas-conformance"}, Write: []string{"/srv/qatlas-conformance"}}
 	harness, err := newConformanceHarness(metadata, descriptors, map[string]config.Connection{
-		"supported":   {Permissions: append([]config.Permission{}, metadata.SupportedPermissions...), Tools: ids, Files: files},
-		"unsupported": {Permissions: append([]config.Permission{}, unsupported...), Tools: ids, Files: files},
+		"supported":   {Effects: append([]config.Effect{}, metadata.SupportedEffects...), Tools: ids, Files: files},
+		"unsupported": {Effects: append([]config.Effect{}, unsupported...), Tools: ids, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
@@ -619,7 +619,7 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 			switch {
 			case connection == "supported" && !offered[descriptor.ID]:
 				violations = append(violations, fmt.Sprintf("%s %s is not offered to a connection with the "+
-					"supported permissions %v", descriptor.Risk.Effect, descriptor.ID, metadata.SupportedPermissions))
+					"supported permissions %v", descriptor.Risk.Effect, descriptor.ID, metadata.SupportedEffects))
 			case connection == "unsupported" && offered[descriptor.ID]:
 				violations = append(violations, fmt.Sprintf("%s %s is offered to a connection with only the "+
 					"unsupported permissions %v", descriptor.Risk.Effect, descriptor.ID, unsupported))
@@ -669,9 +669,9 @@ func targetArgumentViolations(metadata config.ProviderMetadata, d capability.Des
 }
 
 func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor) []string {
-	effect := config.Permission(d.Risk.Effect)
-	others := []config.Permission{}
-	for _, permission := range config.Permissions() {
+	effect := config.Effect(d.Risk.Effect)
+	others := []config.Effect{}
+	for _, permission := range config.Effects() {
 		if permission != effect {
 			others = append(others, permission)
 		}
@@ -687,10 +687,10 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 		files.Write = []string{"/srv/qatlas-conformance"}
 	}
 	harness, err := newConformanceHarness(metadata, []capability.Descriptor{d}, map[string]config.Connection{
-		"listed":   {Permissions: []config.Permission{effect}, Tools: []string{d.ID}, Files: files},
-		"unlisted": {Permissions: []config.Permission{effect}, Tools: []string{}, Files: files},
-		"denied":   {Permissions: others, Tools: []string{d.ID}, Files: files},
-		"open":     {Permissions: []config.Permission{effect}, Files: files},
+		"listed":   {Effects: []config.Effect{effect}, Tools: []string{d.ID}, Files: files},
+		"unlisted": {Effects: []config.Effect{effect}, Tools: []string{}, Files: files},
+		"denied":   {Effects: others, Tools: []string{d.ID}, Files: files},
+		"open":     {Effects: []config.Effect{effect}, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
@@ -1008,9 +1008,9 @@ func assertViolation(t *testing.T, violations []string, want string) {
 func conformantMetadata() config.ProviderMetadata {
 	metadata := config.ProviderMetadata{
 		ID: "sample", Name: "Sample", Description: "Sample system for the conformance checks",
-		DefaultPermissions:   []config.Permission{config.PermissionRead},
-		SupportedPermissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-		SecretRoles:          []config.SecretRole{{Name: "api-token"}},
+		DefaultEffects:   []config.Effect{config.EffectRead},
+		SupportedEffects: []config.Effect{config.EffectRead, config.EffectCreate},
+		SecretRoles:      []config.SecretRole{{Name: "api-token"}},
 	}
 	for _, descriptor := range conformantOperations() {
 		metadata.Tools = append(metadata.Tools, descriptor.Tool())

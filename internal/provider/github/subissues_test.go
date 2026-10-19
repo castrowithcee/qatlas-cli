@@ -251,10 +251,10 @@ func (g *fakeIssueGraph) route(w http.ResponseWriter, req *http.Request) bool {
 // refuse one in a third repository the targets never name, before any credential is resolved.
 func issueGraphConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"repos/octo-org/example", "repos/octo-org/other"}, Permissions: all}
+		Targets: []string{"repos/octo-org/example", "repos/octo-org/other"}, Effects: all}
 	return cfg
 }
 

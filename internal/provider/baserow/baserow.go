@@ -222,8 +222,8 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Baserow", DefaultBaseURL: cloudOrigin,
-		Description:        "Open-source no-code database, tables, fields, and rows through a database token",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "Open-source no-code database, tables, fields, and rows through a database token",
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleDatabaseToken,
 			Description: "Baserow database token, created under the account settings with the read right, and the " +

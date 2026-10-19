@@ -97,16 +97,16 @@ var accessTools = []string{teamsList.ID, collaboratorsUpdate.ID, teamsLink.ID, t
 // only read, and an administrator bound to a project of a user.
 func accessConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	add := func(name string, targets []string, permissions []config.Permission, tools []string) {
+	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Permissions: permissions, Tools: tools}
+			Effects: permissions, Tools: tools}
 	}
-	changes := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	add("unlisted", planningTargets, config.Permissions(), nil)
-	add("admin", planningTargets, config.Permissions(), accessTools)
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	add("unlisted", planningTargets, config.Effects(), nil)
+	add("admin", planningTargets, config.Effects(), accessTools)
 	add("nodelete", planningTargets, changes, accessTools)
-	add("reader", planningTargets, []config.Permission{config.PermissionRead}, accessTools)
-	add("user", []string{userTarget}, config.Permissions(), accessTools)
+	add("reader", planningTargets, []config.Effect{config.EffectRead}, accessTools)
+	add("user", []string{userTarget}, config.Effects(), accessTools)
 	return cfg
 }
 

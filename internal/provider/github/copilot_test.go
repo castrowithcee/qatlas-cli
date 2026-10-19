@@ -79,7 +79,7 @@ func copilotRig(t *testing.T, c *fakeCopilot) (*fakeGitHub, *application.Core, *
 	f.failure = c.graphql(f)
 	cfg := coreChangeConfig(serve(t, f))
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}}
 	red := &redact.Redactor{}
 	reads := 0
 	return f, application.New(registry(t), cfg, resolver(red, &reads), red), &reads

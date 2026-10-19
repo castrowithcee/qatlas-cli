@@ -56,8 +56,8 @@ func TestDisabledConnectionOffersNothingAndKeepsItsSelection(t *testing.T) {
 		if want := map[string]string{"on": "", "off": StateDisabled}[c.Name]; c.State != want || c.Unusable != nil {
 			t.Errorf("%s: state %q unusable %v, want state %q", c.Name, c.State, c.Unusable, want)
 		}
-		if c.Permissions != "read create update delete" {
-			t.Errorf("%s: permissions %q lost", c.Name, c.Permissions)
+		if c.Effects != "read create update delete" {
+			t.Errorf("%s: permissions %q lost", c.Name, c.Effects)
 		}
 	}
 	_, err = core.Describe(DescribeRequest{Operation: "fake.pages.get", Connection: "off"})
@@ -76,7 +76,7 @@ func TestDisabledReasonOnlyWhereTheConnectionWouldOfferTheTool(t *testing.T) {
 	core, _ := testCore(t, []string{"off"}, nil, true)
 	disable(core, "off")
 	connection := core.all.Connections["off"]
-	connection.Permissions = []config.Permission{config.PermissionRead}
+	connection.Effects = []config.Effect{config.EffectRead}
 	core.all.Connections["off"] = connection
 
 	got := map[string]config.Refusal{}

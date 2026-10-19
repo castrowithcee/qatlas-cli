@@ -245,9 +245,9 @@ func TestPageLayoutWidgetsCreateChartInputSchemaHoldsTheSubset(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			calls := serveWidgets(t, http.StatusCreated, chartAnswer(chartLine))
 			cfg := coreConfig()
-			all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+			all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 			cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-				Permissions: all, Tools: []string{pagelayoutwidgetsCreate.ID}}
+				Effects: all, Tools: []string{pagelayoutwidgetsCreate.ID}}
 			stubLimiter(t, internalKey)
 			red := &redact.Redactor{}
 			core := application.New(registry(t), cfg, resolver(red), red)
@@ -425,9 +425,9 @@ func TestPageLayoutWidgetsUpdateInputSchemaHoldsTheChartSubsetWithoutTheObject(t
 		t.Run(name, func(t *testing.T) {
 			calls := serveWidgets(t, http.StatusOK, chartUpdateAnswer(chartAggregate))
 			cfg := coreConfig()
-			all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+			all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 			cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-				Permissions: all, Tools: []string{pagelayoutwidgetsUpdate.ID}}
+				Effects: all, Tools: []string{pagelayoutwidgetsUpdate.ID}}
 			stubLimiter(t, internalKey)
 			red := &redact.Redactor{}
 			core := application.New(registry(t), cfg, resolver(red), red)

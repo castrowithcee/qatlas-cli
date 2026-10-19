@@ -97,10 +97,10 @@ func (n *fakeNotifications) route(w http.ResponseWriter, r *http.Request) bool {
 
 func notificationsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := config.Permissions()
+	all := config.Effects()
 	add := func(name string, targets []string, tools ...string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Permissions: all, Tools: tools}
+			Effects: all, Tools: tools}
 	}
 	add("open", nil)
 	add("open-listed", nil, notificationsMarkAll.ID)

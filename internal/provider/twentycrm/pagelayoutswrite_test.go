@@ -238,12 +238,12 @@ func TestPageLayoutTabsDescriptorDeclaresItsRisk(t *testing.T) {
 func TestPageLayoutTabsCreateNeedsConfirmationAndTheToolsList(t *testing.T) {
 	calls := serveTabs(t, http.StatusCreated, tabWire(layoutID, "Tab", 1, ""))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: []string{pagelayouttabsCreate.ID}}
+		Effects: all, Tools: []string{pagelayouttabsCreate.ID}}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

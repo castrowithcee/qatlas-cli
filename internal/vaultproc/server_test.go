@@ -46,7 +46,7 @@ func testSecrets() map[string]map[string]string {
 // testScope is the connection every test get is made for, and testBindings approve it for wiki-reader.
 func testScope() *vault.Scope {
 	return &vault.Scope{Connection: "wiki", Credential: "wiki-reader", Provider: "bookstack",
-		Origin: "https://wiki.example.test", Permissions: []string{"read", "create"}, Targets: []string{"a", "b"}}
+		Origin: "https://wiki.example.test", Effects: []string{"read", "create"}, Targets: []string{"a", "b"}}
 }
 
 const testCredentialID = "0123456789abcdef0123456789abcdef"
@@ -577,7 +577,7 @@ func TestServerHandsSecretsOnlyToApprovedConnections(t *testing.T) {
 
 	changed := map[string]func(*vault.Scope){
 		"origin":      func(sc *vault.Scope) { sc.Origin = "https://moved.example.invalid" },
-		"permissions": func(sc *vault.Scope) { sc.Permissions = []string{"read", "delete"} },
+		"permissions": func(sc *vault.Scope) { sc.Effects = []string{"read", "delete"} },
 		"targets":     func(sc *vault.Scope) { sc.Targets = []string{"other"} },
 		"tools":       func(sc *vault.Scope) { sc.Tools = []string{} },
 		"provider":    func(sc *vault.Scope) { sc.Provider = "github" },
@@ -609,7 +609,7 @@ func TestServerHandsSecretsOnlyToApprovedConnections(t *testing.T) {
 
 	// The same scope in another order is the same scope.
 	reordered := testScope()
-	reordered.Permissions = []string{"create", "read"}
+	reordered.Effects = []string{"create", "read"}
 	reordered.Targets = []string{"b", "a"}
 	if _, err := exchangeOverPipe(t, s, c, request{Op: opCheck, Scope: reordered}); err != nil {
 		t.Errorf("check of the approved scope = %v", err)

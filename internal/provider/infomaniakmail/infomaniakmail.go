@@ -358,7 +358,7 @@ func validBaseURL(raw string) error {
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Mail", FormerIDs: []string{"infomaniakmail"}, RenamedTools: renamedTools, DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		DefaultEffects: []config.Effect{config.EffectRead},
 		Description: "Infomaniak mailbox over IMAP and SMTP: folders, envelopes, messages, attachments, plus " +
 			"confirmed message changes, drafts with attachments, and confirmed sending for one mailbox",
 		SecretRoles: []config.SecretRole{{

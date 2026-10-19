@@ -156,18 +156,18 @@ func parseRulesetID(rest string) int64 {
 // that lists the guarded tools.
 func rulesetsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all, Tools: []string{rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID}}
+		Effects: all, Tools: []string{rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID}}
 	cfg.Connections["org"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"orgs/octo-org"}, Permissions: all}
+		Targets: []string{"orgs/octo-org"}, Effects: all}
 	cfg.Connections["org-listed"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"orgs/octo-org"}, Permissions: all,
+		Targets: []string{"orgs/octo-org"}, Effects: all,
 		Tools: []string{rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID}}
-	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
 	return cfg
 }
 

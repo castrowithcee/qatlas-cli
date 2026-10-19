@@ -68,7 +68,7 @@ func writeCore(t *testing.T) (*application.Core, *atomic.Int32) {
 	stubLimiter(t, primaryKey)
 	cfg := coreConfig()
 	cfg.Connections["lexware-writer"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}}
 	var reads atomic.Int32
 	red := &redact.Redactor{}
 	counting := secret.NewWith(func(string) string { reads.Add(1); return primaryKey }, nil, nil, red)
@@ -400,9 +400,9 @@ func TestDeleteArticleIsDeclaredAndOfferedOnlyThroughAToolEntry(t *testing.T) {
 	})
 	cfg := coreConfig()
 	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}}
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete}}
 	cfg.Connections["lexware-deleter"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionDelete}, Tools: []string{"lexware.articles.delete"}}
+		Effects: []config.Effect{config.EffectDelete}, Tools: []string{"lexware.articles.delete"}}
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)
 	invoke := func(connection, id string, confirm bool) error {

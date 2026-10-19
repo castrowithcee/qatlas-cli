@@ -675,13 +675,13 @@ func TestFileToolsThroughTheCoreNeedReleasedDirectoriesAndConfirmation(t *testin
 	serveFiles(t, fake)
 	dir := t.TempDir()
 	cfg := testConfig()
-	allRights := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	cfg.Connections["files"] = config.Connection{Service: "baserow", Credential: "token", Permissions: allRights,
+	allRights := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	cfg.Connections["files"] = config.Connection{Service: "baserow", Credential: "token", Effects: allRights,
 		Target: "table/11", Files: config.Files{Read: []string{dir}, Write: []string{dir}}}
-	cfg.Connections["nofiles"] = config.Connection{Service: "baserow", Credential: "token", Permissions: allRights,
+	cfg.Connections["nofiles"] = config.Connection{Service: "baserow", Credential: "token", Effects: allRights,
 		Target: "table/11"}
 	cfg.Connections["readonly"] = config.Connection{Service: "baserow", Credential: "token",
-		Permissions: []config.Permission{config.PermissionRead}, Target: "table/11",
+		Effects: []config.Effect{config.EffectRead}, Target: "table/11",
 		Files: config.Files{Read: []string{dir}, Write: []string{dir}}}
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)

@@ -197,8 +197,8 @@ func scopeFrom(ctx context.Context) (vault.Scope, bool) {
 // its paths, its local file directories, the forward credentials it releases with their fields, and whether it is
 // switched off.
 func ScopeOf(resolved *config.Resolved) vault.Scope {
-	permissions := make([]string, len(resolved.Permissions))
-	for i, permission := range resolved.Permissions {
+	permissions := make([]string, len(resolved.Effects))
+	for i, permission := range resolved.Effects {
 		permissions[i] = string(permission)
 	}
 	targets := append([]string(nil), resolved.Targets...)
@@ -211,7 +211,7 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 	}
 	return vault.Scope{
 		Connection: resolved.Name, Credential: resolved.Credential, Provider: resolved.Provider,
-		Origin: resolved.BaseURL, Permissions: permissions, Targets: targets, Tools: tools,
+		Origin: resolved.BaseURL, Effects: permissions, Targets: targets, Tools: tools,
 		Paths: append([]string(nil), resolved.Paths...), FilesRead: append([]string(nil), resolved.Files.Read...),
 		FilesWrite: append([]string(nil), resolved.Files.Write...), Forward: forwardOf(resolved),
 		Disabled: resolved.Disabled,

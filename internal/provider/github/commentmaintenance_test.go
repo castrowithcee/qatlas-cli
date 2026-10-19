@@ -103,14 +103,14 @@ func (c *fakeComments) route(w http.ResponseWriter, req *http.Request) bool {
 // github.comments.delete, the way labelsConfig binds its own guarded tool.
 func commentMaintenanceConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all, Tools: []string{commentsDelete.ID}}
+		Effects: all, Tools: []string{commentsDelete.ID}}
 	cfg.Connections["planning-full"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: all}
+		Effects: all}
 	return cfg
 }
 

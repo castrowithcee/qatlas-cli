@@ -8,25 +8,25 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-func TestConnectionPermissionsAreIndependentFromCredentials(t *testing.T) {
+func TestConnectionEffectsAreIndependentFromCredentials(t *testing.T) {
 	cfg, err := Decode(strings.NewReader(strings.Replace(minimal,
 		"    credential: reader\n", "    credential: reader\n    permissions: [read, update]\n", 1)), testProviders)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Permission{PermissionRead, PermissionUpdate}
-	if got := cfg.ConnectionPermissions("wiki"); !reflect.DeepEqual(got, want) {
+	want := []Effect{EffectRead, EffectUpdate}
+	if got := cfg.ConnectionEffects("wiki"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("permissions = %v, want %v", got, want)
 	}
-	allows := func(effect Permission) bool {
+	allows := func(effect Effect) bool {
 		return cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: effect})
 	}
-	if !allows(PermissionRead) || !allows(PermissionUpdate) || allows(PermissionCreate) || allows(PermissionDelete) {
+	if !allows(EffectRead) || !allows(EffectUpdate) || allows(EffectCreate) || allows(EffectDelete) {
 		t.Fatal("connection permission check does not match the explicit local allow-list")
 	}
 }
 
-func TestConnectionPermissionsRoundTripMissingAndDenyAll(t *testing.T) {
+func TestConnectionEffectsRoundTripMissingAndDenyAll(t *testing.T) {
 	missing, err := Decode(strings.NewReader(minimal), testProviders)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestConnectionPermissionsRoundTripMissingAndDenyAll(t *testing.T) {
 	}
 
 	connection := missing.Connections["wiki"]
-	connection.Permissions = []Permission{}
+	connection.Effects = []Effect{}
 	missing.Connections["wiki"] = connection
 	encoded, err = yaml.Marshal(missing)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestConnectionPermissionsRoundTripMissingAndDenyAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := roundTrip.ConnectionPermissions("wiki"); got == nil || len(got) != 0 {
+	if got := roundTrip.ConnectionEffects("wiki"); got == nil || len(got) != 0 {
 		t.Fatalf("round-trip permissions = %#v", got)
 	}
 }
@@ -63,7 +63,7 @@ func TestMissingAndEmptyConnectionPermissionsStaySafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.ConnectionPermissions("wiki"); !reflect.DeepEqual(got, []Permission{PermissionRead}) {
+	if got := cfg.ConnectionEffects("wiki"); !reflect.DeepEqual(got, []Effect{EffectRead}) {
 		t.Fatalf("missing permissions = %v, want the safe read compatibility default", got)
 	}
 
@@ -72,12 +72,12 @@ func TestMissingAndEmptyConnectionPermissionsStaySafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := empty.ConnectionPermissions("wiki"); got == nil || len(got) != 0 {
+	if got := empty.ConnectionEffects("wiki"); got == nil || len(got) != 0 {
 		t.Fatalf("explicit empty permissions = %#v, want a non-nil deny-all list", got)
 	}
 }
 
-func TestConnectionPermissionsRejectUnknownAndDuplicateValues(t *testing.T) {
+func TestConnectionEffectsRejectUnknownAndDuplicateValues(t *testing.T) {
 	for _, permissions := range []string{"[read, publish]", "[read, read]"} {
 		input := strings.Replace(minimal, "    credential: reader\n",
 			"    credential: reader\n    permissions: "+permissions+"\n", 1)
@@ -88,14 +88,14 @@ func TestConnectionPermissionsRejectUnknownAndDuplicateValues(t *testing.T) {
 }
 
 func TestPermissionTextDistinguishesDefaultAndDenyAll(t *testing.T) {
-	if got, err := ParsePermissions(""); err != nil || got != nil {
+	if got, err := ParseEffects(""); err != nil || got != nil {
 		t.Fatalf("empty = %#v, %v", got, err)
 	}
-	got, err := ParsePermissions("none")
+	got, err := ParseEffects("none")
 	if err != nil || got == nil || len(got) != 0 {
 		t.Fatalf("none = %#v, %v", got, err)
 	}
-	if FormatPermissions(nil) != "" || FormatPermissions([]Permission{}) != "none" {
+	if FormatEffects(nil) != "" || FormatEffects([]Effect{}) != "none" {
 		t.Fatal("permission formatting lost default/deny-all distinction")
 	}
 }
@@ -163,7 +163,7 @@ func TestConnectionToolsNarrowThePermissions(t *testing.T) {
 	for _, tool := range []struct{ id, effect string }{
 		{"bookstack.pages.get", "read"}, {"bookstack.pages.create", "create"}, {"bookstack.pages.search", "read"},
 	} {
-		if listed.ConnectionAllows("wiki", ToolMetadata{ID: tool.id, Effect: Permission(tool.effect)}) {
+		if listed.ConnectionAllows("wiki", ToolMetadata{ID: tool.id, Effect: Effect(tool.effect)}) {
 			t.Errorf("%s is offered although the tools list does not name it", tool.id)
 		}
 	}
@@ -317,8 +317,8 @@ defaults:`, 1)
 // missing list nor any permission exposes it, a list that names it still needs its effect, and an ordinary
 // tool keeps its behaviour on the same connection.
 func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
-	guarded := ToolMetadata{ID: "bookstack.pages.create", Effect: PermissionCreate, RequiresToolAllowList: true}
-	ordinary := ToolMetadata{ID: "bookstack.pages.list", Effect: PermissionRead}
+	guarded := ToolMetadata{ID: "bookstack.pages.create", Effect: EffectCreate, RequiresToolAllowList: true}
+	ordinary := ToolMetadata{ID: "bookstack.pages.list", Effect: EffectRead}
 	for _, tc := range []struct {
 		name, lines           string
 		guarded, ordinaryWant bool
@@ -348,7 +348,7 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn := cfg.Connections["wiki"]
-	conn.Permissions, conn.Tools = []Permission{PermissionRead}, []string{guarded.ID}
+	conn.Effects, conn.Tools = []Effect{EffectRead}, []string{guarded.ID}
 	cfg.Connections["wiki"] = conn
 	if cfg.ConnectionAllows("wiki", guarded) {
 		t.Error("a listed tool is offered although the permissions exclude its effect")

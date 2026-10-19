@@ -138,12 +138,12 @@ func registry(t *testing.T) *capability.Registry {
 	return reg
 }
 
-var allPermissions = config.Permissions()
+var allEffects = config.Effects()
 
 func coreConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleMailPassword: passwordEnv}}
 	connection := func(targets ...string) config.Connection {
-		return config.Connection{Service: "mail", Credential: "mail-reader", Permissions: allPermissions,
+		return config.Connection{Service: "mail", Credential: "mail-reader", Effects: allEffects,
 			Targets: append([]string{"mailbox/" + mailbox}, targets...)}
 	}
 	// A change tool is offered only through a tools list, since each one requires it.

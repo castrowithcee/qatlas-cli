@@ -186,8 +186,8 @@ func (formerCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool)
 	}
 	return config.ProviderMetadata{ID: id, Name: "Acme Chat", SecretRoles: []config.SecretRole{{Name: "token"}},
 		Tools: []config.ToolMetadata{
-			{ID: "acmechat.messages.fetch", Effect: config.PermissionRead},
-			{ID: "acme.chat.messages.list", Effect: config.PermissionRead},
+			{ID: "acmechat.messages.fetch", Effect: config.EffectRead},
+			{ID: "acme.chat.messages.list", Effect: config.EffectRead},
 		}}, true
 }
 

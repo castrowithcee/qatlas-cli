@@ -16,7 +16,7 @@ func scopeChanges() map[string]func(*config.Resolved) {
 	return map[string]func(*config.Resolved){
 		"origin":      func(r *config.Resolved) { r.BaseURL = "https://moved.example.invalid" },
 		"provider":    func(r *config.Resolved) { r.Provider = "nextcloud" },
-		"permissions": func(r *config.Resolved) { r.Permissions = append(r.Permissions, config.PermissionDelete) },
+		"permissions": func(r *config.Resolved) { r.Effects = append(r.Effects, config.EffectDelete) },
 		"target":      func(r *config.Resolved) { r.Target = "shelf-9" },
 		"targets":     func(r *config.Resolved) { r.Targets = []string{"shelf-1", "shelf-2"} },
 		"tools":       func(r *config.Resolved) { r.Tools = []string{"bookstack.pages.list"} },

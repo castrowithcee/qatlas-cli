@@ -19,7 +19,7 @@ func vaultCred() config.Credential { return config.Credential{Type: config.Crede
 func wikiConnection() *config.Resolved {
 	return &config.Resolved{
 		Name: "wiki", Provider: "bookstack", BaseURL: "https://wiki.example.test", Service: "wiki",
-		Credential: credName, Secrets: vaultCred(), Permissions: []config.Permission{config.PermissionRead},
+		Credential: credName, Secrets: vaultCred(), Effects: []config.Effect{config.EffectRead},
 	}
 }
 

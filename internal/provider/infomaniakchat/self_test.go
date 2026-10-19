@@ -245,7 +245,7 @@ func TestSelfToolsAreOnlyInTheMessagingProfileExceptTheProfileUpdate(t *testing.
 		if tool.ID == statusSet.ID || tool.ID == customStatusSet.ID || tool.ID == customStatusClear.ID ||
 			tool.ID == profileUpdate.ID {
 			found[tool.ID] = true
-			if tool.Group != "users" || tool.Effect != config.PermissionUpdate || tool.RequiresToolAllowList {
+			if tool.Group != "users" || tool.Effect != config.EffectUpdate || tool.RequiresToolAllowList {
 				t.Fatalf("tool metadata = %+v", tool)
 			}
 		}

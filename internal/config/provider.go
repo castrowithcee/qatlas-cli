@@ -6,39 +6,39 @@ import (
 	"strings"
 )
 
-// Permission is one class of operation a connection may expose and execute locally. Provider credentials
+// Effect is one class of operation a connection may expose and execute locally. Provider credentials
 // remain an independent upper bound: a permission can restrict a stronger credential but cannot expand a
 // weaker one.
-type Permission string
+type Effect string
 
 const (
-	PermissionRead    Permission = "read"
-	PermissionCreate  Permission = "create"
-	PermissionUpdate  Permission = "update"
-	PermissionDelete  Permission = "delete"
-	PermissionExecute Permission = "execute"
+	EffectRead    Effect = "read"
+	EffectCreate  Effect = "create"
+	EffectUpdate  Effect = "update"
+	EffectDelete  Effect = "delete"
+	EffectExecute Effect = "execute"
 )
 
-// Permissions returns every supported value in stable display order.
-func Permissions() []Permission {
-	return []Permission{PermissionRead, PermissionCreate, PermissionUpdate, PermissionDelete, PermissionExecute}
+// Effects returns every supported value in stable display order.
+func Effects() []Effect {
+	return []Effect{EffectRead, EffectCreate, EffectUpdate, EffectDelete, EffectExecute}
 }
 
-// ParsePermissions reads the stable comma-separated form used internally by configuration editors. An
+// ParseEffects reads the stable comma-separated form used internally by configuration editors. An
 // empty value keeps the provider's compatibility default; "none" expresses an explicit deny-all list.
-func ParsePermissions(raw string) ([]Permission, error) {
+func ParseEffects(raw string) ([]Effect, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return nil, nil
 	}
 	if trimmed == "none" {
-		return []Permission{}, nil
+		return []Effect{}, nil
 	}
 	parts := strings.Split(raw, ",")
-	permissions := make([]Permission, 0, len(parts))
+	permissions := make([]Effect, 0, len(parts))
 	for _, part := range parts {
-		permission := Permission(strings.TrimSpace(part))
-		if !validPermission(permission) {
+		permission := Effect(strings.TrimSpace(part))
+		if !validEffect(permission) {
 			return nil, fmt.Errorf("unknown permission %q, supported permissions are %s", permission, permissionNames())
 		}
 		permissions = append(permissions, permission)
@@ -46,8 +46,8 @@ func ParsePermissions(raw string) ([]Permission, error) {
 	return permissions, nil
 }
 
-// FormatPermissions returns the editable comma-separated form without expanding compatibility defaults.
-func FormatPermissions(permissions []Permission) string {
+// FormatEffects returns the editable comma-separated form without expanding compatibility defaults.
+func FormatEffects(permissions []Effect) string {
 	if permissions != nil && len(permissions) == 0 {
 		return "none"
 	}
@@ -172,7 +172,7 @@ func (t TargetMetadata) kindOf(target string) string {
 type ToolMetadata struct {
 	ID                    string
 	Title                 string
-	Effect                Permission
+	Effect                Effect
 	RequiresToolAllowList bool
 	// Group is the ID of the provider's ToolGroup the tool belongs to; empty for a provider without Groups.
 	Group string
@@ -205,7 +205,7 @@ type ToolProfile struct {
 	Tools          []string
 }
 
-// ProviderMetadata is the configuration contract of one compiled provider. SupportedPermissions and Tools
+// ProviderMetadata is the configuration contract of one compiled provider. SupportedEffects and Tools
 // are derived from the registered operations, sorted by effect order and by ID, and never declared by hand.
 // Profiles are declared by the provider and checked against its registered tools.
 //
@@ -217,14 +217,14 @@ type ToolProfile struct {
 // validation instead of the first call. It runs the same logic the provider uses to open a connection, and
 // its error may not quote the value.
 type ProviderMetadata struct {
-	ID                   string
-	Name                 string
-	Description          string
-	DefaultBaseURL       string
-	ValidateBaseURL      func(string) error
-	DefaultPermissions   []Permission
-	SupportedPermissions []Permission
-	Tools                []ToolMetadata
+	ID               string
+	Name             string
+	Description      string
+	DefaultBaseURL   string
+	ValidateBaseURL  func(string) error
+	DefaultEffects   []Effect
+	SupportedEffects []Effect
+	Tools            []ToolMetadata
 	// RemovedTools lists tool IDs qatlas no longer offers. A tools list may still name one: the entry is
 	// ignored with a warning instead of failing the configuration.
 	RemovedTools []string
@@ -257,10 +257,10 @@ func (m ProviderMetadata) RecommendedProfile() (ToolProfile, bool) {
 	return ToolProfile{}, false
 }
 
-// ProfilePermissions returns the effects the tools of one profile need, in stable display order. A tool
+// ProfileEffects returns the effects the tools of one profile need, in stable display order. A tool
 // this provider did not register contributes nothing.
-func (m ProviderMetadata) ProfilePermissions(profile ToolProfile) []Permission {
-	needed := map[Permission]bool{}
+func (m ProviderMetadata) ProfileEffects(profile ToolProfile) []Effect {
+	needed := map[Effect]bool{}
 	for _, id := range profile.Tools {
 		for _, tool := range m.Tools {
 			if tool.ID == id {
@@ -268,8 +268,8 @@ func (m ProviderMetadata) ProfilePermissions(profile ToolProfile) []Permission {
 			}
 		}
 	}
-	permissions := []Permission{}
-	for _, permission := range Permissions() {
+	permissions := []Effect{}
+	for _, permission := range Effects() {
 		if needed[permission] {
 			permissions = append(permissions, permission)
 		}
