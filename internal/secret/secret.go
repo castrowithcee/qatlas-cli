@@ -194,7 +194,8 @@ func scopeFrom(ctx context.Context) (vault.Scope, bool) {
 
 // ScopeOf returns the scope an approval of the connection resolved describes is given for: its name, its
 // credential, its provider, its effective endpoint, its effective permissions, its targets, its tools list,
-// its paths, its local file directories, and the forward credentials it releases with their fields.
+// its paths, its local file directories, the forward credentials it releases with their fields, and whether it is
+// switched off.
 func ScopeOf(resolved *config.Resolved) vault.Scope {
 	permissions := make([]string, len(resolved.Permissions))
 	for i, permission := range resolved.Permissions {
@@ -213,6 +214,7 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 		Origin: resolved.BaseURL, Permissions: permissions, Targets: targets, Tools: tools,
 		Paths: append([]string(nil), resolved.Paths...), FilesRead: append([]string(nil), resolved.Files.Read...),
 		FilesWrite: append([]string(nil), resolved.Files.Write...), Forward: forwardOf(resolved),
+		Disabled: resolved.Disabled,
 	}
 }
 

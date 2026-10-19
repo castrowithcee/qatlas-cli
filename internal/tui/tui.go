@@ -2925,6 +2925,8 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Paths:          paths,
 			Files:          files,
 			ForwardSecrets: forward,
+			// The state is not a form field here: saving carries it over, from the copied entry for a copy.
+			Disabled: cfg.Connections[m.sourceEntry(name)].Disabled,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))

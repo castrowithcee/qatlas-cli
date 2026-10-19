@@ -1,7 +1,7 @@
 // Package approval decides which connections an encrypted vault hands a vault credential's secret to. A
 // connection is approved for its scope as it is configured at that moment (see vault.Scope); any later
 // change of its endpoint, provider, permissions, targets, tools list, paths, files, forward credentials with
-// their fields, or credential entry leaves it
+// their fields, state, or credential entry leaves it
 // open until a person approves it again. The approvals themselves live inside the encrypted vault.
 //
 // Every function here reads or writes the approvals of a vault unlocked in this process and never asks for
@@ -35,7 +35,22 @@ const (
 	FieldPaths       = "paths"
 	FieldFiles       = "files"
 	FieldForward     = "forward"
+	FieldState       = "state"
 )
+
+// The two states a FieldState change reads between.
+const (
+	stateActive   = "active"
+	stateDisabled = "disabled"
+)
+
+// StateText is how a person reads whether a connection is switched off.
+func StateText(disabled bool) string {
+	if disabled {
+		return stateDisabled
+	}
+	return stateActive
+}
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
 // a person reads it. It never holds a secret.
@@ -261,6 +276,7 @@ func diff(approved vault.Approval, now vault.Scope, id string, catalog config.Pr
 		FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
 	addList(FieldForward, false, ForwardItems(before.Forward), ForwardItems(after.Forward),
 		ForwardText(before.Forward), ForwardText(after.Forward))
+	add(FieldState, StateText(before.Disabled), StateText(after.Disabled))
 	return fields
 }
 
@@ -410,7 +426,7 @@ func tools(values []string) string {
 // DirectApprovable reports whether change - a connection's own open change, found right after some action
 // that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
 // browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
-// targets, tools, or a plain rename of its credential, never one "stored anew" (the vault holds a different
+// targets, tools, its state, or a plain rename of its credential, never one "stored anew" (the vault holds a different
 // entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
 // connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
 // either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
@@ -425,7 +441,7 @@ func DirectApprovable(change Change) bool {
 	}
 	for _, f := range change.Fields {
 		switch f.Field {
-		case FieldPermissions, FieldTargets, FieldTools:
+		case FieldPermissions, FieldTargets, FieldTools, FieldState:
 		case FieldCredential:
 			if strings.HasSuffix(f.After, " (stored anew)") {
 				return false
@@ -551,7 +567,7 @@ func VaultScopes(cfg *config.Config) ([]vault.Scope, error) {
 // LapsedModels names the vorbild connections of token that cover nothing now, sorted: one that is no
 // connection of cfg reading a vault credential any more, because it was renamed, deleted, or switched away
 // from the vault; one the vault unlocked in this process holds no approval for; and one whose approval was
-// given for a credential entry since removed or stored anew. It is the same rule the vault applies when a
+// given for a credential entry since removed or stored anew; and one that is disabled, as approved or as configured now. It is the same rule the vault applies when a
 // token approves (see vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about
 // exactly the vorbilder an approval would skip.
 func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]string, error) {
@@ -571,7 +587,7 @@ func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]stri
 		if err != nil {
 			return nil, err
 		}
-		if !held || id != approved.CredentialID {
+		if !held || id != approved.CredentialID || approved.Scope.Disabled || connection.Disabled {
 			lapsed = append(lapsed, name)
 		}
 	}
