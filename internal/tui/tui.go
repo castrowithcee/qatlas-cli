@@ -427,6 +427,8 @@ type Model struct {
 	pickerMarks map[string]bool
 	// pickerGroups is set while the picker of a tool list of a grouped provider is open; nil otherwise.
 	pickerGroups *toolGroups
+	// pickerEffects is set while the picker of the tool list is open; it holds the effect rows above the rest.
+	pickerEffects *toolEffects
 	// providers is the table of the focused provider row while it is open.
 	providers providerTable
 	// targetList holds the entries of the focused target list while its screen is open; the row takes them
@@ -1635,7 +1637,7 @@ func (m *Model) openPicker() {
 	if len(f.choices) == 0 {
 		return
 	}
-	m.picker.text, m.pickerMarks, m.picker.match, m.pickerGroups = choiceText, nil, nil, nil
+	m.picker.text, m.pickerMarks, m.picker.match, m.pickerGroups, m.pickerEffects = choiceText, nil, nil, nil, nil
 	if f.kind == fieldToolList || f.kind == fieldMultiChoice {
 		m.pickerMarks = map[string]bool{}
 		for choice, marked := range f.selected {
@@ -1651,6 +1653,18 @@ func (m *Model) openPicker() {
 		if g := newToolGroups(metadata, f.choices); g != nil {
 			m.pickerGroups, entries = g, g.entries()
 			m.picker.match = g.matches(m.picker.text)
+		}
+		if e := newToolEffects(metadata, f.choices); e != nil {
+			m.pickerEffects = e
+			base := m.picker.match
+			text := m.picker.text
+			if base == nil {
+				base = func(name, query string) bool {
+					return query == "" || strings.Contains(strings.ToLower(text(name)), query)
+				}
+			}
+			m.picker.match = e.matches(base)
+			entries = append(e.rows(), entries...)
 		}
 	}
 	m.picker.reset(entries)
@@ -1668,7 +1682,9 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		// typing a blank, which no tool ID or effect contains, and enter keeps every tick at once.
 		switch key.String() {
 		case " ":
-			if choice, ok := m.picker.selected(); ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
+			if choice, ok := m.picker.selected(); ok && m.pickerEffects != nil && isEffectRow(choice) {
+				m.pickerEffects.toggle(choice, m.pickerMarks, m.searchVisible())
+			} else if ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
 				m.pickerGroups.toggle(choice, m.pickerMarks, m.searchVisible())
 			} else if ok {
 				toggleMark(m.pickerMarks, choice, m.fields[m.focus].kind == fieldMultiChoice)
@@ -1704,7 +1720,7 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		if m.pickerGroups == nil || m.picker.query() != "" {
 			return m.picker.updateFilter(key)
 		}
-		if choice, ok := m.picker.selected(); ok {
+		if choice, ok := m.picker.selected(); ok && !isEffectRow(choice) {
 			if row := m.pickerGroups.fold(choice, key.String() == "left"); row != "" {
 				m.picker.refilter()
 				m.picker.selectName(row)
@@ -3940,7 +3956,21 @@ func (m *Model) pickerFrame() (string, string) {
 	f := m.fields[m.focus]
 	shown, total := len(m.picker.matches), len(m.picker.all)
 	var head strings.Builder
-	title := fmt.Sprintf("Choose %s  %d/%d (%d total)", f.label, min(m.picker.cursor+1, shown), shown, total)
+	position := m.picker.cursor + 1
+	if m.pickerEffects != nil {
+		// The effect rows are no values: they count neither as a position nor in the totals.
+		rows := 0
+		for i, name := range m.picker.matches {
+			if isEffectRow(name) {
+				rows++
+				if i < m.picker.cursor {
+					position--
+				}
+			}
+		}
+		shown, total, position = shown-rows, len(f.choices), max(position, 0)
+	}
+	title := fmt.Sprintf("Choose %s  %d/%d (%d total)", f.label, min(position, shown), shown, total)
 	if m.pickerGroups != nil {
 		ticked, all := m.pickerGroups.count(m.pickerMarks)
 		title = fmt.Sprintf("Choose %s  %d/%d ticked", f.label, ticked, all)
@@ -3955,11 +3985,17 @@ func (m *Model) pickerFrame() (string, string) {
 				ticked++
 			}
 		}
+		if m.pickerEffects != nil {
+			total = len(f.choices)
+		}
 		if m.pickerGroups == nil {
+			if m.pickerEffects != nil {
+				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · esc cancel"
+			}
 			head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
 			keys = "type to search · up/down move · space tick · enter keep · esc cancel"
 		} else {
-			keys = "type to search · up/down move · space tick row or group · left/right fold group · enter keep · esc cancel"
+			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · esc cancel"
 		}
 	} else {
 		head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
@@ -3983,7 +4019,9 @@ func (m *Model) pickerRow(i int) string {
 	_, width := m.fit("  ")
 	choice := m.picker.matches[i]
 	var text string
-	if m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
+	if m.pickerEffects != nil && isEffectRow(choice) {
+		text = m.pickerEffects.rowText(choice, m.pickerMarks)
+	} else if m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
 		text = m.pickerGroups.rowText(choice, m.pickerMarks, m.picker.query() != "")
 	} else if m.pickerMarks != nil {
 		mark := "[ ] "
@@ -4814,6 +4852,16 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && len(f.marked()) == 0:
 		value = fmt.Sprintf("none of %d ticked: no tool is offered", len(f.choices))
+	case f.kind == fieldToolList && f.label == toolListLabel:
+		value = fmt.Sprintf("%d of %d", len(f.marked()), len(f.choices))
+		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+		if effects := config.EffectsOfTools(metadata, f.marked()); len(effects) > 0 {
+			names := make([]string, len(effects))
+			for i, effect := range effects {
+				names[i] = string(effect)
+			}
+			value += " · " + strings.Join(names, ", ")
+		}
 	case f.kind == fieldToolList:
 		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
 	case f.kind == fieldTargets && len(f.entries) == 0:

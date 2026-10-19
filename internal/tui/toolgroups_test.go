@@ -62,7 +62,8 @@ func TestTheGroupedPickerStartsFoldedAndFoldsWithLeftRight(t *testing.T) {
 	if strings.Contains(view, "github.issues.") || !strings.Contains(view, "▸ ") || strings.Contains(view, "▾ ") {
 		t.Fatalf("the groups do not start folded:\n%s", view)
 	}
-	press(t, m, "down", "right")
+	cursorTo(t, m, groupRowPrefix+m.pickerGroups.groups[0].ID)
+	press(t, m, "right")
 	view = screenOf(m)
 	if !strings.Contains(view, "▾ ") || !strings.Contains(view, "github.") {
 		t.Fatalf("right did not open the group under the cursor:\n%s", view)
@@ -80,7 +81,8 @@ func TestSpaceTicksAGroupAndAllGroupsAndSearchFindsFoldedTools(t *testing.T) {
 	m, _, _ := groupedPicker(t, 100)
 	first := m.pickerGroups.groups[0]
 	members := m.pickerGroups.members[first.ID]
-	press(t, m, "down", " ")
+	cursorTo(t, m, groupRowPrefix+first.ID)
+	press(t, m, " ")
 	for _, tool := range members {
 		if !m.pickerMarks[tool] {
 			t.Fatalf("group toggle left %s unticked", tool)
@@ -93,7 +95,8 @@ func TestSpaceTicksAGroupAndAllGroupsAndSearchFindsFoldedTools(t *testing.T) {
 	if len(m.pickerMarks) != 0 {
 		t.Fatalf("a second toggle left %d ticks", len(m.pickerMarks))
 	}
-	press(t, m, "up", " ")
+	cursorTo(t, m, allGroupsRow)
+	press(t, m, " ")
 	if ticked, total := m.pickerGroups.count(m.pickerMarks); ticked != total || total == 0 {
 		t.Fatalf("all on gave %d/%d", ticked, total)
 	}
@@ -108,12 +111,14 @@ func TestSpaceTicksAGroupAndAllGroupsAndSearchFindsFoldedTools(t *testing.T) {
 	if !strings.Contains(view, "github.workflow-files.get") || !strings.Contains(view, "Actions") || !m.pickerGroups.collapsed["actions"] {
 		t.Fatalf("the search does not show the tool under its folded group:\n%s", view)
 	}
-	press(t, m, "down", "down", " ")
+	cursorTo(t, m, "github.workflow-files.get")
+	press(t, m, " ")
 	if !m.pickerMarks["github.workflow-files.get"] || len(m.pickerMarks) != 1 {
 		t.Fatalf("ticks = %v, want only github.workflow-files.get", m.pickerMarks)
 	}
 	// While searching, a group row acts on the matching tools only.
-	press(t, m, "up", " ")
+	cursorTo(t, m, groupRowPrefix+"actions")
+	press(t, m, " ")
 	if len(m.pickerMarks) != 0 {
 		t.Fatalf("group toggle within a search reached %v", m.pickerMarks)
 	}
@@ -126,7 +131,8 @@ func TestTheGroupedPickerSavesTheSameListAsTheFlatOrder(t *testing.T) {
 	m, path, reg := groupedPicker(t, 100)
 	group := m.pickerGroups.groups[len(m.pickerGroups.groups)-1]
 	typeText(t, m, "github.issues.get")
-	press(t, m, "down", "down", " ") // the all row is shown, then the group row, then the tool
+	cursorTo(t, m, "github.issues.get")
+	press(t, m, " ")
 	want := map[string]bool{}
 	for k, v := range m.pickerMarks {
 		want[k] = v
@@ -164,7 +170,8 @@ func TestTheGroupedPickerSavesTheSameListAsTheFlatOrder(t *testing.T) {
 func TestTheGroupedPickerFitsNarrowTerminals(t *testing.T) {
 	for _, width := range []int{79, 80} {
 		m, _, _ := groupedPicker(t, width)
-		press(t, m, "down", " ", "right")
+		cursorTo(t, m, groupRowPrefix+m.pickerGroups.groups[0].ID)
+		press(t, m, " ", "right")
 		for _, view := range []string{screenOf(m)} {
 			for _, line := range strings.Split(view, "\n") {
 				if lipgloss.Width(line) > width {
@@ -195,5 +202,13 @@ func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
 	press(t, m, "enter")
 	if m.screen != screenPicker || m.pickerGroups != nil || strings.Contains(screenOf(m), "all groups") {
 		t.Fatalf("a flat provider got a grouped picker:\n%s", screenOf(m))
+	}
+}
+
+// cursorTo puts the picker's cursor on the named entry, which has to be shown.
+func cursorTo(t *testing.T, m *Model, name string) {
+	t.Helper()
+	if !m.picker.selectName(name) {
+		t.Fatalf("%q is not shown in the picker", name)
 	}
 }
