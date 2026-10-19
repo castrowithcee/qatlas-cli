@@ -189,3 +189,72 @@ func BenchmarkAppendParallel(b *testing.B) {
 		}
 	})
 }
+
+// seedDays writes days day files, the newest dated like the logger's clock, each with one valid line. With
+// emptyNewest the newest file exists but is empty, so the predecessor lookup has to walk back one file.
+func seedDays(b testing.TB, days int, emptyNewest bool) *Logger {
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	logger, _ := clockAt(now)
+	logger.vaultDir = b.TempDir()
+	// Retention far beyond the oldest file, so no Append deletes anything.
+	logger.retentionDays = 100000
+	if err := os.MkdirAll(logger.logsDir(), dirMode); err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < days; i++ {
+		name := now.AddDate(0, 0, i-(days-1)).Format("2006-01-02") + ".jsonl"
+		content := []byte(`{"seq":` + strconv.Itoa(i+1) + `,"operation":"bench.seed"}` + "\n")
+		if emptyNewest && i == days-1 {
+			content = nil
+		}
+		if err := os.WriteFile(filepath.Join(logger.logsDir(), name), content, fileMode); err != nil {
+			b.Fatal(err)
+		}
+	}
+	return logger
+}
+
+// BenchmarkAppendManyDays measures one Append with many day files in the logs directory: the directory
+// read and sort per Append grow with the file count. "empty-newest" has an empty newest file.
+//
+//	go test ./internal/invokelog -run '^$' -bench BenchmarkAppendManyDays -benchtime 200x -count 3
+//
+// As a prebuilt test executable:
+//
+//	invokelog.test.exe -test.run '^$' -test.bench BenchmarkAppendManyDays -test.benchtime 200x -test.count 3
+func BenchmarkAppendManyDays(b *testing.B) {
+	for _, emptyNewest := range []bool{false, true} {
+		for _, days := range []int{1, 90, 365, 3650} {
+			name := "days-" + strconv.Itoa(days)
+			if emptyNewest {
+				name += "-empty-newest"
+			}
+			b.Run(name, func(b *testing.B) {
+				logger := seedDays(b, days, emptyNewest)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if err := logger.Append(benchFields()); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestSeedDaysSmall checks the many-days fixture at a size that costs next to nothing, including that
+// retention removes nothing and the empty newest file is skipped.
+func TestSeedDaysSmall(t *testing.T) {
+	for _, emptyNewest := range []bool{false, true} {
+		logger := seedDays(t, 5, emptyNewest)
+		mustAppend(t, logger, "op.next")
+		files, err := dayFiles(logger.logsDir())
+		if err != nil || len(files) != 5 {
+			t.Fatalf("emptyNewest=%v: files = %v, err = %v; want 5 and nothing removed", emptyNewest, files, err)
+		}
+		_, raw, err := lastLine(logger.logsDir())
+		if err != nil || !bytes.Contains(raw, []byte("op.next")) {
+			t.Fatalf("emptyNewest=%v: last line = %q, err = %v", emptyNewest, raw, err)
+		}
+	}
+}

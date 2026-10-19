@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/filelock"
 )
@@ -52,6 +53,10 @@ func (s *Store) lockPath() string {
 	return target + ".lock"
 }
 
+// lockWaited, when set, receives how long taking the cross-process lock blocked. It is a seam for the
+// lock-wait benchmark and nil in production.
+var lockWaited func(time.Duration)
+
 // lock takes the cross-process lock and returns the function that releases it.
 func (s *Store) lock() (func(), error) {
 	path := s.lockPath()
@@ -63,7 +68,12 @@ func (s *Store) lock() (func(), error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the lock file %s: %w", path, err)
 	}
-	if err := filelock.Lock(f); err != nil {
+	start := time.Now()
+	err = filelock.Lock(f)
+	if lockWaited != nil {
+		lockWaited(time.Since(start))
+	}
+	if err != nil {
 		_ = f.Close()
 		return nil, fmt.Errorf("cannot lock %s: %w", path, err)
 	}
