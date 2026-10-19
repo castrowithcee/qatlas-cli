@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -142,4 +143,46 @@ func TestSaveFailsCleanlyWhenFileStaysOpen(t *testing.T) {
 		t.Error("the target changed")
 	}
 	noTempFiles(t, filepath.Dir(path))
+}
+
+func TestBackupACLAllowsOnlyTheUser(t *testing.T) {
+	store, _ := savedStore(t)
+	cfg := sample(t)
+	if err := cfg.SetDefault("other", "wiki"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(store.backupDir())
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("backups = %v, %v", entries, err)
+	}
+	for _, path := range []string{store.backupDir(), filepath.Join(store.backupDir(), entries[0].Name())} {
+		sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+		if err != nil {
+			t.Fatal(err)
+		}
+		control, _, _ := sd.Control()
+		dacl, _, err := sd.DACL()
+		if err != nil || dacl == nil {
+			t.Fatalf("%s: dacl = %v, %v", path, dacl, err)
+		}
+		if control&windows.SE_DACL_PROTECTED == 0 || dacl.AceCount != 1 {
+			t.Errorf("%s: protected = %v, aces = %d, want protected with one entry", path,
+				control&windows.SE_DACL_PROTECTED != 0, dacl.AceCount)
+			continue
+		}
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, 0, &ace); err != nil {
+			t.Fatal(err)
+		}
+		if sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart)); !sid.Equals(user.User.Sid) {
+			t.Errorf("%s: entry is for %s, want the current user", path, sid)
+		}
+	}
 }
