@@ -182,6 +182,11 @@ func TestScaleWriteFixtures(t *testing.T) {
 	}
 }
 
+// TestScaleRegistry registers the scale probe, which otherwise only the benchmarks would exercise.
+func TestScaleRegistry(t *testing.T) {
+	scaleRegistry(t)
+}
+
 // scaleRegistry is the shipped registry plus one tool without effect on any provider, so the preparation of
 // a call can be measured without a handler behind it.
 func scaleRegistry(tb testing.TB) *capability.Registry {
@@ -190,7 +195,7 @@ func scaleRegistry(tb testing.TB) *capability.Registry {
 	err := reg.Register("bookstack", capability.Operation{
 		Descriptor: capability.Descriptor{
 			ID: "bookstack.scale.noop", Version: 1, Description: "Scale probe without handler work",
-			Provider: "bookstack",
+			Provider: "bookstack", Group: "content",
 			Risk: capability.Risk{
 				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 				Confirmation: capability.ConfirmationNone, DataSensitivity: "synthetic",
