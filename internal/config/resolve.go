@@ -8,7 +8,9 @@ import "fmt"
 // the variable names. Both are needed to resolve a secret, and neither is a secret. Nothing here reads a
 // value; that happens later, in package secret, and only for the role a provider actually needs.
 type Resolved struct {
-	Name        string
+	Name string
+	// ID is the connection's config id, empty for a connection that has none yet.
+	ID          string
 	Provider    string
 	BaseURL     string
 	Options     map[string]string
@@ -92,6 +94,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 
 	return &Resolved{
 		Name:           name,
+		ID:             conn.ID,
 		Provider:       service.Provider,
 		BaseURL:        c.ServiceBaseURL(service),
 		Options:        service.Options,

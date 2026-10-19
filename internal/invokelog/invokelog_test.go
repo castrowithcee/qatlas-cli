@@ -563,8 +563,10 @@ func TestValidateConnectionChangeEntries(t *testing.T) {
 			Effect: "update", Result: "success"},
 		"former name on a change": {Path: "cli", Operation: OperationConnectionChange, Connection: "wiki", FormerConnection: "old",
 			Effect: "update", Result: "success"},
-		"connection id on an invoke": {Path: "cli", Operation: "bookstack.read", Connection: "wiki", ConnectionID: id, Effect: "read",
+		"connection id without connection": {Path: "cli", Operation: "bookstack.read", ConnectionID: id, Effect: "read",
 			Result: "success"},
+		"malformed connection id on an invoke": {Path: "mcp", Operation: "bookstack.read", Connection: "wiki", ConnectionID: "X",
+			Effect: "read", Result: "success", Session: "0123456789abcdef"},
 		"malformed connection id": {Path: "cli", Operation: OperationConnectionCreate, Connection: "wiki", ConnectionID: "x",
 			Effect: "create", Result: "success"},
 	}
@@ -596,5 +598,18 @@ func TestSignedConnectionEntriesVerify(t *testing.T) {
 	report := verifyWith(t, dir, key)
 	if report.Broken || !report.Checked {
 		t.Fatalf("report = %+v, want an intact, checked chain", report)
+	}
+}
+
+func TestValidateConnectionIDOnInvokes(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
+	for _, f := range []Fields{
+		{Path: "cli", Operation: "bookstack.read", Connection: "wiki", ConnectionID: id, Effect: "read", Result: "success"},
+		{Path: "mcp", Operation: "bookstack.read", Connection: "wiki", ConnectionID: id, Effect: "read", Result: "success",
+			Session: "0123456789abcdef"},
+	} {
+		if err := f.Validate(); err != nil {
+			t.Errorf("%s: Validate() = %v", f.Path, err)
+		}
 	}
 }

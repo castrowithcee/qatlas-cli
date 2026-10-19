@@ -15,21 +15,22 @@ const pathRule = "must name a directory, either absolute or starting with '~/', 
 
 // validatePaths checks the paths list of one connection. An explicit empty list is refused: it would read
 // like a binding to nothing, while leaving paths out is what makes a connection apply everywhere.
-func validatePaths(name string, paths []string, report func(string, ...any)) {
+func validatePaths(name string, paths []string, report func(Problem)) {
 	if paths != nil && len(paths) == 0 {
-		report("connections.%s.paths: must name at least one directory; leave paths out to use the "+
-			"connection in every project", name)
+		report(problem(SectionConnections, name, "paths", CodePathsEmpty,
+			"must name at least one directory; leave paths out to use the connection in every project"))
 		return
 	}
 	seen := map[string]bool{}
 	for i, entry := range paths {
 		if err := CheckPath(entry); err != nil {
-			report("connections.%s.paths[%d]: %s", name, i, err)
+			report(problem(SectionConnections, name, "paths", CodeInvalidPath, "%s", err).at(i))
 			continue
 		}
 		key := filepath.Clean(entry)
 		if seen[key] {
-			report("connections.%s.paths[%d]: a directory is listed more than once", name, i)
+			report(problem(SectionConnections, name, "paths", CodeDuplicatePath,
+				"a directory is listed more than once").at(i))
 		}
 		seen[key] = true
 	}

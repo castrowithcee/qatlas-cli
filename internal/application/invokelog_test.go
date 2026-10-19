@@ -246,3 +246,40 @@ func TestInvokeLogsSizeCounters(t *testing.T) {
 		t.Fatalf("empty-argument entry = %+v, want a recorded req_bytes of 0", e)
 	}
 }
+
+// The entry of an invoke carries the connection's config id, and none where the connection has no id.
+func TestInvokeLogCarriesTheConnectionID(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
+	for name, want := range map[string]string{"with id": id, "without id": ""} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			core, _ := testCore(t, []string{"primary"}, nil, true)
+			connection := core.config.Connections["primary"]
+			connection.ID = want
+			core.config.Connections["primary"] = connection
+			core.SetInvokeLog(invokelog.New(dir, 90), "cli", nil)
+
+			if _, err := core.Invoke(context.Background(), InvokeRequest{
+				Operation: "fake.pages.get", Connection: "primary", Arguments: json.RawMessage(`{"id":"7"}`),
+			}); err != nil {
+				t.Fatal(err)
+			}
+			files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.jsonl"))
+			if len(files) != 1 {
+				t.Fatalf("day files = %v", files)
+			}
+			data, err := os.ReadFile(files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var entry invokelog.Entry
+			if err := json.Unmarshal(data, &entry); err != nil {
+				t.Fatal(err)
+			}
+			if entry.Connection != "primary" || entry.ConnectionID != want ||
+				strings.Contains(string(data), "connection_id") != (want != "") {
+				t.Fatalf("entry = %s, want connection_id %q", data, want)
+			}
+		})
+	}
+}

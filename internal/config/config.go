@@ -389,7 +389,8 @@ func decodeRaw(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 		Version int `yaml:"version"`
 	}
 	if yaml.Unmarshal(data, &head) == nil && head.Version != 0 && !knownVersion(head.Version) {
-		return nil, fmt.Errorf("version: got %d, want %s", head.Version, versionWant)
+		return nil, problem(SectionVersion, "", "", CodeUnsupportedVersion, "got %d, want %s", head.Version, versionWant).
+			with("want", versionWant)
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -465,67 +466,77 @@ func redactDecodeError(err error) error {
 	return errors.New(strings.Join(problems, "; "))
 }
 
-// Validate reports every schema and reference problem at once. Messages name configuration keys and
-// environment variable names only, never secret values.
+// Validate reports every schema and reference problem at once, each as a Problem inside the joined error.
+// Messages name configuration keys and environment variable names only, never secret values.
 func (c *Config) Validate() error {
 	providers := c.providerCatalog()
 	var problems []error
-	report := func(format string, args ...any) {
-		problems = append(problems, fmt.Errorf(format, args...))
+	report := func(p Problem) {
+		problems = append(problems, p)
 	}
 	// checkName reports an unusable name under its own key, so several bad names are all visible at once.
-	checkName := func(section, kind, name string) {
+	// For a nested key such as defaults.connections the entry sits below field.
+	checkName := func(section, field, kind, name string) {
 		err := validateName(name)
-		switch {
-		case err == nil:
-		case name == "":
-			report("%s: a %s %v", section, kind, err)
-		default:
-			report("%s.%s: a %s %v", section, name, kind, err)
+		if err == nil {
+			return
 		}
+		p := problem(section, name, "", CodeInvalidName, "a %s %v", kind, err)
+		if field != "" {
+			p.Name, p.Field = "", field
+			if name != "" {
+				p.Field = field + "." + name
+			}
+		}
+		report(p)
 	}
 
 	if !knownVersion(c.Version) {
-		report("version: got %d, want %s", c.Version, versionWant)
+		report(problem(SectionVersion, "", "", CodeUnsupportedVersion, "got %d, want %s", c.Version, versionWant).
+			with("want", versionWant))
 	}
 
 	for _, name := range sortedKeys(c.Services) {
 		s := c.Services[name]
-		checkName("services", "service name", name)
+		checkName(SectionServices, "", "service name", name)
 		metadata, metaOK := providers.ProviderMetadata(s.Provider)
 		if s.Provider == "" {
-			report("services.%s: provider must not be empty", name)
+			report(problem(SectionServices, name, "", CodeProviderMissing, "provider must not be empty").
+				refined("provider"))
 		} else if !metaOK {
-			report("services.%s: unknown provider %q, known providers are %s",
-				name, s.Provider, strings.Join(c.Providers(), ", "))
+			report(problem(SectionServices, name, "", CodeUnknownProvider,
+				"unknown provider %q, known providers are %s", s.Provider, strings.Join(c.Providers(), ", ")).
+				refined("provider").with("known", strings.Join(c.Providers(), ", ")))
 		}
 		if err := validateBaseURL(c.ServiceBaseURL(s)); err != nil {
-			report("services.%s.base_url: %v", name, err)
+			report(problem(SectionServices, name, "base_url", CodeInvalidBaseURL, "%v", err))
 		} else if metaOK && metadata.ValidateBaseURL != nil {
 			// The generic check above already ensured a well-formed http(s) URL; this second, provider-owned
 			// check catches a base URL that its own client would still refuse, such as a GitHub host without
 			// /api/v3, before the first call instead of at it.
 			if err := metadata.ValidateBaseURL(c.ServiceBaseURL(s)); err != nil {
-				report("services.%s.base_url: %v", name, err)
+				report(problem(SectionServices, name, "base_url", CodeInvalidBaseURL, "%v", err).because(err))
 			}
 		}
 	}
 
 	for _, name := range sortedKeys(c.Credentials) {
 		cred := c.Credentials[name]
-		checkName("credentials", "credential name", name)
+		checkName(SectionCredentials, "", "credential name", name)
 		validateForward(name, cred, report)
 		if cred.Provider != "" {
 			if _, ok := providers.ProviderMetadata(cred.Provider); !ok {
-				report("credentials.%s: unknown provider %q, known providers are %s",
-					name, cred.Provider, strings.Join(c.Providers(), ", "))
+				report(problem(SectionCredentials, name, "", CodeUnknownProvider,
+					"unknown provider %q, known providers are %s", cred.Provider, strings.Join(c.Providers(), ", ")).
+					refined("provider").with("known", strings.Join(c.Providers(), ", ")))
 			} else if roles := c.SecretRolesOf(cred.Provider); len(roles) > 0 {
 				// A role the named provider does not define would never be read. Naming the provider is
 				// what makes that visible here instead of at the first failing call.
 				for _, role := range sortedKeys(cred.Values) {
 					if !contains(roles, role) {
-						report("credentials.%s.values.%s: %s does not define this secret role, it uses %s",
-							name, role, cred.Provider, strings.Join(roles, ", "))
+						report(problem(SectionCredentials, name, "values."+role, CodeUnknownSecretRole,
+							"%s does not define this secret role, it uses %s", cred.Provider, strings.Join(roles, ", ")).
+							with("provider", cred.Provider).with("roles", strings.Join(roles, ", ")))
 					}
 				}
 			}
@@ -533,46 +544,53 @@ func (c *Config) Validate() error {
 		switch cred.Type {
 		case CredentialTypeEnv:
 			if len(cred.Values) == 0 {
-				report("credentials.%s.values: at least one secret role is required", name)
+				report(problem(SectionCredentials, name, "values", CodeSecretRolesMissing,
+					"at least one secret role is required"))
 			}
 			for _, role := range sortedKeys(cred.Values) {
 				if role == "" {
-					report("credentials.%s.values: a secret role must not be empty", name)
+					report(problem(SectionCredentials, name, "values", CodeEmptySecretRole,
+						"a secret role must not be empty"))
 				}
 				if err := validateEnvName(cred.Values[role]); err != nil {
-					report("credentials.%s.values.%s: %v", name, role, err)
+					report(problem(SectionCredentials, name, "values."+role, CodeInvalidEnvName, "%v", err))
 				}
 			}
 		case CredentialTypeKeyring:
 			// The message never quotes what was written there: a value under a keyring credential is
 			// most likely the secret itself, pasted into the file.
 			if len(cred.Values) > 0 {
-				report("credentials.%s.values: %s", name, keyringValuesRule)
+				report(problem(SectionCredentials, name, "values", CodeSecretValuesNotAllowed, "%s", keyringValuesRule).
+					with("type", CredentialTypeKeyring))
 			}
 		case CredentialTypeVault:
 			// Same rule, and the same reason: a value here is most likely the secret itself.
 			if len(cred.Values) > 0 {
-				report("credentials.%s.values: %s", name, vaultValuesRule)
+				report(problem(SectionCredentials, name, "values", CodeSecretValuesNotAllowed, "%s", vaultValuesRule).
+					with("type", CredentialTypeVault))
 			}
 		default:
-			report("credentials.%s: type must be one of %s, got %q",
-				name, strings.Join(CredentialTypes(), ", "), cred.Type)
+			report(problem(SectionCredentials, name, "", CodeInvalidCredentialType,
+				"type must be one of %s, got %q", strings.Join(CredentialTypes(), ", "), cred.Type).
+				refined("type"))
 		}
 	}
 
 	for _, name := range sortedKeys(c.Connections) {
 		conn := c.Connections[name]
-		checkName("connections", "connection name", name)
+		checkName(SectionConnections, "", "connection name", name)
 		service, ok := c.Services[conn.Service]
 		if !ok {
-			report("connections.%s.service: unknown service %q", name, conn.Service)
+			report(problem(SectionConnections, name, "service", CodeUnknownService, "unknown service %q", conn.Service))
 		}
 		cred, credOK := c.Credentials[conn.Credential]
 		if !credOK {
-			report("connections.%s.credential: unknown credential %q", name, conn.Credential)
+			report(problem(SectionConnections, name, "credential", CodeUnknownCredential,
+				"unknown credential %q", conn.Credential))
 		} else if cred.Forward {
-			report("connections.%s.credential: credential %q is a forward credential and cannot serve a connection",
-				name, conn.Credential)
+			report(problem(SectionConnections, name, "credential", CodeForwardCredentialAsLogin,
+				"credential %q is a forward credential and cannot serve a connection", conn.Credential).
+				with("credential", conn.Credential))
 		}
 		seenForward := map[string]bool{}
 		for i, ref := range conn.ForwardSecrets {
@@ -580,12 +598,19 @@ func (c *Config) Validate() error {
 			switch {
 			case !exists:
 				// An unknown entry is named by its position: free text here may be a pasted secret.
-				report("connections.%s.forward_secrets[%d]: unknown credential", name, i)
+				report(problem(SectionConnections, name, "forward_secrets", CodeUnknownForwardSecret,
+					"unknown credential").at(i))
 			case !target.Forward:
-				report("connections.%s.forward_secrets: credential %q is not a forward credential", name, ref)
+				report(problem(SectionConnections, name, "forward_secrets", CodeNotForwardCredential,
+					"credential %q is not a forward credential", ref).with("credential", ref))
 			}
 			if seenForward[ref] {
-				report("connections.%s.forward_secrets: credential %q is listed more than once", name, ref)
+				dup := problem(SectionConnections, name, "forward_secrets", CodeDuplicateForwardSecret,
+					"credential %q is listed more than once", ref)
+				if exists {
+					dup = dup.with("credential", ref)
+				}
+				report(dup)
 			}
 			seenForward[ref] = true
 		}
@@ -593,8 +618,10 @@ func (c *Config) Validate() error {
 		// roles are the other provider's. Saying so here keeps the mismatch out of the first call, where
 		// it would look like a rejected token.
 		if ok && credOK && cred.Provider != "" && cred.Provider != service.Provider {
-			report("connections.%s: service %q belongs to provider %q, credential %q to %q",
-				name, conn.Service, service.Provider, conn.Credential, cred.Provider)
+			report(problem(SectionConnections, name, "", CodeProviderMismatch,
+				"service %q belongs to provider %q, credential %q to %q",
+				conn.Service, service.Provider, conn.Credential, cred.Provider).
+				with("service", conn.Service).with("credential", conn.Credential))
 		}
 		// Only an env credential can be incomplete in the file. A keyring credential names no roles
 		// here; which ones it must supply follows from the provider, and whether they are supplied is a
@@ -602,24 +629,27 @@ func (c *Config) Validate() error {
 		if ok && credOK && cred.Type == CredentialTypeEnv {
 			for _, role := range c.ProviderSecretRoles(service.Provider) {
 				if cred.Values[role] == "" {
-					report("connections.%s: provider %q requires the secret role %q in credential %q",
-						name, service.Provider, role, conn.Credential)
+					report(problem(SectionConnections, name, "", CodeSecretRoleMissing,
+						"provider %q requires the secret role %q in credential %q", service.Provider, role, conn.Credential).
+						with("provider", service.Provider).with("role", role).with("credential", conn.Credential))
 				}
 			}
 		}
 		if err := validateLine(conn.Description, descriptionRule); err != nil {
-			report("connections.%s.description: %v", name, err)
+			report(problem(SectionConnections, name, "description", CodeInvalidDescription, "%v", err))
 		}
 		validatePaths(name, conn.Paths, report)
 		seenPermissions := map[Permission]bool{}
 		for _, permission := range conn.Permissions {
 			if !validPermission(permission) {
-				report("connections.%s.permissions: unknown permission %q, supported permissions are %s",
-					name, permission, permissionNames())
+				report(problem(SectionConnections, name, "permissions", CodeUnknownPermission,
+					"unknown permission %q, supported permissions are %s", permission, permissionNames()).
+					with("supported", permissionNames()))
 				continue
 			}
 			if seenPermissions[permission] {
-				report("connections.%s.permissions: permission %q is listed more than once", name, permission)
+				report(problem(SectionConnections, name, "permissions", CodeDuplicatePermission,
+					"permission %q is listed more than once", permission).with("permission", string(permission)))
 			}
 			seenPermissions[permission] = true
 		}
@@ -627,15 +657,18 @@ func (c *Config) Validate() error {
 			metadata, known := providers.ProviderMetadata(service.Provider)
 			targets := conn.TargetValues()
 			if metadata.Target.Required && len(targets) == 0 {
-				report("connections.%s.target: provider %q requires %s", name, service.Provider,
-					metadata.Target.Label)
+				report(problem(SectionConnections, name, "target", CodeTargetRequired,
+					"provider %q requires %s", service.Provider, metadata.Target.Label).
+					with("provider", service.Provider))
 			}
 			if strings.TrimSpace(conn.Target) != "" && len(conn.Targets) > 0 {
-				report("connections.%s: target and targets cannot both be set", name)
+				report(problem(SectionConnections, name, "", CodeTargetAndTargets,
+					"target and targets cannot both be set"))
 			}
 			if len(conn.Targets) > 0 && !metadata.Target.Multiple {
-				report("connections.%s.targets: provider %q accepts only one %s", name,
-					service.Provider, metadata.Target.Label)
+				report(problem(SectionConnections, name, "targets", CodeTargetsSingleOnly,
+					"provider %q accepts only one %s", service.Provider, metadata.Target.Label).
+					with("provider", service.Provider))
 			}
 			seenTargets := map[string]bool{}
 			formsValid := true
@@ -645,17 +678,22 @@ func (c *Config) Validate() error {
 			usesTargetList := len(conn.Targets) > 0
 			for i, target := range targets {
 				target = strings.TrimSpace(target)
-				path := "target"
-				if usesTargetList {
-					path = fmt.Sprintf("targets[%d]", i)
+				// at places the problem on the entry of a targets list, or on the plain target key.
+				at := func(p Problem) Problem {
+					if usesTargetList {
+						p.Field = "targets"
+						return p.at(i)
+					}
+					return p
 				}
 				if target == "" {
-					report("connections.%s.%s: targets must not be empty", name, path)
+					report(at(problem(SectionConnections, name, "target", CodeEmptyTarget, "targets must not be empty")))
 					formsValid = false
 					continue
 				}
 				if seenTargets[target] {
-					report("connections.%s.%s: a target is listed more than once", name, path)
+					report(at(problem(SectionConnections, name, "target", CodeDuplicateTarget,
+						"a target is listed more than once")))
 				}
 				validate := metadata.Target.Validate
 				if !usesTargetList && metadata.Target.ValidateSingle != nil {
@@ -663,7 +701,7 @@ func (c *Config) Validate() error {
 				}
 				if validate != nil {
 					if err := validate(target); err != nil {
-						report("connections.%s.%s: %v", name, path, err)
+						report(at(problem(SectionConnections, name, "target", CodeInvalidTarget, "%v", err).because(err)))
 						formsValid = false
 					}
 				}
@@ -671,12 +709,12 @@ func (c *Config) Validate() error {
 			}
 			if metadata.Target.ValidateSet != nil && formsValid && len(targets) > 0 {
 				if err := metadata.Target.ValidateSet(targets); err != nil {
-					report("connections.%s.targets: %v", name, err)
+					report(problem(SectionConnections, name, "targets", CodeInvalidTargetSet, "%v", err).because(err))
 				}
 			}
 			if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {
-				report("connections.%s.targets: wildcard %q must be the only target", name,
-					metadata.Target.Wildcard)
+				report(problem(SectionConnections, name, "targets", CodeWildcardNotAlone,
+					"wildcard %q must be the only target", metadata.Target.Wildcard))
 			}
 			if known && conn.Tools != nil {
 				c.validateTools(name, service.Provider, metadata, report)
@@ -687,35 +725,38 @@ func (c *Config) Validate() error {
 
 	for _, provider := range sortedKeys(c.ProviderNotes) {
 		if _, ok := providers.ProviderMetadata(provider); !ok {
-			report("provider_notes.%s: unknown provider, known providers are %s", provider,
-				strings.Join(c.Providers(), ", "))
+			report(problem(SectionProviderNotes, provider, "", CodeUnknownProvider,
+				"unknown provider, known providers are %s", strings.Join(c.Providers(), ", ")).
+				with("known", strings.Join(c.Providers(), ", ")))
 		}
 		if err := validateLine(c.ProviderNotes[provider], noteRule); err != nil {
-			report("provider_notes.%s: %v", provider, err)
+			report(problem(SectionProviderNotes, provider, "", CodeInvalidNote, "%v", err))
 		}
 	}
 
 	for _, domain := range sortedKeys(c.Defaults.Connections) {
 		conn := c.Defaults.Connections[domain]
-		checkName("defaults.connections", "domain", domain)
+		checkName(SectionDefaults, "connections", "domain", domain)
 		if _, ok := c.Connections[conn]; !ok {
-			report("defaults.connections.%s: unknown connection %q", domain, conn)
+			report(problem(SectionDefaults, "", "connections."+domain, CodeUnknownConnection,
+				"unknown connection %q", conn))
 		}
 	}
 
 	if store := c.Defaults.SecretStore; store != "" && store != CredentialTypeKeyring && store != CredentialTypeVault {
-		report("defaults.secret_store: must be %s or %s, got %q",
-			CredentialTypeKeyring, CredentialTypeVault, store)
+		report(problem(SectionDefaults, "", "secret_store", CodeInvalidSecretStore,
+			"must be %s or %s, got %q", CredentialTypeKeyring, CredentialTypeVault, store))
 	}
 
 	if _, err := parseIdleTimeout(c.Vault.IdleTimeout); err != nil {
-		report("vault.idle_timeout: %v", err)
+		report(problem(SectionVault, "", "idle_timeout", CodeInvalidTimeout, "%v", err))
 	}
 	if _, err := parseAdminTimeout(c.Vault.AdminTimeout); err != nil {
-		report("vault.admin_timeout: %v", err)
+		report(problem(SectionVault, "", "admin_timeout", CodeInvalidTimeout, "%v", err))
 	}
 	if c.Logs.RetentionDays < 0 {
-		report("logs.retention_days: must be a positive integer, got %d", c.Logs.RetentionDays)
+		report(problem(SectionLogs, "", "retention_days", CodeInvalidRetention,
+			"must be a positive integer, got %d", c.Logs.RetentionDays))
 	}
 
 	c.validateIDs(report)
@@ -744,36 +785,41 @@ func (c Credential) CheckForwardValue(field, value string) error {
 
 // validateForward checks the rules of a payload secret: it needs fields, has no provider, and its source is the
 // vault or the keyring. A credential without the flag must not carry fields.
-func validateForward(name string, cred Credential, report func(string, ...any)) {
+func validateForward(name string, cred Credential, report func(Problem)) {
 	if !cred.Forward {
 		if len(cred.Fields) > 0 {
-			report("credentials.%s.fields: only a forward credential has fields", name)
+			report(problem(SectionCredentials, name, "fields", CodeForwardFieldsNotAllowed,
+				"only a forward credential has fields"))
 		}
 		if cred.Description != "" {
-			report("credentials.%s.description: only a forward credential has a description", name)
+			report(problem(SectionCredentials, name, "description", CodeForwardDescriptionNotAllowed,
+				"only a forward credential has a description"))
 		}
 		return
 	}
 	if err := validateLine(cred.Description, descriptionRule); err != nil {
-		report("credentials.%s.description: %v", name, err)
+		report(problem(SectionCredentials, name, "description", CodeInvalidDescription, "%v", err))
 	}
 	if cred.Provider != "" {
-		report("credentials.%s.provider: a forward credential belongs to no provider", name)
+		report(problem(SectionCredentials, name, "provider", CodeForwardProviderNotAllowed,
+			"a forward credential belongs to no provider"))
 	}
 	if cred.Type != CredentialTypeVault && cred.Type != CredentialTypeKeyring {
-		report("credentials.%s.type: a forward credential must be %s or %s",
-			name, CredentialTypeKeyring, CredentialTypeVault)
+		report(problem(SectionCredentials, name, "type", CodeInvalidForwardType,
+			"a forward credential must be %s or %s", CredentialTypeKeyring, CredentialTypeVault))
 	}
 	if len(cred.Fields) == 0 {
-		report("credentials.%s.fields: a forward credential needs at least one field", name)
+		report(problem(SectionCredentials, name, "fields", CodeForwardFieldsMissing,
+			"a forward credential needs at least one field"))
 	}
 	seen := map[string]bool{}
 	for i, field := range cred.Fields {
 		if err := validateName(field); err != nil {
-			report("credentials.%s.fields[%d]: a field name %v", name, i, err)
+			report(problem(SectionCredentials, name, "fields", CodeInvalidFieldName, "a field name %v", err).at(i))
 		}
 		if seen[field] {
-			report("credentials.%s.fields[%d]: a field is listed more than once", name, i)
+			report(problem(SectionCredentials, name, "fields", CodeDuplicateField,
+				"a field is listed more than once").at(i))
 		}
 		seen[field] = true
 	}
@@ -785,7 +831,7 @@ func validateForward(name string, cred Credential, report func(string, ...any)) 
 // kept as a line that reads like a grant. An ID the provider lists as removed is skipped, and ToolWarnings
 // names it. Only registered IDs are quoted; an unknown entry is named by its position, because free text in
 // a configuration file is where a pasted secret ends up.
-func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(string, ...any)) {
+func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(Problem)) {
 	effects := map[string]Permission{}
 	for _, tool := range metadata.Tools {
 		effects[tool.ID] = tool.Effect
@@ -807,17 +853,21 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 		case contains(metadata.RemovedTools, tool):
 			// Ignored, and named by ToolWarnings.
 		case registered && seen[tool]:
-			report("connections.%s.tools: tool %q is listed more than once", name, tool)
+			report(problem(SectionConnections, name, "tools", CodeDuplicateTool,
+				"tool %q is listed more than once", tool).with("tool", tool))
 		case registered && !permitted[effect]:
-			report("connections.%s.tools: tool %q has effect %s, which the connection's permissions do not "+
-				"allow", name, tool, effect)
+			report(problem(SectionConnections, name, "tools", CodeToolEffectNotPermitted,
+				"tool %q has effect %s, which the connection's permissions do not allow", tool, effect).
+				with("tool", tool).with("effect", string(effect)))
 		case registered:
 		case owners[tool] != "":
-			report("connections.%s.tools: tool %q belongs to provider %q, not to %q", name, tool,
-				owners[tool], provider)
+			report(problem(SectionConnections, name, "tools", CodeToolOfOtherProvider,
+				"tool %q belongs to provider %q, not to %q", tool, owners[tool], provider).
+				with("tool", tool).with("owner", owners[tool]).with("provider", provider))
 		default:
-			report("connections.%s.tools: entry %d is not a registered tool of provider %q", name, i+1,
-				provider)
+			report(problem(SectionConnections, name, "tools", CodeUnknownToolEntry,
+				"entry %d is not a registered tool of provider %q", i+1, provider).
+				refined("tools").at(i+1).with("provider", provider))
 		}
 		seen[tool] = true
 	}

@@ -81,9 +81,9 @@ type Entry struct {
 	Operation  string      `json:"operation,omitempty"`
 	Version    int         `json:"version,omitempty"`
 	Connection string      `json:"connection,omitempty"`
-	// ConnectionID is the config id of the connection a connection change names, which links entries
-	// written under an earlier name; FormerConnection is the name a rename replaced. Both are absent
-	// elsewhere and on entries written before they existed.
+	// ConnectionID is the config id of the connection the entry names, which links entries written under
+	// an earlier name; absent where the connection has none and on entries written before it existed.
+	// FormerConnection is the name a rename replaced, present on a rename only.
 	ConnectionID     string `json:"connection_id,omitempty"`
 	FormerConnection string `json:"former_connection,omitempty"`
 	Effect           string `json:"effect,omitempty"`
@@ -114,7 +114,7 @@ type Fields struct {
 	Operation  string
 	Version    int
 	Connection string
-	// ConnectionID and FormerConnection are those of Entry; only a connection change carries them.
+	// ConnectionID and FormerConnection are those of Entry; only a rename carries FormerConnection.
 	ConnectionID     string
 	FormerConnection string
 	Effect           string
@@ -277,8 +277,8 @@ func (f Fields) Validate() error {
 	if effect, ok := connectionOperations[f.Operation]; ok && (f.Effect != effect || f.Connection == "") {
 		return errors.New("a connection change needs its effect and a connection")
 	}
-	if f.ConnectionID != "" && (connectionOperations[f.Operation] == "" || !connectionIDPattern.MatchString(f.ConnectionID)) {
-		return errors.New("connection_id must be a config id, and only on a connection change")
+	if f.ConnectionID != "" && (f.Connection == "" || !connectionIDPattern.MatchString(f.ConnectionID)) {
+		return errors.New("connection_id must be a config id, and needs a connection")
 	}
 	rename := f.Operation == OperationConnectionRename
 	if rename != (f.FormerConnection != "") || rename && f.FormerConnection == f.Connection {
