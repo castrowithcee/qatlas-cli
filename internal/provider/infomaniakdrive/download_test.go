@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -197,10 +198,10 @@ func TestDownloadRedirectNeverSendsTheTokenToTheStorageHost(t *testing.T) {
 
 func TestDownloadNeedsAReleasedDirectoryToBeOffered(t *testing.T) {
 	cfg := coreConfig()
-	if cfg.ConnectionAllows("drive", filesDownload.Tool()) {
+	if cfg.ConnectionAllows("drive", filesDownload.Tool(), time.Time{}) {
 		t.Fatal("a connection without files.write was offered files.download")
 	}
-	if !cfg.ConnectionAllows("drive", filesGet.Tool()) {
+	if !cfg.ConnectionAllows("drive", filesGet.Tool(), time.Time{}) {
 		t.Fatal("files.get is no longer offered to a connection without files.write")
 	}
 }

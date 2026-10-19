@@ -135,6 +135,8 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh", CodeSecretRoleMissing, "connections.gh: provider \"github\" requires the secret role \"token\"", "", -1},
 		{"connection description", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Description = long }) },
 			"connections.gh.description", CodeInvalidDescription, "connections.gh.description: is 201 characters", "description", -1},
+		{"active until", func(c *Config) { conn(c, "gh", func(v *Connection) { v.ActiveUntil = "tomorrow" }) },
+			"connections.gh.active_until", CodeInvalidActiveUntil, "connections.gh.active_until: expiry is neither", "active_until", -1},
 		{"paths empty", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Paths = []string{} }) },
 			"connections.gh.paths", CodePathsEmpty, "connections.gh.paths: must name at least one", "paths", -1},
 		{"path", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Paths = []string{"rel"} }) },

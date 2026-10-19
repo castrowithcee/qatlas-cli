@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -81,19 +82,19 @@ func TestDisabledVorbildIsLapsed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := LapsedModels(cfg, v, token); err != nil || len(got) != 0 {
+	if got, err := LapsedModels(cfg, v, token, time.Time{}); err != nil || len(got) != 0 {
 		t.Fatalf("LapsedModels() = %v, %v, want none", got, err)
 	}
 	// Disabled as configured now, though still approved active.
 	setDisabled(cfg, "wiki-write", true)
-	if got, err := LapsedModels(cfg, v, token); err != nil || !reflect.DeepEqual(got, []string{"wiki-write"}) {
+	if got, err := LapsedModels(cfg, v, token, time.Time{}); err != nil || !reflect.DeepEqual(got, []string{"wiki-write"}) {
 		t.Fatalf("LapsedModels() = %v, %v, want the disabled vorbild", got, err)
 	}
 	// Disabled and approved so.
 	if _, _, err := Approve(context.Background(), cfg, v, []string{"wiki-write"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := LapsedModels(cfg, v, token); err != nil || !reflect.DeepEqual(got, []string{"wiki-write"}) {
+	if got, err := LapsedModels(cfg, v, token, time.Time{}); err != nil || !reflect.DeepEqual(got, []string{"wiki-write"}) {
 		t.Fatalf("LapsedModels() = %v, %v, want the disabled vorbild", got, err)
 	}
 }

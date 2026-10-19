@@ -88,7 +88,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"a masked field. It never displays a stored secret back: what it shows is which source delivers\n" +
 			"a role. The state row of a connection form switches it between active and disabled; a disabled\n" +
 			"connection keeps its whole selection but serves nothing until it is active again, and can still be\n" +
-			"tested. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
+			"tested. The active for row, shown while the state is active, limits how long it stays active: from\n" +
+			"then on it refuses like a disabled one; the list shows the time that remains, or expired. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
 			"order and words: system keyring, vault, and environment variables, whichever is now chosen; none\n" +
 			"is a recommendation.\n\n" +
 			"A payload secret is a credential with freely named fields whose values a tool may pass on to a\n" +

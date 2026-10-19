@@ -55,6 +55,10 @@ type Scope struct {
 	// the credential reaches, so it needs approval. An active connection leaves it unset and keeps the
 	// fingerprint it had before the state existed.
 	Disabled bool `json:"disabled,omitempty"`
+	// ActiveUntil is the instant the connection stops being active, as RFC 3339 in UTC; empty without a
+	// limit. Lengthening or lifting the limit widens what the credential reaches over time, so a change needs
+	// approval. A connection without a limit keeps the fingerprint it had before the limit existed.
+	ActiveUntil string `json:"active_until,omitempty"`
 }
 
 // ForwardSecret is one forward credential a connection releases: its name and the names of the fields whose
@@ -152,10 +156,11 @@ func Fingerprint(scope Scope, credentialID string) string {
 		FilesRead    []string `json:"files_read,omitempty"`
 		FilesWrite   []string `json:"files_write,omitempty"`
 		// Forward holds the forward credentials with their fields: a change of either changes the fingerprint.
-		Forward  []ForwardSecret `json:"forward,omitempty"`
-		Disabled bool            `json:"disabled,omitempty"`
+		Forward     []ForwardSecret `json:"forward,omitempty"`
+		Disabled    bool            `json:"disabled,omitempty"`
+		ActiveUntil string          `json:"active_until,omitempty"`
 	}{credentialID, n.Credential, n.Provider, n.Origin, n.Effects, n.Targets, n.Tools, n.Paths,
-		n.FilesRead, n.FilesWrite, n.Forward, n.Disabled}
+		n.FilesRead, n.FilesWrite, n.Forward, n.Disabled, n.ActiveUntil}
 	data, err := json.Marshal(canonical)
 	if err != nil {
 		// Marshalling strings and string slices cannot fail.

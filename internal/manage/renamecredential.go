@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -296,7 +297,7 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 		return err
 	}
 	for _, token := range tokens {
-		lapsed, err := approval.LapsedModels(plan.before, v, token)
+		lapsed, err := approval.LapsedModels(plan.before, v, token, time.Now())
 		if err != nil {
 			return err
 		}

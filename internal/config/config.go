@@ -136,6 +136,10 @@ type Connection struct {
 	// Disabled switches the connection off: it offers no tool while the rest of its selection stays. Missing
 	// means active.
 	Disabled bool `yaml:"disabled,omitempty"`
+	// ActiveUntil ends the connection's activity at an instant, in the format of an agent token's expiry
+	// (see ParseExpiryTime). From then on it refuses like a disabled one. Missing means no limit. It is kept
+	// as read so a past value stays loadable; MarshalYAML writes it as RFC 3339.
+	ActiveUntil string `yaml:"active_until,omitempty"`
 }
 
 // MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
@@ -155,7 +159,9 @@ func (c Connection) MarshalYAML() (any, error) {
 		Files          Files     `yaml:"files,omitempty"`
 		ForwardSecrets []string  `yaml:"forward_secrets,omitempty"`
 		Disabled       bool      `yaml:"disabled,omitempty"`
+		ActiveUntil    string    `yaml:"active_until,omitempty"`
 	}
+	activeUntil := c.ActiveUntilCanonical()
 	var permissions *[]Effect
 	if c.Effects != nil {
 		copy := append(make([]Effect, 0, len(c.Effects)), c.Effects...)
@@ -168,7 +174,7 @@ func (c Connection) MarshalYAML() (any, error) {
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
 		Description: c.Description, Effects: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
-		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled}, nil
+		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled, ActiveUntil: activeUntil}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -638,6 +644,9 @@ func (c *Config) Validate() error {
 		if err := validateLine(conn.Description, descriptionRule); err != nil {
 			report(problem(SectionConnections, name, "description", CodeInvalidDescription, "%v", err))
 		}
+		if _, err := ParseExpiryTime(conn.ActiveUntil); conn.ActiveUntil != "" && err != nil {
+			report(problem(SectionConnections, name, "active_until", CodeInvalidActiveUntil, "%v", err))
+		}
 		validatePaths(name, conn.Paths, report)
 		seenEffects := map[Effect]bool{}
 		for _, permission := range conn.Effects {
@@ -1029,21 +1038,23 @@ const (
 	RefusalNoConnection Refusal = "no-connection"
 	// RefusalOtherProvider: the connection belongs to another provider than the tool.
 	RefusalOtherProvider Refusal = "other-provider"
-	// RefusalDisabled: the connection is switched off, and would offer the tool otherwise.
+	// RefusalDisabled: the connection is switched off or past its active_until, and would offer the tool
+	// otherwise.
 	RefusalDisabled Refusal = "connection-disabled"
 )
 
 // ConnectionRefusal answers whether the local configuration exposes one operation on a connection, and if
-// not, why. The empty refusal means the connection offers the tool: its effect is among the connection's
+// not, why. now is the time the caller reads the clock at; a connection past its active_until refuses like a
+// disabled one, and the package itself never reads the system time. The empty refusal means the connection offers the tool: its effect is among the connection's
 // permissions and, when the connection lists tools, its ID is among them. A tool that requires an
 // allow-list is exposed only by a connection whose tools list names it. The effect is checked first,
 // because it is the coarser of the two lists. An unknown connection offers nothing.
-func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
+func (c *Config) ConnectionRefusal(name string, tool ToolMetadata, now time.Time) Refusal {
 	conn, ok := c.Connections[name]
 	if !ok {
 		return RefusalNoConnection
 	}
-	if refusal := c.selectionRefusal(conn, name, tool); refusal != "" || !conn.Disabled {
+	if refusal := c.selectionRefusal(conn, name, tool); refusal != "" || !conn.Off(now) {
 		return refusal
 	}
 	return RefusalDisabled
@@ -1075,8 +1086,8 @@ func (c *Config) selectionRefusal(conn Connection, name string, tool ToolMetadat
 
 // ConnectionAllows reports whether a connection offers one operation, by the rule of ConnectionRefusal.
 // Every discovery and invoke path asks this one question, so none of them can offer what another refuses.
-func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
-	return c.ConnectionRefusal(name, tool) == ""
+func (c *Config) ConnectionAllows(name string, tool ToolMetadata, now time.Time) bool {
+	return c.ConnectionRefusal(name, tool, now) == ""
 }
 
 // IdleWarning says why a connection offers no tool at all, or returns "" when it offers at least one. Such
@@ -1086,7 +1097,8 @@ func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
 func (c *Config) IdleWarning(name string) string {
 	conn, ok := c.Connections[name]
 	if !ok || conn.Disabled {
-		// A disabled connection is switched off on purpose, which is no problem to warn about.
+		// A disabled connection is switched off on purpose, which is no problem to warn about. A connection
+		// past its active_until is judged by its selection alone, as it is not idle for being expired.
 		return ""
 	}
 	// A provider this build registers no tool for leaves nothing to judge the connection by.
@@ -1095,7 +1107,7 @@ func (c *Config) IdleWarning(name string) string {
 		return ""
 	}
 	for _, tool := range metadata.Tools {
-		if c.ConnectionAllows(name, tool) {
+		if c.selectionRefusal(conn, name, tool) == "" {
 			return ""
 		}
 	}

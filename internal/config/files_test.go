@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -197,7 +198,7 @@ func TestConnectionRefusalNeedsFilesOfTheToolsDirection(t *testing.T) {
 		{"", ""}, {LocalFilesRead, ""}, {LocalFilesWrite, RefusalNoLocalFiles},
 	} {
 		tool := ToolMetadata{ID: "filer.files.x", Effect: EffectRead, LocalFiles: tt.direction}
-		if got := cfg.ConnectionRefusal("docs", tool); got != tt.want {
+		if got := cfg.ConnectionRefusal("docs", tool, time.Time{}); got != tt.want {
 			t.Errorf("ConnectionRefusal(%q) = %q, want %q", tt.direction, got, tt.want)
 		}
 	}

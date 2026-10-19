@@ -231,3 +231,31 @@ func TestApproveAfterChangeApprovesTheStateOfTheSavedConnection(t *testing.T) {
 		t.Errorf("still open = %v", got)
 	}
 }
+
+// Saving a connection directly by name approves a lengthened limit, as it does any field its form shows;
+// the same lengthening made by editing the file alone is not approved.
+func TestApproveAfterChangeApprovesTheLimitOfTheSavedConnection(t *testing.T) {
+	w := newApprovalWorld(t)
+	short := w.base.Clone()
+	conn := short.Connections["a"]
+	conn.ActiveUntil = "2030-01-02T12:00:00Z"
+	short.Connections["a"] = conn
+	if _, _, err := approval.Approve(context.Background(), short, w.v, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	long := short.Clone()
+	conn.ActiveUntil = "2030-01-02T18:00:00Z"
+	long.Connections["a"] = conn
+	if got := w.open(t, long); !reflect.DeepEqual(got, []string{"a"}) {
+		t.Fatalf("open after a file edit = %v, want a (approval-required)", got)
+	}
+	before := SnapshotApprovals(w.v, short)
+	res := ApproveAfterChange(context.Background(), w.v, before, long, "a", ApprovalDirectOnly)
+	if res.StayedOpen != "" || !reflect.DeepEqual(res.Approved, []string{"a"}) {
+		t.Fatalf("ApproveAfterChange() = %+v, want a approved", res)
+	}
+	if got := w.open(t, long); len(got) != 0 {
+		t.Errorf("still open = %v", got)
+	}
+}

@@ -52,7 +52,21 @@ type Core struct {
 	invokeLog    invokelog.Writer
 	invokePath   string
 	invokeClient *invokelog.ClientInfo
+
+	// clock supplies the time a connection's active_until is judged at; time.Now unless a test replaces it.
+	clock func() time.Time
 }
+
+// now is the time the connections' active_until limits are judged at.
+func (c *Core) now() time.Time {
+	if c.clock == nil {
+		return time.Now()
+	}
+	return c.clock()
+}
+
+// SetClock replaces the clock the core judges a connection's active_until by; nil restores the system clock.
+func (c *Core) SetClock(clock func() time.Time) { c.clock = clock }
 
 // Policy may reject a fully validated request after connection selection and before confirmation,
 // credential resolution, or provider I/O. A nil policy allows the request.
@@ -573,7 +587,7 @@ const (
 	ToolsNone = "none"
 )
 
-// StateDisabled is the State of a connection that is switched off.
+// StateDisabled is the State of a connection that is switched off or past its active_until.
 const StateDisabled = "disabled"
 
 // ConnectionSummary is the discovery view of one configured route: the name an invoke request carries, the
@@ -592,9 +606,12 @@ type ConnectionSummary struct {
 	Effects     string  `json:"permissions"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
-	// State is "disabled" while the connection is switched off, and empty for an active one. It is no
-	// unusable reason: a disabled connection keeps its selection and offers no tool by choice.
+	// State is "disabled" while the connection is switched off or past its active_until, and empty for an
+	// active one. It is no unusable reason: a disabled connection keeps its selection and offers no tool by
+	// choice.
 	State string `json:"state,omitempty"`
+	// ActiveUntil is the instant the connection stops being active, as RFC 3339 in UTC; absent without a limit.
+	ActiveUntil string `json:"active_until,omitempty"`
 	// Files names the local directories the connection releases, per direction; absent when none.
 	Files *FilesRef `json:"files,omitempty"`
 	// ForwardSecrets lists the forward credentials the connection releases as reference arguments, never
@@ -679,6 +696,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		}
 	}
 
+	now := c.now()
 	connections := make([]ConnectionSummary, 0)
 	for name, connection := range c.config.Connections {
 		if !listed(name) {
@@ -707,9 +725,10 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 			Effects: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
 			ForwardSecrets: c.forwardRefs(name, unusable != nil),
 		}
-		if connection.Disabled {
+		if connection.Off(now) {
 			summary.State = StateDisabled
 		}
+		summary.ActiveUntil = connection.ActiveUntilCanonical()
 		if len(reasons) > 0 {
 			reason := reasons[name]
 			summary.Unusable = &reason
@@ -1333,7 +1352,7 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 	case 0:
 		// A provider whose only connection is switched off is refused for that reason, not as if it had none.
 		if only := c.connectionNames(descriptor.Provider); len(only) == 1 &&
-			c.config.ConnectionRefusal(only[0], descriptor.Tool()) == config.RefusalDisabled {
+			c.config.ConnectionRefusal(only[0], descriptor.Tool(), c.now()) == config.RefusalDisabled {
 			return nil, &capability.UnsupportedError{Connection: only[0], Capability: descriptor.ID,
 				Reason: config.RefusalDisabled}
 		}
@@ -1380,6 +1399,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		ForwardSecrets: append([]string(nil), connection.ForwardSecrets...),
 		Forward:        c.config.ForwardCredentials(connection),
 		Disabled:       connection.Disabled,
+		ActiveUntil:    connection.ActiveUntilCanonical(),
 	}, nil
 }
 
@@ -1434,7 +1454,7 @@ func (c *Core) connectionNamesWithAnyOperation(providerID string) []string {
 }
 
 func (c *Core) connectionAllows(name string, descriptor capability.Descriptor) bool {
-	return c.config.ConnectionAllows(name, descriptor.Tool())
+	return c.config.ConnectionAllows(name, descriptor.Tool(), c.now())
 }
 
 // connectionRefusal is the refusal of one resolved connection: another provider's connection never offers
@@ -1443,7 +1463,7 @@ func (c *Core) connectionRefusal(resolved *config.Resolved, descriptor capabilit
 	if resolved.Provider != descriptor.Provider {
 		return config.RefusalOtherProvider
 	}
-	return c.config.ConnectionRefusal(resolved.Name, descriptor.Tool())
+	return c.config.ConnectionRefusal(resolved.Name, descriptor.Tool(), c.now())
 }
 
 // refusal says why the catalog of request does not offer a tool, or nothing when it does. With a
@@ -1466,7 +1486,7 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 	}
 	closest := config.RefusalEffect
 	for _, name := range names {
-		switch c.config.ConnectionRefusal(name, descriptor.Tool()) {
+		switch c.config.ConnectionRefusal(name, descriptor.Tool(), c.now()) {
 		case "":
 			return ""
 		case config.RefusalDisabled:

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -104,7 +105,7 @@ func TestRenameVaultCredentialRenamesTheEntryAndCarriesValidApprovals(t *testing
 		t.Errorf("open = %v, stale = %v, want only the connection that was open before", open, report.Stale)
 	}
 	tokens, _ := w.v.Tokens()
-	if lapsed, _ := approval.LapsedModels(after, w.v, tokens[0]); len(lapsed) != 0 {
+	if lapsed, _ := approval.LapsedModels(after, w.v, tokens[0], time.Time{}); len(lapsed) != 0 {
 		t.Errorf("lapsed vorbilder = %v", lapsed)
 	}
 	var ops []string

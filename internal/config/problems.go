@@ -75,6 +75,7 @@ const (
 	CodeInvalidRetention             = "invalid-retention"
 	CodeInvalidID                    = "invalid-id"
 	CodeDuplicateID                  = "duplicate-id"
+	CodeInvalidActiveUntil           = "invalid-active-until"
 )
 
 // hints maps every code to the English advice that resolves it. The rules live here, in the core, so every
@@ -134,6 +135,7 @@ var hints = map[string]string{
 	CodeInvalidTimeout:               "Use a duration within the supported range, such as 15m.",
 	CodeInvalidRetention:             "Use a positive number of days.",
 	CodeInvalidID:                    "Remove the identifier; a new one is assigned when the file is saved.",
+	CodeInvalidActiveUntil:           "Use a date as YYYY-MM-DD or an RFC 3339 time, or remove the limit.",
 	CodeDuplicateID:                  "Remove the identifier from one of the entries; a new one is assigned when the file is saved.",
 }
 

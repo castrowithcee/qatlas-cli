@@ -158,7 +158,7 @@ func tokenWarning(cfg *config.Config, v *vault.Vault, token vault.Token) (string
 	if token.Expired(tokenNow()) {
 		warning = "expired"
 	}
-	lapsed, err := approval.LapsedModels(cfg, v, token)
+	lapsed, err := approval.LapsedModels(cfg, v, token, tokenNow())
 	if err != nil {
 		return "", err
 	}

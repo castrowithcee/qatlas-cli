@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -204,6 +205,9 @@ type field struct {
 	// hidden takes a row out of the form without dropping what was typed into it: the guided setup shows
 	// the rows of a new entry only while a new entry is chosen, and brings them back unchanged.
 	hidden bool
+	// keep is the active_until text an active-for row's first choice stands for, so saving without a change
+	// keeps that instant.
+	keep string
 	// entries and expanded belong to a target list: its targets in the order they are saved, and whether
 	// the row shows every one of them.
 	entries  []string
@@ -445,6 +449,8 @@ type Model struct {
 	pathInput  textinput.Model
 	pathEdit   int
 	pathRemove bool
+	// now is the clock the active-for row and the connection list read; nil means time.Now.
+	now func() time.Time
 	// startDir is the working directory the TUI was started in, the first suggestion for a new path.
 	startDir string
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
@@ -1625,6 +1631,8 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 		m.targetChosen()
 	case toolsLabel:
 		m.toolsModeChosen()
+	case stateLabel:
+		m.syncActiveFor()
 	}
 	return nil
 }
@@ -2779,6 +2787,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			textField("description", conn.Description, false).withHint(descriptionHint),
 			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
 				withHint(stateHint),
+			m.activeForField(conn),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
 			permissions,
 		)
@@ -2952,6 +2961,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Files:          files,
 			ForwardSecrets: forward,
 			Disabled:       m.fieldValue(stateLabel) == stateDisabled,
+			ActiveUntil:    m.activeUntilValue(),
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -4780,7 +4790,7 @@ func (m *Model) cells(name string) []string {
 		if description == "" && m.needsDescription(name) {
 			description = undescribedMarker
 		}
-		return []string{name, connectionState(conn.Disabled), conn.Service, strings.Join(effects, ","), tools,
+		return []string{name, m.connectionStateText(conn), conn.Service, strings.Join(effects, ","), tools,
 			targets, description}
 	case sectionDefaults:
 		return []string{name, m.cfg.Defaults.Connections[name]}

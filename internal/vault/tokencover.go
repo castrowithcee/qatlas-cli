@@ -29,6 +29,9 @@ const (
 	GapForward     = "forward"
 	// GapState marks a switch of a connection from disabled to active, which no token covers.
 	GapState = "state"
+	// GapActiveUntil marks a change that sets, lengthens or lifts a connection's active_until limit, which
+	// no token covers. Only a shorter limit than the approved one is left to the vorbild.
+	GapActiveUntil = "active until"
 	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
 	// token may change or delete.
 	GapVorbild = "vorbild"
@@ -80,9 +83,10 @@ type model struct {
 // direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
 // V's, each with the same fields. A delete is covered when the
 // approval it removes was. A vorbild counts only while it is a connection in current and its approval still
-// reads the credential entry it was given for and is not disabled. A change to a connection that is the
-// vorbild of any token is never covered. A change from disabled to active is never covered. A change
-// partly outside stays open whole.
+// reads the credential entry it was given for and is neither disabled nor past its active_until at now. A
+// change to a connection that is the vorbild of any token is never covered. A change from disabled to active
+// is never covered, nor is one that sets, lengthens or lifts the active_until limit. A change partly outside
+// stays open whole.
 //
 // It fails with ErrTokenUnknown for a value that matches no token, and with ErrTokenExpired for an expired
 // one, in which case the returned approval names it; nothing is written then.
@@ -119,7 +123,7 @@ func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, n
 		approval, approved := doc.Approvals[name]
 		conf, exists := configured[name]
 		if !approved || !exists || ids[approval.Scope.Credential] != approval.CredentialID ||
-			approval.Scope.Disabled || conf.Disabled {
+			approval.Scope.Disabled || conf.Disabled || approval.Scope.PastLimit(now) || conf.PastLimit(now) {
 			result.Lapsed = append(result.Lapsed, name)
 			continue
 		}
@@ -196,6 +200,11 @@ func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, n
 		if old, ok := doc.Approvals[change.Connection]; ok && change.Kind == ChangeUpdate &&
 			old.Scope.Disabled && !c.scope.Disabled {
 			change.Gaps = append(change.Gaps, GapState)
+		}
+		// A limit that is set, lengthened or lifted widens what the credential reaches in time.
+		if old, ok := doc.Approvals[change.Connection]; ok && change.Kind == ChangeUpdate &&
+			c.scope.ActiveUntil != old.Scope.ActiveUntil && !shorterLimit(old.Scope.ActiveUntil, c.scope.ActiveUntil) {
+			change.Gaps = append(change.Gaps, GapActiveUntil)
 		}
 		if len(change.Gaps) == 0 {
 			change.Approved, written = true, true
@@ -349,4 +358,24 @@ func pathWithin(path, base string) bool {
 	}
 	p, b = filepath.Clean(p), filepath.Clean(b)
 	return projectpath.Within(p, b) && projectpath.Within(projectpath.Canonical(p), projectpath.Canonical(b))
+}
+
+// PastLimit reports whether the scope's active_until limit lies at or before now. A limit that does not read
+// counts as past.
+func (s Scope) PastLimit(now time.Time) bool {
+	if s.ActiveUntil == "" {
+		return false
+	}
+	at, err := time.Parse(time.RFC3339, s.ActiveUntil)
+	return err != nil || !now.Before(at)
+}
+
+// shorterLimit reports whether next is a limit that reads and ends before the limit prev that reads.
+func shorterLimit(prev, next string) bool {
+	before, err := time.Parse(time.RFC3339, prev)
+	if err != nil {
+		return false
+	}
+	after, err := time.Parse(time.RFC3339, next)
+	return err == nil && after.Before(before)
 }

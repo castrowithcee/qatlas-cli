@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -54,10 +55,10 @@ func TestDisabledRefusalNamesOnlyWhatWouldBeOffered(t *testing.T) {
 	}
 	read := ToolMetadata{ID: "bookstack.pages.list", Effect: EffectRead}
 	update := ToolMetadata{ID: "bookstack.pages.update", Effect: EffectUpdate}
-	if got := cfg.ConnectionRefusal("wiki", read); got != RefusalDisabled {
+	if got := cfg.ConnectionRefusal("wiki", read, time.Time{}); got != RefusalDisabled {
 		t.Errorf("refusal of an offered tool = %q, want %q", got, RefusalDisabled)
 	}
-	if got := cfg.ConnectionRefusal("wiki", update); got != RefusalEffect {
+	if got := cfg.ConnectionRefusal("wiki", update, time.Time{}); got != RefusalEffect {
 		t.Errorf("refusal of a tool the selection refuses = %q, want %q", got, RefusalEffect)
 	}
 	if got := cfg.IdleWarning("wiki"); got != "" {

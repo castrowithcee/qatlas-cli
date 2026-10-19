@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -68,11 +69,11 @@ func TestDownloadDescriptorsDeclareLocalWriteAndBookkeepingData(t *testing.T) {
 		t.Errorf("description = %q", documentsDownload.Description)
 	}
 	cfg := coreConfig()
-	if cfg.ConnectionAllows("lexware-primary", documentsDownload.Tool()) ||
-		cfg.ConnectionAllows("lexware-primary", filesDownload.Tool()) {
+	if cfg.ConnectionAllows("lexware-primary", documentsDownload.Tool(), time.Time{}) ||
+		cfg.ConnectionAllows("lexware-primary", filesDownload.Tool(), time.Time{}) {
 		t.Error("a connection without files.write was offered a download tool")
 	}
-	if !cfg.ConnectionAllows("lexware-primary", vouchersGet.Tool()) {
+	if !cfg.ConnectionAllows("lexware-primary", vouchersGet.Tool(), time.Time{}) {
 		t.Error("vouchers.get is no longer offered without files.write")
 	}
 }

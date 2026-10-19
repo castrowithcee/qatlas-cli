@@ -26,16 +26,17 @@ import (
 
 // The fields of a scope, as a FieldChange names them.
 const (
-	FieldCredential = "credential"
-	FieldProvider   = "provider"
-	FieldOrigin     = "origin"
-	FieldEffects    = "permissions"
-	FieldTargets    = "targets"
-	FieldTools      = "tools"
-	FieldPaths      = "paths"
-	FieldFiles      = "files"
-	FieldForward    = "forward"
-	FieldState      = "state"
+	FieldCredential  = "credential"
+	FieldProvider    = "provider"
+	FieldOrigin      = "origin"
+	FieldEffects     = "permissions"
+	FieldTargets     = "targets"
+	FieldTools       = "tools"
+	FieldPaths       = "paths"
+	FieldFiles       = "files"
+	FieldForward     = "forward"
+	FieldState       = "state"
+	FieldActiveUntil = "active until"
 )
 
 // The two states a FieldState change reads between.
@@ -43,6 +44,19 @@ const (
 	stateActive   = "active"
 	stateDisabled = "disabled"
 )
+
+// ActiveUntilText is how a person reads a connection's active_until limit: the instant in local time, or
+// unlimited without one. A value that does not read stays as written.
+func ActiveUntilText(limit string) string {
+	if limit == "" {
+		return "unlimited"
+	}
+	at, err := time.Parse(time.RFC3339, limit)
+	if err != nil {
+		return limit
+	}
+	return at.Local().Format("2006-01-02 15:04:05 MST")
+}
 
 // StateText is how a person reads whether a connection is switched off.
 func StateText(disabled bool) string {
@@ -277,6 +291,7 @@ func diff(approved vault.Approval, now vault.Scope, id string, catalog config.Pr
 	addList(FieldForward, false, ForwardItems(before.Forward), ForwardItems(after.Forward),
 		ForwardText(before.Forward), ForwardText(after.Forward))
 	add(FieldState, StateText(before.Disabled), StateText(after.Disabled))
+	add(FieldActiveUntil, ActiveUntilText(before.ActiveUntil), ActiveUntilText(after.ActiveUntil))
 	return fields
 }
 
@@ -426,9 +441,9 @@ func tools(values []string) string {
 // DirectApprovable reports whether change - a connection's own open change, found right after some action
 // that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
 // browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
-// targets, tools, its state, or a plain rename of its credential, never one "stored anew" (the vault holds
-// a different entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
-// connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
+// targets, tools, its state, its active-until limit, or a plain rename of its credential, never one "stored
+// anew" (the vault holds a different entry under the same credential name), which a form cannot tell apart
+// from an ordinary rename. A connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
 // either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
 // replaced under the same name - left it open outside the fields the form shows, so saving unrelated fields
 // must never approve it in passing.
@@ -441,7 +456,7 @@ func DirectApprovable(change Change) bool {
 	}
 	for _, f := range change.Fields {
 		switch f.Field {
-		case FieldEffects, FieldTargets, FieldTools, FieldState:
+		case FieldEffects, FieldTargets, FieldTools, FieldState, FieldActiveUntil:
 		case FieldCredential:
 			if strings.HasSuffix(f.After, " (stored anew)") {
 				return false
@@ -567,11 +582,11 @@ func VaultScopes(cfg *config.Config) ([]vault.Scope, error) {
 // LapsedModels names the vorbild connections of token that cover nothing now, sorted: one that is no
 // connection of cfg reading a vault credential any more, because it was renamed, deleted, or switched away
 // from the vault; one the vault unlocked in this process holds no approval for; and one whose approval was
-// given for a credential entry since removed or stored anew; and one that is disabled, as approved or as
-// configured now. It is the same rule the vault applies when a token approves (see
+// given for a credential entry since removed or stored anew; and one that is disabled or past its active_until
+// at now, as approved or as configured now. It is the same rule the vault applies when a token approves (see
 // vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about exactly the vorbilder
 // an approval would skip.
-func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]string, error) {
+func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token, now time.Time) ([]string, error) {
 	approvals, err := v.Approvals()
 	if err != nil {
 		return nil, err
@@ -588,7 +603,8 @@ func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]stri
 		if err != nil {
 			return nil, err
 		}
-		if !held || id != approved.CredentialID || approved.Scope.Disabled || connection.Disabled {
+		if !held || id != approved.CredentialID || approved.Scope.Disabled || approved.Scope.PastLimit(now) ||
+			connection.Off(now) {
 			lapsed = append(lapsed, name)
 		}
 	}
