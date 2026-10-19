@@ -45,10 +45,10 @@ func Listen(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the lock beside the vault socket: %w", err)
 	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockSocket(lock, path); err != nil {
 		_ = lock.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, ErrRunning
+		if errors.Is(err, ErrRunning) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("cannot lock the vault socket: %w", err)
 	}
@@ -68,6 +68,27 @@ func Listen(path string) (net.Listener, error) {
 	// handover moves it, or hands its path to a successor.
 	listener.SetUnlinkOnClose(false)
 	return &lockedListener{UnixListener: listener, lock: lock, own: own, path: path}, nil
+}
+
+// releaseWait bounds how long Listen waits for the lock of a vault process that no longer has its socket.
+const releaseWait = time.Second
+
+// lockSocket takes the lock beside the socket at path, or reports ErrRunning. A process removes its socket
+// before it releases the lock, so a held lock without a socket belongs to a process that is ending, or one
+// about to listen: whoever starts a vault process right after ending one waits for the lock rather than
+// failing, while a socket that is there is reported at once.
+func lockSocket(lock *os.File, path string) error {
+	deadline := time.Now().Add(releaseWait)
+	for {
+		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			return err
+		}
+		if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) || time.Now().After(deadline) {
+			return ErrRunning
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // listenLocked replaces a dead socket of this user and listens at path. The caller holds the lock.
@@ -133,7 +154,8 @@ func ownedByMe(info fs.FileInfo) bool {
 }
 
 // lockedListener is the socket together with the lock that makes it this process's. Closing removes the
-// socket first and releases the lock after, so a successor never finds its own fresh socket removed.
+// socket first, stops serving it, and releases the lock last, so a successor never finds its own fresh socket
+// removed.
 //
 // own is the socket as a file, and path where it is now: where it was created, or the vault socket once a
 // handover moved a successor's socket there. Once this listener handed its path over, closing it leaves the
@@ -152,10 +174,13 @@ func (l *lockedListener) Close() error {
 	l.mu.Lock()
 	path, handedOver := l.path, l.handedOver
 	l.mu.Unlock()
-	err := l.UnixListener.Close()
+	// The socket goes before the listener stops serving: a client that finds no process here then finds no
+	// socket either, which is what lockSocket waits on. The lock, still held, keeps any other socket off path.
 	if now, statErr := os.Lstat(path); !handedOver && statErr == nil && os.SameFile(now, l.own) {
 		_ = os.Remove(path)
 	}
+	err := l.UnixListener.Close()
+	beforeUnlock()
 	_ = l.lock.Close()
 	return err
 }
@@ -219,6 +244,10 @@ func AwaitHandover(ctx context.Context, l net.Listener, socket string, timeout t
 		}
 	}
 }
+
+// beforeUnlock runs in Close once the socket no longer serves, right before the lock is released. It is a
+// variable only so a test can hold that moment.
+var beforeUnlock = func() {}
 
 // terminate asks the process pid to end, the way a person ends a vault process with 'kill'. It is a variable
 // only so a test can see the call without ending itself.
