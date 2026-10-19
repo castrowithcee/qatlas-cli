@@ -24,6 +24,8 @@ func (m *Model) typing() bool {
 		return m.pathEdit >= 0
 	case screenTemplate:
 		return m.template != nil && m.template.picking
+	case screenRename:
+		return m.renameTyping()
 	case screenLogs:
 		return m.logs.dialog != nil || m.logs.pick != nil || m.logs.list.editing
 	}
