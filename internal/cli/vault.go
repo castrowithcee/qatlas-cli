@@ -239,14 +239,15 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"holds needs it unlocked exactly like any other read, which the admin check already did before\n" +
 			"credentials.yaml was even opened; without a terminal the command fails there instead, with the\n" +
 			"code admin-required, and with a wrong passphrase with usage, before anything is written.\n\n" +
-			"The configuration file is backed up first as config.yaml.bak (mode 0600, written atomically); a\n" +
-			"failed backup stops the command before config.yaml is touched. Once every entry is written and,\n" +
-			"where the vault was not locked, verified back, deleting credentials.yaml is asked for on the\n" +
-			"terminal; without a terminal to ask on the file is kept and the message names this command as the\n" +
-			"next step to run again. Run with nothing left to migrate, it says so and changes nothing. Run\n" +
-			"again after a partial or a complete migration, it repeats safely: a role already in the vault\n" +
-			"keeps its value, and only a role still missing is written. A vault process that holds the vault\n" +
-			"unlocked is handed every entry written, the same way 'qatlas credential set' hands it one.",
+			"The configuration file is backed up first as a new file in the backups directory next to it (mode\n" +
+			"0600, the ten newest kept); a failed backup stops the command before config.yaml is touched. Once\n" +
+			"every entry is written and, where the vault was not locked, verified back, deleting\n" +
+			"credentials.yaml is asked for on the terminal; without a terminal to ask on the file is kept and\n" +
+			"the message names this command as the next step to run again. Run with nothing left to migrate,\n" +
+			"it says so and changes nothing. Run again after a partial or a complete migration, it repeats\n" +
+			"safely: a role already in the vault keeps its value, and only a role still missing is written. A\n" +
+			"vault process that holds the vault unlocked is handed every entry written, the same way 'qatlas\n" +
+			"credential set' hands it one.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultMigrate(c, opts, reg)
@@ -1588,8 +1589,8 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 		return classifyUserError(err)
 	}
 
-	// Every credential whose entries just moved is switched to type vault. The configuration is backed up
-	// first, atomically and at mode 0600; a failed backup stops here, before config.yaml is touched.
+	// Every credential whose entries just moved is switched to type vault. The save backs the configuration
+	// up first; a failed backup stops here, before config.yaml is touched.
 	before := cfg.Clone()
 	store := config.NewStore(path, reg)
 	if err := vaultmigrate.SwitchCredentials(store, cfg, baseRev, switched); err != nil {
@@ -1620,10 +1621,4 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	}
 	fmt.Fprintf(c.OutOrStdout(), "migrated %d %s into the vault and removed %s\n", len(plan), noun, file.Path())
 	return nil
-}
-
-// backupFile is a thin call site into vaultmigrate.BackupConfig, kept under this name because
-// TestBackupFileIsAtomicAndPrivate and TestBackupFileFailureLeavesNoFileBehind call it directly.
-func backupFile(path string) error {
-	return vaultmigrate.BackupConfig(path)
 }

@@ -592,7 +592,7 @@ func migrateOptions(t *testing.T, dir string, store *secret.MemoryStore) *Option
 }
 
 // TestVaultMigrateCLI carries every entry of credentials.yaml into the vault, switches the affected
-// credential to type vault with a config.yaml.bak backup, and removes credentials.yaml once confirmed.
+// credential to type vault with a backup of the configuration, and removes credentials.yaml once confirmed.
 func TestVaultMigrateCLI(t *testing.T) {
 	dir := migrationFixture(t)
 	writeLegacyCredentials(t, dir, true)
@@ -629,12 +629,15 @@ func TestVaultMigrateCLI(t *testing.T) {
 	if !strings.Contains(string(cfg), "type: vault") {
 		t.Errorf("config.yaml = %q, want the credential switched to type vault", cfg)
 	}
-	info, err := os.Stat(configIn(dir) + ".bak")
-	if err != nil {
-		t.Fatalf("config.yaml.bak was not written: %v", err)
+	backups, err := filepath.Glob(filepath.Join(dir, "backups", "config-*.yaml"))
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("configuration backups = %v, %v, want one", backups, err)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
-		t.Errorf("config.yaml.bak mode = %v, want 0600", info.Mode().Perm())
+	if info, err := os.Stat(backups[0]); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
+		t.Errorf("backup = %v, %v, want mode 0600", info, err)
+	}
+	if _, err := os.Stat(configIn(dir) + ".bak"); !os.IsNotExist(err) {
+		t.Errorf("config.yaml.bak was written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "credentials.yaml")); !os.IsNotExist(err) {
 		t.Errorf("credentials.yaml survives a confirmed migration: %v", err)
@@ -1017,62 +1020,6 @@ func TestVaultMigrateWarnsWhenTheKeyringCannotBeChecked(t *testing.T) {
 	got, found, _, err := vault.New(dir).Get("wiki-reader", "token-id", nil)
 	if err != nil || !found || got != canaryVault {
 		t.Errorf("Get(token-id) = %q, %v, %v, want the plaintext value carried over", got, found, err)
-	}
-}
-
-// backupFile writes atomically and at mode 0600, replacing a stale .bak's wider mode rather than keeping
-// it, and content that matches the source byte for byte.
-func TestBackupFileIsAtomicAndPrivate(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	content := []byte("version: 1\ncredentials: {}\n")
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	// A stale .bak with a wider mode from an earlier, differently permissioned run must not keep that
-	// mode once a fresh backup replaces it.
-	if err := os.WriteFile(path+".bak", []byte("stale"), 0o644); err != nil {
-		t.Fatalf("write stale .bak: %v", err)
-	}
-
-	if err := backupFile(path); err != nil {
-		t.Fatalf("backupFile() = %v", err)
-	}
-
-	got, err := os.ReadFile(path + ".bak")
-	if err != nil || string(got) != string(content) {
-		t.Fatalf("backup content = %q, %v, want %q, nil", got, err, content)
-	}
-	if runtime.GOOS != "windows" {
-		info, err := os.Stat(path + ".bak")
-		if err != nil || info.Mode().Perm() != 0o600 {
-			t.Errorf(".bak mode = %v, %v, want 0600", info, err)
-		}
-	}
-}
-
-// A backup that cannot be read is reported as an error and leaves no partial or stale .bak file behind, so
-// runVaultMigrate's unconditional "return err" right after calling backupFile never lets config.yaml be
-// rewritten without one.
-func TestBackupFileFailureLeavesNoFileBehind(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits do not carry on Windows")
-	}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte("version: 1\n"), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	if err := os.Chmod(path, 0o000); err != nil {
-		t.Fatalf("Chmod() = %v", err)
-	}
-	defer func() { _ = os.Chmod(path, 0o600) }()
-
-	if err := backupFile(path); err == nil {
-		t.Fatal("backupFile() succeeded although the source could not be read")
-	}
-	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
-		t.Errorf(".bak exists although the backup failed: %v", err)
 	}
 }
 
