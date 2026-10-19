@@ -1,7 +1,8 @@
 // The Logs section (section 8, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
 // connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
-// response sizes summed up per tool and connection; enter opens one entry. Every
+// response sizes summed up per tool and connection, m for the context cost of each MCP session; enter opens
+// one entry. Every
 // row and the bar carry the status the hash chain and the check values give it, found by the same walk
 // 'qatlas vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
 // a command, never on the event loop, and never ask for a passphrase: a locked vault leaves the check values
@@ -106,6 +107,14 @@ var logStatColumns = []column{
 	{title: "bytes", optional: true}, {title: "no size", optional: true},
 }
 
+// logSessionColumns are the columns of the MCP session summary. The first column holds the session, its
+// areas, and their tools as indented text; the byte split of a request and a response goes in a narrow
+// terminal before the total and the token estimate do.
+var logSessionColumns = []column{
+	{title: "session / area / tool"}, {title: "calls"}, {title: "req B", optional: true},
+	{title: "resp B", optional: true}, {title: "total B"}, {title: "~tokens"},
+}
+
 // maxLogText bounds one field of a log line on screen; a well-formed entry never comes close.
 const maxLogText = 256
 
@@ -149,9 +158,12 @@ type logView struct {
 	layoutWidth int
 
 	// stats shows the summary of the shown rows instead of the rows themselves.
-	stats  bool
-	dialog *logDateDialog
-	pick   *logPick
+	stats bool
+	// sessions makes the summary the one of the MCP sessions, scrolled down by scroll lines.
+	sessions bool
+	scroll   int
+	dialog   *logDateDialog
+	pick     *logPick
 	// detail is the index of the row the detail screen shows.
 	detail int
 }
@@ -474,7 +486,7 @@ func (m *Model) openLogs() tea.Cmd {
 	m.testName, m.editing, m.confirmRole = "", "", ""
 	m.clearMessages()
 	lv := m.logs
-	lv.focus, lv.dialog, lv.pick, lv.stats = logFocusRows, nil, nil, false
+	lv.focus, lv.dialog, lv.pick, lv.stats, lv.sessions = logFocusRows, nil, nil, false, false
 	m.screen = screenLogs
 	return m.loadLogs()
 }
@@ -507,7 +519,7 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		return m.quit()
 	case "esc":
 		if lv.stats {
-			lv.stats = false
+			lv.stats, lv.sessions = false, false
 			return nil
 		}
 		if lv.list.query() != "" {
@@ -536,7 +548,10 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 			}
 		}
 	case "s":
-		lv.stats = !lv.stats
+		lv.stats, lv.sessions = !lv.stats, false
+	case "m":
+		on := !(lv.stats && lv.sessions)
+		lv.stats, lv.sessions, lv.scroll = on, on, 0
 	case "enter":
 		switch lv.focus {
 		case logFocusDate:
@@ -548,16 +563,21 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 				m.clearMessages()
 			}
 		}
-	case "up":
+	case "up", "down", "pgup", "pgdown", "home", "end":
 		lv.focus = logFocusRows
-		lv.list.move(-1)
-	case "down":
-		lv.focus = logFocusRows
-		lv.list.move(1)
-	case "pgup", "pgdown", "home", "end":
-		lv.focus = logFocusRows
-		start, end := m.logsWindow()
-		lv.list.page(key.String(), start, end)
+		if lv.stats && lv.sessions {
+			m.scrollSessions(key.String())
+			break
+		}
+		switch key.String() {
+		case "up":
+			lv.list.move(-1)
+		case "down":
+			lv.list.move(1)
+		default:
+			start, end := m.logsWindow()
+			lv.list.page(key.String(), start, end)
+		}
 	case "f":
 		m.openLogPick(-1)
 	case "/":
@@ -780,7 +800,12 @@ func (m *Model) logsView() string {
 	var b strings.Builder
 	b.WriteString(head)
 	if lv.stats && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
-		b.WriteString(m.logStatLines(m.logStats(), m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1))
+		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
+		if lv.sessions {
+			b.WriteString(m.sessionStatLines(m.logSessionStats(), room))
+		} else {
+			b.WriteString(m.logStatLines(m.logStats(), room))
+		}
 		b.WriteString(foot)
 		return b.String()
 	}
@@ -904,6 +929,13 @@ func (m *Model) logsFrame() (string, string) {
 	case shown == 0:
 		body = append(body, m.wrapped(hintStyle,
 			"No entry matches the filters and the search. f changes the filters, esc clears the search."))
+	case lv.stats && lv.sessions:
+		body = append(body, m.wrapped(hintStyle, "MCP sessions of the rows shown: the bytes of the JSON-RPC messages per "+
+			"area and tool, error responses included. ~tokens is an estimate (3.5 bytes per token); only the model "+
+			"knows the real count, and the agent's system prompt and thinking are not in it."))
+		if stats := m.logSessionStats(); len(stats.order) > 0 {
+			body = append(body, hintStyle.Render(clipCells("  "+stats.table.header(stats.layout), width)))
+		}
 	case lv.stats:
 		stats := m.logStats()
 		body = append(body, m.wrapped(hintStyle, "Response sizes of the invokes shown, as estimated tokens (3.5 bytes per "+
@@ -976,18 +1008,23 @@ func (m *Model) logKeys() string {
 	if m.screen != screenNav && m.usable(0) < 60 {
 		// The short form names the same keys with shorter words.
 		switch {
+		case lv.stats && lv.sessions && !lv.list.editing:
+			return "up/down scroll · m or s rows · f filter · / search · 1-8 section · ? help · q quit"
 		case lv.stats && !lv.list.editing:
 			return "s rows · f filter · / search · 1-8 section · ? help · q quit"
 		case lv.list.editing:
 			return "type to search · up/down move · enter keep · esc clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+			return "left/right mode · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 		case len(lv.list.matches) == 0:
-			return "tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 		}
-		return "enter detail · tab next · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+		return "enter detail · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
+	}
+	if lv.stats && lv.sessions && m.screen != screenNav && !lv.list.editing {
+		return "up/down scroll · m or s or esc back to the rows · f filter · / search · 1-8 section · ? help · q quit"
 	}
 	if lv.stats && m.screen != screenNav && !lv.list.editing {
 		return "s or esc back to the rows · f filter · / search · 1-8 section · ? help · q quit"
@@ -998,13 +1035,13 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · esc clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next field · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+		return "left/right change mode · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next field · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 	case len(lv.list.matches) == 0:
-		return "tab next field · left/right change · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 	}
-	keys := "enter details · tab next field · left/right change · f filter · s summary · / search · 1-8 section · esc back · ? help · q quit"
+	keys := "enter details · tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · ? help · q quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "esc back", "esc clear search", 1)
 	}
@@ -1073,6 +1110,95 @@ func (m *Model) logStatLines(s logStats, room int) string {
 			break
 		}
 		b.WriteString(m.listRow(false, i%2 == 1, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
+	}
+	return b.String()
+}
+
+// logSessionStats is the table of the MCP sessions among the rows the filters and the search keep: a line
+// for each session, its areas, and their tools, as the cells of the table, in the order of order.
+type logSessionStats struct {
+	table  table
+	layout layout
+	order  []string
+}
+
+func (m *Model) logSessionStats() logSessionStats {
+	lv := m.logs
+	entries := make([]invokelog.Entry, 0, len(lv.list.matches))
+	for _, name := range lv.list.matches {
+		if row := lv.row(name); row != nil && row.line.Parsed {
+			entries = append(entries, row.line.Entry)
+		}
+	}
+	s := logSessionStats{table: table{columns: logSessionColumns, rows: map[string][]string{}}}
+	add := func(label string, t invokelog.ToolBytes) {
+		name := strconv.Itoa(len(s.order))
+		s.order = append(s.order, name)
+		s.table.rows[name] = []string{label, strconv.Itoa(t.Calls), strconv.FormatInt(t.ReqBytes, 10),
+			strconv.FormatInt(t.RespBytes, 10), strconv.FormatInt(t.Total(), 10),
+			strconv.FormatInt(invokelog.EstimateTokens(t.Total()), 10)}
+	}
+	for _, session := range invokelog.SummarizeSessions(entries) {
+		var sum invokelog.ToolBytes
+		for _, a := range session.Areas {
+			sum.Calls += a.Calls
+			sum.ReqBytes += a.ReqBytes
+			sum.RespBytes += a.RespBytes
+		}
+		add("session "+m.logText(session.Session), sum)
+		for _, a := range session.Areas {
+			add("  "+string(a.Area), a.ToolBytes)
+			for _, t := range a.Tools {
+				add("    "+orDash(m.logText(t.Operation)), t)
+			}
+		}
+	}
+	_, width := m.fit("  ")
+	s.layout = s.table.layout(width)
+	return s
+}
+
+// sessionRoom is how many lines the session summary has room for between the frame of the Logs screen.
+func (m *Model) sessionRoom() int {
+	head, foot := m.logsFrame()
+	return m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
+}
+
+// scrollSessions moves the shown part of the session summary; the view clamps it again for its own room.
+func (m *Model) scrollSessions(key string) {
+	lv := m.logs
+	room := max(m.sessionRoom()-1, 1)
+	last := max(len(m.logSessionStats().order)-room, 0)
+	by := map[string]int{"up": -1, "down": 1, "pgup": -room, "pgdown": room}[key]
+	switch key {
+	case "home":
+		lv.scroll = 0
+	case "end":
+		lv.scroll = last
+	default:
+		lv.scroll = min(max(lv.scroll+by, 0), last)
+	}
+}
+
+// sessionStatLines draws the lines of s from the scroll position as many as fit in room, or says that the
+// rows shown hold no MCP session; a last line says how many lines it left below.
+func (m *Model) sessionStatLines(s logSessionStats, room int) string {
+	if len(s.order) == 0 {
+		return m.wrapped(lipgloss.NewStyle(), "No MCP session among the entries shown: only the entries of a "+
+			"'qatlas mcp' process carry a session, and a filter on a tool or a connection keeps only the "+
+			"exchanges that match it.") + "\n"
+	}
+	start := min(max(m.logs.scroll, 0), max(len(s.order)-1, 0))
+	if len(s.order)-start > room {
+		room = max(room-1, 0)
+	}
+	var b strings.Builder
+	for i := start; i < len(s.order); i++ {
+		if i-start == room {
+			b.WriteString(hintStyle.Render(fmt.Sprintf("  ... %d more", len(s.order)-i)) + "\n")
+			break
+		}
+		b.WriteString(m.listRow(false, false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
 	}
 	return b.String()
 }
