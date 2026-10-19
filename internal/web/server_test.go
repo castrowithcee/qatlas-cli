@@ -29,7 +29,7 @@ func testOverview() Overview {
 		Providers:   []ProviderRow{{Provider: "github", Description: "Code hosting", Tools: 3, Connections: 1, Configured: 1}},
 		Services:    []ServiceRow{{Name: "github-cloud", Provider: "github", BaseURL: "https://api.github.com"}},
 		Credentials: []CredentialRow{{Name: "github-bot", Provider: "github", Type: "env"}},
-		Connections: []ConnectionRow{{Name: "github-bot", Provider: "github", Description: syntheticSecret, Permissions: "read", Tools: "all-permitted"}},
+		Connections: []ConnectionRow{{Name: "github-bot", Provider: "github", Description: syntheticSecret, Effects: "read", Tools: "all-permitted"}},
 	}
 }
 

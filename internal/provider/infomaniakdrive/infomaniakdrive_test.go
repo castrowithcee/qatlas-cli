@@ -162,50 +162,50 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"im": {Provider: Provider, BaseURL: apiRoot}},
 		Credentials: map[string]config.Credential{"im-reader": credential},
 		Connections: map[string]config.Connection{
-			"account": {Service: "im", Credential: "im-reader", Target: accountTarget, Permissions: changePermissions},
-			"drive": {Service: "im", Credential: "im-reader", Permissions: changePermissions,
+			"account": {Service: "im", Credential: "im-reader", Target: accountTarget, Effects: changePermissions},
+			"drive": {Service: "im", Credential: "im-reader", Effects: changePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
 			"readonly": {Service: "im", Credential: "im-reader", Targets: []string{accountTarget}},
 			// The allow-list itself is local configuration and can name a drive that, in fact, belongs to
 			// another account; only the live ownership check catches that.
-			"driveforeign": {Service: "im", Credential: "im-reader", Permissions: changePermissions,
+			"driveforeign": {Service: "im", Credential: "im-reader", Effects: changePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
 			// Delete is never offered by permission alone: a trash tool must be listed to be offered.
-			"trash": {Service: "im", Credential: "im-reader", Permissions: deletePermissions, Tools: trashTools,
+			"trash": {Service: "im", Credential: "im-reader", Effects: deletePermissions, Tools: trashTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"trashforeign": {Service: "im", Credential: "im-reader", Permissions: deletePermissions, Tools: trashTools,
+			"trashforeign": {Service: "im", Credential: "im-reader", Effects: deletePermissions, Tools: trashTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
-			"links": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: linkTools,
+			"links": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: linkTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"linksforeign": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: linkTools,
+			"linksforeign": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: linkTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
 			// Without a tools list, no link change is offered, whatever permissions the connection holds.
-			"linksunlisted": {Service: "im", Credential: "im-reader", Permissions: linkPermissions,
+			"linksunlisted": {Service: "im", Credential: "im-reader", Effects: linkPermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"dropbox": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: dropboxTools,
+			"dropbox": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: dropboxTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"dropboxforeign": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: dropboxTools,
+			"dropboxforeign": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: dropboxTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
 			// Without a tools list, no dropbox tool is offered, whatever permissions the connection holds.
-			"dropboxunlisted": {Service: "im", Credential: "im-reader", Permissions: linkPermissions,
+			"dropboxunlisted": {Service: "im", Credential: "im-reader", Effects: linkPermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"access": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: accessTools,
+			"access": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: accessTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"accessforeign": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: accessTools,
+			"accessforeign": {Service: "im", Credential: "im-reader", Effects: linkPermissions, Tools: accessTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
 			// Without a tools list, neither the access read nor an access change is offered.
-			"accessunlisted": {Service: "im", Credential: "im-reader", Permissions: linkPermissions,
+			"accessunlisted": {Service: "im", Credential: "im-reader", Effects: linkPermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
-			"trashunlisted": {Service: "im", Credential: "im-reader", Permissions: deletePermissions,
+			"trashunlisted": {Service: "im", Credential: "im-reader", Effects: deletePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
 		},
 	}
 }
 
-var deletePermissions = []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}
+var deletePermissions = []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete}
 
-var linkPermissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-	config.PermissionDelete}
+var linkPermissions = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+	config.EffectDelete}
 
 var linkTools = []string{linksGet.ID, linksList.ID, linksDelete.ID}
 
@@ -216,7 +216,7 @@ var accessTools = []string{accessGet.ID, accessGrant.ID, accessUpdate.ID, access
 var trashTools = []string{filesTrash.ID, trashListDescriptor.ID, trashRestore.ID, trashDelete.ID, trashEmpty.ID}
 
 // changePermissions lets a connection use the folder and file changes; "readonly" keeps the default.
-var changePermissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
+var changePermissions = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 
 type environment struct {
 	core  *application.Core
@@ -272,8 +272,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	if len(metadata.Tools) != 24 {
 		t.Fatalf("tools = %+v, want 24", metadata.Tools)
 	}
-	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
-		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)
+	if want := []config.Effect{config.EffectRead}; !reflect.DeepEqual(metadata.DefaultEffects, want) {
+		t.Fatalf("default permissions = %v, want read only", metadata.DefaultEffects)
 	}
 	if len(metadata.Profiles) != 3 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 6 ||
 		metadata.Profiles[1].ID != "write" || len(metadata.Profiles[1].Tools) != 9 ||

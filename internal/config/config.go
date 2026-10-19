@@ -99,8 +99,8 @@ type Credential struct {
 // Connection binds exactly one service to exactly one credential. Target is an optional provider-specific
 // scope inside that service.
 //
-// Permissions and Tools are two independent local allow-lists, and an operation is offered only when both
-// admit it. Permissions admits operation effects. Tools, when present, admits individual provider-qualified
+// Effects and Tools are two independent local allow-lists, and an operation is offered only when both
+// admit it. Effects admits operation effects. Tools, when present, admits individual provider-qualified
 // operation IDs of this connection's provider; missing keeps every operation the permissions admit, except
 // those that require an allow-list, and an explicit empty list admits none. A tool registered later is never
 // added to an existing list.
@@ -120,16 +120,16 @@ type Credential struct {
 // and never a selector; see validateFiles.
 type Connection struct {
 	// ID is the stable identity of the connection; see Service.ID.
-	ID          string       `yaml:"id,omitempty"`
-	Service     string       `yaml:"service"`
-	Credential  string       `yaml:"credential"`
-	Target      string       `yaml:"target,omitempty"`
-	Targets     []string     `yaml:"targets,omitempty"`
-	Description string       `yaml:"description,omitempty"`
-	Permissions []Permission `yaml:"permissions,omitempty"`
-	Tools       []string     `yaml:"tools,omitempty"`
-	Paths       []string     `yaml:"paths,omitempty"`
-	Files       Files        `yaml:"files,omitempty"`
+	ID          string   `yaml:"id,omitempty"`
+	Service     string   `yaml:"service"`
+	Credential  string   `yaml:"credential"`
+	Target      string   `yaml:"target,omitempty"`
+	Targets     []string `yaml:"targets,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Effects     []Effect `yaml:"permissions,omitempty"`
+	Tools       []string `yaml:"tools,omitempty"`
+	Paths       []string `yaml:"paths,omitempty"`
+	Files       Files    `yaml:"files,omitempty"`
 	// ForwardSecrets lists the forward credentials a tool of this connection may use as a reference argument.
 	// Missing releases none.
 	ForwardSecrets []string `yaml:"forward_secrets,omitempty"`
@@ -140,21 +140,21 @@ type Connection struct {
 // omitempty slice cannot represent both states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
-		ID             string        `yaml:"id,omitempty"`
-		Service        string        `yaml:"service"`
-		Credential     string        `yaml:"credential"`
-		Target         string        `yaml:"target,omitempty"`
-		Targets        []string      `yaml:"targets,omitempty"`
-		Description    string        `yaml:"description,omitempty"`
-		Permissions    *[]Permission `yaml:"permissions,omitempty"`
-		Tools          *[]string     `yaml:"tools,omitempty"`
-		Paths          []string      `yaml:"paths,omitempty"`
-		Files          Files         `yaml:"files,omitempty"`
-		ForwardSecrets []string      `yaml:"forward_secrets,omitempty"`
+		ID             string    `yaml:"id,omitempty"`
+		Service        string    `yaml:"service"`
+		Credential     string    `yaml:"credential"`
+		Target         string    `yaml:"target,omitempty"`
+		Targets        []string  `yaml:"targets,omitempty"`
+		Description    string    `yaml:"description,omitempty"`
+		Effects        *[]Effect `yaml:"permissions,omitempty"`
+		Tools          *[]string `yaml:"tools,omitempty"`
+		Paths          []string  `yaml:"paths,omitempty"`
+		Files          Files     `yaml:"files,omitempty"`
+		ForwardSecrets []string  `yaml:"forward_secrets,omitempty"`
 	}
-	var permissions *[]Permission
-	if c.Permissions != nil {
-		copy := append(make([]Permission, 0, len(c.Permissions)), c.Permissions...)
+	var permissions *[]Effect
+	if c.Effects != nil {
+		copy := append(make([]Effect, 0, len(c.Effects)), c.Effects...)
 		permissions = &copy
 	}
 	var tools *[]string
@@ -163,7 +163,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
+		Description: c.Description, Effects: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
 		ForwardSecrets: c.ForwardSecrets}, nil
 }
 
@@ -635,19 +635,19 @@ func (c *Config) Validate() error {
 			report(problem(SectionConnections, name, "description", CodeInvalidDescription, "%v", err))
 		}
 		validatePaths(name, conn.Paths, report)
-		seenPermissions := map[Permission]bool{}
-		for _, permission := range conn.Permissions {
-			if !validPermission(permission) {
-				report(problem(SectionConnections, name, "permissions", CodeUnknownPermission,
+		seenEffects := map[Effect]bool{}
+		for _, permission := range conn.Effects {
+			if !validEffect(permission) {
+				report(problem(SectionConnections, name, "permissions", CodeUnknownEffect,
 					"unknown permission %q, supported permissions are %s", permission, permissionNames()).
 					with("supported", permissionNames()))
 				continue
 			}
-			if seenPermissions[permission] {
-				report(problem(SectionConnections, name, "permissions", CodeDuplicatePermission,
+			if seenEffects[permission] {
+				report(problem(SectionConnections, name, "permissions", CodeDuplicateEffect,
 					"permission %q is listed more than once", permission).with("permission", string(permission)))
 			}
-			seenPermissions[permission] = true
+			seenEffects[permission] = true
 		}
 		if ok {
 			metadata, known := providers.ProviderMetadata(service.Provider)
@@ -828,7 +828,7 @@ func validateForward(name string, cred Credential, report func(Problem)) {
 // names it. Only registered IDs are quoted; an unknown entry is named by its position, because free text in
 // a configuration file is where a pasted secret ends up.
 func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(Problem)) {
-	effects := map[string]Permission{}
+	effects := map[string]Effect{}
 	for _, tool := range metadata.Tools {
 		effects[tool.ID] = tool.Effect
 	}
@@ -838,8 +838,8 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 			owners[tool.ID] = other.ID
 		}
 	}
-	permitted := map[Permission]bool{}
-	for _, permission := range c.ConnectionPermissions(name) {
+	permitted := map[Effect]bool{}
+	for _, permission := range c.ConnectionEffects(name) {
 		permitted[permission] = true
 	}
 	seen := map[string]bool{}
@@ -970,8 +970,8 @@ func contains(values []string, want string) bool {
 	return false
 }
 
-func validPermission(permission Permission) bool {
-	for _, candidate := range Permissions() {
+func validEffect(permission Effect) bool {
+	for _, candidate := range Effects() {
 		if permission == candidate {
 			return true
 		}
@@ -980,30 +980,30 @@ func validPermission(permission Permission) bool {
 }
 
 func permissionNames() string {
-	names := make([]string, len(Permissions()))
-	for i, permission := range Permissions() {
+	names := make([]string, len(Effects()))
+	for i, permission := range Effects() {
 		names[i] = string(permission)
 	}
 	return strings.Join(names, ", ")
 }
 
-// ConnectionPermissions returns the explicit local permissions of a connection. A missing field keeps
+// ConnectionEffects returns the explicit local effects of a connection. A missing field keeps
 // only the provider's pre-permission operation classes, so adding a new mutation never grants it silently.
 // An explicitly empty list disables every operation on the connection.
-func (c *Config) ConnectionPermissions(name string) []Permission {
+func (c *Config) ConnectionEffects(name string) []Effect {
 	conn, ok := c.Connections[name]
 	if !ok {
 		return nil
 	}
-	if conn.Permissions != nil {
-		return append(make([]Permission, 0, len(conn.Permissions)), conn.Permissions...)
+	if conn.Effects != nil {
+		return append(make([]Effect, 0, len(conn.Effects)), conn.Effects...)
 	}
 	service := c.Services[conn.Service]
 	metadata, _ := c.ProviderMetadata(service.Provider)
-	if len(metadata.DefaultPermissions) > 0 {
-		return append([]Permission(nil), metadata.DefaultPermissions...)
+	if len(metadata.DefaultEffects) > 0 {
+		return append([]Effect(nil), metadata.DefaultEffects...)
 	}
-	return []Permission{PermissionRead}
+	return []Effect{EffectRead}
 }
 
 // Refusal names why a connection does not offer a tool. The values are stable: discovery publishes them
@@ -1038,7 +1038,7 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 		return RefusalNoConnection
 	}
 	permitted := false
-	for _, permission := range c.ConnectionPermissions(name) {
+	for _, permission := range c.ConnectionEffects(name) {
 		if permission == tool.Effect {
 			permitted = true
 			break
@@ -1085,7 +1085,7 @@ func (c *Config) IdleWarning(name string) string {
 	}
 	reason := "its permissions and tools list allow none of its provider's tools"
 	switch {
-	case conn.Permissions != nil && len(conn.Permissions) == 0:
+	case conn.Effects != nil && len(conn.Effects) == 0:
 		reason = "its permissions are empty ('permissions: []')"
 	case conn.Tools != nil && len(conn.Tools) == 0:
 		reason = "its tools list is empty ('tools: []')"

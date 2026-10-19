@@ -60,13 +60,13 @@ func TestSearchAndDescribeAreLocalAndDeterministic(t *testing.T) {
 	}
 }
 
-func TestConnectionPermissionsFilterDiscoveryAndDirectInvoke(t *testing.T) {
+func TestConnectionEffectsFilterDiscoveryAndDirectInvoke(t *testing.T) {
 	core, calls := testCore(t, []string{"reader", "editor"}, nil, true)
 	reader := core.config.Connections["reader"]
-	reader.Permissions = []config.Permission{config.PermissionRead}
+	reader.Effects = []config.Effect{config.EffectRead}
 	core.config.Connections["reader"] = reader
 	editor := core.config.Connections["editor"]
-	editor.Permissions = []config.Permission{config.PermissionRead, config.PermissionDelete}
+	editor.Effects = []config.Effect{config.EffectRead, config.EffectDelete}
 	core.config.Connections["editor"] = editor
 
 	searched, err := core.Search(SearchRequest{Connection: "reader"})
@@ -84,14 +84,14 @@ func TestConnectionPermissionsFilterDiscoveryAndDirectInvoke(t *testing.T) {
 	if _, err := core.Describe(DescribeRequest{Operation: "fake.pages.delete", Connection: "reader"}); err == nil {
 		t.Fatal("Describe(delete, reader) exposed a locally denied route")
 	}
-	reader.Permissions = []config.Permission{}
+	reader.Effects = []config.Effect{}
 	core.config.Connections["reader"] = reader
-	editor.Permissions = []config.Permission{}
+	editor.Effects = []config.Effect{}
 	core.config.Connections["editor"] = editor
 	if got := core.Providers().Providers[0].Connections; got != 0 {
 		t.Fatalf("deny-all connections in provider summary = %d, want 0", got)
 	}
-	reader.Permissions = []config.Permission{config.PermissionRead}
+	reader.Effects = []config.Effect{config.EffectRead}
 	core.config.Connections["reader"] = reader
 	_, err = core.Invoke(context.Background(), InvokeRequest{
 		Operation: "fake.pages.delete", Connection: "reader", Confirmed: true,
@@ -130,17 +130,17 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 	cfg.Credentials["shared"] = config.Credential{
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
-	read := []config.Permission{config.PermissionRead}
+	read := []config.Effect{config.EffectRead}
 	cfg.Connections["getter"] = config.Connection{
-		Service: "service", Credential: "shared", Permissions: read, Tools: []string{"fake.pages.get"},
+		Service: "service", Credential: "shared", Effects: read, Tools: []string{"fake.pages.get"},
 	}
 	cfg.Connections["lister"] = config.Connection{
-		Service: "service", Credential: "shared", Permissions: read, Tools: []string{"fake.pages.list"},
+		Service: "service", Credential: "shared", Effects: read, Tools: []string{"fake.pages.list"},
 	}
 	cfg.Connections["closed"] = config.Connection{
-		Service: "service", Credential: "shared", Permissions: read, Tools: []string{},
+		Service: "service", Credential: "shared", Effects: read, Tools: []string{},
 	}
-	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Permissions: read}
+	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Effects: read}
 	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
 	core := New(registry, cfg, resolver, nil)
 
@@ -751,7 +751,7 @@ func TestArrayItemBoundsStopInvokeBeforeTheProvider(t *testing.T) {
 	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
 	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
 	cfg.Connections["books"] = config.Connection{
-		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+		Service: "service", Credential: "key", Effects: []config.Effect{config.EffectCreate},
 	}
 	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
 
@@ -805,7 +805,7 @@ func TestObjectBoundsAndUniqueItemsStopInvokeBeforeTheProvider(t *testing.T) {
 	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
 	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
 	cfg.Connections["books"] = config.Connection{
-		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+		Service: "service", Credential: "key", Effects: []config.Effect{config.EffectCreate},
 	}
 	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
 
@@ -867,7 +867,7 @@ func TestUnionsAndAdditionalPropertySchemasStopInvokeBeforeTheProvider(t *testin
 	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
 	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
 	cfg.Connections["books"] = config.Connection{
-		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+		Service: "service", Credential: "key", Effects: []config.Effect{config.EffectCreate},
 	}
 	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
 
@@ -943,7 +943,7 @@ func TestConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T) {
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
 	cfg.Connections["alerts"] = config.Connection{
-		Service: "service", Credential: "sender", Permissions: []config.Permission{config.PermissionCreate},
+		Service: "service", Credential: "sender", Effects: []config.Effect{config.EffectCreate},
 	}
 	cfg.Defaults.Connections["fake"] = "alerts"
 	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
@@ -1205,8 +1205,8 @@ func testCore(t *testing.T, connections []string, defaults map[string]string, wi
 		}
 		cfg.Connections[name] = config.Connection{
 			Service: service, Credential: credential, Description: testDescriptions[name],
-			Permissions: []config.Permission{
-				config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete,
+			Effects: []config.Effect{
+				config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete,
 			},
 		}
 	}
@@ -1288,13 +1288,13 @@ func TestToolsRequiringAnAllowListAreOfferedOnlyWhereListed(t *testing.T) {
 	cfg.Credentials["shared"] = config.Credential{
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
-	every := config.Permissions()
-	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Permissions: every}
+	every := config.Effects()
+	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Effects: every}
 	cfg.Connections["reader"] = config.Connection{Service: "service", Credential: "shared",
-		Permissions: every, Tools: []string{get.ID}}
+		Effects: every, Tools: []string{get.ID}}
 	cfg.Connections["admin"] = config.Connection{Service: "service", Credential: "shared",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-		Tools:       []string{get.ID, guarded.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+		Tools:   []string{get.ID, guarded.ID}}
 	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
 	core := New(registry, cfg, resolver, nil)
 
@@ -1383,7 +1383,7 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
 	cfg.Connections["reader"] = config.Connection{
-		Service: "service", Credential: "shared", Permissions: []config.Permission{config.PermissionRead},
+		Service: "service", Credential: "shared", Effects: []config.Effect{config.EffectRead},
 	}
 	core := New(registry, cfg, nil, nil)
 
@@ -1425,7 +1425,7 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 	// A second connection that comes closer decides the reason: its tools list only lacks the tool.
 	cfg.Connections["lister"] = config.Connection{
 		Service: "service", Credential: "shared", Tools: []string{"fake.pages.get"},
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete},
 	}
 	all["fake.pages.get"] = "lister reader|"
 	all["fake.pages.delete"] = "|not-in-tools-list"
@@ -1480,21 +1480,21 @@ func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
 	}
 	cfg.Connections["writer"] = config.Connection{
 		Service: "wiki", Credential: "shared", Description: "writes pages", Target: "team-space",
-		Permissions: []config.Permission{config.PermissionDelete, config.PermissionRead},
-		Tools:       []string{"fake.pages.get"},
+		Effects: []config.Effect{config.EffectDelete, config.EffectRead},
+		Tools:   []string{"fake.pages.get"},
 	}
 	cfg.Connections["reader"] = config.Connection{Service: "wiki", Credential: "shared"}
 	cfg.Connections["closed"] = config.Connection{Service: "wiki", Credential: "shared", Tools: []string{}}
 	cfg.Connections["alerts"] = config.Connection{
-		Service: "chat", Credential: "shared", Permissions: []config.Permission{},
+		Service: "chat", Credential: "shared", Effects: []config.Effect{},
 	}
 	core := New(capability.NewRegistry(), cfg, nil, nil)
 
 	want := []ConnectionSummary{
-		{Name: "alerts", Provider: "chat", Permissions: "", Tools: ToolsAllPermitted},
-		{Name: "closed", Provider: "fake", Permissions: "read", Tools: ToolsNone},
-		{Name: "reader", Provider: "fake", Permissions: "read", Tools: ToolsAllPermitted},
-		{Name: "writer", Provider: "fake", Description: "writes pages", Permissions: "read delete", Tools: ToolsListed},
+		{Name: "alerts", Provider: "chat", Effects: "", Tools: ToolsAllPermitted},
+		{Name: "closed", Provider: "fake", Effects: "read", Tools: ToolsNone},
+		{Name: "reader", Provider: "fake", Effects: "read", Tools: ToolsAllPermitted},
+		{Name: "writer", Provider: "fake", Description: "writes pages", Effects: "read delete", Tools: ToolsListed},
 	}
 	if got := core.Connections("", nil).Connections; !reflect.DeepEqual(got, want) {
 		t.Errorf("Connections() = %+v, want %+v", got, want)
@@ -1663,10 +1663,10 @@ func searchContractCore(t *testing.T) *Core {
 	cfg.Credentials["shared"] = config.Credential{
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
-	every := []config.Permission{config.PermissionRead, config.PermissionDelete}
-	cfg.Connections["a"] = config.Connection{Service: "service", Credential: "shared", Permissions: every}
+	every := []config.Effect{config.EffectRead, config.EffectDelete}
+	cfg.Connections["a"] = config.Connection{Service: "service", Credential: "shared", Effects: every}
 	cfg.Connections["b"] = config.Connection{
-		Service: "service", Credential: "shared", Permissions: every,
+		Service: "service", Credential: "shared", Effects: every,
 		Tools: []string{"fake.issues.list", "fake.items.list"},
 	}
 	return New(registry, cfg, nil, nil)

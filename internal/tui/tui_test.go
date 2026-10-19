@@ -2165,9 +2165,9 @@ func TestFormShowsOnlyTheFocusedHintAtEverySize(t *testing.T) {
 func TestReturningToASetupStepShowsOnlyTheFocusedHint(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	walkSetup(t, m, stepPermissions)
-	if m.wizard.step != stepPermissions {
-		t.Fatalf("walkSetup landed on step %d, want %d", m.wizard.step, stepPermissions)
+	walkSetup(t, m, stepEffects)
+	if m.wizard.step != stepEffects {
+		t.Fatalf("walkSetup landed on step %d, want %d", m.wizard.step, stepEffects)
 	}
 	assertNoRepeatedHint(t, m, "the permissions step")
 	if blocks := hintBlocks(formLines(m)); len(blocks) != 1 {
@@ -2179,7 +2179,7 @@ func TestReturningToASetupStepShowsOnlyTheFocusedHint(t *testing.T) {
 		t.Fatalf("f2 did not reach the summary: step %d, error %q", m.wizard.step, m.fail)
 	}
 	pump(t, m, "esc")
-	if m.wizard.step != stepPermissions {
+	if m.wizard.step != stepEffects {
 		t.Fatalf("esc did not return to the permissions step: step %d", m.wizard.step)
 	}
 

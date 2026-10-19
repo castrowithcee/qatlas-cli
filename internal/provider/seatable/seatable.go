@@ -294,8 +294,8 @@ func rowMutationDescriptor(action string, effect capability.Effect, idempotency 
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "SeaTable", FormerIDs: []string{"seatable"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
-		Description:        "Spreadsheet-like no-code database platform",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "Spreadsheet-like no-code database platform",
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIToken,
 			Description: "SeaTable API token of one base: choose permission r for reads or rw for intended " +

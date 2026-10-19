@@ -357,7 +357,7 @@ func TestLinkTheCoreNeedsConfirmationAndPermissions(t *testing.T) {
 	stubLimiter(t, salesToken)
 	cfg := coreConfig()
 	cfg.Connections["links"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader",
-		Targets: []string{"*"}, Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete},
+		Targets: []string{"*"}, Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete},
 		Tools: []string{"seatable.base.links.list", "seatable.base.links.create", "seatable.base.links.delete"}}
 	cfg.Connections["links-read"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"}}
 	red := &redact.Redactor{}

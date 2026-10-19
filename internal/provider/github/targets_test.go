@@ -21,14 +21,14 @@ import (
 // one repository, and a project next to a pattern.
 func targetsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
 	cfg.Connections["owner"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"repos/octo-org/*"}, Permissions: all}
+		Targets: []string{"repos/octo-org/*"}, Effects: all}
 	cfg.Connections["single"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{projectTarget, repoTarget}, Permissions: all}
+		Targets: []string{projectTarget, repoTarget}, Effects: all}
 	cfg.Connections["mixed"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{projectTarget, "repos/octo-org/*"}, Permissions: all}
+		Targets: []string{projectTarget, "repos/octo-org/*"}, Effects: all}
 	return cfg
 }
 

@@ -1845,7 +1845,7 @@ func (m *Model) connectionProviderChosen() {
 	if target := m.field(targetsLabel); target != nil {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
-	m.replacePermissionChoices(provider)
+	m.replaceEffectChoices(provider)
 	m.syncFilesRows()
 	if list := m.field(toolListLabel); list != nil {
 		// Tool IDs carry their provider, so no tick survives a change of provider.
@@ -1977,7 +1977,7 @@ func (m *Model) applyProfile(id string) {
 	}
 	if permissions := m.field("permissions"); permissions != nil {
 		permissions.selected = map[string]bool{}
-		for _, permission := range metadata.ProfilePermissions(profile) {
+		for _, permission := range metadata.ProfileEffects(profile) {
 			permissions.selected[string(permission)] = true
 		}
 	}
@@ -2016,7 +2016,7 @@ func (m *Model) matchingProfile() string {
 	for _, profile := range metadata.Profiles {
 		tools := append([]string(nil), profile.Tools...)
 		sort.Strings(tools)
-		if m.fieldValue("permissions") == config.FormatPermissions(metadata.ProfilePermissions(profile)) &&
+		if m.fieldValue("permissions") == config.FormatEffects(metadata.ProfileEffects(profile)) &&
 			strings.Join(tools, ",") == strings.Join(ticked, ",") {
 			return profile.ID
 		}
@@ -2054,20 +2054,20 @@ func profileText(metadata config.ProviderMetadata, profile config.ToolProfile) s
 	if profile.MutationReason != "" {
 		text += "; it preselects a change because " + profile.MutationReason
 	}
-	return text + "; ticks permissions " + config.FormatPermissions(metadata.ProfilePermissions(profile)) +
+	return text + "; ticks permissions " + config.FormatEffects(metadata.ProfileEffects(profile)) +
 		" and tools " + strings.Join(profile.Tools, ", ")
 }
 
 // permittedEffects are the effects the permissions row of the form allows right now.
-func (m *Model) permittedEffects(metadata config.ProviderMetadata) map[config.Permission]bool {
-	permissions, err := config.ParsePermissions(m.fieldValue("permissions"))
+func (m *Model) permittedEffects(metadata config.ProviderMetadata) map[config.Effect]bool {
+	permissions, err := config.ParseEffects(m.fieldValue("permissions"))
 	if err != nil {
 		return nil
 	}
 	if permissions == nil {
-		permissions = manage.DefaultPermissions(metadata)
+		permissions = manage.DefaultEffects(metadata)
 	}
-	permitted := map[config.Permission]bool{}
+	permitted := map[config.Effect]bool{}
 	for _, permission := range permissions {
 		permitted[permission] = true
 	}
@@ -2099,7 +2099,7 @@ func (m *Model) targetChosen() {
 
 func (m *Model) permissionHint(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
-	permissions := manage.DefaultPermissions(metadata)
+	permissions := manage.DefaultEffects(metadata)
 	defaults := make([]string, len(permissions))
 	for i, permission := range permissions {
 		defaults[i] = string(permission)
@@ -2111,13 +2111,13 @@ func (m *Model) permissionHint(provider string) string {
 func (m *Model) permissionChoices(provider string) []string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	choices := []string{"default"}
-	for _, permission := range metadata.SupportedPermissions {
+	for _, permission := range metadata.SupportedEffects {
 		choices = append(choices, string(permission))
 	}
 	return choices
 }
 
-func (m *Model) permissionChoicesFor(provider string, current []config.Permission) []string {
+func (m *Model) permissionChoicesFor(provider string, current []config.Effect) []string {
 	choices := m.permissionChoices(provider)
 	for _, permission := range current {
 		name := string(permission)
@@ -2135,7 +2135,7 @@ func (m *Model) permissionChoicesFor(provider string, current []config.Permissio
 	return choices
 }
 
-func (m *Model) replacePermissionChoices(provider string) {
+func (m *Model) replaceEffectChoices(provider string) {
 	f := m.field("permissions")
 	if f == nil || f.kind != fieldMultiChoice {
 		return
@@ -2740,7 +2740,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		if provider == "" {
 			provider = m.firstProviderWithService()
 		}
-		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
+		permissions := permissionField(m.permissionChoicesFor(provider, conn.Effects), conn.Effects)
 		permissions.hint = m.permissionHint(provider)
 		fields = append(fields,
 			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint),
@@ -2886,7 +2886,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		return cfg.SetCredential(name, cred)
 	case sectionConnections:
-		permissions, err := config.ParsePermissions(m.fieldValue("permissions"))
+		permissions, err := config.ParseEffects(m.fieldValue("permissions"))
 		if err != nil {
 			return err
 		}
@@ -2920,7 +2920,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Target:         target,
 			Targets:        targets,
 			Description:    m.fieldValue("description"),
-			Permissions:    permissions,
+			Effects:        permissions,
 			Tools:          tools,
 			Paths:          paths,
 			Files:          files,
@@ -3190,7 +3190,7 @@ func providerField(choices []string, value string) field {
 	return f
 }
 
-func permissionField(choices []string, permissions []config.Permission) field {
+func permissionField(choices []string, permissions []config.Effect) field {
 	f := field{label: "permissions", kind: fieldMultiChoice, choices: choices, selected: map[string]bool{}}
 	if permissions == nil {
 		f.selected["default"] = true
@@ -4700,8 +4700,8 @@ func (m *Model) cells(name string) []string {
 		return []string{name, providerColumn(provider), m.storagePlace(name, cred), strings.Join(roles, ", ")}
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
-		effects := make([]string, 0, len(config.Permissions()))
-		for _, permission := range m.cfg.ConnectionPermissions(name) {
+		effects := make([]string, 0, len(config.Effects()))
+		for _, permission := range m.cfg.ConnectionEffects(name) {
 			effects = append(effects, string(permission))
 		}
 		tools := "all"

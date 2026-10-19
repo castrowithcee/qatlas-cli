@@ -23,7 +23,7 @@ func groupedRegistry(t *testing.T, alphaTools, betaRead, betaCreate int) *capabi
 	t.Helper()
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{
-		ID: "bookstack", Name: "BookStack", DefaultPermissions: []config.Permission{config.PermissionRead},
+		ID: "bookstack", Name: "BookStack", DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{Name: "token-id"}, {Name: "token-secret"}},
 		Target:      config.TargetMetadata{Label: "target"},
 		Groups: []config.ToolGroup{

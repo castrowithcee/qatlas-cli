@@ -37,8 +37,8 @@ func uploadCore(t *testing.T, dir string) (*application.Core, *atomic.Int32) {
 	stubLimiter(t, primaryKey)
 	cfg := coreConfig()
 	cfg.Connections["lexware-uploader"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-		Files:       config.Files{Read: []string{dir}}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate},
+		Files:   config.Files{Read: []string{dir}}}
 	var reads atomic.Int32
 	red := &redact.Redactor{}
 	counting := secret.NewWith(func(string) string { reads.Add(1); return primaryKey }, nil, nil, red)

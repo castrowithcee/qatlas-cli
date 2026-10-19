@@ -348,13 +348,13 @@ func TestRoleWriteDescriptorsDeclareRisk(t *testing.T) {
 func TestRoleWritesNeedTheToolsListAndConfirmation(t *testing.T) {
 	serveRoleWrite(t, freeRole, refBody("createOneRole"))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	ids := []string{rolesCreate.ID, rolesUpdate.ID, rolesDelete.ID}
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: ids}
+		Effects: all, Tools: ids}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

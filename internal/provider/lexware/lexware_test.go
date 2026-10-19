@@ -310,9 +310,9 @@ func invoiceArgs(extra string) json.RawMessage {
 func issueConfig() *config.Config {
 	cfg := coreConfig()
 	cfg.Connections["lexware-creator"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate}}
 	cfg.Connections["lexware-issuer"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionCreate},
+		Effects: []config.Effect{config.EffectCreate},
 		Tools: []string{"lexware.invoices.create", "lexware.invoices.issue", "lexware.quotations.issue",
 			"lexware.order-confirmations.issue", "lexware.credit-notes.issue", "lexware.delivery-notes.issue"}}
 	return cfg

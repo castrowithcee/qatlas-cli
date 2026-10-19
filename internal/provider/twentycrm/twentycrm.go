@@ -228,8 +228,8 @@ var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, obje
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Twenty CRM", FormerIDs: []string{"twentycrm"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
-		Description:        "Open-source customer relationship management (CRM) system",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "Open-source customer relationship management (CRM) system",
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Twenty API key: the value shown once when you create a key under API & Webhooks; " +

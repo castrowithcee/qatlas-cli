@@ -173,16 +173,16 @@ func serveMaintain(t *testing.T) (*fakeGitHub, *fakeMaintain, string) {
 // lists both.
 func maintainConfig(base string) *config.Config {
 	cfg := actionsConfig(base)
-	repo := func(permissions []config.Permission, tools []string) config.Connection {
-		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Permissions: permissions,
+	repo := func(permissions []config.Effect, tools []string) config.Connection {
+		return config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Effects: permissions,
 			Tools: tools}
 	}
-	cfg.Connections["open"] = repo(config.Permissions(), nil)
-	cfg.Connections["maintainer"] = repo([]config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate}, append([]string{workflowsList.ID, workflowsGet.ID}, maintainerTools...))
-	cfg.Connections["admin"] = repo([]config.Permission{config.PermissionRead, config.PermissionUpdate}, adminTools)
+	cfg.Connections["open"] = repo(config.Effects(), nil)
+	cfg.Connections["maintainer"] = repo([]config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate}, append([]string{workflowsList.ID, workflowsGet.ID}, maintainerTools...))
+	cfg.Connections["admin"] = repo([]config.Effect{config.EffectRead, config.EffectUpdate}, adminTools)
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: config.Permissions(), Tools: guardedTools}
+		Effects: config.Effects(), Tools: guardedTools}
 	return cfg
 }
 
@@ -277,12 +277,12 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	if !reflect.DeepEqual(admin.Tools, adminTools) {
 		t.Errorf("admin profile = %v, want %v", admin.Tools, adminTools)
 	}
-	if got := metadata.ProfilePermissions(maintainer); !reflect.DeepEqual(got, []config.Permission{
-		config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}) {
+	if got := metadata.ProfileEffects(maintainer); !reflect.DeepEqual(got, []config.Effect{
+		config.EffectRead, config.EffectCreate, config.EffectUpdate}) {
 		t.Errorf("maintainer permissions = %v", got)
 	}
-	if got := metadata.ProfilePermissions(admin); !reflect.DeepEqual(got, []config.Permission{
-		config.PermissionRead, config.PermissionUpdate}) {
+	if got := metadata.ProfileEffects(admin); !reflect.DeepEqual(got, []config.Effect{
+		config.EffectRead, config.EffectUpdate}) {
 		t.Errorf("admin permissions = %v", got)
 	}
 }

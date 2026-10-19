@@ -116,9 +116,9 @@ func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraf
 	d.Targets = splitTargetInput(f.Targets)
 	if f.PermMode == "custom" {
 		// A custom list without any entry allows nothing; it never falls back to the defaults.
-		d.Permissions = strings.Join(f.Perms, ",")
-		if strings.TrimSpace(d.Permissions) == "" {
-			d.Permissions = "none"
+		d.Effects = strings.Join(f.Perms, ",")
+		if strings.TrimSpace(d.Effects) == "" {
+			d.Effects = "none"
 		}
 	}
 	if f.ToolsMode == "selected" {
@@ -180,8 +180,8 @@ func applyConnectionDefaults(cfg *config.Config, f *connectionForm) {
 	}
 	if start.ProfileID != "" {
 		f.PermMode, f.ToolsMode = "custom", "selected"
-		f.Perms = make([]string, len(start.Permissions))
-		for i, permission := range start.Permissions {
+		f.Perms = make([]string, len(start.Effects))
+		for i, permission := range start.Effects {
 			f.Perms[i] = string(permission)
 		}
 		f.Tools = start.Tools
@@ -237,7 +237,7 @@ type connectionBuildData struct {
 	// FilesRead and FilesWrite say whether the provider has a tool that reads, or writes, local files; only
 	// then does the page offer the matching directory field.
 	FilesRead, FilesWrite bool
-	Permissions           []optionRow
+	Effects               []optionRow
 	Tools                 []toolOption
 	StorageHint           string
 	ForwardChoices        []optionRow
@@ -295,8 +295,8 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		roles = append(roles, roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(f.Provider, role)})
 	}
 
-	permissionNames := make([]string, len(metadata.SupportedPermissions))
-	for i, p := range metadata.SupportedPermissions {
+	permissionNames := make([]string, len(metadata.SupportedEffects))
+	for i, p := range metadata.SupportedEffects {
 		permissionNames[i] = string(p)
 	}
 	var tools []toolOption
@@ -317,7 +317,7 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		TargetHint:  targetHintFor(metadata),
 		FilesRead:   metadata.LocalFiles.Read,
 		FilesWrite:  metadata.LocalFiles.Write,
-		Permissions: checkedOptions(permissionNames, f.Perms),
+		Effects:     checkedOptions(permissionNames, f.Perms),
 		Tools:       tools,
 		StorageHint: storageHintText,
 		Error:       errText,
@@ -376,9 +376,9 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		storage = cand.Credentials[conn.Credential].Type
 	}
 
-	permissions := "default: " + config.FormatPermissions(manage.DefaultPermissions(metadata))
-	if conn.Permissions != nil {
-		permissions = config.FormatPermissions(conn.Permissions)
+	permissions := "default: " + config.FormatEffects(manage.DefaultEffects(metadata))
+	if conn.Effects != nil {
+		permissions = config.FormatEffects(conn.Effects)
 	}
 	tools := "all tools its permissions allow"
 	switch {
@@ -583,12 +583,12 @@ func (s *Server) approvalNotice(cand *config.Config, connName string) string {
 // run's one-time creation and approval notice when there is one, and, when this run was given a Tester, the
 // "Test this connection" form and the outcome of the last test run from this page.
 type connectionResultData struct {
-	Name, Provider, Service, Credential, Description, Targets, Permissions, Tools string
-	Files                                                                         string
-	Notice, Error                                                                 string
-	CSRF                                                                          string
-	TesterAvailable                                                               bool
-	TestResult                                                                    string
+	Name, Provider, Service, Credential, Description, Targets, Effects, Tools string
+	Files                                                                     string
+	Notice, Error                                                             string
+	CSRF                                                                      string
+	TesterAvailable                                                           bool
+	TestResult                                                                string
 	// Forward is the row of payload credentials this connection releases; shown only while one exists or is
 	// listed.
 	ShowForward    bool
@@ -653,8 +653,8 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 	data := connectionResultData{
 		Name: name, Provider: provider, Service: conn.Service, Credential: conn.Credential,
 		Description: conn.Description, Targets: targets,
-		Files:       approval.FilesText(conn.Files.Read, conn.Files.Write),
-		Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)), Tools: tools,
+		Files:   approval.FilesText(conn.Files.Read, conn.Files.Write),
+		Effects: config.FormatEffects(cfg.ConnectionEffects(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
 	}
 	choices := manage.ForwardChoices(cfg)
@@ -699,8 +699,8 @@ func (s *Server) connectionRows() ([]ConnectionRow, error) {
 		conn := cfg.Connections[name]
 		rows = append(rows, ConnectionRow{
 			Name: name, Provider: cfg.Services[conn.Service].Provider, Description: conn.Description,
-			Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)),
-			Tools:       toolsSummary(conn.Tools),
+			Effects: config.FormatEffects(cfg.ConnectionEffects(name)),
+			Tools:   toolsSummary(conn.Tools),
 		})
 	}
 	return rows, nil

@@ -240,7 +240,7 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if change.Credential != ceiling.Credential || id != vorbild.CredentialID {
 		gaps = append(gaps, GapCredential)
 	}
-	if !subset(change.Permissions, ceiling.Permissions) {
+	if !subset(change.Effects, ceiling.Effects) {
 		gaps = append(gaps, GapPermissions)
 	}
 	// A vorbild without a tools list admits every tool its permissions do; one with a list admits only a

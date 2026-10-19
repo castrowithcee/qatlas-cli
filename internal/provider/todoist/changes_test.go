@@ -17,8 +17,8 @@ import (
 )
 
 // changePermissions are the effects the writing test connections hold.
-var changePermissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-	config.PermissionUpdate, config.PermissionDelete}
+var changePermissions = []config.Effect{config.EffectRead, config.EffectCreate,
+	config.EffectUpdate, config.EffectDelete}
 
 // contentCanary stands for the text of a change; it must never reach an error.
 const contentCanary = "change-content-canary-51f0"

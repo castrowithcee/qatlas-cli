@@ -32,8 +32,8 @@ func participantCore(t *testing.T, targets ...string) *application.Core {
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = targets
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	connection.Tools = []string{talkParticipantsAdd.ID, talkParticipantsRemove.ID, talkParticipantsModerator.ID}
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}

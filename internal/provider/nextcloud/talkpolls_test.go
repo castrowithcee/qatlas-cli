@@ -33,8 +33,8 @@ func pollCore(t *testing.T, tools ...string) *application.Core {
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = []string{"talk/" + boundRoom}
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	connection.Tools = tools
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}
@@ -203,7 +203,7 @@ func TestTalkPollsRefuseUnusableArgumentsBeforeAnyIO(t *testing.T) {
 		cfg := coreConfig()
 		connection := cfg.Connections["reports"]
 		connection.Target, connection.Targets = "", targets
-		connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate}
+		connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate}
 		connection.Tools = allPollTools()
 		cfg.Connections["reports"] = connection
 		red := &redact.Redactor{}

@@ -176,12 +176,12 @@ func TestPageLayoutDeleteNeedsConfirmationAndTheToolsList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			calls := serveWidgets(t, http.StatusOK, `{"success":true}`)
 			cfg := coreConfig()
-			all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+			all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 			bare := cfg.Connections["crm"]
-			bare.Permissions = all
+			bare.Effects = all
 			cfg.Connections["crm"] = bare
 			cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-				Permissions: all, Tools: []string{tt.desc.ID}}
+				Effects: all, Tools: []string{tt.desc.ID}}
 			stubLimiter(t, internalKey)
 			red := &redact.Redactor{}
 			core := application.New(registry(t), cfg, resolver(red), red)

@@ -228,8 +228,8 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "SeaTable account", FormerIDs: []string{"seatableaccount"}, RenamedTools: renamedTools, DefaultBaseURL: cloudOrigin,
-		Description:        "SeaTable account API, snapshots of one base listed and restored into a new base",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "SeaTable account API, snapshots of one base listed and restored into a new base",
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAccountToken,
 			Description: "SeaTable account token of a person, created by that person with POST /api2/auth-token/ " +

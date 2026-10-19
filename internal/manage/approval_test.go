@@ -31,7 +31,7 @@ func newApprovalWorld(t *testing.T) approvalWorld {
 		cfg.Services["s-"+name] = config.Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.test"}
 		cfg.Credentials["c-"+name] = config.Credential{Type: config.CredentialTypeVault}
 		cfg.Connections[name] = config.Connection{Service: "s-" + name, Credential: "c-" + name,
-			Permissions: []config.Permission{config.PermissionRead}}
+			Effects: []config.Effect{config.EffectRead}}
 		offer := vault.PassphraseFunc(nil)
 		if i == 0 {
 			offer = func(string) (string, error) { return approvalPassphrase, nil }
@@ -49,12 +49,12 @@ func newApprovalWorld(t *testing.T) approvalWorld {
 // widen gives connection name one more permission, which opens it for a field its own form shows.
 func widen(cfg *config.Config, name string) {
 	conn := cfg.Connections[name]
-	conn.Permissions = append(slicesClone(conn.Permissions), config.PermissionCreate)
+	conn.Effects = append(slicesClone(conn.Effects), config.EffectCreate)
 	cfg.Connections[name] = conn
 }
 
-func slicesClone(p []config.Permission) []config.Permission {
-	return append([]config.Permission(nil), p...)
+func slicesClone(p []config.Effect) []config.Effect {
+	return append([]config.Effect(nil), p...)
 }
 
 func (w approvalWorld) open(t *testing.T, cfg *config.Config) []string {

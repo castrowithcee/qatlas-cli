@@ -26,8 +26,8 @@ func talkFilesCore(t *testing.T, listed bool, targets ...string) *application.Co
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = targets
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	if listed {
 		connection.Tools = []string{talkFilesShare.ID, sharesDelete.ID}
 	}

@@ -50,13 +50,13 @@ func SplitTargets(values []string) (target string, targets []string) {
 	return "", append([]string(nil), values...)
 }
 
-// DefaultPermissions are what a connection without a permissions list allows: the provider's declared
+// DefaultEffects are what a connection without a permissions list allows: the provider's declared
 // defaults, or read alone. Changes, execution and administration are never among the fallback.
-func DefaultPermissions(metadata config.ProviderMetadata) []config.Permission {
-	if len(metadata.DefaultPermissions) > 0 {
-		return metadata.DefaultPermissions
+func DefaultEffects(metadata config.ProviderMetadata) []config.Effect {
+	if len(metadata.DefaultEffects) > 0 {
+		return metadata.DefaultEffects
 	}
-	return []config.Permission{config.PermissionRead}
+	return []config.Effect{config.EffectRead}
 }
 
 // ConnectionStart is where the setup of a new connection of one provider begins. The values are only a
@@ -72,8 +72,8 @@ type ConnectionStart struct {
 	ProfileID string
 	// Permissions and Tools are what that profile ticks. Tools is an explicit selection: a tool the
 	// profile does not list is never enabled. Both are empty without a profile.
-	Permissions []config.Permission
-	Tools       []string
+	Effects []config.Effect
+	Tools   []string
 }
 
 // ConnectionDefaults are the starting values of a new connection of one provider.
@@ -85,7 +85,7 @@ func ConnectionDefaults(cfg *config.Config, provider string) ConnectionStart {
 	}
 	if profile, ok := metadata.RecommendedProfile(); ok {
 		start.ProfileID = profile.ID
-		start.Permissions = metadata.ProfilePermissions(profile)
+		start.Effects = metadata.ProfileEffects(profile)
 		start.Tools = append([]string(nil), profile.Tools...)
 	}
 	return start

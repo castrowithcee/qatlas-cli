@@ -395,13 +395,13 @@ func TestControlDescriptorsDeclareRiskAndStayOutOfProfiles(t *testing.T) {
 func TestControlNeedsTheToolsListAndConfirmation(t *testing.T) {
 	serveControl(t, controlTools[0].version, okMutation("activateWorkflowVersion"))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionExecute}
+	all := []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectExecute}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	ids := []string{workflowVersionsActivate.ID, workflowVersionsDeactivate.ID, workflowRunsStop.ID, workflowRunsRetry.ID}
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: ids}
+		Effects: all, Tools: ids}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

@@ -58,9 +58,9 @@ func (c *Config) Clone() *Config {
 	for name, conn := range c.Connections {
 		copied := conn
 		copied.Targets = append([]string(nil), conn.Targets...)
-		copied.Permissions = append([]Permission(nil), conn.Permissions...)
-		if conn.Permissions != nil && copied.Permissions == nil {
-			copied.Permissions = []Permission{}
+		copied.Effects = append([]Effect(nil), conn.Effects...)
+		if conn.Effects != nil && copied.Effects == nil {
+			copied.Effects = []Effect{}
 		}
 		copied.Tools = append([]string(nil), conn.Tools...)
 		if conn.Tools != nil && copied.Tools == nil {

@@ -196,8 +196,8 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 			t.Errorf("provider %s has no recommended profile", metadata.ID)
 			continue
 		}
-		permissions := metadata.ProfilePermissions(profile)
-		readOnly := len(permissions) == 1 && permissions[0] == config.PermissionRead
+		permissions := metadata.ProfileEffects(profile)
+		readOnly := len(permissions) == 1 && permissions[0] == config.EffectRead
 		switch {
 		case metadata.ID == "telegram":
 			if profile.MutationReason == "" || len(profile.Tools) != 1 || profile.Tools[0] != "telegram.messages.send" {

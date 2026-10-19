@@ -215,12 +215,12 @@ func TestRecordsRemovalDescriptorsDeclareTheirRisk(t *testing.T) {
 func TestRecordsRemovalToolsNeedConfirmationAndTheAllowList(t *testing.T) {
 	serveWrites(t, http.StatusOK, removeAnswer("delete", personID))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: []string{recordsDelete.ID, recordsDestroy.ID, recordsRestore.ID}}
+		Effects: all, Tools: []string{recordsDelete.ID, recordsDestroy.ID, recordsRestore.ID}}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

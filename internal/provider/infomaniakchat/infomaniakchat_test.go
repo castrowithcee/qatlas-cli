@@ -131,7 +131,7 @@ func registry(t *testing.T) *capability.Registry {
 // sendPermissions grants both connections the create effect messages.send needs; the connection's own
 // team and channel targets are what the tests below exercise, not the permission gate every other provider
 // already proves generically in the shared conformance suite.
-var sendPermissions = []config.Permission{config.PermissionRead, config.PermissionCreate}
+var sendPermissions = []config.Effect{config.EffectRead, config.EffectCreate}
 
 func coreConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleToken: tokenEnv}}
@@ -141,129 +141,129 @@ func coreConfig() *config.Config {
 		Credentials: map[string]config.Credential{"kc-reader": credential},
 		Connections: map[string]config.Connection{
 			// "team" is bound to teamA alone: every channel of it the token can reach is reachable.
-			"team": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA}, Permissions: sendPermissions},
+			"team": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA}, Effects: sendPermissions},
 			// "channel" narrows teamA further to chanA alone.
 			"channel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: sendPermissions},
+				Effects: sendPermissions},
 			// "editor" may edit messages of every reachable channel of teamA; "deleter" lists the delete tool,
 			// "nodelete" holds the permission without listing it.
 			"editor": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}},
 			"deleter": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{messagesDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{messagesDelete.ID}},
 			"editorch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}},
 			"deleterch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{messagesDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{messagesDelete.ID}},
 			"reactor": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"reactorch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"unreact": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{reactionsRemove.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{reactionsRemove.ID}},
 			"unreactch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{reactionsRemove.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{reactionsRemove.ID}},
 			"nounreact": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete}},
 			// "dmonly" narrows teamA to one direct channel.
 			"dmonly": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + dmA},
-				Permissions: sendPermissions},
+				Effects: sendPermissions},
 			// "creator" may create channels in teamA; "channel" holds the same rights but a channel allow-list.
 			"creator": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"nodelete": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete}},
 			// The member connections: "members" adds, "memberdel" removes and "memberroles" sets roles only
 			// because their tools lists name the tool; "memberch" narrows teamA to chanA, "twoteams" binds
 			// both teams, "memberno" holds the permissions without listing the tools.
 			"members": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"memberch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"twoteams": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate}},
 			"memberdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{channelsMembersRemove.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{channelsMembersRemove.ID}},
 			"memberroles": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-				Tools:       []string{channelsMembersRoles.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+				Tools:   []string{channelsMembersRoles.ID}},
 			// The archive connections: each holds one tool in its tools list; "archivech" narrows teamA to chanA.
 			"archiver": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{channelsArchive.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{channelsArchive.ID}},
 			"archivech": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{channelsArchive.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{channelsArchive.ID}},
 			"restorer": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-				Tools:       []string{channelsRestore.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+				Tools:   []string{channelsRestore.ID}},
 			"privater": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-				Tools:       []string{channelsPrivacy.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+				Tools:   []string{channelsPrivacy.ID}},
 			// The team role connections: "teamroles" lists the tool, "teamroles2" binds both teams.
 			"teamroles": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-				Tools:       []string{teamMembersRoles.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+				Tools:   []string{teamMembersRoles.ID}},
 			"teamroles2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
-				Tools:       []string{teamMembersRoles.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate},
+				Tools:   []string{teamMembersRoles.ID}},
 			// "editor2" may update in both teams, so a thread of teamB can be named with teamA.
 			"editor2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}},
 			// "catdel" lists the category delete tool; "nodelete" holds the permission without it.
 			"catdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-				Tools:       []string{categoriesDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+				Tools:   []string{categoriesDelete.ID}},
 			// The webhook connections: "hooker" lists all four tools, "hookch" narrows teamA to chanA, "hookno"
 			// holds the permissions without listing them.
 			"hooker": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       webhookToolIDs},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete},
+				Tools:   webhookToolIDs},
 			"hookch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       webhookToolIDs},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete},
+				Tools:   webhookToolIDs},
 			"hookno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete}},
 			// The slash command connections: "cmder" lists the tools, "cmdch" has a channel allow-list.
 			"cmder": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       commandToolIDs},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete},
+				Tools:   commandToolIDs},
 			"cmdch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       commandToolIDs},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate, config.EffectDelete},
+				Tools:   commandToolIDs},
 			// The bot connections: "botall" binds both teams of the token, "botone" only teamA, "botch" adds a
 			// channel target, "botno" holds the permissions without listing the tools.
 			"botall": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			"botone": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			"botch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}, Tools: append([]string{emojiList.ID, rolesGet.ID}, botToolIDs...)},
 			// "emojiread" has no tools list, as a read profile gives it, and binds only one of two token teams.
 			"emojiread": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead}},
+				Effects: []config.Effect{config.EffectRead}},
 			// The emoji connections: "emojiadm" binds both token teams and lists the write tools, "emojiadmch" adds
 			// a channel target, "emojiadm1" binds one of two token teams, "emojinotool" lists no tools.
 			"emojiadm": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
-				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectDelete},
+				Tools:   []string{emojiCreate.ID, emojiDelete.ID}},
 			"emojiadmch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB, "channel/" + chanA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
-				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectDelete},
+				Tools:   []string{emojiCreate.ID, emojiDelete.ID}},
 			"emojiadm1": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
-				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectDelete},
+				Tools:   []string{emojiCreate.ID, emojiDelete.ID}},
 			"emojinotool": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete}},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectDelete}},
 			"botno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectUpdate}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
+				Effects: []config.Effect{config.EffectRead, config.EffectDelete, config.EffectUpdate}},
 		},
 	}
 }
@@ -460,7 +460,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if strings.HasPrefix(tool.ID, Provider+".threads.") && tool.Group != "threads" {
 			t.Fatalf("tool %s group = %q, want threads", tool.ID, tool.Group)
 		}
-		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.EffectDelete) {
 			t.Fatalf("messages.delete metadata = %+v", tool)
 		}
 		if (tool.ID == channelsMembersRemove.ID || tool.ID == channelsMembersRoles.ID || tool.ID == teamMembersRoles.ID) && !tool.RequiresToolAllowList {
@@ -470,13 +470,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			!tool.RequiresToolAllowList {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
-		if tool.ID == channelsArchive.ID && tool.Effect != config.PermissionDelete {
+		if tool.ID == channelsArchive.ID && tool.Effect != config.EffectDelete {
 			t.Fatalf("channels.archive metadata = %+v", tool)
 		}
 		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
 			t.Fatalf("archived-channels.list metadata = %+v", tool)
 		}
-		if tool.ID == categoriesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+		if tool.ID == categoriesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.EffectDelete) {
 			t.Fatalf("categories.delete metadata = %+v", tool)
 		}
 		if (tool.ID == categoriesList.ID || tool.ID == categoriesCreate.ID || tool.ID == categoriesUpdate.ID ||
@@ -489,7 +489,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			(!tool.RequiresToolAllowList || tool.Group != "integrations") {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
-		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.EffectDelete) {
 			t.Fatalf("reactions.remove metadata = %+v", tool)
 		}
 	}

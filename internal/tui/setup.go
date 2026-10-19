@@ -28,7 +28,7 @@ const (
 	stepService
 	stepCredential
 	stepScope
-	stepPermissions
+	stepEffects
 	stepSummary
 	setupSteps
 )
@@ -146,7 +146,7 @@ func (m *Model) setupShow(step int) {
 	}
 	m.fields = w.pages[step]
 	m.screen = screenForm
-	if fresh && step == stepPermissions && w.template == "" {
+	if fresh && step == stepEffects && w.template == "" {
 		// The permissions of a new connection start on the provider's recommended profile, ticked and
 		// visible; going back and forth keeps whatever was changed since.
 		m.applyRecommendedProfile()
@@ -206,7 +206,7 @@ func (m *Model) setupPage(step int) []field {
 			targetsField(nil).withHint(m.providerTargetHint(provider)),
 			textField("description", "", false).withHint(descriptionHint),
 		}
-	case stepPermissions:
+	case stepEffects:
 		permissions := permissionField(m.permissionChoices(provider), nil)
 		permissions.hint = m.permissionHint(provider)
 		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}, permissions},
@@ -259,7 +259,7 @@ func (m *Model) setupRefresh() {
 			m.fields[0].hint = fmt.Sprintf("reuses %s (%s) unchanged, and its secrets where they are; "+
 				"choose %s to add one", chosen, m.storagePlace(chosen, m.cfg.Credentials[chosen]), newCredential)
 		}
-	case stepPermissions:
+	case stepEffects:
 		m.toolsModeChosen()
 		m.syncProfile()
 	}
@@ -390,10 +390,10 @@ func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan,
 		page := w.pages[stepScope]
 		plan.connection = pageValue(page, "name")
 		draft.Name, draft.Targets, draft.Description = plan.connection, targetEntries(page), pageValue(page, "description")
-		if upto >= stepPermissions {
+		if upto >= stepEffects {
 			stage = manage.StageRights
-			page := w.pages[stepPermissions]
-			draft.Permissions = pageValue(page, "permissions")
+			page := w.pages[stepEffects]
+			draft.Effects = pageValue(page, "permissions")
 			if pageValue(page, toolsLabel) == toolsSelected {
 				draft.ToolsSelected = true
 				for _, f := range page {
@@ -554,7 +554,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 // reason is shown and the steps can be changed; the next save is a conflict again until they are.
 func (m *Model) setupRebase() {
 	w := m.wizard
-	built, plan, err := m.setupCandidate(stepPermissions)
+	built, plan, err := m.setupCandidate(stepEffects)
 	if err != nil {
 		m.fail += "; the setup no longer fits it: " + m.redactor.Apply(err.Error())
 		return
@@ -650,10 +650,10 @@ func (m *Model) summaryRows() []string {
 		secrets = plan.storage + ": " + roles
 	}
 
-	permissions := config.FormatPermissions(conn.Permissions)
-	if conn.Permissions == nil {
-		defaults := manage.DefaultPermissions(metadata)
-		permissions = "default: " + config.FormatPermissions(defaults)
+	permissions := config.FormatEffects(conn.Effects)
+	if conn.Effects == nil {
+		defaults := manage.DefaultEffects(metadata)
+		permissions = "default: " + config.FormatEffects(defaults)
 	}
 	tools := toolsAll
 	switch {

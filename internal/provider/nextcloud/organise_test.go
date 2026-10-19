@@ -197,19 +197,19 @@ func TestOrganiseRisksProfileAndPermissions(t *testing.T) {
 
 	// Without create, no folder and no copy; without update, no move.
 	cases := []struct {
-		perms []config.Permission
+		perms []config.Effect
 		op    string
 		args  string
 	}{
-		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.files.folders.create", `{"path":"x"}`},
-		{[]config.Permission{config.PermissionRead, config.PermissionUpdate}, "nextcloud.files.files.copy", `{"path":"x","destination":"y"}`},
-		{[]config.Permission{config.PermissionRead, config.PermissionCreate}, "nextcloud.files.files.move", `{"path":"x","destination":"y"}`},
+		{[]config.Effect{config.EffectRead, config.EffectUpdate}, "nextcloud.files.folders.create", `{"path":"x"}`},
+		{[]config.Effect{config.EffectRead, config.EffectUpdate}, "nextcloud.files.files.copy", `{"path":"x","destination":"y"}`},
+		{[]config.Effect{config.EffectRead, config.EffectCreate}, "nextcloud.files.files.move", `{"path":"x","destination":"y"}`},
 	}
 	for _, c := range cases {
 		refuse(t)
 		cfg := coreConfig()
 		conn := cfg.Connections["reports"]
-		conn.Permissions = c.perms
+		conn.Effects = c.perms
 		cfg.Connections["reports"] = conn
 		red := &redact.Redactor{}
 		core := application.New(reg, cfg, resolver(red), red)

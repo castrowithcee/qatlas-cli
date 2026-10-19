@@ -161,12 +161,12 @@ func (l *fakeLabels) route(w http.ResponseWriter, req *http.Request) bool {
 // github.labels.delete, the way rulesetsConfig binds its own guarded tools.
 func labelsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all, Tools: []string{labelsDelete.ID}}
+		Effects: all, Tools: []string{labelsDelete.ID}}
 	return cfg
 }
 

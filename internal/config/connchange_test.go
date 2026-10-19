@@ -11,7 +11,7 @@ func TestChangedConnections(t *testing.T) {
 			Credentials: map[string]Credential{"reader": {Type: CredentialTypeEnv}},
 			Connections: map[string]Connection{
 				"a": {Service: "wiki", Credential: "reader", Tools: []string{"x.read"}},
-				"b": {Service: "wiki", Credential: "reader", Permissions: []Permission{}},
+				"b": {Service: "wiki", Credential: "reader", Effects: []Effect{}},
 				"c": {Service: "wiki", Credential: "reader"},
 			},
 		}
@@ -41,7 +41,7 @@ func TestChangedConnections(t *testing.T) {
 		}, []ConnectionChange{{"a", ConnectionChanged}}},
 		{"missing permissions become explicitly empty", func(c *Config) {
 			conn := c.Connections["c"]
-			conn.Permissions = []Permission{}
+			conn.Effects = []Effect{}
 			c.Connections["c"] = conn
 		}, []ConnectionChange{{"c", ConnectionChanged}}},
 		{"several, sorted", func(c *Config) {
@@ -69,7 +69,7 @@ func TestChangedConnections(t *testing.T) {
 // A clone, which the editors save, is no change.
 func TestChangedConnectionsIgnoresAClone(t *testing.T) {
 	cfg := &Config{Connections: map[string]Connection{
-		"a": {Service: "wiki", Credential: "reader", Permissions: []Permission{}, Tools: []string{}},
+		"a": {Service: "wiki", Credential: "reader", Effects: []Effect{}, Tools: []string{}},
 		"b": {Service: "wiki", Credential: "reader"},
 	}}
 	if got := ChangedConnections(cfg, cfg.Clone()); got != nil {

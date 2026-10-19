@@ -31,7 +31,7 @@ type Scope struct {
 	// Origin is the effective endpoint of the connection's service, its base URL or its provider's default.
 	Origin string `json:"origin"`
 	// Permissions are the effects the connection permits, the provider's defaults applied.
-	Permissions []string `json:"permissions"`
+	Effects []string `json:"permissions"`
 	// Targets are the connection's target or targets.
 	Targets []string `json:"targets"`
 	// Tools is the connection's tools list. Nil means it has none, so every tool its permissions admit is
@@ -83,7 +83,7 @@ func (s Scope) Normalized() Scope {
 		slices.Sort(out)
 		return out
 	}
-	s.Permissions = sorted(s.Permissions)
+	s.Effects = sorted(s.Effects)
 	s.Targets = sorted(s.Targets)
 	if s.Tools != nil {
 		s.Tools = sorted(s.Tools)
@@ -141,7 +141,7 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Credential   string   `json:"credential"`
 		Provider     string   `json:"provider"`
 		Origin       string   `json:"origin"`
-		Permissions  []string `json:"permissions"`
+		Effects      []string `json:"permissions"`
 		Targets      []string `json:"targets"`
 		Tools        []string `json:"tools"`
 		Paths        []string `json:"paths,omitempty"`
@@ -149,7 +149,7 @@ func Fingerprint(scope Scope, credentialID string) string {
 		FilesWrite   []string `json:"files_write,omitempty"`
 		// Forward holds the forward credentials with their fields: a change of either changes the fingerprint.
 		Forward []ForwardSecret `json:"forward,omitempty"`
-	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools, n.Paths,
+	}{credentialID, n.Credential, n.Provider, n.Origin, n.Effects, n.Targets, n.Tools, n.Paths,
 		n.FilesRead, n.FilesWrite, n.Forward}
 	data, err := json.Marshal(canonical)
 	if err != nil {

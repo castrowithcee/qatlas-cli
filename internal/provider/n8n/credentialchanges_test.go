@@ -76,7 +76,7 @@ func newChangeEnvironment(t *testing.T, calls *[]call, handler func(*http.Reques
 		Fields: []string{"username", "password"}}
 	cfg.Credentials["n8n-plain"] = config.Credential{Type: config.CredentialTypeKeyring}
 	connection := func(targets ...string) config.Connection {
-		return config.Connection{Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions,
+		return config.Connection{Service: "n8n", Credential: "n8n-reader", Effects: allEffects,
 			Targets: targets, Tools: credentialChangeTools, ForwardSecrets: []string{releasedRef}}
 	}
 	cfg.Connections["cmanage"] = connection()

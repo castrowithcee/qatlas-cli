@@ -111,10 +111,10 @@ func registry(t *testing.T) *capability.Registry {
 	return reg
 }
 
-// allPermissions grants every registered effect to the test connections, so both the read tools of
+// allEffects grants every registered effect to the test connections, so both the read tools of
 // Milestone A and the six change tools of this milestone can be invoked through the same connections; no
 // test relies on a permission refusal, which the shared conformance suite already covers generically.
-var allPermissions = config.Permissions()
+var allEffects = config.Effects()
 
 func coreConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAPIKey: apiKeyEnv}}
@@ -123,18 +123,18 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"n8n": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"n8n-reader": credential},
 		Connections: map[string]config.Connection{
-			"open": {Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions},
+			"open": {Service: "n8n", Credential: "n8n-reader", Effects: allEffects},
 			"workflow": {Service: "n8n", Credential: "n8n-reader", Target: "workflow/" + ownWorkflow,
-				Permissions: allPermissions},
+				Effects: allEffects},
 			"project": {Service: "n8n", Credential: "n8n-reader", Target: "project/" + ownProject,
-				Permissions: allPermissions},
+				Effects: allEffects},
 			"pdelete": {Service: "n8n", Credential: "n8n-reader", Target: "project/" + ownProject,
-				Permissions: allPermissions, Tools: allProjectTools},
-			"pdelete-open": {Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions,
+				Effects: allEffects, Tools: allProjectTools},
+			"pdelete-open": {Service: "n8n", Credential: "n8n-reader", Effects: allEffects,
 				Tools: allProjectTools},
 			"pdelete-workflow": {Service: "n8n", Credential: "n8n-reader", Target: "workflow/" + ownWorkflow,
-				Permissions: allPermissions, Tools: allProjectTools},
-			"both": {Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions,
+				Effects: allEffects, Tools: allProjectTools},
+			"both": {Service: "n8n", Credential: "n8n-reader", Effects: allEffects,
 				Targets: []string{"project/" + ownProject, "workflow/" + ownWorkflow}},
 		},
 	}

@@ -395,7 +395,7 @@ func TestConnectionFormOffersOnlyPayloadSecretsAndSavesTheList(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("crm", config.Credential{
 		Type: config.CredentialTypeVault, Forward: true, Fields: []string{"token"}}))
 	mustNoError(t, cfg.SetConnection("personal", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead}}))
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead}}))
 	mustNoError(t, h.store.Save(cfg))
 	h.m.cfg = cfg
 	syncRevision(t, h.m)
@@ -489,7 +489,7 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("billing", config.Credential{
 		Type: config.CredentialTypeVault, Forward: true, Fields: []string{"username"}}))
 	mustNoError(t, cfg.SetConnection("personal", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead}}))
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead}}))
 	mustNoError(t, h.store.Save(cfg))
 	h.m.cfg = cfg
 	syncRevision(t, h.m)
@@ -556,7 +556,7 @@ func TestSavingAPayloadSecretLeavesItsConnectionsOpen(t *testing.T) {
 	mustNoError(t, released.SetCredential("billing", config.Credential{
 		Type: config.CredentialTypeVault, Forward: true, Fields: []string{"username"}}))
 	mustNoError(t, released.SetConnection("personal", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
 		ForwardSecrets: []string{"billing"}}))
 	mustNoError(t, store.Save(released))
 	if _, _, err := approval.Approve(context.Background(), released, v, nil); err != nil {

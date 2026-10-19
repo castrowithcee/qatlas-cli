@@ -515,9 +515,9 @@ func Register(reg *capability.Registry) error {
 		eventSubscriptionsList.ID, eventSubscriptionsGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
-		Description:        "Online accounting and invoicing service for small businesses",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
-		RenamedTools:       renamedTools,
+		Description:    "Online accounting and invoicing service for small businesses",
+		DefaultEffects: []config.Effect{config.EffectRead},
+		RenamedTools:   renamedTools,
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Lexware private API key: the value shown once when you create a key under " +

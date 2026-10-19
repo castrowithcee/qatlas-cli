@@ -140,7 +140,7 @@ func newRefFixture(t *testing.T) *refFixture {
 	f.cfg.Credentials["plain"] = config.Credential{Type: config.CredentialTypeKeyring}
 	f.cfg.Connections["primary"] = config.Connection{
 		Service: "svc", Credential: "own", Tools: []string{"fake.accounts.create"},
-		Permissions:    []config.Permission{config.PermissionRead, config.PermissionCreate},
+		Effects:        []config.Effect{config.EffectRead, config.EffectCreate},
 		ForwardSecrets: []string{"shared"},
 	}
 	resolver := secret.NewWith(func(string) string { return "" }, f.store, nil, f.redactor)

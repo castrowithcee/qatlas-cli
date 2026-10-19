@@ -86,7 +86,7 @@ func newSecretEnv(t *testing.T, handler func(*secretEnv, *http.Request) (*http.R
 		Fields: []string{"clientId", "clientSecret"}}
 	cfg.Credentials["make-plain"] = config.Credential{Type: config.CredentialTypeKeyring}
 	manage := func(targets ...string) config.Connection {
-		return config.Connection{Service: "make", Credential: "make-reader", Permissions: allPermissions,
+		return config.Connection{Service: "make", Credential: "make-reader", Effects: allEffects,
 			Targets: targets, Tools: connectionSecretTools, ForwardSecrets: []string{releasedRef}}
 	}
 	cfg.Connections["smanage"] = manage("team/" + itoa64(ownTeam))

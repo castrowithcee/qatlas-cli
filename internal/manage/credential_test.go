@@ -478,7 +478,7 @@ func TestSecretWriteApprovalPolicies(t *testing.T) {
 		cfg.Services["s-a"] = config.Service{Provider: "wiki", BaseURL: "https://a.example.test"}
 		cfg.Credentials["c-a"] = config.Credential{Type: config.CredentialTypeVault}
 		cfg.Connections["a"] = config.Connection{Service: "s-a", Credential: "c-a",
-			Permissions: []config.Permission{config.PermissionRead}}
+			Effects: []config.Effect{config.EffectRead}}
 		v := vault.New(t.TempDir())
 		offer := func(string) (string, error) { return approvalPassphrase, nil }
 		if err := v.Set("c-other", "token-id", "synthetic-old", offer); err != nil {

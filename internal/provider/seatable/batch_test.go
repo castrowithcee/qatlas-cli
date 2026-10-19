@@ -322,11 +322,11 @@ func TestBatchAndSnapshotNeedConfirmationPermissionsAndTheToolList(t *testing.T)
 	stubLimiter(t, salesToken)
 	cfg := coreConfig()
 	cfg.Connections["batch"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"},
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete},
-		Tools:       []string{"seatable.base.rows.batch-create", "seatable.base.rows.batch-delete", "seatable.base.snapshots.create"}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete},
+		Tools:   []string{"seatable.base.rows.batch-create", "seatable.base.rows.batch-delete", "seatable.base.snapshots.create"}}
 	cfg.Connections["batch-read"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"}}
 	cfg.Connections["batch-all"] = config.Connection{Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"*"},
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}}
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)
 	create := json.RawMessage(`{"table":"Kunden","rows":[{"Name":"a"}]}`)

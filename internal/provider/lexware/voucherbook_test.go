@@ -45,8 +45,8 @@ func bookCore(t *testing.T) (*application.Core, *atomic.Int32) {
 	stubLimiter(t, primaryKey)
 	cfg := coreConfig()
 	cfg.Connections["lexware-vouchers"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate},
-		Tools:       []string{"lexware.vouchers.book", "lexware.vouchers.update"}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate},
+		Tools:   []string{"lexware.vouchers.book", "lexware.vouchers.update"}}
 	var reads atomic.Int32
 	red := &redact.Redactor{}
 	counting := secret.NewWith(func(string) string { reads.Add(1); return primaryKey }, nil, nil, red)
@@ -394,10 +394,10 @@ func TestVoucherBookAndUpdateAreOfferedOnlyThroughAToolEntry(t *testing.T) {
 		return voucherPutOK()
 	})
 	cfg := coreConfig()
-	permissions := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key", Permissions: permissions}
+	permissions := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key", Effects: permissions}
 	cfg.Connections["lexware-booker"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: permissions, Tools: []string{"lexware.vouchers.book"}}
+		Effects: permissions, Tools: []string{"lexware.vouchers.book"}}
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)
 	invoke := func(connection, operation string) error {

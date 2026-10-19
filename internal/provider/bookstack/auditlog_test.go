@@ -98,10 +98,10 @@ func TestAuditLogIsOfferedOnlyWithAToolsListEntry(t *testing.T) {
 	cfg := config.New()
 	cfg.Services["wiki"] = config.Service{Provider: Provider, BaseURL: "https://wiki.example"}
 	cfg.Credentials["c"] = config.Credential{Type: config.CredentialTypeEnv}
-	every := config.Permissions()
-	cfg.Connections["open"] = config.Connection{Service: "wiki", Credential: "c", Permissions: every}
-	cfg.Connections["other"] = config.Connection{Service: "wiki", Credential: "c", Permissions: every, Tools: []string{usersList.ID}}
-	cfg.Connections["listed"] = config.Connection{Service: "wiki", Credential: "c", Permissions: every, Tools: []string{auditLogList.ID}}
+	every := config.Effects()
+	cfg.Connections["open"] = config.Connection{Service: "wiki", Credential: "c", Effects: every}
+	cfg.Connections["other"] = config.Connection{Service: "wiki", Credential: "c", Effects: every, Tools: []string{usersList.ID}}
+	cfg.Connections["listed"] = config.Connection{Service: "wiki", Credential: "c", Effects: every, Tools: []string{auditLogList.ID}}
 	for name, want := range map[string]config.Refusal{
 		"open": config.RefusalToolAllowList, "other": config.RefusalToolsList, "listed": "",
 	} {

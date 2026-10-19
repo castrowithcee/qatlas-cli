@@ -91,15 +91,15 @@ var lifecycleTools = []string{projectsCreate.ID, projectsUpdate.ID, projectsDele
 // connection without targets.
 func lifecycleConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	changes := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
 	admin := []string{"orgs/octo-org", projectTarget, repoTarget}
-	add := func(name string, targets []string, permissions []config.Permission, tools []string) {
+	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Permissions: permissions, Tools: tools}
+			Effects: permissions, Tools: tools}
 	}
-	add("admin", admin, config.Permissions(), lifecycleTools)
+	add("admin", admin, config.Effects(), lifecycleTools)
 	add("nodelete", admin, changes, lifecycleTools)
-	add("unlisted", admin, config.Permissions(), nil)
+	add("unlisted", admin, config.Effects(), nil)
 	add("patterns", []string{"orgs/octo-org/projects/*", "repos/octo-org/*"}, changes, nil)
 	add("owneronly", []string{"orgs/octo-org"}, changes, nil)
 	add("open", nil, changes, nil)

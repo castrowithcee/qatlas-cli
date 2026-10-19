@@ -426,10 +426,10 @@ func Register(reg *capability.Registry) error {
 			_, err := endpointsOf(raw)
 			return err
 		},
-		Description:        "Code hosting and software collaboration platform",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Groups:             toolGroups,
-		RenamedTools:       renamedTools,
+		Description:    "Code hosting and software collaboration platform",
+		DefaultEffects: []config.Effect{config.EffectRead},
+		Groups:         toolGroups,
+		RenamedTools:   renamedTools,
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "GitHub personal access token: classic with read:project plus repo or public_repo, or " +

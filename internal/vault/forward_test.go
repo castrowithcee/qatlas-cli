@@ -20,7 +20,7 @@ func forwardScope() Scope {
 func TestFingerprintWithoutForwardIsUnchanged(t *testing.T) {
 	scope := Scope{
 		Connection: "wiki", Credential: "wiki-reader", Provider: "bookstack", Origin: "https://wiki.example.invalid",
-		Permissions: []string{"read"}, Paths: []string{"/p"}, FilesRead: []string{"/r"},
+		Effects: []string{"read"}, Paths: []string{"/p"}, FilesRead: []string{"/r"},
 	}
 	if got := Fingerprint(scope, "id-1"); got != legacyFingerprint {
 		t.Errorf("Fingerprint() without forward = %s, want the stored legacy value %s", got, legacyFingerprint)

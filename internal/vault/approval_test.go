@@ -10,7 +10,7 @@ import (
 func wikiScope() Scope {
 	return Scope{
 		Connection: "wiki", Credential: "wiki-reader", Provider: "bookstack",
-		Origin: "https://wiki.example.test", Permissions: []string{"read", "create"}, Targets: []string{"b", "a"},
+		Origin: "https://wiki.example.test", Effects: []string{"read", "create"}, Targets: []string{"b", "a"},
 	}
 }
 
@@ -22,7 +22,7 @@ func TestFingerprintCoversTheScope(t *testing.T) {
 		t.Fatalf("Fingerprint() is not a stable sha256: %q", base)
 	}
 	reordered := wikiScope()
-	reordered.Permissions = []string{"create", "read"}
+	reordered.Effects = []string{"create", "read"}
 	reordered.Targets = []string{"a", "b"}
 	if Fingerprint(reordered, "id-1") != base {
 		t.Errorf("reordering permissions and targets changed the fingerprint")
@@ -37,7 +37,7 @@ func TestFingerprintCoversTheScope(t *testing.T) {
 		"credential":  func(s *Scope) { s.Credential = "other-reader" },
 		"provider":    func(s *Scope) { s.Provider = "nextcloud" },
 		"origin":      func(s *Scope) { s.Origin = "https://wiki.example.test/other" },
-		"permissions": func(s *Scope) { s.Permissions = []string{"read"} },
+		"permissions": func(s *Scope) { s.Effects = []string{"read"} },
 		"targets":     func(s *Scope) { s.Targets = []string{"a"} },
 		"tools empty": func(s *Scope) { s.Tools = []string{} },
 		"tools named": func(s *Scope) { s.Tools = []string{"bookstack.pages.list"} },

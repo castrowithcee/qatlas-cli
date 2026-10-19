@@ -414,12 +414,12 @@ func TestViewSortDescriptorsDeclareTheirRisk(t *testing.T) {
 func TestViewSortToolsNeedConfirmationAndTheToolsList(t *testing.T) {
 	calls := serveSorts(t, http.StatusCreated, sortWire(sortNewID, colView, sortFieldText, "ASC", ""))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: []string{viewsortsCreate.ID, viewsortsUpdate.ID}}
+		Effects: all, Tools: []string{viewsortsCreate.ID, viewsortsUpdate.ID}}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

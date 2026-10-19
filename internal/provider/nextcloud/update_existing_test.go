@@ -73,7 +73,7 @@ func TestUpdateOnlyConnectionCannotCreateAFile(t *testing.T) {
 	refuse(t)
 	cfg := coreConfig()
 	conn := cfg.Connections["reports"]
-	conn.Permissions = []config.Permission{config.PermissionRead, config.PermissionUpdate}
+	conn.Effects = []config.Effect{config.EffectRead, config.EffectUpdate}
 	cfg.Connections["reports"] = conn
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

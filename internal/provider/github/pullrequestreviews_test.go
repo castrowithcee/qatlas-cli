@@ -510,8 +510,8 @@ func TestPullRequestReviewsCreateAndApprove(t *testing.T) {
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["approver"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-		Tools:       []string{pullRequestReviewsApprove.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate},
+		Tools:   []string{pullRequestReviewsApprove.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
 	before := len(f.recorded())
@@ -818,8 +818,8 @@ func TestPullRequestReviewToolsSatisfyTheirContractThroughTheApplicationCoreWith
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["approver"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-		Tools:       []string{pullRequestReviewsApprove.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate},
+		Tools:   []string{pullRequestReviewsApprove.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 	var audit strings.Builder
 	core.SetAudit(&audit)

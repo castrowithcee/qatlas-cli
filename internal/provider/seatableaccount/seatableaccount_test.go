@@ -94,12 +94,12 @@ func testConfig() *config.Config {
 		Services:    map[string]config.Service{"account": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"token": credential},
 		Connections: map[string]config.Connection{
-			"reader": {Service: "account", Credential: "token", Permissions: []config.Permission{config.PermissionRead},
+			"reader": {Service: "account", Credential: "token", Effects: []config.Effect{config.EffectRead},
 				Target: ownTarget},
 			"restorer": {Service: "account", Credential: "token", Target: ownTarget,
-				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-				Tools:       []string{snapshotsList.ID, snapshotsRestore.ID}},
-			"broad": {Service: "account", Credential: "token", Target: ownTarget, Permissions: config.Permissions()},
+				Effects: []config.Effect{config.EffectRead, config.EffectCreate},
+				Tools:   []string{snapshotsList.ID, snapshotsRestore.ID}},
+			"broad": {Service: "account", Credential: "token", Target: ownTarget, Effects: config.Effects()},
 		},
 	}
 }

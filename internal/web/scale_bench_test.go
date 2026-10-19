@@ -38,7 +38,7 @@ func scaleOverview(units int) Overview {
 		})
 		overview.Connections = append(overview.Connections, ConnectionRow{
 			Name: fmt.Sprintf("conn-%05d", i), Provider: "book",
-			Description: fmt.Sprintf("synthetic route %d", i), Permissions: "read", Tools: "all",
+			Description: fmt.Sprintf("synthetic route %d", i), Effects: "read", Tools: "all",
 		})
 	}
 	return overview

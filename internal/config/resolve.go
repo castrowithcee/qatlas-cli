@@ -10,16 +10,16 @@ import "fmt"
 type Resolved struct {
 	Name string
 	// ID is the connection's config id, empty for a connection that has none yet.
-	ID          string
-	Provider    string
-	BaseURL     string
-	Options     map[string]string
-	Target      string
-	Targets     []string
-	Service     string
-	Credential  string
-	Secrets     Credential
-	Permissions []Permission
+	ID         string
+	Provider   string
+	BaseURL    string
+	Options    map[string]string
+	Target     string
+	Targets    []string
+	Service    string
+	Credential string
+	Secrets    Credential
+	Effects    []Effect
 	// Tools is the connection's tools list: nil when it has none, an empty list when it offers no tool.
 	Tools []string
 	// Paths is the connection's paths list as configured, nil when it applies in every project.
@@ -101,7 +101,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Service:        conn.Service,
 		Credential:     conn.Credential,
 		Secrets:        cred,
-		Permissions:    c.ConnectionPermissions(name),
+		Effects:        c.ConnectionEffects(name),
 		Tools:          conn.ToolsList(),
 		Paths:          append([]string(nil), conn.Paths...),
 		Files:          conn.Files.Clone(),

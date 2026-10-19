@@ -281,11 +281,11 @@ func TestDiscussionCommentsListWithRepliesIsBounded(t *testing.T) {
 
 func discussionWriteConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
-	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Permissions: all}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
+	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Effects: all}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all, Tools: []string{discussionCommentsDelete.ID}}
+		Effects: all, Tools: []string{discussionCommentsDelete.ID}}
 	return cfg
 }
 
