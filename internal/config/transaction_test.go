@@ -29,6 +29,9 @@ func TestMain(m *testing.M) {
 	add := func(cfg *Config) error {
 		return cfg.SetService(name, Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"})
 	}
+	if mode == lockWaitMode {
+		os.Exit(lockWaitWorker(store, name))
+	}
 	var err error
 	switch mode {
 	case "update":
