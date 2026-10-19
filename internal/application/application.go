@@ -1450,8 +1450,8 @@ func (c *Core) connectionRefusal(resolved *config.Resolved, descriptor capabilit
 // connection it is that connection's refusal. Otherwise a tool is offered when any connection of its
 // provider offers it; when none does, the refusal of the connection that comes closest wins, in the order
 // not-in-tools-list, requires-tool-allow-list, effect-not-permitted, with connection-disabled ahead of all
-// of them, and a provider without any connection is refused as no-connection. The choice is deterministic and names the smallest change that would offer
-// the tool.
+// of them, and a provider without any connection is refused as no-connection. The choice is deterministic
+// and names the smallest change that would offer the tool.
 func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) config.Refusal {
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)

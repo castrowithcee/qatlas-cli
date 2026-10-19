@@ -80,8 +80,9 @@ type model struct {
 // direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
 // V's, each with the same fields. A delete is covered when the
 // approval it removes was. A vorbild counts only while it is a connection in current and its approval still
-// reads the credential entry it was given for and is not disabled. A change to a connection that is the vorbild of any token is
-// never covered. A change from disabled to active is never covered. A change partly outside stays open whole.
+// reads the credential entry it was given for and is not disabled. A change to a connection that is the
+// vorbild of any token is never covered. A change from disabled to active is never covered. A change
+// partly outside stays open whole.
 //
 // It fails with ErrTokenUnknown for a value that matches no token, and with ErrTokenExpired for an expired
 // one, in which case the returned approval names it; nothing is written then.

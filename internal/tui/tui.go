@@ -235,6 +235,7 @@ const (
 	connectionServiceHint    = "the configured API endpoint this route uses; left/right chooses another instance"
 	connectionCredentialHint = "the provider credential this route authenticates with; secret values stay " +
 		"outside this file"
+	stateHint = "disabled keeps the whole selection but serves and lists nothing until it is active again"
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
 	// carry a secret out of this machine.
@@ -279,6 +280,13 @@ const (
 	profileHint   = "a starting selection, not a role: only the ticks below are saved, and they do not narrow " +
 		"what the credential itself may do at the provider"
 	profileCustomHint = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
+)
+
+// The state row of a connection form: a disabled connection keeps its selection but serves nothing.
+const (
+	stateLabel    = "state"
+	stateActive   = "active"
+	stateDisabled = "disabled"
 )
 
 // The tools modes of a connection. The first one is a connection without a tools list, the second one a
@@ -2754,6 +2762,8 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
+			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
+				withHint(stateHint),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
 			permissions,
 		)
@@ -2925,13 +2935,20 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Paths:          paths,
 			Files:          files,
 			ForwardSecrets: forward,
-			// The state is not a form field here: saving carries it over, from the copied entry for a copy.
-			Disabled: cfg.Connections[m.sourceEntry(name)].Disabled,
+			Disabled:       m.fieldValue(stateLabel) == stateDisabled,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
 	}
 	return nil
+}
+
+// connectionState is the value of the state row for a connection.
+func connectionState(disabled bool) string {
+	if disabled {
+		return stateDisabled
+	}
+	return stateActive
 }
 
 func (m *Model) remove(cfg *config.Config, name string) error {
@@ -4656,7 +4673,7 @@ var sectionColumns = map[section][]column{
 		{title: "STORAGE", optional: true, short: map[string]string{
 			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"}},
 		{title: "SECRETS", flex: true}},
-	sectionConnections: {{title: "NAME"}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
+	sectionConnections: {{title: "NAME"}, {title: "STATE", optional: true}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
 	sectionDefaults:  {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
 	sectionApprovals: {{title: "CONNECTION"}, {title: "CHANGE", flex: true}},
@@ -4725,7 +4742,8 @@ func (m *Model) cells(name string) []string {
 		if description == "" && m.needsDescription(name) {
 			description = undescribedMarker
 		}
-		return []string{name, conn.Service, strings.Join(effects, ","), tools, targets, description}
+		return []string{name, connectionState(conn.Disabled), conn.Service, strings.Join(effects, ","), tools,
+			targets, description}
 	case sectionDefaults:
 		return []string{name, m.cfg.Defaults.Connections[name]}
 	case sectionApprovals:

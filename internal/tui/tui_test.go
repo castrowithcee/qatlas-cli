@@ -728,7 +728,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
 		t.Fatalf("saved configuration = %+v, %v", saved, err)
 	}
-	if view := m.View(); !strings.Contains(view, "wiki  wiki     read") ||
+	if view := m.View(); !strings.Contains(view, "wiki  active  wiki     read") ||
 		!strings.Contains(view, "1 Services     1") {
 		t.Errorf("the workspace or the sidebar does not show the result:\n%s", view)
 	}
@@ -1595,8 +1595,8 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 		t.Fatalf("editor reported %q", m.fail)
 	}
 	view := listed()
-	for _, want := range []string{"wiki wiki read all - " + undescribedMarker,
-		"wiki-2 wiki read all - " + undescribedMarker, "sees only names and descriptions"} {
+	for _, want := range []string{"wiki active wiki read all - " + undescribedMarker,
+		"wiki-2 active wiki read all - " + undescribedMarker, "sees only names and descriptions"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list does not say %q:\n%s", want, screenOf(m))
 		}

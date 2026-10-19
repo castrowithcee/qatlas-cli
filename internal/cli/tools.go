@@ -173,8 +173,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"With --connection the reason is that connection's. Otherwise, where several connections refuse a\n" +
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
 			"connection-disabled, not-in-tools-list, requires-tool-allow-list, no-local-files,\n" +
-			"effect-not-permitted. 'qatlas tui'\n" +
-			"changes what a connection offers.\n\n" +
+			"effect-not-permitted. 'qatlas tui' changes what a connection offers.\n\n" +
 			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
 			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +

@@ -393,3 +393,29 @@ func TestServerServesOverRealLoopback(t *testing.T) {
 		t.Fatal("listener still accepting connections after shutdown")
 	}
 }
+
+// The overview names the state of every connection as a column of its own.
+func TestOverviewShowsConnectionState(t *testing.T) {
+	overview := testOverview()
+	overview.Connections = []ConnectionRow{
+		{Name: "on", Provider: "github", Permissions: "read", Tools: "all", State: "active"},
+		{Name: "off", Provider: "github", Permissions: "read", Tools: "all", State: "disabled"},
+	}
+	s, err := New(overview, nil, defaultTestAdminTimeout, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.close)
+	link, err := url.Parse(s.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	redeem := s.request(t, http.MethodGet, link.RequestURI(), s.addr, nil, nil)
+	cookie := redeem.Result().Cookies()[0]
+	body := s.request(t, http.MethodGet, "/", s.addr, cookie, nil).Body.String()
+	for _, want := range []string{`<th scope="col">State</th>`, "<td>active</td>", "<td>disabled</td>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("overview lacks %q", want)
+		}
+	}
+}

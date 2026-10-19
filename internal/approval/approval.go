@@ -426,8 +426,8 @@ func tools(values []string) string {
 // DirectApprovable reports whether change - a connection's own open change, found right after some action
 // that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
 // browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
-// targets, tools, its state, or a plain rename of its credential, never one "stored anew" (the vault holds a different
-// entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
+// targets, tools, its state, or a plain rename of its credential, never one "stored anew" (the vault holds
+// a different entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
 // connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
 // either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
 // replaced under the same name - left it open outside the fields the form shows, so saving unrelated fields
@@ -567,9 +567,10 @@ func VaultScopes(cfg *config.Config) ([]vault.Scope, error) {
 // LapsedModels names the vorbild connections of token that cover nothing now, sorted: one that is no
 // connection of cfg reading a vault credential any more, because it was renamed, deleted, or switched away
 // from the vault; one the vault unlocked in this process holds no approval for; and one whose approval was
-// given for a credential entry since removed or stored anew; and one that is disabled, as approved or as configured now. It is the same rule the vault applies when a
-// token approves (see vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about
-// exactly the vorbilder an approval would skip.
+// given for a credential entry since removed or stored anew; and one that is disabled, as approved or as
+// configured now. It is the same rule the vault applies when a token approves (see
+// vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about exactly the vorbilder
+// an approval would skip.
 func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]string, error) {
 	approvals, err := v.Approvals()
 	if err != nil {
