@@ -21,8 +21,19 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// Version is the only configuration schema version this build understands.
-const Version = 1
+// Schema versions this build reads. Version 2 adds the stable id of a service, a credential and a
+// connection.
+const (
+	versionNames = 1
+	versionIDs   = 2
+)
+
+// writeVersion is the schema version a new or saved configuration is written in. It is a variable only so a
+// test can write version 2; a configuration that was read as version 2 stays version 2.
+var writeVersion = versionNames
+
+// Version is the schema version a new configuration starts with.
+const Version = versionNames
 
 // Config is the whole configuration file.
 //
@@ -51,6 +62,10 @@ type Config struct {
 // Service is a technical API endpoint of one provider. BaseURL may be left out for a provider that declares
 // a default endpoint; ServiceBaseURL returns the endpoint that applies.
 type Service struct {
+	// ID is the stable, random, never reused identity of the entry within the services; the map key stays
+	// its name. It is no trust anchor: nothing an approval or fingerprint covers depends on it. An entry
+	// without one stays valid and gets one when Qatlas next saves.
+	ID       string            `yaml:"id,omitempty"`
 	Provider string            `yaml:"provider"`
 	BaseURL  string            `yaml:"base_url,omitempty"`
 	Options  map[string]string `yaml:"options,omitempty"`
@@ -72,6 +87,8 @@ type Service struct {
 // (Fields) whose values a tool may pass on to a third party by reference. It uses the vault or keyring type,
 // never env, and is never the credential of a connection. A connection releases it through forward_secrets.
 type Credential struct {
+	// ID is the stable identity of the credential; see Service.ID.
+	ID       string            `yaml:"id,omitempty"`
 	Provider string            `yaml:"provider,omitempty"`
 	Type     string            `yaml:"type"`
 	Values   map[string]string `yaml:"values,omitempty"`
@@ -105,6 +122,8 @@ type Credential struct {
 // local files. Missing, the connection gives no local file access at all. Unlike Paths it is a permission
 // and never a selector; see validateFiles.
 type Connection struct {
+	// ID is the stable identity of the connection; see Service.ID.
+	ID          string       `yaml:"id,omitempty"`
 	Service     string       `yaml:"service"`
 	Credential  string       `yaml:"credential"`
 	Target      string       `yaml:"target,omitempty"`
@@ -124,6 +143,7 @@ type Connection struct {
 // omitempty slice cannot represent both states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
+		ID             string        `yaml:"id,omitempty"`
 		Service        string        `yaml:"service"`
 		Credential     string        `yaml:"credential"`
 		Target         string        `yaml:"target,omitempty"`
@@ -145,7 +165,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		copy := append(make([]string, 0, len(c.Tools)), c.Tools...)
 		tools = &copy
 	}
-	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
+	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
 		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
 		ForwardSecrets: c.ForwardSecrets}, nil
 }
@@ -339,7 +359,19 @@ func Load(path string, providers ...ProviderCatalog) (*Config, error) {
 
 // Decode reads a configuration from r. Unknown keys and duplicate keys are errors.
 func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
-	dec := yaml.NewDecoder(r)
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	// The version is checked before the strict decoding, so a file of a newer schema reports its version
+	// instead of an unknown key. A file that does not parse at all is left to the strict decoding below.
+	var head struct {
+		Version int `yaml:"version"`
+	}
+	if yaml.Unmarshal(data, &head) == nil && head.Version != 0 && !knownVersion(head.Version) {
+		return nil, fmt.Errorf("version: got %d, want %s", head.Version, versionWant)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 
 	var cfg Config
@@ -367,6 +399,10 @@ func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	cfg.normalize()
 	return &cfg, nil
 }
+
+const versionWant = "1 or 2"
+
+func knownVersion(v int) bool { return v == versionNames || v == versionIDs }
 
 // yamlLine matches the position the YAML library puts in front of a message it can locate.
 var yamlLine = regexp.MustCompile(`^line (\d+): `)
@@ -440,8 +476,8 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.Version != Version {
-		report("version: got %d, want %d", c.Version, Version)
+	if !knownVersion(c.Version) {
+		report("version: got %d, want %s", c.Version, versionWant)
 	}
 
 	for _, name := range sortedKeys(c.Services) {
@@ -672,6 +708,8 @@ func (c *Config) Validate() error {
 	if c.Logs.RetentionDays < 0 {
 		report("logs.retention_days: must be a positive integer, got %d", c.Logs.RetentionDays)
 	}
+
+	c.validateIDs(report)
 
 	return errors.Join(problems...)
 }

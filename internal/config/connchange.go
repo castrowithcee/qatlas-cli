@@ -53,8 +53,10 @@ func ChangedConnections(before, after *Config) []ConnectionChange {
 
 // sameConnection compares two entries the way the file does: by their encoding, which keeps a missing list
 // and an explicitly empty one apart (see Connection.MarshalYAML) and ignores a nil list against an empty
-// one wherever the file does.
+// one wherever the file does. The id is not part of the comparison: assigning one is no change of the
+// connection.
 func sameConnection(a, b Connection) bool {
+	a.ID, b.ID = "", ""
 	ea, errA := yaml.Marshal(a)
 	eb, errB := yaml.Marshal(b)
 	if errA != nil || errB != nil {

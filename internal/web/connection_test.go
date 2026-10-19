@@ -627,3 +627,38 @@ func TestCreatedNoticeKeepsTheWarningsOwnPrefix(t *testing.T) {
 		}
 	}
 }
+
+// A schema-2 file keeps the ids of the entries a guided connection reuses and gives the new connection one.
+func TestGuidedConnectionKeepsStableIDs(t *testing.T) {
+	s, store, _, path := newConnectionTestServer(t, nil)
+	const idSvc, idCred = "00000000000000000000000000000001", "00000000000000000000000000000002"
+	file := "version: 2\nservices:\n  book-cloud:\n    id: " + idSvc + "\n    provider: book\n" +
+		"    base_url: https://books.example.test\ncredentials:\n  book-reader:\n    id: " + idCred +
+		"\n    provider: book\n    type: keyring\n"
+	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cookie, csrf := coupleAndApprove(t, s, nil)
+
+	values := url.Values{
+		"provider": {"book"}, "service": {"book-cloud"}, "credential": {"book-reader"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+	}
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+values.Encode(), s.addr, cookie, nil)
+	if review.Code != http.StatusOK {
+		t.Fatalf("GET review status = %d, body: %s", review.Code, review.Body.String())
+	}
+	values.Set("cfgver", extractHiddenValue(t, review.Body.String(), "cfgver"))
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, values)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Services["book-cloud"].ID != idSvc || cfg.Credentials["book-reader"].ID != idCred || cfg.Connections["book-conn"].ID == "" {
+		t.Errorf("ids = %q %q %q", cfg.Services["book-cloud"].ID, cfg.Credentials["book-reader"].ID, cfg.Connections["book-conn"].ID)
+	}
+}

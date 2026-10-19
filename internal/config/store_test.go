@@ -359,7 +359,7 @@ func TestFailedSaveLeavesTargetIntact(t *testing.T) {
 			name: "a wrong version is rejected",
 			prepare: func(t *testing.T, _ *Store) *Config {
 				cfg := sample(t)
-				cfg.Version = 2
+				cfg.Version = 99
 				return cfg
 			},
 			wantIn: "version",

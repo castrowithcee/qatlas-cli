@@ -246,7 +246,7 @@ defaults: {}
 func TestConfigValidateIsDeterministic(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, "version: 9\nservices:\n  b:\n    provider: nope\n    base_url: x\n  a:\n    provider: nope\n    base_url: y\n")
+	path := writeConfig(t, "version: 1\nservices:\n  b:\n    provider: nope\n    base_url: x\n  a:\n    provider: nope\n    base_url: y\n")
 
 	run := func() string {
 		var stdout, stderr bytes.Buffer
