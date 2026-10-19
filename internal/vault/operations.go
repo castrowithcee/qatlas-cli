@@ -71,6 +71,13 @@ func (v *Vault) Set(name, role, value string, offer PassphraseFunc) error {
 // pending file this call wrote, and a vault this call created is unlocked in this process. undo is nil when
 // err is not.
 func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (undo func() error, err error) {
+	return v.SetUndoableWithID(name, "", role, value, offer)
+}
+
+// SetUndoableWithID is SetUndoable that also records credentialID, the config id of the credential, in the
+// entry, or in the pending entry of a locked vault. An id the entry already has is kept; an empty
+// credentialID records nothing.
+func (v *Vault) SetUndoableWithID(name, credentialID, role, value string, offer PassphraseFunc) (undo func() error, err error) {
 	state, err := v.State()
 	if err != nil {
 		return nil, err
@@ -84,7 +91,7 @@ func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (und
 				return nil, err
 			}
 		}
-		if err := v.create(passphrase, name, role, value); err != nil {
+		if err := v.create(passphrase, name, credentialID, role, value); err != nil {
 			return nil, err
 		}
 		return func() error {
@@ -97,7 +104,7 @@ func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (und
 			return nil, err
 		}
 		old, had := roleOf(doc, name, role)
-		doc.setRole(name, role, value, time.Now().UTC())
+		doc.setRole(name, credentialID, role, value, time.Now().UTC())
 		if err := v.writePlain(doc); err != nil {
 			return nil, err
 		}
@@ -110,7 +117,7 @@ func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (und
 			return v.writePlain(doc)
 		}, nil
 	case StateLocked:
-		path, err := v.addPending(name, role, value)
+		path, err := v.addPending(name, credentialID, role, value)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +129,7 @@ func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (und
 		}, nil
 	case StateUnlocked:
 		old, had := roleOf(v.doc, name, role)
-		v.doc.setRole(name, role, value, time.Now().UTC())
+		v.doc.setRole(name, credentialID, role, value, time.Now().UTC())
 		if err := v.writeEncrypted(v.doc); err != nil {
 			return nil, err
 		}
@@ -137,7 +144,7 @@ func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (und
 // restoreRole sets a role back to the value it had, or removes it when it had none.
 func restoreRole(doc *document, name, role, old string, had bool) {
 	if had {
-		doc.setRole(name, role, old, time.Now().UTC())
+		doc.setRole(name, "", role, old, time.Now().UTC())
 		return
 	}
 	doc.deleteRole(name, role)
@@ -270,9 +277,9 @@ func (v *Vault) unlock(passphrase string) (int, error) {
 
 // create makes the vault's first entry, and with it the vault itself: unencrypted when passphrase is
 // empty, encrypted to a freshly generated key otherwise.
-func (v *Vault) create(passphrase, name, role, value string) error {
+func (v *Vault) create(passphrase, name, credentialID, role, value string) error {
 	doc := newDocument()
-	doc.setRole(name, role, value, time.Now().UTC())
+	doc.setRole(name, credentialID, role, value, time.Now().UTC())
 
 	if passphrase == "" {
 		return v.writePlain(doc)

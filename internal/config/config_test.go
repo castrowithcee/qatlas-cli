@@ -387,8 +387,8 @@ func TestDecodeRejects(t *testing.T) {
 		},
 		{
 			name:    "future version",
-			replace: [2]string{"version: 1", "version: 2"},
-			wantIn:  "version: got 2, want 1",
+			replace: [2]string{"version: 1", "version: 99"},
+			wantIn:  "version: got 99, want 1 or 2",
 		},
 		{
 			name:    "unknown top level key",
@@ -577,7 +577,7 @@ func TestADecodeErrorNeverQuotesTheFile(t *testing.T) {
 // Validate reports every problem at once rather than stopping at the first one.
 func TestValidateReportsAllProblems(t *testing.T) {
 	in := strings.NewReplacer(
-		"version: 1", "version: 3",
+		"version: 1", "version: 0",
 		"service: wiki", "service: absent",
 		"knowledge: wiki", "knowledge: absent",
 	).Replace(minimal)
@@ -587,7 +587,7 @@ func TestValidateReportsAllProblems(t *testing.T) {
 	if err == nil {
 		t.Fatal("Decode() = nil, want an error")
 	}
-	for _, want := range []string{"version: got 3", "unknown service", "unknown connection"} {
+	for _, want := range []string{"version: got 0", "unknown service", "unknown connection"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error is missing %q:\n%s", want, err)
 		}

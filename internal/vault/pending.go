@@ -11,12 +11,14 @@ import (
 )
 
 // pendingPayload is what a pending file decrypts to: the roles a locked Set added or changed for one
-// credential name. It carries no id: the id a merge assigns, or reuses, is decided by matching Name against
-// the vault's document, which is unreadable while the vault that wrote the pending file was locked.
+// credential name. It carries no entry id: the id a merge assigns, or reuses, is decided by matching Name
+// against the vault's document, which is unreadable while the vault that wrote the pending file was locked.
+// CredentialID is the config id of the credential and is merged like the roles.
 type pendingPayload struct {
-	Name     string            `json:"name"`
-	Roles    map[string]string `json:"roles"`
-	Modified time.Time         `json:"modified"`
+	Name         string            `json:"name"`
+	CredentialID string            `json:"credential_id,omitempty"`
+	Roles        map[string]string `json:"roles"`
+	Modified     time.Time         `json:"modified"`
 }
 
 // pendingFiles returns the *.age file names under pending, sorted, so a merge is deterministic. A missing
@@ -41,12 +43,12 @@ func (v *Vault) pendingFiles() ([]string, error) {
 
 // addPending writes one role's secret as a pending entry, encrypted to the vault's public recipient alone,
 // so it needs no passphrase. It is how Set stores a new or changed secret while the vault is locked.
-func (v *Vault) addPending(name, role, value string) (path string, err error) {
+func (v *Vault) addPending(name, credentialID, role, value string) (path string, err error) {
 	recipientPEM, err := readFile(v.recipientPath())
 	if err != nil {
 		return "", fmt.Errorf("cannot read %s: %w", v.recipientPath(), err)
 	}
-	payload := pendingPayload{Name: name, Roles: map[string]string{role: value}, Modified: time.Now().UTC()}
+	payload := pendingPayload{Name: name, CredentialID: credentialID, Roles: map[string]string{role: value}, Modified: time.Now().UTC()}
 	plain, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("cannot encode the pending entry for %s: %w", name, err)
@@ -101,6 +103,9 @@ func (d *document) mergePending(p pendingPayload) {
 	entry, ok := d.byName(p.Name)
 	if !ok {
 		entry = Entry{ID: newID(), Name: p.Name, Roles: map[string]string{}, Created: p.Modified}
+	}
+	if entry.CredentialID == "" {
+		entry.CredentialID = p.CredentialID
 	}
 	if entry.Roles == nil {
 		entry.Roles = map[string]string{}

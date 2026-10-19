@@ -413,3 +413,46 @@ func TestForVaultNamesItsVaultAndStoresNothing(t *testing.T) {
 		t.Fatalf("vault() = %v, want nil", got)
 	}
 }
+
+// A schema-2 file keeps the id of an entry the core rebuilds without one, gives a new entry an id, and the
+// assignment is no connection change.
+func TestSaveConfigKeepsStableIDs(t *testing.T) {
+	f := newFixture(t)
+	const idBase, idConn = "00000000000000000000000000000001", "00000000000000000000000000000002"
+	file := "version: 2\nservices:\n  s:\n    provider: docs\n    base_url: https://a.example\ncredentials:\n  base:\n    id: " + idBase +
+		"\n    type: keyring\nconnections:\n  c:\n    id: " + idConn + "\n    service: s\n    credential: base\n"
+	if err := os.WriteFile(f.path, []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.store = config.NewStore(f.path, setupCatalog{})
+	f.svc = New(f.store, f.secrets, connlog.SurfaceWeb, f.red).WithVaultProcessSupport(false)
+	before, rev, err := f.svc.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := before.Clone()
+	if err := after.SetCredential("base", config.Credential{Type: config.CredentialTypeKeyring, Provider: "docs"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := after.SetConnection("c", config.Connection{Service: "s", Credential: "base"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := after.SetCredential("fresh", config.Credential{Type: config.CredentialTypeKeyring}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.svc.SaveConfig(before, after, rev); err != nil {
+		t.Fatalf("SaveConfig() = %v", err)
+	}
+
+	saved, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Credentials["base"].ID != idBase || saved.Connections["c"].ID != idConn || saved.Credentials["fresh"].ID == "" {
+		t.Errorf("ids = %q %q %q", saved.Credentials["base"].ID, saved.Connections["c"].ID, saved.Credentials["fresh"].ID)
+	}
+	if got := config.ChangedConnections(before, saved); len(got) != 0 {
+		t.Errorf("ChangedConnections() = %v, want none", got)
+	}
+}

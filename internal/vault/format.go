@@ -15,14 +15,17 @@ import (
 // Entry is one credential's secrets in the vault. Id is random and fixed for the life of the entry, so a
 // pending write can be merged into the entry it belongs to by name even though the id was chosen without
 // seeing the vault's content. Name is the credential name it belongs to; Roles holds one secret per role.
-// A vault entry carries no configuration value beyond the name: everything else a credential needs, such
-// as its provider or its type, stays in config.yaml.
+// CredentialID is the stable id of the credential in config.yaml, not the entry's own ID and not part of any
+// fingerprint. It is set once, never replaced, and an older build ignores it. A vault entry carries no
+// configuration value beyond the name and that id: everything else a credential needs, such as its provider
+// or its type, stays in config.yaml.
 type Entry struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Roles    map[string]string `json:"roles"`
-	Created  time.Time         `json:"created"`
-	Modified time.Time         `json:"modified"`
+	ID           string            `json:"id"`
+	CredentialID string            `json:"credential_id,omitempty"`
+	Name         string            `json:"name"`
+	Roles        map[string]string `json:"roles"`
+	Created      time.Time         `json:"created"`
+	Modified     time.Time         `json:"modified"`
 }
 
 // document is the JSON shape held by secrets.json and, encrypted, by secrets.age. Approvals, by connection
@@ -51,10 +54,13 @@ func (d *document) byName(name string) (Entry, bool) {
 
 // setRole stores one role's secret under the entry named name, creating the entry when it does not exist
 // yet. now is passed in so a test can make the metadata deterministic.
-func (d *document) setRole(name, role, value string, now time.Time) {
+func (d *document) setRole(name, credentialID, role, value string, now time.Time) {
 	entry, ok := d.byName(name)
 	if !ok {
 		entry = Entry{ID: newID(), Name: name, Roles: map[string]string{}, Created: now}
+	}
+	if entry.CredentialID == "" {
+		entry.CredentialID = credentialID
 	}
 	if entry.Roles == nil {
 		entry.Roles = map[string]string{}
