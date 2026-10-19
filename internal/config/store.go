@@ -94,7 +94,7 @@ func cloneStrings(m map[string]string) map[string]string {
 // New returns an empty configuration of the current schema version.
 func New(providers ...ProviderCatalog) *Config {
 	return &Config{
-		Version:     Version,
+		Version:     writeVersion,
 		Services:    map[string]Service{},
 		Credentials: map[string]Credential{},
 		Connections: map[string]Connection{},
@@ -137,7 +137,7 @@ func (s *Store) Save(cfg *Config) error {
 		return &InvalidError{Path: s.path, Err: err}
 	}
 
-	data, err := s.marshal(cfg)
+	data, err := s.encode(cfg)
 	if err != nil {
 		return &InvalidError{Path: s.path, Err: fmt.Errorf("the configuration could not be encoded: %w", err)}
 	}
@@ -152,6 +152,18 @@ func (s *Store) Save(cfg *Config) error {
 		return err
 	}
 	return s.replace(data)
+}
+
+// encode returns the file form of cfg. A configuration is written in schema 2 once either the file was read
+// as schema 2 or writeVersion says so; the ids missing from it are assigned first, in cfg itself. Otherwise
+// it is written in schema 1 without ids, because released versions reject an id key.
+func (s *Store) encode(cfg *Config) ([]byte, error) {
+	if cfg.Version >= versionIDs || writeVersion >= versionIDs {
+		cfg.assignIDs()
+		cfg.Version = versionIDs
+		return s.marshal(cfg)
+	}
+	return s.marshal(cfg.withoutIDs())
 }
 
 // replace writes data next to the target and moves it into place. Both steps happen inside the target
@@ -214,6 +226,9 @@ func (c *Config) SetService(name string, s Service) error {
 		return errors.New("a service name must not be empty")
 	}
 	c.ensure()
+	if s.ID == "" {
+		s.ID = c.Services[name].ID
+	}
 	c.Services[name] = s
 	return nil
 }
@@ -243,6 +258,9 @@ func (c *Config) SetCredential(name string, cred Credential) error {
 		return errors.New("a credential name must not be empty")
 	}
 	c.ensure()
+	if cred.ID == "" {
+		cred.ID = c.Credentials[name].ID
+	}
 	c.Credentials[name] = cred
 	return nil
 }
@@ -272,6 +290,9 @@ func (c *Config) SetConnection(name string, conn Connection) error {
 		return errors.New("a connection name must not be empty")
 	}
 	c.ensure()
+	if conn.ID == "" {
+		conn.ID = c.Connections[name].ID
+	}
 	conn.Description = normalizeDescription(conn.Description)
 	c.Connections[name] = conn
 	return nil
