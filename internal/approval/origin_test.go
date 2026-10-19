@@ -121,3 +121,41 @@ func TestOriginsUnreadableLogIsUnknown(t *testing.T) {
 		t.Fatalf("origin = %+v / %q", got, got.Text())
 	}
 }
+
+// A rename changes no scope: it explains nothing itself, and past it the change is looked for under the name
+// the connection had before.
+func TestOriginsFollowARename(t *testing.T) {
+	dir := t.TempDir()
+	logger := invokelog.New(dir, 90)
+	logChange(t, logger, "tui", invokelog.OperationConnectionChange, "alpha")
+	rename := invokelog.Fields{Path: "cli", Operation: invokelog.OperationConnectionRename, Connection: "beta",
+		FormerConnection: "alpha", Effect: "update", Result: "success"}
+	if err := rename.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.Append(rename); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	change := Change{Connection: "beta", Approved: now.Add(-time.Hour)}
+	got := Origins(dir, nil, []Change{change}, now, now, 90)["beta"]
+	if got.Source != OriginTUI || got.As != "alpha" || got.Seq != 1 {
+		t.Fatalf("origin = %+v, want the tui change made under the former name", got)
+	}
+	if text := got.Text(); !strings.Contains(text, "changed in qatlas tui") || !strings.Contains(text, "then named alpha") {
+		t.Fatalf("Text() = %q", text)
+	}
+
+	logChange(t, logger, "web", invokelog.OperationConnectionChange, "beta")
+	if got := Origins(dir, nil, []Change{change}, now, now, 90)["beta"]; got.Source != OriginWeb || got.As != "" {
+		t.Fatalf("origin = %+v, want the later web change under the new name", got)
+	}
+
+	renamedOnly := t.TempDir()
+	if err := invokelog.New(renamedOnly, 90).Append(rename); err != nil {
+		t.Fatal(err)
+	}
+	if got := Origins(renamedOnly, nil, []Change{change}, now, now, 90)["beta"]; got.Source != OriginOutside {
+		t.Fatalf("origin = %+v, want outside: a rename alone explains no change", got)
+	}
+}

@@ -123,6 +123,8 @@ func TestVaultManagementCommandsRequireATerminal(t *testing.T) {
 		{"vault", "decrypt", "--confirm"},
 		{"vault", "migrate"},
 		{"vault", "approve"},
+		{"config", "rename", "connection", "wiki", "wiki-main"},
+		{"config", "rename", "service", "wiki", "wiki-eu"},
 	} {
 		full := append(append([]string{}, args...), "--config", configIn(dir))
 		code, stdout, stderr := runWithInput(t, &Options{}, "", full...)

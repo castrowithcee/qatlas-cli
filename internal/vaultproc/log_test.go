@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -257,5 +258,21 @@ func TestLogRequestNeverCarriesTheKey(t *testing.T) {
 	encoded := strings.ToLower(resp.Value + string(resp.Proof))
 	if strings.Contains(encoded, strings.ToLower(testKey.String())) {
 		t.Fatal("the answer holds the vault key")
+	}
+}
+
+func TestLogEntryCarriesTheRenameFields(t *testing.T) {
+	f := invokelog.Fields{Path: "cli", Operation: invokelog.OperationConnectionRename, Connection: "new",
+		ConnectionID: "0123456789abcdef0123456789abcdef", FormerConnection: "old", Effect: "update", Result: "success"}
+	data, err := json.Marshal(logEntryOf(f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded logEntry
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded.fields(); !reflect.DeepEqual(got, f) {
+		t.Fatalf("fields = %+v, want %+v", got, f)
 	}
 }

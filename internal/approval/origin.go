@@ -39,6 +39,8 @@ type Origin struct {
 	Verified bool
 	// Credential names the vault credential of OriginVault.
 	Credential string
+	// As is the name the connection had when the change was logged, where it was renamed since; "" otherwise.
+	As string
 }
 
 // Text is the origin as one line a person reads, times in the local zone. It holds no value of the
@@ -53,6 +55,9 @@ func (o Origin) Text() string {
 	switch o.Source {
 	case OriginTUI, OriginWeb, OriginCLI:
 		text := "changed in qatlas " + o.Source + when(", ")
+		if o.As != "" {
+			text += ", then named " + o.As
+		}
 		if !o.Verified {
 			text += " (unverified)"
 		}
@@ -91,7 +96,8 @@ func LogWindow(change Change, now time.Time, retentionDays int) time.Time {
 }
 
 // Origins finds the origin of every change that has one to find: for each, the youngest log entry
-// config.connection.create or .change of that connection written after its last approval, read from the day
+// config.connection.create or .change of that connection written after its last approval, under its current
+// name or, past a config.connection.rename entry, under the name it had before, read from the day
 // files of vaultDir since the oldest such approval (a connection never approved is looked up over the last
 // retentionDays days) and checked with checker, which may be nil. A change whose only difference is a
 // credential stored anew is OriginVault and needs no log. Where no entry is found, the change was made
@@ -130,25 +136,35 @@ func Origins(vaultDir string, checker invokelog.Checker, changes []Change, confi
 	return out
 }
 
-// originOf walks days from the youngest line back and stops at the first entry that explains change.
+// originOf walks days from the youngest line back and stops at the first entry that explains change. A rename
+// changes no scope, so it explains nothing itself: past it the walk looks for the name the connection had.
 func originOf(change Change, days []invokelog.DayLines, configModTime, after time.Time) Origin {
+	name := change.Connection
 	for i := len(days) - 1; i >= 0; i-- {
 		lines := days[i].Lines
 		for j := len(lines) - 1; j >= 0; j-- {
 			line := lines[j]
 			e := line.Entry
-			if !line.Parsed || e.Kind != "" || e.Connection != change.Connection || e.Result != "success" ||
+			if !line.Parsed || e.Kind != "" || e.Connection != name || e.Result != "success" ||
 				e.Time.IsZero() || !e.Time.After(after) {
-				continue
-			}
-			if e.Operation != invokelog.OperationConnectionCreate && e.Operation != invokelog.OperationConnectionChange {
 				continue
 			}
 			if e.Path != OriginTUI && e.Path != OriginWeb && e.Path != OriginCLI {
 				continue
 			}
-			return Origin{Source: e.Path, Time: e.Time, Seq: e.Seq,
+			if e.Operation == invokelog.OperationConnectionRename && e.FormerConnection != "" {
+				name = e.FormerConnection
+				continue
+			}
+			if e.Operation != invokelog.OperationConnectionCreate && e.Operation != invokelog.OperationConnectionChange {
+				continue
+			}
+			origin := Origin{Source: e.Path, Time: e.Time, Seq: e.Seq,
 				Verified: line.MAC == invokelog.MACValid && line.Chain == invokelog.ChainIntact}
+			if name != change.Connection {
+				origin.As = name
+			}
+			return origin
 		}
 	}
 	return Origin{Source: OriginOutside, Time: configModTime}

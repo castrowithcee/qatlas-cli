@@ -120,7 +120,7 @@ func (r *Recorder) Record(before, after *config.Config) error {
 	for _, change := range Changes(before, after) {
 		fields := invokelog.Fields{
 			Path: r.Surface, Operation: operationOf(change.Kind), Connection: change.Name,
-			Effect: change.Kind, Result: "success",
+			ConnectionID: connectionID(before, after, change), Effect: change.Kind, Result: "success",
 		}
 		if err := fields.Validate(); err != nil {
 			invalid = errors.New("a connection name could not be logged: " + err.Error())
@@ -145,6 +145,44 @@ func (r *Recorder) Record(before, after *config.Config) error {
 		return fmt.Errorf("the change was saved and logged, but unsigned: %w", unsigned)
 	}
 	return nil
+}
+
+// RecordRename appends the entry of the connection with the config id id that was renamed from old to name,
+// one entry and never a delete and a create. Call it only after the rename was committed to the configuration
+// file; a failure is returned the way Record returns one.
+func (r *Recorder) RecordRename(old, name, id string) error {
+	if r == nil || r.Writer == nil {
+		return nil
+	}
+	fields := invokelog.Fields{
+		Path: r.Surface, Operation: invokelog.OperationConnectionRename, Connection: name, ConnectionID: id,
+		FormerConnection: old, Effect: "update", Result: "success",
+	}
+	if err := fields.Validate(); err != nil {
+		return errors.New("the rename was saved, but it could not be logged: " + err.Error())
+	}
+	err := r.Writer.Append(fields)
+	var unsigned *invokelog.UnsignedError
+	switch {
+	case errors.As(err, &unsigned):
+		return fmt.Errorf("the rename was saved and logged, but unsigned: %w", err)
+	case err != nil:
+		return fmt.Errorf("the rename was saved, but the log entry could not be written: %w", err)
+	}
+	return nil
+}
+
+// connectionID is the config id of the connection change names: as after holds it, or as before held a
+// deleted one.
+func connectionID(before, after *config.Config, change config.ConnectionChange) string {
+	cfg := after
+	if change.Kind == config.ConnectionDeleted {
+		cfg = before
+	}
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Connections[change.Name].ID
 }
 
 func operationOf(kind string) string {

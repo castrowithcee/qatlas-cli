@@ -297,6 +297,33 @@ defaults:
 		}
 	})
 
+	// A rename at a terminal carries the approval over and hands it to the vault process, so the renamed
+	// connection is used at once without a new approval; renaming it back restores what the rest expects.
+	t.Run("a connection renamed at a terminal keeps its approval", func(t *testing.T) {
+		for _, step := range []struct{ old, name string }{{"wiki", "wiki-main"}, {"wiki-main", "wiki"}} {
+			out, code := runAtTerminal(t, c, passphrase+"\ny\n", "config", "rename", "connection", step.old, step.name)
+			if code != 0 || !strings.Contains(out, "approved; carried over") ||
+				!strings.Contains(out, "renamed connection "+step.old+" to "+step.name) {
+				t.Fatalf("rename %s: exit %d, output %q", step.old, code, out)
+			}
+			if strings.Contains(out, passphrase) {
+				t.Errorf("the passphrase was echoed: %q", out)
+			}
+			code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+			if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
+				t.Fatalf("invoke after renaming to %s: exit %d, stdout %q, stderr %q", step.name, code, stdout, stderr)
+			}
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"`+step.name+`"}`, "qatlas.invoke")
+			if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
+				t.Errorf("MCP invoke through %s = %s, want the page", step.name, invoke.Result.Structured)
+			}
+		}
+		code, stdout, stderr := c.run(t, "vault", "logs", "verify", "--output", "json")
+		if code != 0 || !strings.Contains(stdout, `"broken":false`) {
+			t.Errorf("vault logs verify: exit %d, stdout %q, stderr %q, want an intact chain", code, stdout, stderr)
+		}
+	})
+
 	t.Run("vault lock locks the vault again", func(t *testing.T) {
 		code, stdout, stderr := c.run(t, "vault", "lock")
 		if code != 0 || !strings.Contains(stdout, "the vault is locked") {
