@@ -73,18 +73,9 @@ func (v *Vault) mergePending(id *identity, doc *document) (int, error) {
 	// A payload with only a credential id goes last, so it finds an entry a pending secret creates.
 	var idsOnly []pendingPayload
 	for _, name := range names {
-		path := filepath.Join(v.pendingPath(), name)
-		data, err := readFile(path)
+		payload, _, err := v.readPending(id, name)
 		if err != nil {
-			return 0, fmt.Errorf("cannot read %s: %w", path, err)
-		}
-		plain, err := decryptFrom(data, id.key)
-		if err != nil {
-			return 0, fmt.Errorf("cannot decrypt %s: %w", path, err)
-		}
-		var payload pendingPayload
-		if err := json.Unmarshal(plain, &payload); err != nil {
-			return 0, fmt.Errorf("%s does not hold a valid pending entry", path)
+			return 0, err
 		}
 		if len(payload.Roles) == 0 {
 			idsOnly = append(idsOnly, payload)
@@ -96,6 +87,24 @@ func (v *Vault) mergePending(id *identity, doc *document) (int, error) {
 		doc.mergePending(payload)
 	}
 	return len(names), nil
+}
+
+// readPending decrypts the pending file name and returns its payload and its very bytes.
+func (v *Vault) readPending(id *identity, name string) (pendingPayload, []byte, error) {
+	path := filepath.Join(v.pendingPath(), name)
+	data, err := readFile(path)
+	if err != nil {
+		return pendingPayload{}, nil, fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	plain, err := decryptFrom(data, id.key)
+	if err != nil {
+		return pendingPayload{}, nil, fmt.Errorf("cannot decrypt %s: %w", path, err)
+	}
+	var payload pendingPayload
+	if err := json.Unmarshal(plain, &payload); err != nil {
+		return pendingPayload{}, nil, fmt.Errorf("%s does not hold a valid pending entry", path)
+	}
+	return payload, data, nil
 }
 
 // removePending deletes the given pending files after they were merged and the document that absorbed them

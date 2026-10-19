@@ -203,8 +203,8 @@ func TestSavingAConnectionKeepsItsFiles(t *testing.T) {
 	}
 }
 
-// A direction the provider has no tool for is refused on save by the core; the message names the position,
-// never the path.
+// A direction the provider has no tool for is refused on save by the core; the refusal stands under the direction's
+// row, never quoting the path.
 func TestSavingFilesWithoutADirectionIsRefused(t *testing.T) {
 	m, path, catalog := filesModel(t, config.LocalFilesSupport{Read: true},
 		map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
@@ -212,11 +212,14 @@ func TestSavingFilesWithoutADirectionIsRefused(t *testing.T) {
 	f := m.field(filesWriteLabel)
 	f.hidden, f.entries = false, []string{"/srv/private-out"}
 	pump(t, m, "f2")
-	if !strings.Contains(m.fail, "files.write") {
-		t.Fatalf("save was not refused for the write direction: %q", m.fail)
+	if len(m.problems.rows[filesWriteLabel]) != 1 {
+		t.Fatalf("save was not refused under the write direction: %v", m.problems)
 	}
-	if strings.Contains(m.fail, "private-out") {
-		t.Fatalf("the refusal quotes the path: %q", m.fail)
+	if shown := refusal(m); strings.Contains(shown, "files.write") {
+		t.Fatalf("the refusal names the key: %q", shown)
+	}
+	if strings.Contains(strings.Join(m.problems.rows[filesWriteLabel], ""), "private-out") {
+		t.Fatalf("the refusal quotes the path: %v", m.problems.rows)
 	}
 	if got := savedFilesConnection(t, path, catalog, "wiki").Files; !got.Empty() {
 		t.Fatalf("files were saved: %+v", got)

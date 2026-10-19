@@ -88,7 +88,7 @@ type ConnectionDraft struct {
 	Storage       string
 	EnvNames      map[string]string
 
-	// The connection. Permissions is the comma-separated form of config.ParseEffects: empty keeps the
+	// The connection. Effects is the comma-separated form of config.ParseEffects: empty keeps the
 	// provider's defaults, "none" allows nothing. With ToolsSelected, Tools is the explicit selection, and
 	// no tool outside it is enabled, an empty one included; without it the connection offers every tool.
 	Name          string

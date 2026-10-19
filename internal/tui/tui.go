@@ -235,6 +235,7 @@ const (
 	connectionServiceHint    = "the configured API endpoint this route uses; left/right chooses another instance"
 	connectionCredentialHint = "the provider credential this route authenticates with; secret values stay " +
 		"outside this file"
+	stateHint = "disabled keeps the whole selection but serves and lists nothing until it is active again"
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
 	// carry a secret out of this machine.
@@ -279,6 +280,13 @@ const (
 	profileHint   = "a starting selection, not a role: only the ticks below are saved, and they do not narrow " +
 		"what the credential itself may do at the provider"
 	profileCustomHint = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
+)
+
+// The state row of a connection form: a disabled connection keeps its selection but serves nothing.
+const (
+	stateLabel    = "state"
+	stateActive   = "active"
+	stateDisabled = "disabled"
 )
 
 // The tools modes of a connection. The first one is a connection without a tools list, the second one a
@@ -389,6 +397,8 @@ type Model struct {
 	// the management service offers. Nothing else reads or writes through it.
 	store *config.Store
 	cfg   *config.Config
+	// problems are the validation problems of the last refused save or deletion (see problems.go).
+	problems problemState
 
 	screen screen
 	// section is the active section: the one the sidebar marks and whose entries, with their filter,
@@ -2471,6 +2481,7 @@ func (m *Model) showList() tea.Cmd {
 	m.editing, m.copyFrom = "", ""
 	m.confirmRole = ""
 	m.clearMessages()
+	m.problems = problemState{}
 	if m.section == sectionVault {
 		// Vault has no list of its own, so "the list" a form or confirmation returns to is the level above
 		// it, the sidebar; openSection is what opens the form directly on the way in (see enterVaultSection).
@@ -2546,6 +2557,7 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	m.editing, m.copyFrom = name, source
 	m.screen = screenForm
 	m.clearMessages()
+	m.problems = problemState{}
 	m.fields = m.buildFieldsFrom(name, source)
 	if m.section == sectionConnections {
 		// A new connection starts on the recommended profile, ticked and visible; a saved one opens as it
@@ -2754,6 +2766,8 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
+			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
+				withHint(stateHint),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
 			permissions,
 		)
@@ -2811,14 +2825,15 @@ func (m *Model) save(name string) tea.Cmd {
 	before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 	previous := m.cfg
 	candidate := m.cfg.Clone()
+	m.problems = problemState{}
 	if err := m.apply(candidate, name); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+		m.reportSaveError(err, name, true)
 		return nil
 	}
 	logged, err := m.svc.SaveConfig(previous, candidate, m.rev)
 	if err != nil {
 		if !m.conflicted(err) {
-			m.fail = m.redactor.Apply(err.Error())
+			m.reportSaveError(err, name, true)
 		}
 		return nil
 	}
@@ -2925,11 +2940,20 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Paths:          paths,
 			Files:          files,
 			ForwardSecrets: forward,
+			Disabled:       m.fieldValue(stateLabel) == stateDisabled,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
 	}
 	return nil
+}
+
+// connectionState is the value of the state row for a connection.
+func connectionState(disabled bool) string {
+	if disabled {
+		return stateDisabled
+	}
+	return stateActive
 }
 
 func (m *Model) remove(cfg *config.Config, name string) error {
@@ -2960,15 +2984,16 @@ func (m *Model) delete() tea.Cmd {
 
 	previous := m.cfg
 	candidate := m.cfg.Clone()
+	m.problems = problemState{}
 	if err := m.remove(candidate, name); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+		m.reportSaveError(err, name, false)
 		m.screen = screenList
 		return nil
 	}
 	logged, err := m.svc.SaveConfig(previous, candidate, m.rev)
 	if err != nil {
 		if !m.conflicted(err) {
-			m.fail = m.redactor.Apply(err.Error())
+			m.reportSaveError(err, name, false)
 		}
 		m.screen = screenList
 		return nil
@@ -3080,7 +3105,13 @@ func (m *Model) applyFocus() {
 	}
 }
 
-func (m *Model) clearMessages() { m.status, m.fail = "", "" }
+func (m *Model) clearMessages() {
+	m.status, m.fail = "", ""
+	if m.fields == nil {
+		// Without a form, no row remains to carry the problems of a refused deletion.
+		m.problems = problemState{}
+	}
+}
 
 func textField(label, value string, readOnly bool) field {
 	in := textinput.New()
@@ -3450,6 +3481,7 @@ func (m *Model) editorView() string {
 		} else {
 			b.WriteString(titleStyle.Render(what) + "\n\n")
 		}
+		b.WriteString(m.otherProblems())
 		for i, f := range m.fields {
 			if f.hidden {
 				continue
@@ -3472,6 +3504,11 @@ func (m *Model) editorView() string {
 			// an idle connection) matters whether or not the field is the one focused, so it always stands.
 			if warning := m.fieldWarning(f); warning != "" {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
+			}
+			// A refused save names its cause and its resolution under the row it concerns. The symbol, not
+			// only the colour, marks the line as an error.
+			for _, line := range m.fieldProblems(f) {
+				b.WriteString(m.indentedWith(failStyle, "[!] "+line) + "\n")
 			}
 		}
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
@@ -3690,6 +3727,12 @@ func (m *Model) notes() string {
 	for _, note := range []string{m.busy, m.probing} {
 		if note != "" {
 			b.WriteString("\n\n" + m.wrapped(hintStyle, note+" ... (the editor stays usable)"))
+		}
+	}
+	if m.fields == nil || m.screen == screenSummary {
+		// A refused deletion has no form to stand above, nor has the summary of the setup.
+		if other := m.otherProblems(); other != "" {
+			b.WriteString("\n\n" + strings.TrimRight(other, "\n"))
 		}
 	}
 	if m.fail != "" {
@@ -4654,7 +4697,7 @@ var sectionColumns = map[section][]column{
 		{title: "STORAGE", optional: true, short: map[string]string{
 			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"}},
 		{title: "SECRETS", flex: true}},
-	sectionConnections: {{title: "NAME"}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
+	sectionConnections: {{title: "NAME"}, {title: "STATE", optional: true}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
 	sectionDefaults:  {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
 	sectionApprovals: {{title: "CONNECTION"}, {title: "CHANGE", flex: true}},
@@ -4723,7 +4766,8 @@ func (m *Model) cells(name string) []string {
 		if description == "" && m.needsDescription(name) {
 			description = undescribedMarker
 		}
-		return []string{name, conn.Service, strings.Join(effects, ","), tools, targets, description}
+		return []string{name, connectionState(conn.Disabled), conn.Service, strings.Join(effects, ","), tools,
+			targets, description}
 	case sectionDefaults:
 		return []string{name, m.cfg.Defaults.Connections[name]}
 	case sectionApprovals:

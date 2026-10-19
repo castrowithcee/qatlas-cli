@@ -274,9 +274,11 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	clearField(t, m)
 	typeText(t, m, "ftp://archive.example.invalid")
 	press(t, m, "f2")
-	if m.wizard.step != stepService || !strings.Contains(m.fail, "base_url") {
+	if m.wizard.step != stepService || m.fail != "1 problem; nothing was saved" ||
+		len(m.problems.rows["base url"]) != 1 {
 		t.Fatalf("the core did not refuse the base url in its step: step %d, error %q", m.wizard.step, m.fail)
 	}
+	assertNoLocation(t, screenOf(m))
 	if m.fieldValue("name") != "archive" || m.fieldValue("base url") != "ftp://archive.example.invalid" {
 		t.Errorf("the refused step lost its input: %q %q", m.fieldValue("name"), m.fieldValue("base url"))
 	}
@@ -346,7 +348,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 			t.Fatal(err)
 		}
 		pump(t, m, "f2")
-		if m.wizard.saved != "" || !strings.Contains(m.fail, "the configuration was not changed") {
+		if m.wizard.saved != "" || m.fail == "" {
 			t.Fatalf("a failed write was not reported: %q", m.fail)
 		}
 		assertNoCanary(t, "the error", m.fail)

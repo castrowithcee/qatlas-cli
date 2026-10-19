@@ -69,9 +69,15 @@ type renameWorld struct {
 
 func newRenameWorld(t *testing.T) renameWorld {
 	t.Helper()
+	return newRenameWorldWith(t, renameConfig)
+}
+
+// newRenameWorldWith is newRenameWorld over the configuration text.
+func newRenameWorldWith(t *testing.T, text string) renameWorld {
+	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte(renameConfig), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := config.NewStore(path, setupCatalog{})
@@ -343,7 +349,7 @@ func TestRenameRefusesNamesTakenOrClaimed(t *testing.T) {
 		{"missing entry", RenameConnection, "nothing", "something", "does not exist"},
 		{"a token's vorbild", RenameConnection, "vault-wiki", "ghost", "names ghost as a vorbild"},
 		{"another connection's approval", RenameConnection, "vault-wiki", "gone", "stale approval under the name gone"},
-		{"credential", RenameCredential, "vault-reader", "reader", "cannot be renamed"},
+		{"unknown kind", "provider", "docs", "pages", "cannot be renamed"},
 	}
 	before := files(t, w.dir)
 	for _, c := range cases {

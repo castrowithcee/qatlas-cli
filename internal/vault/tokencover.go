@@ -27,6 +27,8 @@ const (
 	GapPaths       = "paths"
 	GapFiles       = "files"
 	GapForward     = "forward"
+	// GapState marks a switch of a connection from disabled to active, which no token covers.
+	GapState = "state"
 	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
 	// token may change or delete.
 	GapVorbild = "vorbild"
@@ -78,8 +80,9 @@ type model struct {
 // direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
 // V's, each with the same fields. A delete is covered when the
 // approval it removes was. A vorbild counts only while it is a connection in current and its approval still
-// reads the credential entry it was given for. A change to a connection that is the vorbild of any token is
-// never covered. A change partly outside stays open whole.
+// reads the credential entry it was given for and is not disabled. A change to a connection that is the
+// vorbild of any token is never covered. A change from disabled to active is never covered. A change
+// partly outside stays open whole.
 //
 // It fails with ErrTokenUnknown for a value that matches no token, and with ErrTokenExpired for an expired
 // one, in which case the returned approval names it; nothing is written then.
@@ -114,8 +117,9 @@ func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, n
 	var models []model
 	for _, name := range token.Models {
 		approval, approved := doc.Approvals[name]
-		_, exists := configured[name]
-		if !approved || !exists || ids[approval.Scope.Credential] != approval.CredentialID {
+		conf, exists := configured[name]
+		if !approved || !exists || ids[approval.Scope.Credential] != approval.CredentialID ||
+			approval.Scope.Disabled || conf.Disabled {
 			result.Lapsed = append(result.Lapsed, name)
 			continue
 		}
@@ -187,6 +191,11 @@ func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, n
 			change.Gaps = []string{GapVorbild}
 		default:
 			change.Gaps = bestCover(models, c.scope, c.id)
+		}
+		// Switching a connection on again widens what its credential reaches, whatever a vorbild allows.
+		if old, ok := doc.Approvals[change.Connection]; ok && change.Kind == ChangeUpdate &&
+			old.Scope.Disabled && !c.scope.Disabled {
+			change.Gaps = append(change.Gaps, GapState)
 		}
 		if len(change.Gaps) == 0 {
 			change.Approved, written = true, true

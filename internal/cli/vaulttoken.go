@@ -50,8 +50,8 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"where V is bound to any, so a bound vorbild never covers a connection without paths. V counts as\n" +
 			"it is approved, not as it may be configured now. A change partly outside stays open whole, and a\n" +
 			"connection that is the vorbild of any token is never changed or deleted with a token. A vorbild\n" +
-			"that was renamed, deleted, is not approved, or reads a credential stored anew covers nothing;\n" +
-			"'list' and 'show' warn about it.\n\n" +
+			"that was renamed, deleted, is not approved, reads a credential stored anew, or reads one renamed\n" +
+			"without an admin session covers nothing; 'list' and 'show' warn about it.\n\n" +
 			"A token never manages credentials or their secrets, the vault's settings, or tokens. Tokens exist\n" +
 			"only while the vault is encrypted, sit encrypted inside it as tokens.age, and are managed only\n" +
 			"from an interactive terminal with the vault's passphrase, like every other 'vault' command. A\n" +

@@ -133,6 +133,7 @@ func (m *Model) setupShow(step int) {
 	w := m.wizard
 	w.step = step
 	m.clearMessages()
+	m.problems = problemState{}
 	if step == stepSummary {
 		m.screen = screenSummary
 		return
@@ -279,8 +280,8 @@ func (m *Model) setupNext() {
 	} else {
 		built, plan, err := m.setupCandidate(w.step)
 		if err != nil {
-			m.status = ""
-			m.fail = m.redactor.Apply(err.Error())
+			m.problems = problemState{}
+			m.reportSaveError(err, "", true)
 			return
 		}
 		w.built, w.candidate, w.plan, w.base = built, built.Config, plan, m.rev
@@ -528,7 +529,12 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 			m.setupRebase()
 			return nil
 		}
-		m.fail = m.redactor.Apply(m.setupError(msg.err))
+		m.problems = problemState{}
+		if advice := m.setupStoreAdvice(msg.err); advice != "" {
+			m.status, m.fail = "", m.redactor.Apply(advice)
+			return nil
+		}
+		m.reportSaveError(msg.err, "", true)
 		return nil
 	}
 	m.adoptSaved(msg.cfg)
@@ -556,20 +562,23 @@ func (m *Model) setupRebase() {
 	w := m.wizard
 	built, plan, err := m.setupCandidate(stepEffects)
 	if err != nil {
-		m.fail += "; the setup no longer fits it: " + m.redactor.Apply(err.Error())
+		conflict := m.fail
+		m.problems = problemState{}
+		m.reportSaveError(err, "", true)
+		m.fail = conflict + "; the setup no longer fits it: " + m.fail
 		return
 	}
 	w.built, w.candidate, w.plan, w.base = built, built.Config, plan, m.rev
 	m.fail += ". The summary shows the setup applied to the current file"
 }
 
-// setupError turns a failed save into the way out. The configuration is unchanged in every case.
-func (m *Model) setupError(err error) string {
+// setupStoreAdvice turns a save that failed on the secret store into the way out, "" for any other error.
+func (m *Model) setupStoreAdvice(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
 		return fmt.Sprintf("%v; nothing was saved. %s, then press F2 again, or press esc to go "+
 			"back and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
 	}
-	return err.Error() + "; the configuration was not changed"
+	return ""
 }
 
 func setupKeys(step int) string {

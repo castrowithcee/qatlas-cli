@@ -30,7 +30,7 @@ type Scope struct {
 	Provider string `json:"provider"`
 	// Origin is the effective endpoint of the connection's service, its base URL or its provider's default.
 	Origin string `json:"origin"`
-	// Permissions are the effects the connection permits, the provider's defaults applied.
+	// Effects are what the connection permits, the provider's defaults applied.
 	Effects []string `json:"permissions"`
 	// Targets are the connection's target or targets.
 	Targets []string `json:"targets"`
@@ -51,6 +51,10 @@ type Scope struct {
 	// so a change of the list, or of the fields of a listed credential, needs approval too. A scope without
 	// them keeps the fingerprint it had before they existed.
 	Forward []ForwardSecret `json:"forward,omitempty"`
+	// Disabled is set while the connection is switched off. Switching it on again is an enlargement of what
+	// the credential reaches, so it needs approval. An active connection leaves it unset and keeps the
+	// fingerprint it had before the state existed.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // ForwardSecret is one forward credential a connection releases: its name and the names of the fields whose
@@ -148,9 +152,10 @@ func Fingerprint(scope Scope, credentialID string) string {
 		FilesRead    []string `json:"files_read,omitempty"`
 		FilesWrite   []string `json:"files_write,omitempty"`
 		// Forward holds the forward credentials with their fields: a change of either changes the fingerprint.
-		Forward []ForwardSecret `json:"forward,omitempty"`
+		Forward  []ForwardSecret `json:"forward,omitempty"`
+		Disabled bool            `json:"disabled,omitempty"`
 	}{credentialID, n.Credential, n.Provider, n.Origin, n.Effects, n.Targets, n.Tools, n.Paths,
-		n.FilesRead, n.FilesWrite, n.Forward}
+		n.FilesRead, n.FilesWrite, n.Forward, n.Disabled}
 	data, err := json.Marshal(canonical)
 	if err != nil {
 		// Marshalling strings and string slices cannot fail.

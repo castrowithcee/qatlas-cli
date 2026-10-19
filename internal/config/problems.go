@@ -80,11 +80,11 @@ const (
 // hints maps every code to the English advice that resolves it. The rules live here, in the core, so every
 // surface says the same thing. Hints name no provider and no value.
 var hints = map[string]string{
-	CodeUnsupportedVersion:           "Set version to a supported schema version.",
+	CodeUnsupportedVersion:           "Set the configuration version to a supported one.",
 	CodeInvalidName:                  "Rename the entry to a name that follows the naming rule.",
 	CodeProviderMissing:              "Choose a registered provider for the service.",
 	CodeUnknownProvider:              "Choose a registered provider, or remove the entry.",
-	CodeInvalidBaseURL:               "Correct base_url to an endpoint the provider accepts, or leave it out to use the default.",
+	CodeInvalidBaseURL:               "Correct the base URL to an endpoint the provider accepts, or leave it out to use the default.",
 	CodeUnknownSecretRole:            "Rename the role to one the provider defines, or remove it.",
 	CodeSecretRolesMissing:           "Add at least one secret role with the name of its environment variable.",
 	CodeEmptySecretRole:              "Give the secret role a name, or remove the entry.",
@@ -107,13 +107,13 @@ var hints = map[string]string{
 	CodeDuplicateForwardSecret:       "Remove the repeated entry.",
 	CodeProviderMismatch:             "Choose a credential of the same provider as the service, or one without a provider.",
 	CodeSecretRoleMissing:            "Add the secret role to the credential.",
-	CodePathsEmpty:                   "List at least one directory, or leave paths out to use the connection everywhere.",
+	CodePathsEmpty:                   "List at least one directory, or leave the list out to use the connection everywhere.",
 	CodeInvalidPath:                  "Use an absolute directory or one starting with '~/', without glob patterns.",
 	CodeDuplicatePath:                "Remove the repeated directory.",
 	CodeUnknownEffect:                "Use one of the supported permissions.",
 	CodeDuplicateEffect:              "Remove the repeated permission.",
 	CodeTargetRequired:               "Set the target the provider requires.",
-	CodeTargetAndTargets:             "Use either target or targets, not both.",
+	CodeTargetAndTargets:             "Use either a single target or a list of targets, not both.",
 	CodeTargetsSingleOnly:            "Keep a single target, as the provider accepts only one.",
 	CodeEmptyTarget:                  "Fill in the target, or remove the entry.",
 	CodeDuplicateTarget:              "Remove the repeated target.",
@@ -133,8 +133,8 @@ var hints = map[string]string{
 	CodeInvalidSecretStore:           "Choose one of the supported secret stores.",
 	CodeInvalidTimeout:               "Use a duration within the supported range, such as 15m.",
 	CodeInvalidRetention:             "Use a positive number of days.",
-	CodeInvalidID:                    "Remove the id; a new one is assigned when the file is saved.",
-	CodeDuplicateID:                  "Remove the id from one of the entries; a new one is assigned when the file is saved.",
+	CodeInvalidID:                    "Remove the identifier; a new one is assigned when the file is saved.",
+	CodeDuplicateID:                  "Remove the identifier from one of the entries; a new one is assigned when the file is saved.",
 }
 
 // Problem is one validation finding, structured so that a surface can attach it to a form row and offer a

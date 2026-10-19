@@ -86,7 +86,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
 			"and domain defaults, can test a selected connection, and stores the secrets of a credential in\n" +
 			"a masked field. It never displays a stored secret back: what it shows is which source delivers\n" +
-			"a role. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
+			"a role. The state row of a connection form switches it between active and disabled; a disabled\n" +
+			"connection keeps its whole selection but serves nothing until it is active again, and can still be\n" +
+			"tested. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
 			"order and words: system keyring, vault, and environment variables, whichever is now chosen; none\n" +
 			"is a recommendation.\n\n" +
 			"A payload secret is a credential with freely named fields whose values a tool may pass on to a\n" +

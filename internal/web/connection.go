@@ -700,10 +700,18 @@ func (s *Server) connectionRows() ([]ConnectionRow, error) {
 		rows = append(rows, ConnectionRow{
 			Name: name, Provider: cfg.Services[conn.Service].Provider, Description: conn.Description,
 			Effects: config.FormatEffects(cfg.ConnectionEffects(name)),
-			Tools:   toolsSummary(conn.Tools),
+			Tools:   toolsSummary(conn.Tools), State: stateText(conn.Disabled),
 		})
 	}
 	return rows, nil
+}
+
+// stateText reads the on/off state of a connection as the word the overview shows.
+func stateText(disabled bool) string {
+	if disabled {
+		return "disabled"
+	}
+	return "active"
 }
 
 // toolsSummary is this page's own short reading of a connection's tools list: not a policy decision, only

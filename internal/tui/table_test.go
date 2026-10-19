@@ -107,11 +107,11 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 			"wiki-reader": {"wiki-reader", "bookstack", placeKeyring, "token-id ✓, token-secret missing"},
 		},
 		sectionConnections: {
-			"tracker-issues": {"tracker-issues", "tracker-main", "read,create", "listed 2",
+			"tracker-issues": {"tracker-issues", stateActive, "tracker-main", "read,create", "listed 2",
 				"octo/test-repo", "issues in the test repository, read and create"},
-			"tracker-triage": {"tracker-triage", "tracker-main", "read,update", "none", "3 targets",
+			"tracker-triage": {"tracker-triage", stateActive, "tracker-main", "read,update", "none", "3 targets",
 				undescribedMarker},
-			"wiki-docs": {"wiki-docs", "wiki-main", "read", "all", "-",
+			"wiki-docs": {"wiki-docs", stateActive, "wiki-main", "read", "all", "-",
 				"handbook pages for onboarding, read only"},
 		},
 		sectionDefaults: {
@@ -175,8 +175,8 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 		columns []string
 		gone    []string
 	}{
-		{120, []string{"NAME", "SERVICE", "EFFECTS", "TOOLS", "TARGETS"}, nil},
-		{80, []string{"NAME", "SERVICE"}, []string{"EFFECTS", "TOOLS", "TARGETS"}},
+		{120, []string{"NAME", "STATE", "SERVICE", "EFFECTS", "TOOLS", "TARGETS"}, nil},
+		{80, []string{"NAME", "STATE", "SERVICE"}, []string{"EFFECTS", "TOOLS", "TARGETS"}},
 	} {
 		m := newTableModel(t, c.width)
 		conn := m.cfg.Connections["wiki-docs"]
@@ -196,7 +196,7 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 					t.Errorf("width %d: %s = %q, want %q whole\n%s", c.width, title, got, cells[index], screenOf(m))
 				}
 			}
-			if got := cellAt(header, row, "DESCRIPTION"); got != cells[5] &&
+			if got := cellAt(header, row, "DESCRIPTION"); got != cells[6] &&
 				(!strings.HasSuffix(got, "…") || lipgloss.Width(got) < flexFloor) {
 				t.Errorf("width %d: description = %q, want it cut to the room left\n%s", c.width, got, screenOf(m))
 			}

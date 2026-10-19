@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 )
 
@@ -48,6 +49,44 @@ func (c *Config) RenameConnection(old, name string) ([]string, error) {
 		if conn == old {
 			c.Defaults.Connections[domain] = name
 			refs = append(refs, "defaults.connections."+domain)
+		}
+	}
+	sort.Strings(refs)
+	return refs, nil
+}
+
+// RenameCredential gives the credential old the name name, and every connection that reads it or releases it
+// as a forward credential the new name, in one step. The entry keeps its id. It returns the references it
+// rewrote, as configuration paths, sorted.
+func (c *Config) RenameCredential(old, name string) ([]string, error) {
+	if err := checkRename("credential", c.Credentials, old, name); err != nil {
+		return nil, err
+	}
+	c.Credentials[name] = c.Credentials[old]
+	delete(c.Credentials, old)
+	var refs []string
+	for conn, entry := range c.Connections {
+		changed := false
+		if entry.Credential == old {
+			entry.Credential = name
+			refs = append(refs, "connections."+conn+".credential")
+			changed = true
+		}
+		if slices.Contains(entry.ForwardSecrets, old) {
+			// A new list, so a configuration that shares the old one with this one keeps it.
+			forward := make([]string, len(entry.ForwardSecrets))
+			for i, ref := range entry.ForwardSecrets {
+				if ref == old {
+					ref = name
+				}
+				forward[i] = ref
+			}
+			entry.ForwardSecrets = forward
+			refs = append(refs, "connections."+conn+".forward_secrets")
+			changed = true
+		}
+		if changed {
+			c.Connections[conn] = entry
 		}
 	}
 	sort.Strings(refs)

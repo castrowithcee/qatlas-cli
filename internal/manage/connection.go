@@ -70,7 +70,7 @@ type ConnectionStart struct {
 	Storage string
 	// ProfileID names the provider's recommended profile; empty when it declares none.
 	ProfileID string
-	// Permissions and Tools are what that profile ticks. Tools is an explicit selection: a tool the
+	// Effects and Tools are what that profile ticks. Tools is an explicit selection: a tool the
 	// profile does not list is never enabled. Both are empty without a profile.
 	Effects []config.Effect
 	Tools   []string

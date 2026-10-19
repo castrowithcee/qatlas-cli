@@ -209,12 +209,13 @@ func (m *Model) savePayload() tea.Cmd {
 	}
 	base := m.rev
 	candidate := m.cfg.Clone()
+	m.problems = problemState{}
 	if err := candidate.SetCredential(name, cred); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+		m.reportSaveError(err, name, true)
 		return nil
 	}
 	if err := candidate.Validate(); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+		m.reportSaveError(err, name, true)
 		return nil
 	}
 	values := map[string]string{}
@@ -302,7 +303,7 @@ func (m *Model) handlePayloadSaved(msg payloadSavedMsg) tea.Cmd {
 	}
 	if msg.err != nil {
 		if !m.conflicted(msg.err) {
-			m.fail = m.redactor.Apply(msg.err.Error()) + "; the configuration was not changed"
+			m.reportSaveError(msg.err, msg.name, m.fields != nil)
 		}
 		return nil
 	}

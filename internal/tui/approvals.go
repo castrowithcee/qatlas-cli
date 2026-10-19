@@ -82,7 +82,7 @@ func approvalSummary(c approval.Change) string {
 var approvalFields = []string{
 	approval.FieldCredential, approval.FieldProvider, approval.FieldOrigin,
 	approval.FieldEffects, approval.FieldTargets, approval.FieldTools, approval.FieldPaths,
-	approval.FieldFiles, approval.FieldForward,
+	approval.FieldFiles, approval.FieldForward, approval.FieldState,
 }
 
 // approvalRow is one line of the Approvals detail screen. item rows are the entries of a list change,
@@ -122,6 +122,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		approval.FieldPaths:      approval.PathsText(c.After.Paths),
 		approval.FieldFiles:      approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
 		approval.FieldForward:    approval.ForwardText(c.After.Forward),
+		approval.FieldState:      approval.StateText(c.After.Disabled),
 	}
 	rows := make([]approvalRow, 0, len(approvalFields))
 	for _, field := range approvalFields {

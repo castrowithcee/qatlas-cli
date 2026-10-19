@@ -168,12 +168,12 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("Lexware target hint = %q, want an optional target", lexwareFields[4].hint)
 	}
 	for _, name := range []string{"books-primary", "books-audit"} {
-		if got := m.describe(name); !strings.HasPrefix(got, name+"  lexware-main  ") {
+		if got := m.describe(name); !strings.HasPrefix(got, name+"  active  lexware-main  ") {
 			t.Fatalf("Lexware list entry = %q, want named connection %q", got, name)
 		}
 	}
 	for _, name := range []string{"wiki-primary", "wiki-audit"} {
-		if got := m.describe(name); !strings.HasPrefix(got, name+"  wiki-main  ") {
+		if got := m.describe(name); !strings.HasPrefix(got, name+"  active  wiki-main  ") {
 			t.Fatalf("BookStack list entry = %q, want named connection %q", got, name)
 		}
 	}
@@ -186,8 +186,8 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"crm":          "crm  crm-cloud  ",
-		"crm-internal": "crm-internal  crm-selfhosted  ",
+		"crm":          "crm  active  crm-cloud  ",
+		"crm-internal": "crm-internal  active  crm-selfhosted  ",
 	} {
 		if got := m.describe(name); !strings.Contains(got, want) {
 			t.Fatalf("Twenty list entry = %q, want %q", got, want)
@@ -205,9 +205,9 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 			seatableFields[4].value(), seatableFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"sales-rows":       "sales-rows  tables-cloud  ",
-		"sales-rows-audit": "sales-rows-audit  tables-cloud  ",
-		"onprem-rows":      "onprem-rows  tables-onprem  ",
+		"sales-rows":       "sales-rows  active  tables-cloud  ",
+		"sales-rows-audit": "sales-rows-audit  active  tables-cloud  ",
+		"onprem-rows":      "onprem-rows  active  tables-onprem  ",
 	} {
 		if got := m.describe(name); !strings.Contains(got, want) {
 			t.Fatalf("SeaTable list entry = %q, want %q", got, want)
@@ -228,9 +228,9 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 			nextcloudFields[4].value(), nextcloudFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"files-reports": "files-reports  cloud-main  ",
-		"files-audit":   "files-audit  cloud-main  ",
-		"files-partner": "files-partner  cloud-partner  ",
+		"files-reports": "files-reports  active  cloud-main  ",
+		"files-audit":   "files-audit  active  cloud-main  ",
+		"files-partner": "files-partner  active  cloud-partner  ",
 	} {
 		if got := m.describe(name); !strings.Contains(got, want) {
 			t.Fatalf("Nextcloud list entry = %q, want %q", got, want)
