@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, table change, history, and cell file operations, permissions, and token limits.
+  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, table change, history, and cell file operations, effects, and token limits.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -90,7 +90,7 @@ and change the links between rows of two tables through one link column.
   `seatable.base.links.delete` removes the listed links and is offered only by a connection whose `tools` list
   names it.
 - Row identifiers are 22 characters of letters, digits, `-`, or `_`, and must not repeat in one call.
-- The three changes need the matching permission (`create`, `update`, `delete`) and `confirm`. Each sends
+- The three changes need the matching effect (`create`, `update`, `delete`) and `confirm`. Each sends
   exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable
   answer is reported as uncertain: read the links before repeating the change. An error SeaTable reports,
   for example a duplicate link, is reported without the provider text.
@@ -129,7 +129,7 @@ names it.
   and `hidden_columns` (up to 100). Only the given parts change. Every column is checked against the table
   metadata, may be named by name or key, and is sent as its key; an unknown column is refused before the
   request. An empty update is refused.
-- The three changes need the matching permission (`create`, `update`, `delete`) and `confirm`. Each sends
+- The three changes need the matching effect (`create`, `update`, `delete`) and `confirm`. Each sends
   exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable
   answer is reported as uncertain: read the view before repeating the change. An error SeaTable reports is
   reported without the provider text.
@@ -170,7 +170,7 @@ qatlas invoke seatable.base.columns.options-add --connection sales-rw --confirm 
 
 `seatable.base.columns.create`, `seatable.base.columns.update`, and `seatable.base.columns.delete` create, change, and remove
 the columns of an allowed table. They are in no profile. `columns.delete` is offered only by a connection whose
-`tools` list names it; all three need the matching permission and `confirm`.
+`tools` list names it; all three need the matching effect and `confirm`.
 
 - `columns.create` takes `table`, `name`, `type`, optional `data`, and optional `after` (name or key of the
   column the new one follows; at the end by default). A name has 1 to 255 printable characters, no `.`, `{`,
@@ -208,7 +208,7 @@ qatlas invoke seatable.base.columns.update --connection sales-rw --confirm --arg
 
 `seatable.base.tables.create`, `seatable.base.tables.rename`, `seatable.base.tables.duplicate`, and `seatable.base.tables.delete`
 manage the tables of the base. They are in no profile. `tables.delete` is offered only by a connection whose
-`tools` list names it; all four need the matching permission and `confirm`.
+`tools` list names it; all four need the matching effect and `confirm`.
 
 - A change never widens the table boundary of a connection. A new or duplicated table is not in an
   allow-list, so `tables.create` and `tables.duplicate` work only on a connection with `target: "*"`; any
@@ -370,7 +370,7 @@ names it.
 - Every column of every row is checked against the table metadata, because SeaTable silently ignores unknown
   columns. System and empty column names and link columns are refused; link columns are changed with the
   link tools. The metadata read is the only provider access that can precede such a refusal.
-- Each change needs the matching permission (`create`, `update`, `delete`) and `confirm`, sends exactly one
+- Each change needs the matching effect (`create`, `update`, `delete`) and `confirm`, sends exactly one
   request, and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable answer is
   reported as uncertain: read the rows before repeating the change. SeaTable reports no failure per row, so
   the answer names `requested` (rows in the call) and, when SeaTable gives one, `reported` (rows it
@@ -394,11 +394,11 @@ never select a table outside the connection allow-list. A view narrows listing b
 mutation to another table.
 
 The credential provides `api-token`. Use provider permission `r` for read-only connections and `rw` when
-writes are intended. The local `permissions` list is a separate ceiling and cannot turn an `r` token into a
-writer. An optional `tools` list narrows a connection further to named tools, for example
-`[seatable.base.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
+writes are intended. The local selection is a separate ceiling and cannot turn an `r` token into a
+writer. A connection selects by `effects` or by a `tools` list naming exactly the tools it offers, for example
+`[seatable.base.rows.list]`; neither widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
-connection on the setup profile `read`, which ticks `[read]` and `[seatable.base.tables.list,
+connection on the setup profile `read`, which selects the tools `[seatable.base.tables.list,
 seatable.base.columns.list, seatable.base.rows.list, seatable.base.rows.search, seatable.base.rows.get, seatable.base.links.list, seatable.base.views.list, seatable.base.views.get]`. A profile is a visible
-starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
+starting selection, not a role: only the ticked `tools` are saved, every tick can be changed before saving, and a
 saved connection never follows a profile.

@@ -86,11 +86,10 @@ quotes a configured value.
 | `infomaniak.dav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
 
 The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
-needs the `read` permission. The profile `events` adds `events.create` and `events.update`
-(permissions `create` and `update`); it is not recommended. The profile `contacts` likewise adds
+needs the `read` effect. The profile `events` adds `events.create` and `events.update`
+(effects `create` and `update`); it is not recommended. The profile `contacts` likewise adds
 `contacts.create` and `contacts.update` and is not recommended. `events.delete` and `contacts.delete`
-belong to no profile: a connection offers one only when its `tools` list names it, besides the `delete`
-permission.
+belong to no profile: a connection offers one only when its `tools` list names it.
 
 Each collection carries `id`, `name`, `description`, and, for a calendar, `color` when the server reports a
 valid hex value.

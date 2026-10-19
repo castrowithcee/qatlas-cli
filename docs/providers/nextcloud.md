@@ -2,7 +2,7 @@
 description: >
   Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
   notes, calendars and events, contacts, account data, status, notifications, search, and read-only user and group
-  administration, with typed targets, connection permissions, and safety boundaries.
+  administration, with typed targets, connection effects, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -26,7 +26,7 @@ is a clear failure that did not act on the server, and the app password only eve
 bound to the ETag of the version read (`*` is refused) and confirmed. The root folder is never deletable. When
 the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
 for good; Qatlas cannot tell which applies (see Trash bin). Both tools require a tools list: no profile and no
-permission offers them.
+effect offers them.
 
 ## Trash bin
 
@@ -62,18 +62,17 @@ One whose first segment is a kind name (for example `calendar/2026`) is refused 
 
 The connection test reads the bound folder (or the Files root) and each bound calendar; it reports no metadata.
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
-Connection permissions independently hide and block operations; the identity's WebDAV rights stay the ceiling.
-An optional `tools` list narrows a connection further to named tools, for example `[nextcloud.files.files.list,
-nextcloud.files.files.stat]` for metadata without file content, and never admits an effect `permissions` excludes.
+Connection effects independently hide and block operations; the identity's WebDAV rights stay the ceiling.
+A connection may instead select named tools with a `tools` list, for example `[nextcloud.files.files.list,
+nextcloud.files.files.stat]` for metadata without file content, and then offers exactly those.
 File content is carried as base64 and never written to audit records. The terminal editor starts a new
-connection on the setup profile `read`, a visible starting selection, not a role: only the ticked `permissions`
-and `tools` are saved, and a saved connection never follows a profile.
+connection on the setup profile `read`, a visible starting selection, not a role: only the ticked `tools`
+are saved, and a saved connection never follows a profile.
 
 ## Organising
 
 `nextcloud.files.folders.create`, `nextcloud.files.files.move` (a rename is a move within one folder), and
-`nextcloud.files.files.copy` work on files and folders inside the bound folder and need `confirm` and the permission of
-their effect. Parent folders must already exist, and an existing destination is never overwritten. Source and
+`nextcloud.files.files.copy` work on files and folders inside the bound folder and need `confirm` and their effect. Parent folders must already exist, and an existing destination is never overwritten. Source and
 destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go into
 itself or a descendant. Qatlas checks this locally before any credential access.
 
@@ -83,7 +82,7 @@ failure that names no path. After an unclear outcome, stat source and target, or
 ## Search and favorites
 
 `nextcloud.files.files.search` and `nextcloud.files.favorites.list` belong to the profile `read`; `nextcloud.files.files.favorite`
-needs `confirm` and the permission `update`. All three work on the bound folder only; the root itself is never a
+needs `confirm` and the `update` effect. All three work on the bound folder only; the root itself is never a
 hit and cannot be marked.
 
 The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a

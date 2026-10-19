@@ -352,10 +352,7 @@ func (m *Model) setupPrefill(step int, page []field) {
 		page[2].input.SetValue(conn.Description)
 	case stepEffects:
 		provider := w.provider
-		permissions := permissionField(m.permissionChoicesFor(provider, conn.Effects), conn.Effects)
-		permissions.hint = m.permissionHint(provider)
-		page[1] = permissions
-		copy(page[2:], m.toolFields(provider, slices.Clone(conn.Tools)))
+		copy(page[1:], m.accessFields(provider, conn.Effects, slices.Clone(conn.Tools)))
 	}
 }
 

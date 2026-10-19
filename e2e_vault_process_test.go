@@ -48,7 +48,7 @@ func TestVaultProcessEndToEnd(t *testing.T) {
 	server := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Vault Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 2
+	config := fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -214,7 +214,7 @@ defaults:
 	t.Cleanup(elsewhere.Close)
 	for _, change := range []struct{ name, from, to string }{
 		{"base_url", "base_url: " + server.URL, "base_url: " + elsewhere.URL},
-		{"permissions", "    credential: vault-reader\n", "    credential: vault-reader\n    permissions: [read, create]\n"},
+		{"effects", "    credential: vault-reader\n", "    credential: vault-reader\n    effects: [read, create]\n"},
 	} {
 		t.Run("a connection whose "+change.name+" was changed by hand needs approval", func(t *testing.T) {
 			edited := strings.Replace(config, change.from, change.to, 1)
@@ -266,9 +266,9 @@ defaults:
 	// changed, not as it was before, so this runs last and does not undo the change again afterwards.
 	t.Run("vault approve at a terminal releases a connection changed by hand", func(t *testing.T) {
 		edited := strings.Replace(config, "    credential: vault-reader\n",
-			"    credential: vault-reader\n    permissions: [read, create]\n", 1)
+			"    credential: vault-reader\n    effects: [read, create]\n", 1)
 		if edited == config {
-			t.Fatal("the permissions change did not apply")
+			t.Fatal("the effects change did not apply")
 		}
 		if err := os.WriteFile(configPath, []byte(edited), 0o600); err != nil {
 			t.Fatal(err)
@@ -280,7 +280,7 @@ defaults:
 		}
 
 		out, code := runAtTerminal(t, c, passphrase+"\n", "vault", "approve")
-		if code != 0 || !strings.Contains(out, "permissions") || !strings.Contains(out, "approved 1 connection: wiki") {
+		if code != 0 || !strings.Contains(out, "effects") || !strings.Contains(out, "approved 1 connection: wiki") {
 			t.Fatalf("vault approve: exit %d, output %q", code, out)
 		}
 		if strings.Contains(out, passphrase) {

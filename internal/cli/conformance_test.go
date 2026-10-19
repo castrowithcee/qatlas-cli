@@ -62,7 +62,7 @@ func TestProviderConformance(t *testing.T) {
 func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, "version: 2\ndefaults: {}\n")
+	path := writeConfig(t, "version: 3\ndefaults: {}\n")
 	reg := defaultRegistry()
 	var reads atomic.Int32
 	cliJSON := func(args ...string) []byte {
@@ -577,10 +577,10 @@ func providerViolations(metadata config.ProviderMetadata, descriptors []capabili
 	return append(violations, permissionViolations(metadata, descriptors)...)
 }
 
-// permissionViolations asks the application core which operations two connections are offered: one that
-// holds exactly the supported permissions and one that holds every other permission. Both list every
-// operation in their tools list, so only the permissions decide. The first must be offered every
-// operation, the second none.
+// permissionViolations asks the application core which operations three connections are offered: one that
+// offers by exactly the supported effects, one that offers by every other effect, and one that selects every
+// operation by name. The first must be offered every operation but those that require an allow-list, the
+// second none, the third every operation.
 func permissionViolations(metadata config.ProviderMetadata, descriptors []capability.Descriptor) []string {
 	if len(descriptors) == 0 {
 		return nil
@@ -598,14 +598,15 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 	// A tool with local file access needs a released directory of its direction to be offered at all.
 	files := config.Files{Read: []string{"/srv/qatlas-conformance"}, Write: []string{"/srv/qatlas-conformance"}}
 	harness, err := newConformanceHarness(metadata, descriptors, map[string]config.Connection{
-		"supported":   {Effects: append([]config.Effect{}, metadata.SupportedEffects...), Tools: ids, Files: files},
-		"unsupported": {Effects: append([]config.Effect{}, unsupported...), Tools: ids, Files: files},
+		"supported":   {Effects: append([]config.Effect{}, metadata.SupportedEffects...), Files: files},
+		"unsupported": {Effects: append([]config.Effect{}, unsupported...), Files: files},
+		"selected":    {Tools: ids, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
 	}
 	var violations []string
-	for _, connection := range []string{"supported", "unsupported"} {
+	for _, connection := range []string{"supported", "unsupported", "selected"} {
 		response, err := harness.core.Tools(application.SearchRequest{Connection: connection})
 		if err != nil {
 			violations = append(violations, fmt.Sprintf("tools of connection %s: %v", connection, err))
@@ -617,9 +618,15 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 		}
 		for _, descriptor := range descriptors {
 			switch {
-			case connection == "supported" && !offered[descriptor.ID]:
+			case connection == "supported" && !offered[descriptor.ID] && !descriptor.RequiresToolAllowList:
 				violations = append(violations, fmt.Sprintf("%s %s is not offered to a connection with the "+
 					"supported permissions %v", descriptor.Risk.Effect, descriptor.ID, metadata.SupportedEffects))
+			case connection == "supported" && offered[descriptor.ID] && descriptor.RequiresToolAllowList:
+				violations = append(violations, fmt.Sprintf("%s %s requires a tools list but is offered by effect",
+					descriptor.Risk.Effect, descriptor.ID))
+			case connection == "selected" && !offered[descriptor.ID]:
+				violations = append(violations, fmt.Sprintf("%s %s is not offered to a connection that selects it",
+					descriptor.Risk.Effect, descriptor.ID))
 			case connection == "unsupported" && offered[descriptor.ID]:
 				violations = append(violations, fmt.Sprintf("%s %s is offered to a connection with only the "+
 					"unsupported permissions %v", descriptor.Risk.Effect, descriptor.ID, unsupported))
@@ -633,10 +640,11 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 // registered in a registry of its own, where a counting handler stands in for the provider, and the core
 // is asked through four connections that differ only in their local allow-lists:
 //
-//   - listed names the operation in its tools list and holds its effect, so it is offered the operation;
-//   - unlisted has an explicit empty tools list, so it is not;
-//   - denied names the operation but holds every other effect, so it is not;
-//   - open has no tools list, so it is offered the operation unless the operation requires an allow-list.
+//   - listed selects the operation by name, so it is offered the operation;
+//   - unlisted selects no tool, so it is not;
+//   - denied offers by every other effect, so it is not;
+//   - open offers by the operation's effect, so it is offered the operation unless the operation requires an
+//     allow-list.
 //
 // An operation that requires confirmation is refused without it before the handler runs, and one that
 // requires none runs without it. Every other refusal never reaches the handler either, the core itself
@@ -687,9 +695,9 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 		files.Write = []string{"/srv/qatlas-conformance"}
 	}
 	harness, err := newConformanceHarness(metadata, []capability.Descriptor{d}, map[string]config.Connection{
-		"listed":   {Effects: []config.Effect{effect}, Tools: []string{d.ID}, Files: files},
-		"unlisted": {Effects: []config.Effect{effect}, Tools: []string{}, Files: files},
-		"denied":   {Effects: others, Tools: []string{d.ID}, Files: files},
+		"listed":   {Tools: []string{d.ID}, Files: files},
+		"unlisted": {Tools: []string{}, Files: files},
+		"denied":   {Effects: others, Files: files},
 		"open":     {Effects: []config.Effect{effect}, Files: files},
 	})
 	if err != nil {

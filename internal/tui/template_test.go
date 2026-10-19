@@ -30,8 +30,7 @@ func pressNew(t *testing.T, m *Model) {
 // profile would have chosen.
 var templateConnection = config.Connection{
 	Service: "wiki", Credential: "reader", Target: "book/12", Description: "wiki for customer A",
-	Effects: []config.Effect{config.EffectRead, config.EffectCreate},
-	Tools:   []string{"bookstack.pages.list", "bookstack.pages.create"},
+	Tools: []string{"bookstack.pages.list", "bookstack.pages.create"},
 }
 
 // templateModel is an editor over a service "wiki" with options, a credential "reader" and the connection
@@ -179,8 +178,8 @@ func TestDuplicateConnectionKeepsToolsAndPaths(t *testing.T) {
 	if m.screen != screenForm || m.fieldValue("name") != "github-ops-copy" {
 		t.Fatalf("p: screen %v name %q", m.screen, m.fieldValue("name"))
 	}
-	if got := m.fieldValue(toolsLabel); got != toolsSelected {
-		t.Errorf("tools mode = %q, want %q kept", got, toolsSelected)
+	if got := m.fieldValue(accessLabel); got != accessTools {
+		t.Errorf("tools mode = %q, want %q kept", got, accessTools)
 	}
 	view := screenOf(m)
 	for _, want := range []string{"New connection, from github-ops", "wiki for customer A"} {
@@ -401,10 +400,10 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 	if m.wizard.step != stepEffects {
 		t.Fatalf("step %d fail %q, want permissions", m.wizard.step, m.fail)
 	}
-	if m.fieldValue("permissions") != "read, create" || m.fieldValue(toolsLabel) != toolsSelected ||
+	if m.fieldValue(effectsLabel) != "" || m.fieldValue(accessLabel) != accessTools ||
 		m.fieldValue(toolListLabel) != "bookstack.pages.list, bookstack.pages.create" {
 		t.Fatalf("permissions %q tools mode %q tools %q, want those of the original (no recommended profile)",
-			m.fieldValue("permissions"), m.fieldValue(toolsLabel), m.fieldValue(toolListLabel))
+			m.fieldValue(effectsLabel), m.fieldValue(accessLabel), m.fieldValue(toolListLabel))
 	}
 	press(t, m, "f2")
 	if m.screen != screenSummary {

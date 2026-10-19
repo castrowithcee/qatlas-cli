@@ -23,8 +23,7 @@ under "API forms" and were not tried against a live instance.
 The credential provides `access-token`: a Penpot access token, created in the profile's access tokens. The instance
 needs the `access-tokens` flag enabled (Penpot Cloud has it; a self-hosted instance sets it in its configuration).
 The token is sent as `Authorization: Token ...` and is registered with the redactor. **The token has no scopes**: it
-acts for every team of its account. Qatlas narrows a connection through its targets, its `tools` list, and its
-`permissions`; it does not narrow the token.
+acts for every team of its account. Qatlas narrows a connection through its targets, its `tools` list or `effects`; it does not narrow the token.
 
 `base_url` is `https://design.penpot.app` by default. A self-hosted instance uses its own `https` URL, optionally
 below an installation path; a URL with `http`, user info, a query, or a fragment is refused before any secret is
@@ -114,7 +113,7 @@ connections:
 | `penpot.teams.delete` | delete | required, tool allow-list | `delete-team` | deletes a bound team with its projects and files |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
-through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`,
+through the connection's `effects` or `tools` list, and so are the project and file tools. `penpot.comments.delete`,
 `penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.set-role`, `penpot.members.remove`, `penpot.teams.create`, and `penpot.teams.delete` are offered only
 when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.

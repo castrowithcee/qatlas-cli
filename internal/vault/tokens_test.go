@@ -178,7 +178,7 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 		{"other provider", func(s *Scope) { s.Provider = "gitlab" }, []string{GapService}},
 		{"other endpoint", func(s *Scope) { s.Origin = "https://github.example.test/api" }, []string{GapService}},
 		{"other credential", func(s *Scope) { s.Credential = "gh-b" }, []string{GapCredential}},
-		{"more permissions", func(s *Scope) { s.Effects = []string{"read", "delete"} }, []string{GapPermissions}},
+		{"more permissions", func(s *Scope) { s.Effects = []string{"read", "delete"} }, []string{GapEffects}},
 		{"tool outside the list", func(s *Scope) { s.Tools = []string{"github.repos.delete"} }, []string{GapTools}},
 		{"no tools list", func(s *Scope) { s.Tools = nil }, []string{GapTools}},
 		{"target outside", func(s *Scope) { s.Targets = []string{"repos/o/c"} }, []string{GapTargets}},
@@ -191,9 +191,15 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 		{"partly outside", func(s *Scope) {
 			s.Effects, s.Targets = []string{"read"}, []string{"repos/o/a", "repos/o/z"}
 		}, []string{GapTargets}},
+		{"derived effects of fewer tools", func(s *Scope) {
+			s.Effects, s.Tools = []string{"read"}, []string{"github.issues.list"}
+		}, nil},
+		{"tool of an effect outside", func(s *Scope) {
+			s.Effects, s.Tools = []string{"read", "update"}, []string{"github.issues.list", "github.issues.update"}
+		}, []string{GapEffects, GapTools}},
 		{"outside twice", func(s *Scope) {
 			s.Effects, s.Tools = []string{"read", "update"}, []string{"github.issues.list", "github.x"}
-		}, []string{GapPermissions, GapTools}},
+		}, []string{GapEffects, GapTools}},
 	}
 	for i, tc := range cases {
 		change := vorbild
@@ -230,7 +236,7 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 	change.Effects = []string{"read", "execute"}
 	result, _ = v.ApproveWithToken(wide.Value, []Scope{vorbild, unbound, change}, []string{"wide-change"}, time.Now())
 	if len(result.Changes) != 1 || result.Changes[0].Kind != ChangeUpdate ||
-		!slices.Equal(result.Changes[0].Gaps, []string{GapPermissions}) {
+		!slices.Equal(result.Changes[0].Gaps, []string{GapEffects}) {
 		t.Errorf("an update beyond the permissions = %+v, want it open for its permissions", result)
 	}
 }
@@ -263,7 +269,7 @@ func TestApproveWithTokenVorbildRules(t *testing.T) {
 	if c := decided["vorbild"]; c.Approved || !slices.Equal(c.Gaps, []string{GapVorbild}) {
 		t.Errorf("a change of the vorbild itself = %+v, want it open as a vorbild", c)
 	}
-	if c := decided["wants-delete"]; c.Approved || !slices.Equal(c.Gaps, []string{GapPermissions}) {
+	if c := decided["wants-delete"]; c.Approved || !slices.Equal(c.Gaps, []string{GapEffects}) {
 		t.Errorf("a change within the widened, unapproved vorbild = %+v, want it open", c)
 	}
 

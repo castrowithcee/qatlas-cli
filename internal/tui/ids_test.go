@@ -19,7 +19,7 @@ func TestSavingKeepsStableIDs(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	file := "version: 2\nservices:\n  wiki:\n    id: " + idSvc + "\n    provider: bookstack\n" +
+	file := "version: 3\nservices:\n  wiki:\n    id: " + idSvc + "\n    provider: bookstack\n" +
 		"    base_url: https://wiki.example.invalid\ncredentials:\n  reader:\n    id: " + idCred +
 		"\n    type: env\n    values:\n      token-id: A\n      token-secret: B\n" +
 		"connections:\n  wiki:\n    id: " + idConn + "\n    service: wiki\n    credential: reader\n"

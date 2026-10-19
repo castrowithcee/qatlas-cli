@@ -661,9 +661,9 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 // A mode switch stays a before-and-after line, and a new connection shows its whole scope as before.
 func TestApprovalDetailKeepsModeSwitchesReadable(t *testing.T) {
 	rows := approvalDetailRows(approval.Change{Fields: []approval.FieldChange{
-		{Field: approval.FieldTools, Before: "(every tool the permissions allow)", After: "a.b c.d"},
+		{Field: approval.FieldTools, Before: "(every tool of its effects)", After: "a.b c.d"},
 	}})
-	if !containsRow(rows, "tools", "(every tool the permissions allow) -> a.b c.d") {
+	if !containsRow(rows, "tools", "(every tool of its effects) -> a.b c.d") {
 		t.Errorf("mode switch rows:\n%s", strings.Join(rows, "\n"))
 	}
 	rows = approvalDetailRows(approval.Change{New: true, After: vault.Scope{Tools: []string{"a.b", "c.d"}}})

@@ -88,9 +88,12 @@ func TestBuildConnectionCandidateRights(t *testing.T) {
 			wantPerm: []config.Effect{}, toolsNil: true},
 		{name: "listed permissions", edit: func(d *ConnectionDraft) { d.Effects = "read, update" },
 			wantPerm: []config.Effect{config.EffectRead, config.EffectUpdate}, toolsNil: true},
-		{name: "selected tools", edit: func(d *ConnectionDraft) {
+		{name: "selected tools are stored alone", edit: func(d *ConnectionDraft) {
 			d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.read"}
-		}, wantPerm: []config.Effect{config.EffectRead}, wantTools: []string{"docs.read"}},
+		}, permsNil: true, wantTools: []string{"docs.read"}},
+		{name: "a selected tool of another effect than the rights text", edit: func(d *ConnectionDraft) {
+			d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.write"}
+		}, permsNil: true, wantTools: []string{"docs.write"}},
 		{name: "an empty selection enables no tool", edit: func(d *ConnectionDraft) {
 			d.ToolsSelected = true
 		}, permsNil: true, wantTools: []string{}},
@@ -192,8 +195,8 @@ func TestBuildConnectionCandidateErrors(t *testing.T) {
 		{name: "connection name taken", edit: func(d *ConnectionDraft) { d.Name = "mail" }, is: &taken},
 		{name: "connection name empty", edit: func(d *ConnectionDraft) { d.Name = "" }, is: &empty},
 		{name: "unknown permission", edit: func(d *ConnectionDraft) { d.Effects = "admin" }},
-		{name: "tool outside the permissions", edit: func(d *ConnectionDraft) {
-			d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.write"}
+		{name: "tool the provider does not register", edit: func(d *ConnectionDraft) {
+			d.ToolsSelected, d.Tools = true, []string{"docs.nothing"}
 		}},
 		{name: "files without a direction", edit: func(d *ConnectionDraft) { d.Files.Write = []string{"/srv"} }},
 		{name: "env role without a variable", edit: func(d *ConnectionDraft) {

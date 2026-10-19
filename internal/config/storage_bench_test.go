@@ -49,7 +49,7 @@ func storageYAML(total int) []byte {
 	b.WriteString("connections:\n")
 	for i := 0; i < total-2*third; i++ {
 		fmt.Fprintf(&b, "  conn-%05d:\n    service: svc-%05d\n    credential: cred-%05d\n"+
-			"    description: synthetic route %d\n    permissions: [read]\n", i, i%third, i%third, i)
+			"    description: synthetic route %d\n    effects: [read]\n", i, i%third, i%third, i)
 	}
 	b.WriteString("defaults: {}\n")
 	return []byte(b.String())

@@ -58,7 +58,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	for _, want := range []string{"WIKI_TOKEN_ID", "WIKI_TOKEN_SECRET", "version: 2"} {
+	for _, want := range []string{"WIKI_TOKEN_ID", "WIKI_TOKEN_SECRET", "version: 3"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("file is missing %q:\n%s", want, data)
 		}

@@ -20,11 +20,11 @@ updated: 2026-10-03
 Infomaniak kDrive is a provider for the Infomaniak kDrive REST API. It lists the drives of one Infomaniak
 account, lists the immediate children of one folder page by page, reads the metadata of one file or folder,
 and reads bounded file content or writes one file to a local path, all through `https://api.infomaniak.com`.
-On a connection that holds the `create` or `update` permission it also creates one folder, renames, moves, or
+On a connection that holds the `create` or `update` effect it also creates one folder, renames, moves, or
 copies one file or folder inside one drive, uploads one file or replaces the content of one, and restores a
 trash entry, each only after an explicit confirmation. It reads the trash too. Moving a file or folder to the
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
-permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
+effect and an explicit tools list. It reads the share link of a file or folder and lists the files that have
 one; deleting a share link is a separate, confirmed tool, and all share link tools,
 the reading ones included, need an explicit tools list. Qatlas creates no permanent access or data paths to the
 outside (webhooks, invitations, public links, dropboxes); reading, pausing, revoking, and deleting remain, so no tool creates or
@@ -124,7 +124,7 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 `drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, `trash.list`, `links.get`, and `links.list`
 are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
 `files.upload` have the effect `update`. `trash.restore` has the effect `update`. `files.trash`, `trash.delete`, and `trash.empty` have the effect
-`delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
+`delete`, and each of them requires the tool allow-list: no effect alone offers it, a connection must name
 the tool in its `tools` list. `links.delete` has the effect `delete`; a share link is access for whoever holds its
 URL, so it requires the tool allow-list as well, whichever right the link has. `links.get` and `links.list` are
 `read` and safe, but their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe and `dropbox.delete` has the effect `delete`; a dropbox URL lets
@@ -133,17 +133,17 @@ needs `confirm`; both are `open_world`, and the deletion is idempotent. `access.
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
 three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `dropbox.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` is `create` and stays non-idempotent. The provider's default
-permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
-list offers the tool where one is required.
+effect stays `read`: a connection runs a change only after it offers the tool, by its `effects` or, where a
+list is required, by naming it in its `tools` list.
 
-The terminal editor offers three setup profiles. `read` is the recommended one and ticks `[read]` and the six
-read tools, `trash.list` included. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
-`upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
+The terminal editor offers three setup profiles. `read` is the recommended one and selects the six
+read tools, `trash.list` included. `write` also selects the four folder and file organisation tools.
+`upload` also selects `files.upload`. Neither `write` nor `upload` is ever
 preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, `trash.empty`, or any of the share link
 tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it. No profile contains a
 `dropbox.*` tool either, for the same reason. No profile contains
 an `access.*` tool either, not even `access.get`, since it discloses people, their rights, and invited e-mail
-addresses: a connection adds them by naming them in its `tools` list together with the matching permission.
+addresses: a connection adds them by naming them in its `tools` list.
 The profile descriptions of `write` and `upload` stay true: neither shares, grants access, nor deletes. `files.download` is only offered to a connection that releases a directory for writing, and
 `files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
 setting of the connection.
@@ -195,7 +195,7 @@ than being refused or silently redirected to a listing.
   `trash.delete` or `trash.empty` removes it; that removal and the emptying cannot be undone.
 - `trash.restore` takes `destination_id`, a required folder of the same drive (the root is `1`), because the
   specification requires `destination_directory_id` in the request body; Qatlas offers no restore to a place
-  outside the drive. Restoring is the only trash change that needs just the `update` permission.
+  outside the drive. Restoring is the only trash change that needs just the `update` effect.
 - The same rules as for the other changes apply: the drive goes through the allow-list check and the live
   ownership check before the one request, a refusal names no foreign value, an unclear outcome is reported
   and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports

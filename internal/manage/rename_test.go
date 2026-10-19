@@ -19,7 +19,7 @@ import (
 
 const renamePassphrase = "synthetic-passphrase-91ab"
 
-const renameConfig = `version: 2
+const renameConfig = `version: 3
 services:
     wiki:
         provider: docs
@@ -36,17 +36,17 @@ connections:
     vault-wiki:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     second-wiki:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     widened:
         service: wiki
         credential: vault-reader
-        permissions:
+        effects:
             - read
     mail:
         service: mail

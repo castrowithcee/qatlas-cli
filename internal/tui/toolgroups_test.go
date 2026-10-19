@@ -25,8 +25,8 @@ func groupedPicker(t *testing.T, width int) (*Model, string, *capability.Registr
 		Target: "repos/octo-org/example"}})
 	m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
 	openEntryForm(t, m, sectionConnections, "repo")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
 	if m.screen != screenPicker || m.pickerGroups == nil {
@@ -189,8 +189,8 @@ func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
 	}
 	m, _ := toolsModel(t, reg, map[string]config.Connection{"route": {Service: "wiki", Credential: "reader", Target: "*"}})
 	openEntryForm(t, m, sectionConnections, "route")
-	focusField(t, m, toolsLabel)
-	selectChoice(t, m, toolsSelected)
+	focusField(t, m, accessLabel)
+	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
 	if m.screen != screenPicker || m.pickerGroups != nil || strings.Contains(screenOf(m), "all groups") {

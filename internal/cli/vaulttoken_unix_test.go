@@ -27,7 +27,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 	config, _ := os.ReadFile(configIn(dir))
 	extended := strings.Replace(string(config), "defaults:", "  wiki-agent:\n    service: wiki\n"+
 		"    credential: wiki-vault\n  wiki-wide:\n    service: wiki\n    credential: wiki-vault\n"+
-		"    permissions: [read, create]\ndefaults:", 1)
+		"    effects: [read, create]\ndefaults:", 1)
 	if err := os.WriteFile(configIn(dir), []byte(extended), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 		t.Errorf("approve: stdout %q, want the covered change approved", stdout)
 	}
 	if !strings.Contains(stderr, "admin-required: agent token kunde-a does not cover 1 open change, which stays "+
-		"open: wiki-wide (create): permissions") {
+		"open: wiki-wide (create): effects") {
 		t.Errorf("approve: stderr %q, want the open change and its field named", stderr)
 	}
 	if strings.Contains(stdout+stderr, value) {

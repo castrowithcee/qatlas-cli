@@ -610,7 +610,7 @@ var overviewTemplate = strings.TrimSpace(`
 {{if .CredentialsUsable}}<p class="actions"><a href="/connections/new">Set up a connection</a></p>{{end}}
 <div class="table-wrap" role="region" aria-labelledby="connections-heading" tabindex="0">
 <table>
-<thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Permissions</th><th scope="col">Tools</th><th scope="col">State</th></tr></thead>
+<thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Effects</th><th scope="col">Tools</th><th scope="col">State</th></tr></thead>
 <tbody>
 {{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Effects}}</td><td>{{.Tools}}</td><td>{{.State}}{{if .ActiveUntil}} (until {{.ActiveUntil}}){{end}}</td></tr>
 {{end}}</tbody>

@@ -52,7 +52,7 @@ func renameRegistry(t *testing.T) *capability.Registry {
 	return reg
 }
 
-const formerNamesConfig = `version: 2
+const formerNamesConfig = `version: 3
 services:
   svc:
     provider: acmechat
@@ -66,7 +66,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: [acmechat.messages.fetch, acme.chat.messages.list, acmechat.messages.purge]
 provider_notes:
   acmechat: team chat
@@ -204,7 +203,7 @@ func vaultRenameFixture(t *testing.T, tools string) string {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	dir := t.TempDir()
-	body := `version: 2
+	body := `version: 3
 services:
   svc:
     provider: acmechat
@@ -216,7 +215,6 @@ connections:
   conn:
     service: svc
     credential: cred
-    permissions: [read]
     tools: ` + tools + "\n"
 	if err := os.WriteFile(configIn(dir), []byte(body), 0o600); err != nil {
 		t.Fatal(err)

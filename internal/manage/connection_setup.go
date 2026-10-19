@@ -62,9 +62,9 @@ const (
 	// StageCredential also applies the credential.
 	StageCredential
 	// StageScope also adds the connection with its name, targets, description and the entries a surface
-	// carries over, still without permissions and tools.
+	// carries over, still without effects and tools.
 	StageScope
-	// StageRights also applies permissions and tools. The candidate is complete.
+	// StageRights also applies effects or tools. The candidate is complete.
 	StageRights
 )
 
@@ -90,7 +90,8 @@ type ConnectionDraft struct {
 
 	// The connection. Effects is the comma-separated form of config.ParseEffects: empty keeps the
 	// provider's defaults, "none" allows nothing. With ToolsSelected, Tools is the explicit selection, and
-	// no tool outside it is enabled, an empty one included; without it the connection offers every tool.
+	// no tool outside it is enabled, an empty one included; only Tools is stored then and Effects is
+	// ignored. Without it the connection offers every tool of its effects.
 	Name          string
 	Targets       []string
 	Description   string
@@ -147,7 +148,7 @@ func credentialServes(cfg *config.Config, name string, cred config.Credential, p
 }
 
 // BuildConnectionCandidate applies the draft, up to stage, to a copy of cfg and lets the core validate the
-// result. Nothing decides on its own whether a target, a permission or a tool is allowed: the
+// result. Nothing decides on its own whether a target, an effect or a tool is allowed: the
 // configuration's own methods do. A connection never gets a credential that belongs to another provider
 // than its service. The errors are the types of this file, or the configuration's own.
 func BuildConnectionCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage) (ConnectionCandidate, error) {
@@ -230,12 +231,14 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 			if err != nil {
 				return cand, err
 			}
-			conn.Effects = permissions
+			// A connection selects by effect or by tools, never both: a tool selection stores only the tools.
 			if d.ToolsSelected {
 				conn.Tools = slices.Clone(d.Tools)
 				if conn.Tools == nil {
 					conn.Tools = []string{}
 				}
+			} else {
+				conn.Effects = permissions
 			}
 		}
 		if err := cand.Config.SetConnection(d.Name, conn); err != nil {

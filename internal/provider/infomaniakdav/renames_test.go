@@ -92,7 +92,6 @@ connections:
     service: dav
     credential: dav-secret
     targets: [calendar/personal, addressbook/contacts]
-    permissions: [read]
     tools: [infomaniakdav.calendars.list, infomaniakdav.addressbooks.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

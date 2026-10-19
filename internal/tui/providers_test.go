@@ -247,7 +247,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "required for Telegram") {
 		t.Errorf("target hint = %q, want the Telegram rule", hint)
 	}
-	if got := m.field("permissions").choices; !reflect.DeepEqual(got, m.permissionChoices("telegram")) {
+	if got := m.field(effectsLabel).choices; !reflect.DeepEqual(got, m.permissionChoices("telegram")) {
 		t.Errorf("permissions = %v, want those of Telegram", got)
 	}
 	list := m.field(toolListLabel)

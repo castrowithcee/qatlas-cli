@@ -37,9 +37,9 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"one object with the fields valid and path.\n\n" +
 			"A connection's optional tools list names complete tool IDs of its provider, as 'qatlas tools\n" +
 			"<provider> --all' lists them. Every entry must be a tool this build registers for that provider,\n" +
-			"listed once, with an effect the connection's permissions allow. An unknown entry is reported\n" +
+			"listed once. A connection gives either effects or tools, not both. An unknown entry is reported\n" +
 			"by its position, never quoted.\n\n" +
-			"A connection that offers no tool, because its permissions or its tools list are empty or allow\n" +
+			"A connection that offers no tool, because its effects or its tools list are empty or allow\n" +
 			"none of its provider's tools, is valid but useless to an agent. Validate names each one in a\n" +
 			"warning on stderr and still succeeds.\n\n" +
 			"A connection's optional paths list binds it to projects: each entry is a directory, absolute or\n" +

@@ -4,7 +4,7 @@ description: >
   required mailbox target and the optional folder and sender allow-lists, the folder, message-envelope,
   message-text, and attachment reads, the read-only EXAMINE and BODY.PEEK access, UID binding to folder and
   UIDVALIDITY, the fixed search criteria, the text, attachment, and size caps, the local file release for
-  attachments, the four confirmed message changes (flag, move, trash, expunge) with their risk, permissions,
+  attachments, the four confirmed message changes (flag, move, trash, expunge) with their risk, effects,
   tools list requirement, trash folder detection, and unclear-outcome rule, the three confirmed draft tools
   (create, update, delete) with their typed fields, attachments, header-injection protection, drafts folder
   detection, replacement sequence, limits, and profile, the two confirmed sending tools (messages.send,
@@ -100,7 +100,7 @@ would match).
 | `infomaniak.mail.messages.send` | create | required | sends one new message or reply over SMTP and stores a copy in the Sent folder |
 | `infomaniak.mail.drafts.send` | create | required | sends one checked draft over SMTP and stores a copy in the Sent folder |
 
-The recommended profile, `read`, offers the four reads and needs the `read` permission. The profile `organise`
+The recommended profile, `read`, offers the four reads and needs the `read` effect. The profile `organise`
 is not recommended; it adds `messages.flag`, `messages.move`, and `messages.delete`, so it needs `update` and
 `delete`. No profile contains `messages.expunge`: it is offered only when the connection's tools list names it.
 The profile `draft` is not recommended either; it adds `drafts.create` and `drafts.update` to the reads, so it needs
@@ -108,7 +108,7 @@ The profile `draft` is not recommended either; it adds `drafts.create` and `draf
 `drafts.update` declare local file access for reading and are offered only to a connection that releases a
 directory under `files.read`, also for a draft without attachments or with inline ones; `drafts.delete` needs no
 release. `messages.send` and `drafts.send` are in no profile at all: like `messages.expunge` they are offered
-only when the connection's tools list names them, and they need the `create` permission; `messages.send`
+only when the connection's tools list names them, and they need the `create` effect; `messages.send`
 declares local file access for reading like `drafts.create`, `drafts.send` needs no release. `attachments.get` declares local file access like every tool that can write a local file, so it is offered
 only to a connection that releases a directory under `files.write`, also for an inline read; `messages.get`
 needs no release.
@@ -209,8 +209,8 @@ Rules that hold for every change:
 - **Risk.** Each carries a complete risk: `flag` is `update` and idempotent; `move` is `update`, `delete` and
   `expunge` are `delete`, and all three are non-idempotent. All are confirmed (the request needs `confirm`),
   open-world, and of the class `infomaniak-mail-messages`.
-- **Tools list.** All four require the connection's tools list, whatever the permissions: a connection without
-  a `tools` list offers none of them. `delete` and `expunge` because they remove a message from its folder or
+- **Tools list.** All four require the connection's tools list, whatever the effects: a connection that selects
+  by `effects` offers none of them. `delete` and `expunge` because they remove a message from its folder or
   from the mailbox; `move` because it changes the UID and folder of a message, which every earlier reference
   loses; `flag` is held to the same rule because it changes mailbox state the person sees in every client, and
   the rule is the narrower of the two readings.
@@ -251,7 +251,6 @@ connections:
   customer-a-inbox:
     service: infomaniak-mail
     credential: customer-a-mail
-    permissions: [read, update, delete]
     targets: [mailbox/office@example.com, folder/INBOX, folder/Archive, folder/Trash]
     tools: [infomaniak.mail.messages.list, infomaniak.mail.messages.get, infomaniak.mail.messages.flag,
             infomaniak.mail.messages.move, infomaniak.mail.messages.delete]
@@ -319,7 +318,6 @@ connections:
   customer-a-drafts:
     service: infomaniak-mail
     credential: customer-a-mail
-    permissions: [read, create, update]
     targets: [mailbox/office@example.com, folder/INBOX, folder/Drafts]
     files:
       read: [~/uploads]
@@ -403,7 +401,6 @@ connections:
   customer-a-send:
     service: infomaniak-mail
     credential: customer-a-mail
-    permissions: [read, create]
     targets: [mailbox/office@example.com, folder/INBOX, folder/Drafts, folder/Sent]
     files:
       read: [~/uploads]

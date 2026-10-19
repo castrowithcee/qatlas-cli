@@ -87,7 +87,7 @@ func TestServerApprovesWithAToken(t *testing.T) {
 	}
 	result := *resp.Approval
 	if result.Token != "agent" || len(result.Changes) != 2 || !result.Changes[0].Approved ||
-		result.Changes[1].Approved || result.Changes[1].Gaps[0] != vault.GapPermissions {
+		result.Changes[1].Approved || result.Changes[1].Gaps[0] != vault.GapEffects {
 		t.Fatalf("approval = %+v, want covered approved and wide open for its permissions", result)
 	}
 	if resp, err := exchangeOverPipe(t, s, c, request{Op: opCheck, Scope: &covered}); err != nil || !resp.Found {

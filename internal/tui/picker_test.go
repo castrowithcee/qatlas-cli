@@ -279,8 +279,8 @@ func TestEveryChoiceRowOpensOnEnterAndSlash(t *testing.T) {
 		{sectionConnections, "service"},
 		{sectionConnections, "credential"},
 		{sectionConnections, profileLabel},
-		{sectionConnections, "permissions"},
-		{sectionConnections, toolsLabel},
+		{sectionConnections, effectsLabel},
+		{sectionConnections, accessLabel},
 		{sectionConnections, toolListLabel},
 		{sectionDefaults, "connection"},
 	}
@@ -290,6 +290,12 @@ func TestEveryChoiceRowOpensOnEnterAndSlash(t *testing.T) {
 			openSectionByName(t, m, row.section)
 			pressNew(t, m)
 			typeText(t, m, "fresh")
+			switch row.label {
+			case effectsLabel:
+				selectAccess(t, m, accessEffects)
+			case toolListLabel:
+				selectAccess(t, m, accessTools)
+			}
 			focusField(t, m, row.label)
 			before, err := os.ReadFile(path)
 			mustNoError(t, err)
@@ -322,7 +328,8 @@ func TestF2SavesFromAChoiceRow(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "fresh")
-	focusField(t, m, "permissions")
+	selectAccess(t, m, accessEffects)
+	focusField(t, m, effectsLabel)
 	if view := screenOf(m); !strings.Contains(view, "enter open · tab next field · F2 save") {
 		t.Errorf("the key line of a multiselect row does not name its keys:\n%s", view)
 	}
@@ -342,9 +349,12 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	m, _ := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
-	focusField(t, m, "permissions")
-	if got := m.fieldValue("permissions"); got != "read" {
-		t.Fatalf("permissions = %q, want the recommended read", got)
+	selectAccess(t, m, accessEffects)
+	focusField(t, m, effectsLabel)
+	// The recommended profile selects tools, so the effects start on the provider default; tick read here.
+	m.field(effectsLabel).selected = map[string]bool{"read": true}
+	if got := m.fieldValue(effectsLabel); got != "read" {
+		t.Fatalf("effects = %q, want read ticked", got)
 	}
 	press(t, m, "enter")
 	if view := screenOf(m); !strings.Contains(view, "[x] read") || !strings.Contains(view, "space tick · enter keep") {
@@ -356,7 +366,7 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 		t.Fatalf("esc dropped changed ticks without asking: screen %v", m.screen)
 	}
 	press(t, m, "d")
-	if got := m.fieldValue("permissions"); m.screen != screenForm || got != "read" {
+	if got := m.fieldValue(effectsLabel); m.screen != screenForm || got != "read" {
 		t.Fatalf("discarding kept a tick: %q", got)
 	}
 	press(t, m, "enter", "esc")
@@ -367,19 +377,19 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	press(t, m, "enter")
 	typeText(t, m, "create")
 	press(t, m, " ", "enter")
-	if got := m.fieldValue("permissions"); got != "read, create" {
+	if got := m.fieldValue(effectsLabel); got != "read, create" {
 		t.Fatalf("permissions = %q, want read, create", got)
 	}
 	press(t, m, "/")
 	typeText(t, m, "default")
 	press(t, m, " ", "enter")
-	if got := m.fieldValue("permissions"); got != "" {
+	if got := m.fieldValue(effectsLabel); got != "" {
 		t.Fatalf("default kept explicit permissions: %q", got)
 	}
 	press(t, m, "enter")
 	typeText(t, m, "read")
 	press(t, m, " ", "enter")
-	if got := m.fieldValue("permissions"); got != "read" {
+	if got := m.fieldValue(effectsLabel); got != "read" {
 		t.Fatalf("an explicit permission kept default: %q", got)
 	}
 }

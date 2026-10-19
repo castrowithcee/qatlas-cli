@@ -30,12 +30,14 @@ type Scope struct {
 	Provider string `json:"provider"`
 	// Origin is the effective endpoint of the connection's service, its base URL or its provider's default.
 	Origin string `json:"origin"`
-	// Effects are what the connection permits, the provider's defaults applied.
+	// Effects are what the connection offers: its effects with the provider's defaults applied, or, with a
+	// tools list, the effects derived from the listed tools. The JSON name is the one of earlier versions, so
+	// an approval keeps its fingerprint.
 	Effects []string `json:"permissions"`
 	// Targets are the connection's target or targets.
 	Targets []string `json:"targets"`
-	// Tools is the connection's tools list. Nil means it has none, so every tool its permissions admit is
-	// offered; an empty list offers none. The two are different scopes.
+	// Tools is the connection's tools list. Nil means it has none, so every tool of its effects is offered;
+	// an empty list offers none. The two are different scopes.
 	Tools []string `json:"tools"`
 	// Paths are the directories the connection is bound to, as configured; none means every project. A
 	// connection bound to other projects reaches other data, so a change of its paths needs approval too.

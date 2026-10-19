@@ -17,8 +17,7 @@ func TestSavingADisabledConnectionKeepsItsStateAndSelection(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {
 		Service: "wiki", Credential: "reader", Disabled: true,
-		Effects: []config.Effect{config.EffectRead},
-		Tools:   []string{"bookstack.pages.list"}, Paths: []string{"~/work/kunde"},
+		Tools: []string{"bookstack.pages.list"}, Paths: []string{"~/work/kunde"},
 	}})
 	openEntryForm(t, m, sectionConnections, "wiki")
 	pump(t, m, "f2")
@@ -28,7 +27,7 @@ func TestSavingADisabledConnectionKeepsItsStateAndSelection(t *testing.T) {
 	got := savedConfig(t, path).Connections["wiki"]
 	if !got.Disabled || !reflect.DeepEqual(got.Tools, []string{"bookstack.pages.list"}) ||
 		!reflect.DeepEqual(got.Paths, []string{"~/work/kunde"}) ||
-		!reflect.DeepEqual(got.Effects, []config.Effect{config.EffectRead}) {
+		got.Effects != nil {
 		t.Fatalf("saved connection = %+v, want state and selection kept", got)
 	}
 

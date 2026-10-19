@@ -64,7 +64,6 @@ connections:
     service: acct
     credential: acct-token
     target: 42/Customer base
-    permissions: [read, create]
     tools: [seatableaccount.snapshots.list, seatableaccount.snapshots.restore]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

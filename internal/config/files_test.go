@@ -187,7 +187,7 @@ func TestFilesSurviveMarshalCloneAndResolve(t *testing.T) {
 }
 
 func TestConnectionRefusalNeedsFilesOfTheToolsDirection(t *testing.T) {
-	cfg, err := decodeFiles(t, filesBase+"    permissions: [read, create]\n    files: {read: ["+drive+"/srv/in]}\n")
+	cfg, err := decodeFiles(t, filesBase+"    effects: [read, create]\n    files: {read: ["+drive+"/srv/in]}\n")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,19 +13,26 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
-// Migration is what one migration of the configuration file to the current schema did. Backup is the copy of
+// Migration is what one migration of the configuration file to the current schema did. From is the schema
+// the file had. Backup is the copy of
 // the file as it was and VaultCopies the copies of the vault's files, all in the backups directory beside the
 // file; together they are the way back. VaultIDs counts the vault entries that got their credential id, or,
 // with Pending, the pending writes of a locked vault that carry them until its next unlock. Renamings are the
 // former provider and tool IDs the file named, which it names by their current IDs now, as every save writes
-// them. Warning is the redacted failure to log the migration, which never undoes it, and "" otherwise.
+// them. Reapproval names the connections that read a credential of an encrypted vault and whose effects the
+// migration narrowed to those of their tools: their approval no longer matches, and each needs approving once
+// ('qatlas vault approve', or in the editor). With a locked vault it lists every such connection, since
+// whether it was approved is unknown. Warning is the redacted failure to log the migration, which never undoes
+// it, and "" otherwise.
 type Migration struct {
 	Path        string
+	From        int
 	Backup      string
 	VaultCopies []string
 	VaultIDs    int
 	Pending     bool
 	Renamings   []config.Renaming
+	Reapproval  []string
 	Warning     string
 }
 
@@ -99,7 +106,7 @@ func (s *Service) MigrateSchema() (*Migration, error) {
 // migrate runs one attempt on cfg, read at revision rev. The returned Migration has Backup set once the file
 // was written, also when the read-back failed.
 func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, error) {
-	m := &Migration{Path: s.store.Path(), Renamings: cfg.Renamings()}
+	m := &Migration{Path: s.store.Path(), From: cfg.Version, Renamings: cfg.Renamings()}
 	v := s.vault()
 	if v != nil && v.Dir() != vault.New(filepath.Dir(s.store.Path())).Dir() {
 		v = nil
@@ -123,6 +130,7 @@ func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, 
 			return err
 		}
 
+		m.Reapproval = reapprovalNeeded(cfg, v)
 		cfg.AssignIDs()
 		undo := func() error { return nil }
 		if v != nil {
@@ -149,6 +157,36 @@ func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, 
 		return s.readBack(cfg)
 	})
 	return m, err
+}
+
+// reapprovalNeeded returns the connections whose effects the migration narrows and that an encrypted vault
+// approved or may have approved. It never widens anything and approves nothing.
+func reapprovalNeeded(cfg *config.Config, v *vault.Vault) []string {
+	narrowed := cfg.NarrowedEffects()
+	if v == nil || len(narrowed) == 0 {
+		return nil
+	}
+	state, err := v.State()
+	if err != nil || state != vault.StateLocked && state != vault.StateUnlocked {
+		return nil
+	}
+	var approvals map[string]vault.Approval
+	if state == vault.StateUnlocked {
+		if approvals, err = v.Approvals(); err != nil {
+			approvals = nil
+		}
+	}
+	var names []string
+	for _, name := range narrowed {
+		if cred, ok := cfg.Credentials[cfg.Connections[name].Credential]; !ok || cred.Type != config.CredentialTypeVault {
+			continue
+		}
+		if _, approved := approvals[name]; approvals != nil && !approved {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 // backupVaultFiles copies every file at the top of the vault directory; the pending writes and the logs below

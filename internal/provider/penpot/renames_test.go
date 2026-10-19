@@ -107,7 +107,6 @@ connections:
     service: pp
     credential: pp-token
     target: team/11111111-1111-1111-1111-111111111111
-    permissions: [read, create, update]
     tools: [penpot.media.fromurl, penpot.members.setrole]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

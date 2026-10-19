@@ -61,7 +61,7 @@ func TestProblemsAreStructured(t *testing.T) {
 		field string
 		index int // -1 for none
 	}{
-		{"version", func(c *Config) { c.Version = 9 }, "version", CodeUnsupportedVersion, "version: got 9, want 1 or 2", "", -1},
+		{"version", func(c *Config) { c.Version = 9 }, "version", CodeUnsupportedVersion, "version: got 9, want 1, 2 or 3", "", -1},
 		{"service name", func(c *Config) { c.Services["bad name"] = c.Services["gh"] }, "services.bad name",
 			CodeInvalidName, "services.bad name: a service name must consist", "", -1},
 		{"defaults name", func(c *Config) { c.Defaults.Connections = map[string]string{"bad domain": "gh"} },
@@ -145,10 +145,10 @@ func TestProblemsAreStructured(t *testing.T) {
 			conn(c, "gh", func(v *Connection) { v.Paths = []string{drive + "/srv/a", drive + "/srv/a"} })
 		}, "connections.gh.paths[1]", CodeDuplicatePath, "connections.gh.paths[1]: a directory is listed", "paths", 1},
 		{"unknown permission", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Effects = []Effect{"fly"} }) },
-			"connections.gh.permissions", CodeUnknownEffect, "connections.gh.permissions: unknown permission \"fly\"", "permissions", -1},
+			"connections.gh.effects", CodeUnknownEffect, "connections.gh.effects: unknown permission \"fly\"", "effects", -1},
 		{"duplicate permission", func(c *Config) {
 			conn(c, "gh", func(v *Connection) { v.Effects = []Effect{EffectRead, EffectRead} })
-		}, "connections.gh.permissions", CodeDuplicateEffect, "connections.gh.permissions: permission \"read\" is listed", "permissions", -1},
+		}, "connections.gh.effects", CodeDuplicateEffect, "connections.gh.effects: permission \"read\" is listed", "effects", -1},
 		{"target required", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Target = "" }) },
 			"connections.gh.target", CodeTargetRequired, "connections.gh.target: provider \"github\" requires", "target", -1},
 		{"target and targets", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Targets = []string{"repos/a/b"} }) },
@@ -175,11 +175,21 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh.tools", CodeDuplicateTool, "connections.gh.tools: tool \"github.issues.get\" is listed", "tools", -1},
 		{"tool effect", func(c *Config) {
 			conn(c, "gh", func(v *Connection) {
-				v.Effects = []Effect{EffectRead}
+				v.legacyEffects = []Effect{EffectRead}
 				v.Tools = []string{"github.issues.create"}
 			})
 		}, "connections.gh.tools", CodeToolEffectNotPermitted,
-			"connections.gh.tools: tool \"github.issues.create\" has effect create, which the connection's permissions do not allow", "tools", -1},
+			"connections.gh.tools: tool \"github.issues.create\" has effect create, which the former permissions of the connection do not allow", "tools", -1},
+		{"effects and tools", func(c *Config) {
+			conn(c, "gh", func(v *Connection) {
+				v.Effects = []Effect{EffectRead}
+				v.Tools = []string{"github.issues.get"}
+			})
+		}, "connections.gh.effects", CodeEffectsAndTools, "connections.gh.effects: effects and tools are both given", "effects", -1},
+		{"permissions and effects", func(c *Config) { conn(c, "gh", func(v *Connection) { v.bothEffectFields = true }) },
+			"connections.gh.effects", CodePermissionsAndEffects, "connections.gh.effects: both effects and its former name", "effects", -1},
+		{"permissions in a current file", func(c *Config) { conn(c, "gh", func(v *Connection) { v.permissionsInCurrent = true }) },
+			"connections.gh.effects", CodePermissionsRenamed, "connections.gh.effects: permissions is the former name", "effects", -1},
 		{"tool of other provider", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Tools = []string{"bookstack.pages.get"} }) },
 			"connections.gh.tools", CodeToolOfOtherProvider, "connections.gh.tools: tool \"bookstack.pages.get\" belongs to provider \"bookstack\"", "tools", -1},
 		{"unknown tool entry", func(c *Config) {
@@ -279,7 +289,7 @@ func TestProblemsAreStructured(t *testing.T) {
 }
 
 func TestProblemToolEffectHint(t *testing.T) {
-	if got := (Problem{Code: CodeToolEffectNotPermitted}).Hint(); got != "Tick the effect again or untick these tools." {
+	if got := (Problem{Code: CodeToolEffectNotPermitted}).Hint(); got != "Remove these tools, or list their effect among the former permissions." {
 		t.Errorf("Hint() = %q", got)
 	}
 }

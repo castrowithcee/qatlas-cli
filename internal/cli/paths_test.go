@@ -23,7 +23,7 @@ func TestBoundConnectionsFollowTheWorkingDirectory(t *testing.T) {
 		}
 	}
 	absent := filepath.Join(t.TempDir(), "absent")
-	cfg := writeConfig(t, fmt.Sprintf(`version: 2
+	cfg := writeConfig(t, fmt.Sprintf(`version: 3
 services:
   wiki:
     provider: bookstack
@@ -38,16 +38,16 @@ connections:
   customer:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
     paths: [%q]
   shared:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
   ghost:
     service: wiki
     credential: reader
-    permissions: [read]
+    effects: [read]
     paths: [%q]
 defaults:
   connections:

@@ -313,7 +313,8 @@ func TestQuestionMarkOpensTheHelpWhereNothingIsTyped(t *testing.T) {
 		m, _ := toolsModel(t, wikiRegistry(t), nil)
 		openSectionByName(t, m, sectionConnections)
 		pressNew(t, m)
-		focusField(t, m, "permissions")
+		selectAccess(t, m, accessEffects)
+		focusField(t, m, effectsLabel)
 		press(t, m, "enter")
 		if m.screen != screenPicker {
 			t.Fatalf("screen = %v, want the picker", m.screen)
@@ -340,7 +341,13 @@ func TestSpaceOnlyTicksInMultipleChoices(t *testing.T) {
 	m, _ := toolsModel(t, wikiRegistry(t), nil)
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
-	for _, label := range []string{"service", "permissions", toolListLabel} {
+	for _, label := range []string{"service", effectsLabel, toolListLabel} {
+		switch label {
+		case effectsLabel:
+			selectAccess(t, m, accessEffects)
+		case toolListLabel:
+			selectAccess(t, m, accessTools)
+		}
 		focusField(t, m, label)
 		press(t, m, " ")
 		if m.screen != screenForm || m.fields[m.focus].label != label {

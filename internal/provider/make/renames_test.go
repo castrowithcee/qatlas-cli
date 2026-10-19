@@ -149,7 +149,6 @@ connections:
     service: make
     credential: make-token
     target: team/1
-    permissions: [read, update]
     tools: [make.datastores.list, make.hookqueue.list, make.connections.setdata]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

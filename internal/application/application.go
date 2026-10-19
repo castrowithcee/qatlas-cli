@@ -578,7 +578,7 @@ func (c *Core) Providers() ProvidersResponse {
 
 // The ways a connection's tools list shapes what it offers, as ConnectionSummary publishes them.
 const (
-	// ToolsAllPermitted: no tools list; every tool whose effect the permissions allow, except a tool that
+	// ToolsAllPermitted: no tools list; every tool of the connection's effects, except a tool that
 	// requires an allow-list.
 	ToolsAllPermitted = "all-permitted"
 	// ToolsListed: a tools list; only the tools it names.
@@ -603,7 +603,7 @@ type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`
 	Description string  `json:"description"`
-	Effects     string  `json:"permissions"`
+	Effects     string  `json:"effects"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
 	// State is "disabled" while the connection is switched off or past its active_until, and empty for an

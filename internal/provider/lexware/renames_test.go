@@ -125,7 +125,6 @@ connections:
   office:
     service: lx
     credential: lx-key
-    permissions: [read]
     tools: [lexware.voucherlist.list, lexware.creditnotes.get, lexware.eventsubscriptions.list]
 `
 	cfg, err := config.Decode(strings.NewReader(document), reg)

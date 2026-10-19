@@ -54,7 +54,7 @@ var problemRows = map[string]map[string]string{
 	},
 	config.SectionConnections: {
 		"": "name", "service": "service", "credential": "credential", "forward_secrets": forwardLabel,
-		"description": "description", "permissions": "permissions", "target": targetsLabel,
+		"description": "description", "effects": effectsLabel, "target": targetsLabel,
 		"targets": targetsLabel, "paths": pathsLabel, "tools": toolListLabel,
 		"files.read": filesReadLabel, "files.write": filesWriteLabel,
 	},
@@ -76,10 +76,7 @@ func (m *Model) problemRow(p config.Problem, name string) string {
 		if step != m.wizard.step || m.screen != screenForm {
 			return ""
 		}
-		if label == toolListLabel && m.shownRow(label) == "" {
-			label = toolsLabel
-		}
-		return m.shownRow(label)
+		return m.shownRow(m.accessRow(p, label))
 	}
 	if m.fields == nil || problemSections[m.section] != p.Section && p.Section != config.SectionProviderNotes {
 		return ""
@@ -120,17 +117,27 @@ func (m *Model) problemRow(p config.Problem, name string) string {
 	default:
 		label = problemRows[p.Section][field]
 	}
-	if label == toolListLabel && m.shownRow(label) == "" {
-		label = toolsLabel
+	return m.shownRow(m.accessRow(p, label))
+}
+
+// accessRow moves a problem of the effects or tools rows to the access row when the problem concerns both
+// fields or its own row is hidden by the other access mode.
+func (m *Model) accessRow(p config.Problem, label string) string {
+	switch p.Code {
+	case config.CodeEffectsAndTools, config.CodePermissionsAndEffects, config.CodePermissionsRenamed:
+		return accessLabel
 	}
-	return m.shownRow(label)
+	if (label == effectsLabel || label == toolListLabel) && m.shownRow(label) == "" {
+		return accessLabel
+	}
+	return label
 }
 
 // setupLabelSteps places the connection rows of the guided setup on the step that edits them.
 var setupLabelSteps = map[string]int{
 	"service": stepService, "credential": stepCredential, "name": stepScope, "description": stepScope,
-	targetsLabel: stepScope, "permissions": stepEffects, toolListLabel: stepEffects,
-	toolsLabel: stepEffects,
+	targetsLabel: stepScope, effectsLabel: stepEffects, toolListLabel: stepEffects,
+	accessLabel: stepEffects,
 }
 
 // setupProblemLabel returns the step of the guided setup whose rows edit p and the label of the row there.
