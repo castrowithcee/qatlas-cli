@@ -362,3 +362,58 @@ func TestSignedLogHoldsNoKeyMaterial(t *testing.T) {
 		}
 	}
 }
+
+// TestConnectionIDEntriesMixWithOldOnes interleaves entries with and without connection_id, signed and
+// unsigned, and checks that the field is covered by the check value and the chain.
+func TestConnectionIDEntriesMixWithOldOnes(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
+	dir := t.TempDir()
+	key, _ := testKey(t)
+	at := time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC)
+	signed, _ := signedLogger(t, dir, key, at)
+	unsigned, _ := clockAt(at)
+	unsigned.vaultDir, unsigned.retentionDays = dir, 90
+	withID := func(l *Logger, op string) {
+		t.Helper()
+		f := Fields{Path: "cli", Operation: op, Connection: "wiki", ConnectionID: id, Effect: "read", Result: "success"}
+		if err := f.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if err := l.Append(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustAppend(t, signed, "op.old.signed")
+	withID(signed, "op.new.signed")
+	mustAppend(t, signed, "op.old.after.new")
+	withID(unsigned, "op.new.unsigned")
+	mustAppend(t, unsigned, "op.old.unsigned")
+	withID(signed, "op.new.signed.two")
+
+	report := verifyWith(t, dir, key)
+	if day := report.Days[0]; report.Broken || day.Entries != 6 || day.Unverified != 2 || day.Changed != 0 {
+		t.Fatalf("report = %+v, want 6 entries, 2 unverified, intact", report)
+	}
+
+	path := filepath.Join(signed.logsDir(), "2026-03-01.jsonl")
+	lines := readLines(t, path)
+	if !bytes.Contains(lines[1], []byte(`"connection":"wiki","connection_id":"`+id+`"`)) || bytes.Contains(lines[0], []byte("connection_id")) {
+		t.Fatalf("lines = %s, want connection_id on the new entries only", lines)
+	}
+
+	// A changed connection_id on the last, signed line is caught by its check value alone.
+	tampered := append([][]byte(nil), lines...)
+	last := len(tampered) - 1
+	tampered[last] = bytes.Replace(lines[last], []byte(id), []byte("fedcba9876543210fedcba9876543210"), 1)
+	writeLines(t, path, tampered)
+	if report := verifyWith(t, dir, key); !report.Broken || report.Days[0].Changed != 1 {
+		t.Fatalf("report = %+v, want the changed connection_id detected", report)
+	}
+	// ... and on a middle line by the chain.
+	tampered = append([][]byte(nil), lines...)
+	tampered[1] = bytes.Replace(lines[1], []byte(id), []byte("fedcba9876543210fedcba9876543210"), 1)
+	writeLines(t, path, tampered)
+	if report := verifyWith(t, dir, nil); !report.Broken {
+		t.Fatalf("report without a checker = %+v, want the chain broken", report)
+	}
+}

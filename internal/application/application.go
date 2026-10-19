@@ -1157,7 +1157,7 @@ func (c *Core) logInvoke(request InvokeRequest, reqBytes int64, response InvokeR
 		fields.Operation, fields.Version, fields.Effect = descriptor.ID, descriptor.Version, string(descriptor.Risk.Effect)
 	}
 	if resolved != nil {
-		fields.Connection = resolved.Name
+		fields.Connection, fields.ConnectionID = resolved.Name, resolved.ID
 	}
 	if warning := InvokeLogWarning(c.invokeLog.Append(fields)); warning != "" {
 		c.writeAuditText(warning)
@@ -1354,7 +1354,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 	}
 	service := c.config.Services[connection.Service]
 	return &config.Resolved{
-		Name: name, Provider: service.Provider, BaseURL: c.config.ServiceBaseURL(service), Options: service.Options,
+		Name: name, ID: connection.ID, Provider: service.Provider, BaseURL: c.config.ServiceBaseURL(service), Options: service.Options,
 		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
 		Service: connection.Service, Credential: connection.Credential,
 		Secrets:        c.config.Credentials[connection.Credential],

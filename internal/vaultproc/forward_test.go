@@ -82,10 +82,10 @@ func TestServerHandsForwardCredentialToTheReleasingConnection(t *testing.T) {
 	}
 }
 
-// A process of protocol 7 and a client of protocol 8 refuse each other, in both directions, with ErrVersion.
+// A process of protocol 8 and a client of protocol 9 refuse each other, in both directions, with ErrVersion.
 func TestProtocolVersionMismatchIsReported(t *testing.T) {
-	if Version != 8 {
-		t.Fatalf("Version = %d, want 8", Version)
+	if Version != 9 {
+		t.Fatalf("Version = %d, want 9", Version)
 	}
 	const previous = Version - 1
 
