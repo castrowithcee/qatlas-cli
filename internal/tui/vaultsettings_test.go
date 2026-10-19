@@ -474,8 +474,12 @@ func TestVaultSectionSavesTimeouts(t *testing.T) {
 	focusRole(t, m, "idle timeout")
 	typeText(t, m, "not a duration")
 	press(t, m, "f2")
-	if !strings.Contains(m.fail, "vault.idle_timeout") {
-		t.Fatalf("error = %q, want it refused by its key", m.fail)
+	if m.fail != "1 problem; nothing was saved" || len(m.problems.rows["idle timeout"]) != 1 {
+		t.Fatalf("error = %q, want the problem under its row", m.fail)
+	}
+	assertNoLocation(t, screenOf(m))
+	if !strings.Contains(screenOf(m), "[!] ") || !strings.Contains(screenOf(m), "such as 15m") {
+		t.Errorf("no cause and resolution under the row:\n%s", screenOf(m))
 	}
 	if m.screen != screenForm || m.fieldValue("idle timeout") != "not a duration" {
 		t.Fatalf("a refused value did not keep the form open with what was typed: screen %v value %q",
