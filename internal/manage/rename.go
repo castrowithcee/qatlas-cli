@@ -209,7 +209,8 @@ var saveRename = func(save func(*config.Config) error, cfg *config.Config) error
 // Once committed it removes the approval under the old name, hands the approvals to a vault process that
 // holds the vault unlocked, and logs a connection's rename as one config.connection.rename entry. A failure
 // there leaves at most a stale approval that names its connection (see approval.Leftover) and is returned as
-// a warning. A credential's rename is carried out by renameCredential.
+// a warning. A credential's rename is carried out by renameCredential, and a plan of PlanRevertRename by
+// revertCredential.
 func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, error) {
 	var res RenameResult
 	if plan == nil || plan.cfg == nil {
@@ -227,6 +228,9 @@ func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, e
 		if state == vault.StateLocked {
 			return res, vault.ErrNotUnlocked
 		}
+	}
+	if plan.Revert {
+		return s.revertCredential(ctx, plan, v)
 	}
 	if plan.Kind == RenameCredential {
 		return s.renameCredential(ctx, plan, v)

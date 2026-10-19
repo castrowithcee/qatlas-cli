@@ -23,9 +23,12 @@ type ScopeRename struct {
 // CredentialRename is what renaming the credential From to To changes in the vault. Entry renames the vault
 // entry of From, a vault credential's, and records CredentialID, its config id, where the entry has none yet.
 // Carry are the connections whose approvals follow the rename.
+//
+// Resume finishes a rename that stopped after the vault: the entry has the name To already and records
+// CredentialID, and the vault holds no entry From. Pending writes for From are merged into it under To.
 type CredentialRename struct {
 	From, To, CredentialID string
-	Entry                  bool
+	Entry, Resume          bool
 	Carry                  []ScopeRename
 }
 
@@ -51,6 +54,40 @@ func (v *Vault) HasEntry(name string) (bool, error) {
 		return ok, nil
 	}
 	return false, nil
+}
+
+// EntryCredentialIDs returns the config id each entry of the vault records, by entry name; "" for an entry
+// that records none. It reads an unencrypted vault and one unlocked in this process; a locked one fails with
+// ErrNotUnlocked, and an absent one holds no entry.
+func (v *Vault) EntryCredentialIDs() (map[string]string, error) {
+	state, err := v.State()
+	if err != nil {
+		return nil, err
+	}
+	doc := newDocument()
+	switch state {
+	case StateUnencrypted:
+		if doc, err = loadPlainDocument(v.plainPath()); err != nil {
+			return nil, err
+		}
+	case StateLocked:
+		return nil, ErrNotUnlocked
+	case StateUnlocked:
+		doc = v.doc
+	}
+	out := make(map[string]string, len(doc.Entries))
+	for _, entry := range doc.Entries {
+		out[entry.Name] = entry.CredentialID
+	}
+	return out, nil
+}
+
+// resumable reports whether doc holds what r.Resume expects: the entry To with r.CredentialID and no entry
+// From.
+func (d *document) resumable(r CredentialRename) bool {
+	entry, ok := d.byName(r.To)
+	_, from := d.byName(r.From)
+	return ok && !from && r.CredentialID != "" && entry.CredentialID == r.CredentialID
 }
 
 // PendingWrites counts the pending writes of an encrypted vault unlocked in this process by credential name:
@@ -110,11 +147,14 @@ func (v *Vault) RenameCredential(r CredentialRename) (carried []string, undo fun
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, taken := doc.byName(r.To); taken {
+		if r.Resume && !doc.resumable(r) {
+			return nil, nil, ErrEntryTaken
+		}
+		if _, taken := doc.byName(r.To); taken && !r.Resume {
 			return nil, nil, ErrEntryTaken
 		}
 		// An unencrypted vault binds no connection, so there is no approval to carry.
-		if !r.Entry || !doc.renameEntry(r.From, r.To, r.CredentialID) {
+		if r.Resume || !r.Entry || !doc.renameEntry(r.From, r.To, r.CredentialID) {
 			return nil, unchanged, nil
 		}
 		if err := v.writePlain(doc); err != nil {
@@ -135,7 +175,10 @@ type heldPending struct {
 
 func (v *Vault) renameUnlocked(r CredentialRename) ([]string, func() error, error) {
 	doc := v.doc
-	if _, taken := doc.byName(r.To); taken {
+	if r.Resume && !doc.resumable(r) {
+		return nil, nil, ErrEntryTaken
+	}
+	if _, taken := doc.byName(r.To); taken && !r.Resume {
 		return nil, nil, ErrEntryTaken
 	}
 	names, err := v.pendingFiles()
@@ -157,6 +200,9 @@ func (v *Vault) renameUnlocked(r CredentialRename) ([]string, func() error, erro
 			continue
 		}
 		merged = append(merged, heldPending{path: filepath.Join(v.pendingPath(), name), data: data})
+		if r.Resume {
+			payload.Name = r.To
+		}
 		// The order an unlock merges in: a payload with only a credential id last.
 		if len(payload.Roles) == 0 {
 			idsOnly = append(idsOnly, payload)
@@ -175,6 +221,9 @@ func (v *Vault) renameUnlocked(r CredentialRename) ([]string, func() error, erro
 	for _, c := range r.Carry {
 		approval, ok := next.Approvals[c.Before.Connection]
 		own := before[c.Before.Credential]
+		if r.Resume && c.Before.Credential == r.From {
+			own = before[r.To]
+		}
 		if !ok || own == "" || approval.Fingerprint != Fingerprint(c.Before, own) || after[c.After.Credential] == "" {
 			continue
 		}

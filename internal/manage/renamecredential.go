@@ -31,9 +31,21 @@ type CredentialPlan struct {
 	// EnvVars are the variables derived from the credential's name that can override its stored secrets; the
 	// credential reads them under their new names from now on. qatlas changes no environment.
 	EnvVars []EnvRename
+	// Resumes says the rename finishes one that stopped before the configuration was saved: the vault holds
+	// the credential's entry under the new name already, or the system keyring holds a copy of its secrets
+	// there. What that run carried over is reported as carried.
+	Resumes bool
+	// Revert says the plan puts back what such a stopped rename left instead (see PlanRevertRename): the
+	// vault entry gets the old name again, the approvals it carried go back to the old name, and KeyringRoles
+	// are the copies under the new name that are removed. The configuration is not written.
+	Revert bool
 
 	before *config.Config
 	carry  []vault.ScopeRename
+	// resumeEntry is the part of Resumes that concerns the vault entry, which approvals depend on; resumed
+	// are the connections whose approvals the run that stopped carried over.
+	resumeEntry bool
+	resumed     []string
 }
 
 // RenameReader is one connection that reads a renamed credential or releases it.
@@ -75,10 +87,13 @@ func (s *Service) planCredential(plan *RenamePlan, before *config.Config, approv
 		plan.Outside = append(plan.Outside, "environment variables: a forward credential reads none")
 	default:
 		for _, role := range roles {
-			env := EnvRename{Role: role, Old: secret.DerivedEnvName(plan.Old, role), New: secret.DerivedEnvName(plan.New, role)}
-			plan.EnvVars = append(plan.EnvVars, env)
-			plan.Outside = append(plan.Outside, fmt.Sprintf("environment variable %s, which overrides the stored "+
-				"%s secret, is read as %s from now on; qatlas changes no environment", env.Old, role, env.New))
+			plan.EnvVars = append(plan.EnvVars, EnvRename{Role: role, Old: secret.DerivedEnvName(plan.Old, role),
+				New: secret.DerivedEnvName(plan.New, role)})
+		}
+		if len(roles) > 0 {
+			plan.Outside = append(plan.Outside, "environment variables named after the credential, which override "+
+				"its stored secrets: it reads them under its new name from now on, and qatlas changes "+
+				"no environment")
 		}
 	}
 	if cred.Type == config.CredentialTypeKeyring {
@@ -108,7 +123,11 @@ func (s *Service) planKeyring(plan *RenamePlan, roles []string) error {
 		if err != nil {
 			return fmt.Errorf("reading %s from the system keyring: %w", secret.StoreKey(plan.New, role), err)
 		}
-		if taken.had {
+		switch {
+		case taken.had && held.had && taken.value == held.value:
+			// A copy a rename that stopped wrote: finishing it writes nothing there.
+			plan.Resumes = true
+		case taken.had:
 			return &RenameRefusedError{fmt.Errorf("the system keyring holds a secret under %s already; remove "+
 				"it with the system's key manager before a credential takes the name %s",
 				secret.StoreKey(plan.New, role), plan.New)}
@@ -160,19 +179,21 @@ func (s *Service) planCredentialVault(plan *RenamePlan, cred config.Credential, 
 	default:
 		return nil
 	}
-	taken, err := v.HasEntry(plan.New)
+	ids, err := v.EntryCredentialIDs()
 	if err != nil {
 		return err
 	}
-	if taken {
-		return &RenameRefusedError{fmt.Errorf("the vault holds secrets under the name %s already; a credential "+
-			"cannot take that name while they are there", plan.New)}
-	}
 	isVault := cred.Type == config.CredentialTypeVault
-	if isVault {
-		if plan.VaultEntry, err = v.HasEntry(plan.Old); err != nil {
-			return err
+	if owner, taken := ids[plan.New]; taken {
+		// Only the entry a rename of this very credential left is taken over; any other keeps the name.
+		if _, old := ids[plan.Old]; !isVault || old || owner == "" || owner != plan.ID {
+			return &RenameRefusedError{fmt.Errorf("the vault holds secrets under the name %s already; a "+
+				"credential cannot take that name while they are there", plan.New)}
 		}
+		plan.Resumes, plan.resumeEntry = true, true
+	}
+	if isVault {
+		_, plan.VaultEntry = ids[plan.Old]
 	}
 	if state == vault.StateUnencrypted {
 		return nil
@@ -216,6 +237,16 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 		scopes[scope.Connection] = pair
 	}
 	carried := map[string]bool{}
+	resumed := map[string]bool{}
+	if plan.resumeEntry {
+		rest, err := leftoverApprovals(plan.before, plan.cfg, plan.Old, v, approvals)
+		if err != nil {
+			return err
+		}
+		for _, r := range rest {
+			resumed[r.After.Connection] = true
+		}
+	}
 	for i := range plan.Readers {
 		reader := &plan.Readers[i]
 		pair, ok := scopes[reader.Connection]
@@ -223,10 +254,23 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 		if !ok || !isApproved {
 			continue
 		}
+		if resumed[reader.Connection] {
+			// The run that stopped carried it over already.
+			reader.Approval, reader.Carried = ApprovalValid, true
+			carried[reader.Connection] = true
+			plan.resumed = append(plan.resumed, reader.Connection)
+			continue
+		}
 		// The entry a connection reads keeps its id when it is the one renamed.
 		own, held, err := v.CredentialID(pair[0].Credential)
 		if err != nil {
 			return err
+		}
+		if !held && plan.resumeEntry {
+			own, held, err = v.CredentialID(pair[1].Credential)
+			if err != nil {
+				return err
+			}
 		}
 		if !held {
 			continue
@@ -305,7 +349,8 @@ func (s *Service) renameCredential(ctx context.Context, plan *RenamePlan, v *vau
 				return undoKeyring(plan.New, undos, err)
 			}
 			res.Carried, undoVault, err = v.RenameCredential(vault.CredentialRename{
-				From: plan.Old, To: plan.New, CredentialID: plan.ID, Entry: toVault, Carry: plan.carry,
+				From: plan.Old, To: plan.New, CredentialID: plan.ID, Entry: toVault, Resume: plan.resumeEntry,
+				Carry: plan.carry,
 			})
 			if err != nil {
 				discard()
@@ -339,30 +384,15 @@ func (s *Service) renameCredential(ctx context.Context, plan *RenamePlan, v *vau
 				"manager", secret.StoreKey(plan.Old, role), err, plan.Old)))
 		}
 	}
-	if vaultWritten {
-		if warning := s.SyncVaultProcess(ctx, func(ctx context.Context, client *vaultproc.Client) error {
-			if !toVault {
-				return nil
-			}
-			for _, role := range vaultRoles(plan.cfg, cred) {
-				value, found, _, err := v.Get(plan.New, role, nil)
-				if err != nil {
-					return err
-				}
-				if !found {
-					continue
-				}
-				if err := client.Set(ctx, plan.New, role, value); err != nil {
-					return err
-				}
-				if err := client.Delete(ctx, plan.Old, role); err != nil {
-					return err
-				}
-			}
-			return nil
-		}); warning != "" {
+	// A vault process still holds what it held before a run that stopped, so a resumed one is handed over too.
+	if vaultWritten || plan.resumeEntry {
+		if warning := s.syncRenamedEntry(ctx, v, plan.cfg, cred, plan.Old, plan.New); warning != "" {
 			res.Warnings = append(res.Warnings, warning)
 		}
+	}
+	if len(plan.resumed) > 0 {
+		res.Carried = append(res.Carried, plan.resumed...)
+		sort.Strings(res.Carried)
 	}
 	if warning := s.RecordConnections(plan.before, plan.cfg); warning != "" {
 		res.Warnings = append(res.Warnings, warning)
@@ -370,9 +400,38 @@ func (s *Service) renameCredential(ctx context.Context, plan *RenamePlan, v *vau
 	return res, nil
 }
 
+// syncRenamedEntry hands the entry of cred, renamed from one name to another in the vault, and the approvals
+// to a vault process that holds the vault unlocked, and returns its warning. The entry's secrets are handed
+// only for a vault credential; for any other the approvals alone are.
+func (s *Service) syncRenamedEntry(ctx context.Context, v *vault.Vault, cfg *config.Config, cred config.Credential,
+	from, to string) string {
+	return s.SyncVaultProcess(ctx, func(ctx context.Context, client *vaultproc.Client) error {
+		if cred.Type != config.CredentialTypeVault {
+			return nil
+		}
+		for _, role := range vaultRoles(cfg, cred) {
+			value, found, _, err := v.Get(to, role, nil)
+			if err != nil {
+				return err
+			}
+			if !found {
+				continue
+			}
+			if err := client.Set(ctx, to, role, value); err != nil {
+				return err
+			}
+			if err := client.Delete(ctx, from, role); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // moveKeyring writes every role of roles the system keyring holds under the old name of plan under the new
 // one and reads it back. It returns the roles it moved and the undo of each write; on a failure it has undone
-// them itself. A key the new name already holds is refused, never overwritten.
+// them itself. A key the new name already holds is refused, never overwritten, unless it holds the very same
+// secret.
 func (s *Service) moveKeyring(plan *RenamePlan, roles []string) ([]string, []undoStep, error) {
 	var moved []string
 	var undos []undoStep
@@ -389,6 +448,11 @@ func (s *Service) moveKeyring(plan *RenamePlan, roles []string) ([]string, []und
 		taken, err := s.previousKeyringSecret(plan.New, role)
 		if err != nil {
 			return nil, nil, undoKeyring(plan.New, undos, fmt.Errorf("reading %s from the system keyring: %w", key, err))
+		}
+		if taken.had && taken.value == held.value {
+			// The copy a rename that stopped wrote; it was there before, so no undo removes it.
+			moved = append(moved, role)
+			continue
 		}
 		if taken.had {
 			return nil, nil, undoKeyring(plan.New, undos, &RenameRefusedError{fmt.Errorf("the system keyring holds "+

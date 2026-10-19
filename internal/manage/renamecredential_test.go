@@ -74,7 +74,7 @@ func TestRenameVaultCredentialRenamesTheEntryAndCarriesValidApprovals(t *testing
 	if !reflect.DeepEqual(plan.EnvVars, wantEnv) || !reflect.DeepEqual(res.EnvVars, wantEnv) {
 		t.Errorf("env = %v / %v, want %v", plan.EnvVars, res.EnvVars, wantEnv)
 	}
-	if outside := strings.Join(plan.Outside, "\n"); !strings.Contains(outside, "QATLAS_READER_KEY_ID") ||
+	if outside := strings.Join(plan.Outside, "\n"); !strings.Contains(outside, "environment variables named after the credential") ||
 		!strings.Contains(outside, "qatlas changes no environment") {
 		t.Errorf("Outside = %v", plan.Outside)
 	}

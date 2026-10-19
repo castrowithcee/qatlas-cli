@@ -170,3 +170,60 @@ func TestRenameCredentialInAnUnencryptedVault(t *testing.T) {
 		t.Errorf("onto a held name = %v, want ErrEntryTaken", err)
 	}
 }
+
+// A rename that stopped after the vault is finished by a second one that finds the entry under the new name:
+// it merges what was queued for the old name since into it and carries what is still valid, but only for the
+// credential the entry records.
+func TestRenameCredentialResumesAStoppedRename(t *testing.T) {
+	v, _ := renameVault(t)
+	idBefore, _, _ := v.CredentialID("wiki-reader")
+	if _, _, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", CredentialID: "c0ffee", Entry: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := New(filepath.Dir(v.Dir())).Set("wiki-reader", "late", "synthetic-late", nil); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := v.EntryCredentialIDs()
+	if err != nil || ids["reader"] != "c0ffee" {
+		t.Fatalf("EntryCredentialIDs() = %v, %v", ids, err)
+	}
+	if _, held := ids["wiki-reader"]; held {
+		t.Fatal("the old name still holds an entry")
+	}
+	before := vaultFiles(t, v)
+	for _, id := range []string{"another", ""} {
+		if _, _, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", CredentialID: id,
+			Entry: true, Resume: true}); !errors.Is(err, ErrEntryTaken) {
+			t.Errorf("resuming for credential id %q = %v, want ErrEntryTaken", id, err)
+		}
+	}
+	if got := vaultFiles(t, v); !reflect.DeepEqual(got, before) {
+		t.Error("a refused resume changed the vault")
+	}
+
+	carried, _, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", CredentialID: "c0ffee",
+		Entry: true, Resume: true, Carry: []ScopeRename{
+			{Before: wikiScope(), After: renamedScope(wikiScope(), "reader"), ConnectionID: "conn-id"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(carried, []string{"wiki"}) {
+		t.Errorf("carried = %v, want the approval still valid for the old name", carried)
+	}
+	if value, found := mustGet(t, v, "reader", "late"); !found || value != "synthetic-late" {
+		t.Error("the write queued for the old name was not merged into the entry")
+	}
+	if id, held, _ := v.CredentialID("reader"); !held || id != idBefore {
+		t.Errorf("entry id = %q, %v, want %q", id, held, idBefore)
+	}
+	if held, _ := v.HasEntry("wiki-reader"); held {
+		t.Error("the resume created an entry under the old name")
+	}
+	if pending, _ := v.PendingWrites(); !reflect.DeepEqual(pending, map[string]int{"crm-key": 1}) {
+		t.Errorf("PendingWrites() = %v", pending)
+	}
+	v.Forget()
+	if _, err := v.EntryCredentialIDs(); !errors.Is(err, ErrNotUnlocked) {
+		t.Errorf("EntryCredentialIDs() while locked = %v, want ErrNotUnlocked", err)
+	}
+}
