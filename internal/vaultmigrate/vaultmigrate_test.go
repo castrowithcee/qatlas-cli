@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -119,14 +120,18 @@ func TestPlanFallsBackWhenTheKeyringCannotBeChecked(t *testing.T) {
 	}
 }
 
-// Write stores every entry, offering a passphrase only for the vault's very first secret, and Verify
-// confirms exactly that content is there once the vault is not locked.
+// Write stores every entry with its credential's id, offering a passphrase only for the vault's very first
+// secret, and Verify confirms exactly that content is there once the vault is not locked.
 func TestWriteAndVerifyRoundTrip(t *testing.T) {
-	v := vault.New(t.TempDir())
+	dir := t.TempDir()
+	v := vault.New(dir)
 	plan := []Entry{{Name: "reader", Role: "token-id", Value: "canary-write-4f1a"}}
 	var synced []Entry
+	const credID = "0123456789abcdef0123456789abcdef"
+	cfg := config.New()
+	cfg.Credentials["reader"] = config.Credential{ID: credID, Type: config.CredentialTypeVault}
 
-	if err := Write(v, plan, func(string) (string, error) { return "", nil },
+	if err := Write(v, cfg, plan, func(string) (string, error) { return "", nil },
 		func(p []Entry) { synced = p }); err != nil {
 		t.Fatalf("Write() = %v", err)
 	}
@@ -140,6 +145,9 @@ func TestWriteAndVerifyRoundTrip(t *testing.T) {
 	got, found, _, err := v.Get("reader", "token-id", nil)
 	if err != nil || !found || got != "canary-write-4f1a" {
 		t.Errorf("Get() = %q, %v, %v, want the written value", got, found, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(v.Dir(), "secrets.json")); !strings.Contains(string(data), `"credential_id": "`+credID+`"`) {
+		t.Errorf("the entry lacks the credential id:\n%s", data)
 	}
 }
 

@@ -70,6 +70,20 @@ func (d *document) setRole(name, credentialID, role, value string, now time.Time
 	d.Entries[entry.ID] = entry
 }
 
+// recordCredentialIDs sets the credential id of every entry whose name ids maps and that has none yet, and
+// returns the ids of the entries it changed.
+func (d *document) recordCredentialIDs(ids map[string]string) []string {
+	var changed []string
+	for id, entry := range d.Entries {
+		if credentialID := ids[entry.Name]; credentialID != "" && entry.CredentialID == "" {
+			entry.CredentialID = credentialID
+			d.Entries[id] = entry
+			changed = append(changed, id)
+		}
+	}
+	return changed
+}
+
 // deleteRole removes one role from the entry named name and reports whether it was there. An entry left
 // without any role is removed entirely, so an empty entry never lingers in the document.
 func (d *document) deleteRole(name, role string) bool {

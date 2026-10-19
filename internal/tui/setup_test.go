@@ -545,6 +545,11 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 			t.Fatalf("Load() = %v", err)
 		}
 		out := outcome{cred: saved.Credentials["reader"]}
+		if out.cred.ID == "" {
+			t.Fatal("the saved credential has no id")
+		}
+		// Each file gives its credential an id of its own.
+		out.cred.ID = ""
 		for _, role := range []string{"token-id", "token-secret"} {
 			source, _ := secrets.Status("reader", out.cred, role)
 			out.sources = append(out.sources, source)

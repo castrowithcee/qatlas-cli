@@ -154,6 +154,10 @@ type mcpServer struct {
 	stderr   io.Writer
 	timeout  time.Duration
 
+	// session is the ID every invocation log entry of this process carries, or empty where none could be
+	// created, which leaves the process unlogged. adopt may replace it once, before the loop starts.
+	session string
+
 	// legacy is the protocol version an initialize request negotiated, or empty. It is only touched by
 	// the reading loop.
 	legacy string
@@ -215,8 +219,12 @@ func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr i
 	if opts.Redactor == nil {
 		opts.Redactor = &redact.Redactor{}
 	}
+	session, err := invokelog.NewSession()
+	if err != nil {
+		fmt.Fprintf(stderr, "qatlas: warning: the MCP session is not logged: %v\n", err)
+	}
 	return &mcpServer{
-		opts: opts, registry: registry, stdout: stdout, stderr: stderr,
+		opts: opts, registry: registry, stdout: stdout, stderr: stderr, session: session,
 		timeout: invokeTimeout, rootsWait: mcpRootsWait, pending: make(map[string]*mcpPending),
 		restart: platformMCPRestart(), version: version,
 	}
@@ -303,13 +311,15 @@ type mcpMessage struct {
 }
 
 func (s *mcpServer) handle(parent context.Context, line []byte) {
+	ex := &mcpExchange{start: time.Now(), reqBytes: len(line)}
 	message, code, text := decodeMCPMessage(line)
 	if code != 0 {
 		// JSON-RPC notifications never receive a response, including when their params are malformed.
 		if len(message.ID) == 0 && message.Method != "" {
 			return
 		}
-		s.writeResponse(mcpErrorResponse(message.ID, code, text, nil))
+		ex.classify(message)
+		s.reply(ex, mcpErrorResponse(message.ID, code, text, nil))
 		return
 	}
 	if message.Reply {
@@ -327,8 +337,11 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		}
 		return
 	}
+	ex.classify(message)
 	if message.Method == "initialize" {
-		s.writeResponse(s.initialize(message))
+		response := s.initialize(message)
+		ex.client = s.legacyClient
+		s.reply(ex, response)
 		return
 	}
 
@@ -341,11 +354,11 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		session = false
 		requested, err := requestProtocolVersion(message.Params)
 		if err != nil {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
 			return
 		}
 		if requested != mcpProtocolVersion {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpUnsupportedVersion,
+			s.reply(ex, mcpErrorResponse(message.ID, mcpUnsupportedVersion,
 				"Unsupported protocol version", map[string]any{
 					"supported": []string{mcpProtocolVersion}, "requested": requested,
 				}))
@@ -353,20 +366,21 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		}
 		client = requestClientInfo(message.Params)
 	}
+	ex.client = client
 
 	switch message.Method {
 	case "ping":
 		if err := onlyParams(message.Params, "_meta"); err != nil {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
 			return
 		}
-		s.writeResponse(mcpResultResponse(message.ID, map[string]any{}))
+		s.reply(ex, mcpResultResponse(message.ID, map[string]any{}))
 	case "server/discover":
 		if err := onlyParams(message.Params, "_meta"); err != nil {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
 			return
 		}
-		s.writeResponse(mcpResultResponse(message.ID, map[string]any{
+		s.reply(ex, mcpResultResponse(message.ID, map[string]any{
 			"resultType":        "complete",
 			"supportedVersions": []string{mcpProtocolVersion},
 			"capabilities":      map[string]any{"tools": map[string]any{}},
@@ -377,21 +391,21 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		}))
 	case "tools/list":
 		if err := onlyParams(message.Params, "_meta", "cursor"); err != nil {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
 			return
 		}
 		if cursorPresent(message.Params) {
-			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, "pagination cursor is not supported", nil))
+			s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, "pagination cursor is not supported", nil))
 			return
 		}
-		s.writeResponse(mcpResultResponse(message.ID, map[string]any{
+		s.reply(ex, mcpResultResponse(message.ID, map[string]any{
 			"resultType": "complete", "tools": mcpTools(),
 			"ttlMs": mcpCacheTTLMillis, "cacheScope": "public", "_meta": mcpServerMeta(),
 		}))
 	case "tools/call":
-		s.startToolCall(parent, message, client, session)
+		s.startToolCall(parent, message, client, session, ex)
 	default:
-		s.writeResponse(mcpErrorResponse(message.ID, mcpMethodNotFound, "Method not found", nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpMethodNotFound, "Method not found", nil))
 	}
 }
 
@@ -574,7 +588,7 @@ func cursorPresent(raw json.RawMessage) bool {
 }
 
 func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, client *invokelog.ClientInfo,
-	session bool) {
+	session bool, ex *mcpExchange) {
 	var params struct {
 		Name           string          `json:"name"`
 		Arguments      json.RawMessage `json:"arguments"`
@@ -585,11 +599,11 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	decoder := json.NewDecoder(bytes.NewReader(message.Params))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&params) != nil || params.Name == "" || len(params.InputResponses) > 0 || params.RequestState != "" {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, "invalid tool call parameters", nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, "invalid tool call parameters", nil))
 		return
 	}
 	if !knownMCPTool(params.Name) {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, "Unknown tool: "+params.Name, nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, "Unknown tool: "+params.Name, nil))
 		return
 	}
 	if len(params.Arguments) == 0 {
@@ -597,7 +611,7 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	}
 	var arguments map[string]json.RawMessage
 	if json.Unmarshal(params.Arguments, &arguments) != nil || arguments == nil {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, "tool arguments must be an object", nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidParams, "tool arguments must be an object", nil))
 		return
 	}
 
@@ -608,13 +622,13 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	if _, exists := s.pending[key]; exists {
 		s.mu.Unlock()
 		cancel()
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidRequest, "request ID is already in progress", nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpInvalidRequest, "request ID is already in progress", nil))
 		return
 	}
 	if len(s.pending) >= maxMCPInFlight {
 		s.mu.Unlock()
 		cancel()
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInternalError, "too many in-flight requests", nil))
+		s.reply(ex, mcpErrorResponse(message.ID, mcpInternalError, "too many in-flight requests", nil))
 		return
 	}
 	s.pending[key] = pending
@@ -624,19 +638,23 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	go func() {
 		defer s.wg.Done()
 		defer cancel()
-		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments, client, session)
+		call := &mcpCall{}
+		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments, client, session, call)
 		s.writeAudit(audit)
 		if err != nil && errors.Is(requestContext.Err(), context.DeadlineExceeded) {
 			err = pastDeadline(err, s.timeout)
 		}
 		response := mcpResultResponse(message.ID, toolResult(result, err, s.opts.Redactor))
 
+		var n int
+		var written bool
 		s.mu.Lock()
 		if !pending.cancelled {
-			s.writeResponse(response)
+			n, written = s.writeResponse(response)
 		}
 		delete(s.pending, key)
 		s.mu.Unlock()
+		s.logToolCall(ex, call, err, n, written)
 	}()
 }
 
@@ -644,7 +662,7 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 // projects are the roots the client names, where it names any; every other call runs in the working
 // directory.
 func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessage,
-	client *invokelog.ClientInfo, session bool) (any, []byte, error) {
+	client *invokelog.ClientInfo, session bool, call *mcpCall) (any, []byte, error) {
 	var audit bytes.Buffer
 	// The published input schema is the contract; checking it first names the offending field.
 	for _, tool := range mcpTools() {
@@ -659,16 +677,15 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 		projects = s.sessionProjects(ctx)
 	}
 	s.coreMu.Lock()
-	var core *application.Core
-	var err error
-	if name == "qatlas.invoke" {
-		core, err = applicationCoreForInvoke(s.opts, s.registry, "mcp", client)
-	} else {
-		core, err = applicationCore(s.opts, s.registry, false)
-	}
+	core, cfg, configPath, err := loadCore(s.opts, s.registry, name == "qatlas.invoke")
 	s.coreMu.Unlock()
 	if err != nil {
 		return nil, nil, err
+	}
+	call.dir, call.retention = invokeLogDir(configPath), cfg.LogRetentionDays()
+	if name == "qatlas.invoke" {
+		// The core hands its entry to call, which the server appends once the response is written.
+		core.SetInvokeLog(call, "mcp", client)
 	}
 	if len(projects) > 0 {
 		core.SetProjects(projects)
@@ -908,16 +925,30 @@ type mcpRequest struct {
 	Method  string `json:"method"`
 }
 
-func (s *mcpServer) writeResponse(response mcpResponse) {
-	s.writeMessage(response)
+func (s *mcpServer) writeResponse(response mcpResponse) (int, bool) {
+	return s.writeMessage(response)
 }
 
-func (s *mcpServer) writeMessage(message any) {
+// writeMessage writes one message as one line and returns the length of the message without its line feed,
+// the same way the length of a line read is counted, and whether it was written. The message is encoded
+// once, into a buffer, so the length is that of the bytes written.
+func (s *mcpServer) writeMessage(message any) (int, bool) {
+	var line bytes.Buffer
+	encodeErr := json.NewEncoder(&line).Encode(message)
 	s.outMu.Lock()
 	defer s.outMu.Unlock()
-	if s.writeErr == nil {
-		s.writeErr = json.NewEncoder(s.stdout).Encode(message)
+	if s.writeErr != nil {
+		return 0, false
 	}
+	if encodeErr != nil {
+		s.writeErr = encodeErr
+		return 0, false
+	}
+	if _, err := s.stdout.Write(line.Bytes()); err != nil {
+		s.writeErr = err
+		return 0, false
+	}
+	return line.Len() - 1, true
 }
 
 func (s *mcpServer) outputError() error {

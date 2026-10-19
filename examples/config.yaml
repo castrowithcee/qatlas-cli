@@ -6,7 +6,7 @@
 # Check your edits with:       qatlas config validate
 # See where secrets come from: qatlas config validate --secrets
 
-version: 1
+version: 2
 
 # A service is one technical API endpoint of one provider.
 services:

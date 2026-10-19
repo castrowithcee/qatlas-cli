@@ -320,7 +320,7 @@ func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	path := writeConfig(t, `version: 1
+	path := writeConfig(t, `version: 2
 services:
   fake:
     provider: fake
@@ -381,7 +381,7 @@ defaults: {}
 // without a description, and one whose description contains a value the redactor knows. The service,
 // credential, environment variables and target are canaries that no diagnostic may carry.
 const ambiguousConfig = `
-version: 1
+version: 2
 services:
   service-canary:
     provider: bookstack
@@ -835,7 +835,7 @@ func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return registry, writeConfig(t, `version: 1
+	return registry, writeConfig(t, `version: 2
 services:
   fake:
     provider: fake
@@ -891,6 +891,12 @@ func TestMCPCancellationStopsCoreAndSuppressesResponse(t *testing.T) {
 	}
 	if stdout.Len() != 0 || stderr.Len() != 0 {
 		t.Fatalf("cancelled request wrote stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	// The call ran, so it keeps its entry; nothing was answered, so the entry has no resp_bytes.
+	entries, _ := readMCPLog(t, path)
+	if len(entries) != 1 || entries[0].Operation != "fake.pages.get" || entries[0].ReqBytes == nil ||
+		entries[0].RespBytes != nil || entries[0].Session != server.session {
+		t.Fatalf("log of a cancelled invoke = %+v", entries)
 	}
 }
 
@@ -1122,7 +1128,7 @@ func mcpTestRegistry(t *testing.T, handler capability.Handler) (*capability.Regi
 	if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
 		t.Fatal(err)
 	}
-	path := writeConfig(t, `version: 1
+	path := writeConfig(t, `version: 2
 services:
   fake:
     provider: fake

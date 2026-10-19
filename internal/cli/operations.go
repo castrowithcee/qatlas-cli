@@ -122,14 +122,21 @@ func applicationCoreForInvoke(opts *Options, registry *capability.Registry, path
 	if err != nil {
 		return nil, err
 	}
-	vaultDir := vault.New(filepath.Dir(configPath)).Dir()
-	writer := invokeLogWriter{logger: invokelog.New(vaultDir, cfg.LogRetentionDays())}
+	core.SetInvokeLog(newInvokeLogWriter(opts, invokeLogDir(configPath), cfg.LogRetentionDays()), path, client)
+	return core, nil
+}
+
+// invokeLogDir is the vault directory the invocation log of the configuration at configPath lives under.
+func invokeLogDir(configPath string) string { return vault.New(filepath.Dir(configPath)).Dir() }
+
+// newInvokeLogWriter returns the writer of the invocation log under vaultDir.
+func newInvokeLogWriter(opts *Options, vaultDir string, retentionDays int) invokeLogWriter {
+	writer := invokeLogWriter{logger: invokelog.New(vaultDir, retentionDays)}
 	// Only the vault this very log belongs to signs it.
 	if secrets, err := opts.resolver(); err == nil && secrets.Vault() != nil && secrets.Vault().Dir() == vaultDir {
 		writer.vault = secrets.Vault()
 	}
-	core.SetInvokeLog(writer, path, client)
-	return core, nil
+	return writer
 }
 
 func loadCore(opts *Options, registry *capability.Registry, withSecrets bool) (*application.Core, *config.Config,

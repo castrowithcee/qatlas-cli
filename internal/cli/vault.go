@@ -322,13 +322,20 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"or mcp and, over mcp, the client's name and version from its initialize request, the tool ID and\n" +
 			"version, the connection, the tool's effect, the result (success or the error code the diagnostic\n" +
 			"leads with), how long it took, and the byte sizes of the arguments (req_bytes) and of a\n" +
-			"successful result (resp_bytes), absent where not recorded. No argument, result, secret, target,\n" +
-			"or URL query ever reaches it, and an entry is written even where the vault does not exist yet,\n" +
-			"is locked, or is unencrypted; a logging failure, such as an unwritable directory, is a warning\n" +
-			"beside the invoke's own result, never a reason to change it.\n\n" +
+			"successful result (resp_bytes), absent where not recorded. Over mcp, an entry also carries the\n" +
+			"random session ID of its 'qatlas mcp' process, and the sizes are those of the whole JSON-RPC\n" +
+			"request and response messages, an error response included. The initialize, server/discover, and\n" +
+			"tools/list exchanges and the qatlas.search and qatlas.describe calls get entries of their own,\n" +
+			"without a connection; a qatlas.invoke that failed before it named a known tool has no tool ID.\n" +
+			"An entry is written after the response, so a request that never got one is not logged, except a\n" +
+			"qatlas.invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
+			"term, result, secret, target, or URL query ever reaches the log, and an entry is written even\n" +
+			"where the vault does not exist yet, is locked, or is unencrypted; a logging failure, such as an\n" +
+			"unwritable directory, is a warning beside the invoke's own result, never a reason to change it.\n\n" +
 			"Entries are linked by a SHA-256 hash chain that spans day boundaries, so a changed or deleted\n" +
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
-			"'vault logs stats' sums up the response sizes per tool and connection.\n" +
+			"'vault logs stats' sums up the response sizes per tool and connection, and per MCP session the bytes\n" +
+			"of its baseline, navigation, and invokes.\n" +
 			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +
 			"an older day is removed on the next invoke, and the entry written right after names what was\n" +
 			"removed, so the cut is never mistaken for a gap.\n\n" +
@@ -389,10 +396,11 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 	var from, to string
 	cmd := &cobra.Command{
 		Use:   "stats",
-		Short: "Sum up the response sizes of invokes per tool and connection",
+		Short: "Sum up the response sizes of invokes per tool and connection, and the context cost of MCP sessions",
 		Long: "Stats shows how much agent context each tool and connection produces: it reads the invocation\n" +
 			"log and groups the invokes by tool ID (operation) and connection. Retention cuts, connection\n" +
-			"changes, and approvals are not invokes and are left out.\n\n" +
+			"changes, approvals, and the MCP baseline and navigation exchanges are not invokes and are left\n" +
+			"out of these groups.\n\n" +
 			"Each group has calls (invokes), no_counter (invokes without a recorded resp_bytes: a failed invoke\n" +
 			"or an entry written before the counter existed; they are never counted as 0 and are left out of\n" +
 			"every size below), resp_bytes_total, resp_bytes_max, resp_bytes_p50 and resp_bytes_p95 (nearest-rank\n" +
@@ -400,6 +408,16 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 			"size has only operation, connection, calls, and no_counter. The token figures are an\n" +
 			"approximation of 3.5 bytes per token, not a tokenizer count. A recorded 0 counts as a size. The\n" +
 			"groups come largest resp_bytes_total first, then most calls, then by operation and connection.\n\n" +
+			"sessions sums up what each MCP session (one 'qatlas mcp' process, in the order of its first entry)\n" +
+			"put into the agent's context, in three areas: baseline (the initialize response with the server\n" +
+			"instructions and the tools/list response with the tool descriptions), navigation (qatlas.search\n" +
+			"and qatlas.describe), and invoke (qatlas.invoke, failed calls included). Per area and per\n" +
+			"operation it has calls, req_bytes and resp_bytes (the byte lengths of the whole JSON-RPC request\n" +
+			"and response messages, an error response included; a missing counter adds 0), and total_bytes.\n" +
+			"Baseline and navigation operations are named mcp/initialize (also for server/discover),\n" +
+			"mcp/tools-list, qatlas.search, and qatlas.describe; an invoke without a tool ID has an empty\n" +
+			"operation. Entries without a session ID, written before it existed or over the CLI, appear\n" +
+			"only in the groups.\n\n" +
 			"--from and --to (YYYY-MM-DD, both inclusive, local days like the editor's Logs section) narrow\n" +
 			"the entries; either one left out leaves that end open, and without both every recorded day counts.\n\n" +
 			"It only reads the log, without checking its chain or check values (see 'vault logs verify'), and\n" +
@@ -434,10 +452,34 @@ type logsStatsGroup struct {
 	EstTokensP95   *int64 `json:"est_tokens_p95,omitempty"`
 }
 
+// logsStatsTool is what one operation of an MCP session's area cost, in JSON-RPC message bytes.
+type logsStatsTool struct {
+	Operation  string `json:"operation"`
+	Calls      int    `json:"calls"`
+	ReqBytes   int64  `json:"req_bytes"`
+	RespBytes  int64  `json:"resp_bytes"`
+	TotalBytes int64  `json:"total_bytes"`
+}
+
+type logsStatsArea struct {
+	Area       string          `json:"area"`
+	Calls      int             `json:"calls"`
+	ReqBytes   int64           `json:"req_bytes"`
+	RespBytes  int64           `json:"resp_bytes"`
+	TotalBytes int64           `json:"total_bytes"`
+	Tools      []logsStatsTool `json:"tools"`
+}
+
+type logsStatsSession struct {
+	Session string          `json:"session"`
+	Areas   []logsStatsArea `json:"areas"`
+}
+
 type logsStatsDocument struct {
-	From   string           `json:"from,omitempty"`
-	To     string           `json:"to,omitempty"`
-	Groups []logsStatsGroup `json:"groups"`
+	From     string             `json:"from,omitempty"`
+	To       string             `json:"to,omitempty"`
+	Groups   []logsStatsGroup   `json:"groups"`
+	Sessions []logsStatsSession `json:"sessions,omitempty"`
 }
 
 func runVaultLogsStats(c *cobra.Command, opts *Options, from, to string) error {
@@ -462,7 +504,27 @@ func runVaultLogsStats(c *cobra.Command, opts *Options, from, to string) error {
 	if err != nil {
 		return err
 	}
-	return emitDocument(c, format, logsStatsResponse(invokelog.Summarize(invokelog.LocalDayEntries(days, from, to)), from, to))
+	entries := invokelog.LocalDayEntries(days, from, to)
+	doc := logsStatsResponse(invokelog.Summarize(entries), from, to)
+	doc.Sessions = logsStatsSessions(invokelog.SummarizeSessions(entries))
+	return emitDocument(c, format, doc)
+}
+
+func logsStatsSessions(sessions []invokelog.SessionSummary) []logsStatsSession {
+	out := make([]logsStatsSession, len(sessions))
+	for i, s := range sessions {
+		out[i] = logsStatsSession{Session: s.Session, Areas: make([]logsStatsArea, len(s.Areas))}
+		for j, a := range s.Areas {
+			area := logsStatsArea{Area: string(a.Area), Calls: a.Calls, ReqBytes: a.ReqBytes, RespBytes: a.RespBytes,
+				TotalBytes: a.Total(), Tools: make([]logsStatsTool, len(a.Tools))}
+			for k, t := range a.Tools {
+				area.Tools[k] = logsStatsTool{Operation: t.Operation, Calls: t.Calls, ReqBytes: t.ReqBytes,
+					RespBytes: t.RespBytes, TotalBytes: t.Total()}
+			}
+			out[i].Areas[j] = area
+		}
+	}
+	return out
 }
 
 func logsStatsResponse(groups []invokelog.SizeGroup, from, to string) logsStatsDocument {
@@ -1579,7 +1641,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 			return nil
 		})
 	}
-	if err := vaultmigrate.Write(v, plan, offerVaultPassphrase, sync); err != nil {
+	if err := vaultmigrate.Write(v, cfg, plan, offerVaultPassphrase, sync); err != nil {
 		return classifyUserError(err)
 	}
 

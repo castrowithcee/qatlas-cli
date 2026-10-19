@@ -1159,15 +1159,23 @@ func (c *Core) logInvoke(request InvokeRequest, reqBytes int64, response InvokeR
 	if resolved != nil {
 		fields.Connection = resolved.Name
 	}
-	var unsigned *invokelog.UnsignedError
-	switch logErr := c.invokeLog.Append(fields); {
-	case logErr == nil:
-	case errors.As(logErr, &unsigned):
-		c.writeAuditText(fmt.Sprintf("qatlas: warning: the invocation log entry was written without a check value: %v",
-			unsigned.Err))
-	default:
-		c.writeAuditText(fmt.Sprintf("qatlas: warning: could not write the invocation log: %v", logErr))
+	if warning := InvokeLogWarning(c.invokeLog.Append(fields)); warning != "" {
+		c.writeAuditText(warning)
 	}
+}
+
+// InvokeLogWarning is the warning line for the error of an invocation log Append, or "" where it succeeded.
+// An *invokelog.UnsignedError means the entry was written without a check value.
+func InvokeLogWarning(err error) string {
+	var unsigned *invokelog.UnsignedError
+	switch {
+	case err == nil:
+		return ""
+	case errors.As(err, &unsigned):
+		return fmt.Sprintf("qatlas: warning: the invocation log entry was written without a check value: %v",
+			unsigned.Err)
+	}
+	return fmt.Sprintf("qatlas: warning: could not write the invocation log: %v", err)
 }
 
 // writeAuditText appends one warning line to the audit writer, beside the JSON audit event a confirmed

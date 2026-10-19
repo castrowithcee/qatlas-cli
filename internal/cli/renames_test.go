@@ -52,7 +52,7 @@ func renameRegistry(t *testing.T) *capability.Registry {
 	return reg
 }
 
-const formerNamesConfig = `version: 1
+const formerNamesConfig = `version: 2
 services:
   svc:
     provider: acmechat
@@ -204,7 +204,7 @@ func vaultRenameFixture(t *testing.T, tools string) string {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	dir := t.TempDir()
-	body := `version: 1
+	body := `version: 2
 services:
   svc:
     provider: acmechat

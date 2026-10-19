@@ -7,7 +7,7 @@ import (
 )
 
 // SizeGroup is the response sizes of every invoke of one tool on one connection. An invoke without a
-// resp_bytes counter (a failed invoke, or a line written before the counter existed) is counted in Calls
+// resp_bytes counter (a failed CLI invoke, or a line written before the counter existed) is counted in Calls
 // and NoCounter, never as 0, and takes no part in the byte figures; Counted is what is left.
 type SizeGroup struct {
 	Operation  string
@@ -28,10 +28,123 @@ func (g SizeGroup) Counted() int { return g.Calls - g.NoCounter }
 // involved, so it is a rough size for the agent context, not a count.
 func EstimateTokens(n int64) int64 { return n * 2 / 7 }
 
-// IsInvoke reports whether e records an invoke, as opposed to a retention cut, a connection change, or an
-// approval.
+// IsInvoke reports whether e records an invoke, as opposed to a retention cut, a connection change, an
+// approval, or an mcp baseline or navigation exchange.
 func IsInvoke(e Entry) bool {
-	return e.Kind == "" && e.Operation != "" && !managementOperations[e.Operation]
+	_, reserved := mcpOperations[e.Operation]
+	return e.Kind == "" && e.Operation != "" && !managementOperations[e.Operation] && !reserved
+}
+
+// Area is the part of an MCP session's context cost an entry belongs to.
+type Area string
+
+// The areas, in the order a session meets them.
+const (
+	AreaBaseline   Area = "baseline"
+	AreaNavigation Area = "navigation"
+	AreaInvoke     Area = "invoke"
+)
+
+var areaOrder = []Area{AreaBaseline, AreaNavigation, AreaInvoke}
+
+// ToolBytes is what one operation of one area cost: the number of exchanges and the bytes of their
+// JSON-RPC requests and responses, error responses included. A counter an entry lacks adds 0.
+type ToolBytes struct {
+	Operation string
+	Calls     int
+	ReqBytes  int64
+	RespBytes int64
+}
+
+// Total is the request and response bytes together.
+func (t ToolBytes) Total() int64 { return t.ReqBytes + t.RespBytes }
+
+// AreaSummary is the sum of an area's operations, which come largest total first, then most calls, then by
+// operation.
+type AreaSummary struct {
+	Area Area
+	ToolBytes
+	Tools []ToolBytes
+}
+
+// SessionSummary is what one MCP session cost, with every area that has an entry in the fixed order of
+// AreaBaseline, AreaNavigation, AreaInvoke.
+type SessionSummary struct {
+	Session string
+	Areas   []AreaSummary
+}
+
+// SummarizeSessions groups the mcp entries that carry a session by session, area, and operation. Sessions
+// come in the order of their first entry. Entries without a session, from the CLI or from before sessions
+// existed, are left out; Summarize still counts their invokes.
+func SummarizeSessions(entries []Entry) []SessionSummary {
+	type tools = map[string]*ToolBytes
+	sessions := map[string]map[Area]tools{}
+	var order []string
+	for _, e := range entries {
+		area, ok := areaOf(e)
+		if !ok || e.Session == "" {
+			continue
+		}
+		byArea := sessions[e.Session]
+		if byArea == nil {
+			byArea = map[Area]tools{}
+			sessions[e.Session] = byArea
+			order = append(order, e.Session)
+		}
+		if byArea[area] == nil {
+			byArea[area] = tools{}
+		}
+		t := byArea[area][e.Operation]
+		if t == nil {
+			t = &ToolBytes{Operation: e.Operation}
+			byArea[area][e.Operation] = t
+		}
+		t.Calls++
+		if e.ReqBytes != nil {
+			t.ReqBytes += *e.ReqBytes
+		}
+		if e.RespBytes != nil {
+			t.RespBytes += *e.RespBytes
+		}
+	}
+	out := make([]SessionSummary, 0, len(order))
+	for _, id := range order {
+		summary := SessionSummary{Session: id}
+		for _, area := range areaOrder {
+			byTool := sessions[id][area]
+			if len(byTool) == 0 {
+				continue
+			}
+			as := AreaSummary{Area: area, Tools: make([]ToolBytes, 0, len(byTool))}
+			for _, t := range byTool {
+				as.Tools = append(as.Tools, *t)
+				as.Calls += t.Calls
+				as.ReqBytes += t.ReqBytes
+				as.RespBytes += t.RespBytes
+			}
+			slices.SortFunc(as.Tools, func(a, b ToolBytes) int {
+				return cmp.Or(cmp.Compare(b.Total(), a.Total()), cmp.Compare(b.Calls, a.Calls),
+					cmp.Compare(a.Operation, b.Operation))
+			})
+			summary.Areas = append(summary.Areas, as)
+		}
+		out = append(out, summary)
+	}
+	return out
+}
+
+// areaOf returns the area of an mcp entry: baseline or navigation by its reserved operation, invoke for any
+// other invoke on the mcp path. A call that failed before its tool was known has no operation and still is
+// an invoke of its session.
+func areaOf(e Entry) (Area, bool) {
+	if area, ok := mcpOperations[e.Operation]; ok {
+		return area, e.Kind == "" && e.Path == "mcp"
+	}
+	if e.Operation == "" {
+		return AreaInvoke, e.Kind == "" && e.Path == "mcp" && e.Session != ""
+	}
+	return AreaInvoke, e.Path == "mcp" && IsInvoke(e)
 }
 
 // Summarize groups the invokes among entries by operation and connection and sums up their response sizes.

@@ -124,7 +124,7 @@ func TestInvokeRefusesAnOutputFormatItDoesNotWrite(t *testing.T) {
 func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, "version: 1\n")
+	cfg := writeConfig(t, "version: 2\n")
 
 	calls := 0
 	descriptor := capability.Descriptor{
@@ -173,7 +173,7 @@ func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 func TestConfirmedMutationWritesMinimalAuditToStderr(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, `version: 1
+	cfg := writeConfig(t, `version: 2
 services:
   telegram:
     provider: fake
@@ -243,7 +243,7 @@ defaults: {}
 func TestConfirmedProviderFailureKeepsCodeFirstAndAuditLast(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, `version: 1
+	cfg := writeConfig(t, `version: 2
 services:
   telegram:
     provider: fake
@@ -318,7 +318,7 @@ defaults: {}
 func TestDefaultConnectionRefusalStopsBeforeSecretsAndAudit(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, `version: 1
+	cfg := writeConfig(t, `version: 2
 services:
   telegram:
     provider: fake

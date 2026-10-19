@@ -43,7 +43,7 @@ func catalogEnvironment(t *testing.T) (string, *atomic.Int32, string) {
 
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, fmt.Sprintf(`version: 1
+	cfg := writeConfig(t, fmt.Sprintf(`version: 2
 services:
   wiki:
     provider: bookstack
@@ -296,7 +296,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	})
 
 	t.Run("a connection that offers no tool is listed but not counted, as the help says", func(t *testing.T) {
-		empty := writeConfig(t, `version: 1
+		empty := writeConfig(t, `version: 2
 services:
   telegram:
     provider: telegram
@@ -849,7 +849,7 @@ func commandNames(cmd *cobra.Command) []string {
 func TestLargeCatalogGrowsOnlyTheData(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, "version: 1\n")
+	cfg := writeConfig(t, "version: 2\n")
 
 	small := newRootCommand(&Options{}, syntheticRegistry(t, 1))
 	large := newRootCommand(&Options{}, syntheticRegistry(t, 128))
@@ -1238,7 +1238,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 func TestToolsQueryFindsByDescriptionAndCarriesTheCallContract(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, `version: 1
+	cfg := writeConfig(t, `version: 2
 services:
   gh:
     provider: github

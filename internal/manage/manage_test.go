@@ -79,7 +79,7 @@ func (f *fakeSecrets) StoreValue(_ context.Context, credential, role string) (st
 	}
 	return "", secret.StoreEmpty
 }
-func (f *fakeSecrets) SetVaultUndoable(credential, role, value string, _ vault.PassphraseFunc) (func() error, error) {
+func (f *fakeSecrets) SetVaultUndoable(credential, _, role, value string, _ vault.PassphraseFunc) (func() error, error) {
 	old, had := f.entries[credential+"."+role]
 	if err := f.put(credential, role, value); err != nil {
 		return nil, err

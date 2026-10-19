@@ -312,9 +312,9 @@ func (b vaultBlockingSecrets) SetVault(credential, role, value string, offer vau
 	return b.Resolver.SetVault(credential, role, value, offer)
 }
 
-func (b vaultBlockingSecrets) SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error) {
+func (b vaultBlockingSecrets) SetVaultUndoable(credential, credentialID, role, value string, offer vault.PassphraseFunc) (func() error, error) {
 	<-b.gate
-	return b.Resolver.SetVaultUndoable(credential, role, value, offer)
+	return b.Resolver.SetVaultUndoable(credential, credentialID, role, value, offer)
 }
 
 // The scrypt cost of a vault write, or of the offer that may lead to one, never blocks the event loop, and

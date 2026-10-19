@@ -141,11 +141,11 @@ func sortedRoles(m map[string]string) []string {
 }
 
 // Write stores every entry of plan in the vault, offering a passphrase only for its very first secret (see
-// vault.Vault.Set), and calls sync, if not nil, once every entry is written, so a caller can hand the same
-// plan on to a vault process, or anything else that needs telling.
-func Write(v *vault.Vault, plan []Entry, offer vault.PassphraseFunc, sync Sync) error {
+// vault.Vault.Set), with the id cfg gives its credential, and calls sync, if not nil, once every entry is
+// written, so a caller can hand the same plan on to a vault process, or anything else that needs telling.
+func Write(v *vault.Vault, cfg *config.Config, plan []Entry, offer vault.PassphraseFunc, sync Sync) error {
 	for _, p := range plan {
-		if err := v.Set(p.Name, p.Role, p.Value, offer); err != nil {
+		if _, err := v.SetUndoableWithID(p.Name, cfg.Credentials[p.Name].ID, p.Role, p.Value, offer); err != nil {
 			return err
 		}
 	}
