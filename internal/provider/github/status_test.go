@@ -88,15 +88,15 @@ var statusTools = []string{statusList.ID, statusCreate.ID, statusUpdate.ID, stat
 // with every permission but without a tools list.
 func statusConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	changes := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	add := func(name string, permissions []config.Permission, tools []string) {
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	add := func(name string, permissions []config.Effect, tools []string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets,
-			Permissions: permissions, Tools: tools}
+			Effects: permissions, Tools: tools}
 	}
 	add("status", changes, nil)
-	add("admin", config.Permissions(), statusTools)
+	add("admin", config.Effects(), statusTools)
 	add("nodelete", changes, statusTools)
-	add("unlisted", config.Permissions(), nil)
+	add("unlisted", config.Effects(), nil)
 	return cfg
 }
 

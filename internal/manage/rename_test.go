@@ -262,7 +262,7 @@ func TestRenameOpenConnectionStaysOpen(t *testing.T) {
 	}
 	report := w.pending(t)
 	change, open := OpenChange(report, "wider")
-	if !open || change.New || len(change.Fields) != 1 || change.Fields[0].Field != approval.FieldPermissions {
+	if !open || change.New || len(change.Fields) != 1 || change.Fields[0].Field != approval.FieldEffects {
 		t.Errorf("change = %+v, want the widened permissions still open", change)
 	}
 }

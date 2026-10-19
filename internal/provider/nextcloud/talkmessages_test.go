@@ -26,8 +26,8 @@ func talkWriter(t *testing.T, targets ...string) *application.Core {
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = targets
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	connection.Tools = []string{talkMessagesSend.ID, talkMessagesEdit.ID, talkMessagesDelete.ID, talkReactionsSet.ID, talkRoomsMarkRead.ID}
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}

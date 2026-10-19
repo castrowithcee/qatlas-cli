@@ -180,7 +180,7 @@ func TestInvokeLogNeverHoldsProviderResultOrErrorText(t *testing.T) {
 	cfg.Services["s"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
 	cfg.Credentials["c"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"}}
 	cfg.Connections["primary"] = config.Connection{Service: "s", Credential: "c",
-		Permissions: []config.Permission{config.PermissionRead}}
+		Effects: []config.Effect{config.EffectRead}}
 	redactor := &redact.Redactor{}
 	dir := t.TempDir()
 	core := New(registry, cfg, secret.NewWith(func(string) string { return "test-token" }, nil, nil, redactor), redactor)

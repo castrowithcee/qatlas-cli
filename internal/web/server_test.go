@@ -29,7 +29,7 @@ func testOverview() Overview {
 		Providers:   []ProviderRow{{Provider: "github", Description: "Code hosting", Tools: 3, Connections: 1, Configured: 1}},
 		Services:    []ServiceRow{{Name: "github-cloud", Provider: "github", BaseURL: "https://api.github.com"}},
 		Credentials: []CredentialRow{{Name: "github-bot", Provider: "github", Type: "env"}},
-		Connections: []ConnectionRow{{Name: "github-bot", Provider: "github", Description: syntheticSecret, Permissions: "read", Tools: "all-permitted"}},
+		Connections: []ConnectionRow{{Name: "github-bot", Provider: "github", Description: syntheticSecret, Effects: "read", Tools: "all-permitted"}},
 	}
 }
 
@@ -398,8 +398,8 @@ func TestServerServesOverRealLoopback(t *testing.T) {
 func TestOverviewShowsConnectionState(t *testing.T) {
 	overview := testOverview()
 	overview.Connections = []ConnectionRow{
-		{Name: "on", Provider: "github", Permissions: "read", Tools: "all", State: "active"},
-		{Name: "off", Provider: "github", Permissions: "read", Tools: "all", State: "disabled"},
+		{Name: "on", Provider: "github", Effects: "read", Tools: "all", State: "active"},
+		{Name: "off", Provider: "github", Effects: "read", Tools: "all", State: "disabled"},
 	}
 	s, err := New(overview, nil, defaultTestAdminTimeout, nil, nil, nil, nil)
 	if err != nil {

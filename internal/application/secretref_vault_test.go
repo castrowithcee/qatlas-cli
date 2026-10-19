@@ -25,9 +25,9 @@ func newVaultRefFixture(t *testing.T) (*refFixture, *vault.Vault) {
 	// A second connection of the same service that releases nothing, and a third that lists the credential
 	// without ever being approved.
 	f.cfg.Connections["bare"] = config.Connection{Service: "svc", Credential: "own", Tools: []string{"fake.accounts.create"},
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate}}
 	f.cfg.Connections["late"] = config.Connection{Service: "svc", Credential: "own", Tools: []string{"fake.accounts.create"},
-		Permissions:    []config.Permission{config.PermissionRead, config.PermissionCreate},
+		Effects:        []config.Effect{config.EffectRead, config.EffectCreate},
 		ForwardSecrets: []string{"shared"}}
 
 	v := vault.New(t.TempDir())

@@ -51,7 +51,7 @@ func renameVault(t *testing.T) (*Vault, Scope) {
 	if err := other.Set("crm-key", "token", "synthetic-crm", nil); err != nil {
 		t.Fatal(err)
 	}
-	widened.Permissions = append(widened.Permissions, "delete")
+	widened.Effects = append(widened.Effects, "delete")
 	return v, widened
 }
 

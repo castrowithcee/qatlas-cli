@@ -213,7 +213,7 @@ var (
 // Register records this provider's operations and their existing command handlers.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "BookStack", DefaultPermissions: []config.Permission{config.PermissionRead},
+		ID: Provider, Name: "BookStack", DefaultEffects: []config.Effect{config.EffectRead},
 		Description:  "Self-hosted documentation platform for team knowledge",
 		Groups:       toolGroups,
 		RenamedTools: renamedTools,

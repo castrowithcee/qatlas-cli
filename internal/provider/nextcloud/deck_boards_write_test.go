@@ -23,8 +23,8 @@ func deckWriteCore(t *testing.T, tools []string, targets ...string) *application
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = targets
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	connection.Tools = tools
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}

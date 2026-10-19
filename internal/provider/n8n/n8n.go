@@ -422,7 +422,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // workflow and execution changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "n8n", DefaultPermissions: []config.Permission{config.PermissionRead},
+		ID: Provider, Name: "n8n", DefaultEffects: []config.Effect{config.EffectRead},
 		RemovedTools: []string{"n8n.users.invite"},
 		RenamedTools: renamedTools,
 		Description: "Workflow automation platform, self-hosted or n8n Cloud, read and confirmed changes " +

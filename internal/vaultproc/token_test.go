@@ -51,12 +51,12 @@ func tokenFixture(t *testing.T) (*Server, *Client, string, string) {
 
 func tokenVorbild() vault.Scope {
 	return vault.Scope{Connection: "vorbild", Credential: "gh-a", Provider: "github",
-		Origin: "https://api.github.com", Permissions: []string{"read", "create"}}
+		Origin: "https://api.github.com", Effects: []string{"read", "create"}}
 }
 
 func tokenChange(name string, permissions ...string) vault.Scope {
 	scope := tokenVorbild()
-	scope.Connection, scope.Permissions = name, permissions
+	scope.Connection, scope.Effects = name, permissions
 	return scope
 }
 

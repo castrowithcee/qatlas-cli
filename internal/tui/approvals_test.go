@@ -36,7 +36,7 @@ func newApprovalFixture(t *testing.T, dir, passphrase string) (*config.Store, *c
 		Provider: "bookstack", Type: config.CredentialTypeVault,
 	}))
 	mustNoError(t, cfg.SetConnection("personal", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
 	}))
 	mustNoError(t, store.Save(cfg))
 
@@ -192,7 +192,7 @@ func TestSavingAConnectionApprovesAVisiblePermissionsChange(t *testing.T) {
 	changed := cfg.Clone()
 	mustNoError(t, changed.SetConnection("personal", config.Connection{
 		Service: "wiki", Credential: "reader",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete},
 	}))
 	mustNoError(t, store.Save(changed))
 
@@ -221,7 +221,7 @@ func TestExternallyChangedConnectionStaysOpenAfterSavingAnother(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
 	}))
 	mustNoError(t, store.Save(cfg))
 
@@ -235,7 +235,7 @@ func TestExternallyChangedConnectionStaysOpenAfterSavingAnother(t *testing.T) {
 	changed := cfg.Clone()
 	mustNoError(t, changed.SetConnection("personal", config.Connection{
 		Service: "wiki", Credential: "reader",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete},
 	}))
 	mustNoError(t, store.Save(changed))
 
@@ -338,7 +338,7 @@ func TestBulkApproveRemovesStaleApprovals(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
 	}))
 	mustNoError(t, store.Save(cfg))
 	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
@@ -435,7 +435,7 @@ func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	store, cfg, _ := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
-		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
+		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
 	}))
 	mustNoError(t, store.Save(cfg))
 

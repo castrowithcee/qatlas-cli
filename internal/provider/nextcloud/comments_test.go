@@ -460,9 +460,9 @@ func commentCore(t *testing.T) (*application.Core, *redact.Redactor) {
 	cfg.Services["cloud"] = config.Service{Provider: Provider, BaseURL: mainInstance}
 	cfg.Credentials["alice"] = config.Credential{Type: config.CredentialTypeEnv,
 		Values: map[string]string{roleUserID: aliceUserEnv, roleAppPassword: aliceTokenEnv}}
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
-	cfg.Connections["rw"] = config.Connection{Service: "cloud", Credential: "alice", Target: "Reports", Permissions: all}
-	cfg.Connections["listed"] = config.Connection{Service: "cloud", Credential: "alice", Target: "Reports", Permissions: all,
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
+	cfg.Connections["rw"] = config.Connection{Service: "cloud", Credential: "alice", Target: "Reports", Effects: all}
+	cfg.Connections["listed"] = config.Connection{Service: "cloud", Credential: "alice", Target: "Reports", Effects: all,
 		Tools: []string{commentsList.ID, commentsDelete.ID}}
 	red := &redact.Redactor{}
 	return application.New(reg, cfg, resolver(red), red), red

@@ -105,7 +105,7 @@ func registry(t *testing.T) *capability.Registry {
 	return reg
 }
 
-var allPermissions = config.Permissions()
+var allEffects = config.Effects()
 
 func coreConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAPIToken: apiTokenEnv}}
@@ -114,33 +114,33 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"make": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"make-reader": credential},
 		Connections: map[string]config.Connection{
-			"open": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"open": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Target: "team/" + itoa64(ownTeam)},
-			"hookurl": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"hookurl": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".hooks.url"}, Target: "team/" + itoa64(ownTeam)},
-			"hookdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"hookdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".hooks.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"connectiondelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"connectiondelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".connections.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"datastoredelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"datastoredelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".data-stores.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"recordsdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"recordsdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".data-store-records.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"teamvariablesdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"teamvariablesdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".team-variables.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"credentialdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"credentialdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".credential-requests.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"hookqueuedelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"hookqueuedelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".hook-queue.delete"}, Target: "team/" + itoa64(ownTeam)},
-			"org": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"org": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Targets: []string{"team/" + itoa64(ownTeam), "organization/" + itoa64(ownOrg)}},
-			"orgmode": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"orgmode": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Target: "organization/" + itoa64(ownOrg)},
-			"orgvariablesdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"orgvariablesdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".organization-variables.delete"}, Target: "organization/" + itoa64(ownOrg)},
-			"orgdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"orgdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".teams.delete"}, Target: "organization/" + itoa64(ownOrg)},
-			"scenario": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+			"scenario": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Targets: []string{"team/" + itoa64(ownTeam), "scenario/" + itoa64(ownScenario)}},
 		},
 	}

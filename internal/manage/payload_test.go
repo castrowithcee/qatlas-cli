@@ -284,7 +284,7 @@ func newReleaseFixture(t *testing.T) (*Service, *config.Config, config.Revision)
 	cfg.Credentials["c-a"] = config.Credential{Type: config.CredentialTypeVault}
 	cfg.Credentials["shared"] = config.Credential{Type: config.CredentialTypeVault, Forward: true, Fields: []string{"user"}}
 	cfg.Connections["a"] = config.Connection{Service: "s-a", Credential: "c-a",
-		Permissions: []config.Permission{config.PermissionRead}}
+		Effects: []config.Effect{config.EffectRead}}
 	v := vault.New(t.TempDir())
 	if err := v.Set("c-a", "token-id", "synthetic-a", func(string) (string, error) { return approvalPassphrase, nil }); err != nil {
 		t.Fatal(err)

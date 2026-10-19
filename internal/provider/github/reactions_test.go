@@ -197,12 +197,12 @@ func (r *fakeReactions) targetID(kind, rest string) (int64, bool) {
 // binds its own repository and project connections.
 func reactionsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["planning-full"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
-		Permissions: all}
+		Effects: all}
 	return cfg
 }
 

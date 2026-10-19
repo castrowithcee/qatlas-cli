@@ -351,7 +351,7 @@ func Register(reg *capability.Registry) error {
 			_, err := parseInstance(raw)
 			return err
 		},
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Excalidraw+ workspace API key, created in the workspace settings with the read right " +

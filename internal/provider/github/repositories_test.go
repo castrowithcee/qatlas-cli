@@ -114,19 +114,19 @@ func (r *fakeRepositories) route(w http.ResponseWriter, req *http.Request) bool 
 // organization is refused before IO), and one that lists github.repositories.delete.
 func repositoriesConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
-		config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate,
+		config.EffectDelete}
 	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all}
+		Effects: all}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: all, Tools: []string{repositoriesDelete.ID}}
+		Effects: all, Tools: []string{repositoriesDelete.ID}}
 	cfg.Connections["org"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"orgs/octo-org"}, Permissions: all}
+		Targets: []string{"orgs/octo-org"}, Effects: all}
 	cfg.Connections["repo-org"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{repoTarget, "orgs/octo-org"}, Permissions: all}
-	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
+		Targets: []string{repoTarget, "orgs/octo-org"}, Effects: all}
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
 	cfg.Connections["pattern"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{"repos/octo-org/*"}, Permissions: all}
+		Targets: []string{"repos/octo-org/*"}, Effects: all}
 	return cfg
 }
 

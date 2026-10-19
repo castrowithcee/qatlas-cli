@@ -82,12 +82,12 @@ func TestSplitTargets(t *testing.T) {
 	}
 }
 
-func TestDefaultPermissions(t *testing.T) {
-	declared := config.ProviderMetadata{DefaultPermissions: []config.Permission{config.PermissionRead}}
+func TestDefaultEffects(t *testing.T) {
+	declared := config.ProviderMetadata{DefaultEffects: []config.Effect{config.EffectRead}}
 	for name, metadata := range map[string]config.ProviderMetadata{"none": {}, "declared": declared} {
-		got := DefaultPermissions(metadata)
-		if !slices.Equal(got, []config.Permission{config.PermissionRead}) {
-			t.Errorf("%s: DefaultPermissions = %v, want read only", name, got)
+		got := DefaultEffects(metadata)
+		if !slices.Equal(got, []config.Effect{config.EffectRead}) {
+			t.Errorf("%s: DefaultEffects = %v, want read only", name, got)
 		}
 	}
 }
@@ -98,7 +98,7 @@ func TestConnectionDefaults(t *testing.T) {
 	if start.Name != "wiki" || start.Storage != cfg.SecretStore() {
 		t.Errorf("unexpected start %+v", start)
 	}
-	if start.ProfileID != "" || start.Permissions != nil || start.Tools != nil {
+	if start.ProfileID != "" || start.Effects != nil || start.Tools != nil {
 		t.Errorf("a provider without profiles must start without ticks: %+v", start)
 	}
 	cfg.Connections["wiki"] = config.Connection{Service: "wiki-a", Credential: "named"}
@@ -113,8 +113,8 @@ var profileProvider = config.ProviderMetadata{
 	ID:             "docs",
 	DefaultBaseURL: "https://docs.example",
 	Tools: []config.ToolMetadata{
-		{ID: "docs.read", Effect: config.PermissionRead},
-		{ID: "docs.write", Effect: config.PermissionUpdate},
+		{ID: "docs.read", Effect: config.EffectRead},
+		{ID: "docs.write", Effect: config.EffectUpdate},
 	},
 	Profiles: []config.ToolProfile{
 		{ID: "all", Tools: []string{"docs.read", "docs.write"}},
@@ -135,12 +135,12 @@ func TestConnectionDefaultsProfile(t *testing.T) {
 	if start.ProfileID != "reader" || start.BaseURL != "https://docs.example" {
 		t.Fatalf("unexpected start %+v", start)
 	}
-	if !slices.Equal(start.Permissions, []config.Permission{config.PermissionRead}) ||
+	if !slices.Equal(start.Effects, []config.Effect{config.EffectRead}) ||
 		!slices.Equal(start.Tools, []string{"docs.read"}) {
 		t.Errorf("the profile must tick only its own tools and their effects: %+v", start)
 	}
-	for _, p := range start.Permissions {
-		if p != config.PermissionRead {
+	for _, p := range start.Effects {
+		if p != config.EffectRead {
 			t.Errorf("unexpected permission %s", p)
 		}
 	}

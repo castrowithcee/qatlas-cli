@@ -236,9 +236,9 @@ func TestDeleteEventSubscriptionIsOfferedOnlyThroughAToolEntry(t *testing.T) {
 	})
 	cfg := coreConfig()
 	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}}
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete}}
 	cfg.Connections["lexware-deleter"] = config.Connection{Service: "lexware", Credential: "primary-key",
-		Permissions: []config.Permission{config.PermissionDelete}, Tools: []string{"lexware.event-subscriptions.delete"}}
+		Effects: []config.Effect{config.EffectDelete}, Tools: []string{"lexware.event-subscriptions.delete"}}
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)
 	invoke := func(connection, id string, confirm bool) error {

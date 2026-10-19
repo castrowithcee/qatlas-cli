@@ -18,9 +18,9 @@ var setupProviders = []config.ProviderMetadata{
 		ID: "docs", DefaultBaseURL: "https://docs.example",
 		SecretRoles: []config.SecretRole{{Name: "key-id"}, {Name: "key-secret"}},
 		Tools: []config.ToolMetadata{
-			{ID: "docs.read", Effect: config.PermissionRead},
-			{ID: "docs.write", Effect: config.PermissionUpdate},
-			{ID: "docs.fetch", Effect: config.PermissionRead, LocalFiles: config.LocalFilesRead},
+			{ID: "docs.read", Effect: config.EffectRead},
+			{ID: "docs.write", Effect: config.EffectUpdate},
+			{ID: "docs.fetch", Effect: config.EffectRead, LocalFiles: config.LocalFilesRead},
 		},
 		LocalFiles: config.LocalFilesSupport{Read: true},
 	},
@@ -76,7 +76,7 @@ func TestBuildConnectionCandidateRights(t *testing.T) {
 	tests := []struct {
 		name        string
 		edit        func(*ConnectionDraft)
-		wantPerm    []config.Permission
+		wantPerm    []config.Effect
 		wantTools   []string
 		toolsNil    bool
 		permsNil    bool
@@ -84,13 +84,13 @@ func TestBuildConnectionCandidateRights(t *testing.T) {
 	}{
 		{name: "empty rights keep the defaults and offer every tool", edit: func(*ConnectionDraft) {},
 			permsNil: true, toolsNil: true},
-		{name: "none allows nothing", edit: func(d *ConnectionDraft) { d.Permissions = "none" },
-			wantPerm: []config.Permission{}, toolsNil: true},
-		{name: "listed permissions", edit: func(d *ConnectionDraft) { d.Permissions = "read, update" },
-			wantPerm: []config.Permission{config.PermissionRead, config.PermissionUpdate}, toolsNil: true},
+		{name: "none allows nothing", edit: func(d *ConnectionDraft) { d.Effects = "none" },
+			wantPerm: []config.Effect{}, toolsNil: true},
+		{name: "listed permissions", edit: func(d *ConnectionDraft) { d.Effects = "read, update" },
+			wantPerm: []config.Effect{config.EffectRead, config.EffectUpdate}, toolsNil: true},
 		{name: "selected tools", edit: func(d *ConnectionDraft) {
-			d.Permissions, d.ToolsSelected, d.Tools = "read", true, []string{"docs.read"}
-		}, wantPerm: []config.Permission{config.PermissionRead}, wantTools: []string{"docs.read"}},
+			d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.read"}
+		}, wantPerm: []config.Effect{config.EffectRead}, wantTools: []string{"docs.read"}},
 		{name: "an empty selection enables no tool", edit: func(d *ConnectionDraft) {
 			d.ToolsSelected = true
 		}, permsNil: true, wantTools: []string{}},
@@ -110,8 +110,8 @@ func TestBuildConnectionCandidateRights(t *testing.T) {
 				t.Fatalf("BuildConnectionCandidate() = %v", err)
 			}
 			conn := cand.Config.Connections["mine"]
-			if (conn.Permissions == nil) != tt.permsNil || !slices.Equal(conn.Permissions, tt.wantPerm) {
-				t.Errorf("permissions = %#v, want %#v (nil %v)", conn.Permissions, tt.wantPerm, tt.permsNil)
+			if (conn.Effects == nil) != tt.permsNil || !slices.Equal(conn.Effects, tt.wantPerm) {
+				t.Errorf("permissions = %#v, want %#v (nil %v)", conn.Effects, tt.wantPerm, tt.permsNil)
 			}
 			if (conn.Tools == nil) != tt.toolsNil || !slices.Equal(conn.Tools, tt.wantTools) {
 				t.Errorf("tools = %#v, want %#v (nil %v)", conn.Tools, tt.wantTools, tt.toolsNil)
@@ -145,12 +145,12 @@ func TestBuildConnectionCandidateForward(t *testing.T) {
 func TestBuildConnectionCandidateStages(t *testing.T) {
 	cfg := setupConfig(t)
 	d := reuse()
-	d.Permissions, d.ToolsSelected, d.Tools = "read", true, []string{"docs.read"}
+	d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.read"}
 	cand, err := BuildConnectionCandidate(cfg, d, StageScope)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conn := cand.Config.Connections["mine"]; conn.Permissions != nil || conn.Tools != nil {
+	if conn := cand.Config.Connections["mine"]; conn.Effects != nil || conn.Tools != nil {
 		t.Errorf("rights applied before their stage: %+v", conn)
 	}
 	cand, err = BuildConnectionCandidate(cfg, ConnectionDraft{Provider: "docs", Service: "docs-a", Name: "taken"}, StageService)
@@ -191,9 +191,9 @@ func TestBuildConnectionCandidateErrors(t *testing.T) {
 		{name: "unknown credential", edit: func(d *ConnectionDraft) { d.Credential = "none" }, is: &unknown},
 		{name: "connection name taken", edit: func(d *ConnectionDraft) { d.Name = "mail" }, is: &taken},
 		{name: "connection name empty", edit: func(d *ConnectionDraft) { d.Name = "" }, is: &empty},
-		{name: "unknown permission", edit: func(d *ConnectionDraft) { d.Permissions = "admin" }},
+		{name: "unknown permission", edit: func(d *ConnectionDraft) { d.Effects = "admin" }},
 		{name: "tool outside the permissions", edit: func(d *ConnectionDraft) {
-			d.Permissions, d.ToolsSelected, d.Tools = "read", true, []string{"docs.write"}
+			d.Effects, d.ToolsSelected, d.Tools = "read", true, []string{"docs.write"}
 		}},
 		{name: "files without a direction", edit: func(d *ConnectionDraft) { d.Files.Write = []string{"/srv"} }},
 		{name: "env role without a variable", edit: func(d *ConnectionDraft) {

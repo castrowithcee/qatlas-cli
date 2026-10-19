@@ -169,7 +169,7 @@ func TestNoFormRowOfAnyProviderBlocksTheFormAtUsualSizes(t *testing.T) {
 			m.screen = screenNav
 			press(t, m, "c")
 			m.wizard.provider = id
-			for step := stepService; step <= stepPermissions; step++ {
+			for step := stepService; step <= stepEffects; step++ {
 				m.setupShow(step)
 				check(t, m, id+" setup "+setupTitles[step], size.w, size.h)
 			}

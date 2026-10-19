@@ -279,7 +279,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	clearField(t, m)
 	typeText(t, m, "users/octo/projects/3")
 	press(t, m, "enter", "up", "d", "y", "f2")
-	if m.wizard.step != stepPermissions || m.fail != "" {
+	if m.wizard.step != stepEffects || m.fail != "" {
 		t.Fatalf("F2 in the setup list did not go on to the next step: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if hasConnection(t, path, reg, "github") {
@@ -424,7 +424,7 @@ func TestTheGuidedSetupTakesTargetsWithOneF2(t *testing.T) {
 	press(t, m, "a")
 	typeText(t, m, "repos/octo/b")
 	press(t, m, "f2")
-	if m.fail != "" || m.wizard.step != stepPermissions {
+	if m.fail != "" || m.wizard.step != stepEffects {
 		t.Fatalf("F2 while typing did not go on: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if got := pageEntries(m.wizard.pages[stepScope], targetsLabel); !reflect.DeepEqual(got, []string{"repos/octo/b"}) {
@@ -712,7 +712,7 @@ func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 	press(t, m, "enter", "enter")
 	typeText(t, m, "c")
 	press(t, m, "f2")
-	if m.fail != "" || m.wizard.step != stepPermissions {
+	if m.fail != "" || m.wizard.step != stepEffects {
 		t.Fatalf("F2 in the builder did not go on: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if got := pageEntries(m.wizard.pages[stepScope], targetsLabel); !reflect.DeepEqual(got,

@@ -24,9 +24,9 @@ import (
 // rejected for.
 var bookMetadata = config.ProviderMetadata{
 	ID: "book", Name: "BookStack", Description: "a synthetic test provider with tools",
-	DefaultBaseURL:       "https://books.example.test",
-	DefaultPermissions:   []config.Permission{config.PermissionRead},
-	SupportedPermissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
+	DefaultBaseURL:   "https://books.example.test",
+	DefaultEffects:   []config.Effect{config.EffectRead},
+	SupportedEffects: []config.Effect{config.EffectRead, config.EffectCreate},
 	SecretRoles: []config.SecretRole{
 		{Name: "token-id", Description: "the token id"},
 		{Name: "token-secret", Description: "the token secret"},
@@ -41,8 +41,8 @@ var bookMetadata = config.ProviderMetadata{
 		},
 	},
 	Tools: []config.ToolMetadata{
-		{ID: "book.read", Title: "Read a book", Effect: config.PermissionRead},
-		{ID: "book.create", Title: "Create a book", Effect: config.PermissionCreate},
+		{ID: "book.read", Title: "Read a book", Effect: config.EffectRead},
+		{ID: "book.create", Title: "Create a book", Effect: config.EffectCreate},
 	},
 	Profiles: []config.ToolProfile{
 		{ID: "reader", Title: "Reader", Recommended: true, Tools: []string{"book.read"}},

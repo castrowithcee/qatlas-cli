@@ -143,7 +143,7 @@ func TestSetupProblemNamesItsStep(t *testing.T) {
 		config.Problem{Section: config.SectionConnections, Name: "personal", Field: "service",
 			Code: config.CodeUnknownService},
 		config.Problem{Section: config.SectionConnections, Name: "personal", Field: "permissions",
-			Code: config.CodeUnknownPermission},
+			Code: config.CodeUnknownEffect},
 	)
 	m.reportSaveError(err, "", true)
 

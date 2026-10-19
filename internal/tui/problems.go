@@ -129,8 +129,8 @@ func (m *Model) problemRow(p config.Problem, name string) string {
 // setupLabelSteps places the connection rows of the guided setup on the step that edits them.
 var setupLabelSteps = map[string]int{
 	"service": stepService, "credential": stepCredential, "name": stepScope, "description": stepScope,
-	targetsLabel: stepScope, "permissions": stepPermissions, toolListLabel: stepPermissions,
-	toolsLabel: stepPermissions,
+	targetsLabel: stepScope, "permissions": stepEffects, toolListLabel: stepEffects,
+	toolsLabel: stepEffects,
 }
 
 // setupProblemLabel returns the step of the guided setup whose rows edit p and the label of the row there.

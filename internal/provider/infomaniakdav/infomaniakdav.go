@@ -252,8 +252,8 @@ func validBaseURL(raw string) error {
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Calendar and Contacts", FormerIDs: []string{"infomaniakdav"}, RenamedTools: renamedTools, DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
-		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted, contacts read",
+		DefaultEffects: []config.Effect{config.EffectRead},
+		Description:    "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted, contacts read",
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
 			Description: "Personal user name of the Infomaniak sync identity, shown in the Infomaniak " +

@@ -422,12 +422,12 @@ func TestViewColumnDescriptorsDeclareTheirRisk(t *testing.T) {
 func TestViewColumnToolsNeedConfirmationAndTheToolsList(t *testing.T) {
 	calls := serveColumns(t, http.StatusCreated, colWire(colNewID, colView, colOK, ""))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: []string{viewfieldsCreate.ID, viewfieldsUpdate.ID}}
+		Effects: all, Tools: []string{viewfieldsCreate.ID, viewfieldsUpdate.ID}}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

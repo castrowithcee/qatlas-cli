@@ -435,8 +435,8 @@ func Register(reg *capability.Registry) error {
 		RenamedTools: renamedTools,
 		RemovedTools: []string{"infomaniakdrive.links.create", "infomaniakdrive.links.update",
 			"infomaniakdrive.dropbox.create", "infomaniakdrive.dropbox.update"},
-		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description:    "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API",
+		DefaultEffects: []config.Effect{config.EffectRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "Infomaniak API token, created in the Infomaniak Manager under Account settings, API " +

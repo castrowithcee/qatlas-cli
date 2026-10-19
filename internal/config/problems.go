@@ -50,8 +50,8 @@ const (
 	CodePathsEmpty                   = "paths-empty"
 	CodeInvalidPath                  = "invalid-path"
 	CodeDuplicatePath                = "duplicate-path"
-	CodeUnknownPermission            = "unknown-permission"
-	CodeDuplicatePermission          = "duplicate-permission"
+	CodeUnknownEffect                = "unknown-permission"
+	CodeDuplicateEffect              = "duplicate-permission"
 	CodeTargetRequired               = "target-required"
 	CodeTargetAndTargets             = "target-and-targets"
 	CodeTargetsSingleOnly            = "targets-single-only"
@@ -110,8 +110,8 @@ var hints = map[string]string{
 	CodePathsEmpty:                   "List at least one directory, or leave the list out to use the connection everywhere.",
 	CodeInvalidPath:                  "Use an absolute directory or one starting with '~/', without glob patterns.",
 	CodeDuplicatePath:                "Remove the repeated directory.",
-	CodeUnknownPermission:            "Use one of the supported permissions.",
-	CodeDuplicatePermission:          "Remove the repeated permission.",
+	CodeUnknownEffect:                "Use one of the supported permissions.",
+	CodeDuplicateEffect:              "Remove the repeated permission.",
 	CodeTargetRequired:               "Set the target the provider requires.",
 	CodeTargetAndTargets:             "Use either a single target or a list of targets, not both.",
 	CodeTargetsSingleOnly:            "Keep a single target, as the provider accepts only one.",

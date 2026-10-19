@@ -100,15 +100,15 @@ var viewTools = []string{viewsList.ID, viewsCreate.ID, viewsUpdate.ID, viewsDele
 // permission but without a tools list, and one bound to a project of a user.
 func viewsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	changes := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	add := func(name string, targets []string, permissions []config.Permission, tools []string) {
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Permissions: permissions, Tools: tools}
+			Effects: permissions, Tools: tools}
 	}
 	add("views", planningTargets, changes, nil)
-	add("admin", planningTargets, config.Permissions(), viewTools)
+	add("admin", planningTargets, config.Effects(), viewTools)
 	add("nodelete", planningTargets, changes, viewTools)
-	add("unlisted", planningTargets, config.Permissions(), nil)
+	add("unlisted", planningTargets, config.Effects(), nil)
 	add("user", []string{userTarget}, changes, nil)
 	return cfg
 }

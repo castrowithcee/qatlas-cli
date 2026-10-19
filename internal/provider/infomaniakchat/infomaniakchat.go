@@ -515,10 +515,10 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat", FormerIDs: []string{"infomaniakchat"},
-		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, slash commands, and instance-wide administration",
-		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Groups:             toolGroups,
-		RenamedTools:       renamedTools,
+		Description:    "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, slash commands, and instance-wide administration",
+		DefaultEffects: []config.Effect{config.EffectRead},
+		Groups:         toolGroups,
+		RenamedTools:   renamedTools,
 		ValidateBaseURL: func(raw string) error {
 			_, err := parseInstance(raw)
 			return err

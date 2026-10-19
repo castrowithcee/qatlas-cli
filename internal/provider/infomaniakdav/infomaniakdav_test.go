@@ -413,7 +413,7 @@ func TestInvokeThroughCore(t *testing.T) {
 		Services:    map[string]config.Service{"dav": {Provider: Provider}},
 		Credentials: map[string]config.Credential{"dav": resolved().Secrets},
 		Connections: map[string]config.Connection{"main": {Service: "dav", Credential: "dav",
-			Permissions: config.Permissions(), Targets: []string{"calendar/work", "addressbook/main"}}},
+			Effects: config.Effects(), Targets: []string{"calendar/work", "addressbook/main"}}},
 	}
 	red := &redact.Redactor{}
 	core := application.New(reg, cfg, resolver(red), red)

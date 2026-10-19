@@ -26,16 +26,16 @@ import (
 
 // The fields of a scope, as a FieldChange names them.
 const (
-	FieldCredential  = "credential"
-	FieldProvider    = "provider"
-	FieldOrigin      = "origin"
-	FieldPermissions = "permissions"
-	FieldTargets     = "targets"
-	FieldTools       = "tools"
-	FieldPaths       = "paths"
-	FieldFiles       = "files"
-	FieldForward     = "forward"
-	FieldState       = "state"
+	FieldCredential = "credential"
+	FieldProvider   = "provider"
+	FieldOrigin     = "origin"
+	FieldEffects    = "permissions"
+	FieldTargets    = "targets"
+	FieldTools      = "tools"
+	FieldPaths      = "paths"
+	FieldFiles      = "files"
+	FieldForward    = "forward"
+	FieldState      = "state"
 )
 
 // The two states a FieldState change reads between.
@@ -260,8 +260,8 @@ func diff(approved vault.Approval, now vault.Scope, id string, catalog config.Pr
 		}
 		fields = append(fields, change)
 	}
-	addList(FieldPermissions, false, before.Permissions, after.Permissions,
-		list(before.Permissions), list(after.Permissions))
+	addList(FieldEffects, false, before.Effects, after.Effects,
+		list(before.Effects), list(after.Effects))
 	addList(FieldTargets, false, before.Targets, after.Targets, list(before.Targets), list(after.Targets))
 	var renamedTools []Rename
 	if before.Tools != nil && after.Tools != nil && (before.Provider == after.Provider || providerRenamed) {
@@ -441,7 +441,7 @@ func DirectApprovable(change Change) bool {
 	}
 	for _, f := range change.Fields {
 		switch f.Field {
-		case FieldPermissions, FieldTargets, FieldTools, FieldState:
+		case FieldEffects, FieldTargets, FieldTools, FieldState:
 		case FieldCredential:
 			if strings.HasSuffix(f.After, " (stored anew)") {
 				return false

@@ -438,7 +438,7 @@ func TestEventsWritesThroughCoreNeedConfirmationAndToolList(t *testing.T) {
 			Services:    map[string]config.Service{"dav": {Provider: Provider}},
 			Credentials: map[string]config.Credential{"dav": resolved().Secrets},
 			Connections: map[string]config.Connection{"main": {Service: "dav", Credential: "dav",
-				Permissions: config.Permissions(), Tools: tools, Targets: []string{"calendar/work"}}},
+				Effects: config.Effects(), Tools: tools, Targets: []string{"calendar/work"}}},
 		}
 		red := &redact.Redactor{}
 		return application.New(reg, cfg, resolver(red), red)

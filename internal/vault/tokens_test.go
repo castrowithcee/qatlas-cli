@@ -31,7 +31,7 @@ func tokenVault(t *testing.T) *Vault {
 func vorbildScope(base string) Scope {
 	return Scope{
 		Connection: "vorbild", Credential: "gh-a", Provider: "github", Origin: "https://api.github.com",
-		Permissions: []string{"read", "create"}, Targets: []string{"repos/o/a", "repos/o/b"},
+		Effects: []string{"read", "create"}, Targets: []string{"repos/o/a", "repos/o/b"},
 		Tools: []string{"github.issues.list", "github.issues.create"}, Paths: []string{base},
 	}
 }
@@ -171,14 +171,14 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 	}{
 		{"same reach", func(*Scope) {}, nil},
 		{"narrower everywhere", func(s *Scope) {
-			s.Permissions, s.Tools, s.Targets, s.Paths = []string{"read"}, []string{"github.issues.list"},
+			s.Effects, s.Tools, s.Targets, s.Paths = []string{"read"}, []string{"github.issues.list"},
 				[]string{"repos/o/b"}, []string{inside}
 		}, nil},
 		{"no tools at all", func(s *Scope) { s.Tools = []string{} }, nil},
 		{"other provider", func(s *Scope) { s.Provider = "gitlab" }, []string{GapService}},
 		{"other endpoint", func(s *Scope) { s.Origin = "https://github.example.test/api" }, []string{GapService}},
 		{"other credential", func(s *Scope) { s.Credential = "gh-b" }, []string{GapCredential}},
-		{"more permissions", func(s *Scope) { s.Permissions = []string{"read", "delete"} }, []string{GapPermissions}},
+		{"more permissions", func(s *Scope) { s.Effects = []string{"read", "delete"} }, []string{GapPermissions}},
 		{"tool outside the list", func(s *Scope) { s.Tools = []string{"github.repos.delete"} }, []string{GapTools}},
 		{"no tools list", func(s *Scope) { s.Tools = nil }, []string{GapTools}},
 		{"target outside", func(s *Scope) { s.Targets = []string{"repos/o/c"} }, []string{GapTargets}},
@@ -189,10 +189,10 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 		{"files read released", func(s *Scope) { s.FilesRead = []string{inside} }, []string{GapFiles}},
 		{"files write released", func(s *Scope) { s.FilesWrite = []string{inside} }, []string{GapFiles}},
 		{"partly outside", func(s *Scope) {
-			s.Permissions, s.Targets = []string{"read"}, []string{"repos/o/a", "repos/o/z"}
+			s.Effects, s.Targets = []string{"read"}, []string{"repos/o/a", "repos/o/z"}
 		}, []string{GapTargets}},
 		{"outside twice", func(s *Scope) {
-			s.Permissions, s.Tools = []string{"read", "update"}, []string{"github.issues.list", "github.x"}
+			s.Effects, s.Tools = []string{"read", "update"}, []string{"github.issues.list", "github.x"}
 		}, []string{GapPermissions, GapTools}},
 	}
 	for i, tc := range cases {
@@ -227,7 +227,7 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 	if err != nil || len(result.Changes) != 1 || !result.Changes[0].Approved {
 		t.Fatalf("ApproveWithToken() under an open vorbild = %+v, %v, want it approved", result, err)
 	}
-	change.Permissions = []string{"read", "execute"}
+	change.Effects = []string{"read", "execute"}
 	result, _ = v.ApproveWithToken(wide.Value, []Scope{vorbild, unbound, change}, []string{"wide-change"}, time.Now())
 	if len(result.Changes) != 1 || result.Changes[0].Kind != ChangeUpdate ||
 		!slices.Equal(result.Changes[0].Gaps, []string{GapPermissions}) {
@@ -243,15 +243,15 @@ func TestApproveWithTokenVorbildRules(t *testing.T) {
 	vorbild := vorbildScope(t.TempDir())
 	vorbild.Paths = nil
 	covered := vorbild
-	covered.Connection, covered.Permissions = "covered", []string{"read"}
+	covered.Connection, covered.Effects = "covered", []string{"read"}
 	approveScopes(t, v, vorbild, covered)
 	token := createToken(t, v, "agent", "vorbild")
 
 	// The vorbild widened by hand and still open: the token sees it as approved.
 	widened := vorbild
-	widened.Permissions = []string{"read", "create", "delete"}
+	widened.Effects = []string{"read", "create", "delete"}
 	wants := covered
-	wants.Connection, wants.Permissions = "wants-delete", []string{"delete"}
+	wants.Connection, wants.Effects = "wants-delete", []string{"delete"}
 	result, err := v.ApproveWithToken(token.Value, []Scope{widened, covered, wants}, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)

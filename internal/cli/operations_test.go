@@ -190,7 +190,7 @@ defaults: {}
 `)
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{
-		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+		ID: "fake", Name: "Fake", DefaultEffects: []config.Effect{config.EffectCreate},
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ defaults: {}
 `)
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{
-		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+		ID: "fake", Name: "Fake", DefaultEffects: []config.Effect{config.EffectCreate},
 	}, nil); err != nil {
 		t.Fatal(err)
 	}

@@ -88,13 +88,13 @@ type ConnectionDraft struct {
 	Storage       string
 	EnvNames      map[string]string
 
-	// The connection. Permissions is the comma-separated form of config.ParsePermissions: empty keeps the
+	// The connection. Effects is the comma-separated form of config.ParseEffects: empty keeps the
 	// provider's defaults, "none" allows nothing. With ToolsSelected, Tools is the explicit selection, and
 	// no tool outside it is enabled, an empty one included; without it the connection offers every tool.
 	Name          string
 	Targets       []string
 	Description   string
-	Permissions   string
+	Effects       string
 	ToolsSelected bool
 	Tools         []string
 	Paths         []string
@@ -226,11 +226,11 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 			Files: config.Files{Read: slices.Clone(d.Files.Read), Write: slices.Clone(d.Files.Write)},
 		}
 		if stage >= StageRights {
-			permissions, err := config.ParsePermissions(d.Permissions)
+			permissions, err := config.ParseEffects(d.Effects)
 			if err != nil {
 				return cand, err
 			}
-			conn.Permissions = permissions
+			conn.Effects = permissions
 			if d.ToolsSelected {
 				conn.Tools = slices.Clone(d.Tools)
 				if conn.Tools == nil {

@@ -205,19 +205,19 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 	if strings.TrimSpace(metadata.Name) == "" {
 		return fmt.Errorf("provider %q must have a display name", metadata.ID)
 	}
-	knownPermissions := map[config.Permission]bool{}
-	for _, permission := range config.Permissions() {
-		knownPermissions[permission] = true
+	knownEffects := map[config.Effect]bool{}
+	for _, permission := range config.Effects() {
+		knownEffects[permission] = true
 	}
-	seenPermissions := map[config.Permission]bool{}
-	for _, permission := range metadata.DefaultPermissions {
-		if !knownPermissions[permission] {
+	seenEffects := map[config.Effect]bool{}
+	for _, permission := range metadata.DefaultEffects {
+		if !knownEffects[permission] {
 			return fmt.Errorf("provider %q has unknown default permission %q", metadata.ID, permission)
 		}
-		if seenPermissions[permission] {
+		if seenEffects[permission] {
 			return fmt.Errorf("provider %q declares default permission %q twice", metadata.ID, permission)
 		}
-		seenPermissions[permission] = true
+		seenEffects[permission] = true
 	}
 	seen := map[string]bool{}
 	for _, role := range metadata.SecretRoles {
@@ -307,8 +307,8 @@ func (r *Registry) TestConnection(ctx context.Context, resolved *config.Resolved
 
 func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SecretRoles = append([]config.SecretRole(nil), metadata.SecretRoles...)
-	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
-	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
+	metadata.DefaultEffects = append([]config.Effect(nil), metadata.DefaultEffects...)
+	metadata.SupportedEffects = append([]config.Effect(nil), metadata.SupportedEffects...)
 	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
 	metadata.RemovedTools = append([]string(nil), metadata.RemovedTools...)
 	metadata.FormerIDs = append([]string(nil), metadata.FormerIDs...)
@@ -356,7 +356,7 @@ func (r *Registry) ValidateProfiles() error {
 		if len(metadata.Tools) > 0 && len(metadata.Profiles) == 0 {
 			return fmt.Errorf("provider %q declares no tool profile", metadata.ID)
 		}
-		effects := map[string]config.Permission{}
+		effects := map[string]config.Effect{}
 		explicit := map[string]bool{}
 		for _, tool := range metadata.Tools {
 			effects[tool.ID] = tool.Effect
@@ -392,7 +392,7 @@ func (r *Registry) ValidateProfiles() error {
 				case profile.Recommended && explicit[id]:
 					return fmt.Errorf("provider %q recommended profile %q selects tool %q, which a connection "+
 						"offers only when its tools list names it", metadata.ID, profile.ID, id)
-				case profile.Recommended && effect != config.PermissionRead &&
+				case profile.Recommended && effect != config.EffectRead &&
 					strings.TrimSpace(profile.MutationReason) == "":
 					return fmt.Errorf("provider %q recommended profile %q selects %s tool %q without a reason why "+
 						"that is safe", metadata.ID, profile.ID, effect, id)
@@ -585,14 +585,14 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 		return err
 	}
 	metadata := r.metadata[provider]
-	seenEffects := map[config.Permission]bool{}
+	seenEffects := map[config.Effect]bool{}
 	for _, descriptor := range r.byProvider[provider] {
-		seenEffects[config.Permission(descriptor.Risk.Effect)] = true
+		seenEffects[config.Effect(descriptor.Risk.Effect)] = true
 	}
-	metadata.SupportedPermissions = metadata.SupportedPermissions[:0]
-	for _, permission := range config.Permissions() {
+	metadata.SupportedEffects = metadata.SupportedEffects[:0]
+	for _, permission := range config.Effects() {
 		if seenEffects[permission] {
-			metadata.SupportedPermissions = append(metadata.SupportedPermissions, permission)
+			metadata.SupportedEffects = append(metadata.SupportedEffects, permission)
 		}
 	}
 	// The tool list is what configuration validates a connection's tools against and what an editor
@@ -639,7 +639,7 @@ func (r *Registry) checkGroups(provider string) error {
 // Tool is the configuration view of the operation: what a connection's permissions and tools list are
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
-	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Permission(d.Risk.Effect),
+	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Effect(d.Risk.Effect),
 		RequiresToolAllowList: d.RequiresToolAllowList, Group: d.Group, LocalFiles: d.LocalFiles}
 }
 

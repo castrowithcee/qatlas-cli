@@ -27,8 +27,8 @@ func roomManager(t *testing.T, targets ...string) *application.Core {
 	connection := cfg.Connections["reports"]
 	connection.Target = ""
 	connection.Targets = targets
-	connection.Permissions = []config.Permission{config.PermissionRead, config.PermissionCreate,
-		config.PermissionUpdate, config.PermissionDelete}
+	connection.Effects = []config.Effect{config.EffectRead, config.EffectCreate,
+		config.EffectUpdate, config.EffectDelete}
 	connection.Tools = []string{talkRoomsCreate.ID, talkRoomsUpdate.ID, talkRoomsDelete.ID}
 	cfg.Connections["reports"] = connection
 	red := &redact.Redactor{}

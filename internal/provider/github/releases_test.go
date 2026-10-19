@@ -525,8 +525,8 @@ func TestReleaseDeleteIsListedOnlyAndTreatsAnAlreadyDeletedReleaseAsNotFound(t *
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["deleter"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-		Tools:       []string{releasesGet.ID, releasesDelete.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+		Tools:   []string{releasesGet.ID, releasesDelete.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
 	// A connection whose tools list does not name it neither discovers nor runs it.
@@ -624,8 +624,8 @@ func TestReleaseChangesSatisfyTheirContractThroughTheApplicationCoreWithAudit(t 
 	red := &redact.Redactor{}
 	cfg := coreChangeConfig(base)
 	cfg.Connections["deleter"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
-		Tools:       []string{releasesGet.ID, releasesDelete.ID}}
+		Effects: []config.Effect{config.EffectRead, config.EffectDelete},
+		Tools:   []string{releasesGet.ID, releasesDelete.ID}}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 	var audit strings.Builder
 	core.SetAudit(&audit)

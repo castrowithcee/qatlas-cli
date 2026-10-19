@@ -30,8 +30,8 @@ func pressNew(t *testing.T, m *Model) {
 // profile would have chosen.
 var templateConnection = config.Connection{
 	Service: "wiki", Credential: "reader", Target: "book/12", Description: "wiki for customer A",
-	Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
-	Tools:       []string{"bookstack.pages.list", "bookstack.pages.create"},
+	Effects: []config.Effect{config.EffectRead, config.EffectCreate},
+	Tools:   []string{"bookstack.pages.list", "bookstack.pages.create"},
 }
 
 // templateModel is an editor over a service "wiki" with options, a credential "reader" and the connection
@@ -398,7 +398,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 			m.fieldValue("description"), targetEntries(m.fields))
 	}
 	press(t, m, "f2")
-	if m.wizard.step != stepPermissions {
+	if m.wizard.step != stepEffects {
 		t.Fatalf("step %d fail %q, want permissions", m.wizard.step, m.fail)
 	}
 	if m.fieldValue("permissions") != "read, create" || m.fieldValue(toolsLabel) != toolsSelected ||

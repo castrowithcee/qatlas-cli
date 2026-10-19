@@ -224,10 +224,10 @@ func Register(reg *capability.Registry) error {
 			return err
 		},
 		// Only groups with a registered tool are declared: the registry rejects an empty group.
-		Groups:             toolGroups,
-		RenamedTools:       renamedTools,
-		Description:        "Cloud-based instant messaging service",
-		DefaultPermissions: []config.Permission{config.PermissionCreate},
+		Groups:         toolGroups,
+		RenamedTools:   renamedTools,
+		Description:    "Cloud-based instant messaging service",
+		DefaultEffects: []config.Effect{config.EffectCreate},
 		SecretRoles: []config.SecretRole{{
 			Name:        roleBotToken,
 			Description: "Telegram bot token issued by BotFather",

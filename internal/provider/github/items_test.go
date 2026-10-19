@@ -60,15 +60,15 @@ var itemTools = []string{itemsDelete.ID, itemsUnarchive.ID, itemsMove.ID, drafts
 // permission but without a tools list, and one bound to the project alone.
 func itemsConfig(base string) *config.Config {
 	cfg := coreConfig(base)
-	changes := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
-	add := func(name string, targets []string, permissions []config.Permission, tools []string) {
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	add := func(name string, targets []string, permissions []config.Effect, tools []string) {
 		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
-			Permissions: permissions, Tools: tools}
+			Effects: permissions, Tools: tools}
 	}
 	add("items", planningTargets, changes, nil)
-	add("admin", planningTargets, config.Permissions(), itemTools)
+	add("admin", planningTargets, config.Effects(), itemTools)
 	add("nodelete", planningTargets, changes, itemTools)
-	add("unlisted", planningTargets, config.Permissions(), nil)
+	add("unlisted", planningTargets, config.Effects(), nil)
 	add("project", []string{projectTarget}, changes, nil)
 	return cfg
 }

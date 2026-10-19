@@ -154,7 +154,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 		t.Errorf("credential = %+v", cred)
 	}
 	if conn := saved.Connections["bookstack"]; conn.Service != "wiki" || conn.Credential != "reader" ||
-		conn.Permissions != nil || conn.Tools != nil {
+		conn.Effects != nil || conn.Tools != nil {
 		t.Errorf("connection = %+v", conn)
 	}
 	raw, err := os.ReadFile(path)

@@ -26,7 +26,7 @@ func fixture(t *testing.T) (*config.Config, *vault.Vault) {
 	cfg.Credentials["desk"] = config.Credential{Type: config.CredentialTypeKeyring}
 	cfg.Connections["wiki-read"] = config.Connection{Service: "wiki", Credential: "reader"}
 	cfg.Connections["wiki-write"] = config.Connection{Service: "wiki", Credential: "writer",
-		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}}
+		Effects: []config.Effect{config.EffectRead, config.EffectCreate}}
 	cfg.Connections["wiki-empty"] = config.Connection{Service: "wiki", Credential: "empty"}
 	cfg.Connections["wiki-desk"] = config.Connection{Service: "wiki", Credential: "desk"}
 
@@ -91,7 +91,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	}
 	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "https://moved.example.invalid"}
 	write := cfg.Connections["wiki-write"]
-	write.Permissions = append(write.Permissions, config.PermissionDelete)
+	write.Effects = append(write.Effects, config.EffectDelete)
 	write.Tools = []string{}
 	write.Targets = []string{"shelf-2", "shelf-1"}
 	write.Paths = []string{"~/repos/kunde-a"}
@@ -107,7 +107,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	}
 	want := []FieldChange{
 		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "https://moved.example.invalid"},
-		{Field: FieldPermissions, Before: "create read", After: "create delete read",
+		{Field: FieldEffects, Before: "create read", After: "create delete read",
 			Added: []string{"delete"}, Kept: []string{"create", "read"}},
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2", Added: []string{"shelf-1", "shelf-2"}},
 		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
@@ -217,7 +217,7 @@ func TestDirectApprovableRefusesFilesChange(t *testing.T) {
 func scopeFixture() vault.Scope {
 	return vault.Scope{
 		Connection: "gh", Credential: "token", Provider: "github", Origin: "https://api.example.test",
-		Permissions: []string{"read"}, Targets: []string{"org"},
+		Effects: []string{"read"}, Targets: []string{"org"},
 		Tools: []string{"github.issues.get", "github.issues.list", "github.pull-requests.list"},
 	}
 }

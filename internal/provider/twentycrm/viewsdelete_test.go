@@ -205,12 +205,12 @@ func TestViewsDeleteDescriptorIsGuarded(t *testing.T) {
 func TestViewsDeleteNeedsConfirmationAndTheToolsList(t *testing.T) {
 	calls := serveMetaWrite(t, vdReads(vwView(viewID, "WORKSPACE", "TABLE", "", true)), metaAnswer(`{"success":true}`))
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: []string{viewsDelete.ID}}
+		Effects: all, Tools: []string{viewsDelete.ID}}
 	stubLimiter(t, internalKey)
 	red := &redact.Redactor{}
 	core := application.New(registry(t), cfg, resolver(red), red)

@@ -193,7 +193,7 @@ func TestVaultProcessNeedsApproval(t *testing.T) {
 
 	// Approving the changed connection and handing the bindings over lets it through at once.
 	changed := wikiConnection()
-	changed.Permissions = append(changed.Permissions, config.PermissionCreate)
+	changed.Effects = append(changed.Effects, config.EffectCreate)
 	v := vault.New(dir)
 	if _, err := v.Unlock(processPassphrase); err != nil {
 		t.Fatalf("Unlock() = %v", err)

@@ -364,9 +364,9 @@ func TestProviderMetadataListsTheRegisteredTools(t *testing.T) {
 	}
 	after, _ := reg.ProviderMetadata("fakewiki")
 	want := []config.ToolMetadata{
-		{ID: "fakewiki.pages.create", Title: "Create a page", Effect: config.PermissionCreate},
-		{ID: "fakewiki.pages.get", Effect: config.PermissionRead},
-		{ID: "fakewiki.pages.list", Effect: config.PermissionRead},
+		{ID: "fakewiki.pages.create", Title: "Create a page", Effect: config.EffectCreate},
+		{ID: "fakewiki.pages.get", Effect: config.EffectRead},
+		{ID: "fakewiki.pages.list", Effect: config.EffectRead},
 	}
 	if !reflect.DeepEqual(after.Tools, want) {
 		t.Fatalf("tools = %+v, want %+v", after.Tools, want)
@@ -475,7 +475,7 @@ func TestProfilesNameConcreteToolsOnly(t *testing.T) {
 	if !ok || !reflect.DeepEqual(profile.Tools, []string{pagesList.ID}) {
 		t.Fatalf("recommended profile = %+v, %v; a later tool joined it", profile, ok)
 	}
-	if got := metadata.ProfilePermissions(profile); !reflect.DeepEqual(got, []config.Permission{config.PermissionRead}) {
+	if got := metadata.ProfileEffects(profile); !reflect.DeepEqual(got, []config.Effect{config.EffectRead}) {
 		t.Fatalf("profile permissions = %v, want read", got)
 	}
 	metadata.Profiles[0].Tools[0] = "mutated"
@@ -518,7 +518,7 @@ func TestToolsRequiringAnAllowListStayOutOfTheRecommendedProfile(t *testing.T) {
 	if want := map[string]bool{pagesList.ID: false, guardedRead.ID: true, guardedChange.ID: true}; !reflect.DeepEqual(marked, want) {
 		t.Errorf("tools = %+v, want the mark on the guarded tools only", metadata.Tools)
 	}
-	if got := guardedChange.Tool(); !got.RequiresToolAllowList || got.Effect != config.PermissionUpdate ||
+	if got := guardedChange.Tool(); !got.RequiresToolAllowList || got.Effect != config.EffectUpdate ||
 		got.ID != guardedChange.ID {
 		t.Errorf("Tool() = %+v", got)
 	}

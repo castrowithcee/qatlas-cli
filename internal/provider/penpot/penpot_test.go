@@ -103,10 +103,10 @@ func registry(t *testing.T) *capability.Registry {
 
 func testConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAccessToken: tokenEnv}}
-	read := []config.Permission{config.PermissionRead}
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	read := []config.Effect{config.EffectRead}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	connection := func(targets ...string) config.Connection {
-		return config.Connection{Service: "penpot", Credential: "token", Permissions: read, Targets: targets}
+		return config.Connection{Service: "penpot", Credential: "token", Effects: read, Targets: targets}
 	}
 	return &config.Config{
 		Version:     1,
@@ -116,14 +116,14 @@ func testConfig() *config.Config {
 			"one":    connection("team/" + teamA),
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
-			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
+			"write": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA},
 				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
-			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
+			"writetwo": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA, "team/" + teamB},
 				Tools: append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)},
-			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
+			"writenarrow": {Service: "penpot", Credential: "token", Effects: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
 				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
-			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
+			"nodelete": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
 		},
@@ -193,26 +193,26 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	want := map[string]config.Permission{teamsList.ID: config.PermissionRead, projectsList.ID: config.PermissionRead,
-		filesList.ID: config.PermissionRead, filesGet.ID: config.PermissionRead,
-		commentsThreads.ID: config.PermissionRead, commentsList.ID: config.PermissionRead,
-		commentsCreate.ID: config.PermissionCreate, commentsUpdate.ID: config.PermissionUpdate,
-		commentsDelete.ID: config.PermissionDelete,
-		projectsCreate.ID: config.PermissionCreate, projectsRename.ID: config.PermissionUpdate,
-		projectsDelete.ID: config.PermissionDelete, filesCreate.ID: config.PermissionCreate,
-		filesRename.ID: config.PermissionUpdate, filesMove.ID: config.PermissionUpdate,
-		librariesList.ID: config.PermissionRead, librariesShare.ID: config.PermissionUpdate,
-		librariesLink.ID:   config.PermissionUpdate,
-		snapshotsCreate.ID: config.PermissionCreate, snapshotsRestore.ID: config.PermissionUpdate,
-		filesDelete.ID: config.PermissionDelete, filesRestore.ID: config.PermissionUpdate,
-		filesPurge.ID:  config.PermissionDelete,
-		mediaUpload.ID: config.PermissionCreate, mediaFromURL.ID: config.PermissionCreate,
-		filesExport.ID: config.PermissionRead, filesImport.ID: config.PermissionCreate,
-		webhooksList.ID:   config.PermissionRead,
-		webhooksUpdate.ID: config.PermissionUpdate, webhooksDelete.ID: config.PermissionDelete,
-		membersList.ID: config.PermissionRead, membersSetRole.ID: config.PermissionUpdate,
-		membersRemove.ID: config.PermissionDelete,
-		teamsCreate.ID:   config.PermissionCreate, teamsDelete.ID: config.PermissionDelete}
+	want := map[string]config.Effect{teamsList.ID: config.EffectRead, projectsList.ID: config.EffectRead,
+		filesList.ID: config.EffectRead, filesGet.ID: config.EffectRead,
+		commentsThreads.ID: config.EffectRead, commentsList.ID: config.EffectRead,
+		commentsCreate.ID: config.EffectCreate, commentsUpdate.ID: config.EffectUpdate,
+		commentsDelete.ID: config.EffectDelete,
+		projectsCreate.ID: config.EffectCreate, projectsRename.ID: config.EffectUpdate,
+		projectsDelete.ID: config.EffectDelete, filesCreate.ID: config.EffectCreate,
+		filesRename.ID: config.EffectUpdate, filesMove.ID: config.EffectUpdate,
+		librariesList.ID: config.EffectRead, librariesShare.ID: config.EffectUpdate,
+		librariesLink.ID:   config.EffectUpdate,
+		snapshotsCreate.ID: config.EffectCreate, snapshotsRestore.ID: config.EffectUpdate,
+		filesDelete.ID: config.EffectDelete, filesRestore.ID: config.EffectUpdate,
+		filesPurge.ID:  config.EffectDelete,
+		mediaUpload.ID: config.EffectCreate, mediaFromURL.ID: config.EffectCreate,
+		filesExport.ID: config.EffectRead, filesImport.ID: config.EffectCreate,
+		webhooksList.ID:   config.EffectRead,
+		webhooksUpdate.ID: config.EffectUpdate, webhooksDelete.ID: config.EffectDelete,
+		membersList.ID: config.EffectRead, membersSetRole.ID: config.EffectUpdate,
+		membersRemove.ID: config.EffectDelete,
+		teamsCreate.ID:   config.EffectCreate, teamsDelete.ID: config.EffectDelete}
 	explicit := map[string]bool{commentsDelete.ID: true, projectsDelete.ID: true, snapshotsRestore.ID: true,
 		filesDelete.ID: true, filesPurge.ID: true, webhooksDelete.ID: true, membersSetRole.ID: true,
 		membersRemove.ID: true, teamsCreate.ID: true, teamsDelete.ID: true}
@@ -357,7 +357,7 @@ func TestBadOriginFailsBeforeSecret(t *testing.T) {
 		Services:    map[string]config.Service{"penpot": {Provider: Provider, BaseURL: "http://insecure.example.test"}},
 		Credentials: testConfig().Credentials,
 		Connections: map[string]config.Connection{"bad": {Service: "penpot", Credential: "token",
-			Permissions: []config.Permission{config.PermissionRead}, Target: "team/" + teamA}},
+			Effects: []config.Effect{config.EffectRead}, Target: "team/" + teamA}},
 	}, resolver(env.red, env.reads), env.red)
 	if _, err := env.invoke(teamsList.ID, "bad", `{}`); err == nil {
 		t.Fatal("an http base URL must be refused")

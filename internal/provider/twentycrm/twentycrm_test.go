@@ -452,14 +452,14 @@ func TestDeletingToolsNeedTheToolAllowList(t *testing.T) {
 	})
 	stubLimiter(t, cloudKey)
 	cfg := coreConfig()
-	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	all := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 	bare := cfg.Connections["crm"]
-	bare.Permissions = all
+	bare.Effects = all
 	cfg.Connections["crm"] = bare
 	listed := bare
 	listed.Tools = []string{"twenty-crm.companies.delete", "twenty-crm.companies.destroy"}
 	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
-		Permissions: all, Tools: listed.Tools}
+		Effects: all, Tools: listed.Tools}
 	stubLimiter(t, internalKey)
 
 	red := &redact.Redactor{}

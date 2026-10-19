@@ -119,7 +119,7 @@ func TestSearchToolsRefuseAProjectOnlyTargetBeforeIO(t *testing.T) {
 	red := &redact.Redactor{}
 	cfg := discoveryConfig(serve(t, f))
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{projectTarget}, Permissions: config.Permissions()}
+		Targets: []string{projectTarget}, Effects: config.Effects()}
 	core := application.New(registry(t), cfg, resolver(red, &reads), red)
 
 	for _, operation := range []string{repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID, pullRequestsSearch.ID,
@@ -144,7 +144,7 @@ func TestSearchScopeIgnoresAProjectBesideARepositoryTarget(t *testing.T) {
 	red := &redact.Redactor{}
 	cfg := discoveryConfig(base)
 	cfg.Connections["mixed"] = config.Connection{Service: "gh", Credential: "gh-reader",
-		Targets: []string{projectTarget, repoTarget}, Permissions: config.Permissions()}
+		Targets: []string{projectTarget, repoTarget}, Effects: config.Effects()}
 	core := application.New(registry(t), cfg, resolver(red, nil), red)
 
 	if _, err := invoke(t, core, repositoriesSearch.ID, "mixed", `{"terms":"example"}`, false); err != nil {
