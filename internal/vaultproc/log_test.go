@@ -24,7 +24,7 @@ func testLogKey(t *testing.T) *invokelog.Key {
 func goodEntry() *logEntry {
 	return &logEntry{Path: "mcp", Client: &invokelog.ClientInfo{Name: "client", Version: "1"},
 		Operation: "bookstack.pages.list", Version: 1, Connection: "wiki", Effect: "read", Result: "success",
-		DurationMS: 12}
+		DurationMS: 12, Session: "fedcba9876543210"}
 }
 
 // logLines returns every line the log below vaultDir holds.
@@ -134,7 +134,9 @@ func TestServerSignsSessionEntries(t *testing.T) {
 		Session: session, ReqBytes: int64Ptr(60), RespBytes: int64Ptr(9000)}
 	failedSearch := &logEntry{Path: "mcp", Operation: invokelog.OperationMCPSearch, Result: "invalid-request",
 		Session: session, ReqBytes: int64Ptr(80), RespBytes: int64Ptr(200)}
-	for _, e := range []*logEntry{baseline, failedSearch, goodEntry()} {
+	cliEntry := goodEntry()
+	cliEntry.Path, cliEntry.Session = "cli", ""
+	for _, e := range []*logEntry{baseline, failedSearch, cliEntry} {
 		if _, err := exchangeOverPipe(t, s, c, request{Op: opLog, Entry: e}); err != nil {
 			t.Fatalf("log error = %v", err)
 		}
@@ -142,7 +144,7 @@ func TestServerSignsSessionEntries(t *testing.T) {
 	lines := logLines(t, dir)
 	if len(lines) != 3 || !bytes.Contains(lines[0], []byte(`"session":"`+session+`","prev_hash"`)) ||
 		bytes.Contains(lines[2], []byte("session")) {
-		t.Fatalf("lines = %q, want the session before prev_hash on the first two only", lines)
+		t.Fatalf("lines = %q, want the session before prev_hash on the mcp entries only", lines)
 	}
 	report, err := invokelog.VerifyWith(dir, testLogKey(t))
 	if err != nil || report.Broken || report.Days[0].Unverified != 0 {
@@ -198,6 +200,7 @@ func TestServerRefusesInvalidLogFields(t *testing.T) {
 		"resp_bytes on error":  func(e *logEntry) { e.Path = "cli"; e.Result = "not-found"; e.RespBytes = int64Ptr(1) },
 		"session on cli":       func(e *logEntry) { e.Path = "cli"; e.Session = "0123456789abcdef" },
 		"malformed session":    func(e *logEntry) { e.Session = "ABC" },
+		"mcp without session":  func(e *logEntry) { e.Session = "" },
 		"search with a connection": func(e *logEntry) {
 			e.Operation, e.Session, e.Effect, e.Version = invokelog.OperationMCPSearch, "0123456789abcdef", "", 0
 			e.ReqBytes, e.RespBytes = int64Ptr(1), int64Ptr(1)

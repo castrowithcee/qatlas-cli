@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,13 +75,29 @@ defaults:
 		t.Fatalf("invoke pages.get(%d) exit=0, want a provider-error", argumentCanary)
 	}
 
-	mcpInput := `{"jsonrpc":"2.0","id":"list","method":"tools/call","params":{` + mcpMeta +
+	// One MCP session beside the CLI invokes: its baseline, navigation, and invoke are logged under one
+	// session ID, with sizes but without the search term, which is as distinctive as the page ID.
+	const queryCanary = "searchcanary774422"
+	mcpInput := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{` + mcpMeta + `}}` + "\n" +
+		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta +
+		`,"name":"qatlas.search","arguments":{"query":"` + queryCanary + `","connection":"primary"}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta +
+		`,"name":"qatlas.describe","arguments":{"operation":"bookstack.pages.list"}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":"list","method":"tools/call","params":{` + mcpMeta +
 		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"primary"}}}` + "\n"
 	code, stdout, stderr := c.runInput(t, mcpInput, "mcp")
 	if code != 0 || stderr != "" {
 		t.Fatalf("mcp exit=%d stderr=%q", code, stderr)
 	}
-	if responses := decodeMCP(t, stdout); responses["list"].Result.IsError {
+	// tools/list answers with no tool result, which decodeMCP reads.
+	var toolCalls []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if line != "" && !strings.Contains(line, `"id":"tools"`) {
+			toolCalls = append(toolCalls, line)
+		}
+	}
+	responses := decodeMCP(t, strings.Join(toolCalls, "\n"))
+	if responses["list"].Result.IsError {
 		t.Fatalf("MCP invoke failed: %+v", responses["list"])
 	}
 
@@ -103,10 +120,36 @@ defaults:
 		t.Fatalf("ReadFile(%s) error = %v", dayFile, err)
 	}
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("log has %d lines, want 4 (one per invoke): %s", len(lines), data)
+	if len(lines) != 7 {
+		t.Fatalf("log has %d lines, want 7 (3 CLI invokes and the 4 exchanges of the MCP session): %s", len(lines), data)
 	}
-	for _, canary := range append(allCanaries(), fmt.Sprint(argumentCanary)) {
+	sessions := map[string]bool{}
+	for _, line := range lines[3:] {
+		var entry struct {
+			Session    string `json:"session"`
+			Operation  string `json:"operation"`
+			Connection string `json:"connection"`
+			ReqBytes   *int64 `json:"req_bytes"`
+			RespBytes  *int64 `json:"resp_bytes"`
+		}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("log line %q: %v", line, err)
+		}
+		if entry.Session == "" || entry.ReqBytes == nil || entry.RespBytes == nil ||
+			(entry.Operation == "qatlas.search" || entry.Operation == "qatlas.describe") && entry.Connection != "" {
+			t.Fatalf("MCP entry = %s, want a session, both sizes, and no connection on navigation", line)
+		}
+		sessions[entry.Session] = true
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("the MCP session logged under %v, want one session ID", sessions)
+	}
+	for _, line := range lines[:3] {
+		if strings.Contains(line, `"session"`) {
+			t.Fatalf("a CLI entry carries a session: %s", line)
+		}
+	}
+	for _, canary := range append(allCanaries(), fmt.Sprint(argumentCanary), queryCanary) {
 		if strings.Contains(string(data), canary) {
 			t.Fatalf("invocation log contains a canary %q: %s", canary, data)
 		}

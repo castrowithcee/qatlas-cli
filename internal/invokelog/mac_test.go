@@ -305,7 +305,8 @@ func TestValidateAcceptsSizeCountersAtTheirBounds(t *testing.T) {
 
 func TestValidateRefusesWhatNoInvokeLogs(t *testing.T) {
 	good := Fields{Path: "mcp", Client: &ClientInfo{Name: "client", Version: "1.0"}, Operation: "wiki.pages.list",
-		Version: 1, Connection: "wiki", Effect: "read", Result: "success", Duration: time.Second}
+		Version: 1, Connection: "wiki", Effect: "read", Result: "success", Duration: time.Second,
+		Session: "0123456789abcdef"}
 	if err := good.Validate(); err != nil {
 		t.Fatalf("Validate(good) = %v", err)
 	}

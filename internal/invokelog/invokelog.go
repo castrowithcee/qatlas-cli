@@ -122,8 +122,8 @@ type Fields struct {
 	// Token names the agent token an approval of a connection change was made with, never its value; empty
 	// for an invoke.
 	Token string
-	// Session is the NewSession ID of the MCP process; only the mcp path has one, and the operations of
-	// the mcp baseline and navigation need it.
+	// Session is the NewSession ID of the MCP process; the mcp path always has one and no other path has
+	// any.
 	Session string
 }
 
@@ -147,6 +147,16 @@ const MaxDuration = 30 * 24 * time.Hour
 
 // sessionPattern is the form of Fields.Session: 8 random bytes as lowercase hex.
 var sessionPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// ValidSession reports whether s has the form of a NewSession ID.
+func ValidSession(s string) bool { return sessionPattern.MatchString(s) }
+
+// IsReservedOperation reports whether name is one of the operations only an MCP session's own exchanges log,
+// which no invoke entry may carry, whatever a client asked for.
+func IsReservedOperation(name string) bool {
+	_, reserved := mcpOperations[name]
+	return reserved
+}
 
 // NewSession returns a random session ID for one MCP process. It is not derived from the client, the user,
 // or anything a call carries, so entries of one session can be grouped but traced to nothing.
@@ -230,15 +240,15 @@ func (f Fields) Validate() error {
 	default:
 		return errors.New("path must be cli, mcp, tui, or web")
 	}
-	if f.Session != "" && (f.Path != "mcp" || !sessionPattern.MatchString(f.Session)) {
-		return errors.New("session must be a NewSession ID on the mcp path")
+	if (f.Path == "mcp" || f.Session != "") && (f.Path != "mcp" || !sessionPattern.MatchString(f.Session)) {
+		return errors.New("session must be a NewSession ID, and only on the mcp path")
 	}
 	if _, reserved := mcpOperations[f.Operation]; reserved {
 		// Nothing the agent supplied may be left in such an entry, so it has no connection even where the
 		// call was filtered by one.
 		switch {
-		case f.Path != "mcp" || f.Session == "":
-			return errors.New("an mcp operation needs the mcp path and a session")
+		case f.Path != "mcp":
+			return errors.New("an mcp operation needs the mcp path")
 		case f.Connection != "" || f.Effect != "" || f.Version != 0:
 			return errors.New("an mcp operation has no connection, effect, or version")
 		case f.ReqBytes == nil || f.RespBytes == nil:

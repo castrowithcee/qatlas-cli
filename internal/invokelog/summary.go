@@ -135,10 +135,14 @@ func SummarizeSessions(entries []Entry) []SessionSummary {
 }
 
 // areaOf returns the area of an mcp entry: baseline or navigation by its reserved operation, invoke for any
-// other invoke on the mcp path.
+// other invoke on the mcp path. A call that failed before its tool was known has no operation and still is
+// an invoke of its session.
 func areaOf(e Entry) (Area, bool) {
 	if area, ok := mcpOperations[e.Operation]; ok {
 		return area, e.Kind == "" && e.Path == "mcp"
+	}
+	if e.Operation == "" {
+		return AreaInvoke, e.Kind == "" && e.Path == "mcp" && e.Session != ""
 	}
 	return AreaInvoke, e.Path == "mcp" && IsInvoke(e)
 }

@@ -322,12 +322,15 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"version, the connection, the tool's effect, the result (success or the error code the diagnostic\n" +
 			"leads with), how long it took, and the byte sizes of the arguments (req_bytes) and of a\n" +
 			"successful result (resp_bytes), absent where not recorded. Over mcp, an entry also carries the\n" +
-			"random session ID of its 'qatlas mcp' process, and the initialize and tools/list exchanges and\n" +
-			"qatlas.search and qatlas.describe calls get entries of their own, without a connection; there the\n" +
-			"sizes are those of the whole JSON-RPC messages, an error response included. No argument, search\n" +
-			"term, result, secret, target, or URL query ever reaches it, and an entry is written even where the vault does not exist yet,\n" +
-			"is locked, or is unencrypted; a logging failure, such as an unwritable directory, is a warning\n" +
-			"beside the invoke's own result, never a reason to change it.\n\n" +
+			"random session ID of its 'qatlas mcp' process, and the sizes are those of the whole JSON-RPC\n" +
+			"request and response messages, an error response included. The initialize, server/discover, and\n" +
+			"tools/list exchanges and the qatlas.search and qatlas.describe calls get entries of their own,\n" +
+			"without a connection; a qatlas.invoke that failed before it named a known tool has no tool ID.\n" +
+			"An entry is written after the response, so a request that never got one is not logged, except a\n" +
+			"qatlas.invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
+			"term, result, secret, target, or URL query ever reaches the log, and an entry is written even\n" +
+			"where the vault does not exist yet, is locked, or is unencrypted; a logging failure, such as an\n" +
+			"unwritable directory, is a warning beside the invoke's own result, never a reason to change it.\n\n" +
 			"Entries are linked by a SHA-256 hash chain that spans day boundaries, so a changed or deleted\n" +
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
 			"'vault logs stats' sums up the response sizes per tool and connection, and per MCP session the bytes\n" +
@@ -410,8 +413,9 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 			"and qatlas.describe), and invoke (qatlas.invoke, failed calls included). Per area and per\n" +
 			"operation it has calls, req_bytes and resp_bytes (the byte lengths of the whole JSON-RPC request\n" +
 			"and response messages, an error response included; a missing counter adds 0), and total_bytes.\n" +
-			"Baseline and navigation operations are named mcp/initialize, mcp/tools-list, qatlas.search, and\n" +
-			"qatlas.describe. Entries without a session ID, written before it existed or over the CLI, appear\n" +
+			"Baseline and navigation operations are named mcp/initialize (also for server/discover),\n" +
+			"mcp/tools-list, qatlas.search, and qatlas.describe; an invoke without a tool ID has an empty\n" +
+			"operation. Entries without a session ID, written before it existed or over the CLI, appear\n" +
 			"only in the groups.\n\n" +
 			"--from and --to (YYYY-MM-DD, both inclusive, local days like the editor's Logs section) narrow\n" +
 			"the entries; either one left out leaves that end open, and without both every recorded day counts.\n\n" +

@@ -52,15 +52,20 @@ func TestValidateMCPOperationsAndSessions(t *testing.T) {
 			t.Errorf("Validate(%s error response) = %v", operation, err)
 		}
 	}
-	// An mcp invoke may carry a session or not, and keeps its response size on failure.
+	// Every mcp entry needs a session, an invoke keeps its response size on failure, and one that failed
+	// before its tool was known has no operation.
 	invoke := Fields{Path: "mcp", Operation: "wiki.pages.list", Version: 1, Connection: "wiki", Effect: "read",
 		Result: "not-found", ReqBytes: int64Ptr(300), RespBytes: int64Ptr(150)}
-	if err := invoke.Validate(); err != nil {
-		t.Errorf("Validate(mcp invoke error, no session) = %v", err)
+	if err := invoke.Validate(); err == nil {
+		t.Error("Validate(mcp invoke, no session) = nil, want a refusal")
 	}
 	invoke.Session = testSession
 	if err := invoke.Validate(); err != nil {
 		t.Errorf("Validate(mcp invoke error with session) = %v", err)
+	}
+	invoke.Operation, invoke.Version, invoke.Effect, invoke.Connection = "", 0, "", ""
+	if err := invoke.Validate(); err != nil {
+		t.Errorf("Validate(mcp invoke without an operation) = %v", err)
 	}
 
 	bad := map[string]func(*Fields){
@@ -159,9 +164,12 @@ func TestSummarizeSessionsGroupsAreasAndIncludesErrors(t *testing.T) {
 		entry("aaaa", "wiki.pages.list", "success", ptr(300), ptr(4000)),
 		entry("aaaa", "wiki.pages.list", "not-found", ptr(300), ptr(150)),
 		entry("aaaa", "chat.msgs.send", "success", ptr(10), nil),
+		// A call that failed before its tool was known has no operation and still is an invoke.
+		entry("aaaa", "", "invalid-request", ptr(40), ptr(100)),
 		entry("bbbb", OperationMCPInitialize, "success", ptr(100), ptr(1000)),
 		// Left out: no session, CLI, other kinds.
 		entry("", "wiki.pages.list", "success", ptr(1), ptr(1)),
+		entry("", "", "invalid-request", ptr(1), ptr(1)),
 		{Path: "cli", Session: "cccc", Operation: "wiki.pages.list", ReqBytes: ptr(1), RespBytes: ptr(1)},
 		{Kind: KindCut, Path: "mcp", Session: "aaaa", Operation: OperationMCPSearch},
 		{Path: "mcp", Session: "aaaa", Operation: OperationApprove},
@@ -175,8 +183,9 @@ func TestSummarizeSessionsGroupsAreasAndIncludesErrors(t *testing.T) {
 			{Area: AreaNavigation, ToolBytes: ToolBytes{Calls: 3, ReqBytes: 210, RespBytes: 1000}, Tools: []ToolBytes{
 				{Operation: OperationMCPSearch, Calls: 2, ReqBytes: 140, RespBytes: 700},
 				{Operation: OperationMCPDescribe, Calls: 1, ReqBytes: 70, RespBytes: 300}}},
-			{Area: AreaInvoke, ToolBytes: ToolBytes{Calls: 3, ReqBytes: 610, RespBytes: 4150}, Tools: []ToolBytes{
+			{Area: AreaInvoke, ToolBytes: ToolBytes{Calls: 4, ReqBytes: 650, RespBytes: 4250}, Tools: []ToolBytes{
 				{Operation: "wiki.pages.list", Calls: 2, ReqBytes: 600, RespBytes: 4150},
+				{Operation: "", Calls: 1, ReqBytes: 40, RespBytes: 100},
 				{Operation: "chat.msgs.send", Calls: 1, ReqBytes: 10}}},
 		}},
 		{Session: "bbbb", Areas: []AreaSummary{
@@ -189,6 +198,17 @@ func TestSummarizeSessionsGroupsAreasAndIncludesErrors(t *testing.T) {
 	}
 	if SummarizeSessions(nil) == nil {
 		t.Error("SummarizeSessions(nil) = nil, want an empty slice")
+	}
+}
+
+func TestIsReservedOperation(t *testing.T) {
+	for operation := range mcpOperations {
+		if !IsReservedOperation(operation) {
+			t.Errorf("IsReservedOperation(%s) = false", operation)
+		}
+	}
+	if IsReservedOperation("wiki.pages.list") || IsReservedOperation("") {
+		t.Error("IsReservedOperation(tool or empty) = true")
 	}
 }
 
