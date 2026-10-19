@@ -62,7 +62,7 @@ func TestProviderConformance(t *testing.T) {
 func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, "version: 1\ndefaults: {}\n")
+	path := writeConfig(t, "version: 2\ndefaults: {}\n")
 	reg := defaultRegistry()
 	var reads atomic.Int32
 	cliJSON := func(args ...string) []byte {

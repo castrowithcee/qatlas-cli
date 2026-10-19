@@ -28,7 +28,7 @@ func (s *commitRecordingSecrets) DeleteVault(string, string) error { return nil 
 func (s *commitRecordingSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
 	return "", secret.StoreEmpty
 }
-func (s *commitRecordingSecrets) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+func (s *commitRecordingSecrets) SetVaultUndoable(string, string, string, string, vault.PassphraseFunc) (func() error, error) {
 	return func() error { return nil }, nil
 }
 

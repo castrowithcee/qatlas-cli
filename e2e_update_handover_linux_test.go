@@ -131,7 +131,7 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 	checksums = []byte(hex.EncodeToString(sum[:]) + "  " + asset + "\n")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 1
+	config := fmt.Sprintf(`version: 2
 services:
   wiki:
     provider: bookstack

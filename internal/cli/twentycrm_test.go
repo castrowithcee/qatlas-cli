@@ -19,7 +19,7 @@ func twentyConfig(t *testing.T) string {
 	t.Helper()
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	return writeConfig(t, `version: 1
+	return writeConfig(t, `version: 2
 services:
   crm-cloud:
     provider: twenty-crm

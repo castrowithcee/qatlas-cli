@@ -28,12 +28,9 @@ const (
 	versionIDs   = 2
 )
 
-// writeVersion is the schema version a new or saved configuration is written in. It is a variable only so a
-// test can write version 2; a configuration that was read as version 2 stays version 2.
-var writeVersion = versionNames
-
-// Version is the schema version a new configuration starts with.
-const Version = versionNames
+// Version is the schema version every configuration is written in. A schema-1 file is still read and
+// becomes schema 2 when it is next saved.
+const Version = versionIDs
 
 // Config is the whole configuration file.
 //

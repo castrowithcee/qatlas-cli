@@ -25,7 +25,7 @@ const (
 )
 
 const keyringConfig = `
-version: 1
+version: 2
 services:
   wiki:
     provider: bookstack
@@ -87,7 +87,7 @@ func configIn(dir string) string { return filepath.Join(dir, "config.yaml") }
 // read and clear.
 func writeLegacyPlaintext(t *testing.T, dir, credential, role, value string) {
 	t.Helper()
-	body := fmt.Sprintf("version: 1\nallow_plaintext: true\ncredentials:\n  %s:\n    %s: %s\n",
+	body := fmt.Sprintf("version: 2\nallow_plaintext: true\ncredentials:\n  %s:\n    %s: %s\n",
 		credential, role, value)
 	if err := os.WriteFile(filepath.Join(dir, secret.FileName), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy plaintext fixture: %v", err)
@@ -454,7 +454,7 @@ func TestConfigValidateSecretsIsNotTruncated(t *testing.T) {
 
 	const connections = 30 // two roles each, well past the default limit of 50 records
 	var b strings.Builder
-	b.WriteString("version: 1\nservices:\n")
+	b.WriteString("version: 2\nservices:\n")
 	for i := 0; i < connections; i++ {
 		fmt.Fprintf(&b, "  s%02d:\n    provider: bookstack\n    base_url: https://wiki%02d.example.invalid\n", i, i)
 	}
@@ -618,7 +618,7 @@ func TestStoredSecretNeverReachesTheOutput(t *testing.T) {
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfg, []byte(fmt.Sprintf(`
-version: 1
+version: 2
 services:
   wiki:
     provider: bookstack
@@ -747,7 +747,7 @@ func TestConfigValidateSecretsProjectsWithoutShortening(t *testing.T) {
 }
 
 const providerRolesConfig = `
-version: 1
+version: 2
 credentials:
   named:
     type: keyring

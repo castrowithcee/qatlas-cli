@@ -40,7 +40,19 @@ func TestMain(m *testing.M) {
 	vaultProcessSupported = false
 	// No test finds an agent token of the machine it runs on; a test that needs one sets its own.
 	lookupAgentToken = func() (string, string, error) { return "", "", nil }
-	os.Exit(m.Run())
+	// Every start may migrate the configuration it finds, so not even a test that names no configuration
+	// may reach the one of the machine it runs on.
+	home, err := os.MkdirTemp("", "qatlas-cli-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("HOME", home)
+	_ = os.Setenv("USERPROFILE", home)
+	_ = os.Unsetenv("QATLAS_CONFIG")
+	_ = os.Unsetenv("QATLAS_CLI_HOME")
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
 }
 
 // runAsQatlasEnv makes the test binary run as qatlas, the way a vault process it starts runs.

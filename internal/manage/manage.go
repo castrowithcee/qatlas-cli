@@ -34,8 +34,9 @@ type Secrets interface {
 	DeleteVault(credential, role string) error
 	// StoreValue reads one role from the system keyring only, for the previous value a rollback restores.
 	StoreValue(ctx context.Context, credential, role string) (string, secret.StoreState)
-	// SetVaultUndoable is SetVault that also returns what puts the vault back as it was, without a passphrase.
-	SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error)
+	// SetVaultUndoable is SetVault that also records credentialID, the credential's config id, in its entry
+	// and returns what puts the vault back as it was, without a passphrase.
+	SetVaultUndoable(credential, credentialID, role, value string, offer vault.PassphraseFunc) (func() error, error)
 }
 
 // Service performs the shared write completion for one surface. It never hands out its store, vault or
@@ -77,7 +78,7 @@ func (o vaultOnly) DeleteVault(string, string) error { return errNoSecretStore }
 func (o vaultOnly) StoreValue(context.Context, string, string) (string, secret.StoreState) {
 	return "", secret.StoreUnavailable
 }
-func (o vaultOnly) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+func (o vaultOnly) SetVaultUndoable(string, string, string, string, vault.PassphraseFunc) (func() error, error) {
 	return nil, errNoSecretStore
 }
 
@@ -154,6 +155,8 @@ func (s *Service) CommitSecrets(cfg *config.Config, base config.Revision, creden
 			}
 		}
 	}
+	// The save would assign a new credential's id anyway; it is assigned now so its vault entry records it.
+	cfg.AssignIDs()
 	var written []string
 	var undos []undoStep
 	// The revision is checked before the first secret is written and the lock is held until the configuration
@@ -181,7 +184,7 @@ func (s *Service) CommitSecrets(cfg *config.Config, base config.Revision, creden
 			var undo func() error
 			var writeErr error
 			if toVault {
-				undo, writeErr = s.secrets.SetVaultUndoable(credential, role, value, offer)
+				undo, writeErr = s.secrets.SetVaultUndoable(credential, cfg.Credentials[credential].ID, role, value, offer)
 			} else {
 				writeErr = s.secrets.Set(credential, role, value)
 				undo = s.keyringUndo(credential, role, previous[role])

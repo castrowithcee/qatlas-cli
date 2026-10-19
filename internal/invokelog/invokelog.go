@@ -159,11 +159,16 @@ const (
 	OperationHandover = "vault.handover"
 )
 
+// OperationConfigMigrate logs that qatlas moved the configuration file to the schema named by Version. Its
+// Path is "cli" or "mcp", the command that migrated.
+const OperationConfigMigrate = "config.migrate"
+
 // managementOperations holds every operation an entry can carry that is not an invoke; IsInvoke excludes
 // them, so a new one is added here.
 var managementOperations = map[string]bool{
 	OperationApprove: true, OperationLock: true, OperationHandover: true,
 	OperationConnectionCreate: true, OperationConnectionChange: true, OperationConnectionDelete: true,
+	OperationConfigMigrate: true,
 }
 
 // connectionOperations maps each connection operation to the effect it must carry.

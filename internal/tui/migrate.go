@@ -242,7 +242,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	m.screen = screenForm
 	return func() tea.Msg {
 		var warning string
-		err := vaultmigrate.Write(v, p.plan, offer, vaultMigrateSync(svc, &warning))
+		err := vaultmigrate.Write(v, cfg, p.plan, offer, vaultMigrateSync(svc, &warning))
 		if err == nil {
 			err = vaultmigrate.Verify(v, p.plan)
 		}

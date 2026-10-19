@@ -14,13 +14,6 @@ const (
 	idB = "fedcba9876543210fedcba9876543210"
 )
 
-func withWriteVersion(t *testing.T, v int) {
-	t.Helper()
-	old := writeVersion
-	writeVersion = v
-	t.Cleanup(func() { writeVersion = old })
-}
-
 func TestDuplicateIDsNameBothKeys(t *testing.T) {
 	cfg := sample(t)
 	must(t, cfg.SetService("a", Service{ID: idA, Provider: "bookstack"}))
@@ -46,8 +39,7 @@ func TestMalformedIDIsInvalid(t *testing.T) {
 	}
 }
 
-func TestEntryWithoutIDIsValidAndGetsOneWhenIDsAreWritten(t *testing.T) {
-	withWriteVersion(t, versionIDs)
+func TestEntryWithoutIDIsValidAndGetsOneWhenSaved(t *testing.T) {
 	store, path := newTarget(t)
 	cfg := sample(t)
 	if err := cfg.Validate(); err != nil {
@@ -70,20 +62,6 @@ func TestEntryWithoutIDIsValidAndGetsOneWhenIDsAreWritten(t *testing.T) {
 	}
 }
 
-func TestSchemaOneWritesNoIDs(t *testing.T) {
-	store, path := newTarget(t)
-	cfg := sample(t)
-	must(t, cfg.SetService("wiki", Service{ID: idA, Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
-	must(t, cfg.SetConnection("wiki", Connection{ID: idB, Service: "wiki", Credential: "reader"}))
-
-	must(t, store.Save(cfg))
-
-	data, _ := os.ReadFile(path)
-	if idKey.Match(data) || !strings.Contains(string(data), "version: 1") {
-		t.Fatalf("schema 1 file must have no id:\n%s", data)
-	}
-}
-
 func TestSetKeepsExistingID(t *testing.T) {
 	cfg := New(testProviders)
 	must(t, cfg.SetService("s", Service{ID: idA, Provider: "bookstack"}))
@@ -100,7 +78,6 @@ func TestSetKeepsExistingID(t *testing.T) {
 }
 
 func TestIDAssignmentIsNoConnectionChange(t *testing.T) {
-	withWriteVersion(t, versionIDs)
 	store, _ := newTarget(t)
 	cfg := sample(t)
 	before := cfg.Clone()
@@ -139,10 +116,30 @@ func TestVersionTwoWithIDsLoadsAndStaysVersionTwo(t *testing.T) {
 	if cfg.Services["wiki"].ID != idA || cfg.Credentials["reader"].ID != idB || cfg.Connections["wiki"].ID != idA {
 		t.Fatalf("ids not loaded: %+v", cfg)
 	}
-	// Saving with the schema-1 default must not drop the ids of a schema-2 file.
 	must(t, store.Save(cfg))
 	data, _ := os.ReadFile(path)
 	if !strings.Contains(string(data), "version: 2") || strings.Count(string(data), idA) != 2 {
 		t.Errorf("ids or version lost:\n%s", data)
+	}
+}
+
+func TestHasCurrentSchemaReadsOnlyTheVersionLine(t *testing.T) {
+	store, path := newTarget(t)
+	if store.HasCurrentSchema() {
+		t.Error("a missing file is current")
+	}
+	must(t, os.MkdirAll(strings.TrimSuffix(path, "config.yaml"), 0o700))
+	for in, want := range map[string]bool{
+		"version: 2\nservices: {}\n":          true,
+		"version: 2\r\n":                      true,
+		"version: 1\n":                        false,
+		"# version: 2\nversion: 1\n":          false,
+		"version: 2 # the current schema\n":   false,
+		"services:\n  version: 2\nversion: 1": false,
+	} {
+		must(t, os.WriteFile(path, []byte(in), 0o600))
+		if got := store.HasCurrentSchema(); got != want {
+			t.Errorf("HasCurrentSchema(%q) = %v, want %v", in, got, want)
+		}
 	}
 }

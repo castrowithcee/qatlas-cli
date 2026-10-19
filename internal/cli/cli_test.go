@@ -235,7 +235,7 @@ func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, "version: 1\n")
+	cfg := writeConfig(t, "version: 2\n")
 	for _, tt := range []struct {
 		name  string
 		args  []string
@@ -270,7 +270,7 @@ func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
 func TestInvalidRequestIsNamedOnce(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	cfg := writeConfig(t, "version: 1\n")
+	cfg := writeConfig(t, "version: 2\n")
 	code, _, stderr := runTools(t, nil, "invoke", "bookstack.pages.get", "--arg", "id=x", "--config", cfg)
 	if code != exitUsage || !strings.HasPrefix(stderr, "qatlas: invalid-request: ") ||
 		strings.Contains(strings.ToLower(stderr), "invalid request") {

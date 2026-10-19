@@ -1579,7 +1579,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 			return nil
 		})
 	}
-	if err := vaultmigrate.Write(v, plan, offerVaultPassphrase, sync); err != nil {
+	if err := vaultmigrate.Write(v, cfg, plan, offerVaultPassphrase, sync); err != nil {
 		return classifyUserError(err)
 	}
 

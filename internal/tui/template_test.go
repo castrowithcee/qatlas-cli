@@ -52,6 +52,16 @@ func templateModel(t *testing.T, more ...string) (*Model, string) {
 	return m, path
 }
 
+// withoutID checks that a copy has an id of its own and returns both connections without their ids.
+func withoutID(t *testing.T, copied, original config.Connection) (config.Connection, config.Connection) {
+	t.Helper()
+	if copied.ID == "" || copied.ID == original.ID {
+		t.Errorf("copy id %q, original id %q, want an id of its own", copied.ID, original.ID)
+	}
+	copied.ID, original.ID = "", ""
+	return copied, original
+}
+
 func savedConfig(t *testing.T, path string) *config.Config {
 	t.Helper()
 	cfg, err := config.Load(path, wikiRegistry(t))
@@ -185,7 +195,7 @@ func TestDuplicateConnectionKeepsToolsAndPaths(t *testing.T) {
 		t.Fatalf("saving the copy reported %q", m.fail)
 	}
 	saved := savedConfig(t, path)
-	got, want := saved.Connections["kunde-b"], saved.Connections["github-ops"]
+	got, want := withoutID(t, saved.Connections["kunde-b"], saved.Connections["github-ops"])
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("copy = %+v, want everything of the original: %+v", got, want)
 	}
@@ -405,7 +415,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 		t.Fatalf("saving failed: fail %q", m.fail)
 	}
 	saved := savedConfig(t, path)
-	got, want := saved.Connections["github-ops-copy"], saved.Connections["github-ops"]
+	got, want := withoutID(t, saved.Connections["github-ops-copy"], saved.Connections["github-ops"])
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("setup copy = %+v, want %+v", got, want)
 	}

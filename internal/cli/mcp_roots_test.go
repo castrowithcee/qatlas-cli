@@ -154,7 +154,7 @@ func pathsLayout(t *testing.T) (project, outside, cfg string) {
 			t.Fatal(err)
 		}
 	}
-	cfg = writeConfig(t, fmt.Sprintf(`version: 1
+	cfg = writeConfig(t, fmt.Sprintf(`version: 2
 services:
   fake:
     provider: fake

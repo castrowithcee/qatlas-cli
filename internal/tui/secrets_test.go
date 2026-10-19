@@ -680,7 +680,7 @@ func (b blockingSecrets) Plaintext() *secret.File { return nil }
 func (b blockingSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
 	return "", secret.StoreEmpty
 }
-func (b blockingSecrets) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+func (b blockingSecrets) SetVaultUndoable(string, string, string, string, vault.PassphraseFunc) (func() error, error) {
 	<-b.writes
 	return func() error { return nil }, nil
 }
@@ -1040,7 +1040,7 @@ func (s scriptedSecrets) Plaintext() *secret.File          { return nil }
 func (s scriptedSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
 	return "", secret.StoreEmpty
 }
-func (s scriptedSecrets) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+func (s scriptedSecrets) SetVaultUndoable(string, string, string, string, vault.PassphraseFunc) (func() error, error) {
 	return nil, secret.ErrUnavailable
 }
 
