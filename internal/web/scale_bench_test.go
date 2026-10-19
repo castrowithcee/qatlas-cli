@@ -64,11 +64,16 @@ func scaleConfigYAML(units int) []byte {
 	return []byte(b.String())
 }
 
-// scalePage couples a server to one session and returns a function that fetches the overview page.
-func scalePage(b *testing.B, overview Overview, store *config.Store) func() *httptest.ResponseRecorder {
+// scalePage couples a server to one session and returns a function that fetches the overview page. Without a
+// store the server has no management service, so the page shows the snapshot alone.
+func scalePage(b testing.TB, overview Overview, store *config.Store) func() *httptest.ResponseRecorder {
 	b.Helper()
 	resolver := secret.NewWith(func(string) string { return "" }, secret.NewMemoryStore(), nil, &redact.Redactor{})
-	s, err := New(overview, nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, &redact.Redactor{}), resolver, &redact.Redactor{}, nil)
+	var svc *manage.Service
+	if store != nil {
+		svc = manage.New(store, resolver, connlog.SurfaceWeb, &redact.Redactor{})
+	}
+	s, err := New(overview, nil, defaultTestAdminTimeout, svc, resolver, &redact.Redactor{}, nil)
 	if err != nil {
 		b.Fatalf("New: %v", err)
 	}
@@ -143,8 +148,8 @@ func BenchmarkScaleOverviewPage(b *testing.B) {
 	}
 }
 
-// TestScaleOverviewSmall keeps the generators honest at a size that costs nothing: the fixture loads and
-// the page shows its last row.
+// TestScaleOverviewSmall keeps the generators and the benchmark server honest at a size that costs nothing:
+// the fixture loads and the page shows its last row.
 func TestScaleOverviewSmall(t *testing.T) {
 	cfg, err := config.Decode(strings.NewReader(string(scaleConfigYAML(12))), bookCatalog{})
 	if err != nil {
@@ -155,5 +160,9 @@ func TestScaleOverviewSmall(t *testing.T) {
 	}
 	if got := scaleOverview(12); len(got.Connections) != 12 {
 		t.Fatalf("rows = %d", len(got.Connections))
+	}
+	rec := scalePage(t, scaleOverview(12), nil)()
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "conn-00011") {
+		t.Fatalf("status = %d, last row shown = %t", rec.Code, strings.Contains(rec.Body.String(), "conn-00011"))
 	}
 }
