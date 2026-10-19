@@ -203,3 +203,31 @@ func TestApproveOnEncrypt(t *testing.T) {
 		t.Errorf("ApproveOnEncrypt() = %+v, want a missing configuration to be silent", res)
 	}
 }
+
+// Saving a connection directly by name approves its switch from disabled to active, as it does any field its
+// form shows; the same switch made by editing the file alone is not approved.
+func TestApproveAfterChangeApprovesTheStateOfTheSavedConnection(t *testing.T) {
+	w := newApprovalWorld(t)
+	off := w.base.Clone()
+	conn := off.Connections["a"]
+	conn.Disabled = true
+	off.Connections["a"] = conn
+	if _, _, err := approval.Approve(context.Background(), off, w.v, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	on := off.Clone()
+	conn.Disabled = false
+	on.Connections["a"] = conn
+	if got := w.open(t, on); !reflect.DeepEqual(got, []string{"a"}) {
+		t.Fatalf("open after a file edit = %v, want a (approval-required)", got)
+	}
+	before := SnapshotApprovals(w.v, off)
+	res := ApproveAfterChange(context.Background(), w.v, before, on, "a", ApprovalDirectOnly)
+	if res.StayedOpen != "" || !reflect.DeepEqual(res.Approved, []string{"a"}) {
+		t.Fatalf("ApproveAfterChange() = %+v, want a approved", res)
+	}
+	if got := w.open(t, on); len(got) != 0 {
+		t.Errorf("still open = %v", got)
+	}
+}

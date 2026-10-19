@@ -84,6 +84,9 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"vault unlocked; 'qatlas vault unlock' starts one. An encrypted vault also hands its secrets only\n" +
 			"to a connection a person approved as it is configured now; one that was never approved or changed\n" +
 			"since gets unusable: approval-required. Without such a connection the column is left out.\n\n" +
+			"A connection a person switched off gets state: disabled, a column of its own that is left out\n" +
+			"while none is. It keeps its selection and offers no tool; naming it fails with\n" +
+			"unsupported-capability and the reason connection-disabled.\n\n" +
 			"It is answered from the local configuration and the vault's state alone: no provider is\n" +
 			"contacted, no secret is read, and no passphrase is asked for. No URL, credential, target, or\n" +
 			"secret source is published. The tools one connection offers are one 'qatlas tools <provider>\n" +
@@ -165,11 +168,12 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"  not-in-tools-list         the tools list does not name the tool\n" +
 			"  no-local-files            the tool reads or writes local files, and the connection's files\n" +
 			"                            list releases no directory for that direction\n" +
+			"  connection-disabled       the connection would offer the tool, but a person switched it off\n" +
 			"  no-connection             the provider has no configured connection\n\n" +
 			"With --connection the reason is that connection's. Otherwise, where several connections refuse a\n" +
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
-			"not-in-tools-list, requires-tool-allow-list, no-local-files, effect-not-permitted. 'qatlas tui'\n" +
-			"changes what a connection offers.\n\n" +
+			"connection-disabled, not-in-tools-list, requires-tool-allow-list, no-local-files,\n" +
+			"effect-not-permitted. 'qatlas tui' changes what a connection offers.\n\n" +
 			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
 			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
