@@ -215,10 +215,18 @@ func buildOverview(registry *capability.Registry, cfg *config.Config) web.Overvi
 	for _, cn := range connections {
 		overview.Connections = append(overview.Connections, web.ConnectionRow{
 			Name: cn.Name, Provider: cn.Provider, Description: cn.Description,
-			Permissions: cn.Permissions, Tools: cn.Tools,
+			Permissions: cn.Permissions, Tools: cn.Tools, State: webState(cn.State),
 		})
 	}
 	return overview
+}
+
+// webState names the state of a connection for the overview: an empty summary state is an active one.
+func webState(state string) string {
+	if state == "" {
+		return "active"
+	}
+	return state
 }
 
 // displayBaseURL returns base stripped of any access value a service's base_url might carry: userinfo,

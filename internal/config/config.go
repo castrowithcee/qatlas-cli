@@ -133,6 +133,9 @@ type Connection struct {
 	// ForwardSecrets lists the forward credentials a tool of this connection may use as a reference argument.
 	// Missing releases none.
 	ForwardSecrets []string `yaml:"forward_secrets,omitempty"`
+	// Disabled switches the connection off: it offers no tool while the rest of its selection stays. Missing
+	// means active.
+	Disabled bool `yaml:"disabled,omitempty"`
 }
 
 // MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
@@ -151,6 +154,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Paths          []string      `yaml:"paths,omitempty"`
 		Files          Files         `yaml:"files,omitempty"`
 		ForwardSecrets []string      `yaml:"forward_secrets,omitempty"`
+		Disabled       bool          `yaml:"disabled,omitempty"`
 	}
 	var permissions *[]Permission
 	if c.Permissions != nil {
@@ -164,7 +168,7 @@ func (c Connection) MarshalYAML() (any, error) {
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
 		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
-		ForwardSecrets: c.ForwardSecrets}, nil
+		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -1025,6 +1029,8 @@ const (
 	RefusalNoConnection Refusal = "no-connection"
 	// RefusalOtherProvider: the connection belongs to another provider than the tool.
 	RefusalOtherProvider Refusal = "other-provider"
+	// RefusalDisabled: the connection is switched off, and would offer the tool otherwise.
+	RefusalDisabled Refusal = "connection-disabled"
 )
 
 // ConnectionRefusal answers whether the local configuration exposes one operation on a connection, and if
@@ -1037,6 +1043,15 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 	if !ok {
 		return RefusalNoConnection
 	}
+	if refusal := c.selectionRefusal(conn, name, tool); refusal != "" || !conn.Disabled {
+		return refusal
+	}
+	return RefusalDisabled
+}
+
+// selectionRefusal is the refusal by the connection's selection alone, ignoring whether it is disabled, so a
+// disabled connection reports connection-disabled only for a tool it would otherwise offer.
+func (c *Config) selectionRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
 	permitted := false
 	for _, permission := range c.ConnectionPermissions(name) {
 		if permission == tool.Effect {
@@ -1070,7 +1085,8 @@ func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
 // secret, and is the same wherever it is shown.
 func (c *Config) IdleWarning(name string) string {
 	conn, ok := c.Connections[name]
-	if !ok {
+	if !ok || conn.Disabled {
+		// A disabled connection is switched off on purpose, which is no problem to warn about.
 		return ""
 	}
 	// A provider this build registers no tool for leaves nothing to judge the connection by.

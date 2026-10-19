@@ -30,6 +30,8 @@ type Resolved struct {
 	ForwardSecrets []string
 	// Forward holds the entries of those forward credentials, keyed by name. They name fields, never values.
 	Forward map[string]Credential
+	// Disabled is set while the connection is switched off.
+	Disabled bool
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -107,5 +109,6 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Files:          conn.Files.Clone(),
 		ForwardSecrets: append([]string(nil), conn.ForwardSecrets...),
 		Forward:        c.ForwardCredentials(conn),
+		Disabled:       conn.Disabled,
 	}, nil
 }
