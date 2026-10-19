@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -775,5 +776,141 @@ func TestLogsSummaryCountsMissingSizesApart(t *testing.T) {
 	}
 	if !strings.Contains(line, "-") {
 		t.Errorf("a group without sizes shows no -: %q", line)
+	}
+}
+
+// appendSession writes one MCP exchange of session with the given message sizes.
+func (f *logFixture) appendSession(session, operation, result string, req, resp int64) {
+	f.t.Helper()
+	fields := invokelog.Fields{Path: "mcp", Session: session, Operation: operation, Result: result,
+		Duration: time.Millisecond, ReqBytes: &req, RespBytes: &resp}
+	if !invokelog.IsReservedOperation(operation) && operation != "" {
+		fields.Connection, fields.Effect = "wiki", "read"
+	}
+	mustNoError(f.t, f.logger.Append(fields))
+}
+
+const (
+	sessionOld = "00000000000000a1"
+	sessionNew = "00000000000000b2"
+)
+
+func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
+	f := newLogFixture(t)
+	// An older day holds a whole session of its own; the Day mode must leave it out.
+	f.appendSession(sessionOld, invokelog.OperationMCPInitialize, "success", 10, 700)
+	mustNoError(t, os.Rename(filepath.Join(f.logsDir(), f.today()+".jsonl"), filepath.Join(f.logsDir(), "2020-01-02.jsonl")))
+
+	f.appendSession(sessionNew, invokelog.OperationMCPInitialize, "success", 100, 1000)
+	f.appendSession(sessionNew, invokelog.OperationMCPToolsList, "success", 50, 9000)
+	f.appendSession(sessionNew, invokelog.OperationMCPSearch, "invalid-request", 70, 200)
+	f.appendSession(sessionNew, "wiki.pages.get", "not-found", 30, 90)
+	f.appendSession(sessionNew, "wiki.pages.get", "success", 30, 3500)
+	f.appendSession(sessionNew, "", "invalid-request", 20, 60)
+	f.append("cli", "", "cli.only", "wiki", "success")
+	m := f.model(true, f.localToday())
+
+	press(t, m, "m")
+	view := m.View()
+	if !m.logs.stats || !m.logs.sessions {
+		t.Fatalf("m did not open the session summary:\n%s", view)
+	}
+	for _, want := range []string{"~tokens", "estimate", "system prompt and thinking", "session " + sessionNew,
+		"m or s or esc back to the rows"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the session summary lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, sessionOld) || strings.Contains(view, "cli.only") {
+		t.Errorf("the session summary shows another day or a CLI entry:\n%s", view)
+	}
+	// Error responses count: the failed get adds its 30+90 bytes to the 30+3500 of the successful one.
+	want := map[string][]string{
+		"session " + sessionNew: {"6", "300", "13850", "14150", "4042"},
+		"baseline":              {"2", "150", "10000", "10150", "2900"},
+		"mcp/tools-list":        {"1", "50", "9000", "9050", "2585"},
+		"navigation":            {"1", "70", "200", "270", "77"},
+		"wiki.pages.get":        {"2", "60", "3590", "3650", "1042"},
+		"-":                     {"1", "20", "60", "80", "22"},
+	}
+	for name, cells := range want {
+		var got []string
+		for _, l := range strings.Split(view, "\n") {
+			_, cell, ok := strings.Cut(l, "║")
+			if fields := strings.Fields(strings.TrimSuffix(strings.TrimSpace(cell), "║")); ok &&
+				strings.HasPrefix(strings.TrimSpace(cell), name+" ") && len(fields) >= 5 {
+				got = fields[len(fields)-5:]
+				break
+			}
+		}
+		if strings.Join(got, " ") != strings.Join(cells, " ") {
+			t.Errorf("row %q = %v, want the figures %v", name, got, cells)
+		}
+	}
+	t.Logf("session summary view:\n%s", view)
+
+	// The summary follows the period like the rows: All adds the older session.
+	press(t, m, "tab")
+	pump(t, m, "right", "right")
+	if view := m.View(); !m.logs.sessions || !strings.Contains(view, sessionOld) || !strings.Contains(view, sessionNew) {
+		t.Fatalf("All does not add the older session:\n%s", view)
+	}
+
+	// m again, and s from the group summary, lead back.
+	press(t, m, "m")
+	if m.logs.stats || m.logs.sessions {
+		t.Fatalf("m did not leave the session summary")
+	}
+	press(t, m, "s", "m")
+	if !m.logs.sessions {
+		t.Fatalf("m from the group summary did not show the sessions")
+	}
+	press(t, m, "s")
+	if m.logs.stats || m.logs.sessions {
+		t.Fatalf("s did not leave the session summary")
+	}
+}
+
+func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
+	f := newLogFixture(t)
+	f.appendSession(sessionNew, invokelog.OperationMCPInitialize, "success", 100, 1000)
+	for i := range 12 {
+		f.appendSession(sessionNew, "wiki.tool"+strconv.Itoa(100+i), "success", 10, 100)
+	}
+	m := f.model(true, f.localToday())
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 18})
+	press(t, m, "m")
+	view := m.View()
+	assertViewFits(t, view, 60, 18)
+	if !strings.Contains(view, "... ") || !strings.Contains(view, "more") || strings.Contains(view, "wiki.tool111") {
+		t.Fatalf("a long summary does not say what it leaves out:\n%s", view)
+	}
+	press(t, m, "end")
+	view = m.View()
+	assertViewFits(t, view, 60, 18)
+	if !strings.Contains(view, "wiki.tool111") || strings.Contains(view, "more") {
+		t.Errorf("end does not scroll to the last line:\n%s", view)
+	}
+	press(t, m, "home")
+	if m.logs.scroll != 0 {
+		t.Errorf("home left scroll %d", m.logs.scroll)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	assertViewFits(t, m.View(), 40, 12)
+}
+
+func TestLogsSessionSummaryWithoutSessionsSaysSo(t *testing.T) {
+	f := newLogFixture(t)
+	f.append("cli", "", "cli.only", "wiki", "success")
+	m := f.model(true, f.localToday())
+	press(t, m, "m")
+	if view := m.View(); !strings.Contains(view, "No MCP session among the entries shown") {
+		t.Errorf("no hint without sessions:\n%s", view)
+	}
+	// A day without any entry keeps the plain empty-log text.
+	m = f.model(true, "2021-05-05")
+	press(t, m, "m")
+	if view := m.View(); !strings.Contains(view, "No entries for 2021-05-05.") {
+		t.Errorf("an empty day lacks its hint in the session summary:\n%s", view)
 	}
 }
