@@ -16,8 +16,9 @@ An empty target never means the whole base. A fixed table may include a view aft
 
 `seatable.base.tables.list` discovers the tables visible through the connection and returns the stable reference
 accepted by other operations. `seatable.base.columns.list` returns one bounded page of column keys, names, and
-types. A single-table connection needs no table argument. An allow-list or wildcard connection requires the
-`table` argument returned by table discovery for column and row operations.
+types. The `table` argument may be omitted only when the connection has exactly one table, set by `target` or by a
+one-entry allow-list. Otherwise, and always for a wildcard connection, it is required and comes from table
+discovery.
 
 ```sh
 qatlas invoke seatable.base.tables.list --connection sales-all-tables

@@ -61,7 +61,7 @@ var viewsRisk = capability.Risk{
 }
 
 var (
-	viewTableArg = capability.Argument{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"}
+	viewTableArg = capability.Argument{Name: "table", Description: tableArgumentDescription, Target: "*"}
 	viewRefArg   = capability.Argument{Name: "view", Description: "Name of a view of the table, or id:VIEWID, as returned by seatable.base.views.list", Required: true}
 )
 
