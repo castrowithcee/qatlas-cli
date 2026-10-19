@@ -62,7 +62,7 @@ func (c *Config) localFilesOf(conn Connection, providers ProviderCatalog) LocalF
 // refused whole, so a released directory never rests unused on a connection that cannot use it. Every entry
 // follows the rules of a paths entry and is, on top of that, neither the file system root, the whole home
 // directory, nor a path with '..'. Messages name direction and position, never the path.
-func validateFiles(name string, files Files, support LocalFilesSupport, report func(string, ...any)) {
+func validateFiles(name string, files Files, support LocalFilesSupport, report func(Problem)) {
 	for _, direction := range []struct {
 		name    string
 		entries []string
@@ -72,24 +72,25 @@ func validateFiles(name string, files Files, support LocalFilesSupport, report f
 		{"write", files.Write, support.Write},
 	} {
 		if direction.entries != nil && len(direction.entries) == 0 {
-			report("connections.%s.files.%s: must name at least one directory; leave it out to release none",
-				name, direction.name)
+			report(problem(SectionConnections, name, "files."+direction.name, CodeFilesEmpty,
+				"must name at least one directory; leave it out to release none"))
 			continue
 		}
 		if len(direction.entries) > 0 && !direction.offered {
-			report("connections.%s.files.%s: the provider of this connection has no tool that %ss local files",
-				name, direction.name, direction.name)
+			report(problem(SectionConnections, name, "files."+direction.name, CodeFilesDirectionUnsupported,
+				"the provider of this connection has no tool that %ss local files", direction.name))
 			continue
 		}
 		seen := map[string]bool{}
 		for i, entry := range direction.entries {
 			if err := checkFilesEntry(entry); err != nil {
-				report("connections.%s.files.%s[%d]: %s", name, direction.name, i, err)
+				report(problem(SectionConnections, name, "files."+direction.name, CodeInvalidFilesEntry, "%s", err).at(i))
 				continue
 			}
 			key := filepath.Clean(entry)
 			if seen[key] {
-				report("connections.%s.files.%s[%d]: a directory is listed more than once", name, direction.name, i)
+				report(problem(SectionConnections, name, "files."+direction.name, CodeDuplicateFilesEntry,
+					"a directory is listed more than once").at(i))
 			}
 			seen[key] = true
 		}
