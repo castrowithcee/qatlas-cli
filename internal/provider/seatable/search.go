@@ -69,7 +69,7 @@ var rowsSearch = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: rowsList.OutputSchema,
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.base.tables.list; required for an allow-list or * scope", Target: "*"},
+		{Name: "table", Description: tableArgumentDescription, Target: "*"},
 		{Name: "filters", Description: "Up to 10 conditions combined with AND: column, op (eq, ne, lt, lte, gt, gte, like, is_null, in) and value; in takes values (up to 50); is_null takes none"},
 		{Name: "sort", Description: "Up to 3 sort keys: column and direction asc (default) or desc"},
 		{Name: "start", Description: "Zero-based row offset, up to 100000"},
