@@ -46,8 +46,10 @@ type mcpHandoff struct {
 	From     string                `json:"from"` // version of the program that restarted
 	Protocol string                `json:"protocol,omitempty"`
 	Client   *invokelog.ClientInfo `json:"client,omitempty"`
-	Roots    mcpHandoffRoots       `json:"roots"`
-	Input    []byte                `json:"input,omitempty"`
+	// Session is the invocation log session ID, which stays the same across the restart.
+	Session string          `json:"session,omitempty"`
+	Roots   mcpHandoffRoots `json:"roots"`
+	Input   []byte          `json:"input,omitempty"`
 }
 
 type mcpHandoffRoots struct {
@@ -92,6 +94,9 @@ func decodeMCPHandoff(value string) *mcpHandoff {
 			return nil
 		}
 	}
+	if handoff.Session != "" && !invokelog.ValidSession(handoff.Session) {
+		return nil
+	}
 	roots := handoff.Roots
 	if roots.Sequence < 0 || roots.Sequence > 1<<30 || len(roots.Dirs) > maxMCPRoots {
 		return nil
@@ -121,6 +126,9 @@ func isMCPLegacyVersion(version string) bool {
 func (s *mcpServer) adopt(handoff *mcpHandoff) {
 	s.legacy = handoff.Protocol
 	s.legacyClient = handoff.Client
+	if handoff.Session != "" {
+		s.session = handoff.Session
+	}
 	s.restart.skipCheck = true
 	s.restartFrom = handoff.From
 	roots := handoff.Roots
@@ -191,7 +199,7 @@ func (s *mcpServer) restartIfReplaced(reader *bufio.Reader, line []byte) {
 	r.tried = true
 
 	handoff := mcpHandoff{Version: mcpHandoffVersion, From: s.version, Protocol: s.legacy, Client: s.legacyClient,
-		Input: input}
+		Session: s.session, Input: input}
 	s.rootsMu.Lock()
 	handoff.Roots = mcpHandoffRoots{Offered: s.roots.offered, ListChanged: s.roots.listChanged,
 		Sequence: s.roots.sequence, Ask: s.roots.pending != "", Dirs: s.roots.dirs}
