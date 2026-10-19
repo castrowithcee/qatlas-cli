@@ -280,7 +280,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"An approval a connection no longer belongs to, because it was renamed, removed, or switched away\n" +
 			"from the vault, is stale; approving every open connection also removes it and names it. One that\n" +
 			"a 'qatlas config rename' left when it stopped early is also named with its connection and the\n" +
-			"rename that gives the connection that name; --output json lists it under rename_leftovers.\n" +
+			"rename that gives the connection that name. So is a credential whose vault entry such a rename\n" +
+			"left under the new name, unencrypted vault included, with the command that finishes the rename\n" +
+			"and the one that puts it back. --output json lists both under rename_leftovers, each with its kind:\n" +
+			"connection with approval and connection, or credential with credential, new, and approvals.\n" +
 			"--connection leaves a stale approval untouched. A name given with --connection that does not read a\n" +
 			"stored vault credential at all is refused before anything is approved; one that is already approved\n" +
 			"as it is configured now is reported and left alone, nothing written.\n\n" +
@@ -1157,19 +1160,30 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	}
 	asJSON := c.Flags().Changed("output") && opts.Format == output.FormatJSON
 	doc := newVaultApproveDocument()
-	if state != vault.StateLocked && state != vault.StateUnlocked {
-		if asJSON {
-			return emitDocument(c, output.FormatJSON, doc)
-		}
-		fmt.Fprintln(c.OutOrStdout(),
-			"the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
-		return nil
+	out := c.OutOrStdout()
+	if asJSON {
+		out = io.Discard
 	}
-
 	path, err := config.Path(opts.Config)
 	if err != nil {
 		return err
 	}
+	if state != vault.StateLocked && state != vault.StateUnlocked {
+		// An unencrypted vault can hold what a credential's rename left all the same; a configuration that does
+		// not load only goes unchecked here, since nothing else of this run needs it.
+		if cfg, err := config.Load(path, reg); err == nil {
+			if err := writeCredentialLeftovers(out, opts, cfg, v, &doc); err != nil {
+				return classifyUserError(err)
+			}
+		}
+		if asJSON {
+			return emitDocument(c, output.FormatJSON, doc)
+		}
+		fmt.Fprintln(out,
+			"the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
+		return nil
+	}
+
 	cfg, err := config.Load(path, reg)
 	if err != nil {
 		return classifyUserError(err)
@@ -1178,12 +1192,15 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	if err != nil {
 		return classifyUserError(err)
 	}
+	if err := writeCredentialLeftovers(out, opts, cfg, v, &doc); err != nil {
+		return classifyUserError(err)
+	}
 
 	if len(names) == 0 && len(report.Open) == 0 && len(report.Stale) == 0 {
 		if asJSON {
 			return emitDocument(c, output.FormatJSON, doc)
 		}
-		fmt.Fprintln(c.OutOrStdout(), "nothing is open: every connection is approved as it is configured now")
+		fmt.Fprintln(out, "nothing is open: every connection is approved as it is configured now")
 		return nil
 	}
 
@@ -1218,9 +1235,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	}
 
 	origins := approvalOrigins(contextOrBackground(c.Context()), v, path, cfg, report.Open)
-	out := c.OutOrStdout()
 	if asJSON {
-		out = io.Discard
 		for _, change := range report.Open {
 			doc.Open = append(doc.Open, approvalChangeJSON(opts.Redactor, change, origins[change.Connection]))
 		}
@@ -1240,7 +1255,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 			opts.Redactor.Apply(left.Approval), opts.Redactor.Apply(left.Connection),
 			opts.Redactor.Apply(left.Connection), opts.Redactor.Apply(left.Approval),
 			opts.Redactor.Apply(left.Connection))
-		doc.RenameLeftovers = append(doc.RenameLeftovers, renameLeftoverDocument{
+		doc.RenameLeftovers = append(doc.RenameLeftovers, renameLeftoverDocument{Kind: manage.RenameConnection,
 			Approval: opts.Redactor.Apply(left.Approval), Connection: opts.Redactor.Apply(left.Connection)})
 	}
 
@@ -1343,9 +1358,41 @@ type vaultApproveDocument struct {
 	RenameLeftovers []renameLeftoverDocument `json:"rename_leftovers"`
 }
 
+// renameLeftoverDocument is one rest of an unfinished rename by kind: for a connection the stale approval and
+// its connection; for a credential the configured credential, the name the vault holds its entry under, and
+// the connections whose approvals were carried over to that name.
 type renameLeftoverDocument struct {
-	Approval   string `json:"approval"`
-	Connection string `json:"connection"`
+	Kind       string   `json:"kind"`
+	Approval   string   `json:"approval,omitempty"`
+	Connection string   `json:"connection,omitempty"`
+	Credential string   `json:"credential,omitempty"`
+	New        string   `json:"new,omitempty"`
+	Approvals  []string `json:"approvals,omitempty"`
+}
+
+// writeCredentialLeftovers names what each credential's rename that stopped before the configuration left in
+// v, with both ways to resolve it, and adds it to doc.
+func writeCredentialLeftovers(out io.Writer, opts *Options, cfg *config.Config, v *vault.Vault,
+	doc *vaultApproveDocument) error {
+	leftovers, err := manage.CredentialLeftovers(cfg, v)
+	if err != nil {
+		return err
+	}
+	apply := opts.Redactor.Apply
+	for _, left := range leftovers {
+		carried := ""
+		if len(left.Approvals) > 0 {
+			carried = fmt.Sprintf(", with the approvals of %s", redactAll(opts.Redactor, left.Approvals))
+		}
+		fmt.Fprintf(out, "the vault holds credential %s under the name %s%s, left over from an unfinished rename; "+
+			"until it is resolved, %s is not read from the vault: 'qatlas config rename credential %s %s' finishes "+
+			"the rename, and 'qatlas config rename credential %s %s --revert' puts it back under %s\n",
+			apply(left.Credential), apply(left.New), carried, apply(left.Credential), apply(left.Credential),
+			apply(left.New), apply(left.Credential), apply(left.New), apply(left.Credential))
+		doc.RenameLeftovers = append(doc.RenameLeftovers, renameLeftoverDocument{Kind: manage.RenameCredential,
+			Credential: apply(left.Credential), New: apply(left.New), Approvals: redactEach(opts.Redactor, left.Approvals)})
+	}
+	return nil
 }
 
 func newVaultApproveDocument() vaultApproveDocument {
