@@ -101,7 +101,7 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 			return nil, err
 		}
 		all = append(all, listed...)
-		// A folder/NAME/* target also asks for the subfolders of NAME, with the delimiter NAME itself reports.
+		// A folder/PATH/* target also asks for the subfolders of NAME, with the delimiter NAME itself reports.
 		// A folder without one (flat hierarchy) has no subfolders to ask for.
 		for _, tree := range c.scope.trees {
 			if pattern != tree {

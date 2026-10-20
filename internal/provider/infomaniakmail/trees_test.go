@@ -81,7 +81,7 @@ func TestTreeScopeMembership(t *testing.T) {
 	// Without a tree target the check without network access stays exact.
 	exact, _ := parseScope([]string{"mailbox/box@example.com", "folder/Kunde"})
 	if exact.allowsFolder("Kunde/A") || !exact.allowsFolder("Kunde") {
-		t.Error("folder/NAME must stay exact")
+		t.Error("folder/PATH must stay exact")
 	}
 	// With one, a longer name passes provisionally only when it begins with NAME.
 	if !bound.allowsFolder("Kunden") || bound.allowsFolder("Other") {
@@ -139,7 +139,7 @@ func TestTreeAskOnlyWhenNeeded(t *testing.T) {
 		t.Errorf("exact target admitted a subfolder: %v", err)
 	}
 	if n := len(listDelimiterCommand.FindAllString(e.f.wire.String(), -1)); n != 0 {
-		t.Errorf("LIST \"\" \"\" sent %d times without a folder/NAME/* target", n)
+		t.Errorf("LIST \"\" \"\" sent %d times without a folder/PATH/* target", n)
 	}
 
 	// With a tree target: exactly one per call for a subfolder, none for the exact folder.
