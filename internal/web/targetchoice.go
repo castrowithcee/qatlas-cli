@@ -148,3 +148,29 @@ func (s *Server) handleTargetResolve(w http.ResponseWriter, r *http.Request, pro
 	}
 	writeTargetJSON(w, http.StatusOK, targetResolveResponse{Entries: targetEntries(entries), Warning: warning})
 }
+
+// targetDialogData is what the build page hands the script's chooser: routes, the kinds and their parent
+// relation, and the CSRF value (as an attribute, never as a form field, since the build form submits by GET).
+type targetDialogData struct {
+	CSRF, ListURL, ResolveURL, Script, Noun string
+	Kinds                                   string
+	Multiple                                bool
+}
+
+type targetKindJSON struct {
+	Name   string `json:"name"`
+	Parent string `json:"parent,omitempty"`
+	Nested bool   `json:"nested,omitempty"`
+}
+
+func newTargetDialogData(t config.TargetMetadata, csrf string) *targetDialogData {
+	kinds := make([]targetKindJSON, 0, len(t.Kinds))
+	for _, k := range t.Kinds {
+		kinds = append(kinds, targetKindJSON{Name: k.Name, Parent: k.Parent, Nested: k.Nested})
+	}
+	b, _ := json.Marshal(kinds)
+	return &targetDialogData{
+		CSRF: csrf, ListURL: targetListPath, ResolveURL: targetResolvePath,
+		Script: scriptPrefix + "target-dialog.js", Noun: t.Label, Kinds: string(b), Multiple: t.Multiple,
+	}
+}

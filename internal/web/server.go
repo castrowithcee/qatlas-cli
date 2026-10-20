@@ -543,7 +543,7 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 
 // overviewTemplate renders the secretfree overview, together with the admin status and its masked
 // passphrase form, inside the shared layout (see layoutTemplates), with no external asset, no inline style,
-// and no script, so the content security policy this server sends is never a compromise; the form's own
+// and no inline script, so the content security policy this server sends is never a compromise; the form's own
 // submission is the one thing form-action 'self' loosens.
 var overviewTemplate = strings.TrimSpace(`
 {{template "layout-top" (page "Overview" "overview")}}

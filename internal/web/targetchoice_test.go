@@ -198,6 +198,7 @@ func TestScriptRoute(t *testing.T) {
 // No page of any template set carries an inline script or an event handler attribute.
 func TestNoInlineScriptInPages(t *testing.T) {
 	s, _, _, _ := newConnectionTestServer(t, nil)
+	s.svc = s.svc.WithTargetSource(bookTargetSource(nil, nil)) // the build page then links its script
 	cookie, _ := coupleAndApprove(t, s, nil)
 	handler := regexp.MustCompile(`(?i)\son[a-z]+\s*=|javascript:`)
 	for _, path := range []string{
@@ -214,6 +215,70 @@ func TestNoInlineScriptInPages(t *testing.T) {
 		}
 		if handler.MatchString(body) {
 			t.Fatalf("%s: event handler attribute or javascript: URL in: %s", path, body)
+		}
+	}
+}
+
+func TestBuildPageTargetDialog(t *testing.T) {
+	s, _, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	get := func() string {
+		rec := s.request(t, http.MethodGet, "/connections/new?provider=book&label_x=%3Cscript%3Ealert(1)%3C/script%3E&targets=x", s.addr, cookie, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		return rec.Body.String()
+	}
+	// No browsing source: no dialog element and no script.
+	body := get()
+	if strings.Contains(body, "target-dialog") || strings.Contains(body, "<script") {
+		t.Fatalf("page without a target browser carries the dialog: %s", body)
+	}
+	if !strings.Contains(body, `name="targets"`) {
+		t.Fatalf("targets field missing")
+	}
+
+	s.svc = s.svc.WithTargetSource(bookTargetSource(nil, nil))
+	body = get()
+	for _, want := range []string{
+		`id="target-dialog"`, `data-csrf="` + csrf + `"`, `data-list-url="` + targetListPath + `"`,
+		`data-resolve-url="` + targetResolvePath + `"`, `data-multiple="true"`, `data-noun="book"`,
+		`data-kinds="[{&#34;name&#34;:&#34;shelf&#34;}]"`, `<script src="/static/js/target-dialog.js"></script>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("build page lacks %s in: %s", want, body)
+		}
+	}
+	// The CSRF value is an attribute, not a field the GET form would put in the address.
+	if strings.Contains(body, `name="csrf"`) {
+		t.Fatalf("build page has a csrf form field")
+	}
+	if strings.Contains(body, "<script>alert") {
+		t.Fatalf("label text not escaped: %s", body)
+	}
+	if strings.Count(body, "<script") != 1 {
+		t.Fatalf("want exactly the one linked script")
+	}
+}
+
+// The embedded scripts stay free of dynamic code, markup sinks, browser storage and absolute URLs.
+func TestEmbeddedScriptsAreRestricted(t *testing.T) {
+	if len(scripts) == 0 {
+		t.Fatal("no embedded script")
+	}
+	forbidden := []string{"eval(", "new Function", "Function(", "innerHTML", "outerHTML", "insertAdjacentHTML",
+		"document.write", "localStorage", "sessionStorage", "indexedDB", "document.cookie", "http:", "https:", "//"}
+	for name, body := range scripts {
+		for _, line := range strings.Split(string(body), "\n") {
+			code := strings.TrimSpace(line)
+			if strings.HasPrefix(code, "//") {
+				continue // a comment line
+			}
+			for _, f := range forbidden {
+				if strings.Contains(code, f) {
+					t.Errorf("%s contains %q: %s", name, f, code)
+				}
+			}
 		}
 	}
 }
