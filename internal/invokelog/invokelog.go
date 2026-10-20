@@ -195,6 +195,23 @@ const (
 	OperationConnectionRename = "config.connection.rename"
 )
 
+// The operations that log a person's reading of a connection's provider to choose targets, on the surface
+// ("tui" or "web") that did it; neither the CLI nor MCP chooses targets. Their Effect is read. A listing names the kind of the listed entries
+// after a colon (TargetListOperation); neither entry holds a target, a name, or a search text.
+const (
+	OperationTargetList    = "config.target.list"
+	OperationTargetResolve = "config.target.resolve"
+)
+
+// TargetListOperation is the operation of a listing of the entries of kind.
+func TargetListOperation(kind string) string { return OperationTargetList + ":" + kind }
+
+// IsTargetOperation reports whether operation is the one of a target listing or URL resolution.
+func IsTargetOperation(operation string) bool {
+	return operation == OperationTargetResolve || operation == OperationTargetList ||
+		strings.HasPrefix(operation, OperationTargetList+":")
+}
+
 // The operations the vault process logs for its own decisions, which are not invokes: an approval with an
 // agent token, a lock it decides on itself, and the outcome of a handover.
 const (
@@ -252,8 +269,8 @@ func (f Fields) Validate() error {
 	switch f.Path {
 	case "cli", "mcp":
 	case "tui", "web":
-		// A surface of the interactive editors only ever logs a change to a connection.
-		if connectionOperations[f.Operation] == "" {
+		// A surface of the interactive editors only ever logs a change to a connection or a target choice.
+		if connectionOperations[f.Operation] == "" && !IsTargetOperation(f.Operation) {
 			return errors.New("operation is not a connection change")
 		}
 	default:
@@ -277,6 +294,9 @@ func (f Fields) Validate() error {
 	if effect, ok := connectionOperations[f.Operation]; ok && (f.Effect != effect || f.Connection == "") {
 		return errors.New("a connection change needs its effect and a connection")
 	}
+	if IsTargetOperation(f.Operation) && (f.Effect != "read" || f.Connection == "" || f.Path != "tui" && f.Path != "web") {
+		return errors.New("a target choice needs the read effect, a connection, and the tui or web path")
+	}
 	if f.ConnectionID != "" && (f.Connection == "" || !connectionIDPattern.MatchString(f.ConnectionID)) {
 		return errors.New("connection_id must be a config id, and needs a connection")
 	}
@@ -297,7 +317,7 @@ func (f Fields) Validate() error {
 		return errors.New("duration is out of range")
 	}
 	if f.ReqBytes != nil || f.RespBytes != nil {
-		if connectionOperations[f.Operation] != "" {
+		if connectionOperations[f.Operation] != "" || IsTargetOperation(f.Operation) {
 			return errors.New("a connection change has no size counters")
 		}
 		if f.RespBytes != nil && f.Result != "success" && f.Path != "mcp" {

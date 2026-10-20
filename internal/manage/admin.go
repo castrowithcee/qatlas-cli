@@ -149,3 +149,16 @@ func (s *AdminSession) Remaining() time.Duration {
 	}
 	return s.until.Sub(s.clock())
 }
+
+// AdminProof is the proof an admin-bound read of the core demands from its caller: it exists only as the
+// result of AdminSession.Authorize, so a surface cannot make one up. Its zero value proves nothing.
+type AdminProof struct{ granted bool }
+
+// Authorize uses the session for one action like Consume and, when it covered the action, returns the proof
+// to hand to the core function. A refused session yields the zero proof.
+func (s *AdminSession) Authorize(timeout time.Duration) (AdminProof, bool) {
+	if !s.Consume(timeout) {
+		return AdminProof{}, false
+	}
+	return AdminProof{granted: true}, true
+}

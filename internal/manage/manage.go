@@ -47,6 +47,7 @@ type Service struct {
 	surface   string
 	redactor  *redact.Redactor
 	processOK bool
+	targets   TargetSource
 }
 
 // New returns the service for surface (one of the connlog.Surface constants). secrets may be nil for a

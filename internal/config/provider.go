@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -125,10 +126,94 @@ func (t TargetMetadata) knowsForm(form string) bool {
 
 // TargetKind is one kind of target, such as a repository or a project. Forms lists the accepted spellings
 // with upper-case placeholders, for example repos/OWNER/REPO, and Description says what an entry allows.
+//
+// Parent names the kind one level above, empty for a top-level kind; the parents of all kinds form the levels
+// an editor browses through. Entries of a kind with a parent are listed under one target of that parent.
 type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
+	Parent      string
+}
+
+// ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.
+var ErrTargetBrowseUnsupported = errors.New("this provider cannot list its targets")
+
+// TargetListRequest asks for one page of the entries of one kind. Parent is the target of the kind's parent
+// the entries sit under, empty for a top-level kind. Query is a search text and Cursor the Next of the
+// previous page, both empty for the first page without search.
+type TargetListRequest struct {
+	Kind   string
+	Parent string
+	Query  string
+	Cursor string
+}
+
+// TargetEntry is one target a provider offers. Target is the value in a valid form of Kind, Name the
+// provider's own name for it, Path a readable place such as a parent chain or empty, and HasChildren says
+// that entries of a child kind sit under it.
+type TargetEntry struct {
+	Target      string
+	Name        string
+	Kind        string
+	Path        string
+	HasChildren bool
+}
+
+// TargetPage is one page of entries. Next is the cursor of the following page, empty on the last one.
+// ServerSearch says that the provider applied the request's Query itself; otherwise a surface filters the
+// pages it has loaded.
+type TargetPage struct {
+	Entries      []TargetEntry
+	Next         string
+	ServerSearch bool
+}
+
+// KindByName returns the kind of that name.
+func (t TargetMetadata) KindByName(name string) (TargetKind, bool) {
+	for _, kind := range t.Kinds {
+		if kind.Name == name {
+			return kind, true
+		}
+	}
+	return TargetKind{}, false
+}
+
+// HasChildKind reports whether another kind has the kind as its parent.
+func (t TargetMetadata) HasChildKind(name string) bool {
+	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool { return kind.Parent == name })
+}
+
+// ValidateKindParents checks that every Parent names a kind of its own provider and that the parents form no
+// cycle.
+func (t TargetMetadata) ValidateKindParents() error {
+	for _, kind := range t.Kinds {
+		seen := map[string]bool{kind.Name: true}
+		for parent := kind.Parent; parent != ""; {
+			next, ok := t.KindByName(parent)
+			if !ok {
+				return fmt.Errorf("target kind %q names unknown parent kind %q", kind.Name, parent)
+			}
+			if seen[parent] {
+				return fmt.Errorf("target kind %q has a parent cycle", kind.Name)
+			}
+			seen[parent] = true
+			parent = next.Parent
+		}
+	}
+	return nil
+}
+
+// ValidTarget reports whether target is spelled in a form of the kind and passes the provider's Validate. It
+// refuses a wildcard: a chosen entry names one thing.
+func (t TargetMetadata) ValidTarget(kind, target string) bool {
+	k, ok := t.KindByName(kind)
+	if !ok || target == "" || strings.Contains(target, "*") {
+		return false
+	}
+	segments := strings.Split(target, "/")
+	fits := slices.ContainsFunc(k.Forms, func(form string) bool { return FitsForm(segments, strings.Split(form, "/")) })
+	return fits && (t.Validate == nil || t.Validate(target) == nil)
 }
 
 // Placeholder reports whether a segment of a form is a placeholder such as OWNER.
