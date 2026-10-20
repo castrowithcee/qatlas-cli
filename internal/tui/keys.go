@@ -19,7 +19,7 @@ func (m *Model) typing() bool {
 			return !f.readOnly
 		}
 	case screenTargets:
-		return m.targetEdit >= 0 || m.targetAdd != nil
+		return m.targetEdit >= 0 || m.targetAdd != nil || m.labelEdit
 	case screenPaths:
 		return m.pathEdit >= 0
 	case screenTemplate:

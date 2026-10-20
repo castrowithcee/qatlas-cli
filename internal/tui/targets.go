@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -12,7 +13,8 @@ import (
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
 // add, which offers known targets and a builder where there are any, enter edits the selected target, and d
-// removes it after asking. F2 keeps the list and saves the form in one step, from every state of the
+// removes it after asking. i labels the selected target for the person, in a line of its own; an empty
+// label removes it. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
 // only from its summary. esc is one level back: it closes an unchanged list, cancels an unchanged entry,
 // and asks about a changed list, a typed entry or a half-built target, so no change is dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
@@ -28,8 +30,10 @@ func (m *Model) targetMetadata() config.TargetMetadata {
 // openTargets opens the entries of the focused target list on its first target.
 func (m *Model) openTargets() {
 	m.targetList.reset(append([]string(nil), m.fields[m.focus].entries...))
-	m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
+	m.targetLabels = maps.Clone(m.fields[m.focus].labels)
+	m.targetEdit, m.targetRemove, m.targetAdd, m.labelEdit = -1, false, nil, false
 	m.targetInput.Blur()
+	m.labelInput.Blur()
 	m.screen = screenTargets
 	m.clearMessages()
 }
@@ -51,6 +55,9 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 				return nil
 			}
 		}
+		if m.labelEdit {
+			m.takeLabel()
+		}
 		// A remove question left unanswered keeps its target.
 		m.targetRemove = false
 		m.keepTargets()
@@ -58,6 +65,19 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	}
 	if m.targetAdd != nil {
 		return m.updateAdd(key)
+	}
+	if m.labelEdit {
+		switch key.String() {
+		case "esc":
+			m.stopLabel()
+		case "enter":
+			m.takeLabel()
+		default:
+			var cmd tea.Cmd
+			m.labelInput, cmd = m.labelInput.Update(key)
+			return cmd
+		}
+		return nil
 	}
 	if m.targetEdit >= 0 {
 		switch key.String() {
@@ -108,6 +128,11 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
+	case "i":
+		// The guided setup saves no labels, so it offers none.
+		if selected && m.wizard == nil {
+			m.editLabel(target)
+		}
 	case "d":
 		if selected {
 			m.targetRemove = true
@@ -127,6 +152,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 // keepTargets hands the list over to its row and returns to the form. Nothing is written yet.
 func (m *Model) keepTargets() {
 	m.fields[m.focus].entries = append([]string(nil), m.targetList.all...)
+	m.fields[m.focus].labels = maps.Clone(m.targetLabels)
 	m.screen = screenForm
 	m.clearMessages()
 }
@@ -135,7 +161,7 @@ func (m *Model) keepTargets() {
 // first, like a changed form does.
 func (m *Model) leaveTargets() tea.Cmd {
 	m.clearMessages()
-	if slices.Equal(m.targetList.all, m.fields[m.focus].entries) {
+	if !m.targetsChanged() {
 		m.screen = screenForm
 		return nil
 	}
@@ -161,7 +187,53 @@ func (m *Model) targetsPending() bool {
 	if m.targetEdit >= 0 && m.targetTyped() {
 		return true
 	}
-	return !slices.Equal(m.targetList.all, m.fields[m.focus].entries)
+	return m.targetsChanged()
+}
+
+// targetsChanged reports whether the list or its labels differ from what the row holds.
+func (m *Model) targetsChanged() bool {
+	row := m.fields[m.focus]
+	return !slices.Equal(m.targetList.all, row.entries) || !maps.Equal(m.targetLabels, row.labels)
+}
+
+// editLabel starts typing the label of target.
+func (m *Model) editLabel(target string) {
+	m.labelEdit = true
+	m.labelInput.SetValue(m.targetLabels[target])
+	m.labelInput.CursorEnd()
+	m.labelInput.Focus()
+	m.clearMessages()
+}
+
+func (m *Model) stopLabel() {
+	m.labelEdit = false
+	m.labelInput.Blur()
+	m.clearMessages()
+}
+
+// takeLabel sets the typed label of the selected target, or removes it when nothing is typed. Whether a
+// label is acceptable is the core's to say when the form is saved.
+func (m *Model) takeLabel() {
+	target, ok := m.targetList.selected()
+	if ok {
+		if label := m.labelInput.Value(); label == "" {
+			delete(m.targetLabels, target)
+		} else {
+			if m.targetLabels == nil {
+				m.targetLabels = map[string]string{}
+			}
+			m.targetLabels[target] = label
+		}
+	}
+	m.stopLabel()
+}
+
+// labelled is a target with its label, as far as it has one.
+func (m *Model) labelled(target string, labels map[string]string) string {
+	if label := labels[target]; label != "" {
+		return target + "  " + m.logText(label)
+	}
+	return target
 }
 
 // editTarget starts typing the target at index, or a new one at the end of the list.
@@ -260,8 +332,16 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "F2 next step"
 	}
-	keys := "a add · enter edit · d remove · up/down move · " + save + " · esc close · ? help"
+	keys := "a add · enter edit · i label · d remove · up/down move · " + save + " · esc close · ? help"
+	if m.wizard != nil {
+		keys = "a add · enter edit · d remove · up/down move · " + save + " · esc close · ? help"
+	}
 	switch {
+	case m.labelEdit:
+		target, _ := m.targetList.selected()
+		foot.WriteString("\n" + m.wrapped(hintStyle, "Label for "+target+"; leave it empty to remove the label") + "\n")
+		foot.WriteString(m.inputLine("label: ", m.labelInput) + "\n")
+		keys = "enter take · " + save + " · esc cancel entry"
 	case m.targetEdit >= 0:
 		label := "new: "
 		if m.targetEdit < total {
@@ -280,7 +360,7 @@ func (m *Model) targetFrame() (string, string) {
 
 // targetRow draws the target at index i of the list.
 func (m *Model) targetRow(i int) string {
-	return m.row(i == m.targetList.cursor, m.targetList.matches[i])
+	return m.row(i == m.targetList.cursor, m.labelled(m.targetList.matches[i], m.targetLabels))
 }
 
 func (m *Model) targetWindow() (int, int) {

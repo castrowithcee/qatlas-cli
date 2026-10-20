@@ -787,3 +787,167 @@ func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 			m.fail)
 	}
 }
+
+func plainTargetsModel(t *testing.T) (*Model, string, *capability.Registry) {
+	t.Helper()
+	reg := targetsRegistry(t, github.Register)
+	m, path := toolsModel(t, reg, map[string]config.Connection{
+		"gh": {Service: "wiki", Credential: "reader", Targets: []string{"repos/octo/a", "repos/octo/b"}}})
+	return m, path, reg
+}
+
+func TestATargetLabelIsSetChangedAndCleared(t *testing.T) {
+	m, path, reg := plainTargetsModel(t)
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+
+	press(t, m, "i")
+	if !m.labelEdit || !strings.Contains(strings.Join(strings.Fields(screenOf(m)), " "), "enter take") {
+		t.Fatalf("i did not open the label line:\n%s", screenOf(m))
+	}
+	typeText(t, m, "Frontend")
+	press(t, m, "enter")
+	if m.labelEdit || m.targetLabels["repos/octo/a"] != "Frontend" {
+		t.Fatalf("enter did not take the label: %v", m.targetLabels)
+	}
+	if view := screenOf(m); !strings.Contains(view, "repos/octo/a  Frontend") {
+		t.Fatalf("the row does not show the label:\n%s", view)
+	}
+
+	press(t, m, "i")
+	clearField(t, m)
+	typeText(t, m, "Web")
+	press(t, m, "enter")
+	if m.targetLabels["repos/octo/a"] != "Web" {
+		t.Fatalf("label = %q, want it changed", m.targetLabels["repos/octo/a"])
+	}
+	press(t, m, "down", "i")
+	typeText(t, m, "Backend")
+	press(t, m, "enter", "f2")
+	if m.fail != "" {
+		t.Fatalf("save failed: %s", m.fail)
+	}
+	want := map[string]string{"repos/octo/a": "Web", "repos/octo/b": "Backend"}
+	if got := savedConnection(t, path, reg, "gh").TargetLabels; !reflect.DeepEqual(got, want) {
+		t.Fatalf("saved labels = %v, want %v", got, want)
+	}
+
+	// An emptied line removes the label.
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	press(t, m, "i")
+	clearField(t, m)
+	press(t, m, "enter", "f2")
+	if got := savedConnection(t, path, reg, "gh").TargetLabels; !reflect.DeepEqual(got, map[string]string{"repos/octo/b": "Backend"}) {
+		t.Fatalf("saved labels = %v, want the first one gone", got)
+	}
+
+	// esc closes the line without a question and keeps the label.
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	press(t, m, "i")
+	typeText(t, m, "x")
+	press(t, m, "esc")
+	if m.screen != screenTargets || m.labelEdit || m.targetLabels["repos/octo/a"] != "" {
+		t.Fatalf("esc: screen %v edit %v labels %v", m.screen, m.labelEdit, m.targetLabels)
+	}
+}
+
+func TestChangedTargetLabelsAskBeforeLeaving(t *testing.T) {
+	m, path, reg := plainTargetsModel(t)
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	press(t, m, "i")
+	typeText(t, m, "Frontend")
+	press(t, m, "enter", "esc")
+	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "target labels changed") {
+		t.Fatalf("esc on changed labels did not ask: screen %v\n%s", m.screen, view)
+	}
+	press(t, m, "esc")
+	if m.screen != screenTargets || m.targetLabels["repos/octo/a"] != "Frontend" {
+		t.Fatalf("esc did not go on editing: screen %v labels %v", m.screen, m.targetLabels)
+	}
+	press(t, m, "esc", "d")
+	if m.screen != screenForm || len(m.field(targetsLabel).labels) != 0 || m.formDirty() {
+		t.Fatalf("d kept the label: screen %v labels %v", m.screen, m.field(targetsLabel).labels)
+	}
+	if got := savedConnection(t, path, reg, "gh").TargetLabels; len(got) != 0 {
+		t.Fatalf("discarding wrote %v", got)
+	}
+}
+
+func TestChangedTargetLabelsMakeTheFormUnsaved(t *testing.T) {
+	m, path, reg := plainTargetsModel(t)
+	openConnection(t, m, "gh")
+	if m.formDirty() {
+		t.Fatal("a freshly opened form is unsaved")
+	}
+	// A refused label stays in the row, so leaving the form asks.
+	openTargetList(t, m)
+	press(t, m, "i")
+	typeText(t, m, strings.Repeat("x", 300))
+	press(t, m, "enter", "f2")
+	if m.screen != screenForm || !m.formDirty() {
+		t.Fatalf("screen %v dirty %v, want the unsaved form", m.screen, m.formDirty())
+	}
+	press(t, m, "esc")
+	if m.screen != screenLeave {
+		t.Fatalf("esc on the form with a changed label opened screen %v, want the question", m.screen)
+	}
+	press(t, m, "d")
+	if got := savedConnection(t, path, reg, "gh").TargetLabels; len(got) != 0 {
+		t.Fatalf("discarding wrote %v", got)
+	}
+}
+
+func TestARefusedTargetLabelStandsUnderTheTargetsRow(t *testing.T) {
+	m, path, reg := plainTargetsModel(t)
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	press(t, m, "i")
+	typeText(t, m, strings.Repeat("x", 300))
+	press(t, m, "enter", "f2")
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	if m.fail == "" || !strings.Contains(view, "Shorten the label") {
+		t.Fatalf("the refusal is not shown with its hint (fail %q):\n%s", m.fail, screenOf(m))
+	}
+	if got := m.problems.rows[targetsLabel]; len(got) != 1 {
+		t.Fatalf("problems under the targets row = %v", m.problems.rows)
+	}
+	if got := savedConnection(t, path, reg, "gh").TargetLabels; len(got) != 0 {
+		t.Fatalf("a refused label was saved: %v", got)
+	}
+}
+
+func TestTargetLabelsStandInTheListInsteadOfTheTarget(t *testing.T) {
+	m, _ := labelledModel(t)
+	mustNoError(t, m.cfg.SetConnection("one", config.Connection{Service: "wiki", Credential: "reader",
+		Target: "repos/octo/c", TargetLabels: map[string]string{"repos/octo/c": "Docs"}}))
+	mustNoError(t, m.cfg.SetConnection("bare", config.Connection{Service: "wiki", Credential: "reader",
+		Target: "repos/octo/d"}))
+	openSectionByName(t, m, sectionConnections)
+	m.list.setItems(m.entryNames(m.section))
+	view := screenOf(m)
+	if !strings.Contains(view, "Docs") || strings.Contains(view, "repos/octo/c") || !strings.Contains(view, "repos/octo/d") {
+		t.Fatalf("the TARGETS column is wrong:\n%s", view)
+	}
+	for _, query := range []string{"docs", "repos/octo/c", "frontend", "repos/octo/b"} {
+		m.list.input.SetValue(query)
+		m.list.refilter()
+		if len(m.list.matches) != 1 {
+			t.Errorf("filter %q shows %v, want one connection", query, m.list.matches)
+		}
+	}
+}
+
+func TestATargetLabelIsShownWithoutControlCharacters(t *testing.T) {
+	m, _, _ := plainTargetsModel(t)
+	mustNoError(t, m.cfg.SetConnection("gh", config.Connection{Service: "wiki", Credential: "reader",
+		Targets:      []string{"repos/octo/a", "repos/octo/b"},
+		TargetLabels: map[string]string{"repos/octo/a": "bad\x1b[31mred\x07"}}))
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	if view := screenOf(m); strings.ContainsAny(view, "\x07") || strings.Contains(view, "bad\x1b[31m") {
+		t.Fatalf("the label is drawn raw: %q", view)
+	}
+}
