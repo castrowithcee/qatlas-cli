@@ -36,7 +36,7 @@ var dataStructureIDSchema = idSchema
 
 var dataStructureIDArgument = capability.Argument{Name: "datastructure_id", Required: true,
 	Description: "Make data structure identifier; its team is always re-checked live against Make's own " +
-		"report, and a Qatlas connection with a scenario allow-list reaches no data structures at all"}
+		"report, and a Qatlas connection with a scenario or folder allow-list reaches no data structures at all"}
 
 var dataStructureSummarySchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
 	`"team_id":{"type":"integer"},"strict":{"type":"boolean"},` +
@@ -62,7 +62,7 @@ var dataStructuresReadRisk = capability.Risk{
 var dataStructuresList = capability.Descriptor{
 	ID: Provider + ".data-structures.list", Version: 1, Title: "List Make data structures",
 	Description: "List the data structures of the bound team by name, id, and strictness, sorted by name, page by " +
-		"page; the field specification is read with get. Refused on a connection with a scenario allow-list. " +
+		"page; the field specification is read with get. Refused on a connection with a scenario or folder allow-list. " +
 		"Needs the udts:read scope",
 	Tags: []string{"make", "datastructures", "list", "automation"}, Risk: dataStructuresReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"offset":{"type":"integer","minimum":0},` +
@@ -90,7 +90,7 @@ var dataStructuresList = capability.Descriptor{
 var dataStructuresGet = capability.Descriptor{
 	ID: Provider + ".data-structures.get", Version: 1, Title: "Get a Make data structure",
 	Description: "Read one data structure of the bound team with its field specification, bounded and without " +
-		"default values. Refused on a connection with a scenario allow-list. Needs the udts:read scope",
+		"default values. Refused on a connection with a scenario or folder allow-list. Needs the udts:read scope",
 	Tags: []string{"make", "datastructures", "get", "automation"}, Risk: dataStructuresReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"datastructure_id":` + dataStructureIDSchema + `},` +
 		`"required":["datastructure_id"],"additionalProperties":false}`),
@@ -206,7 +206,7 @@ func dataStructureSummaryOf(s dataStructureJSON, withSpec bool) DataStructureSum
 	return out
 }
 
-// selectDataStructures refuses a connection with a scenario allow-list before any secret is read: data
+// selectDataStructures refuses a connection with a scenario or folder allow-list before any secret is read: data
 // stores and data structures belong to no scenario, so the narrower reading is that such a connection
 // reaches none.
 func selectDataStructures(resolved *config.Resolved) error {
@@ -214,7 +214,7 @@ func selectDataStructures(resolved *config.Resolved) error {
 	if err != nil {
 		return err
 	}
-	if len(bound.scenarios) > 0 {
+	if bound.restricted() {
 		return invalidRequest("Make data stores and data structures are not scenario-bound; a connection with " +
 			"a scenario allow-list cannot reach them")
 	}
