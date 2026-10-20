@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -35,11 +36,14 @@ var pickDelay = 300 * time.Millisecond
 // maxLabelRunes is the longest target label the configuration accepts.
 const maxLabelRunes = 200
 
-// pickLoadedMsg carries one page of a level back into the event loop. replace says that it starts the
-// level's entries over (first page, or another search text).
+// pickLoadedMsg carries one page of a level, or the entries a URL resolved to, back into the event loop.
+// replace says that it starts the level's entries over (first page, or another search text); cursor is the
+// page that was asked for, and retried says that the read was the repeat after an admin login.
 type pickLoadedMsg struct {
 	req     int
 	replace bool
+	cursor  string
+	retried bool
 	page    config.TargetPage
 	err     error
 }
@@ -85,34 +89,51 @@ func (lv *pickLevel) kind() string { return lv.kinds[lv.ki] }
 
 // targetPick is the picker while it is open, over the add menu that opened it.
 type targetPick struct {
+	// connection names the saved connection that is read; without one, draft is read, the connection the
+	// form or the setup is still building.
 	connection string
-	levels     []*pickLevel
-	nextID     int
-	marks      map[string]config.TargetEntry
-	markOrder  []string
+	draft      *manage.ConnectionDraft
+	// url, when set, is the web address the entries were resolved from: the picker then shows that one
+	// answer and has no levels, pages or search of the provider.
+	url       string
+	levels    []*pickLevel
+	nextID    int
+	marks     map[string]config.TargetEntry
+	markOrder []string
 }
 
 func (p *targetPick) top() *pickLevel { return p.levels[len(p.levels)-1] }
 
-// pickConnection is the saved connection the picker would read: the one being edited, as long as the form
-// still names the service and credential it was saved with, since the core reads the saved connection.
-func (m *Model) pickConnection() (string, bool) {
-	if m.wizard != nil || m.editing == "" {
-		return "", false
+// pickSubject says what the picker reads for. A saved connection that the form still names as it was saved
+// is read by name. Anything else, a new connection, a changed one or the guided setup, is read as the draft
+// the form or the setup describes, since the core reads a saved connection as it was saved. ok is false
+// where the provider has no way to list its targets or the draft names no service or credential yet.
+func (m *Model) pickSubject() (connection string, draft *manage.ConnectionDraft, ok bool) {
+	provider := m.formProvider()
+	if provider == "" || !m.svc.CanBrowseTargets(provider) {
+		return "", nil, false
 	}
-	saved, ok := m.cfg.Connections[m.editing]
-	if !ok || saved.Service != m.formService() || saved.Credential != m.fieldValue("credential") {
-		return "", false
+	if m.wizard != nil {
+		if len(m.wizard.pages) <= stepCredential {
+			return "", nil, false
+		}
+		d, _, _ := m.setupDraft(stepCredential)
+		d.Targets = slices.Clone(m.targetList.all)
+		return "", &d, d.Service != "" && d.Credential != ""
 	}
-	if !m.svc.CanBrowseTargets(m.formProvider()) {
-		return "", false
+	service, credential := m.formService(), m.fieldValue("credential")
+	if saved, found := m.cfg.Connections[m.editing]; m.editing != "" && found &&
+		saved.Service == service && saved.Credential == credential {
+		return m.editing, nil, true
 	}
-	return m.editing, true
+	d := manage.ConnectionDraft{Provider: provider, Service: service, Credential: credential,
+		Targets: slices.Clone(m.targetList.all)}
+	return "", &d, service != "" && credential != ""
 }
 
 // pickRoots are the kinds the picker can start on: those without a parent.
 func (m *Model) pickRoots() []string {
-	if _, ok := m.pickConnection(); !ok {
+	if _, _, ok := m.pickSubject(); !ok {
 		return nil
 	}
 	return m.pickKindsUnder("")
@@ -148,9 +169,9 @@ func (m *Model) newPickLevel(p *targetPick, kinds []string, ki int, parent, labe
 
 // startPick opens the picker on a top-level kind and starts reading its first page.
 func (m *Model) startPick(kind string) tea.Cmd {
-	connection, ok := m.pickConnection()
+	connection, draft, ok := m.pickSubject()
 	if !ok {
-		m.fail = "choosing from the list needs the saved connection; save the form first"
+		m.fail = "the provider's list cannot be read for this form yet"
 		return nil
 	}
 	roots := m.pickKindsUnder("")
@@ -160,7 +181,7 @@ func (m *Model) startPick(kind string) tea.Cmd {
 			ki = i
 		}
 	}
-	p := &targetPick{connection: connection, marks: map[string]config.TargetEntry{}}
+	p := &targetPick{connection: connection, draft: draft, marks: map[string]config.TargetEntry{}}
 	p.levels = []*pickLevel{m.newPickLevel(p, roots, ki, "", "")}
 	m.targetPick = p
 	m.clearMessages()
@@ -179,9 +200,26 @@ func (m *Model) closePick() {
 	m.targetPick = nil
 }
 
+// freshProof is the proof for the one read that repeats a refused one right after the person proved the
+// admin passphrase. It is made from a single use that is spent at once, so it covers nothing else.
+func freshProof() manage.AdminProof {
+	session := manage.NewAdminSession(true, nil)
+	session.Grant(0)
+	proof, _ := session.Authorize(0)
+	return proof
+}
+
 // pickLoad reads the page after cursor of a level, or its first page for an empty cursor. Starting a read
 // abandons the one in flight.
 func (m *Model) pickLoad(lv *pickLevel, cursor string) tea.Cmd {
+	// The proof is taken here because the session is not safe for concurrent use. Without an active session
+	// the core answers admin-required for an encrypted vault, which offers the login (see pickLoaded).
+	proof, _ := m.admin.Authorize(m.cfg.VaultAdminTimeout())
+	return m.pickRead(lv, cursor, proof, false)
+}
+
+// pickRead starts the read of a level, or of the URL of the picker, under proof.
+func (m *Model) pickRead(lv *pickLevel, cursor string, proof manage.AdminProof, retried bool) tea.Cmd {
 	if lv.cancel != nil {
 		lv.cancel()
 	}
@@ -189,6 +227,22 @@ func (m *Model) pickLoad(lv *pickLevel, cursor string) tea.Cmd {
 	lv.cancel = cancel
 	m.pickSeq++
 	lv.req, lv.loading, lv.err = m.pickSeq, true, ""
+	p := m.targetPick
+	svc, id := m.svc, lv.req
+	if p.url != "" {
+		connection, draft, rawURL := p.connection, p.draft, p.url
+		return func() tea.Msg {
+			var entries []config.TargetEntry
+			var err error
+			if draft != nil {
+				entries, _, err = svc.ResolveDraftTargetURL(ctx, proof, *draft, rawURL)
+			} else {
+				entries, _, err = svc.ResolveTargetURL(ctx, proof, connection, rawURL)
+			}
+			return pickLoadedMsg{req: id, replace: true, retried: retried, page: config.TargetPage{Entries: entries},
+				err: err}
+		}
+	}
 	query := ""
 	if lv.server {
 		query = lv.list.query()
@@ -196,15 +250,39 @@ func (m *Model) pickLoad(lv *pickLevel, cursor string) tea.Cmd {
 	if cursor == "" {
 		lv.sent = query
 	}
-	// The proof is taken here because the session is not safe for concurrent use. Without an active session
-	// the core answers admin-required for an encrypted vault, which the picker shows.
-	proof, _ := m.admin.Authorize(m.cfg.VaultAdminTimeout())
 	req := config.TargetListRequest{Kind: lv.kind(), Parent: lv.parent, Query: query, Cursor: cursor}
-	svc, connection, id := m.svc, m.targetPick.connection, lv.req
+	connection, draft := p.connection, p.draft
 	return func() tea.Msg {
-		page, _, err := svc.ListTargets(ctx, proof, connection, req)
-		return pickLoadedMsg{req: id, replace: req.Cursor == "", page: page, err: err}
+		var page config.TargetPage
+		var err error
+		if draft != nil {
+			page, _, err = svc.ListDraftTargets(ctx, proof, *draft, req)
+		} else {
+			page, _, err = svc.ListTargets(ctx, proof, connection, req)
+		}
+		return pickLoadedMsg{req: id, replace: req.Cursor == "", cursor: req.Cursor, retried: retried, page: page, err: err}
 	}
+}
+
+// startResolve opens the picker on the entries a web address of the provider's service stands for. It
+// reports whether the input was taken as an address to look up, which needs a way to list targets.
+func (m *Model) startResolve(rawURL string) (tea.Cmd, bool) {
+	connection, draft, ok := m.pickSubject()
+	if !ok {
+		return nil, false
+	}
+	p := &targetPick{connection: connection, draft: draft, url: rawURL, marks: map[string]config.TargetEntry{}}
+	p.levels = []*pickLevel{m.newPickLevel(p, []string{"URL"}, 0, "", "")}
+	m.targetPick = p
+	m.clearMessages()
+	return m.pickLoad(p.top(), ""), true
+}
+
+// looksLikeURL reports whether typed input is a web address, which is looked up rather than checked as a
+// target.
+func looksLikeURL(typed string) bool {
+	lower := strings.ToLower(strings.TrimSpace(typed))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
 // pickLoaded takes the answer of a read, unless the level it was for is gone or has started another read.
@@ -229,6 +307,24 @@ func (m *Model) pickLoaded(msg pickLoadedMsg) tea.Cmd {
 	}
 	if msg.err != nil {
 		lv.err = m.pickError(msg.err)
+		var choice *manage.TargetChoiceError
+		if errors.As(msg.err, &choice) && choice.Code == "admin-required" {
+			if msg.retried || m.screen != screenTargets {
+				return nil
+			}
+			// Like every managing action, the read asks for the admin passphrase and repeats itself once.
+			return m.requireAdmin(func() tea.Cmd {
+				if m.targetPick == nil || !slices.Contains(m.targetPick.levels, lv) {
+					return nil
+				}
+				return m.pickRead(lv, msg.cursor, freshProof(), true)
+			})
+		}
+		if p.url != "" {
+			// The input stays typed in the add menu with the reason.
+			m.closePick()
+			m.fail = lv.err
+		}
 		return nil
 	}
 	lv.server = msg.page.ServerSearch
@@ -251,7 +347,30 @@ func (m *Model) pickLoaded(msg pickLoadedMsg) tea.Cmd {
 	}
 	lv.next = msg.page.Next
 	lv.list.setItems(names)
+	if p.url != "" {
+		return m.pickResolved(lv)
+	}
 	return m.pickSync(lv)
+}
+
+// pickResolved acts on the entries a URL stood for: none keeps the typed input, one is taken like an entry
+// of the list, several are left to choose from.
+func (m *Model) pickResolved(lv *pickLevel) tea.Cmd {
+	var found []config.TargetEntry
+	for _, target := range lv.list.all {
+		found = append(found, lv.entries[target].entry)
+	}
+	switch len(found) {
+	case 0:
+		m.closePick()
+		m.fail = "the provider found no entry for this address; check that it is a page of this service, " +
+			"or type the " + m.targetMetadata().Label + " itself"
+	case 1:
+		if !m.takeEntries(found) {
+			m.closePick()
+		}
+	}
+	return nil
 }
 
 // pickError is the failure of a read as the core states it: its code and its fixed text.
@@ -394,7 +513,7 @@ func (m *Model) pickOpen(lv *pickLevel) tea.Cmd {
 		return nil
 	}
 	kinds := m.pickKindsUnder(lv.kind())
-	if !e.entry.HasChildren || len(kinds) == 0 {
+	if !e.entry.HasChildren || len(kinds) == 0 || m.targetPick.url != "" {
 		m.status = "Nothing lies below this entry"
 		return nil
 	}
@@ -482,6 +601,11 @@ func (m *Model) pickTake(useCursor bool) bool {
 			picked = append(picked, e.entry)
 		}
 	}
+	return m.takeEntries(picked)
+}
+
+// takeEntries puts entries into the list like typed targets, all or none, and closes the picker when it did.
+func (m *Model) takeEntries(picked []config.TargetEntry) bool {
 	if len(picked) == 0 {
 		return false
 	}
@@ -510,7 +634,7 @@ func (m *Model) pickTake(useCursor bool) bool {
 	m.closePick()
 	m.targetAdd = nil
 	m.clearMessages()
-	m.status = fmt.Sprintf("Added %d from the list", len(picked))
+	m.status = fmt.Sprintf("Added %d from the provider", len(picked))
 	return true
 }
 
@@ -535,6 +659,9 @@ func (m *Model) pickFrame() (string, string) {
 	p := m.targetPick
 	lv := p.top()
 	title := "Choose " + lv.kind() + " from the list  " + lv.position()
+	if p.url != "" {
+		title = "Entries found for the address  " + lv.position()
+	}
 	if len(p.marks) > 0 {
 		title += fmt.Sprintf(" · %d marked", len(p.marks))
 	}
@@ -547,7 +674,11 @@ func (m *Model) pickFrame() (string, string) {
 		}
 		where = append(where, level.kind())
 	}
-	head.WriteString(m.wrapped(hintStyle, "level: "+strings.Join(where, " › ")) + "\n")
+	level := "level: " + strings.Join(where, " › ")
+	if p.url != "" {
+		level = "the address you typed matched these entries"
+	}
+	head.WriteString(m.wrapped(hintStyle, level) + "\n")
 	head.WriteString(m.searchLine(&lv.list, "search: ") + "\n")
 	_, width := m.fit("  ")
 	if len(lv.list.all) > 0 {
@@ -568,7 +699,7 @@ func (m *Model) pickFrame() (string, string) {
 	}
 
 	keys := "type to search · up/down move · enter take"
-	if _, ok := lv.current(); ok && len(m.pickKindsUnder(lv.kind())) > 0 {
+	if _, ok := lv.current(); ok && p.url == "" && len(m.pickKindsUnder(lv.kind())) > 0 {
 		keys += " · right open"
 	}
 	if len(p.levels) > 1 {

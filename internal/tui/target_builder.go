@@ -134,6 +134,11 @@ func (m *Model) refreshAdd() {
 		if query != "" {
 			typed = `use as typed: "` + query + `"`
 		}
+		if looksLikeURL(query) {
+			if _, _, ok := m.pickSubject(); ok {
+				typed = `look up the address at the provider: "` + query + `"`
+			}
+		}
 		if query != "" && exact == "" {
 			rows = append([]string{addTyped}, rows...)
 			a.text[addTyped] = typed
@@ -440,6 +445,11 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 		if choice, ok := a.choices.selected(); ok {
 			if kind, isPick := strings.CutPrefix(choice, addPick); isPick && a.kind < 0 {
 				return m.startPick(kind)
+			}
+			if choice == addTyped && a.kind < 0 && looksLikeURL(a.choices.query()) {
+				if cmd, ok := m.startResolve(strings.TrimSpace(a.choices.query())); ok {
+					return cmd
+				}
 			}
 			m.pickAdd(choice)
 		}
