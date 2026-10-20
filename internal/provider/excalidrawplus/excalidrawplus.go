@@ -359,21 +359,28 @@ func Register(reg *capability.Registry) error {
 				"sent as 'Authorization: Bearer ...'",
 		}},
 		Target: config.TargetMetadata{
-			Label:    "collection",
+			Label:    "collections and scenes",
 			Required: true,
 			Multiple: true,
 			Wildcard: wildcard,
 			WildcardWarning: "All collections and scenes the API key may read are exposed to the agent. " +
 				"Use a collection allow-list when not all of them are required.",
-			Description: "one or more collections as an allow-list, or * for every collection the key reads; a " +
-				"scene is only reachable when its own collection is allowed",
+			Description: "one or more collections and single scenes as an allow-list, or * for every collection the key " +
+				"reads; a scene is only reachable when it is listed or its own collection is allowed",
 			Kinds: []config.TargetKind{{
 				Name:        "collection",
 				Description: "a collection whose scenes and scene content this connection may read",
 				Forms:       []string{"collection/COLLECTION_ID", "*"},
+			}, {
+				Name: "scene",
+				Description: "a single scene of the workspace that narrows the connection to it; optional, repeatable, " +
+					"and it does not open its collection",
+				Forms:  []string{"scene/SCENE_ID"},
+				Parent: "collection",
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
+			Reaches:     reaches,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read collections and scenes", Recommended: true,
@@ -406,6 +413,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	browser := capability.TargetBrowser{List: browseList, ResolveURL: browseResolveURL}
+	if err := reg.RegisterTargetBrowser(Provider, browser); err != nil {
 		return err
 	}
 	return reg.Register(Provider,

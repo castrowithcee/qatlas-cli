@@ -193,7 +193,7 @@ func (r rewrite) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // serve starts a local TLS server and routes the package transport to it.
-func serve(t *testing.T, f *fakeTodoist) {
+func serve(t *testing.T, f http.Handler) {
 	t.Helper()
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)

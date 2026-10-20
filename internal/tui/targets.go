@@ -31,6 +31,7 @@ func (m *Model) targetMetadata() config.TargetMetadata {
 func (m *Model) openTargets() {
 	m.targetList.reset(append([]string(nil), m.fields[m.focus].entries...))
 	m.targetLabels = maps.Clone(m.fields[m.focus].labels)
+	m.closePick()
 	m.targetEdit, m.targetRemove, m.targetAdd, m.labelEdit = -1, false, nil, false
 	m.targetInput.Blur()
 	m.labelInput.Blur()
@@ -46,6 +47,14 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
 		// The add menu takes its typed line the same way, and the builder its target once it is complete.
+		if m.targetPick != nil {
+			// Marked entries are taken; with none marked the picker only closes, and a selected row is
+			// never taken by F2.
+			if len(m.targetPick.marks) > 0 && !m.pickTake(false) {
+				return nil
+			}
+			m.closePick()
+		}
 		if m.targetAdd != nil && !m.saveAdd() {
 			return nil
 		}
@@ -62,6 +71,9 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		m.targetRemove = false
 		m.keepTargets()
 		return m.updateForm(key)
+	}
+	if m.targetPick != nil {
+		return m.updatePick(key)
 	}
 	if m.targetAdd != nil {
 		return m.updateAdd(key)
@@ -151,6 +163,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 
 // keepTargets hands the list over to its row and returns to the form. Nothing is written yet.
 func (m *Model) keepTargets() {
+	m.closePick()
 	m.fields[m.focus].entries = append([]string(nil), m.targetList.all...)
 	m.fields[m.focus].labels = maps.Clone(m.targetLabels)
 	m.screen = screenForm
@@ -161,6 +174,7 @@ func (m *Model) keepTargets() {
 // first, like a changed form does.
 func (m *Model) leaveTargets() tea.Cmd {
 	m.clearMessages()
+	m.closePick()
 	if !m.targetsChanged() {
 		m.screen = screenForm
 		return nil
@@ -181,6 +195,9 @@ func (m *Model) targetTyped() bool {
 // targetsPending reports whether closing the screen for good would lose something: a changed list, a typed
 // target or a half-built one.
 func (m *Model) targetsPending() bool {
+	if m.targetPick != nil && len(m.targetPick.marks) > 0 {
+		return true
+	}
 	if a := m.targetAdd; a != nil && (a.kind >= 0 || a.choices.query() != "") {
 		return true
 	}
@@ -245,29 +262,36 @@ func (m *Model) editTarget(index int, value string) {
 	m.clearMessages()
 }
 
+// targetProblem says why value cannot be put at index of the list: the provider refuses its form, or the
+// list holds it already at another place. It is empty when the target is acceptable.
+func (m *Model) targetProblem(value string, index int) string {
+	metadata := m.targetMetadata()
+	if value == "" {
+		return "a " + metadata.Label + " must not be empty; esc cancels the entry"
+	}
+	if metadata.Validate != nil {
+		if err := metadata.Validate(value); err != nil {
+			return m.redactor.Apply(err.Error())
+		}
+	}
+	for i, entry := range m.targetList.all {
+		if entry == value && i != index {
+			return "this " + metadata.Label + " is already in the list"
+		}
+	}
+	return ""
+}
+
 // takeTarget puts the typed target into the list once the provider accepts its form and the list does not
 // hold it yet. A refused target stays typed with the reason.
 func (m *Model) takeTarget() {
 	value := strings.TrimSpace(m.targetInput.Value())
-	metadata := m.targetMetadata()
 	m.status = ""
-	if value == "" {
-		m.fail = "a " + metadata.Label + " must not be empty; esc cancels the entry"
+	if problem := m.targetProblem(value, m.targetEdit); problem != "" {
+		m.fail = problem
 		return
 	}
-	if metadata.Validate != nil {
-		if err := metadata.Validate(value); err != nil {
-			m.fail = m.redactor.Apply(err.Error())
-			return
-		}
-	}
 	entries := append([]string(nil), m.targetList.all...)
-	for i, entry := range entries {
-		if entry == value && i != m.targetEdit {
-			m.fail = "this " + metadata.Label + " is already in the list"
-			return
-		}
-	}
 	if m.targetEdit >= len(entries) {
 		entries = append(entries, value)
 	} else {
@@ -295,6 +319,9 @@ func (m *Model) removeTarget() {
 
 // targetsView draws the target list screen: its frame, and between them as many targets as fit.
 func (m *Model) targetsView() string {
+	if m.targetPick != nil {
+		return m.pickView()
+	}
 	if m.targetAdd != nil {
 		return m.addView()
 	}

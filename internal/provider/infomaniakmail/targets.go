@@ -16,6 +16,7 @@ const (
 	mailboxPrefix = "mailbox/"
 	folderPrefix  = "folder/"
 	senderPrefix  = "sender/"
+	treeSuffix    = "/*"
 
 	maxAddressLength    = 254
 	maxLocalPartLength  = 64
@@ -31,17 +32,64 @@ const (
 // sender.
 type scope struct {
 	mailbox string
-	folders []string
+	folders []string // exact names: folder/NAME
+	trees   []string // folder/NAME/*: the folder NAME and its subfolders
 	senders []string // lower case
 }
 
-func (s scope) allowsFolder(name string) bool {
-	if len(s.folders) == 0 {
+// unrestricted reports whether no folder target is configured, so every folder of the mailbox is reachable.
+func (s scope) unrestricted() bool { return len(s.folders) == 0 && len(s.trees) == 0 }
+
+// allowsExact reports whether name is the folder of a folder/NAME or folder/NAME/* target itself. It needs no
+// hierarchy delimiter.
+func (s scope) allowsExact(name string) bool {
+	if s.unrestricted() {
 		return true
 	}
 	name = normalizeFolder(name)
 	for _, allowed := range s.folders {
 		if allowed == name {
+			return true
+		}
+	}
+	for _, allowed := range s.trees {
+		if allowed == name {
+			return true
+		}
+	}
+	return false
+}
+
+// allowsFolder is the check that needs no network access. It admits a folder that is exactly a target and,
+// provisionally, one that begins with the name of a folder/NAME/* target and is longer: whether that is a
+// subfolder depends on the server's hierarchy delimiter, so session.folderOK decides it after login. Without a
+// folder/NAME/* target it is exact.
+func (s scope) allowsFolder(name string) bool {
+	if s.allowsExact(name) {
+		return true
+	}
+	name = normalizeFolder(name)
+	for _, tree := range s.trees {
+		if len(name) > len(tree) && strings.HasPrefix(name, tree) {
+			return true
+		}
+	}
+	return false
+}
+
+// allowsFolderDelim is the final check: the folder is a target itself, or it begins with the name of a
+// folder/NAME/* target followed by the hierarchy delimiter. An empty delimiter (a flat hierarchy) admits only
+// the targets themselves.
+func (s scope) allowsFolderDelim(name, delim string) bool {
+	if s.allowsExact(name) {
+		return true
+	}
+	if delim == "" {
+		return false
+	}
+	name = normalizeFolder(name)
+	for _, tree := range s.trees {
+		if strings.HasPrefix(name, tree+delim) && len(name) > len(tree)+len(delim) {
 			return true
 		}
 	}
@@ -80,7 +128,7 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 // sender/ADDRESS entries, none named twice within its own kind. No error ever quotes a configured value.
 func parseScope(values []string) (scope, error) {
 	var bound scope
-	seenFolders, seenSenders := map[string]bool{}, map[string]bool{}
+	seenFolders, seenTrees, seenSenders := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, raw := range values {
 		kind, value, err := parseTarget(strings.TrimSpace(raw))
 		if err != nil {
@@ -98,6 +146,12 @@ func parseScope(values []string) (scope, error) {
 			}
 			seenFolders[value] = true
 			bound.folders = append(bound.folders, value)
+		case "tree":
+			if seenTrees[value] {
+				return scope{}, errors.New("the folder target list names a folder tree more than once")
+			}
+			seenTrees[value] = true
+			bound.trees = append(bound.trees, value)
 		case "sender":
 			if seenSenders[value] {
 				return scope{}, errors.New("the sender target list names an address more than once")
@@ -109,7 +163,7 @@ func parseScope(values []string) (scope, error) {
 	if bound.mailbox == "" {
 		return scope{}, errors.New("an Infomaniak Mail connection needs exactly one mailbox/ADDRESS target")
 	}
-	if len(bound.folders) > maxFolderTargets {
+	if len(bound.folders)+len(bound.trees) > maxFolderTargets {
 		return scope{}, errors.New("an Infomaniak Mail connection may list at most 50 folder targets")
 	}
 	if len(bound.senders) > maxSenderTargets {
@@ -124,7 +178,7 @@ func validateTarget(raw string) error {
 	return err
 }
 
-// parseTarget reads one target as mailbox/ADDRESS, folder/NAME, or sender/ADDRESS. The mailbox keeps the
+// parseTarget reads one target as mailbox/ADDRESS, folder/NAME, folder/NAME/* (kind tree), or sender/ADDRESS. The mailbox keeps the
 // spelling it was configured with, since it is the login name; a sender address is lower-cased for
 // comparison; a folder name is normalised only for INBOX.
 func parseTarget(raw string) (kind, value string, err error) {
@@ -141,6 +195,13 @@ func parseTarget(raw string) (kind, value string, err error) {
 			return "", "", errors.New("an Infomaniak Mail sender target must be a plain email address")
 		}
 		return kind, strings.ToLower(raw), nil
+	case strings.HasPrefix(raw, folderPrefix) && strings.HasSuffix(raw, treeSuffix):
+		kind, raw = "tree", strings.TrimSuffix(strings.TrimPrefix(raw, folderPrefix), treeSuffix)
+		if !validFolderName(raw) {
+			return "", "", errors.New("an Infomaniak Mail folder/NAME/* target must name one folder without " +
+				"control characters or the IMAP wildcards * and %")
+		}
+		return kind, normalizeFolder(raw), nil
 	case strings.HasPrefix(raw, folderPrefix):
 		kind, raw = "folder", strings.TrimPrefix(raw, folderPrefix)
 		if !validFolderName(raw) {
@@ -149,7 +210,7 @@ func parseTarget(raw string) (kind, value string, err error) {
 		}
 		return kind, normalizeFolder(raw), nil
 	}
-	return "", "", errors.New("an Infomaniak Mail target must be mailbox/ADDRESS, folder/NAME, or sender/ADDRESS")
+	return "", "", errors.New("an Infomaniak Mail target must be mailbox/ADDRESS, folder/NAME, folder/NAME/*, or sender/ADDRESS")
 }
 
 // validFolderName keeps a folder name to one literal mailbox name: valid UTF-8 of bounded length, no control

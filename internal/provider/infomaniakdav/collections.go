@@ -135,11 +135,18 @@ func singleLink(op string, resources []dav.Resource, property xml.Name) ([]strin
 
 // list runs the discovery chain and reports the allow-listed collections of one kind.
 func (c *Client) list(ctx context.Context, calendars bool) (*CollectionsPage, error) {
-	op, allowed, homeProp, homeBody, body := "list address books", c.scope.addressbooks, dav.PropBookHome,
-		dav.AddressbookHomeBody, dav.AddressbooksBody
+	allowed := c.scope.addressbooks
 	if calendars {
-		op, allowed, homeProp, homeBody, body = "list calendars", c.scope.calendars, dav.PropCalHome,
-			dav.CalendarHomeBody, dav.CalendarsBody
+		allowed = c.scope.calendars
+	}
+	return c.collect(ctx, calendars, func(id string) bool { return contains(allowed, id) })
+}
+
+// collect runs the discovery chain and reports the collections of one kind that keep accepts.
+func (c *Client) collect(ctx context.Context, calendars bool, keep func(id string) bool) (*CollectionsPage, error) {
+	op, homeProp, homeBody, body := "list address books", dav.PropBookHome, dav.AddressbookHomeBody, dav.AddressbooksBody
+	if calendars {
+		op, homeProp, homeBody, body = "list calendars", dav.PropCalHome, dav.CalendarHomeBody, dav.CalendarsBody
 	}
 	principal, err := c.discoverPrincipal(ctx, op)
 	if err != nil {
@@ -176,7 +183,7 @@ func (c *Client) list(ctx context.Context, calendars bool) (*CollectionsPage, er
 		if calendars {
 			kindOK = resources[i].Calendar
 		}
-		if !kindOK || !contains(allowed, id) || seen[id] {
+		if !kindOK || !keep(id) || seen[id] {
 			continue
 		}
 		seen[id] = true

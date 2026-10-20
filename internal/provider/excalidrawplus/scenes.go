@@ -188,10 +188,11 @@ func sceneOf(m sceneMetaJSON) Scene {
 		SceneVersion: boundedValue(m.SceneVersion), TotalElements: m.TotalElements}
 }
 
-// admitted reports whether a scene, by its own reported collection, belongs to this connection: a valid
-// identifier, not in the trash, and in an allowed collection.
+// admitted reports whether a scene belongs to this connection: a valid identifier, not in the trash, and
+// either listed itself or in an allowed collection by its own reported collection.
 func (c *Client) admitted(m sceneMetaJSON) bool {
-	return validID(m.ID) && !m.IsDeleted && (m.Collection == "" || validID(m.Collection)) && c.scope.allows(m.Collection)
+	return validID(m.ID) && !m.IsDeleted && (m.Collection == "" || validID(m.Collection)) &&
+		c.scope.allowsScene(m.ID, m.Collection)
 }
 
 // ScenesPage is one offset-paginated, allow-list-filtered listing of scenes.
@@ -218,6 +219,9 @@ func invokeScenesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	}
 	bound, err := boundScope(resolved)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireCollections(bound); err != nil {
 		return nil, err
 	}
 	if input.CollectionID != "" {
@@ -282,11 +286,8 @@ func invokeScenesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("get scene", "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	if err := selectScene(resolved, input.SceneID); err != nil {
 		return nil, err
-	}
-	if !validID(input.SceneID) {
-		return nil, invalidRequest("scene_id is not a valid identifier")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -300,9 +301,12 @@ func invokeScenesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	return &scene, nil
 }
 
-// boundScene reads one scene's metadata and binds it to this connection: the scene is only returned when the
-// collection it reports is allowed. The refusal never names that collection.
+// boundScene reads one scene's metadata and binds it to this connection: the scene is only returned when it
+// is listed or the collection it reports is allowed. The refusal never names that collection.
 func (c *Client) boundScene(ctx context.Context, op, sceneID string) (*sceneMetaJSON, error) {
+	if !c.scope.mayReachScene(sceneID) {
+		return nil, invalidRequest("scene_id is outside the targets of this connection")
+	}
 	var entry sceneEntryJSON
 	if err := c.get(ctx, op, "/scenes/"+url.PathEscape(sceneID), nil, &entry, maxResponseBytes); err != nil {
 		return nil, err
@@ -383,11 +387,8 @@ func invokeScenesContent(ctx context.Context, resolved *config.Resolved, secrets
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("read scene content", "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	if err := selectScene(resolved, input.SceneID); err != nil {
 		return nil, err
-	}
-	if !validID(input.SceneID) {
-		return nil, invalidRequest("scene_id is not a valid identifier")
 	}
 	if input.Limit == 0 {
 		input.Limit = defaultElementLimit
