@@ -1,8 +1,8 @@
 ---
 description: >
-  Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection targets,
-  the collection, scene, and scene content reads with their client-side search, creating, renaming, and moving
-  scenes, patching and replacing scene content, deleting scenes and collections into the trash, workspace users,
+  Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection and scene
+  targets, choosing them, the collection, scene, and scene content reads with their client-side search, creating,
+  renaming, and moving scenes, patching and replacing scene content, deleting scenes and collections into the trash, workspace users,
   the bounds, and the errors.
 type: knowledge
 edit: shared
@@ -53,17 +53,33 @@ connections:
 | Target | Allows |
 | --- | --- |
 | `collection/COLLECTION_ID` | the scenes of this collection; repeatable |
+| `scene/SCENE_ID` | this single scene, optionally narrowing the connection; repeatable; it does not open its collection |
 | `*` | every collection the key reads; must be the only target |
 
-A collection identifier is limited to ASCII letters, digits, hyphen, and underscore, at most 64 characters.
+Collection and scene targets together form one allow-list: a scene is reachable when it is listed or its collection
+is allowed. A connection without a scene target behaves as a pure collection binding. An identifier is limited to
+ASCII letters, digits, hyphen, and underscore, at most 64 characters.
 
 - A `collection_id` outside the targets is refused before any secret is read or request is sent, without naming the
   collection.
-- A scene is bound through its own collection: `scenes.get` and `scenes.content` first read the scene's metadata and
-  continue only when the collection it reports is allowed. A scene of another collection, a scene without a
-  collection, and a scene in the trash are refused (the last two are only reachable with `*` or never, respectively),
-  and the content is not requested. The refusal never names the real collection.
-- Lists drop collections and scenes outside the targets and in the trash.
+- A scene is bound through its own metadata: `scenes.get` and `scenes.content` first read it and continue only when
+  the scene is listed or the collection it reports is allowed. A scene of another collection, a scene without a
+  collection (only reachable with `*` or when listed), and a scene in the trash are refused, and the content is not
+  requested. The refusal never names the real collection or the scene.
+- With scene targets only, a scene that is not listed is refused locally without a request.
+- Lists drop collections and scenes outside the targets and in the trash. `scenes.list` lists the scenes of allowed
+  collections; a listed scene of another collection is not listed.
+- A connection bound to scenes only does not reach the tools on collections and the workspace: `collections.list`,
+  `scenes.list`, `scenes.create`, `collections.delete`, the activity log, and the user tools. They are not offered
+  and refused at the call; moving a scene needs an allowed target collection.
+
+## Choosing targets
+
+The picker offers two levels: `collection`, and `scene` below a collection. It lists what the key reaches, not only
+the current targets, and works on a draft connection without targets. Both levels are paged by the API's offset;
+the API has no name search, so the picker filters the pages it has loaded. Names are untrusted data. Excalidraw+
+documents no web interface URL with collection or scene identifiers, so no URL is resolved; choose from the lists
+or enter the identifier.
 
 ## Tools
 
