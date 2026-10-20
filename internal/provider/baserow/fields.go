@@ -101,7 +101,7 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := selectTable(resolved, input.TableID); err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 		}
 		field := Field{ID: entry.ID, Name: bounded(entry.Name), Type: bounded(entry.Type),
 			Primary: entry.Primary, ReadOnly: entry.ReadOnly}
-		if entry.LinkRowTableID != nil && client.scope.allows(*entry.LinkRowTableID) {
+		if entry.LinkRowTableID != nil && client.inScope(*entry.LinkRowTableID) {
 			field.LinkTableID = *entry.LinkRowTableID
 		}
 		for i, option := range entry.SelectOptions {
@@ -135,6 +135,12 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 
 // readFields reads the raw fields of one table, whose ID the caller has already checked.
 func (c *Client) readFields(ctx context.Context, op string, tableID int64) ([]fieldJSON, error) {
+	if len(c.scope.databases) > 0 {
+		// Link targets are judged by their database, so the table list is read with the fields.
+		if _, err := c.tableDatabases(ctx, op); err != nil {
+			return nil, err
+		}
+	}
 	var raw []fieldJSON
 	if err := c.get(ctx, op, "/api/database/fields/table/"+tablePath(tableID), nil, &raw); err != nil {
 		return nil, err
