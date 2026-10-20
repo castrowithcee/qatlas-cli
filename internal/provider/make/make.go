@@ -218,6 +218,9 @@ type Client struct {
 
 	// wantRefusal asks the next failing request to keep the status and a bounded excerpt of a generic 4xx
 	// answer in refusalStatus and refusal; only hooks.delete and connections.delete use it, to recognize Make's own refusal.
+	// parents is the bound team's folder tree (folder to parent), read at most once per client.
+	parents map[int64]int64
+
 	wantRefusal   bool
 	refusalStatus int
 	refusal       []byte
@@ -251,6 +254,14 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		}
 		return nil, errNeedsTeamConnection()
 	}
+	return build(ctx, resolved, secrets, red, lim, bound)
+}
+
+// build resolves the token and origin of a connection for the given scope. Choosing targets uses it with an
+// empty scope, since the connection may still be a draft without any target.
+func build(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
+	const op = "open"
 	origin, err := parseInstance(resolved.BaseURL)
 	if err != nil {
 		return nil, providerError(op, err.Error())
@@ -633,37 +644,47 @@ func Register(reg *capability.Registry) error {
 				"target decides what is exposed",
 		}},
 		Target: config.TargetMetadata{
-			Label:    "team and scenarios, or organization",
+			Label:    "team, folders and scenarios, or organization",
 			Required: true,
 			Multiple: true,
 			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
 				"target, which offers only the organization tools (make.teams.*, make.organization-variables.*, make.organization.update, make.organization.members) and refuses every team tool; or " +
 				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
-				"targets of that team; without a scenario target, every scenario of the bound team the token " +
+				"and folder/FOLDER_ID targets of that team; without either, every scenario of the bound team the token " +
 				"can reach is reachable. A scenario_id argument outside a configured allow-list is refused " +
 				"locally, before any request is sent; every operation that names a scenario_id also confirms " +
 				"live, against Make's own report, that the scenario belongs to the bound team, and a run's own " +
 				"answer is defensively re-checked the same way against the bound team and, when configured, " +
 				"the bound organization. scenarios.create always creates in the bound team and refuses outright " +
-				"on a connection restricted by a scenario allow-list, since a scenario that does not exist yet " +
+				"on a connection restricted by a scenario or folder allow-list, since a scenario that does not exist yet " +
 				"can never already be on that list",
 			Kinds: []config.TargetKind{{
-				Name: "team",
-				Description: "the Make team this connection may reach; required in team mode, exactly one, and absent in organization mode; find it as the " +
-					"numeric team identifier in Make's team settings URL or in a scenario's own teamId",
-				Forms: []string{"team/TEAM_ID"},
-			}, {
 				Name: "organization",
 				Description: "the Make organization: in team mode the one the bound team belongs to, optional, at most one; in organization mode the one this connection administers, required. A " +
 					"scenario itself reports no organizationId of its own, only teamId, so this target is verified " +
 					"against a run's own report and the bound team's own answer, never against a scenario directly",
 				Forms: []string{"organization/ORG_ID"},
 			}, {
+				Name: "team",
+				Description: "the Make team this connection may reach; required in team mode, exactly one, and absent in organization mode; find it as the " +
+					"numeric team identifier in Make's team settings URL or in a scenario's own teamId",
+				Forms:  []string{"team/TEAM_ID"},
+				Parent: "organization",
+			}, {
+				Name: "folder",
+				Description: "one scenario folder of the bound team; optional, may be listed more than once, team mode only. " +
+					"It allows the scenarios in that folder and in all folders below it, together with " +
+					"any scenario targets; each scenario is confirmed to sit there when it is read",
+				Forms:  []string{"folder/FOLDER_ID"},
+				Parent: "team",
+			}, {
 				Name:        "scenario",
 				Description: "one scenario of the bound team; optional, and may be listed more than once",
 				Forms:       []string{"scenario/SCENARIO_ID"},
+				Parent:      "team",
 			}},
+			Reaches:     reaches,
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
 		},
@@ -714,7 +735,7 @@ func Register(reg *capability.Registry) error {
 			ID: "connections-read", Title: "Read the bound team's connections",
 			Description: "lists and reads the connections of the bound team by allow-listed metadata only and " +
 				"lists the names of their editable parameters; never a token or secret, changes nothing, and " +
-				"needs the connections:read scope; refused on a connection with a scenario allow-list",
+				"needs the connections:read scope; refused on a connection with a scenario or folder allow-list",
 			Tools: []string{connectionsList.ID, connectionsGet.ID, connectionsEditableSchema.ID},
 		}, {
 			ID: "connections-test", Title: "Test the bound team's connections",
@@ -744,7 +765,7 @@ func Register(reg *capability.Registry) error {
 			ID: "credentialrequests-read", Title: "Read the bound team's credential requests",
 			Description: "lists and reads the credential requests of the bound team by allow-listed metadata, " +
 				"never a request link, secret, or email address; changes nothing and needs the " +
-				"credential-requests:read scope; refused on a connection with a scenario allow-list",
+				"credential-requests:read scope; refused on a connection with a scenario or folder allow-list",
 			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID},
 		}, {
 			ID: "credentialrequests-manage", Title: "Create credential requests in the bound team",
@@ -758,7 +779,7 @@ func Register(reg *capability.Registry) error {
 			ID: "datastores-read", Title: "Read the bound team's data stores",
 			Description: "lists and reads the data stores of the bound team, never their records; changes " +
 				"nothing and needs the datastores:read scope (Make's reference lists organizations:read for " +
-				"reading a single store); refused on a connection with a scenario allow-list",
+				"reading a single store); refused on a connection with a scenario or folder allow-list",
 			Tools: []string{dataStoresList.ID, dataStoresGet.ID},
 		}, {
 			ID: "datastores-manage", Title: "Create and update the bound team's data stores",
@@ -772,7 +793,7 @@ func Register(reg *capability.Registry) error {
 			Description: "lists the records of a data store of the bound team, capped in number and size; " +
 				"record contents are untrusted user data and likely personal data; changes nothing and needs " +
 				"the datastores:read scope (Make's reference lists organizations:read for reading a single " +
-				"store); refused on a connection with a scenario allow-list",
+				"store); refused on a connection with a scenario or folder allow-list",
 			Tools: []string{dataStoreRecordsList.ID},
 		}, {
 			ID: "datastorerecords-manage", Title: "Create, replace, and update records in the bound team's data stores",
@@ -833,7 +854,7 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider,
+	if err := reg.Register(Provider,
 		capability.Operation{Descriptor: scenariosList, Handler: capability.Handler(invokeScenariosList)},
 		capability.Operation{Descriptor: scenariosGet, Handler: capability.Handler(invokeScenariosGet)},
 		capability.Operation{Descriptor: scenariosBlueprint, Handler: capability.Handler(invokeScenariosBlueprint)},
@@ -905,7 +926,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: organizationSubscription, Handler: capability.Handler(invokeOrganizationSubscription)},
 		capability.Operation{Descriptor: organizationUsage, Handler: capability.Handler(invokeOrganizationUsage)},
 		capability.Operation{Descriptor: organizationPayments, Handler: capability.Handler(invokeOrganizationPayments)},
-	)
+	); err != nil {
+		return err
+	}
+	return reg.RegisterTargetBrowser(Provider, targetBrowser())
 }
 
 // readTools are the five tools of Milestone A. The manage profile reuses this list instead of repeating it.
