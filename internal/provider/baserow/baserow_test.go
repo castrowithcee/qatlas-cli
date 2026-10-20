@@ -96,9 +96,12 @@ func testConfig() *config.Config {
 		Services:    map[string]config.Service{"baserow": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"token": credential},
 		Connections: map[string]config.Connection{
-			"one":  {Service: "baserow", Credential: "token", Effects: read, Target: "table/11"},
-			"list": {Service: "baserow", Credential: "token", Effects: read, Targets: []string{"table/11", "table/12"}},
-			"all":  {Service: "baserow", Credential: "token", Effects: read, Target: "*"},
+			"one":     {Service: "baserow", Credential: "token", Effects: read, Target: "table/11"},
+			"list":    {Service: "baserow", Credential: "token", Effects: read, Targets: []string{"table/11", "table/12"}},
+			"all":     {Service: "baserow", Credential: "token", Effects: read, Target: "*"},
+			"db":      {Service: "baserow", Credential: "token", Effects: read, Target: "database/1"},
+			"dbtable": {Service: "baserow", Credential: "token", Effects: read, Targets: []string{"database/1", "table/99"}},
+			"dbwrite": {Service: "baserow", Credential: "token", Effects: allRights, Target: "database/1", Tools: writeTools},
 			"write": {Service: "baserow", Credential: "token", Effects: allRights, Targets: []string{"table/11", "table/12"},
 				Tools: writeTools},
 			"writeall": {Service: "baserow", Credential: "token", Effects: allRights, Target: "*", Tools: writeTools},
@@ -187,14 +190,15 @@ func TestTargetValidation(t *testing.T) {
 		"table/1": true, "table/123456": true, "*": true,
 		"": false, "table/": false, "table/0": false, "table/01": false, "table/-1": false, "table/x": false,
 		"table/1/2": false, "table/1 2": false, "tables/1": false, "table/" + strings.Repeat("9", 30): false,
-		"database/1": false,
+		"database/1": true, "database/": false, "database/0": false, "database/x": false, "database/1/2": false,
 	} {
 		if err := validateTarget(raw); (err == nil) != valid {
 			t.Errorf("validateTarget(%q) = %v, want valid=%t", raw, err, valid)
 		}
 	}
 	for values, valid := range map[string]bool{
-		"table/1,table/2": true, "*": true, "": false, "table/1,table/1": false, "*,table/1": false, "*,*": false,
+		"table/1,table/2": true, "*": true, "database/1,table/1": true, "database/1,database/2": true,
+		"database/1,database/1": false, "database/1,*": false, "table/1,database/1,table/1": false, "": false, "table/1,table/1": false, "*,table/1": false, "*,*": false,
 	} {
 		var list []string
 		if values != "" {

@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes the Baserow provider: the database token and Baserow Cloud or self-hosted base URL, the table
-  allow-list target, the read tools, row changes, and file upload and download, schema checks, link-field
+  Describes the Baserow provider: the database token and Baserow Cloud or self-hosted base URL, the
+  table and database targets, choosing targets, the read tools, row changes, and file upload and download, schema checks, link-field
   masking and link values outside the allow-list, bounds, errors, uncertain results, and the documented limits of
   lookup and formula fields.
 type: knowledge
@@ -42,27 +42,44 @@ credentials:
 
 ## Scope
 
-A connection lists the tables it may read as targets: one or more `table/TABLE_ID` entries, or the single
-entry `*` for every table the token reads. Entries are positive integers without a sign or leading zero.
+A connection lists what it may read as targets: `table/TABLE_ID` entries, `database/DATABASE_ID` entries,
+or the single entry `*` for every table the token reads. Entries are positive integers without a sign or
+leading zero. A database covers all its tables, also those created later; tables and databases together form
+the allow-list. A listed table does not open its database.
 
 ```yaml
 connections:
   customer-a-crm:
     service: baserow-customer-a
     credential: baserow-customer-a-token
-    targets: [table/11, table/12]
+    targets: [table/11, database/3]
 ```
 
-A `table_id` outside the targets is refused as an invalid request before the credential is resolved and
-before any request is sent; the refusal does not name the table. `baserow.tables.list` shows only the tables
-of the targets when the connection has an allow-list. The target limits what Qatlas shows; it does not
-narrow what the token itself may read, so grant the token only the rights the connection needs.
+A `table_id` outside the targets is refused as an invalid request without naming the table. A listed table
+is checked before the credential is resolved and before any request. A table that is not listed itself is
+proven by one read of the token's table list, which names the table's database; it is refused without any
+request on the table when its database is not listed. That read is made at most once per call and is shared
+with the link checks below. `baserow.tables.list` shows only the tables of the targets when the connection has
+an allow-list. The target limits what Qatlas shows; it does not narrow what the token itself may read, so grant
+the token only the rights the connection needs. Every tool acts on one table or lists tables, so a database
+target reaches all of them.
+
+## Choosing targets
+
+The selection lists the databases of the token and the tables of one database, without the connection's
+targets. A database token reads the token's table list, which names no database; databases are therefore derived
+from that list and shown by their ID, not by name.
+
+A URL of the web interface of the form `/database/DATABASE_ID/table/TABLE_ID/...` names a database and a
+table without a request. For Baserow Cloud the web host is `baserow.io`, the API host `api.baserow.io`; for a
+self-hosted instance only the host of the connection's base URL counts, because the web address of an
+installation may differ from its API address. Any other host names nothing.
 
 ## Tools
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `baserow.tables.list` | read | none | lists the tables of the targets with `id`, `name`, `database_id` |
+| `baserow.tables.list` | read | none | lists the tables of the targets, also those of a listed database, with `id`, `name`, `database_id` |
 | `baserow.fields.list` | read | none | lists one table's fields: `id`, `name`, `type`, `primary`, `read_only`, select options |
 | `baserow.rows.list` | read | none | lists one table's rows page by page |
 | `baserow.rows.get` | read | none | reads one row |
