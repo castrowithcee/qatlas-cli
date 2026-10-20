@@ -47,7 +47,7 @@ var connectionIDSchema = idSchema
 
 var connectionIDArgument = capability.Argument{Name: "connection_id", Required: true,
 	Description: "Make connection identifier (not a Qatlas connection); its team is always re-checked live " +
-		"against Make's own report, and a Qatlas connection with a scenario allow-list reaches no Make " +
+		"against Make's own report, and a Qatlas connection with a scenario or folder allow-list reaches no Make " +
 		"connections at all, since they belong to no scenario"}
 
 var connectionSummarySchema = `{"type":"object","properties":{` +
@@ -73,7 +73,7 @@ var connectionsList = capability.Descriptor{
 	ID: Provider + ".connections.list", Version: 1, Title: "List Make connections",
 	Description: "List the Make connections (stored third-party credentials) of the bound team by allow-listed " +
 		"metadata only; never a token, secret, scope list, or other stored value. Refused on a connection " +
-		"with a scenario allow-list",
+		"with a scenario or folder allow-list",
 	Tags: []string{"make", "connections", "list", "automation"}, Risk: connectionsReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"type":{"type":"string","pattern":"^[A-Za-z0-9_.-]{1,64}$"}},"additionalProperties":false}`),
@@ -208,14 +208,14 @@ func (c *Client) allowsConnection(conn connectionJSON) bool {
 	return c.scope.allowsTeam(conn.TeamID) && c.scope.allowsOrg(conn.OrganizationID)
 }
 
-// selectConnections refuses a connection with a scenario allow-list before any secret is read: Make
+// selectConnections refuses a connection with a scenario or folder allow-list before any secret is read: Make
 // connections belong to no scenario, so the narrower reading is that such a connection reaches none.
 func selectConnections(resolved *config.Resolved) error {
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return err
 	}
-	if len(bound.scenarios) > 0 {
+	if bound.restricted() {
 		return invalidRequest("Make connections are not scenario-bound; a connection with a scenario " +
 			"allow-list cannot reach them")
 	}
