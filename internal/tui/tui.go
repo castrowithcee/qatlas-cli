@@ -1935,9 +1935,10 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 	return choices
 }
 
-// toolText is how one tool reads in the picker: its ID and effect, and whether it is offered only when
-// ticked here. The same text is what the filter
-// searches.
+// toolText is how one tool reads in the picker: its ID and effect, whether it is offered only when ticked
+// here, and whether the targets set in the form do not reach it, with the reason as text. The same text is
+// what the filter searches. A tool outside the targets stays tickable: the selection is kept and the tool is
+// offered once the targets reach it.
 func (m *Model) toolText(id string) string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	for _, tool := range metadata.Tools {
@@ -1947,6 +1948,15 @@ func (m *Model) toolText(id string) string {
 		text := id + "  " + string(tool.Effect)
 		if tool.RequiresToolAllowList {
 			text += "  (listed only)"
+		}
+		if target := m.field(targetsLabel); target != nil {
+			if reached, hint := metadata.Target.Reach(id, target.entries); !reached {
+				text += "  (outside-targets"
+				if hint != "" {
+					text += ": " + hint
+				}
+				text += ")"
+			}
 		}
 		return text
 	}

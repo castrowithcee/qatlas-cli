@@ -85,6 +85,43 @@ type TargetMetadata struct {
 	// provider with a targets list can keep the old meaning of that field and refuse values the list
 	// would read differently. It may not quote the value either.
 	ValidateSingle func(string) error
+	// Reaches, when set, says whether a connection bound to targets reaches a tool, so a tool the targets
+	// cannot serve, such as one that acts on a whole account where the targets name one folder, is not
+	// offered. When it does not, needs names the forms of Kinds a binding would take to reach the tool.
+	// Without it every binding reaches every tool.
+	Reaches func(tool string, targets []string) (reached bool, needs []string)
+}
+
+// Reach reports whether a binding to targets reaches a tool and, when it does not, a hint naming the forms
+// a binding would need. The hint is built only from forms of Kinds, so it carries no target value whatever
+// the provider returns; a need that is not such a form is dropped.
+func (t TargetMetadata) Reach(tool string, targets []string) (bool, string) {
+	if t.Reaches == nil {
+		return true, ""
+	}
+	reached, needs := t.Reaches(tool, targets)
+	if reached {
+		return true, ""
+	}
+	var forms []string
+	for _, need := range needs {
+		if t.knowsForm(need) && !slices.Contains(forms, need) {
+			forms = append(forms, need)
+		}
+	}
+	if len(forms) == 0 {
+		return false, ""
+	}
+	return false, "needs " + strings.Join(forms, " or ")
+}
+
+func (t TargetMetadata) knowsForm(form string) bool {
+	for _, kind := range t.Kinds {
+		if slices.Contains(kind.Forms, form) {
+			return true
+		}
+	}
+	return false
 }
 
 // TargetKind is one kind of target, such as a repository or a project. Forms lists the accepted spellings
