@@ -306,6 +306,32 @@ organization with Projects read access, but not the projects of a user; GitHub r
 `permission`. The repositories need no scope for public ones, `repo` on a classic token for private ones, or
 access to the repositories on a fine-grained token.
 
+## Choosing targets
+
+A person chooses the targets of a connection in two levels: the owner, then its repositories or projects. Owners
+are the account behind the token (`users/LOGIN`) and the organizations it belongs to (`orgs/LOGIN`). Under an
+owner, every repository it owns (`repos/OWNER/REPO`) and every project, open or closed, is offered. The
+repository list of an owner begins with all its repositories (`repos/OWNER/*`); beside it the owner itself
+(`users/LOGIN` or `orgs/LOGIN`) can be chosen, each with its usual meaning. The
+connection's own targets neither filter nor narrow what is offered. Choosing only reads, through no tool and
+for no agent.
+
+Repositories can be searched by name at GitHub within the owner; owners and projects have no search and are
+filtered by what has been loaded. Project titles are untrusted data and are shortened and cleaned.
+
+A URL of the web interface is resolved to a target:
+
+| URL | Target |
+| --- | --- |
+| `github.com/OWNER/REPO`, also with a page below it such as `/issues/1` or `/tree/main/x` | `repos/OWNER/REPO` |
+| `github.com/orgs/LOGIN/projects/NUMBER` or `github.com/users/LOGIN/projects/NUMBER`, also with `/views/1` | the project |
+| `github.com/LOGIN` | `users/LOGIN` or `orgs/LOGIN`, after one read of the account |
+
+Pages of github.com that are no owner (`settings`, `orgs` without a project, `marketplace`, `search`, `login`
+and the like) and any other host resolve to nothing. The web host follows the connection's service:
+`github.com` for `https://api.github.com`, `SUBDOMAIN.ghe.com` for `https://api.SUBDOMAIN.ghe.com`, and for
+GitHub Enterprise Server its own host.
+
 ## Discovery: account, organization teams, and stars
 
 `github.accounts.me` reads the login, display name, account type, and billing plan of the account behind the

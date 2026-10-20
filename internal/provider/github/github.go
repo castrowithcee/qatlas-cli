@@ -535,12 +535,14 @@ func Register(reg *capability.Registry) error {
 				"a connection reaches whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "repository", Description: "one repository, or with * every repository of one owner",
-				Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"},
+				Forms:  []string{"repos/OWNER/REPO", "repos/OWNER/*"},
+				Parent: "owner",
 			}, {
 				Name: "project", Description: "one project of a user or an organization, or with * every project of " +
 					"one owner",
 				Forms: []string{"users/LOGIN/projects/NUMBER", "orgs/LOGIN/projects/NUMBER", "users/LOGIN/projects/*",
 					"orgs/LOGIN/projects/*"},
+				Parent: "owner",
 			}, {
 				Name: "owner", Description: "a user or an organization whose projects and repositories may be " +
 					"listed and in which projects may be created or copied; allows no repository or existing project " +
@@ -751,7 +753,10 @@ func Register(reg *capability.Registry) error {
 	for i := range operations {
 		operations[i].Descriptor = withGroup(withTargetArgument(operations[i].Descriptor))
 	}
-	return reg.Register(Provider, operations...)
+	if err := reg.Register(Provider, operations...); err != nil {
+		return err
+	}
+	return reg.RegisterTargetBrowser(Provider, targetBrowser())
 }
 
 func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
