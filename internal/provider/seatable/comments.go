@@ -36,7 +36,7 @@ const (
 )
 
 var commentRowArguments = []capability.Argument{
-	{Name: "table", Description: tableArgumentDescription, Target: "*"},
+	{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 	{Name: "row_id", Description: "Row identifier of 22 characters; the row must exist in the selected table", Required: true},
 }
 
