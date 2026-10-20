@@ -39,7 +39,12 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   is updated.
 - `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
-  refused before the key is read.
+  refused before the key is read and listed as not reachable.
+
+The target choice lists the objects from one page of the metadata list (`/rest/metadata/objects`, the Data
+model right, see Data model) as `object/NAME` with the label of the object; the list ignores a connection's
+targets, so the choice also offers objects outside them, and system objects are left out. The metadata API has
+no search, so the list is filtered locally. Qatlas resolves no URL to a target.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
 connection does not reach are left out. The catalog comes from the generated API document, which needs no

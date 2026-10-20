@@ -156,3 +156,36 @@ func requireWorkspaceScope(resolved *config.Resolved) error {
 	}
 	return nil
 }
+
+// workspaceTools are the tools that call requireWorkspaceScope; reaches reads this set, and a test invokes
+// every tool to keep both in line.
+var workspaceTools = map[string]bool{}
+
+func init() {
+	for _, name := range []string{"agents.get", "agents.list", "logic-functions.get", "logic-functions.list",
+		"meta-fields.create", "meta-fields.delete", "meta-fields.get", "meta-fields.update", "meta-objects.create",
+		"meta-objects.delete", "meta-objects.get", "meta-objects.list", "meta-objects.update",
+		"page-layout-tabs.create", "page-layout-tabs.delete", "page-layout-widgets.create",
+		"page-layout-widgets.delete", "page-layout-widgets.update", "page-layouts.get", "page-layouts.list",
+		"roles.create", "roles.delete", "roles.list", "roles.set-field-permissions", "roles.set-object-permissions",
+		"roles.set-permission-flags", "roles.update", "skills.get", "skills.list", "view-fields.create",
+		"view-fields.delete", "view-fields.update", "view-filters.create", "view-filters.delete",
+		"view-filters.update", "view-groups.delete", "view-groups.update", "view-sorts.create",
+		"view-sorts.delete", "view-sorts.update", "views.create", "views.delete", "views.get", "views.list",
+		"views.update", "webhooks.delete", "webhooks.get", "webhooks.list", "webhooks.update",
+		"workflow-runs.list", "workflow-runs.retry", "workflow-runs.stop", "workflow-versions.activate",
+		"workflow-versions.deactivate", "workflows.get", "workflows.list", "workspace-members.get",
+		"workspace-members.list"} {
+		workspaceTools[Provider+"."+name] = true
+	}
+}
+
+// reaches mirrors requireWorkspaceScope: a binding to objects, or one that does not parse, reaches no
+// workspace-wide tool. Without a form that spells "no targets" there is nothing a hint could name.
+func reaches(tool string, targets []string) (bool, []string) {
+	if !workspaceTools[tool] {
+		return true, nil
+	}
+	bound, err := parseScope(targets)
+	return err == nil && !bound.bound(), nil
+}
