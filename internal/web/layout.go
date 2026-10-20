@@ -27,7 +27,8 @@ var layoutFuncs = template.FuncMap{
 // layoutTemplates defines the shared page frame as two halves: "layout-top" opens the document up to the
 // content area and "layout-bottom" closes it. A page renders {{template "layout-top" (page "Title" "nav")}},
 // its own content, then {{template "layout-bottom"}}. It is meant to be parsed into every template set
-// together with layoutFuncs; it ships no script, no inline style, and no external asset.
+// together with layoutFuncs; it ships no inline script, no inline style, and no external asset; a page that wants a script links an
+// embedded one itself.
 const layoutTemplates = `
 {{define "layout-top"}}<!doctype html>
 <html lang="en">

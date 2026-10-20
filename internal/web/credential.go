@@ -130,7 +130,7 @@ func (s *Server) csrfValue() string {
 }
 
 // handleNewCredentialForm shows the new-credential form: a provider chooser, and once a provider is chosen
-// (by its own small GET form, since this page ships no script to react to a selection), the name, the
+// (by its own small GET form, since this page needs no script to react to a selection), the name, the
 // storage choice, and one row per secret role the provider defines.
 func (s *Server) handleNewCredentialForm(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
@@ -438,7 +438,7 @@ func contains(haystack []string, needle string) bool {
 }
 
 // credentialTemplates defines the "new" and "detail" pages, parsed together as one template set. Like
-// overviewTemplate they ship no script and no external asset, and their forms carry no secret value back:
+// overviewTemplate they ship no inline script and no external asset, and their forms carry no secret value back:
 // a secret field is always rendered empty.
 const credentialTemplates = `
 {{define "new"}}
@@ -657,6 +657,8 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <label for="targets">Targets</label>
 <input id="targets" type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off">
 <p class="hint">{{.TargetHint}}</p>
+{{with .Dialog}}<div id="target-dialog" class="target-dialog" hidden data-csrf="{{.CSRF}}" data-list-url="{{.ListURL}}" data-resolve-url="{{.ResolveURL}}" data-kinds="{{.Kinds}}" data-multiple="{{.Multiple}}" data-noun="{{.Noun}}"></div>
+<script src="{{.Script}}"></script>{{end}}
 </div>
 {{range $i, $l := .Labels}}<div class="field">
 <label for="label-{{$i}}">Label for {{$l.Target}}</label>
