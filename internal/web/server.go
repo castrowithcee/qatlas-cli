@@ -292,6 +292,9 @@ func (s *Server) mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
 	mux.HandleFunc("GET "+stylesheetPath, s.withSession(s.handleStylesheet))
+	mux.HandleFunc("GET "+scriptPrefix+"{name}", s.withSession(s.handleScript))
+	mux.HandleFunc("POST "+targetListPath, s.withTargetGuard(s.handleTargetList))
+	mux.HandleFunc("POST "+targetResolvePath, s.withTargetGuard(s.handleTargetResolve))
 	mux.HandleFunc("POST /admin", s.withSessionGuard(s.handleAdminAuth))
 	mux.HandleFunc("GET /credentials/new", s.withSession(s.handleNewCredentialForm))
 	mux.HandleFunc("POST /credentials/new", s.withAdminGuard(s.handleCreateCredential))
@@ -331,8 +334,9 @@ func (s *Server) withSession(next http.HandlerFunc) http.HandlerFunc {
 
 // withSecurityHeaders adds the headers every response of this server carries, whatever it answers:
 // nothing is ever cached, no referrer ever leaves for another origin, and a content security policy keeps a
-// browser from loading anything but the document itself and its own stylesheet, and from submitting
-// forms anywhere but back to it, since the page ships no external asset and no script.
+// browser from loading anything but the document itself and its own stylesheet and embedded scripts, from
+// connecting anywhere but back to it, and from submitting forms anywhere but back to it. No inline script
+// is ever allowed.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -340,7 +344,7 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		// same-origin, not no-referrer: no-referrer makes a browser send "Origin: null" on form POSTs.
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy",
-			"default-src 'none'; style-src 'self'; script-src 'none'; img-src 'none'; "+
+			"default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'none'; "+
 				"base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
@@ -539,7 +543,7 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 
 // overviewTemplate renders the secretfree overview, together with the admin status and its masked
 // passphrase form, inside the shared layout (see layoutTemplates), with no external asset, no inline style,
-// and no script, so the content security policy this server sends is never a compromise; the form's own
+// and no inline script, so the content security policy this server sends is never a compromise; the form's own
 // submission is the one thing form-action 'self' loosens.
 var overviewTemplate = strings.TrimSpace(`
 {{template "layout-top" (page "Overview" "overview")}}

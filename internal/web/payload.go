@@ -394,7 +394,7 @@ func (s *Server) forwardChangeNotice(saved manage.ReleaseSaved, connName string)
 	return ""
 }
 
-// payloadTemplates defines the payload credential page. Like the other pages it ships no script and no
+// payloadTemplates defines the payload credential page. Like the other pages it ships no inline script and no
 // external asset, and every masked input is rendered empty.
 const payloadTemplates = `
 {{define "payload"}}
