@@ -137,6 +137,18 @@ func TestProblemsAreStructured(t *testing.T) {
 			"connections.gh.description", CodeInvalidDescription, "connections.gh.description: is 201 characters", "description", -1},
 		{"active until", func(c *Config) { conn(c, "gh", func(v *Connection) { v.ActiveUntil = "tomorrow" }) },
 			"connections.gh.active_until", CodeInvalidActiveUntil, "connections.gh.active_until: expiry is neither", "active_until", -1},
+		{"label without target", func(c *Config) {
+			conn(c, "seat", func(v *Connection) { v.TargetLabels = map[string]string{"t9": "Projects"} })
+		}, "connections.seat.target_labels", CodeUnknownTargetLabel, "connections.seat.target_labels: a label names a target", "target_labels", -1},
+		{"empty label", func(c *Config) {
+			conn(c, "seat", func(v *Connection) { v.TargetLabels = map[string]string{"t1": " \t "} })
+		}, "connections.seat.target_labels", CodeEmptyTargetLabel, "connections.seat.target_labels: a target label must not be empty", "target_labels", -1},
+		{"label with line break", func(c *Config) {
+			conn(c, "seat", func(v *Connection) { v.TargetLabels = map[string]string{"t1": "a\nb"} })
+		}, "connections.seat.target_labels", CodeInvalidTargetLabel, "connections.seat.target_labels: must not contain a line break", "target_labels", -1},
+		{"label too long", func(c *Config) {
+			conn(c, "seat", func(v *Connection) { v.TargetLabels = map[string]string{"t1": long} })
+		}, "connections.seat.target_labels", CodeInvalidTargetLabel, "connections.seat.target_labels: is 201 characters", "target_labels", -1},
 		{"paths empty", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Paths = []string{} }) },
 			"connections.gh.paths", CodePathsEmpty, "connections.gh.paths: must name at least one", "paths", -1},
 		{"path", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Paths = []string{"rel"} }) },
@@ -314,7 +326,9 @@ func TestProblemParametersCarryNoFreeValue(t *testing.T) {
 	cfg.Connections["gh"] = Connection{Service: "wiki", Credential: "wikikey", Target: canary + "-target",
 		Tools: []string{canary + "-tool"}}
 	cfg.Connections["seat"] = Connection{Service: "seat", Credential: "seatkey",
-		Targets: []string{canary + "-a", canary + "-a"}}
+		Targets: []string{canary + "-a", canary + "-a"},
+		TargetLabels: map[string]string{canary + "-a": canary + strings.Repeat("a", 200), canary + "-b": canary,
+			canary + "-c": " "}}
 	cfg.Defaults.Connections = map[string]string{"git": canary + "-conn"}
 	cfg.Defaults.SecretStore = canary + "-store"
 	cfg.Vault.IdleTimeout = canary

@@ -436,3 +436,21 @@ func TestSaveConnectionSetupRefusesForeignCredential(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildConnectionCandidateKeepsTargetLabelsOfItsTargets(t *testing.T) {
+	d := reuse()
+	d.Targets = []string{"t1"}
+	d.TargetLabels = map[string]string{"t1": " Projects ", "gone": "Old"}
+	cand, err := BuildConnectionCandidate(setupConfig(t), d, StageRights)
+	if err != nil {
+		t.Fatalf("BuildConnectionCandidate() = %v", err)
+	}
+	got := cand.Config.Connections["mine"].TargetLabels
+	if len(got) != 1 || got["t1"] != "Projects" {
+		t.Errorf("labels = %v, want only the label of t1, normalized", got)
+	}
+	d.TargetLabels["t1"] = "changed"
+	if cand.Config.Connections["mine"].TargetLabels["t1"] != "Projects" {
+		t.Error("the candidate shares the draft's label map")
+	}
+}

@@ -2936,6 +2936,12 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if row := m.field(forwardLabel); row != nil {
 			forward = append(forward, row.marked()...)
 		}
+		// The form has no label rows; a copy takes the source's, and SetConnection drops those without a target.
+		labelsFrom := name
+		if m.editing == "" && m.copyFrom != "" {
+			labelsFrom = m.copyFrom
+		}
+		labels := cfg.Connections[labelsFrom].TargetLabels
 		return cfg.SetConnection(name, config.Connection{
 			Service:        m.fieldValue("service"),
 			Credential:     m.fieldValue("credential"),
@@ -2949,6 +2955,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			ForwardSecrets: forward,
 			Disabled:       m.fieldValue(stateLabel) == stateDisabled,
 			ActiveUntil:    m.activeUntilValue(),
+			TargetLabels:   labels,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))

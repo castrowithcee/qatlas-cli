@@ -69,6 +69,7 @@ func (c *Config) Clone() *Config {
 		copied.Paths = append([]string(nil), conn.Paths...)
 		copied.Files = conn.Files.Clone()
 		copied.ForwardSecrets = append([]string(nil), conn.ForwardSecrets...)
+		copied.TargetLabels = cloneStrings(conn.TargetLabels)
 		out.Connections[name] = copied
 	}
 	out.ProviderNotes = cloneStrings(c.ProviderNotes)
@@ -296,8 +297,10 @@ func (c *Config) DeleteCredential(name string) error {
 	return nil
 }
 
-// SetConnection creates or replaces a connection. The description is stored in its normalized form, so an
-// editor and a hand-written file end up with the same text.
+// SetConnection creates or replaces a connection. The description and the target labels are stored in their
+// normalized form, so an editor and a hand-written file end up with the same text, and a label whose target
+// the connection no longer has is dropped (see Connection.PruneTargetLabels). conn's own label map is not
+// changed.
 func (c *Config) SetConnection(name string, conn Connection) error {
 	if name == "" {
 		return errors.New("a connection name must not be empty")
@@ -307,6 +310,10 @@ func (c *Config) SetConnection(name string, conn Connection) error {
 		conn.ID = c.Connections[name].ID
 	}
 	conn.Description = normalizeDescription(conn.Description)
+	conn.TargetLabels = conn.PruneTargetLabels()
+	for target, label := range conn.TargetLabels {
+		conn.TargetLabels[target] = normalizeDescription(label)
+	}
 	c.Connections[name] = conn
 	return nil
 }
@@ -374,6 +381,13 @@ func (c *Config) DeleteDefault(domain string) error {
 func (c *Config) normalize() {
 	for name, conn := range c.Connections {
 		conn.Description = normalizeDescription(conn.Description)
+		if conn.TargetLabels != nil {
+			labels := make(map[string]string, len(conn.TargetLabels))
+			for target, label := range conn.TargetLabels {
+				labels[target] = normalizeDescription(label)
+			}
+			conn.TargetLabels = labels
+		}
 		c.Connections[name] = conn
 	}
 	for provider, note := range c.ProviderNotes {

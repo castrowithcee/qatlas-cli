@@ -79,6 +79,9 @@ const (
 	CodeInvalidID                    = "invalid-id"
 	CodeDuplicateID                  = "duplicate-id"
 	CodeInvalidActiveUntil           = "invalid-active-until"
+	CodeUnknownTargetLabel           = "unknown-target-label"
+	CodeEmptyTargetLabel             = "empty-target-label"
+	CodeInvalidTargetLabel           = "invalid-target-label"
 )
 
 // hints maps every code to the English advice that resolves it. The rules live here, in the core, so every
@@ -142,6 +145,9 @@ var hints = map[string]string{
 	CodeInvalidRetention:             "Use a positive number of days.",
 	CodeInvalidID:                    "Remove the identifier; a new one is assigned when the file is saved.",
 	CodeInvalidActiveUntil:           "Use a date as YYYY-MM-DD or an RFC 3339 time, or remove the limit.",
+	CodeUnknownTargetLabel:           "Remove the label, or add its target to the connection.",
+	CodeEmptyTargetLabel:             "Give the label a text, or remove it.",
+	CodeInvalidTargetLabel:           "Shorten the label to a single line within the length limit.",
 	CodeDuplicateID:                  "Remove the identifier from one of the entries; a new one is assigned when the file is saved.",
 }
 
