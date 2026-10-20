@@ -52,7 +52,8 @@ credentials:
 
 `ID` is the last path segment of the collection below its home set, for example `work` for
 `/calendars/AB12345/work/`. It is one literal segment of at most 128 bytes: no separator, no percent sign, no
-`.` or `..`, no control character. Matching is exact and case-sensitive; there are no wildcards.
+`.` or `..`, no control character. Matching is exact and case-sensitive; there are no wildcards. A connection with only `calendar/ID` targets is not offered the contact and
+address book tools, and one with only `addressbook/ID` targets not the calendar and event tools.
 
 ```yaml
 connections:
@@ -226,6 +227,14 @@ A changed entity tag (HTTP 412) is reported as a failed precondition with nothin
 once and never repeated. If its result stays open (timeout, interrupted connection, a 5xx answer, an
 unexpected status), the error says the change may have taken effect: read the contact before repeating
 anything.
+
+## Choosing targets
+
+The target picker offers two top-level kinds, `calendar` and `addressbook`, each listing the collections of that
+kind through the same discovery as the list tools. It works on a draft connection without targets and lists
+everything the credential reaches, not only the current targets. Names are untrusted data. There is no paging
+and no server-side search. URLs of the web interface are not resolved, because they carry no usable collection
+IDs.
 
 ## Discovery and path binding
 

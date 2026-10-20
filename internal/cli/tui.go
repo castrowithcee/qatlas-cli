@@ -393,6 +393,7 @@ func targetSuggester(store *config.Store, opts *Options, reg *capability.Registr
 // resolver the core hands over is the only one the read uses; without one it is this run's own.
 func targetSource(opts *Options, reg *capability.Registry) manage.TargetSource {
 	return manage.TargetSource{
+		Browses: reg.HasTargetBrowser,
 		List: func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 			req config.TargetListRequest) (config.TargetPage, error) {
 			secrets, err := targetSecrets(opts, secrets)
