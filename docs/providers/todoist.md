@@ -93,6 +93,21 @@ Structure changes follow the same boundary:
   project, and no project is created in or below one.
 - A reminder belongs to a task, which is read first and must belong to the connection.
 
+## Choosing targets
+
+A person chooses from the projects of the account, subprojects below their project with the parent chain as
+path, and then from the sections of one project. A chosen project becomes `project/PROJECT_ID`, a section
+`section/SECTION_ID`; an exact `PROJECT_ID` is entered by hand. The connection's targets do not narrow what is
+offered, and choosing only reads, through no tool and for no agent. Projects and sections are searched by name
+at Todoist, a project search at any depth; names are untrusted and are shortened and cleaned.
+
+| URL | Target |
+| --- | --- |
+| `app.todoist.com/app/project/SLUG-ID` | `project/ID` |
+| `app.todoist.com/app/task/SLUG-ID` | the task's `project/ID` and, if set, its `section/ID`, after one read of the task |
+
+The ID follows the last `-` of the last segment. Any other form or host resolves to nothing.
+
 ## Tools
 
 | Tool | Reads |

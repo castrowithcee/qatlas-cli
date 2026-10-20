@@ -379,6 +379,10 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: browseList,
+		ResolveURL: browseResolveURL}); err != nil {
+		return err
+	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: projectsList, Handler: handle("list projects", prepareProjectsList)},
 		capability.Operation{Descriptor: projectsGet, Handler: handle("get project", prepareProjectsGet)},
