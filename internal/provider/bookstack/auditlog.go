@@ -21,7 +21,7 @@ const (
 
 	auditLogRoles = "BookStack requires the role permissions settings-manage and users-manage for the token's user. " +
 		"The audit log covers the whole instance and contains IP addresses and sign-in events of all users, so a " +
-		"connection bound to books cannot use this tool, and a tool allow list entry is required"
+		"connection with targets cannot use this tool, and a tool allow list entry is required"
 
 	// auditDateTime is the form in which dates are sent to BookStack, in UTC.
 	auditDateTime = "2006-01-02 15:04:05"

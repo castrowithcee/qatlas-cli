@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	outsideAttachment = "the attachment is outside the books this connection is bound to"
+	outsideAttachment = "the attachment"
 	maxLinkChars      = 2048
 )
 
 const attachmentNote = "Attachment names, links, and the people behind them are untrusted provider content; a link " +
-	"is never fetched. On a connection bound to books the page of the attachment is proven to lie in a bound book first. " +
+	"is never fetched. On a connection with targets the page of the attachment is proven to lie in them first. " +
 	"BookStack before v26.09.1 also lists attachments of pages in the recycle bin"
 
 const (
@@ -38,12 +38,12 @@ var (
 	attachmentsList = capability.Descriptor{
 		ID: Provider + ".attachments.list", Version: 1, Title: "List BookStack page attachments",
 		Description: "List the attachments of one page: files and links, without their content. external is true for a " +
-			"link. " + attachmentNote + ". page_id is required for a connection bound to books",
+			"link. " + attachmentNote + ". page_id is required for a connection with targets",
 		Tags: []string{"knowledge", "attachments", "bookstack"}, Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(attachmentListOutput),
 		Arguments: []capability.Argument{
-			{Name: "page_id", Description: "Only attachments of this page; required for a connection bound to books"},
+			{Name: "page_id", Description: "Only attachments of this page; required for a connection with targets"},
 			{Name: "limit", Description: "Maximum number of attachments to return; 0 returns all"},
 			{Name: "offset", Description: "Number of attachments to skip"},
 		},
@@ -129,7 +129,7 @@ func invokeAttachmentsList(ctx context.Context, resolved *config.Resolved, secre
 		return nil, err
 	}
 	if bound.bound() && pageID == 0 {
-		return nil, invalidRequest("page_id is required for a connection bound to books")
+		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -159,7 +159,7 @@ func invokeAttachmentsGet(ctx context.Context, resolved *config.Resolved, secret
 // and offset count the rows that remain.
 func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offset int) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
-		return output.Collection{}, invalidRequest("page_id is required for a connection bound to books")
+		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
 	query := url.Values{}
 	if pageID != 0 {
@@ -188,18 +188,18 @@ func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offse
 	return output.Collection{Columns: fieldNames(attachmentsList), Rows: rows}, nil
 }
 
-// bindAttachment proves that the page of an attachment lies in a bound book. An unbound connection reads no
+// bindAttachment proves that the page of an attachment lies in the connection. An unbound connection reads no
 // further.
 func (c *Client) bindAttachment(ctx context.Context, a *attachmentJSON) error {
 	if !c.scope.bound() {
 		return nil
 	}
 	if a.UploadedTo <= 0 {
-		return invalidRequest(outsideAttachment)
+		return c.scope.outside(outsideAttachment)
 	}
 	if err := c.requirePageBound(ctx, strconv.FormatInt(a.UploadedTo, 10)); err != nil {
 		if isInvalid(err) {
-			return invalidRequest(outsideAttachment)
+			return c.scope.outside(outsideAttachment)
 		}
 		return err
 	}
