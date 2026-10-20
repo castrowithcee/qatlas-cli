@@ -613,3 +613,34 @@ func TestValidateConnectionIDOnInvokes(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateTargetChoiceEntries(t *testing.T) {
+	good := func(path, operation string) Fields {
+		return Fields{Path: path, Operation: operation, Connection: "wiki", Effect: "read", Result: "success"}
+	}
+	for _, path := range []string{"tui", "web"} {
+		for _, operation := range []string{TargetListOperation("space"), OperationTargetList, OperationTargetResolve} {
+			if err := good(path, operation).Validate(); err != nil {
+				t.Errorf("%s %s: Validate() = %v", path, operation, err)
+			}
+			if !IsTargetOperation(operation) || IsInvoke(Entry{Operation: operation}) {
+				t.Errorf("%s is not told apart from an invoke", operation)
+			}
+		}
+	}
+	noConnection := good("tui", OperationTargetResolve)
+	noConnection.Connection = ""
+	wrongEffect := good("web", OperationTargetResolve)
+	wrongEffect.Effect = "update"
+	for name, f := range map[string]Fields{
+		"mcp path": good("mcp", OperationTargetResolve), "cli path": good("cli", OperationTargetList),
+		"no connection": noConnection, "wrong effect": wrongEffect,
+	} {
+		if err := f.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil", name)
+		}
+	}
+	if IsTargetOperation("config.target.listing") || IsTargetOperation("bookstack.read") {
+		t.Error("IsTargetOperation accepted a name that is not a target choice")
+	}
+}

@@ -318,7 +318,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 				return err
 			}
 			store := config.NewStore(path, reg)
-			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor)
+			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor).
+				WithTargetSource(targetSource(opts, reg))
 			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), targetSuggester(store, opts, reg), secrets, opts.Redactor,
 				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
@@ -384,6 +385,29 @@ func targetSuggester(store *config.Store, opts *Options, reg *capability.Registr
 			return "", err
 		}
 		return reg.SuggestTarget(ctx, resolved, secrets, opts.Redactor)
+	}
+}
+
+// targetSource binds the management core's target choice to the registry's target browsers, the way
+// connectionTester binds the test. Surfaces reach it only through the manage.Service it is attached to.
+func targetSource(opts *Options, reg *capability.Registry) manage.TargetSource {
+	return manage.TargetSource{
+		List: func(ctx context.Context, resolved *config.Resolved,
+			req config.TargetListRequest) (config.TargetPage, error) {
+			secrets, err := opts.resolver()
+			if err != nil {
+				return config.TargetPage{}, err
+			}
+			return reg.ListTargets(ctx, resolved, secrets, opts.Redactor, req)
+		},
+		ResolveURL: func(ctx context.Context, resolved *config.Resolved, origin,
+			rawURL string) ([]config.TargetEntry, error) {
+			secrets, err := opts.resolver()
+			if err != nil {
+				return nil, err
+			}
+			return reg.ResolveTargetURL(ctx, resolved, secrets, opts.Redactor, origin, rawURL)
+		},
 	}
 }
 
