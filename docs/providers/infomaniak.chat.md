@@ -139,6 +139,23 @@ and refuses, naming no team, on an unbound, empty, or unreadable answer, so a la
 A successful `qatlas connection test` proves only that the token is accepted, not that a team or channel
 of the allow-list exists or is reachable.
 
+## Choosing targets
+
+The target picker offers two levels: `team`, then `channel` below the chosen team. It works on a draft
+connection that has no team yet, and it lists what the token reaches, not only the current targets. Teams are
+the token's teams; channels are the live, non-archived channels of the chosen team the token is a member of.
+Direct and group channels belong to no team and are not offered. Names are untrusted data. Both lists are paged
+by Qatlas from kChat's single answer; a search text on the channel level uses `channels.search`, so it finds
+public channels only, while the list also shows private ones.
+
+A channel URL `https://TEAM.kchat.infomaniak.com/TEAM/channels/NAME` on the connection's own instance is turned
+into `team/TEAM_ID` and `channel/CHANNEL_ID`: the team handle is looked up among the token's teams, the channel
+handle with `GET /api/v4/teams/{team_id}/channels/name/{name}`. Any other host, form, or a team or channel the
+token does not show gives nothing. Reading a URL costs two requests; every list read counts like any other.
+
+A connection with a channel target is not offered the tools that are refused with one: the `bots`, `emoji`,
+`roles`, and `commands` tools, `channels.create`, `direct.open`, and `group-messages.open`.
+
 ## Tools
 
 Every tool ID starts with `infomaniak.chat.`; the tool group is the first column:

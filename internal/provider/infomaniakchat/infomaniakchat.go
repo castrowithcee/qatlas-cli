@@ -195,6 +195,14 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
+	return connect(ctx, resolved, secrets, red, lim, bound)
+}
+
+// connect opens the client of an already read scope. Choosing targets passes an empty scope: its reads name
+// no team or channel of the connection and never rely on the scope.
+func connect(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
+	const op = "open"
 	origin, err := parseInstance(resolved.BaseURL)
 	if err != nil {
 		return nil, providerError(op, err.Error())
@@ -549,10 +557,12 @@ func Register(reg *capability.Registry) error {
 				Name: "channel",
 				Description: "one channel of a bound team, or one direct or group channel whose other " +
 					"participants are members of them; optional, and may be listed more than once",
-				Forms: []string{"channel/CHANNEL_ID"},
+				Forms:  []string{"channel/CHANNEL_ID"},
+				Parent: "team",
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
+			Reaches:     reaches,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
@@ -597,6 +607,9 @@ func Register(reg *capability.Registry) error {
 				channelsUpdate.ID, channelsMembersAdd.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
