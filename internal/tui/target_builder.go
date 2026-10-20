@@ -127,6 +127,9 @@ func (m *Model) refreshAdd() {
 		for i, kind := range m.targetMetadata().Kinds {
 			add(fmt.Sprintf("%s%d", addKind, i), "new "+kind.Name+", step by step: "+kind.Description)
 		}
+		for _, kind := range m.pickRoots() {
+			add(addPick+kind, "choose a "+kind+" from the provider's list")
+		}
 		typed := "type a target"
 		if query != "" {
 			typed = `use as typed: "` + query + `"`
@@ -435,6 +438,9 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 		}
 	case "enter":
 		if choice, ok := a.choices.selected(); ok {
+			if kind, isPick := strings.CutPrefix(choice, addPick); isPick && a.kind < 0 {
+				return m.startPick(kind)
+			}
 			m.pickAdd(choice)
 		}
 	case "up":

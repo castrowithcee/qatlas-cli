@@ -318,6 +318,12 @@ func (r *Registry) RegisterTargetBrowser(providerID string, browser TargetBrowse
 	return nil
 }
 
+// HasTargetBrowser reports whether the provider registered a target browser.
+func (r *Registry) HasTargetBrowser(providerID string) bool {
+	_, ok := r.browsers[providerID]
+	return ok
+}
+
 // ListTargets reads one page of targets from the provider of the connection, with its secrets resolved for
 // that connection alone. It returns config.ErrTargetBrowseUnsupported for a provider without a browser.
 func (r *Registry) ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
