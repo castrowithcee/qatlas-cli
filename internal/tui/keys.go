@@ -19,7 +19,7 @@ func (m *Model) typing() bool {
 			return !f.readOnly
 		}
 	case screenTargets:
-		return m.targetEdit >= 0 || m.targetAdd != nil || m.labelEdit
+		return m.targetEdit >= 0 || m.targetAdd != nil || m.targetPick != nil || m.labelEdit
 	case screenPaths:
 		return m.pathEdit >= 0
 	case screenTemplate:
@@ -44,6 +44,9 @@ func (m *Model) helpReachable() bool {
 	case screenProviders:
 		return m.providers.list.query() == ""
 	case screenTargets:
+		if m.targetPick != nil {
+			return m.targetPick.top().list.query() == ""
+		}
 		if m.targetAdd != nil {
 			return m.targetAdd.choices.query() == ""
 		}

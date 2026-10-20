@@ -127,9 +127,17 @@ func (m *Model) refreshAdd() {
 		for i, kind := range m.targetMetadata().Kinds {
 			add(fmt.Sprintf("%s%d", addKind, i), "new "+kind.Name+", step by step: "+kind.Description)
 		}
+		for _, kind := range m.pickRoots() {
+			add(addPick+kind, "choose a "+kind+" from the provider's list")
+		}
 		typed := "type a target"
 		if query != "" {
 			typed = `use as typed: "` + query + `"`
+		}
+		if looksLikeURL(query) {
+			if _, _, ok := m.pickSubject(); ok {
+				typed = `look up the address at the provider: "` + query + `"`
+			}
 		}
 		if query != "" && exact == "" {
 			rows = append([]string{addTyped}, rows...)
@@ -435,6 +443,14 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 		}
 	case "enter":
 		if choice, ok := a.choices.selected(); ok {
+			if kind, isPick := strings.CutPrefix(choice, addPick); isPick && a.kind < 0 {
+				return m.startPick(kind)
+			}
+			if choice == addTyped && a.kind < 0 && looksLikeURL(a.choices.query()) {
+				if cmd, ok := m.startResolve(strings.TrimSpace(a.choices.query())); ok {
+					return cmd
+				}
+			}
 			m.pickAdd(choice)
 		}
 	case "up":
