@@ -88,7 +88,8 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				return err
 			}
 
-			svc := manage.New(store, secrets, connlog.SurfaceWeb, opts.Redactor)
+			svc := manage.New(store, secrets, connlog.SurfaceWeb, opts.Redactor).
+				WithTargetSource(targetSource(opts, registry))
 			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout(),
 				svc, secrets, opts.Redactor, web.Tester(connectionTester(store, opts, registry)))
 			if err != nil {

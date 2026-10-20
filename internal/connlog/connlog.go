@@ -232,3 +232,29 @@ func Changes(before, after *config.Config) []config.ConnectionChange {
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Name < changes[j].Name })
 	return changes
 }
+
+// RecordTargetChoice appends the entry of one read of a connection's provider to choose targets: operation
+// is invokelog.TargetListOperation(kind) or invokelog.OperationTargetResolve, result "success" or the code of
+// the failure. It carries the surface and the connection only, never a target, a name, or a search text. A
+// failure is returned the way Record returns one; it never changes what the read returned.
+func (r *Recorder) RecordTargetChoice(operation, connection, connectionID, result string) error {
+	if r == nil || r.Writer == nil {
+		return nil
+	}
+	fields := invokelog.Fields{
+		Path: r.Surface, Operation: operation, Connection: connection, ConnectionID: connectionID,
+		Effect: "read", Result: result,
+	}
+	if err := fields.Validate(); err != nil {
+		return errors.New("the target choice could not be logged: " + err.Error())
+	}
+	err := r.Writer.Append(fields)
+	var unsigned *invokelog.UnsignedError
+	switch {
+	case errors.As(err, &unsigned):
+		return fmt.Errorf("the target choice was logged, but unsigned: %w", err)
+	case err != nil:
+		return fmt.Errorf("the target choice could not be logged: %w", err)
+	}
+	return nil
+}

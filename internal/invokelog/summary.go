@@ -32,7 +32,7 @@ func EstimateTokens(n int64) int64 { return n * 2 / 7 }
 // approval, or an mcp baseline or navigation exchange.
 func IsInvoke(e Entry) bool {
 	_, reserved := mcpOperations[e.Operation]
-	return e.Kind == "" && e.Operation != "" && !managementOperations[e.Operation] && !reserved
+	return e.Kind == "" && e.Operation != "" && !managementOperations[e.Operation] && !IsTargetOperation(e.Operation) && !reserved
 }
 
 // Area is the part of an MCP session's context cost an entry belongs to.

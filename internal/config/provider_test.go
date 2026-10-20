@@ -486,3 +486,50 @@ defaults: {}
 		t.Errorf("targets list = %v", err)
 	}
 }
+
+func TestValidateKindParents(t *testing.T) {
+	kinds := func(parents ...string) TargetMetadata {
+		var t TargetMetadata
+		for i, parent := range parents {
+			t.Kinds = append(t.Kinds, TargetKind{Name: string(rune('a' + i)), Forms: []string{"x/ID"}, Parent: parent})
+		}
+		return t
+	}
+	for name, tc := range map[string]struct {
+		target TargetMetadata
+		ok     bool
+	}{
+		"levels":       {kinds("", "a", "b"), true},
+		"no parents":   {kinds("", ""), true},
+		"unknown":      {kinds("", "zz"), false},
+		"self":         {kinds("a"), false},
+		"cycle":        {kinds("b", "a"), false},
+		"longer cycle": {kinds("c", "a", "b"), false},
+	} {
+		if err := tc.target.ValidateKindParents(); (err == nil) != tc.ok {
+			t.Errorf("%s: ValidateKindParents() = %v, want ok %v", name, err, tc.ok)
+		}
+	}
+}
+
+func TestValidTarget(t *testing.T) {
+	target := TargetMetadata{
+		Kinds: []TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "bot"}}},
+		Validate: func(v string) error {
+			if strings.Contains(v, "bad") {
+				return errors.New("bad")
+			}
+			return nil
+		},
+	}
+	for value, want := range map[string]bool{
+		"repos/o/r": true, "bot": true, "repos/o/*": false, "repos/o": false, "": false, "repos/bad/r": false,
+	} {
+		if got := target.ValidTarget("repo", value); got != want {
+			t.Errorf("ValidTarget(%q) = %v, want %v", value, got, want)
+		}
+	}
+	if target.ValidTarget("other", "bot") {
+		t.Error("ValidTarget accepted an unknown kind")
+	}
+}
