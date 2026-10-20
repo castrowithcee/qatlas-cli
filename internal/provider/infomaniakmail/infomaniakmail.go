@@ -146,11 +146,17 @@ type Client struct {
 
 // Open resolves the mailbox password of one selected connection and returns a client for its scope.
 func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	const op = "open"
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return nil, err
 	}
+	return newClient(ctx, bound, resolved, secrets, red)
+}
+
+// newClient resolves the mailbox password of resolved for the login of bound.mailbox.
+func newClient(ctx context.Context, bound scope, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor) (*Client, error) {
+	const op = "open"
 	if secrets == nil {
 		return nil, providerError(op, "no credential resolver was configured")
 	}
@@ -410,7 +416,8 @@ func Register(reg *capability.Registry) error {
 				Description: "the one mailbox this connection logs in to; required, exactly one",
 				Forms:       []string{"mailbox/ADDRESS"},
 			}, {
-				Name: "folder",
+				Name:   "folder",
+				Parent: "mailbox",
 				Description: "one folder of the mailbox, by its exact name, or with folder/NAME/* that folder and " +
 					"its subfolders; optional, repeatable; no other wildcards",
 				Forms: []string{"folder/NAME", "folder/NAME/*"},
@@ -447,7 +454,7 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider,
+	if err := reg.Register(Provider,
 		capability.Operation{Descriptor: foldersList, Handler: capability.Handler(invokeFoldersList)},
 		capability.Operation{Descriptor: messagesList, Handler: capability.Handler(invokeMessagesList)},
 		capability.Operation{Descriptor: messagesGet, Handler: capability.Handler(invokeMessagesGet)},
@@ -461,7 +468,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: draftsDelete, Handler: capability.Handler(invokeDraftsDelete)},
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: draftsSend, Handler: capability.Handler(invokeDraftsSend)},
-	)
+	); err != nil {
+		return err
+	}
+	return reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL})
 }
 
 var mailReadRisk = func(sensitivity string) capability.Risk {
