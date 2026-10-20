@@ -105,6 +105,27 @@ then fails the check closed instead of guessing, and the refusal says so.
 
 `workflows.create` applies the same boundary to a workflow that does not exist yet, see below.
 
+## Choosing targets
+
+A person chooses the targets of a connection level by level: the projects of the instance, then the workflows of
+a project. Projects page by n8n's own cursor; workflows are listed with the server filters `projectId` and
+`name`, so they can be searched at n8n. The connection's own targets neither filter nor narrow what is offered.
+Choosing only reads, through no tool and for no agent. Names are untrusted data and are shortened.
+
+A workflow is offered only below a project. On an instance without the Projects feature no project can be
+listed, so such a workflow is chosen by its ID or by a pasted URL. The chosen targets keep their meaning:
+`project` and `workflow` stay independent allow-lists.
+
+A URL of the instance's own editor, below its base URL including a path prefix, names a target without a
+request: `/workflow/WORKFLOW_ID` a workflow, `/projects/PROJECT_ID/...` a project. A URL of another origin
+names nothing.
+
+Which tools a binding reaches follows what the call refuses. Any project or workflow target reaches no
+instance-wide tool (`n8n.tags.*`, `n8n.users.*`, `n8n.audit.generate`, `n8n.source-control.*`) and no
+`n8n.projects.create`; no target form reaches them. A workflow target reaches no credential, variable, data
+table, column, row or project-member tool, no `n8n.projects.update` or `.delete` and no `n8n.workflows.create`;
+a project target alone reaches them.
+
 ## Tools
 
 | Tool | Effect | Does |
