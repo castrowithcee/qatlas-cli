@@ -128,7 +128,7 @@ var credentialRequestsCreate = capability.Descriptor{
 		"passes through Qatlas and none is accepted. The person is an existing Make user of the bound team " +
 		"(provider_user_id, verified live against the team first); no new user is ever invited. The answer carries the request link, which is a " +
 		"way to enter secrets and is returned only here, never by get or list; hand it only to that person. " +
-		"A repeated call creates a second request. Refused on a connection with a scenario allow-list. " +
+		"A repeated call creates a second request. Refused on a connection with a scenario or folder allow-list. " +
 		"Needs the credential-requests:write and user:read scopes",
 	Tags: []string{"make", "credentialrequests", "create", "automation"}, Risk: credentialRequestChangeRisk(
 		capability.EffectCreate, capability.IdempotencyNonIdempotent), Provider: Provider,
@@ -165,7 +165,7 @@ var credentialRequestsCreate = capability.Descriptor{
 var credentialRequestsList = capability.Descriptor{
 	ID: Provider + ".credential-requests.list", Version: 1, Title: "List Make credential requests",
 	Description: "List the credential requests of the bound team by allow-listed metadata, never a link, " +
-		"secret, or email address. Refused on a connection with a scenario allow-list. Needs the " +
+		"secret, or email address. Refused on a connection with a scenario or folder allow-list. Needs the " +
 		"credential-requests:read scope",
 	Tags: []string{"make", "credentialrequests", "list", "automation"}, Risk: credentialRequestsReadRisk,
 	Provider: Provider,
@@ -286,14 +286,14 @@ func credentialRequestsQuery(query url.Values) url.Values {
 	return query
 }
 
-// selectCredentialRequests refuses a connection with a scenario allow-list before any secret is read:
+// selectCredentialRequests refuses a connection with a scenario or folder allow-list before any secret is read:
 // credential requests belong to no scenario, so the narrower reading is that such a connection reaches none.
 func selectCredentialRequests(resolved *config.Resolved) error {
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return err
 	}
-	if len(bound.scenarios) > 0 {
+	if bound.restricted() {
 		return invalidRequest("Make credential requests are not scenario-bound; a connection with a scenario " +
 			"allow-list cannot reach them")
 	}

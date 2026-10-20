@@ -2,6 +2,7 @@ package makeapi
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -9,16 +10,18 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
-// The three target kinds a connection may combine. Team mode: exactly one team, at most one organization,
-// and zero or more scenarios. Organization mode: no team, exactly one organization, and no scenario (the
-// narrower reading, since a scenario belongs to a team). Exactly one of the two modes applies. Every value
-// is a plain positive integer, the form every Make identifier this provider reads takes (scenarioId, teamId,
+// The four target kinds a connection may combine. Team mode: exactly one team, at most one organization,
+// and zero or more scenarios and folders (together one allow-list: the union of the listed scenarios and the
+// scenarios in a listed folder or any folder below it). Organization mode: no team, exactly one organization,
+// and no scenario (the narrower reading, since a scenario belongs to a team). Exactly one of the two modes
+// applies. Every value is a plain positive integer, the form every Make identifier this provider reads takes (scenarioId, teamId,
 // organizationId are all documented as integers), so a target is never a free-form string that could be
 // mistaken for a path or a URL.
 const (
 	teamPrefix         = "team/"
 	organizationPrefix = "organization/"
 	scenarioPrefix     = "scenario/"
+	folderPrefix       = "folder/"
 	// maxTargetIDDigits bounds a configured or argument identifier well above any realistic Make id, so a
 	// malformed value fails fast instead of overflowing.
 	maxTargetIDDigits = 18
@@ -26,29 +29,37 @@ const (
 
 // scope is the team, organization, and scenario boundary of one connection: exactly one bound team, an
 // optional bound organization, and either every scenario of that team (an empty allow-list) or only the
-// scenarios explicitly listed.
+// scenarios explicitly listed or filed in a listed folder or any folder below it.
 type scope struct {
 	teamID    int64
 	orgID     int64 // 0 means no organization target was configured
 	scenarios []int64
+	folders   []int64
 }
 
 // organizationMode reports whether the connection is bound to an organization instead of a team.
 func (s scope) organizationMode() bool { return s.teamID == 0 }
 
-// allowsScenario reports whether a scenario belongs to this connection's local scenario boundary. It says
-// nothing about the scenario's team; that is always checked separately, live, against Make's own report,
-// see (*Client).verifyScenarioScope.
-func (s scope) allowsScenario(scenarioID int64) bool {
-	if len(s.scenarios) == 0 {
-		return true
-	}
-	for _, allowed := range s.scenarios {
-		if allowed == scenarioID {
-			return true
-		}
-	}
-	return false
+// restricted reports whether a scenario or folder allow-list narrows the bound team.
+func (s scope) restricted() bool { return len(s.scenarios) > 0 || len(s.folders) > 0 }
+
+// listsScenario reports whether the scenario is named by a scenario target.
+func (s scope) listsScenario(scenarioID int64) bool { return slices.Contains(s.scenarios, scenarioID) }
+
+// mayAllowScenario is the local, request-free check of a scenario_id argument. A folder target cannot be
+// judged without the scenario's own folder, so with one configured the decision falls to
+// (*Client).verifyScenarioScope after the scenario was read.
+func (s scope) mayAllowScenario(scenarioID int64) bool {
+	return !s.restricted() || len(s.folders) > 0 || s.listsScenario(scenarioID)
+}
+
+// allowsScenario is the request-free part of the scenario boundary: no allow-list, a listed scenario, or a
+// scenario filed directly in a listed folder. A scenario deeper below a listed folder needs the folder tree,
+// see (*Client).scenarioInScope. It says nothing about the scenario's team; that is always checked
+// separately, live, against Make's own report, see (*Client).verifyScenarioScope.
+func (s scope) allowsScenario(scenario scenarioJSON) bool {
+	return !s.restricted() || s.listsScenario(scenario.ID) ||
+		(scenario.FolderID != 0 && slices.Contains(s.folders, scenario.FolderID))
 }
 
 // allowsTeam reports whether a reported team ID matches the one team this connection is bound to.
@@ -65,13 +76,13 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 }
 
 // parseScope reads the configured targets of one connection: either exactly one team/TEAM_ID, at most one
-// organization/ORG_ID, and zero or more scenario/SCENARIO_ID entries (team mode), or no team and exactly one
-// organization/ORG_ID (organization mode), none named twice within its own kind.
+// organization/ORG_ID, and zero or more scenario/SCENARIO_ID and folder/FOLDER_ID entries (team mode), or no
+// team and exactly one organization/ORG_ID (organization mode), none named twice within its own kind.
 // No error ever quotes a configured value.
 func parseScope(values []string) (scope, error) {
 	var bound scope
 	teamSet, orgSet := false, false
-	seenScenarios := map[int64]bool{}
+	seenScenarios, seenFolders := map[int64]bool{}, map[int64]bool{}
 	for _, raw := range values {
 		kind, id, err := parseTarget(strings.TrimSpace(raw))
 		if err != nil {
@@ -94,6 +105,12 @@ func parseScope(values []string) (scope, error) {
 			}
 			seenScenarios[id] = true
 			bound.scenarios = append(bound.scenarios, id)
+		case "folder":
+			if seenFolders[id] {
+				return scope{}, errors.New("the Make folder target list names a folder more than once")
+			}
+			seenFolders[id] = true
+			bound.folders = append(bound.folders, id)
 		}
 	}
 	if !teamSet {
@@ -103,6 +120,9 @@ func parseScope(values []string) (scope, error) {
 		}
 		if len(bound.scenarios) > 0 {
 			return scope{}, errors.New("a Make connection bound to an organization cannot target scenarios")
+		}
+		if len(bound.folders) > 0 {
+			return scope{}, errors.New("a Make connection bound to an organization cannot target folders")
 		}
 	}
 	return bound, nil
@@ -115,7 +135,8 @@ func validateTarget(raw string) error {
 	return err
 }
 
-// parseTarget reads one configured target as team/TEAM_ID, organization/ORG_ID, or scenario/SCENARIO_ID.
+// parseTarget reads one configured target as team/TEAM_ID, organization/ORG_ID, scenario/SCENARIO_ID, or
+// folder/FOLDER_ID.
 func parseTarget(raw string) (kind string, id int64, err error) {
 	switch {
 	case strings.HasPrefix(raw, teamPrefix):
@@ -124,8 +145,11 @@ func parseTarget(raw string) (kind string, id int64, err error) {
 		kind, raw = "organization", strings.TrimPrefix(raw, organizationPrefix)
 	case strings.HasPrefix(raw, scenarioPrefix):
 		kind, raw = "scenario", strings.TrimPrefix(raw, scenarioPrefix)
+	case strings.HasPrefix(raw, folderPrefix):
+		kind, raw = "folder", strings.TrimPrefix(raw, folderPrefix)
 	default:
-		return "", 0, errors.New("a Make target must be team/TEAM_ID, organization/ORG_ID, or scenario/SCENARIO_ID")
+		return "", 0, errors.New("a Make target must be team/TEAM_ID, organization/ORG_ID, scenario/SCENARIO_ID, " +
+			"or folder/FOLDER_ID")
 	}
 	if !validPositiveID(raw) {
 		return "", 0, errors.New("a Make target ID must be a positive integer")
@@ -188,7 +212,8 @@ func anyScope(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// selectScenario checks a scenario_id argument against the connection's local scenario allow-list before
+// selectScenario checks a scenario_id argument against the connection's local scenario allow-list (a folder
+// target is checked once the scenario was read, see mayAllowScenario) before
 // any secret is resolved and before any request is sent. A scenario outside a configured allow-list is
 // refused as an invalid request, never as a provider failure, because the connection's own configuration
 // decided against it. Whether the scenario also belongs to the bound team is checked separately, live, see
@@ -201,8 +226,58 @@ func selectScenario(resolved *config.Resolved, scenarioID int64) error {
 	if scenarioID <= 0 {
 		return invalidRequest("scenario_id must be a positive integer")
 	}
-	if !bound.allowsScenario(scenarioID) {
+	if !bound.mayAllowScenario(scenarioID) {
 		return invalidRequest("scenario_id is outside the targets of this connection")
 	}
 	return nil
+}
+
+// orgTool reports whether a tool acts on the bound organization and so needs organization mode; every other
+// tool of this provider acts on the bound team.
+func orgTool(tool string) bool {
+	switch tool {
+	case organizationUpdate.ID, organizationMembers.ID, organizationSubscription.ID, organizationUsage.ID,
+		organizationPayments.ID:
+		return true
+	}
+	return strings.HasPrefix(tool, Provider+".teams.") || strings.HasPrefix(tool, Provider+".organization-variables.")
+}
+
+// unscopedTool reports whether a tool acts on team-wide objects that belong to no scenario or folder, which
+// the call refuses on a connection with a scenario or folder allow-list; scenarios.create cannot be on such
+// a list yet. Hooks name a scenario but no folder and so are refused only with a folder target.
+func unscopedTool(tool string) bool {
+	if tool == scenariosCreate.ID {
+		return true
+	}
+	for _, prefix := range []string{"connections.", "connection-access.", "credential-requests.", "data-structures.",
+		"data-stores.", "data-store-records.", "team-variables."} {
+		if strings.HasPrefix(tool, Provider+"."+prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// reaches says whether a binding reaches a tool, mirroring what the call itself refuses. A binding that
+// does not parse reaches everything; configuration validation reports it.
+func reaches(tool string, targets []string) (bool, []string) {
+	bound, err := parseScope(targets)
+	if err != nil {
+		return true, nil
+	}
+	switch {
+	case bound.organizationMode():
+		if !orgTool(tool) {
+			return false, []string{"team/TEAM_ID"}
+		}
+	case orgTool(tool):
+		return false, []string{"organization/ORG_ID"}
+	case bound.restricted() && unscopedTool(tool):
+		return false, []string{"team/TEAM_ID"}
+	case len(bound.folders) > 0 &&
+		(strings.HasPrefix(tool, Provider+".hooks.") || strings.HasPrefix(tool, Provider+".hook-queue.")):
+		return false, []string{"team/TEAM_ID"}
+	}
+	return true, nil
 }

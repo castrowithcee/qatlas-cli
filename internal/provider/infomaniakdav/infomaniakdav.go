@@ -87,6 +87,11 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
+	return openWith(ctx, resolved, secrets, red, bound)
+}
+
+func openWith(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, bound scope) (*Client, error) {
+	const op = "open"
 	if secrets == nil {
 		return nil, providerError(op, "no credential resolver was configured")
 	}
@@ -281,6 +286,7 @@ func Register(reg *capability.Registry) error {
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
+			Reaches:     reaches,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read calendars, address books, events, and contacts", Recommended: true,
@@ -302,6 +308,9 @@ func Register(reg *capability.Registry) error {
 				contactsGet.ID, contactsCreate.ID, contactsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
