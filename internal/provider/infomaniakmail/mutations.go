@@ -332,6 +332,9 @@ func withSuffix(op string, err error, suffix string) error {
 // message. Nothing here changes a flag: the folder is selected without a changing command and the message
 // is read through ENVELOPE and BODYSTRUCTURE only.
 func (c *Client) openForChange(conn *session, op string, ref messageRef) error {
+	if err := conn.folderOK(op, ref.folder); err != nil {
+		return err
+	}
 	selected, err := conn.client.Select(ref.folder, nil).Wait()
 	if err != nil {
 		return failure(op, err)
@@ -396,6 +399,9 @@ func (c *Client) MoveMessage(ctx context.Context, ref messageRef, destination st
 	if !conn.client.Caps().Has(imap.CapMove) {
 		return nil, unsupported(op, "MOVE")
 	}
+	if err := conn.folderOK(op, destination); err != nil {
+		return nil, err
+	}
 	if err := c.openForChange(conn, op, ref); err != nil {
 		return nil, err
 	}
@@ -442,19 +448,22 @@ func (c *Client) specialFolder(conn *session, op string, attr imap.MailboxAttr, 
 	if err != nil {
 		return "", failure(op, err)
 	}
-	found := map[string]bool{}
+	found := map[string]string{} // name -> the hierarchy delimiter of that LIST answer
 	for _, data := range listed {
 		for _, a := range data.Attrs {
 			if a == attr {
-				found[normalizeFolder(data.Mailbox)] = true
+				found[normalizeFolder(data.Mailbox)] = string(data.Delim)
 			}
 		}
 	}
 	if len(found) != 1 {
 		return "", refusal
 	}
-	for name := range found {
-		if validFolderName(name) && c.scope.allowsFolder(name) {
+	for name, delim := range found {
+		if validFolderName(name) && c.scope.allowsFolderDelim(name, delim) {
+			if !conn.delimKnown {
+				conn.delimKnown, conn.delim = true, delim
+			}
 			return name, nil
 		}
 	}
