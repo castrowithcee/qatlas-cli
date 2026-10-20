@@ -21,7 +21,8 @@ import (
 // Config.SetCredential, Config.SetConnection, Config.Validate): this package adds no second provider or
 // permission policy of its own, only HTML pages over the same checks.
 //
-// The journey is two GET pages, without a script: a provider chooser, and a build page that carries every
+// The journey is two GET pages that work without a script (the build page's target chooser is an optional
+// enhancement of its Targets field): a provider chooser, and a build page that carries every
 // later choice (service, credential, scope, access) as ordinary visible or hidden fields. The
 // build page's own form leads, by an ordinary GET, to a review page that shows what would be saved,
 // secretfree, and, only for a new credential, the fields to type its secrets: exactly there, and nowhere
@@ -165,7 +166,7 @@ func buildConnectionCandidate(cfg *config.Config, f connectionForm) (manage.Conn
 
 // splitTargetInput reads the build page's single, comma-separated targets field into the target/targets
 // list the core stores (see manage.SplitTargets). A comma-separated field, not the TUI's own
-// add-one-at-a-time list, is this page's own simplification for a form that ships no script to grow a list
+// add-one-at-a-time list, is this page's own simplification for a form that works without a script to grow a list
 // with.
 func splitTargetInput(raw string) []string {
 	var values []string
@@ -271,11 +272,14 @@ type connectionBuildData struct {
 	Effects               []optionRow
 	Tools                 []toolOption
 	Labels                []labelRow
-	StorageHint           string
-	ForwardChoices        []optionRow
-	ForwardText           string
-	BindingNote           string
-	Error                 string
+	// Dialog is set only for a provider whose targets can be listed; the page then carries the data the
+	// script's chooser needs and nothing else of it.
+	Dialog         *targetDialogData
+	StorageHint    string
+	ForwardChoices []optionRow
+	ForwardText    string
+	BindingNote    string
+	Error          string
 }
 
 // toolOption is one row of the tool checklist: its ID, the effect it needs permission for, and whether this
@@ -392,6 +396,9 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		Labels:      targetLabelRows(f),
 		StorageHint: storageHintText,
 		Error:       errText,
+	}
+	if s.svc != nil && s.svc.CanBrowseTargets(f.Provider) {
+		data.Dialog = newTargetDialogData(metadata.Target, s.csrfValue())
 	}
 	if choices := manage.ForwardChoices(cfg); len(choices) > 0 {
 		data.ForwardChoices = checkedOptions(choices, f.Forward)

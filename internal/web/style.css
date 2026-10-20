@@ -281,3 +281,6 @@ td input[type="password"] { min-width: 12rem; }
   white-space: nowrap;
   border: 0;
 }
+
+[hidden] { display: none !important; }
+.target-panel { margin: var(--space-3) 0; }
