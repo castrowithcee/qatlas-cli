@@ -149,8 +149,8 @@ func selectTeamForWebhookChange(resolved *config.Resolved, raw string) (string, 
 	if err != nil {
 		return "", err
 	}
-	if len(bound.projects) > 0 {
-		return "", invalidRequest("a connection with a project allow-list cannot change webhooks, which belong to the whole team")
+	if bound.narrowed() {
+		return "", invalidRequest("a connection with a project or file allow-list cannot change webhooks, which belong to the whole team")
 	}
 	return id, nil
 }
@@ -227,6 +227,9 @@ func invokeWebhooksList(ctx context.Context, resolved *config.Resolved, secrets 
 	}
 	teamID, err := selectTeam(resolved, input.TeamID)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseFileOnly(resolved, "list webhooks"); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

@@ -1,12 +1,12 @@
 ---
 description: >
-  Describes the Penpot provider (beta): the access token and the Penpot Cloud or self-hosted base URL, the team and
-  project targets, the read tools, the tools that manage projects and files, the comment tools that read and change, the media, export, and import tools, the webhook tools, the team and member tools, the bounds, errors, and the RPC forms it
+  Describes the Penpot provider (beta): the access token and the Penpot Cloud or self-hosted base URL, the team,
+  project, and file targets, the choice of targets, the read tools, the tools that manage projects and files, the comment tools that read and change, the media, export, and import tools, the webhook tools, the team and member tools, the bounds, errors, and the RPC forms it
   relies on.
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-10-04
+updated: 2026-10-20
 ---
 
 # Penpot
@@ -44,7 +44,10 @@ credentials:
 ## Scope
 
 A connection lists one or more teams as `team/TEAM_ID` targets (required) and, optionally, projects of those teams as
-`project/PROJECT_ID` entries. IDs are UUIDs. Without a project entry, every project of the bound teams is reachable.
+`project/PROJECT_ID` entries and single files as `file/FILE_ID` entries. IDs are UUIDs. Without a project or file entry,
+every project of the bound teams is reachable. Projects and files together are one allow-list within the bound teams:
+a listed project is reachable as a whole, a listed file only itself (and what belongs to the file: pages, comments,
+snapshots, libraries). A listed file does not open its project.
 
 ```yaml
 connections:
@@ -57,11 +60,14 @@ connections:
 ```
 
 - `team_id` (projects.list) must be one of the bound teams, and a `project_id` must be in the project allow-list when
-  there is one. Both are checked before the credential is resolved and before any request is sent; the refusal does
-  not name the ID.
+  there is one; for a tool that acts on a file, a listed `file_id` passes in place of its project. Both are checked
+  before the credential is resolved and before any request is sent; the refusal does not name the ID.
 - A project without an allow-list match is not enough on its own: before a project's files are listed or read, the
   projects of the bound teams are read (one `get-projects` request per team, until the project appears). A project
   outside them is refused as outside the targets.
+- A connection bound to files only (no project entry) does not reach tools that act on a team or a project as a whole;
+  they are shown as not reached and refused at the call, and the target form they need is named. A file outside the
+  allow-list is refused before the credential is resolved, without a request to it.
 - A file is bound through its project: `files.get` takes `project_id` and `file_id`, reads the project's file list,
   and refuses a `file_id` that is not in it, before the summary or page is requested. The comment tools bind the file
   the same way before anything else is read.
@@ -71,6 +77,17 @@ connections:
   another file or thread are dropped.
 - `teams.list` and `projects.list` show only the bound teams and allowed projects. A project that reports another
   team and a file that reports another project are dropped.
+
+## Choosing targets
+
+The picker offers three levels: `team`, `project` below a team, and `file` below a project. It lists what the token
+reaches, not only the current targets, and works on a draft connection without targets. Penpot's commands are not
+paged, so each level is one bounded list without server-side search; names are untrusted data.
+
+A URL of the connection's Penpot origin is turned into targets from the ids in its hash route: a
+`#/dashboard/files?team-id=...&project-id=...` or the legacy `#/dashboard/team/TEAM_ID/projects/PROJECT_ID` gives
+`team` and `project`, a `#/workspace?team-id=...&file-id=...` gives `team` and `file`. A URL of another origin or
+without a usable id gives nothing; reading a URL sends no request.
 
 ## Tools
 
@@ -133,7 +150,7 @@ characters (Penpot's own limit), are not blank, and carry no control characters;
 IDs.
 
 - `projects.create` takes `team_id` and `name` and answers `project_id` and `team_id`. The team must be a bound team.
-  **A connection with a project allow-list refuses it**, because a new project could not be inside that list.
+  **A connection with a project or file allow-list refuses it**, because a new project could not be inside that list.
 - `projects.rename` takes `project_id` and `name`; `projects.delete` takes `project_id`. The project must pass the
   allow-list and lie in a bound team (proved with `get-projects`). Penpot marks a deleted project and removes it and its
   files after its deletion delay, and refuses the default project of a team. A project that is in the allow-list may be
@@ -282,7 +299,7 @@ remain, so no tool creates a webhook, changes a webhook's target URL, or invites
 - `webhooks.delete` takes `team_id` and `webhook_id`.
 
 A webhook ID is bound before an update or delete: it must appear in `get-webhooks` of the given bound team, else it is refused without naming it. **Webhooks
-belong to the whole team, so a connection with a project allow-list refuses update and delete**; listing is
+belong to the whole team, so a connection with a project or file allow-list refuses update and delete**; listing is
 still allowed.
 
 Every change asks for `confirm`, sends exactly one request, and is never repeated. After a timeout, a connection
@@ -308,11 +325,11 @@ team that `teams.create` makes is outside every connection until you add `team/I
 - `teams.delete` takes `team_id`. Penpot marks the team and its projects and files as deleted and removes them after
   the deletion delay; only the owner may delete, and the default team is refused.
 
-Team and member changes affect the whole team, so **a connection with a project allow-list refuses all of
-them, and `teams.create`**; `members.list` is still allowed. Every change asks for `confirm`, sends exactly one request,
-and is never repeated. After a timeout, a connection reset, a 5xx answer, or (for `teams.create`)
-an unreadable answer, the error says that the change may have taken effect; list the members or teams
-before trying again. Emails are never part of an error message.
+Team and member changes affect the whole team, so **a connection with a project or file allow-list refuses all of
+them, and `teams.create`**; `members.list` is still allowed unless the connection is bound to files only. Every
+change asks for `confirm`, sends exactly one request, and is never repeated. After a timeout, a connection reset, a
+5xx answer, or (for `teams.create`) an unreadable answer, the error says that the change may have taken effect; list
+the members or teams before trying again. Emails are never part of an error message.
 
 ## Bounds
 

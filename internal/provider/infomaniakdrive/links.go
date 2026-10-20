@@ -277,7 +277,7 @@ func invokeLinksGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(linkFileReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if limit == 0 {
 		limit = defaultListLimit
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +366,7 @@ func invokeLinksDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(linkFileReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

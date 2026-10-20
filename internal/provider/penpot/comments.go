@@ -284,7 +284,7 @@ func prepare(op string, resolved *config.Resolved, raw json.RawMessage) (comment
 		return input, ids, providerError(op, "the validated arguments could not be read")
 	}
 	var err error
-	if ids.project, err = selectProject(resolved, input.ProjectID); err != nil {
+	if ids.project, err = selectProjectForFile(resolved, "project_id", input.ProjectID, input.FileID); err != nil {
 		return input, ids, err
 	}
 	for _, field := range []struct {

@@ -11,14 +11,18 @@ import (
 const (
 	teamPrefix    = "team/"
 	projectPrefix = "project/"
+	filePrefix    = "file/"
 	maxTeams      = 20
 	maxProjects   = 200
+	maxFiles      = 200
 )
 
-// scope is the boundary of one connection: its teams, and optionally the projects it is narrowed to.
+// scope is the boundary of one connection: its teams, and optionally the projects and single files it is
+// narrowed to. Projects and files together form one allow-list within the teams.
 type scope struct {
 	teams    []string
 	projects []string
+	files    []string
 }
 
 func contains(list []string, id string) bool {
@@ -32,9 +36,22 @@ func contains(list []string, id string) bool {
 
 func (s scope) allowsTeam(id string) bool { return contains(s.teams, id) }
 
-// allowsProject is the local project check: every project when the allow-list is empty. Whether the project
-// belongs to a bound team is established separately, with a request.
-func (s scope) allowsProject(id string) bool { return len(s.projects) == 0 || contains(s.projects, id) }
+// narrowed reports whether the connection has an allow-list of projects or files.
+func (s scope) narrowed() bool { return len(s.projects) > 0 || len(s.files) > 0 }
+
+// fileOnly reports an allow-list of files without any project.
+func (s scope) fileOnly() bool { return len(s.projects) == 0 && len(s.files) > 0 }
+
+// allowsProject is the local project check: every project when there is no allow-list, otherwise only the
+// listed projects; a listed file does not open its project. Whether the project belongs to a bound team is
+// established separately, with a request.
+func (s scope) allowsProject(id string) bool { return !s.narrowed() || contains(s.projects, id) }
+
+// allowsFile is the local file check: the file of an allowed project, or a listed file. Whether the file lies
+// in the project is established separately, with a request.
+func (s scope) allowsFile(projectID, fileID string) bool {
+	return s.allowsProject(projectID) || contains(s.files, fileID)
+}
 
 // parseUUID accepts the 36-character hexadecimal form and returns it in lower case.
 func parseUUID(raw string) (string, bool) {
@@ -57,14 +74,16 @@ func parseUUID(raw string) (string, bool) {
 	return raw, true
 }
 
-// parseTarget reads one team/TEAM_ID or project/PROJECT_ID entry.
+// parseTarget reads one team/TEAM_ID, project/PROJECT_ID, or file/FILE_ID entry.
 func parseTarget(raw string) (kind, id string, err error) {
-	const form = "a Penpot target must be team/TEAM_ID or project/PROJECT_ID with a UUID"
+	const form = "a Penpot target must be team/TEAM_ID, project/PROJECT_ID, or file/FILE_ID with a UUID"
 	switch {
 	case strings.HasPrefix(raw, teamPrefix):
 		kind, raw = "team", strings.TrimPrefix(raw, teamPrefix)
 	case strings.HasPrefix(raw, projectPrefix):
 		kind, raw = "project", strings.TrimPrefix(raw, projectPrefix)
+	case strings.HasPrefix(raw, filePrefix):
+		kind, raw = "file", strings.TrimPrefix(raw, filePrefix)
 	default:
 		return "", "", errors.New(form)
 	}
@@ -75,7 +94,7 @@ func parseTarget(raw string) (kind, id string, err error) {
 	return kind, id, nil
 }
 
-// parseScope reads the configured targets: at least one team, any number of projects, none named twice.
+// parseScope reads the configured targets: at least one team, any number of projects and files, none named twice.
 // No error quotes a configured value.
 func parseScope(values []string) (scope, error) {
 	var bound scope
@@ -86,8 +105,11 @@ func parseScope(values []string) (scope, error) {
 		}
 		list := &bound.teams
 		limit := maxTeams
-		if kind == "project" {
+		switch kind {
+		case "project":
 			list, limit = &bound.projects, maxProjects
+		case "file":
+			list, limit = &bound.files, maxFiles
 		}
 		if contains(*list, id) {
 			return scope{}, errors.New("the Penpot targets name a " + kind + " more than once")
@@ -145,7 +167,8 @@ func selectTeam(resolved *config.Resolved, raw string) (string, error) {
 
 // selectProject checks a project_id argument against the connection's project allow-list, when it has one,
 // before any secret is resolved and before any request is sent. Whether the project lies in a bound team is
-// checked afterwards with a request (see (*Client).locateProject).
+// checked afterwards with a request (see (*Client).locateProject). A listed file does not open its project:
+// tools that act on a project itself use this check.
 func selectProject(resolved *config.Resolved, raw string) (string, error) {
 	return selectProjectAs(resolved, "project_id", raw)
 }
@@ -166,6 +189,24 @@ func selectProjectAs(resolved *config.Resolved, field, raw string) (string, erro
 	return id, nil
 }
 
+// selectProjectForFile is selectProject for a tool that acts on one file of the project: besides an allowed
+// project, a listed file passes. The file argument is only read here; its form is checked by the caller.
+func selectProjectForFile(resolved *config.Resolved, projectField, projectRaw, fileRaw string) (string, error) {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return "", err
+	}
+	projectID, ok := parseUUID(projectRaw)
+	if !ok {
+		return "", invalidRequest(projectField + " must be a UUID")
+	}
+	fileID, _ := parseUUID(fileRaw)
+	if !bound.allowsProject(projectID) && !(fileID != "" && contains(bound.files, fileID)) {
+		return "", invalidRequest(projectField + " is outside the targets of this connection")
+	}
+	return projectID, nil
+}
+
 // selectTeamForNewProject is selectTeam for a new project: a connection narrowed by a project allow-list
 // refuses it, since the new project could not lie inside that list. The refusal comes before any secret.
 func selectTeamForNewProject(resolved *config.Resolved, raw string) (string, error) {
@@ -177,8 +218,21 @@ func selectTeamForNewProject(resolved *config.Resolved, raw string) (string, err
 	if err != nil {
 		return "", err
 	}
-	if len(bound.projects) > 0 {
-		return "", invalidRequest("a connection with a project allow-list cannot create projects")
+	if bound.narrowed() {
+		return "", invalidRequest("a connection with a project or file allow-list cannot create projects")
 	}
 	return id, nil
+}
+
+// refuseFileOnly refuses a team-level read to a connection that is bound to single files only: such a
+// binding names no project, so nothing at team level is part of it. The refusal comes before any secret.
+func refuseFileOnly(resolved *config.Resolved, what string) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
+	if bound.fileOnly() {
+		return invalidRequest("a connection bound to files only cannot " + what + ", which is not part of a file")
+	}
+	return nil
 }

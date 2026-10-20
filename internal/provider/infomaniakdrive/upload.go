@@ -233,6 +233,13 @@ func invokeFilesUpload(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := client.verifyDriveAccount(ctx, op, input.DriveID); err != nil {
 		return nil, err
 	}
+	destination := input.DirectoryID
+	if plan.replace() {
+		destination = plan.fileID
+	}
+	if err := client.proveObjects(ctx, op, input.DriveID, destination); err != nil {
+		return nil, err
+	}
 	if session {
 		return client.uploadSession(ctx, op, plan)
 	}
