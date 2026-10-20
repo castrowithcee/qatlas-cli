@@ -580,3 +580,17 @@ func TestNestedKindHoldsEntriesOfItsOwnKind(t *testing.T) {
 		t.Errorf("a nested kind is no parent cycle: %v", err)
 	}
 }
+
+func TestFitsFormTakesSeveralSegmentsForAMiddlePath(t *testing.T) {
+	for target, want := range map[string]bool{
+		"folder/a/*": true, "folder/a/b/*": true, "folder/*": false, "folder/a": false, "folder/a/*/*": false,
+		"folder//*": false, "file/a/*": false,
+	} {
+		if got := FitsForm(strings.Split(target, "/"), []string{"folder", "PATH", "*"}); got != want {
+			t.Errorf("FitsForm(%q, folder/PATH/*) = %v, want %v", target, got, want)
+		}
+	}
+	if FitsForm([]string{"folder", "a", "*"}, []string{"folder", "PATH"}) {
+		t.Error("folder/PATH must not fit a target with a trailing wildcard")
+	}
+}

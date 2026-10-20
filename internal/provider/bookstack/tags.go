@@ -36,7 +36,7 @@ var (
 	tagsList = capability.Descriptor{
 		ID: Provider + ".tags.list", Version: 1, Title: "List BookStack tag names",
 		Description: "List the tag names used on visible content with the number of distinct values and usages. Tags " +
-			"aggregate over the whole instance, so a connection bound to books cannot use this tool",
+			"aggregate over the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},"name_contains":{"type":"string","minLength":1,"maxLength":255}},"additionalProperties":false}`),
@@ -56,7 +56,7 @@ var (
 	tagsValues = capability.Descriptor{
 		ID: Provider + ".tags.values", Version: 1, Title: "List values of a BookStack tag",
 		Description: "List the values used with one tag name on visible content with their usages. Tags aggregate over " +
-			"the whole instance, so a connection bound to books cannot use this tool",
+			"the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"value_contains":{"type":"string","minLength":1,"maxLength":255},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"required":["name"],"additionalProperties":false}`),
@@ -77,7 +77,7 @@ var (
 	systemGet = capability.Descriptor{
 		ID: Provider + ".system.get", Version: 1, Title: "Get BookStack instance information",
 		Description: "Read the version, application name, instance identifier, and base URL of the BookStack instance. " +
-			"It returns no content, so it also works on a connection bound to books",
+			"It returns no content, so it also works on a connection with targets",
 		Tags: []string{"administration", "system", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
