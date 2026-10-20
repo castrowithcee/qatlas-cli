@@ -3,6 +3,8 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -336,6 +338,20 @@ func pageValue(page []field, label string) string {
 // check it. The configuration it starts from was loaded, so every problem the core reports is one of the
 // steps.
 func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan, error) {
+	draft, stage, plan := m.setupDraft(upto)
+	built, err := manage.BuildConnectionCandidate(m.cfg, draft, stage)
+	if err == nil {
+		err = built.MissingSecret(plan.secrets)
+	}
+	if err != nil {
+		return manage.ConnectionCandidate{}, plan, setupProblem(err)
+	}
+	return built, plan, nil
+}
+
+// setupDraft is what the steps up to upto decided, as the draft the core builds its candidate from and
+// reads targets for, with the stage it reaches and the plan beside it.
+func (m *Model) setupDraft(upto int) (manage.ConnectionDraft, manage.ConnectionStage, setupPlan) {
 	w := m.wizard
 	var plan setupPlan
 	draft := manage.ConnectionDraft{Provider: w.provider}
@@ -404,19 +420,30 @@ func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan,
 				}
 			}
 		}
+		// Labels the target row holds come from the provider's list; a label the template carries for the
+		// same target stays. Only targets that were chosen keep a label.
+		for target, label := range targetLabelsOf(page) {
+			if slices.Contains(draft.Targets, target) {
+				if draft.TargetLabels == nil {
+					draft.TargetLabels = map[string]string{}
+				}
+				draft.TargetLabels[target] = label
+			}
+		}
 		if w.template != "" {
-			draft.Paths, draft.Files, draft.TargetLabels = m.setupTemplateExtras()
+			var templateLabels map[string]string
+			draft.Paths, draft.Files, templateLabels = m.setupTemplateExtras()
+			if draft.TargetLabels == nil {
+				draft.TargetLabels = map[string]string{}
+			}
+			maps.Copy(draft.TargetLabels, templateLabels)
+			if len(draft.TargetLabels) == 0 {
+				draft.TargetLabels = nil
+			}
 		}
 	}
 
-	built, err := manage.BuildConnectionCandidate(m.cfg, draft, stage)
-	if err == nil {
-		err = built.MissingSecret(plan.secrets)
-	}
-	if err != nil {
-		return manage.ConnectionCandidate{}, plan, setupProblem(err)
-	}
-	return built, plan, nil
+	return draft, stage, plan
 }
 
 // setupProblem words a problem of the core in the terms of the setup's rows.

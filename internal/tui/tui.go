@@ -579,6 +579,11 @@ type Model struct {
 	suggested     map[string]string
 	cancelSuggest context.CancelFunc
 
+	// targetPick is the picker of the targets a provider lists while it is open over the add menu; pickSeq
+	// numbers its reads. See targetpick.go.
+	targetPick *targetPick
+	pickSeq    int
+
 	// wizard is the guided setup while it runs, and nil otherwise.
 	wizard *setup
 
@@ -713,6 +718,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case suggestDoneMsg:
 		m.finishSuggest(msg)
 		return m, nil
+	case pickLoadedMsg:
+		return m, m.pickLoaded(msg)
+	case pickSearchMsg:
+		return m, m.pickSearch(msg)
 	case sourcesMsg:
 		return m, m.handleSources(msg)
 	case placedMsg:
@@ -1424,6 +1433,8 @@ func (m *Model) discard() tea.Cmd {
 	switch m.leaveFrom {
 	case screenTargets:
 		switch {
+		case m.targetPick != nil:
+			m.closePick()
 		case m.targetAdd != nil:
 			m.targetAdd = nil
 		case m.targetEdit >= 0:
@@ -2463,6 +2474,7 @@ func (m *Model) quit() tea.Cmd {
 	if m.cancelSuggest != nil {
 		m.cancelSuggest()
 	}
+	m.closePick()
 	m.quitting = true
 	return tea.Quit
 }
@@ -3752,6 +3764,8 @@ func (m *Model) leaveSubject() string {
 			return ""
 		}
 		switch {
+		case m.targetPick != nil:
+			return "the marked entries were not taken"
 		case m.targetAdd != nil && m.targetAdd.kind >= 0:
 			return "the new target is not finished"
 		case m.targetAdd != nil || m.targetEdit >= 0:
@@ -4131,6 +4145,10 @@ func (m *Model) keepScrollPosition() {
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
 	case screenTargets:
+		if m.targetPick != nil {
+			m.targetPick.top().list.offset, _ = m.pickWindow()
+			return
+		}
 		if m.targetAdd != nil {
 			m.targetAdd.choices.offset, _ = m.addWindow()
 			return

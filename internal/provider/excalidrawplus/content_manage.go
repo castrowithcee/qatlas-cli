@@ -481,11 +481,8 @@ func prepareContent(resolved *config.Resolved, raw json.RawMessage, op string, p
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	if err := selectScene(resolved, input.SceneID); err != nil {
 		return nil, err
-	}
-	if !validID(input.SceneID) {
-		return nil, invalidRequest("scene_id is not a valid identifier")
 	}
 	limit := maxReplaceElements
 	if patch {

@@ -241,7 +241,7 @@ func invokeRunsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	return client.ListRuns(ctx, input.ScenarioID, input.Offset, limit, input.Status, input.FromMS, input.ToMS)
@@ -308,7 +308,7 @@ func invokeRunsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	return client.GetRun(ctx, input.ScenarioID, input.ExecutionID)
@@ -452,7 +452,7 @@ func invokeScenariosRun(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	return client.RunScenario(ctx, input.ScenarioID, input.Data, input.Responsive)

@@ -34,6 +34,8 @@ const (
 	foreignOrg      int64 = 502
 	ownScenario     int64 = 10
 	foreignScenario int64 = 20
+	ownFolder       int64 = 300
+	foreignFolder   int64 = 400
 	foreignCanary         = "foreign-body-canary-9f3c"
 )
 
@@ -140,6 +142,10 @@ func coreConfig() *config.Config {
 				Tools: []string{Provider + ".organization-variables.delete"}, Target: "organization/" + itoa64(ownOrg)},
 			"orgdelete": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Tools: []string{Provider + ".teams.delete"}, Target: "organization/" + itoa64(ownOrg)},
+			"folder": {Service: "make", Credential: "make-reader", Effects: allEffects,
+				Targets: []string{"team/" + itoa64(ownTeam), "folder/" + itoa64(ownFolder)}},
+			"folderscenario": {Service: "make", Credential: "make-reader", Effects: allEffects,
+				Targets: []string{"team/" + itoa64(ownTeam), "folder/" + itoa64(ownFolder), "scenario/" + itoa64(foreignScenario)}},
 			"scenario": {Service: "make", Credential: "make-reader", Effects: allEffects,
 				Targets: []string{"team/" + itoa64(ownTeam), "scenario/" + itoa64(ownScenario)}},
 		},
@@ -204,7 +210,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Make" || len(metadata.SecretRoles) != 1 ||
 		metadata.SecretRoles[0].Name != roleAPIToken || !metadata.Target.Required ||
-		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
+		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 4 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	if len(metadata.Tools) != 70 {
@@ -239,6 +245,12 @@ func TestTargetValidation(t *testing.T) {
 		{"organization mode", []string{"organization/2"}, false},
 		{"organization mode, two organizations", []string{"organization/2", "organization/3"}, true},
 		{"scenario only", []string{"scenario/3"}, true},
+		{"team and folder", []string{"team/1", "folder/5"}, false},
+		{"team, folders, and scenarios", []string{"team/1", "folder/5", "folder/6", "scenario/3"}, false},
+		{"duplicate folder", []string{"team/1", "folder/5", "folder/5"}, true},
+		{"organization mode with folder", []string{"organization/2", "folder/5"}, true},
+		{"folder only", []string{"folder/5"}, true},
+		{"folder zero", []string{"team/1", "folder/0"}, true},
 		{"malformed kind", []string{"project/1"}, true},
 		{"free-form value", []string{"1"}, true},
 		{"leading zero", []string{"team/01"}, true},

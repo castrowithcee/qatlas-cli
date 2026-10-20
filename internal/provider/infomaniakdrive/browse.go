@@ -31,6 +31,9 @@ func openUnbound(ctx context.Context, resolved *config.Resolved, secrets *secret
 // token's request budget like any other. Neither level filters by the connection's current targets.
 func ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	req config.TargetListRequest) (config.TargetPage, error) {
+	if req.Kind == "files" {
+		return listFileTargets(ctx, resolved, secrets, red, req)
+	}
 	page := 1
 	if req.Cursor != "" {
 		if !validPositiveID(req.Cursor) {
@@ -58,6 +61,62 @@ func ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret
 		return client.listDriveTargets(ctx, parent, page)
 	}
 	return client.listAccountTargets(ctx, page)
+}
+
+// fileTargetsPerPage is the page size of one folder read while choosing a file or folder.
+const fileTargetsPerPage = 50
+
+// maxFileCursorLength bounds the opaque folder cursor taken from a request before it is sent on.
+const maxFileCursorLength = 1024
+
+// listFileTargets reads one page of the folders and files directly inside the drive's root (parent
+// drive/DRIVE_ID) or inside one folder (parent drive/DRIVE_ID/files/FILE_ID). The cursor is Infomaniak's own
+// folder cursor. The path of an entry is the folder's own path, read once per page below a folder.
+func listFileTargets(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	req config.TargetListRequest) (config.TargetPage, error) {
+	const badParent = "the parent of a file or folder must be drive/DRIVE_ID or drive/DRIVE_ID/files/FILE_ID"
+	parent, err := parseAnyTarget(strings.TrimSpace(req.Parent))
+	if err != nil || (parent.kind != "drive" && parent.kind != "files") {
+		return config.TargetPage{}, invalidRequest(badParent)
+	}
+	folderID := int64(rootFileID)
+	if parent.kind == "files" {
+		folderID = parent.fileID
+	}
+	if len(req.Cursor) > maxFileCursorLength || strings.ContainsFunc(req.Cursor, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return config.TargetPage{}, invalidRequest("the target cursor is not a page of this provider")
+	}
+	client, err := openUnbound(ctx, resolved, secrets, red)
+	if err != nil {
+		return config.TargetPage{}, err
+	}
+	place := "/"
+	if folderID != rootFileID {
+		item, err := client.readWithParents(ctx, "list file targets", parent.id, folderID)
+		if err != nil {
+			return config.TargetPage{}, err
+		}
+		place = folderPath(folderID, item)
+	}
+	folder, err := client.ListFolder(ctx, parent.id, folderID, req.Cursor, fileTargetsPerPage)
+	if err != nil {
+		return config.TargetPage{}, err
+	}
+	entries := make([]config.TargetEntry, 0, len(folder.Entries))
+	for _, e := range folder.Entries {
+		if e.ID <= 0 {
+			continue
+		}
+		entries = append(entries, config.TargetEntry{
+			Target: drivePrefix + strconv.FormatInt(parent.id, 10) + "/files/" + strconv.FormatInt(e.ID, 10),
+			Name:   e.Name, Kind: "files", Path: place, HasChildren: e.Type == "folder",
+		})
+	}
+	page := config.TargetPage{Entries: entries}
+	if folder.HasMore {
+		page.Next = folder.Cursor
+	}
+	return page, nil
 }
 
 // nextCursor is the page after the one read, empty on the last page.
@@ -141,7 +200,8 @@ func (c *Client) listAccountTargets(ctx context.Context, page int) (config.Targe
 
 // ResolveTargetURL reads the drive, and on a K Suite URL the account before it, from a URL of the web
 // interface. It never sends a request, so a person's URL names no more than the IDs it holds, and the name
-// of an entry is its ID. Files and folders in the URL are ignored.
+// of an entry is its ID. A file or folder in the URL (…/files/FILE_ID, or the file of …/files/FOLDER_ID/preview/…)
+// is added when its form is unambiguous.
 func ResolveTargetURL(_ context.Context, _ *config.Resolved, _ *secret.Resolver, _ *redact.Redactor,
 	_, rawURL string) ([]config.TargetEntry, error) {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
@@ -168,9 +228,77 @@ func ResolveTargetURL(_ context.Context, _ *config.Resolved, _ *secret.Resolver,
 				}
 			}
 		}
-		return append(entries, config.TargetEntry{
+		entries = append(entries, config.TargetEntry{
 			Target: drivePrefix + segments[i+1], Name: segments[i+1], Kind: "drive",
-		}), nil
+		})
+		if file := fileOfURL(segments[i+2:]); file != "" {
+			entries = append(entries, config.TargetEntry{
+				Target: drivePrefix + segments[i+1] + "/files/" + file, Name: file, Kind: "files",
+			})
+		}
+		return entries, nil
 	}
 	return nil, nil
+}
+
+// fileOfURL reads the file or folder from the path after the drive: files/ID names it, and
+// files/FOLDER/preview/…/FILE names the previewed file when exactly one numeric segment follows preview.
+// Anything else names none.
+func fileOfURL(rest []string) string {
+	if len(rest) < 2 || rest[0] != "files" || !validPositiveID(rest[1]) {
+		return ""
+	}
+	if len(rest) == 2 || (len(rest) == 3 && rest[2] == "") {
+		return rest[1]
+	}
+	if rest[2] != "preview" {
+		return ""
+	}
+	file := ""
+	for _, segment := range rest[3:] {
+		if segment == "" {
+			continue
+		}
+		if !validPositiveID(segment) {
+			if segment[0] >= '0' && segment[0] <= '9' {
+				return ""
+			}
+			continue
+		}
+		if file != "" {
+			return ""
+		}
+		file = segment
+	}
+	return file
+}
+
+// maxPathLength bounds the path of an entry.
+const maxPathLength = 1024
+
+// folderPath builds /Name/Name from the names of a folder read with its parents, root left out. The order of
+// the parents is not relied on: the chain is followed through parent_id from the folder up to the root. A
+// chain that does not reach the root, or loops, gives no path.
+func folderPath(folderID int64, item *fileJSON) string {
+	if item.ID != folderID || item.Parents == nil {
+		return ""
+	}
+	byID := make(map[int64]parentJSON, len(*item.Parents))
+	for _, p := range *item.Parents {
+		byID[p.ID] = p
+	}
+	names := []string{boundedText(item.Name, maxPathLength)}
+	for cur := item.ParentID; cur != rootFileID; {
+		p, ok := byID[cur]
+		if !ok || len(names) > len(byID) {
+			return ""
+		}
+		names = append(names, boundedText(p.Name, maxPathLength))
+		cur = p.ParentID
+	}
+	var path strings.Builder
+	for i := len(names) - 1; i >= 0; i-- {
+		path.WriteString("/" + names[i])
+	}
+	return boundedText(path.String(), maxPathLength)
 }

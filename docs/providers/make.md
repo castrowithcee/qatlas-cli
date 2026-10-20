@@ -1,7 +1,7 @@
 ---
 description: >
   Describes the Make provider: zone and API token setup, the required team target plus the optional
-  organization and scenario allow-lists and the live scenario-team check, the scenario and blueprint
+  organization, folder, and scenario allow-lists and the live scenario-team check, the scenario and blueprint
   reads, the run (Make's own "logs") reads and their offset pagination, the bounded best-effort run error,
   the confirmed scenario create/update/start/stop/run tools and their contracts, and the scope and plan
   boundaries of a Make API token, and the argument-free reads of the bound team, its usage and members,
@@ -86,11 +86,12 @@ A connection binds one zone, through its base URL and API token, and:
 | --- | --- |
 | `team/TEAM_ID` | the one Make team this connection may reach; team mode: required, exactly one |
 | `organization/ORG_ID` | team mode: the organization the bound team belongs to, optional, at most one; organization mode: required, exactly one |
+| `folder/FOLDER_ID` | the scenarios in one folder of the bound team and in all folders below it; optional, repeatable; team mode only |
 | `scenario/SCENARIO_ID` | one scenario of the bound team; optional, repeatable; team mode only |
 
 A connection has exactly one of two modes. **Team mode** (the default described here): exactly one `team/TEAM_ID`,
-an optional `organization/ORG_ID`, and optional scenarios. **Organization mode**: no team and exactly one
-`organization/ORG_ID`; scenario targets are refused (the narrower reading, since a scenario belongs to a team).
+an optional `organization/ORG_ID`, and optional folders and scenarios. **Organization mode**: no team and exactly one
+`organization/ORG_ID`; scenario and folder targets are refused (the narrower reading, since both belong to a team).
 Configuration errors never quote a configured value. In organization mode every team tool (all tools except
 `make.teams.*`, including `make.team.*` and `make.organization.get`) is refused as an invalid request ("needs a
 team connection") before a secret is read or a request is sent; in team mode the `make.teams.*` tools are
@@ -109,8 +110,15 @@ Team is **required**, unlike the optional allow-lists the n8n and Infomaniak pro
 limits this provider to one team; it does not replace Make's own API scopes, user team membership, or any
 locked-connection access list that the organization has enabled and configured.
 
+Folder and scenario targets form one allow-list, their union; without either, the whole team is reachable.
 A `scenario_id` argument outside a configured scenario allow-list is refused locally, as an invalid request,
-before any request is sent. A scenario's team membership is checked live, against Make's own answer, never
+before any request is sent; with a folder target the decision falls to the scenario read below, which proves
+the folder from the `folderId` Make reports for the scenario. A listed folder needs no further request; for
+any other folder, one read of the team's folder tree per call (`GET /scenarios-folders`) proves whether it lies
+below a listed folder, and `make.scenarios.list` filters its rows the same way. A scenario outside every listed
+folder and its subfolders, or in none, is refused without naming its folder. `make.scenarios.update` moves a
+scenario that is in scope only through its folders solely into a listed folder or one below it, and never
+clears its folder. A scenario's team membership is checked live, against Make's own answer, never
 against local configuration alone: every tool that names a scenario_id directly (`make.scenarios.get`,
 `make.scenarios.blueprint`, `make.scenarios.update`, `make.scenarios.start`, `make.scenarios.stop`,
 `make.scenarios.run`, `make.runs.list`, and `make.runs.get`) reads the named scenario from Make first and
@@ -126,18 +134,37 @@ organization tools check it against the bound team's own answer as well.
 
 `make.scenarios.create` cannot name a scenario_id at all: it always creates in the connection's own bound
 team, never a caller-supplied one, and it is refused outright on a connection restricted by a scenario
-allow-list, since a scenario that does not exist yet can never already be on that list.
+or folder allow-list, since a scenario that does not exist yet can never already be on that list.
 `make.scenarios.create`, `make.scenarios.update`, `make.scenarios.start`, and `make.scenarios.stop` all
 re-read the scenario after their one changing request and re-apply the bound team and scenario allow-list to
 it; a mismatch is reported as a `provider-error`, not an invalid request, because the change has already
 happened and this provider has no delete tool to undo it. `make.scenarios.run` is never followed by a
 re-read: its own answer carries no scope of its own to re-verify (see "Runs and their errors" below).
 
+## Choosing targets
+
+A person chooses the targets of a connection level by level: organization, the teams of an organization, then
+the folders of a team and its scenarios. The scenario list of a team holds all its scenarios, in a folder or
+not, so a scenario outside any folder stays selectable; its folder is shown as its place. Organizations and
+teams page by offset (`pg[offset]`, `pg[limit]`); the folder list of a team comes in one answer with all
+subfolders, since Make documents no paging for it. Scenarios can be searched by name at Make; the other levels are
+filtered by what has been loaded. The connection's own targets neither filter nor narrow what is offered.
+Choosing only reads, through no tool and for no agent. Names are untrusted data and are shortened.
+
+No URL of Make's web interface is resolved: neither Make's API documentation nor its help pages document the
+routes for team, scenario or folder, so a pasted URL names no target.
+
+Which tools a binding reaches follows what the call refuses. A team binding reaches no organization tool
+(`make.teams.*`, `make.organization-variables.*`, `make.organization.update`, `.members`, `.subscription`,
+`.usage`, `.payments`); an organization binding reaches nothing else. A scenario or folder allow-list reaches
+no `make.scenarios.create`, connection, credential request, data store, data structure or team variable tool;
+a folder target also reaches no hook or hook queue tool.
+
 ## Tools
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `make.scenarios.list` | read | none | lists the scenarios of the bound team, filtered to the scenario allow-list, page by page |
+| `make.scenarios.list` | read | none | lists the scenarios of the bound team, filtered to the scenario and folder allow-list, page by page |
 | `make.scenarios.get` | read | none | reads one scenario, with its team membership confirmed live |
 | `make.scenarios.blueprint` | read | none | reads one scenario's blueprint (modules, wiring, configuration) |
 | `make.scenarios.create` | create | required | creates one scenario in the bound team from a blueprint and scheduling |
@@ -383,7 +410,7 @@ team as `teamId`. Every tool that names a `hook_id` validates it locally (positi
 from Make first, and refuses it as an invalid request, without naming its real team, when its `teamId` is not
 the bound team, before any ping, log, or URL request is sent. On a connection with a scenario allow-list the
 hook tools are narrower than the scenario tools: only hooks assigned to a listed scenario are listed or
-reachable, and an unassigned hook is not.
+reachable, and an unassigned hook is not. A hook names no folder, so a folder target reaches no hook.
 
 The trigger URL, a mailhook address, the hook's `udid`, and `ping.address` are trigger secrets: anyone who
 knows them can start the scenario. `list`, `get`, `ping`, and `logs` omit them and mask any part of them inside
