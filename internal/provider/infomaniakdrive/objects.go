@@ -21,7 +21,9 @@ const outsideSubtree = "the file or folder is outside the targets of this connec
 
 // parentJSON is one folder above an object.
 type parentJSON struct {
-	ID int64 `json:"id"`
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	ParentID int64  `json:"parent_id"`
 }
 
 // readWithParents reads one object together with all folders above it, once.

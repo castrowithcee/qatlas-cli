@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -152,16 +153,33 @@ func TestResolveTargetURL(t *testing.T) {
 	drv := func(id string) config.TargetEntry {
 		return config.TargetEntry{Target: "drive/" + id, Name: id, Kind: "drive"}
 	}
+	fil := func(drive, id string) config.TargetEntry {
+		return config.TargetEntry{Target: "drive/" + drive + "/files/" + id, Name: id, Kind: "files"}
+	}
 	cases := []struct {
 		name, url string
 		want      []config.TargetEntry
 	}{
 		{"kdrive", "https://kdrive.infomaniak.com/app/drive/5001/files", []config.TargetEntry{drv("5001")}},
 		{"kdrive ignores an account number", "https://kdrive.infomaniak.com/1001/app/drive/5001", []config.TargetEntry{drv("5001")}},
-		{"ksuite with account", "https://ksuite.infomaniak.com/1001/kdrive/app/drive/5001/files/42",
+		{"ksuite with account", "https://ksuite.infomaniak.com/1001/kdrive/app/drive/5001/files",
 			[]config.TargetEntry{acc("1001"), drv("5001")}},
+		{"ksuite files url", "https://ksuite.infomaniak.com/1001/kdrive/app/drive/5001/files/42",
+			[]config.TargetEntry{acc("1001"), drv("5001"), fil("5001", "42")}},
+		{"files url", "https://kdrive.infomaniak.com/app/drive/5001/files/42/", []config.TargetEntry{drv("5001"), fil("5001", "42")}},
+		{"broken file id", "https://kdrive.infomaniak.com/app/drive/5001/files/abc", []config.TargetEntry{drv("5001")}},
+		{"zero padded file id", "https://kdrive.infomaniak.com/app/drive/5001/files/042", []config.TargetEntry{drv("5001")}},
+		{"extra segment after file", "https://kdrive.infomaniak.com/app/drive/5001/files/42/x", []config.TargetEntry{drv("5001")}},
+		{"preview url gives the file", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/pdf/8",
+			[]config.TargetEntry{drv("5001"), fil("5001", "8")}},
+		{"preview without type", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/8",
+			[]config.TargetEntry{drv("5001"), fil("5001", "8")}},
+		{"preview with two numbers", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/9/8", []config.TargetEntry{drv("5001")}},
+		{"preview with broken number", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/8x", []config.TargetEntry{drv("5001")}},
+		{"preview without file", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview", []config.TargetEntry{drv("5001")}},
+		{"preview with broken folder", "https://kdrive.infomaniak.com/app/drive/5001/files/x/preview/8", []config.TargetEntry{drv("5001")}},
+		{"foreign host files url", "https://example.invalid/app/drive/5001/files/42", nil},
 		{"ksuite without account", "https://ksuite.infomaniak.com/kdrive/app/drive/5001", []config.TargetEntry{drv("5001")}},
-		{"file url gives the drive", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/8", []config.TargetEntry{drv("5001")}},
 		{"upper case host", "https://KDRIVE.infomaniak.com/app/drive/5001", []config.TargetEntry{drv("5001")}},
 		{"foreign host", "https://example.invalid/app/drive/5001", nil},
 		{"api host", "https://api.infomaniak.com/2/drive/5001", nil},
@@ -185,5 +203,91 @@ func TestResolveTargetURL(t *testing.T) {
 	}
 	if len(calls) != 0 {
 		t.Fatalf("URL resolution sent %d requests", len(calls))
+	}
+}
+
+func TestFileTargetsUnderDriveAndFolder(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/3/drive/5001/files/1/files":
+			return jsonResponse(200, `{"result":"success","data":[`+
+				fileJSONOf(30, 1, "Reports", "dir")+`,`+fileJSONOf(31, 1, "a.pdf", "file")+`],"cursor":"c2","has_more":true}`), nil
+		case "/3/drive/5001/files/30":
+			if r.URL.Query().Get("with") != "parents" {
+				t.Errorf("no parents asked")
+			}
+			// Parents deliberately out of order; the root is among them.
+			return jsonResponse(200, `{"result":"success","data":`+
+				`{"id":30,"name":"Reports","type":"dir","parent_id":20,"parents":[{"id":20,"name":"Kunden","parent_id":10},`+
+				`{"id":1,"name":"Root","parent_id":0},{"id":10,"name":"A\u0007","parent_id":1}]}}`), nil
+		case "/3/drive/5001/files/31":
+			return jsonResponse(200, `{"result":"success","data":{"id":31,"name":"x","type":"dir","parent_id":77,"parents":[{"id":5,"name":"Z","parent_id":1}]}}`), nil
+		case "/3/drive/5001/files/30/files":
+			return jsonResponse(200, `{"result":"success","data":[`+fileJSONOf(32, 30, "b.txt", "file")+`],"cursor":"","has_more":false}`), nil
+		}
+		t.Fatalf("unexpected %s", r.URL.Path)
+		return nil, nil
+	}, nil)
+	page, err := browseList(t, config.TargetListRequest{Kind: "files", Parent: "drive/5001"}, "account/1001", "drive/5002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []config.TargetEntry{
+		{Target: "drive/5001/files/30", Name: "Reports", Kind: "files", Path: "/", HasChildren: true},
+		{Target: "drive/5001/files/31", Name: "a.pdf", Kind: "files", Path: "/"},
+	}
+	if !reflect.DeepEqual(page.Entries, want) || page.Next != "c2" || page.ServerSearch {
+		t.Fatalf("page = %+v", page)
+	}
+	page, err = browseList(t, config.TargetListRequest{Kind: "files", Parent: "drive/5001/files/30"})
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Target != "drive/5001/files/32" || page.Entries[0].Path != "/A/Kunden/Reports" || page.Next != "" {
+		t.Fatalf("folder page = %+v, %v", page, err)
+	}
+	if _, err = browseList(t, config.TargetListRequest{Kind: "files", Parent: "drive/5001", Cursor: "c2"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls[3].query.Get("cursor") != "c2" || calls[0].query.Has("cursor") || len(calls) != 4 ||
+		calls[0].path != "/3/drive/5001/files/1/files" || calls[1].path != "/3/drive/5001/files/30" ||
+		calls[2].path != "/3/drive/5001/files/30/files" {
+		t.Fatalf("calls = %+v", calls)
+	}
+}
+
+func TestFileTargetErrors(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(404, `{}`), nil }, nil)
+	for _, req := range []config.TargetListRequest{
+		{Kind: "files"},
+		{Kind: "files", Parent: "account/1001"},
+		{Kind: "files", Parent: "drive/abc"},
+		{Kind: "files", Parent: "drive/5001/files/x"},
+		{Kind: "files", Parent: "drive/5001", Cursor: "a\nb"},
+		{Kind: "files", Parent: "drive/5001", Cursor: strings.Repeat("a", 2000)},
+	} {
+		if _, err := browseList(t, req); !isInvalidRequest(err) {
+			t.Fatalf("%+v: err = %v", req, err)
+		}
+	}
+	if len(calls) != 0 {
+		t.Fatalf("invalid requests sent %d requests", len(calls))
+	}
+	_, err := browseList(t, config.TargetListRequest{Kind: "files", Parent: "drive/5001/files/9"})
+	if classOf(err) != provider.ClassNotFound {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestFolderPathNeedsAUnambiguousChain(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/3/drive/5001/files/31" {
+			return jsonResponse(200, `{"result":"success","data":{"id":31,"name":"x","type":"dir","parent_id":77,"parents":[{"id":5,"name":"Z","parent_id":1}]}}`), nil
+		}
+		return jsonResponse(200, `{"result":"success","data":[`+fileJSONOf(40, 31, "f", "file")+`],"cursor":"","has_more":false}`), nil
+	}, nil)
+	page, err := browseList(t, config.TargetListRequest{Kind: "files", Parent: "drive/5001/files/31"})
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Path != "" {
+		t.Fatalf("page = %+v, %v", page, err)
 	}
 }

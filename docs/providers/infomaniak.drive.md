@@ -95,18 +95,18 @@ accepted and may list drives of that account, not that every bound drive exists 
 
 ## Choosing targets
 
-The target picker offers `account`, then `drive` below the chosen account. It works on a draft
-connection that has no account yet, and it lists what the token reaches, not only the current targets.
-Accounts are read from the drives listing without an `account_id` and grouped; their names come from the
-accounts endpoint when the token may read it, otherwise an account is named by its ID. Names are untrusted
-data. Lists are paged on request only; an account that holds drives on several pages can appear on each of
-them. The picker never searches on the server.
+The target picker offers `account`, then `drive` below the chosen account, then `files` below a drive or below a
+folder: the entries directly inside, folders marked as having children, each with the path of the listed folder
+(`/` at the root; below a folder one extra read of that folder with its parents per page, no path if the chain
+is unclear). It works on a draft connection. Accounts are grouped from the drives listing without an
+`account_id`; names come from the accounts endpoint if readable, else the ID. Names are untrusted. Account and
+drive lists are paged by number, `files` by the folder cursor. It never searches on the server.
 
-A URL of the web interface on `kdrive.infomaniak.com` or `ksuite.infomaniak.com` is turned into
-`drive/DRIVE_ID`, and on `ksuite.infomaniak.com` with an account number before the drive also into
-`account/ACCOUNT_ID`. Any other host or form gives nothing. A folder or file in the URL is ignored, and the
-entries are named by their IDs. Reading a URL sends no request; every list read counts against the shared
-60 requests per minute budget, and an account page costs two.
+A URL on `kdrive.infomaniak.com` or `ksuite.infomaniak.com` is turned into `drive/DRIVE_ID` (on
+`ksuite.infomaniak.com` with an account number before the drive also `account/ACCOUNT_ID`), plus
+`drive/DRIVE_ID/files/FILE_ID` for `…/files/FILE_ID` or the one numeric segment after `…/files/FOLDER/preview`.
+Other hosts and forms give nothing; entries are named by their IDs. Reading a URL sends no request; every list
+read counts against the shared 60 requests per minute budget (an account page costs two).
 
 ## Tools
 
