@@ -161,12 +161,14 @@ type targetKindJSON struct {
 	Name   string `json:"name"`
 	Parent string `json:"parent,omitempty"`
 	Nested bool   `json:"nested,omitempty"`
+	// Unlisted kinds have no list; the script offers no list when every kind is unlisted.
+	Unlisted bool `json:"unlisted,omitempty"`
 }
 
 func newTargetDialogData(t config.TargetMetadata, csrf string) *targetDialogData {
 	kinds := make([]targetKindJSON, 0, len(t.Kinds))
 	for _, k := range t.Kinds {
-		kinds = append(kinds, targetKindJSON{Name: k.Name, Parent: k.Parent, Nested: k.Nested})
+		kinds = append(kinds, targetKindJSON{Name: k.Name, Parent: k.Parent, Nested: k.Nested, Unlisted: k.Unlisted})
 	}
 	b, _ := json.Marshal(kinds)
 	return &targetDialogData{

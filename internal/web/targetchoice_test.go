@@ -282,3 +282,20 @@ func TestEmbeddedScriptsAreRestricted(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPageMarksUnlistedKinds(t *testing.T) {
+	old := bookMetadata.Target.Kinds
+	bookMetadata.Target.Kinds = []config.TargetKind{{Name: "shelf", Forms: []string{"shelf/NAME"}, Unlisted: true}}
+	t.Cleanup(func() { bookMetadata.Target.Kinds = old })
+	s, _, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	s.svc = s.svc.WithTargetSource(bookTargetSource(nil, nil))
+	rec := s.request(t, http.MethodGet, "/connections/new?provider=book", s.addr, cookie, nil)
+	body := rec.Body.String()
+	for _, want := range []string{`id="target-dialog"`, `data-resolve-url="` + targetResolvePath + `"`,
+		`data-kinds="[{&#34;name&#34;:&#34;shelf&#34;,&#34;unlisted&#34;:true}]"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("build page lacks %s in: %s", want, body)
+		}
+	}
+}

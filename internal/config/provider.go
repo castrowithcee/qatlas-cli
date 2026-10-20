@@ -132,12 +132,17 @@ func (t TargetMetadata) knowsForm(form string) bool {
 //
 // Nested says that entries of the kind also sit below an entry of the same kind, such as a folder inside a
 // folder. They are listed under one target of the kind itself.
+//
+// Unlisted says that the provider offers no list of the kind (a service without an index of its chats, say):
+// a surface offers no list for it, though entries of it can still come from a resolved web address. The zero
+// value is a listed kind.
 type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
 	Parent      string
 	Nested      bool
+	Unlisted    bool
 }
 
 // ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.

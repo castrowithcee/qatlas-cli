@@ -288,7 +288,7 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider,
+	if err := reg.Register(Provider,
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: richMessagesSend, Handler: capability.Handler(invokeRichMessagesSend)},
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
@@ -429,7 +429,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: stickersetsSetThumbnail, Handler: capability.Handler(invokeStickersetsSetThumbnail)},
 		capability.Operation{Descriptor: stickersetsSetCustomEmojiThumbnail,
 			Handler: capability.Handler(invokeStickersetsSetCustomEmojiThumbnail)},
-	)
+	); err != nil {
+		return err
+	}
+	return reg.RegisterTargetBrowser(Provider, targetBrowser())
 }
 
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

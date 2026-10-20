@@ -20,6 +20,9 @@
   if (!kinds.length) {
     return;
   }
+  // A provider whose kinds are all unlisted has no list to choose from: the panel then only resolves a web
+  // address.
+  var hasList = kinds.some(function (k) { return !k.unlisted; });
   var csrf = root.dataset.csrf || "";
   var listURL = root.dataset.listUrl;
   var resolveURL = root.dataset.resolveUrl;
@@ -54,9 +57,9 @@
   }
 
   // The panel. None of its inputs has a name, so none is submitted with the form.
-  var openButton = button("Choose " + noun + " from the provider", function () {
+  var openButton = button(hasList ? "Choose " + noun + " from the provider" : "Add " + noun + " from a web address", function () {
     panel.hidden = !panel.hidden;
-    if (!panel.hidden && !levels.length) {
+    if (hasList && !panel.hidden && !levels.length) {
       startTop();
     }
   });
@@ -99,6 +102,7 @@
   table.appendChild(head);
   table.appendChild(body);
   var wrap = el("div", { class: "table-wrap" });
+  wrap.hidden = !hasList;
   wrap.appendChild(table);
   var moreButton = button("Load more", function () {
     loadMore();
@@ -125,7 +129,7 @@
   }
 
   function startTop() {
-    var names = kinds.filter(function (k) { return !k.parent; }).map(function (k) { return k.name; });
+    var names = kinds.filter(function (k) { return !k.parent && !k.unlisted; }).map(function (k) { return k.name; });
     levels = [{ title: "", kinds: names, kind: names[0], parent: "", entries: [], next: "", serverSearch: false, fixed: false }];
     marks.clear();
     render();
@@ -259,7 +263,12 @@
       }
       message.textContent = (data.entries || []).length ? "" : "The address matches nothing.";
       marks.clear();
-      levels.push({ title: "Address", kinds: [], kind: "", parent: "", entries: data.entries || [], next: "", serverSearch: false, fixed: true });
+      var found = { title: "Address", kinds: [], kind: "", parent: "", entries: data.entries || [], next: "", serverSearch: false, fixed: true };
+      if (hasList) {
+        levels.push(found);
+      } else {
+        levels = [found];
+      }
       render();
     }, function (err) {
       if (seq === requestSeq) {
@@ -280,7 +289,7 @@
 
   function open(entry) {
     var children = kinds.filter(function (k) {
-      return k.parent === entry.kind || (k.nested && k.name === entry.kind);
+      return !k.unlisted && (k.parent === entry.kind || (k.nested && k.name === entry.kind));
     }).map(function (k) { return k.name; });
     if (!children.length) {
       return;
@@ -295,6 +304,7 @@
 
   function render() {
     var lv = top();
+    wrap.hidden = false;
     pathLine.textContent = levels.map(function (l) { return l.title; }).filter(Boolean).join(" / ");
     backButton.hidden = levels.length < 2;
     kindSelect.replaceChildren();

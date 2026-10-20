@@ -144,6 +144,9 @@ func (m *Model) pickRoots() []string {
 func (m *Model) pickKindsUnder(parent string) []string {
 	var kinds []string
 	for _, kind := range m.targetMetadata().Kinds {
+		if kind.Unlisted {
+			continue
+		}
 		if kind.Parent == parent || parent != "" && kind.Nested && kind.Name == parent {
 			kinds = append(kinds, kind.Name)
 		}

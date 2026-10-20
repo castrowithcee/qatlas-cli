@@ -37,6 +37,10 @@ ID from an invocation argument or a Telegram response never becomes a target on 
 combine with chats, and a connection with only `bot` has no chat. A tool missing its target is refused before the
 credential is read, and methods that accept only a numeric chat ID refuse an `@username` chat locally.
 
+The Bot API has no chat list, so setup offers none. A `https://t.me/<username>` link, also with a message
+number, becomes the target `@<username>`, and a `https://t.me/c/<id>/...` link becomes `-100<id>`. No request is
+made. Invite links and other `t.me` feature paths name no chat and yield no target.
+
 Tool groups only sort tools for display. The base URL must be a plain `https` URL with a host and without user,
 query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
 rejects any other base URL. Errors never carry Telegram's own error text.
