@@ -188,7 +188,7 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if limit == 0 {
 		limit = defaultListLimit
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func (c *Client) ListTrash(ctx context.Context, driveID int64, cursor string, li
 
 // invokeTrashFile runs the checks every trash change on one entry shares, then sends it once.
 func invokeTrashFile(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage, op string,
+	red *redact.Redactor, raw json.RawMessage, op string, whole bool,
 	send func(*Client, context.Context, int64, int64) (*Change, error)) (any, error) {
 	var input fileArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
@@ -231,7 +231,17 @@ func invokeTrashFile(ctx context.Context, resolved *config.Resolved, secrets *se
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest("file_id must be a positive integer other than the drive's root")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	var client *Client
+	var err error
+	if whole {
+		// An entry of the trash has no place in a subtree any more.
+		client, err = prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
+	} else {
+		if err := protectTarget(resolved, input.DriveID, input.FileID); err != nil {
+			return nil, err
+		}
+		client, err = prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -240,12 +250,12 @@ func invokeTrashFile(ctx context.Context, resolved *config.Resolved, secrets *se
 
 func invokeFilesTrash(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeTrashFile(ctx, resolved, secrets, red, raw, "trash file", (*Client).TrashFile)
+	return invokeTrashFile(ctx, resolved, secrets, red, raw, "trash file", false, (*Client).TrashFile)
 }
 
 func invokeTrashDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeTrashFile(ctx, resolved, secrets, red, raw, "delete trash entry", (*Client).DeleteTrashEntry)
+	return invokeTrashFile(ctx, resolved, secrets, red, raw, "delete trash entry", true, (*Client).DeleteTrashEntry)
 }
 
 // TrashFile moves exactly one file or folder to the trash, once.
@@ -281,7 +291,7 @@ func invokeTrashRestore(ctx context.Context, resolved *config.Resolved, secrets 
 	if !validObjectID(input.DestinationID) {
 		return nil, invalidRequest("destination_id must be a positive integer")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +317,7 @@ func invokeTrashEmpty(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}

@@ -155,8 +155,8 @@ func refuseProjectAllowList(resolved *config.Resolved) error {
 	if err != nil {
 		return err
 	}
-	if len(bound.projects) > 0 {
-		return invalidRequest("a connection with a project allow-list cannot change teams or their members, which are not part of a project")
+	if bound.narrowed() {
+		return invalidRequest("a connection with a project or file allow-list cannot change teams or their members, which are not part of a project")
 	}
 	return nil
 }
@@ -220,6 +220,9 @@ func invokeMembersList(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	teamID, err := selectTeam(resolved, input.TeamID)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseFileOnly(resolved, "list members"); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

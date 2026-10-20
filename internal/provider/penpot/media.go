@@ -243,7 +243,7 @@ func readMedia(op string, raw json.RawMessage) (mediaArguments, error) {
 
 // selectFile is the local part of binding a file: project and file ID, before any secret is resolved.
 func selectFile(resolved *config.Resolved, projectArgument, fileArgument string) (string, string, error) {
-	projectID, err := selectProject(resolved, projectArgument)
+	projectID, err := selectProjectForFile(resolved, "project_id", projectArgument, fileArgument)
 	if err != nil {
 		return "", "", err
 	}

@@ -182,7 +182,7 @@ func invokeDropboxGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(dropboxFolderReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func invokeDropboxDelete(ctx context.Context, resolved *config.Resolved, secrets
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(dropboxFolderReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

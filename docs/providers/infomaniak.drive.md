@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Infomaniak kDrive provider: API token setup, the account and drive allow-list, the drive,
+  Describes the Infomaniak kDrive provider: API token setup, the account, drive, and folder or file binding, the drive,
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
   deletion, the share link reads and the confirmed deletion of share links with their
@@ -57,44 +57,45 @@ credentials:
 
 ## Scope
 
-A connection binds exactly one account and, optionally, an allow-list of its drives:
+A connection binds exactly one account and, optionally, drives and folders or files of them:
 
 | Target | Binds |
 | --- | --- |
 | `account/ACCOUNT_ID` | the Infomaniak account this connection may reach; required, exactly one |
-| `drive/DRIVE_ID` | one kDrive of that account; optional, repeatable |
+| `drive/DRIVE_ID` | one whole kDrive of that account; optional, repeatable |
+| `drive/DRIVE_ID/files/FILE_ID` | one folder (with everything below it) or file of a drive; optional, repeatable; a file identifier is unique only inside its drive, the drive's root is `1` |
 
 ```yaml
 connections:
   customer-a:
     service: infomaniak
     credential: infomaniak-reader
-    targets: [account/1001, drive/5001]
+    targets: [account/1001, drive/5001, drive/5002/files/77]
 ```
 
-Without a `drive/DRIVE_ID` target, every kDrive of the bound account is reachable. With one or more, only
-those drives are. A `drive_id` argument goes through two checks before any file endpoint is reached:
+Without a `drive` or `files` target, every kDrive of the bound account is reachable. Otherwise the reach is the
+union: `drive/ID` is the whole drive, a `files` target only its subtree. A `drive_id` argument goes through
+these checks before any file endpoint is reached:
 
-1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
-   secret is read or any request is sent.
-2. Every `infomaniak.drive.files.*` (upload and download included), `infomaniak.drive.trash.*`, `infomaniak.drive.links.*`, `infomaniak.drive.dropbox.*`, `infomaniak.drive.access.*`, and `infomaniak.drive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
-   `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
-   the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
-   own, because the same token can otherwise reach a drive of another account, and a drive named in an
-   allow-list is not proof of which account it really belongs to. A drive of another account, or a check that
-   failed or came back unreadable, aborts the request right there; there is no silent fallback to the file
-   endpoint.
+1. A `drive_id` outside the drives of the targets is refused locally, as an invalid request, before any secret
+   is read or request is sent.
+2. Every `infomaniak.drive.files.*` (upload and download included), `infomaniak.drive.trash.*`, `infomaniak.drive.links.*`, `infomaniak.drive.dropbox.*`, `infomaniak.drive.access.*`, and `infomaniak.drive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no `account_id` of its own) that the drive belongs to the bound account, in one extra request before the file endpoint. The targets are local configuration and never trusted on their own, because the same token can otherwise reach a drive of another account. A drive of another account, or a check that failed or came back unreadable, aborts the request; there is no silent fallback.
+3. Under a drive bound only by `files` targets, every `file_id`, `folder_id`, `parent_id`, `destination_id`, and `directory_id` of a call is proven to be a target or to lie below one, with one more read (`with=parents`) per identifier, counted against the shared limit; for `files.stat` and `files.download` the read they make anyway is the proof. The proof fails closed. The refusal is an invalid request that does not name the object, and a 404, a 403, or an unusable answer is not told apart from "outside".
 
-This second check doubles the number of requests a single `files.*` call spends against the shared 60
-requests per minute budget. `infomaniak.drive.drives.list` needs no such check: Infomaniak already answers it
-scoped to one `account_id`, and every returned drive is still matched against that same `account_id` again
-defensively before it is reported. A successful `qatlas connection test` reads one page of at most one drive
-of the bound account: it proves the token is accepted and that it may list drives of that account, not that
-every drive on a narrower allow-list exists, is reachable, or actually belongs to that account.
+A target itself cannot be moved or put in the trash; renaming it is allowed. `trash.list`, `trash.restore`,
+`trash.delete`, `trash.empty`, and `links.list` act on a whole drive and are not reachable under a drive bound
+only by `files` targets. Without `folder_id`, `files.list` lists the one `files` target of such a drive; with
+several, `folder_id` is required. An object moved between the proof and the action is not caught.
+
+The ownership check doubles the number of requests a single `files.*` call spends against the shared 60
+requests per minute budget. `infomaniak.drive.drives.list` needs none: Infomaniak answers it scoped to one
+`account_id`, and every returned drive is matched against it again before it is reported. A successful
+`qatlas connection test` reads one page of at most one drive of the bound account: it proves the token is
+accepted and may list drives of that account, not that every bound drive exists or belongs to it.
 
 ## Choosing targets
 
-The target picker offers two levels: `account`, then `drive` below the chosen account. It works on a draft
+The target picker offers `account`, then `drive` below the chosen account. It works on a draft
 connection that has no account yet, and it lists what the token reaches, not only the current targets.
 Accounts are read from the drives listing without an `account_id` and grouped; their names come from the
 accounts endpoint when the token may read it, otherwise an account is named by its ID. Names are untrusted
@@ -111,7 +112,7 @@ entries are named by their IDs. Reading a URL sends no request; every list read 
 
 | Tool | Does |
 | --- | --- |
-| `infomaniak.drive.drives.list` | the kDrives of the bound account, filtered to the allow-list, page by page |
+| `infomaniak.drive.drives.list` | the kDrives of the bound account, filtered to the drives of the targets, page by page |
 | `infomaniak.drive.files.list` | the immediate children of one folder of one drive, cursor-paginated |
 | `infomaniak.drive.files.stat` | the metadata of exactly one file or folder |
 | `infomaniak.drive.files.get` | the bounded content of exactly one file, as base64 |
@@ -167,9 +168,9 @@ setting of the connection.
 
 - `drive_id`, `file_id`, `parent_id`, and `destination_id` are plain positive integers of at most 18 digits,
   validated before any secret is read or request is sent, and used only as path segments of the fixed paths
-  above. A connection binds an account and drives, not single files, so an object identifier is bound by the
-  drive it is used in: the drive goes through the allow-list check and the live ownership check described
-  under Scope before the change request, and Infomaniak resolves the file and the destination only inside
+  above. An object identifier is bound by the
+  drive it is used in: the drive goes through the checks under Scope (the proof of a subtree binding
+  included) before the change request, and Infomaniak resolves the file and the destination only inside
   that one drive. A refusal does not name the value. The drive's root (`1`) can be a destination or a parent,
   but is never renamed, moved, or copied, and `destination_id` must differ from `file_id`.
 - A new name (`name`) is 1 to 255 bytes of text, without a slash, a control character, or the special names
@@ -193,7 +194,8 @@ setting of the connection.
 - The creation and the copy report the new folder or file as `entry`, as untrusted data.
 
 `infomaniak.drive.files.list` and `infomaniak.drive.files.stat` default `folder_id` and `file_id` to `1`, the
-fixed identifier of a drive's own root directory, as Infomaniak documents it. `infomaniak.drive.files.get`
+fixed identifier of a drive's own root directory, as Infomaniak documents it; `files.list` under a subtree
+binding defaults as described under Scope. `infomaniak.drive.files.get`
 requires an explicit `file_id`: reading content is never defaulted to the root. A folder identifier passed to
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
@@ -211,8 +213,8 @@ than being refused or silently redirected to a listing.
 - `trash.restore` takes `destination_id`, a required folder of the same drive (the root is `1`), because the
   specification requires `destination_directory_id` in the request body; Qatlas offers no restore to a place
   outside the drive. Restoring is the only trash change that needs just the `update` effect.
-- The same rules as for the other changes apply: the drive goes through the allow-list check and the live
-  ownership check before the one request, a refusal names no foreign value, an unclear outcome is reported
+- The same rules as for the other changes apply: the drive goes through the checks under Scope before the one
+  request, `files.trash` proves its `file_id` like any object, the four other trash tools act on the whole drive, a refusal names no foreign value, an unclear outcome is reported
   and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports
   one. A trash change never reports an entry. A 403, for example because the plan does not allow trash
   handling, is reported as `permission`.
@@ -224,8 +226,7 @@ than being refused or silently redirected to a listing.
   URL with no further check. Deleting a link needs `confirm` for every right, `public` included, and a
   connection must list the tool by name besides holding the permission.
 - `file_id` is a positive integer other than the drive's root `1`, validated, like `drive_id`, before any
-  secret is read or request is sent; the drive goes through the allow-list check and the live ownership check
-  first, and a refusal names no foreign value. Qatlas does not offer a link for the root: whether Infomaniak
+  secret is read or request is sent; the checks under Scope follow, and a refusal names no foreign value. Qatlas does not offer a link for the root: whether Infomaniak
   allows one is not documented, so the narrower reading applies.
 - `links.delete` removes the link; the file stays.
 - No link password is ever read from a provider answer or returned.
@@ -249,7 +250,7 @@ than being refused or silently redirected to a listing.
   without an account. Creating or changing one would open or prolong such an access to the outside, so neither is
   offered. The tools `dropbox.get` and `dropbox.delete` act
   on exactly one folder (`file_id`, a positive integer other than the drive's root `1`) of one drive, which goes
-  through the allow-list check and the live ownership check first; a foreign `drive_id` is refused locally,
+  through the checks under Scope first; a foreign `drive_id` is refused locally,
   without naming it, before any secret is read or request is sent. Both need an explicit tools list; the
   deletion needs `confirm`.
 - The dropbox has its own sensitivity class, `infomaniak-kdrive-dropboxes`. A dropbox is reported as `id`, `uuid`,
@@ -278,8 +279,7 @@ than being refused or silently redirected to a listing.
   `read`, `write`, or `manage` (can also share); the API's `none` is not offered, because `access.revoke` removes
   access explicitly. Nothing else of the provider's body exists.
 - `file_id` is a positive integer other than the drive's root `1`, checked before any secret is read or request is
-  sent; the drive goes through the allow-list check and the live ownership check first, and a refusal names no
-  foreign value.
+  sent; the checks under Scope follow, and a refusal names no foreign value.
 - Every user and team a change names is proven to belong to the same drive before the change request: after the
   ownership check, Qatlas reads the drive's users page by page with their team identifiers (`GET
   /2/drive/{d}/users?with=teams`, 100 per page, at most 10 pages, stopping once everything is found) and counts only
@@ -329,7 +329,7 @@ than being refused or silently redirected to a listing.
 - The content goes to a temporary file that only becomes the target once the transfer is complete and matches
   the reported size, so an aborted or too large transfer leaves no partial file. The result carries `file_id`,
   `name`, `size`, and `sha256`, never the content. It costs three requests: the ownership check, a metadata
-  read, and the content request.
+  read (the proof under a subtree binding), and the content request.
 - A folder identifier writes Infomaniak's zip archive of it, as with `files.get`. The redirect rules under
   Content and size limits apply unchanged.
 
@@ -343,8 +343,8 @@ of its own.
 
 `infomaniak.drive.drives.list` takes `page` (default 1) and reports the account's own `page`, `pages`, and
 `total` transparently, exactly as Infomaniak answers them for the bound account. `drives` and `count` are
-filtered to the connection's allow-list afterwards, so `count` can be lower than what an incomplete page
-alone would suggest, and a further page of the account may still hold an allow-listed drive that this page
+filtered to the drives of the connection's targets afterwards, so `count` can be lower than what an incomplete page
+alone would suggest, and a further page of the account may still hold a bound drive that this page
 did not.
 
 ## Content and size limits
@@ -373,7 +373,7 @@ Errors keep stable classes and never carry the token or a raw provider response 
 | `provider-error` | every other rejection, including a `conflict` (HTTP 409: the name already exists or the target is not in a state that allows the change), an etag conflict of a replacing upload, a failed `If-Match` precondition and a redirect on an endpoint that must not answer with one |
 
 A `user_id`, `team_id`, or `user_ids` or `team_ids` entry that is not proven to belong to the drive is an
-invalid request too, see Access. A `drive_id` outside the connection's allow-list, or one the live ownership check finds belongs to another
+invalid request too, see Access. A `drive_id` outside the connection's targets, or one the live ownership check finds belongs to another
 account, is an invalid request, never a provider error, so a scope refusal is never mistaken for a missing
 drive. A failed or unreadable answer to that ownership check itself keeps its own class (`auth`,
 `permission`, `rate-limited`, `timeout`, `unreachable`, or `invalid-provider-response`) and aborts the request

@@ -197,10 +197,11 @@ func validName(name string) bool {
 const nameReason = "name must be 1 to 255 bytes of text without a slash or control character"
 
 // prepare runs every local check of a change, in order: the identifiers, the drive allow-list, and, only
-// then, the secret and the live ownership check of the drive. Nothing before the last step reads a secret or
-// sends a request, and no refusal names a value the caller supplied.
+// then, the secret, the live ownership check of the drive, and, for a drive bound only as a subtree, the
+// proof of every object identifier. Nothing before the ownership check reads a secret or sends a request,
+// and no refusal names a value the caller supplied.
 func prepare(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	op string, driveID int64) (*Client, error) {
+	op string, driveID int64, objects ...int64) (*Client, error) {
 	if err := selectDrive(resolved, driveID); err != nil {
 		return nil, err
 	}
@@ -211,7 +212,23 @@ func prepare(ctx context.Context, resolved *config.Resolved, secrets *secret.Res
 	if err := client.verifyDriveAccount(ctx, op, driveID); err != nil {
 		return nil, err
 	}
+	if err := client.proveObjects(ctx, op, driveID, objects...); err != nil {
+		return nil, err
+	}
 	return client, nil
+}
+
+// prepareWhole is prepare for a tool that acts on the whole drive: a connection that binds the drive only as
+// a subtree of it is refused before the secret is read or any request is sent.
+func prepareWhole(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	op string, driveID int64) (*Client, error) {
+	if err := selectDrive(resolved, driveID); err != nil {
+		return nil, err
+	}
+	if err := requireWholeDrive(resolved, driveID); err != nil {
+		return nil, err
+	}
+	return prepare(ctx, resolved, secrets, red, op, driveID)
 }
 
 type folderCreateArguments struct {
@@ -233,7 +250,7 @@ func invokeFoldersCreate(ctx context.Context, resolved *config.Resolved, secrets
 	if !validName(input.Name) {
 		return nil, invalidRequest(nameReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.ParentID)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +292,7 @@ func invokeFilesRename(ctx context.Context, resolved *config.Resolved, secrets *
 	if !validName(input.Name) {
 		return nil, invalidRequest(nameReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -303,16 +320,16 @@ type transferArguments struct {
 
 func invokeFilesMove(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeTransfer(ctx, resolved, secrets, red, raw, "move file", (*Client).MoveFile)
+	return invokeTransfer(ctx, resolved, secrets, red, raw, "move file", true, (*Client).MoveFile)
 }
 
 func invokeFilesCopy(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeTransfer(ctx, resolved, secrets, red, raw, "copy file", (*Client).CopyFile)
+	return invokeTransfer(ctx, resolved, secrets, red, raw, "copy file", false, (*Client).CopyFile)
 }
 
 func invokeTransfer(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage, op string,
+	red *redact.Redactor, raw json.RawMessage, op string, move bool,
 	send func(*Client, context.Context, int64, int64, int64, string) (*Change, error)) (any, error) {
 	var input transferArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
@@ -333,7 +350,12 @@ func invokeTransfer(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if input.FileID == input.DestinationID {
 		return nil, invalidRequest("destination_id must differ from file_id")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	if move {
+		if err := protectTarget(resolved, input.DriveID, input.FileID); err != nil {
+			return nil, err
+		}
+	}
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID, input.DestinationID)
 	if err != nil {
 		return nil, err
 	}
