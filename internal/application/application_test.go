@@ -1833,3 +1833,63 @@ func TestSearchRanksTheDescriptionBelowTheTitle(t *testing.T) {
 		t.Errorf("paged Search(issues) = %v, want %v", paged, want)
 	}
 }
+
+// A provider's target browser is no tool: discovery lists no entry for it and invoke does not know it, under
+// any name an agent could try.
+func TestTargetBrowserIsUnreachableForAgents(t *testing.T) {
+	registry := capability.NewRegistry()
+	metadata := config.ProviderMetadata{ID: "fake", Name: "Fake", Target: config.TargetMetadata{
+		Kinds: []config.TargetKind{{Name: "space", Forms: []string{"spaces/KEY"}}},
+	}}
+	if err := registry.RegisterProvider(metadata, nil); err != nil {
+		t.Fatal(err)
+	}
+	browser := capability.TargetBrowser{
+		List: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, config.TargetListRequest) (config.TargetPage, error) {
+			return config.TargetPage{}, nil
+		},
+		ResolveURL: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, string, string) ([]config.TargetEntry, error) {
+			return nil, nil
+		},
+	}
+	if err := registry.RegisterTargetBrowser("fake", browser); err != nil {
+		t.Fatal(err)
+	}
+	read := testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	if err := registry.Register("fake", capability.Operation{Descriptor: read,
+		Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error) {
+			return map[string]any{"ok": true}, nil
+		}}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New(registry)
+	cfg.Services["s"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["c"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"}}
+	cfg.Connections["docs"] = config.Connection{Service: "s", Credential: "c",
+		Effects: []config.Effect{config.EffectRead}}
+	redactor := &redact.Redactor{}
+	core := New(registry, cfg, secret.NewWith(func(string) string { return "x" }, nil, nil, redactor), redactor)
+
+	search, err := core.Search(SearchRequest{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Operations) != 1 {
+		t.Errorf("search lists %d tools, want 1", len(search.Operations))
+	}
+	for _, hit := range search.Operations {
+		if hit.ID != "fake.pages.get" {
+			t.Errorf("search lists %q besides the tool", hit.ID)
+		}
+	}
+	for _, id := range []string{"fake.targets.list", "fake.target.list", "config.target.list", "config.target.resolve",
+		"fake.spaces.list", "fake.targets.browse"} {
+		if _, err := core.Describe(DescribeRequest{Operation: id}); string(ErrorCode(err)) != "unknown-operation" {
+			t.Errorf("Describe(%q) = %v, want unknown-operation", id, err)
+		}
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: id, Arguments: json.RawMessage(`{}`)})
+		if string(ErrorCode(err)) != "unknown-operation" {
+			t.Errorf("Invoke(%q) = %v, want unknown-operation", id, err)
+		}
+	}
+}

@@ -736,3 +736,66 @@ func TestRegistryRefusesVendorCollision(t *testing.T) {
 		}
 	}
 }
+
+func TestRegisterProviderRefusesInvalidKindParents(t *testing.T) {
+	for name, kinds := range map[string][]config.TargetKind{
+		"unknown parent": {{Name: "a", Forms: []string{"a/ID"}, Parent: "zz"}},
+		"cycle":          {{Name: "a", Forms: []string{"a/ID"}, Parent: "b"}, {Name: "b", Forms: []string{"b/ID"}, Parent: "a"}},
+	} {
+		err := NewRegistry().RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake",
+			Target: config.TargetMetadata{Kinds: kinds}}, nil)
+		if err == nil {
+			t.Errorf("%s: provider was accepted", name)
+		}
+	}
+}
+
+func TestTargetBrowserIsNoOperation(t *testing.T) {
+	reg := NewRegistry()
+	browser := TargetBrowser{
+		List: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, config.TargetListRequest) (config.TargetPage, error) {
+			return config.TargetPage{Entries: []config.TargetEntry{{Target: "a/1", Name: "n", Kind: "a"}}}, nil
+		},
+		ResolveURL: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, string, string) ([]config.TargetEntry, error) {
+			return nil, nil
+		},
+	}
+	resolved := &config.Resolved{Name: "c", Provider: "fakewiki"}
+	if _, err := reg.ListTargets(context.Background(), resolved, nil, nil, config.TargetListRequest{}); !errors.Is(err, config.ErrTargetBrowseUnsupported) {
+		t.Errorf("ListTargets() without browser = %v, want ErrTargetBrowseUnsupported", err)
+	}
+	if err := reg.RegisterTargetBrowser("fakewiki", browser); err == nil {
+		t.Error("a browser for an unregistered provider was accepted")
+	}
+	metadata := config.ProviderMetadata{ID: "fakewiki", Name: "Fake"}
+	if err := reg.RegisterProvider(metadata, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RegisterTargetBrowser("fakewiki", browser); err == nil {
+		t.Error("a browser for a provider without kinds was accepted")
+	}
+	reg = NewRegistry()
+	metadata.Target.Kinds = []config.TargetKind{{Name: "a", Forms: []string{"a/ID"}}}
+	if err := reg.RegisterProvider(metadata, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RegisterTargetBrowser("fakewiki", TargetBrowser{}); err == nil {
+		t.Error("a browser without functions was accepted")
+	}
+	if err := reg.RegisterTargetBrowser("fakewiki", browser); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RegisterTargetBrowser("fakewiki", browser); err == nil {
+		t.Error("a second browser was accepted")
+	}
+	page, err := reg.ListTargets(context.Background(), resolved, nil, nil, config.TargetListRequest{Kind: "a"})
+	if err != nil || len(page.Entries) != 1 {
+		t.Errorf("ListTargets() = %+v, %v", page, err)
+	}
+	if len(reg.All()) != 0 || len(reg.Provider("fakewiki")) != 0 {
+		t.Error("a target browser appears in the operation catalog")
+	}
+	if _, _, ok := reg.Lookup("fakewiki.targets.list"); ok {
+		t.Error("a target browser can be looked up as an operation")
+	}
+}

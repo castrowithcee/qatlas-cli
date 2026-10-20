@@ -140,6 +140,21 @@ type ConnectionTester func(context.Context, *config.Resolved, *secret.Resolver, 
 // it has no suggestion. It only suggests: nothing is saved, and the caller validates what it adopts.
 type TargetSuggester func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor) (string, error)
 
+// TargetBrowser lets a person choose the targets of a connection by reading them from the provider. It is
+// no operation: it is in no catalog and no agent reaches it. Both functions only read, and never through the
+// tools that filter by the connection's targets.
+//
+// List reads one page of the entries of one kind. ResolveURL turns a URL of the service's web interface
+// into zero or more entries. The caller has checked only that it is a plain http(s) URL; origin is that of
+// the connection's base URL, which is often not the host of the web interface. ResolveURL decides which
+// hosts belong to the service and answers a URL of any other host with zero entries and no request. Neither
+// validates its entries: the caller drops what does not fit the kind's forms.
+type TargetBrowser struct {
+	List       func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, config.TargetListRequest) (config.TargetPage, error)
+	ResolveURL func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+		origin, rawURL string) ([]config.TargetEntry, error)
+}
+
 // DuplicateError reports an operation ID and version that were already registered.
 type DuplicateError struct {
 	ID      string
@@ -169,6 +184,7 @@ type Registry struct {
 	metadata   map[string]config.ProviderMetadata
 	testers    map[string]ConnectionTester
 	suggesters map[string]TargetSuggester
+	browsers   map[string]TargetBrowser
 }
 
 // NewRegistry returns an empty registry.
@@ -179,6 +195,7 @@ func NewRegistry() *Registry {
 		metadata:   map[string]config.ProviderMetadata{},
 		testers:    map[string]ConnectionTester{},
 		suggesters: map[string]TargetSuggester{},
+		browsers:   map[string]TargetBrowser{},
 	}
 }
 
@@ -242,6 +259,9 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 		}
 		groups[group.ID] = true
 	}
+	if err := metadata.Target.ValidateKindParents(); err != nil {
+		return fmt.Errorf("provider %q: %w", metadata.ID, err)
+	}
 	if err := r.checkFormerIDs(metadata); err != nil {
 		return err
 	}
@@ -276,6 +296,47 @@ func (r *Registry) SuggestTarget(ctx context.Context, resolved *config.Resolved,
 		return "", nil
 	}
 	return suggest(secret.ForConnection(ctx, resolved), resolved, secrets, red)
+}
+
+// RegisterTargetBrowser adds the way to choose targets of an already registered provider, which must
+// declare target kinds.
+func (r *Registry) RegisterTargetBrowser(providerID string, browser TargetBrowser) error {
+	metadata, ok := r.metadata[providerID]
+	if !ok {
+		return fmt.Errorf("provider %q must be registered before its target browser", providerID)
+	}
+	if len(metadata.Target.Kinds) == 0 {
+		return fmt.Errorf("provider %q declares no target kinds to browse", providerID)
+	}
+	if browser.List == nil || browser.ResolveURL == nil {
+		return fmt.Errorf("provider %q target browser must have both functions", providerID)
+	}
+	if _, exists := r.browsers[providerID]; exists {
+		return fmt.Errorf("provider %q target browser is already registered", providerID)
+	}
+	r.browsers[providerID] = browser
+	return nil
+}
+
+// ListTargets reads one page of targets from the provider of the connection, with its secrets resolved for
+// that connection alone. It returns config.ErrTargetBrowseUnsupported for a provider without a browser.
+func (r *Registry) ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, req config.TargetListRequest) (config.TargetPage, error) {
+	browser, ok := r.browsers[resolved.Provider]
+	if !ok {
+		return config.TargetPage{}, config.ErrTargetBrowseUnsupported
+	}
+	return browser.List(secret.ForConnection(ctx, resolved), resolved, secrets, red, req)
+}
+
+// ResolveTargetURL turns a URL of the connection's service into target entries; see TargetBrowser.
+func (r *Registry) ResolveTargetURL(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, origin, rawURL string) ([]config.TargetEntry, error) {
+	browser, ok := r.browsers[resolved.Provider]
+	if !ok {
+		return nil, config.ErrTargetBrowseUnsupported
+	}
+	return browser.ResolveURL(secret.ForConnection(ctx, resolved), resolved, secrets, red, origin, rawURL)
 }
 
 // ProviderMetadata returns one provider's configuration contract.
