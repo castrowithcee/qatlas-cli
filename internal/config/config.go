@@ -1199,6 +1199,8 @@ const (
 	RefusalNoConnection Refusal = "no-connection"
 	// RefusalOtherProvider: the connection belongs to another provider than the tool.
 	RefusalOtherProvider Refusal = "other-provider"
+	// RefusalOutsideTargets: the connection's targets do not reach the tool, which the provider judges.
+	RefusalOutsideTargets Refusal = "outside-targets"
 	// RefusalDisabled: the connection is switched off or past its active_until, and would offer the tool
 	// otherwise.
 	RefusalDisabled Refusal = "connection-disabled"
@@ -1223,6 +1225,25 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata, now time.Time
 // selectionRefusal is the refusal by the connection's selection alone, ignoring whether it is disabled, so a
 // disabled connection reports connection-disabled only for a tool it would otherwise offer.
 func (c *Config) selectionRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
+	if refusal := c.listRefusal(conn, name, tool); refusal != "" {
+		return refusal
+	}
+	return c.reachRefusal(conn, tool)
+}
+
+// reachRefusal is the last stage of the selection: a tool the selection would offer is still refused when
+// the connection's targets do not reach it. The selection itself stays as configured, so the tool is offered
+// again once the targets reach it.
+func (c *Config) reachRefusal(conn Connection, tool ToolMetadata) Refusal {
+	metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
+	if reached, _ := metadata.Target.Reach(tool.ID, conn.TargetValues()); !reached {
+		return RefusalOutsideTargets
+	}
+	return ""
+}
+
+// listRefusal is the refusal by effects, tools list, allow-list and local files, before the targets.
+func (c *Config) listRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
 	if conn.Tools != nil {
 		if !contains(conn.Tools, tool.ID) {
 			return RefusalToolsList
@@ -1268,6 +1289,12 @@ func (c *Config) IdleWarning(name string) string {
 		}
 	}
 	reason := "its effects or tools list allow none of its provider's tools"
+	for _, tool := range metadata.Tools {
+		if c.listRefusal(conn, name, tool) == "" {
+			reason = "its targets reach none of the tools its selection allows"
+			break
+		}
+	}
 	switch {
 	case conn.Effects != nil && len(conn.Effects) == 0:
 		reason = "its effects are empty ('effects: []')"

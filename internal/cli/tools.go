@@ -172,12 +172,15 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"  not-in-tools-list         the tools list does not name the tool\n" +
 			"  no-local-files            the tool reads or writes local files, and the connection's files\n" +
 			"                            list releases no directory for that direction\n" +
+			"  outside-targets           the connection's targets do not reach the tool, as the provider\n" +
+			"                            judges; the tool stays in the selection and is offered once the\n" +
+			"                            targets reach it\n" +
 			"  connection-disabled       the connection would offer the tool, but a person switched it off\n" +
 			"  no-connection             the provider has no configured connection\n\n" +
 			"With --connection the reason is that connection's. Otherwise, where several connections refuse a\n" +
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
 			"connection-disabled, not-in-tools-list, requires-tool-allow-list, no-local-files,\n" +
-			"effect-not-permitted. 'qatlas tui' changes what a connection offers.\n\n" +
+			"effect-not-permitted, outside-targets. 'qatlas tui' changes what a connection offers.\n\n" +
 			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
 			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
