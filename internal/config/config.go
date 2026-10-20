@@ -147,6 +147,11 @@ type Connection struct {
 	// (see ParseExpiryTime). From then on it refuses like a disabled one. Missing means no limit. It is kept
 	// as read so a past value stays loadable; MarshalYAML writes it as RFC 3339.
 	ActiveUntil string `yaml:"active_until,omitempty"`
+	// TargetLabels names targets of this connection for the person: a target value from TargetValues maps to
+	// a one-line label. It is display text only. It grants nothing, enters neither Resolved nor the approval
+	// scope, and no surface for agents ever shows it, since it is free text a person typed. Missing means no
+	// labels.
+	TargetLabels map[string]string `yaml:"target_labels,omitempty"`
 
 	// legacyEffects is the former permissions list of a connection that also lists tools, kept from reading
 	// the file so a migration can name the connections whose approval it narrows. It is no configuration.
@@ -188,19 +193,20 @@ func (c *Config) foldLegacyEffects() {
 // states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
-		ID             string    `yaml:"id,omitempty"`
-		Service        string    `yaml:"service"`
-		Credential     string    `yaml:"credential"`
-		Target         string    `yaml:"target,omitempty"`
-		Targets        []string  `yaml:"targets,omitempty"`
-		Description    string    `yaml:"description,omitempty"`
-		Effects        *[]Effect `yaml:"effects,omitempty"`
-		Tools          *[]string `yaml:"tools,omitempty"`
-		Paths          []string  `yaml:"paths,omitempty"`
-		Files          Files     `yaml:"files,omitempty"`
-		ForwardSecrets []string  `yaml:"forward_secrets,omitempty"`
-		Disabled       bool      `yaml:"disabled,omitempty"`
-		ActiveUntil    string    `yaml:"active_until,omitempty"`
+		ID             string            `yaml:"id,omitempty"`
+		Service        string            `yaml:"service"`
+		Credential     string            `yaml:"credential"`
+		Target         string            `yaml:"target,omitempty"`
+		Targets        []string          `yaml:"targets,omitempty"`
+		Description    string            `yaml:"description,omitempty"`
+		Effects        *[]Effect         `yaml:"effects,omitempty"`
+		Tools          *[]string         `yaml:"tools,omitempty"`
+		Paths          []string          `yaml:"paths,omitempty"`
+		Files          Files             `yaml:"files,omitempty"`
+		ForwardSecrets []string          `yaml:"forward_secrets,omitempty"`
+		Disabled       bool              `yaml:"disabled,omitempty"`
+		ActiveUntil    string            `yaml:"active_until,omitempty"`
+		TargetLabels   map[string]string `yaml:"target_labels,omitempty"`
 	}
 	activeUntil := c.ActiveUntilCanonical()
 	var effects *[]Effect
@@ -215,7 +221,8 @@ func (c Connection) MarshalYAML() (any, error) {
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
 		Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
-		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled, ActiveUntil: activeUntil}, nil
+		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled, ActiveUntil: activeUntil,
+		TargetLabels: c.TargetLabels}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -689,6 +696,7 @@ func (c *Config) Validate() error {
 		if _, err := ParseExpiryTime(conn.ActiveUntil); conn.ActiveUntil != "" && err != nil {
 			report(problem(SectionConnections, name, "active_until", CodeInvalidActiveUntil, "%v", err))
 		}
+		validateTargetLabels(name, conn, report)
 		validatePaths(name, conn.Paths, report)
 		if conn.permissionsInCurrent {
 			report(problem(SectionConnections, name, "effects", CodePermissionsRenamed,
@@ -942,6 +950,55 @@ func (c Connection) TargetValues() []string {
 		return nil
 	}
 	return []string{c.Target}
+}
+
+// PruneTargetLabels returns the labels of the connection whose target is still one of its targets, as a copy
+// that shares nothing with the connection, or nil when none is left. It is the one place that decides a label
+// is orphaned; every write by Qatlas goes through it (see Config.SetConnection), while loading never repairs a
+// hand-written orphan but reports it (see validateTargetLabels).
+func (c Connection) PruneTargetLabels() map[string]string {
+	var kept map[string]string
+	for _, target := range c.TargetValues() {
+		if label, ok := c.TargetLabels[target]; ok {
+			if kept == nil {
+				kept = map[string]string{}
+			}
+			kept[target] = label
+		}
+	}
+	return kept
+}
+
+// validateTargetLabels checks the labels of one connection: each names a target of the connection and is one
+// non-empty line. A problem never quotes a target or a label, both are free text.
+func validateTargetLabels(name string, conn Connection, report func(Problem)) {
+	if len(conn.TargetLabels) == 0 {
+		return
+	}
+	targets := map[string]bool{}
+	for _, target := range conn.TargetValues() {
+		targets[target] = true
+	}
+	keys := make([]string, 0, len(conn.TargetLabels))
+	for key := range conn.TargetLabels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		label := conn.TargetLabels[key]
+		switch {
+		case !targets[key]:
+			report(problem(SectionConnections, name, "target_labels", CodeUnknownTargetLabel,
+				"a label names a target the connection does not have"))
+		case normalizeDescription(label) == "" && !strings.ContainsAny(label, "\n\r"):
+			report(problem(SectionConnections, name, "target_labels", CodeEmptyTargetLabel,
+				"a target label must not be empty"))
+		default:
+			if err := validateLine(label, targetLabelRule); err != nil {
+				report(problem(SectionConnections, name, "target_labels", CodeInvalidTargetLabel, "%v", err))
+			}
+		}
+	}
 }
 
 func providerCatalog(providers []ProviderCatalog) ProviderCatalog {
@@ -1301,6 +1358,10 @@ const (
 	noteRule = "a provider note must be a single line of at most 200 characters; " +
 		"discovery publishes it, so it must never carry a secret or personal data"
 )
+
+// targetLabelRule states what a target label must look like. It never quotes the input either.
+const targetLabelRule = "a target label must be a single line of at most 200 characters; " +
+	"it is for the person only and is never shown to an agent"
 
 // validateLine refuses a description or note that is not one short line, naming rule. An empty text is a
 // missing one and needs no rule.

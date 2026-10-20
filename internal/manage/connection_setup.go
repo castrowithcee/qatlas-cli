@@ -3,6 +3,7 @@ package manage
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -101,6 +102,8 @@ type ConnectionDraft struct {
 	Paths         []string
 	Files         config.Files
 	Forward       []string
+	// TargetLabels are the person's labels by target; the core keeps only those of a target in Targets.
+	TargetLabels map[string]string
 }
 
 // ConnectionCandidate is a validated copy of the configuration with the new connection, and what saving it
@@ -224,7 +227,8 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 		conn := config.Connection{
 			Service: d.Service, Credential: d.Credential, Target: target, Targets: targets,
 			Description: d.Description, Paths: slices.Clone(d.Paths), ForwardSecrets: slices.Clone(d.Forward),
-			Files: config.Files{Read: slices.Clone(d.Files.Read), Write: slices.Clone(d.Files.Write)},
+			Files:        config.Files{Read: slices.Clone(d.Files.Read), Write: slices.Clone(d.Files.Write)},
+			TargetLabels: maps.Clone(d.TargetLabels),
 		}
 		if stage >= StageRights {
 			permissions, err := config.ParseEffects(d.Effects)

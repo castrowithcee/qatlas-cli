@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -357,11 +358,12 @@ func (m *Model) setupPrefill(step int, page []field) {
 }
 
 // setupTemplateExtras are what the setup has no row for and copies from its template unchanged: the paths
-// and local file lists of the connection.
-func (m *Model) setupTemplateExtras() ([]string, config.Files) {
+// and local file lists of the connection, and its target labels.
+func (m *Model) setupTemplateExtras() ([]string, config.Files, map[string]string) {
 	source, ok := m.cfg.Connections[m.wizard.template]
 	if !ok {
-		return nil, config.Files{}
+		return nil, config.Files{}, nil
 	}
-	return slices.Clone(source.Paths), config.Files{Read: slices.Clone(source.Files.Read), Write: slices.Clone(source.Files.Write)}
+	return slices.Clone(source.Paths), config.Files{Read: slices.Clone(source.Files.Read), Write: slices.Clone(source.Files.Write)},
+		maps.Clone(source.TargetLabels)
 }

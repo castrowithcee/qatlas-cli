@@ -405,7 +405,7 @@ func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan,
 			}
 		}
 		if w.template != "" {
-			draft.Paths, draft.Files = m.setupTemplateExtras()
+			draft.Paths, draft.Files, draft.TargetLabels = m.setupTemplateExtras()
 		}
 	}
 
