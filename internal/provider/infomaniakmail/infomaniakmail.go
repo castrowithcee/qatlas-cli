@@ -15,7 +15,7 @@
 // connection's mailbox/ADDRESS target together with a mailbox password the person created for it; the
 // Infomaniak REST mail API plays no part here.
 //
-// A connection binds exactly one mailbox, plus optional allow-lists of folders (folder/NAME, or folder/NAME/* with its subfolders) and sender
+// A connection binds exactly one mailbox, plus optional allow-lists of folders (folder/PATH, or folder/PATH/* with its subfolders) and sender
 // addresses (sender/ADDRESS). Without a folder list every folder of the mailbox is reachable; a folder
 // outside a configured list is refused before any secret is read and before any network access, and the
 // refusal never names the folder that is allowed. The sender list is applied locally to the parsed From
@@ -213,7 +213,7 @@ type session struct {
 }
 
 // folderOK is the final folder check of one operation, run after login and before any SELECT, EXAMINE, or
-// MOVE on that folder. Without a folder/NAME/* target it adds nothing: the check without network access was
+// MOVE on that folder. Without a folder/PATH/* target it adds nothing: the check without network access was
 // already exact. With one it asks the server for the hierarchy delimiter once per session (LIST "" "") unless
 // a LIST answer already provided it. A failed question refuses without naming a folder.
 func (s *session) folderOK(op, name string) error {
@@ -407,7 +407,7 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "exactly one mailbox/ADDRESS target, which is also the IMAP login name, plus an optional, " +
-				"repeatable allow-list of folder/NAME targets and an optional, repeatable allow-list of " +
+				"repeatable allow-list of folder/PATH targets and an optional, repeatable allow-list of " +
 				"sender/ADDRESS targets; without a folder target every folder of the mailbox is reachable, and " +
 				"without a sender target every sender. A folder outside the list is refused before any secret " +
 				"is read; the sender list is applied locally to the parsed From address of every message",
@@ -418,9 +418,9 @@ func Register(reg *capability.Registry) error {
 			}, {
 				Name:   "folder",
 				Parent: "mailbox",
-				Description: "one folder of the mailbox, by its exact name, or with folder/NAME/* that folder and " +
+				Description: "one folder of the mailbox, by its exact name, or with folder/PATH/* that folder and " +
 					"its subfolders; optional, repeatable; no other wildcards",
-				Forms: []string{"folder/NAME", "folder/NAME/*"},
+				Forms: []string{"folder/PATH", "folder/PATH/*"},
 			}, {
 				Name: "sender",
 				Description: "one sender address whose messages are listed; optional, repeatable; compared " +

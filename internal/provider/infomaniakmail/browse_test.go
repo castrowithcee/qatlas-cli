@@ -220,3 +220,30 @@ func TestBrowseLeavesExistingConfigsUnchanged(t *testing.T) {
 }
 
 func validateTargets(targets []string) error { _, err := parseScope(targets); return err }
+
+// Every entry of the folder level must pass the core's form check, whatever the hierarchy delimiter.
+func TestFolderEntriesPassTheCoreFormCheck(t *testing.T) {
+	metadata, _ := registry(t).ProviderMetadata(Provider)
+	for _, delim := range []string{"/", "."} {
+		folders := []Folder{
+			{Name: "INBOX", Delimiter: delim},
+			{Name: "Kunden", Delimiter: delim},
+			{Name: "Kunden" + delim + "A", Delimiter: delim},
+			{Name: "Kunden" + delim + "A" + delim + "2026", Delimiter: delim},
+		}
+		entries := folderEntries(folders)
+		if len(entries) != 6 {
+			t.Fatalf("delimiter %q: %d entries, want 6", delim, len(entries))
+		}
+		for _, entry := range entries {
+			if !metadata.Target.ValidTarget("folder", entry.Target) {
+				t.Errorf("delimiter %q: %q is no valid folder target", delim, entry.Target)
+			}
+		}
+	}
+	for _, bad := range []string{"folder/*", "folder//*", "folder/a/*/*"} {
+		if metadata.Target.ValidTarget("folder", bad) {
+			t.Errorf("%q must not be a valid folder target", bad)
+		}
+	}
+}

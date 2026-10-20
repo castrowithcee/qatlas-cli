@@ -49,8 +49,8 @@ credentials:
 | Target | Binds |
 | --- | --- |
 | `mailbox/ADDRESS` | the one mailbox this connection logs in to, also the IMAP login name; required, exactly one |
-| `folder/NAME` | one folder by its exact name, without subfolders; optional, repeatable |
-| `folder/NAME/*` | the folder `NAME` itself and every folder whose name begins with `NAME` plus the server's hierarchy delimiter; optional, repeatable |
+| `folder/PATH` | one folder by its exact name, without subfolders; optional, repeatable |
+| `folder/PATH/*` | the folder `PATH` itself and every folder whose name begins with `PATH` plus the server's hierarchy delimiter; optional, repeatable |
 | `sender/ADDRESS` | one sender address; optional, repeatable, at most 50 |
 
 Folder targets of both forms together are at most 50.
@@ -66,24 +66,24 @@ connections:
 Addresses are plain ASCII addresses: no display name, no quoting, no internationalised domain, at most 254 bytes.
 A folder name is at most 255 bytes, valid UTF-8, without control characters, and without the IMAP wildcards `*`
 and `%`, so a name can never widen into a pattern. `INBOX` is case-insensitive; every other folder name is
-compared exactly. `folder/NAME` names that folder only. In `folder/NAME/*`, `NAME` is one literal name and the
+compared exactly. `folder/PATH` names that folder only. In `folder/PATH/*`, `PATH` is one literal name and the
 trailing `/*` is the only wildcard; `folder/*` (all folders) is not a form, since a connection without a folder
-target already reaches every folder. `/*` includes the folder `NAME` itself. A name that merely begins with `NAME`
+target already reaches every folder. `/*` includes the folder `PATH` itself. A name that merely begins with `PATH`
 without the delimiter (`Kunden` or `Kunde2` for `Kunde/*`) is not in the scope. A server without a hierarchy
-delimiter (flat hierarchy) leaves only `NAME` itself. No error quotes a configured value.
+delimiter (flat hierarchy) leaves only `PATH` itself. No error quotes a configured value.
 
 Without a folder target, every folder of the mailbox is reachable. With one, `infomaniak.mail.messages.list`,
 `infomaniak.mail.messages.get`, and `infomaniak.mail.attachments.get` refuse any other folder as an invalid
 request **before** a secret is read and before any connection is opened, and the refusal never names an allowed
 folder. `infomaniak.mail.folders.list` then asks the server only for the allow-listed names (and, for
-`folder/NAME/*`, the subfolders of `NAME`) and filters every answer again locally.
+`folder/PATH/*`, the subfolders of `PATH`) and filters every answer again locally.
 
-A `folder/NAME/*` target needs the delimiter of the server. A folder that is exactly a target is accepted without
-it. For any other folder that begins with `NAME`, a call sends one extra `LIST "" ""` on its IMAP connection after
+A `folder/PATH/*` target needs the delimiter of the server. A folder that is exactly a target is accepted without
+it. For any other folder that begins with `PATH`, a call sends one extra `LIST "" ""` on its IMAP connection after
 login and before the folder is opened or a message is moved there; where a LIST answer is read anyway
 (`folders.list`, the trash, drafts, and sent folder lookup) its delimiter is used instead. Every folder of a call,
 including a move destination, is checked against it; a failed question refuses the call without naming a folder. A
-connection without a `folder/NAME/*` target never sends it.
+connection without a `folder/PATH/*` target never sends it.
 
 Without a sender target, every sender is listed. With one, only messages whose parsed From address is on the list are
 returned or read; `messages.get` and `attachments.get` answer `not-found`, with no detail, for a message from another
@@ -98,9 +98,9 @@ The target picker offers `mailbox`, then `folder` below it. The service lists no
 only the connection's own `mailbox/ADDRESS` target, without a request, and nothing if there is none. `folder` logs in
 with that address only; any other parent address is an invalid request before a secret is read. It reads the whole
 folder list, unfiltered by folder and sender targets, 50 entries a page (at most 500 folders). Each folder is
-`folder/NAME`, named by its last element with the ones above it as path (`Kunden.A` under `.` gives `A` at `/Kunden`;
+`folder/PATH`, named by its last element with the ones above it as path (`Kunden.A` under `.` gives `A` at `/Kunden`;
 `/` at the top or without a delimiter). A folder with subfolders (by `\HasChildren` or another listed name below it)
-also gets `folder/NAME/*`, named "… (with subfolders)". It works on a draft connection and resolves no URL.
+also gets `folder/PATH/*`, named "… (with subfolders)". It works on a draft connection and resolves no URL.
 
 ## Tools
 

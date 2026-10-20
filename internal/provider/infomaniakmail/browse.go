@@ -110,8 +110,8 @@ func boundMailbox(resolved *config.Resolved) (string, bool) {
 	return found, found != ""
 }
 
-// folderEntries turns the sorted folder list into choices: the exact folder/NAME of every folder, directly
-// followed by folder/NAME/* for a folder with subfolders. A folder has subfolders when its LIST answer says
+// folderEntries turns the sorted folder list into choices: the exact folder/PATH of every folder, directly
+// followed by folder/PATH/* for a folder with subfolders. A folder has subfolders when its LIST answer says
 // \HasChildren or another listed folder begins with its name and the hierarchy delimiter; a flat hierarchy
 // (no delimiter) has none. The name is the last element below the delimiter and the path the elements above
 // it, as /A/B, or / at the top.
