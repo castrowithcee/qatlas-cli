@@ -168,3 +168,32 @@ func TestSearchHitTargetFollowsRequires(t *testing.T) {
 		t.Errorf("hit = %s", encoded)
 	}
 }
+
+// A target label is for the person only: none of the listings an agent reads shows it.
+func TestTargetLabelsNeverReachTheAgentListings(t *testing.T) {
+	const canary = "canary-label-7c1e"
+	core := targetCore(t, false, map[string][]string{"main": {"t1", "t2"}})
+	conn := core.config.Connections["main"]
+	conn.Description = "plain route"
+	conn.TargetLabels = map[string]string{"t1": canary, "t2": canary + "-2"}
+	core.config.Connections["main"] = conn
+
+	connections := core.Connections("", nil)
+	search, err := core.Search(SearchRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	describe, err := core.Describe(DescribeRequest{Operation: "fake.rows.list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]any{"connections": connections, "search": search, "describe": describe} {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), canary) {
+			t.Errorf("%s shows a target label: %s", name, encoded)
+		}
+	}
+}
