@@ -14,6 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -31,7 +32,8 @@ var browseKinds = []config.TargetKind{
 type browseCatalog struct{}
 
 var browseProviders = []config.ProviderMetadata{
-	{ID: "wiki", Name: "Wiki", Target: config.TargetMetadata{Kinds: browseKinds}},
+	{ID: "wiki", Name: "Wiki", Target: config.TargetMetadata{Kinds: browseKinds},
+		SecretRoles: []config.SecretRole{{Name: "token"}}},
 }
 
 func (browseCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool) {
@@ -45,14 +47,41 @@ func (browseCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool)
 
 func (browseCatalog) ProviderMetadataAll() []config.ProviderMetadata { return browseProviders }
 
-// browseFixture is a service over a configuration with one wiki connection "docs" and a source whose
-// calls are recorded.
+// browseFixture is a service over a configuration with one wiki connection "docs", the wiki credentials
+// "vault-cred" (vault) and "wiki-cred" (keyring), and a source whose calls are recorded. With readSecret
+// set, a read resolves role token the way a provider does, through the resolver the core handed over or else
+// own, the surface's resolver, and keeps what it got in seen.
 type browseFixture struct {
-	svc   *Service
-	path  string
-	calls int
-	list  func(config.TargetListRequest) (config.TargetPage, error)
-	url   func(origin, rawURL string) ([]config.TargetEntry, error)
+	svc        *Service
+	path       string
+	calls      int
+	list       func(config.TargetListRequest) (config.TargetPage, error)
+	url        func(origin, rawURL string) ([]config.TargetEntry, error)
+	own        *secret.Resolver
+	readSecret bool
+	resolved   *config.Resolved
+	seen       string
+}
+
+// emptyStore is a system keyring that answers and holds nothing.
+type emptyStore struct{}
+
+func (emptyStore) Get(context.Context, string) (string, error) { return "", secret.ErrNoEntry }
+func (emptyStore) Set(string, string) error                    { return secret.ErrUnavailable }
+func (emptyStore) Delete(string) error                         { return secret.ErrNoEntry }
+
+func (f *browseFixture) read(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver) error {
+	f.calls++
+	f.resolved = resolved
+	if !f.readSecret {
+		return nil
+	}
+	if secrets == nil {
+		secrets = f.own
+	}
+	value, err := secrets.Resolve(secret.ForConnection(ctx, resolved), resolved.Credential, resolved.Secrets, "token")
+	f.seen = value.Secret
+	return err
 }
 
 func newBrowseFixture(t *testing.T, v *vault.Vault) *browseFixture {
@@ -62,21 +91,32 @@ func newBrowseFixture(t *testing.T, v *vault.Vault) *browseFixture {
 	cfg := store.New()
 	cfg.Services["wiki-svc"] = config.Service{Provider: "wiki", BaseURL: "https://wiki.example.test"}
 	cfg.Credentials["wiki-cred"] = config.Credential{Type: config.CredentialTypeKeyring}
+	cfg.Credentials["vault-cred"] = config.Credential{Provider: "wiki", Type: config.CredentialTypeVault}
 	cfg.Connections["docs"] = config.Connection{Service: "wiki-svc", Credential: "wiki-cred"}
 	if err := store.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
 	secrets := newFakeSecrets()
 	secrets.vault = v
-	f := &browseFixture{path: path}
-	f.svc = New(store, secrets, connlog.SurfaceTUI, &redact.Redactor{}).WithVaultProcessSupport(false).
+	red := &redact.Redactor{}
+	f := &browseFixture{path: path, own: secret.NewWith(nil, emptyStore{}, nil, red)}
+	if v != nil {
+		f.own.WithVault(v, nil)
+	}
+	f.svc = New(store, secrets, connlog.SurfaceTUI, red).WithVaultProcessSupport(false).
 		WithTargetSource(TargetSource{
-			List: func(_ context.Context, _ *config.Resolved, req config.TargetListRequest) (config.TargetPage, error) {
-				f.calls++
+			List: func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+				req config.TargetListRequest) (config.TargetPage, error) {
+				if err := f.read(ctx, resolved, secrets); err != nil {
+					return config.TargetPage{}, err
+				}
 				return f.list(req)
 			},
-			ResolveURL: func(_ context.Context, _ *config.Resolved, origin, rawURL string) ([]config.TargetEntry, error) {
-				f.calls++
+			ResolveURL: func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+				origin, rawURL string) ([]config.TargetEntry, error) {
+				if err := f.read(ctx, resolved, secrets); err != nil {
+					return nil, err
+				}
 				return f.url(origin, rawURL)
 			},
 		})

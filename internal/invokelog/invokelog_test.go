@@ -644,3 +644,35 @@ func TestValidateTargetChoiceEntries(t *testing.T) {
 		t.Error("IsTargetOperation accepted a name that is not a target choice")
 	}
 }
+
+func TestValidateDraftTargetChoiceEntries(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
+	draft := func(operation string) Fields {
+		return Fields{Path: "web", Operation: operation, Connection: DraftConnection, Effect: "read", Result: "success"}
+	}
+	for _, operation := range []string{DraftTargetListOperation("space"), OperationDraftTargetList, OperationDraftTargetResolve} {
+		if err := draft(operation).Validate(); err != nil {
+			t.Errorf("%s: Validate() = %v", operation, err)
+		}
+		if !IsTargetOperation(operation) || !IsDraftTargetOperation(operation) || IsInvoke(Entry{Operation: operation}) {
+			t.Errorf("%s is not told apart as a draft's target choice", operation)
+		}
+	}
+	named := draft(OperationDraftTargetResolve)
+	named.Connection = "wiki"
+	withID := draft(OperationDraftTargetResolve)
+	withID.ConnectionID = id
+	saved := draft(OperationTargetResolve)
+	cli := draft(OperationDraftTargetResolve)
+	cli.Path = "cli"
+	for name, f := range map[string]Fields{
+		"draft with a name": named, "draft with an id": withID, "saved choice of the draft": saved, "cli path": cli,
+	} {
+		if err := f.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil", name)
+		}
+	}
+	if IsDraftTargetOperation(OperationTargetResolve) || IsDraftTargetOperation(TargetListOperation("space")) {
+		t.Error("IsDraftTargetOperation accepted a saved connection's choice")
+	}
+}
