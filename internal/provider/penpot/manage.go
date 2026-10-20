@@ -339,7 +339,7 @@ func invokeFilesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 // file bound through its project.
 func boundFileOf(ctx context.Context, op string, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, input manageArguments) (*Client, string, string, error) {
-	projectID, err := selectProject(resolved, input.ProjectID)
+	projectID, err := selectProjectForFile(resolved, "project_id", input.ProjectID, input.FileID)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -389,7 +389,7 @@ func invokeFilesMove(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	source, err := selectProject(resolved, input.ProjectID)
+	source, err := selectProjectForFile(resolved, "project_id", input.ProjectID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

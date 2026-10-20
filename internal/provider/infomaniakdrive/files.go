@@ -82,7 +82,7 @@ var filesList = capability.Descriptor{
 		`"required":["drive_id","folder_id","entries","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		driveIDArgument,
-		{Name: "folder_id", Description: "Folder identifier below the same drive; the drive's root (1) when omitted"},
+		{Name: "folder_id", Description: "Folder identifier below the same drive; the drive's root (1) when omitted, or the one files target of a drive bound only by files targets"},
 		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
 	},
@@ -161,6 +161,8 @@ type fileJSON struct {
 	CreatedAt      *int64  `json:"created_at"`
 	LastModifiedAt int64   `json:"last_modified_at"`
 	DeletedAt      *int64  `json:"deleted_at"`
+	// Parents is every folder above the object, present only when it was asked for.
+	Parents *[]parentJSON `json:"parents"`
 }
 
 // Entry is the stable Qatlas view of one file or folder. Content is never part of it.
@@ -240,9 +242,9 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := selectDrive(resolved, input.DriveID); err != nil {
 		return nil, err
 	}
-	folderID := input.FolderID
-	if folderID == 0 {
-		folderID = rootFileID
+	folderID, defaulted, err := listFolder(resolved, input)
+	if err != nil {
+		return nil, err
 	}
 	limit := input.Limit
 	if limit == 0 {
@@ -255,7 +257,34 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := client.verifyDriveAccount(ctx, "list files", input.DriveID); err != nil {
 		return nil, err
 	}
+	if !defaulted {
+		// The entries of a folder inside the targets lie inside them too, so they need no proof of their own.
+		if err := client.proveObjects(ctx, "list files", input.DriveID, folderID); err != nil {
+			return nil, err
+		}
+	}
 	return client.ListFolder(ctx, input.DriveID, folderID, input.Cursor, limit)
+}
+
+// listFolder names the folder to list. Without folder_id a drive bound as a whole lists its root; a drive
+// bound as a subtree lists its one files target, and with several of them folder_id is required. A folder
+// taken from the targets themselves needs no proof.
+func listFolder(resolved *config.Resolved, input filesListArguments) (folderID int64, defaulted bool, err error) {
+	if input.FolderID != 0 {
+		return input.FolderID, false, nil
+	}
+	bound, err := scopeOf(resolved)
+	if err != nil {
+		return 0, false, providerError("list files", err.Error())
+	}
+	if bound.wholeDrive(input.DriveID) {
+		return rootFileID, true, nil
+	}
+	roots := bound.subtreeRoots(input.DriveID)
+	if len(roots) != 1 {
+		return 0, false, invalidRequest("folder_id is required because this connection binds several files or folders of this drive")
+	}
+	return roots[0], true, nil
 }
 
 // ListFolder reads one page of the immediate children of one folder, cursor-paginated exactly as Infomaniak
@@ -305,7 +334,7 @@ func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := client.verifyDriveAccount(ctx, "stat file", input.DriveID); err != nil {
 		return nil, err
 	}
-	return client.StatFile(ctx, input.DriveID, fileID)
+	return client.statProven(ctx, input.DriveID, fileID)
 }
 
 // StatFile reads the metadata of exactly one file or folder.
@@ -337,6 +366,9 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, err
 	}
 	if err := client.verifyDriveAccount(ctx, "get file content", input.DriveID); err != nil {
+		return nil, err
+	}
+	if err := client.proveObjects(ctx, "get file content", input.DriveID, input.FileID); err != nil {
 		return nil, err
 	}
 	return client.GetFileContent(ctx, input.DriveID, input.FileID)

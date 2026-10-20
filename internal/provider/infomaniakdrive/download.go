@@ -97,7 +97,7 @@ func invokeFilesDownload(ctx context.Context, resolved *config.Resolved, secrets
 	if err := client.verifyDriveAccount(ctx, op, input.DriveID); err != nil {
 		return nil, err
 	}
-	entry, err := client.StatFile(ctx, input.DriveID, input.FileID)
+	entry, err := client.statProven(ctx, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

@@ -366,7 +366,7 @@ func invokeAccessGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(accessFileReason)
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func invokeAccessGrant(ctx context.Context, resolved *config.Resolved, secrets *
 	if len(input.UserIDs)+len(input.TeamIDs) == 0 {
 		return nil, invalidRequest("a grant needs at least one of user_ids and team_ids")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -571,7 +571,7 @@ func invokeAccessOne(ctx context.Context, resolved *config.Resolved, secrets *se
 	case !update && input.Right != "":
 		return nil, invalidRequest("a revoke takes no right")
 	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

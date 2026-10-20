@@ -209,6 +209,9 @@ func (c *Client) fileOf(ctx context.Context, op, projectID, fileID string) (*Fil
 
 // fileOfAs is fileOf for arguments with other names, such as a library file.
 func (c *Client) fileOfAs(ctx context.Context, op, projectField, fileField, projectID, fileID string) (*File, error) {
+	if !c.scope.allowsFile(projectID, fileID) {
+		return nil, invalidRequest(projectField + " is outside the targets of this connection")
+	}
 	if err := c.locateProjectAs(ctx, op, projectField, projectID); err != nil {
 		return nil, err
 	}
@@ -235,7 +238,7 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	projectID, err := selectProject(resolved, input.ProjectID)
+	projectID, err := selectProjectForFile(resolved, "project_id", input.ProjectID, input.FileID)
 	if err != nil {
 		return nil, err
 	}

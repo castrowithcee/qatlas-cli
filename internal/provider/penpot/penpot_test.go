@@ -116,6 +116,8 @@ func testConfig() *config.Config {
 			"one":    connection("team/" + teamA),
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
+			"file":   connection("team/"+teamA, "file/"+fileA1),
+			"mixed":  connection("team/"+teamA, "project/"+projectA2, "file/"+fileA1),
 			"write": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA},
 				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
 			"writetwo": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA, "team/" + teamB},
@@ -123,6 +125,8 @@ func testConfig() *config.Config {
 			"writenarrow": {Service: "penpot", Credential: "token", Effects: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
 				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
+			"writefile": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA, "file/" + fileA1},
+				Tools: append([]string{}, manageTools...)},
 			"nodelete": {Service: "penpot", Credential: "token", Effects: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
@@ -190,7 +194,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != roleAccessToken ||
 		metadata.DefaultBaseURL != cloudOrigin || !metadata.Target.Required || !metadata.Target.Multiple ||
-		len(metadata.Target.Kinds) != 2 {
+		len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	want := map[string]config.Effect{teamsList.ID: config.EffectRead, projectsList.ID: config.EffectRead,
@@ -234,7 +238,7 @@ func TestTargetValidation(t *testing.T) {
 	for raw, valid := range map[string]bool{
 		"team/" + teamA: true, "project/" + projectA1: true, "team/" + strings.ToUpper(teamA): true,
 		"": false, "team/": false, "team/1": false, "team/" + teamA + "x": false, "tem/" + teamA: false,
-		"*": false, "file/" + fileA1: false, "team/" + strings.Repeat("g", 36): false,
+		"*": false, "file/" + fileA1: true, "file/": false, "file/x": false, "team/" + strings.Repeat("g", 36): false,
 	} {
 		if err := validateTarget(raw); (err == nil) != valid {
 			t.Errorf("validateTarget(%q) = %v, want valid=%t", raw, err, valid)
@@ -247,6 +251,9 @@ func TestTargetValidation(t *testing.T) {
 		"team":          {[]string{"team/" + teamA}, true},
 		"teams+project": {[]string{"team/" + teamA, "team/" + teamB, "project/" + projectA1}, true},
 		"none":          {nil, false},
+		"team+file":     {[]string{"team/" + teamA, "file/" + fileA1}, true},
+		"file only":     {[]string{"file/" + fileA1}, false},
+		"dup file":      {[]string{"team/" + teamA, "file/" + fileA1, "file/" + fileA1}, false},
 		"project only":  {[]string{"project/" + projectA1}, false},
 		"dup team":      {[]string{"team/" + teamA, "team/" + strings.ToUpper(teamA)}, false},
 		"dup project":   {[]string{"team/" + teamA, "project/" + projectA1, "project/" + projectA1}, false},
