@@ -101,3 +101,27 @@ func validCollectionID(id string) bool {
 	}
 	return true
 }
+
+// toolKinds names, for every tool, the kind of target it needs. calendars.list and address-books.list each
+// need their own kind: they list only what the bound allow-list names.
+var toolKinds = map[string]string{
+	calendarsList.ID: "calendar", eventsList.ID: "calendar", eventsGet.ID: "calendar",
+	eventsCreate.ID: "calendar", eventsUpdate.ID: "calendar", eventsDelete.ID: "calendar",
+	addressbooksList.ID: "addressbook", contactsList.ID: "addressbook", contactsGet.ID: "addressbook",
+	contactsCreate.ID: "addressbook", contactsUpdate.ID: "addressbook", contactsDelete.ID: "addressbook",
+}
+
+// reaches says whether a binding holds a target of the kind the tool needs. A tool missing from toolKinds
+// counts as reached: the check at call time still refuses it, while hiding it would drop a new tool silently.
+func reaches(tool string, targets []string) (bool, []string) {
+	kind, ok := toolKinds[tool]
+	if !ok {
+		return true, nil
+	}
+	for _, raw := range targets {
+		if k, _, err := parseTarget(strings.TrimSpace(raw)); err == nil && k == kind {
+			return true, nil
+		}
+	}
+	return false, []string{kind + "/ID"}
+}
