@@ -9,6 +9,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/emersion/go-imap/v2"
 )
 
 const (
@@ -82,34 +83,59 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 	defer conn.close()
 
 	patterns := []string{"*"}
-	if len(c.scope.folders) > 0 {
-		patterns = c.scope.folders
+	if !c.scope.unrestricted() {
+		patterns = append(append([]string{}, c.scope.folders...), c.scope.trees...)
 	}
 	byName := map[string]Folder{}
-	for _, pattern := range patterns {
+	collect := func(pattern string) ([]*imap.ListData, error) {
 		listed, err := conn.client.List("", pattern, nil).Collect()
 		if err != nil {
 			return nil, failure(op, err)
 		}
-		for _, data := range listed {
-			name := normalizeFolder(data.Mailbox)
-			// A folder this provider could not open again is never listed: its name must be a literal one,
-			// and the connection's scope must admit it.
-			if !validFolderName(name) || !c.scope.allowsFolder(name) {
+		return listed, nil
+	}
+	var all []*imap.ListData
+	for _, pattern := range patterns {
+		listed, err := collect(pattern)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, listed...)
+		// A folder/NAME/* target also asks for the subfolders of NAME, with the delimiter NAME itself reports.
+		// A folder without one (flat hierarchy) has no subfolders to ask for.
+		for _, tree := range c.scope.trees {
+			if pattern != tree {
 				continue
 			}
-			folder := Folder{Name: name}
-			if data.Delim != 0 {
-				folder.Delimiter = clean(string(data.Delim), 1)
-			}
-			for i, attr := range data.Attrs {
-				if i >= maxAttributes {
-					break
+			for _, data := range listed {
+				if normalizeFolder(data.Mailbox) == tree && data.Delim != 0 {
+					sub, err := collect(tree + string(data.Delim) + "*")
+					if err != nil {
+						return nil, err
+					}
+					all = append(all, sub...)
 				}
-				folder.Attributes = append(folder.Attributes, clean(string(attr), maxAttributeText))
 			}
-			byName[name] = folder
 		}
+	}
+	for _, data := range all {
+		name := normalizeFolder(data.Mailbox)
+		// A folder this provider could not open again is never listed: its name must be a literal one,
+		// and the connection's scope must admit it with the delimiter of its own LIST answer.
+		if !validFolderName(name) || !c.scope.allowsFolderDelim(name, string(data.Delim)) {
+			continue
+		}
+		folder := Folder{Name: name}
+		if data.Delim != 0 {
+			folder.Delimiter = clean(string(data.Delim), 1)
+		}
+		for i, attr := range data.Attrs {
+			if i >= maxAttributes {
+				break
+			}
+			folder.Attributes = append(folder.Attributes, clean(string(attr), maxAttributeText))
+		}
+		byName[name] = folder
 	}
 	names := make([]string, 0, len(byName))
 	for name := range byName {

@@ -335,6 +335,8 @@ type listCall struct {
 	binding []byte
 	limit   int
 	after   string
+	// project is the project the list is narrowed to, if any; it must belong to the connection.
+	project string
 }
 
 // newListCall checks the batch size and the cursor of one request before any credential is resolved. The
@@ -354,6 +356,9 @@ func newListCall(op, path string, query url.Values, limit int, cursor string, pa
 
 // run reads exactly the one page the call names and returns its entries and the continuation.
 func (c *Client) run(ctx context.Context, call listCall) ([]json.RawMessage, Continuation, error) {
+	if err := c.requireProject(ctx, call.op, call.project); err != nil {
+		return nil, Continuation{}, err
+	}
 	entries, next, err := c.page(ctx, call.op, call.path, call.query, call.limit, call.after)
 	if err != nil {
 		return nil, Continuation{}, err
@@ -375,7 +380,11 @@ func (c *Client) listProjects(ctx context.Context, call listCall) (*ProjectList,
 	}
 	result := &ProjectList{Projects: []Project{}, Continuation: more}
 	for _, raw := range raws {
-		if c.scope.allows(raw.ID) {
+		ok, err := c.projectAllowed(ctx, call.op, raw.ID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			result.Projects = append(result.Projects, projectOf(raw, false))
 		}
 	}
@@ -400,7 +409,14 @@ func (c *Client) readProject(ctx context.Context, op, id string) (rawProject, er
 	if raw.ID == "" {
 		return rawProject{}, invalidResponse(op)
 	}
-	if raw.IsDeleted || !c.scope.allows(raw.ID) {
+	if raw.IsDeleted {
+		return rawProject{}, outsideScope("project")
+	}
+	ok, err := c.projectAllowed(ctx, op, raw.ID)
+	if err != nil {
+		return rawProject{}, err
+	}
+	if !ok {
 		return rawProject{}, outsideScope("project")
 	}
 	return raw, nil
@@ -419,7 +435,14 @@ func (c *Client) listSections(ctx context.Context, call listCall, projectID stri
 	}
 	result := &SectionList{Sections: []Section{}, Continuation: more}
 	for _, raw := range raws {
-		if raw.IsDeleted || !c.scope.allows(raw.ProjectID) || (projectID != "" && raw.ProjectID != projectID) {
+		if raw.IsDeleted || (projectID != "" && raw.ProjectID != projectID) {
+			continue
+		}
+		ok, err := c.sectionAllowed(ctx, call.op, raw)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
 		result.Sections = append(result.Sections, sectionOf(raw))
@@ -436,7 +459,14 @@ func (c *Client) readSection(ctx context.Context, op, id string) (rawSection, er
 	if raw.ID == "" {
 		return rawSection{}, invalidResponse(op)
 	}
-	if raw.IsDeleted || !c.scope.allows(raw.ProjectID) {
+	if raw.IsDeleted {
+		return rawSection{}, outsideScope("section")
+	}
+	ok, err := c.sectionAllowed(ctx, op, raw)
+	if err != nil {
+		return rawSection{}, err
+	}
+	if !ok {
 		return rawSection{}, outsideScope("section")
 	}
 	return raw, nil
@@ -509,7 +539,14 @@ func (c *Client) listTasks(ctx context.Context, call listCall, window dueWindow,
 	}
 	result := &TaskList{Tasks: []Task{}, Continuation: more}
 	for _, raw := range raws {
-		if raw.IsDeleted || !c.scope.allows(raw.ProjectID) || !window.admits(raw.Due) {
+		if raw.IsDeleted || !window.admits(raw.Due) {
+			continue
+		}
+		ok, err := c.taskAllowed(ctx, call.op, raw)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
 		result.Tasks = append(result.Tasks, taskOf(raw, full))
@@ -526,7 +563,14 @@ func (c *Client) readTask(ctx context.Context, op, id string) (rawTask, error) {
 	if raw.ID == "" {
 		return rawTask{}, invalidResponse(op)
 	}
-	if raw.IsDeleted || !c.scope.allows(raw.ProjectID) {
+	if raw.IsDeleted {
+		return rawTask{}, outsideScope("task")
+	}
+	ok, err := c.taskAllowed(ctx, op, raw)
+	if err != nil {
+		return rawTask{}, err
+	}
+	if !ok {
 		return rawTask{}, outsideScope("task")
 	}
 	return raw, nil

@@ -156,7 +156,7 @@ var sectionsCreate = changing(capability.EffectCreate, capability.IdempotencyNon
 	json.RawMessage(sectionSchema),
 	[]capability.Argument{
 		{Name: "name", Description: "Section name, at most 2048 characters on one line", Required: true},
-		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted", Target: "*"},
+		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted", Target: "project"},
 		{Name: "description", Description: "Section description, at most 16383 characters"},
 	},
 	sectionFields,
@@ -291,6 +291,12 @@ func listedOnly(d capability.Descriptor) capability.Descriptor {
 // accountOnly refuses a tool on a project connection as an unsupported capability before any credential is
 // resolved: the tool acts on the whole account, beyond any list of projects.
 func accountOnly(id string, next capability.Handler) capability.Handler {
+	return reachedBy(id, func(bound scope) bool { return bound.all }, next)
+}
+
+// reachedBy refuses a tool as an unsupported capability before any credential is resolved when the
+// connection's scope does not pass the check.
+func reachedBy(id string, reached func(scope) bool, next capability.Handler) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 		raw json.RawMessage) (any, error) {
 		if resolved == nil {
@@ -300,7 +306,7 @@ func accountOnly(id string, next capability.Handler) capability.Handler {
 		if err != nil {
 			return nil, providerError("open", err.Error())
 		}
-		if !bound.all {
+		if !reached(bound) {
 			return nil, &capability.UnsupportedError{Connection: resolved.Name, Capability: id}
 		}
 		return next(ctx, resolved, secrets, red, raw)
@@ -389,48 +395,19 @@ func (c *Client) subprojectsInScope(ctx context.Context, op, projectID string, a
 	if c.scope.all {
 		return nil
 	}
-	parents := map[string]string{}
-	paths := []string{"/projects"}
-	if archived {
-		paths = append(paths, "/projects/archived")
+	if err := c.loadProjects(ctx, op, archived); err != nil {
+		return err
 	}
-	for _, path := range paths {
-		after := ""
-		for pages := 0; ; pages++ {
-			if pages == maxScanPages {
-				return &provider.Error{Class: provider.ClassProviderError, Op: op,
-					Message: "the subprojects of this project could not all be checked; nothing was changed"}
-			}
-			entries, next, err := c.page(ctx, op, path, nil, maxLimit, after)
-			if err != nil {
-				return err
-			}
-			raws, err := decodeEach(op, entries, func(p rawProject) string { return p.ID })
-			if err != nil {
-				return err
-			}
-			for _, raw := range raws {
-				if parent := text(raw.ParentID); parent != "" {
-					parents[raw.ID] = parent
-				}
-			}
-			if next == "" {
-				break
-			}
-			after = next
-		}
-	}
-	for id := range parents {
-		ancestor := parents[id]
-		for steps := 0; ancestor != "" && steps < len(parents); steps++ {
+	for id, ancestor := range c.tree.parents {
+		for steps := 0; ancestor != "" && steps < len(c.tree.parents); steps++ {
 			if ancestor == projectID {
-				if !c.scope.allows(id) {
+				if !c.scope.exact(id) && !c.below(id) {
 					return invalidRequest("the project has a subproject outside this connection, which Todoist " +
 						"would change with it")
 				}
 				break
 			}
-			ancestor = parents[ancestor]
+			ancestor = c.tree.parents[ancestor]
 		}
 	}
 	return nil
@@ -438,11 +415,16 @@ func (c *Client) subprojectsInScope(ctx context.Context, op, projectID string, a
 
 // changedProject checks the project a change answered with. Its request may have changed something, so every
 // failure says so.
-func (c *Client) changedProject(op string, raw rawProject, want string) (*Project, error) {
+func (c *Client) changedProject(ctx context.Context, op string, raw rawProject, want string) (*Project, error) {
 	if raw.ID == "" || (want != "" && raw.ID != want) {
 		return nil, invalidChange(op, true)
 	}
-	if !c.scope.allows(raw.ID) {
+	c.noteProject(raw)
+	ok, err := c.projectAllowed(ctx, op, raw.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "Todoist answered with a project outside the connection" + uncertain}
 	}
@@ -450,7 +432,7 @@ func (c *Client) changedProject(op string, raw rawProject, want string) (*Projec
 	return &project, nil
 }
 
-func prepareProjectsCreate(_ scope, arguments struct {
+func prepareProjectsCreate(bound scope, arguments struct {
 	ParentID string `json:"parent_id"`
 	projectValues
 }) (run, error) {
@@ -464,9 +446,23 @@ func prepareProjectsCreate(_ scope, arguments struct {
 	if err := arguments.check(); err != nil {
 		return nil, err
 	}
+	if !bound.all && arguments.ParentID == "" {
+		return nil, invalidRequest("name parent_id; a connection bound to a project tree creates subprojects only")
+	}
 	body := arguments.body()
 	return func(ctx context.Context, c *Client) (any, error) {
 		if arguments.ParentID != "" {
+			// A new project joins a bound project only below a project tree: a bare project ID binds that
+			// project alone, so a project created below it would be outside the connection.
+			if !c.scope.all {
+				member, err := c.treeMember(ctx, op, arguments.ParentID)
+				if err != nil {
+					return nil, err
+				}
+				if !member {
+					return nil, outsideScope("project")
+				}
+			}
 			if _, err := c.personalProject(ctx, op, arguments.ParentID); err != nil {
 				return nil, err
 			}
@@ -476,7 +472,7 @@ func prepareProjectsCreate(_ scope, arguments struct {
 		if err := c.change(ctx, op, http.MethodPost, "/projects", body, &raw); err != nil {
 			return nil, err
 		}
-		return c.changedProject(op, raw, "")
+		return c.changedProject(ctx, op, raw, "")
 	}, nil
 }
 
@@ -485,6 +481,9 @@ func prepareProjectsUpdate(bound scope, arguments struct {
 	projectValues
 }) (run, error) {
 	const op = "update project"
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := checkRequiredID("project_id", arguments.ProjectID); err != nil {
 		return nil, err
 	}
@@ -507,7 +506,7 @@ func prepareProjectsUpdate(bound scope, arguments struct {
 			&raw); err != nil {
 			return nil, err
 		}
-		return c.changedProject(op, raw, arguments.ProjectID)
+		return c.changedProject(ctx, op, raw, arguments.ProjectID)
 	}, nil
 }
 
@@ -520,6 +519,9 @@ func prepareProjectState(op, method, suffix, result string, subprojects, archive
 		ProjectID string `json:"project_id"`
 	}) (run, error) {
 		if err := checkRequiredID("project_id", arguments.ProjectID); err != nil {
+			return nil, err
+		}
+		if err := bound.requireProjectLevel(); err != nil {
 			return nil, err
 		}
 		if err := bound.selectProject(arguments.ProjectID); err != nil {
@@ -553,11 +555,15 @@ func (c *Client) sectionInScope(ctx context.Context, op, id string) error {
 }
 
 // changedSection checks the section a change answered with.
-func (c *Client) changedSection(op string, raw rawSection, want string) (*Section, error) {
+func (c *Client) changedSection(ctx context.Context, op string, raw rawSection, want string) (*Section, error) {
 	if raw.ID == "" || (want != "" && raw.ID != want) {
 		return nil, invalidChange(op, true)
 	}
-	if !c.scope.allows(raw.ProjectID) {
+	ok, err := c.sectionAllowed(ctx, op, raw)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "Todoist answered with a section outside the connection's projects" + uncertain}
 	}
@@ -597,12 +603,15 @@ func prepareSectionsCreate(bound scope, arguments struct {
 	if err := checkID("project_id", arguments.ProjectID); err != nil {
 		return nil, err
 	}
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := bound.selectProject(arguments.ProjectID); err != nil {
 		return nil, err
 	}
 	project := arguments.ProjectID
 	if project == "" {
-		single, ok := bound.single()
+		single, ok := bound.defaultProject()
 		if !ok {
 			return nil, invalidRequest("name project_id; only a connection with one project has a default project")
 		}
@@ -613,11 +622,14 @@ func prepareSectionsCreate(bound scope, arguments struct {
 		body["description"] = *arguments.Description
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
+		if err := c.requireProject(ctx, op, project); err != nil {
+			return nil, err
+		}
 		var raw rawSection
 		if err := c.change(ctx, op, http.MethodPost, "/sections", body, &raw); err != nil {
 			return nil, err
 		}
-		return c.changedSection(op, raw, "")
+		return c.changedSection(ctx, op, raw, "")
 	}, nil
 }
 
@@ -649,10 +661,13 @@ func prepareSectionsUpdate(_ scope, arguments struct {
 	return sectionChange(op, arguments.SectionID, body), nil
 }
 
-func prepareSectionsReorder(_ scope, arguments struct {
+func prepareSectionsReorder(bound scope, arguments struct {
 	SectionID string `json:"section_id"`
 	Order     *int   `json:"order"`
 }) (run, error) {
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := checkRequiredID("section_id", arguments.SectionID); err != nil {
 		return nil, err
 	}
@@ -672,7 +687,7 @@ func sectionChange(op, id string, body map[string]any) run {
 		if err := c.change(ctx, op, http.MethodPost, "/sections/"+url.PathEscape(id), body, &raw); err != nil {
 			return nil, err
 		}
-		return c.changedSection(op, raw, id)
+		return c.changedSection(ctx, op, raw, id)
 	}
 }
 
@@ -690,11 +705,17 @@ func prepareSectionsMove(bound scope, arguments struct {
 	if err := checkRequiredID("project_id", arguments.ProjectID); err != nil {
 		return nil, err
 	}
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := bound.selectProject(arguments.ProjectID); err != nil {
 		return nil, err
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
 		if err := c.sectionInScope(ctx, op, arguments.SectionID); err != nil {
+			return nil, err
+		}
+		if err := c.requireProject(ctx, op, arguments.ProjectID); err != nil {
 			return nil, err
 		}
 		if err := c.command(ctx, op, "section_move", map[string]any{"id": arguments.SectionID,
@@ -705,10 +726,13 @@ func prepareSectionsMove(bound scope, arguments struct {
 	}, nil
 }
 
-func prepareSectionsDelete(_ scope, arguments struct {
+func prepareSectionsDelete(bound scope, arguments struct {
 	SectionID string `json:"section_id"`
 }) (run, error) {
 	const op = "delete section"
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := checkRequiredID("section_id", arguments.SectionID); err != nil {
 		return nil, err
 	}

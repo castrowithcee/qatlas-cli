@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-25
+updated: 2026-10-20
 ---
 
 # Todoist
@@ -24,9 +24,9 @@ because a personal token belongs to that one service.
 
 The credential provides `token`, the personal API token from Todoist under Settings, Integrations,
 Developer. That token reaches the whole account, so the connection target is what limits Qatlas. A
-successful `qatlas connection test` reads each configured project once, or one project of the account for a
-wildcard connection; it proves that the token sees the scope, not that the account's plan includes every
-feature.
+successful `qatlas connection test` reads each configured project and section once, or one project of the
+account for a wildcard connection; it proves that the token sees the scope, not that the account's plan
+includes every feature.
 
 ```yaml
 services:
@@ -42,55 +42,56 @@ credentials:
 
 ## Scope
 
-A connection names its projects explicitly, or deliberately the whole account:
+A connection names its targets explicitly, or deliberately the whole account. Several targets form an
+allow-list: the connection reaches what any of them reaches.
 
 | Target | Binds |
 | --- | --- |
-| `target: PROJECT_ID` | one project |
-| `targets: [PROJECT_ID, PROJECT_ID, ...]` | exactly these projects |
-| `target: "*"` | the whole account, including saved filters |
+| `PROJECT_ID` | exactly this project, without its subprojects |
+| `project/PROJECT_ID` | this project and all its subprojects at any depth, also those created later |
+| `section/SECTION_ID` | the tasks of this section, with their comments and reminders |
+| `*` | the whole account, including saved filters; stands alone |
 
-A project ID is the ID `todoist.projects.list` returns (letters and digits). Subprojects are not included by
-their parent: list every project the connection may read. An empty target never means the whole account,
-and `*` must be the only target. The terminal editor warns whenever `*` is entered.
+An ID is the ID the matching list tool returns (letters and digits). Subprojects are resolved on every
+call from the project list, so no subproject is remembered across calls. An empty target never means the
+whole account. The terminal editor warns whenever `*` is entered.
 
-No argument names or widens the scope. A `project_id` argument only selects one of the connection's
-projects and is refused before any request when it lies outside them. Todoist answers are checked again:
-a task, section, comment, or reminder of another project is never returned, even when a filter expression
-or Todoist itself answers more broadly, and reading one by its ID is refused without its content. The
-comments and reminders of a task are requested only after the task was read and found inside the scope.
-A connection bound to exactly one project narrows every task and section request to that project.
+A binding reaches a tool only where the tool can act inside it; the others are not offered, and the call
+check stays in force:
 
-A change on a project connection first reads the task or comment it concerns and every section, parent task,
-or task it names, and is refused before anything is sent when one of them lies outside the connection: no
-task is created in, moved into, or attached below another project, a section must belong to one of the
-connection's projects, and a comment is changed only when its task or project belongs to them. A `project_id`
-argument is checked against the connection before any request. A `*` connection holds every project, so it
-reads nothing first and leaves the combination to Todoist.
+| Tools | `*` | `PROJECT_ID`, `project/PROJECT_ID` | `section/SECTION_ID` only |
+| --- | --- | --- | --- |
+| task, completed-task, comment, and reminder tools; `todoist.labels.list` | yes | yes | yes, within the section |
+| `todoist.sections.get`, `todoist.sections.update` | yes | yes | yes, the bound section |
+| project tools except create; section list, create, reorder, move, delete | yes | yes | no |
+| `todoist.projects.create` | yes | only below a `project/PROJECT_ID` project | no |
+| label changes, `todoist.filters.list` | yes | no | no |
 
-The structure changes follow the same boundary:
+No argument names or widens the scope. A `project_id`, `section_id`, or `parent_id` argument only selects
+inside it and is refused when it lies outside. Every object ID is proven against the scope before it is
+read, changed, or returned, and no refusal names the object or a target. A task belongs to a section
+binding when its `section_id` is the bound one. The comments and reminders of a task are requested only
+after the task was read and found inside. Todoist answers are checked again: a row outside the scope is never
+returned, even when Todoist answers more broadly than asked. A connection bound to exactly one project or
+one section narrows every task request to it at Todoist; a project tree is narrowed only by a named
+`project_id`.
 
-- A project connection updates, archives, unarchives, and deletes only its own projects, and creates, changes,
-  reorders, moves, and deletes sections only inside them; a section moves only to another project of the
-  connection.
-- A new project would lie outside every project list, so `todoist.projects.create` is offered only by a `*`
-  connection; a project connection refuses it as an unsupported capability before a secret is read. The new
-  project does not join any connection's target.
-- Todoist archives and deletes a project together with all its subprojects. On a project connection Qatlas
-  therefore reads the project tree first (the active projects, and for a delete the archived ones too) and
-  refuses the change when a subproject at any depth lies outside the connection. A tree of more than 25 pages
-  of 200 projects is refused unchecked. Unarchiving restores the project alone, as a top-level project.
-- Only personal projects are changed. Every project change reads the project first, on every connection,
-  and refuses a workspace project; a new project is never created in a workspace or below a workspace project.
-- Personal labels belong to the account, not to a project, and a label change reaches every task that carries
-  the label, so the label changes are offered only by a `*` connection.
-- A reminder belongs to a task. On a project connection a new reminder's task, or an existing reminder and
-  then its task, is read first and must belong to the connection.
+A change reads what it concerns first and is refused before anything is sent when it lies outside the
+connection: no task is created in, moved into, or attached below another place, a section must belong to the
+scope, and a comment is changed only when its task or project belongs to it. A new task without a place goes
+to the connection's only target. A `*` connection reads nothing first.
 
-Personal labels belong to the account, not to a project; every connection may list their names and colors,
-never tasks through them. Saved filters span every project, so only a `*` connection offers
-`todoist.filters.list`; a project connection refuses it as an unsupported capability before a secret is
-read. A project connection reads reminders only for one named task.
+Structure changes follow the same boundary:
+
+- A new project would lie outside every list unless it joins a tree, so `todoist.projects.create` needs
+  `parent_id` inside a `project/PROJECT_ID` project on any binding but `*`; it joins that tree at once.
+- Todoist archives and deletes a project with all its subprojects. Qatlas reads the project tree first (for a
+  delete the archived projects too) and refuses the change when a subproject at any depth lies outside the
+  connection. A tree of more than 25 pages of 200 projects is refused unresolved. Unarchiving restores the
+  project alone, as a top-level project.
+- Only personal projects are changed: every project change reads the project first and refuses a workspace
+  project, and no project is created in or below one.
+- A reminder belongs to a task, which is read first and must belong to the connection.
 
 ## Tools
 
@@ -106,7 +107,7 @@ read. A project connection reads reminders only for one named task.
 | `todoist.tasks.get` | one active task with its description |
 | `todoist.completed-tasks.list` | tasks completed between `since` and `until` |
 | `todoist.comments.list` | the comments of exactly one `task_id` or one `project_id` |
-| `todoist.reminders.list` | time-based reminders; of one `task_id` on a project connection |
+| `todoist.reminders.list` | time-based reminders; of one `task_id` unless `*` |
 | `todoist.reminders.get` | one time-based reminder of a task of the connection |
 | `todoist.filters.list` | saved filters with their queries; `*` connections only |
 
@@ -131,7 +132,7 @@ The structure changes:
 
 | Tool | Effect | Repeating it | Connection | Changes |
 | --- | --- | --- | --- | --- |
-| `todoist.projects.create` | `create` | creates a second project | `*` only | one personal project, optionally below a personal parent |
+| `todoist.projects.create` | `create` | creates a second project | `*`, or below a tree | one personal project, optionally below a personal parent |
 | `todoist.projects.update` | `update` | same state | any | name, description, color, favorite mark, view style |
 | `todoist.projects.archive` | `update` | same state | any | archives one project with all its subprojects |
 | `todoist.projects.unarchive` | `update` | same state | any | restores one archived project alone, as a top-level project |
@@ -146,7 +147,7 @@ The structure changes:
 | `todoist.labels.reorder` | `update` | same state | `*` only | the position of one label in the label list |
 | `todoist.labels.delete` | `delete`, listed only | same state | `*` only | deletes one label and removes it from every task |
 
-"Any" means a `*` connection or a project connection within its projects. A tool marked listed only takes more
+"Any" means every binding that reaches the tool, see Scope. A tool marked listed only takes more
 than itself with it, so it is offered only by a connection whose `tools` list names it, whatever its
 `effects`; a connection that selects by `effects` never offers it.
 
@@ -185,7 +186,7 @@ an update never moves or completes a task, and a close never reopens one.
 `todoist.tasks.create` takes `content` (one line, at most 500 characters) and places the task by
 `project_id`, `section_id`, or `parent_id`; `section_id` and `parent_id` exclude each other, and a named
 project must be the one of the section or parent. Without any of them the task goes to the connection's only
-project, to the Inbox on a `*` connection, and is refused on a connection with several projects.
+target, to the Inbox on a `*` connection, and is refused on a connection with several targets.
 `todoist.tasks.update` changes only the values it names. Both take:
 
 - `description` in Markdown, at most 16383 characters,
@@ -215,7 +216,7 @@ contract. The delivery channel of a reminder is left to the account.
 `description`, `color` (a Todoist color name such as `blue` or `berry_red`), `is_favorite`, and `view_style`
 (`list`, `board`, or `calendar`); a create takes `parent_id` of a personal project as well. Sections take
 `name` (one line, at most 2048 characters) and `description`; a create without `project_id` goes to the
-connection's only project. Labels take `name` (one line, at most 128 characters), `color`, and
+connection's only project or project tree. Labels take `name` (one line, at most 128 characters), `color`, and
 `is_favorite`. Reordering is a tool of its own: `todoist.sections.reorder` and `todoist.labels.reorder` set
 one `order` position and change nothing else.
 
