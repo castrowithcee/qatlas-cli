@@ -658,6 +658,11 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <input id="targets" type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off">
 <p class="hint">{{.TargetHint}}</p>
 </div>
+{{range $i, $l := .Labels}}<div class="field">
+<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+<input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
+</div>
+{{end}}{{if not .Labels}}<p class="hint">Labels can be set for each target once the targets are entered and reviewed; the review page keeps them editable.</p>{{end}}
 <div class="field">
 <label for="description">Description</label>
 <input id="description" type="text" name="description" value="{{.Form.Description}}" autocomplete="off">
@@ -695,7 +700,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{end}}</fieldset>
 {{if .Tools}}<fieldset class="field">
 <legend>Tools (access by selected tools)</legend>
-{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}})</label></div>
+{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}{{if $t.Unreached}} disabled{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}}){{if $t.Unreached}} - not available, {{$t.Unreached}}{{end}}</label></div>
 {{end}}</fieldset>{{end}}
 </section>
 
@@ -749,6 +754,14 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{range $role, $value := .Form.EnvNames}}<input type="hidden" name="envname_{{$role}}" value="{{$value}}">
 {{end}}
 <input type="hidden" name="connname" value="{{.Form.ConnName}}">
+{{if .Labels}}<fieldset class="field">
+<legend>Target labels</legend>
+<p class="hint">A label names a target for people; leave it empty for none.</p>
+{{range $i, $l := .Labels}}<div class="field">
+<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+<input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
+</div>
+{{end}}</fieldset>{{end}}
 <input type="hidden" name="targets" value="{{.Form.Targets}}">
 <input type="hidden" name="description" value="{{.Form.Description}}">
 <input type="hidden" name="filesread" value="{{.Form.FilesRead}}">
