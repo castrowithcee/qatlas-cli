@@ -534,3 +534,49 @@ func TestValidTarget(t *testing.T) {
 		t.Error("ValidTarget accepted an unknown kind")
 	}
 }
+
+func TestFitsFormTakesSeveralSegmentsForATrailingPath(t *testing.T) {
+	form := []string{"folder", "PATH"}
+	for target, want := range map[string]bool{
+		"folder/a": true, "folder/a/b": true, "folder/a/b/c": true, "folder": false, "folder/": false,
+		"folder/a//b": false, "folder/*": false, "folder/a/*": false, "dir/a": false,
+	} {
+		if got := FitsForm(strings.Split(target, "/"), form); got != want {
+			t.Errorf("FitsForm(%q) = %v, want %v", target, got, want)
+		}
+	}
+	if FitsForm([]string{"a", "b"}, []string{"PATH"}) {
+		t.Error("a lone PATH segment stands for one segment only")
+	}
+	// Forms without a trailing PATH keep their exact segment count.
+	for _, c := range []struct {
+		target, form string
+		want         bool
+	}{
+		{"folder", "folder", true}, {"folder/a", "folder", false}, {"repos/o/r", "repos/OWNER/REPO", true},
+		{"repos/o/r/x", "repos/OWNER/REPO", false}, {"repos/o", "repos/OWNER/REPO", false},
+		{"repos/o/*", "repos/OWNER/*", true}, {"repos/o/*", "repos/OWNER/REPO", false},
+		{"g/n/i/1", "g/NAME/i/ID", true}, {"g/n/i/1/2", "g/NAME/i/ID", false},
+	} {
+		if got := FitsForm(strings.Split(c.target, "/"), strings.Split(c.form, "/")); got != c.want {
+			t.Errorf("FitsForm(%q, %q) = %v, want %v", c.target, c.form, got, c.want)
+		}
+	}
+}
+
+func TestNestedKindHoldsEntriesOfItsOwnKind(t *testing.T) {
+	m := TargetMetadata{Kinds: []TargetKind{
+		{Name: "folder", Forms: []string{"folder", "folder/PATH"}, Nested: true},
+		{Name: "leaf", Forms: []string{"leaf/ID"}},
+		{Name: "plain", Forms: []string{"plain/ID"}, Parent: "leaf"},
+	}}
+	if !m.HasChildKind("folder") || !m.HasChildKind("leaf") || m.HasChildKind("plain") {
+		t.Error("HasChildKind ignores nesting or parents")
+	}
+	if !m.ValidTarget("folder", "folder/a/b") || m.ValidTarget("folder", "folder/a/*") {
+		t.Error("ValidTarget of a nested path")
+	}
+	if err := m.ValidateKindParents(); err != nil {
+		t.Errorf("a nested kind is no parent cycle: %v", err)
+	}
+}
