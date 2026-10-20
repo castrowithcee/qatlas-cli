@@ -129,11 +129,15 @@ func (t TargetMetadata) knowsForm(form string) bool {
 //
 // Parent names the kind one level above, empty for a top-level kind; the parents of all kinds form the levels
 // an editor browses through. Entries of a kind with a parent are listed under one target of that parent.
+//
+// Nested says that entries of the kind also sit below an entry of the same kind, such as a folder inside a
+// folder. They are listed under one target of the kind itself.
 type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
 	Parent      string
+	Nested      bool
 }
 
 // ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.
@@ -179,9 +183,12 @@ func (t TargetMetadata) KindByName(name string) (TargetKind, bool) {
 	return TargetKind{}, false
 }
 
-// HasChildKind reports whether another kind has the kind as its parent.
+// HasChildKind reports whether another kind has the kind as its parent, or the kind is nested and so holds
+// entries of its own kind.
 func (t TargetMetadata) HasChildKind(name string) bool {
-	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool { return kind.Parent == name })
+	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool {
+		return kind.Parent == name || kind.Nested && kind.Name == name
+	})
 }
 
 // ValidateKindParents checks that every Parent names a kind of its own provider and that the parents form no
@@ -229,8 +236,17 @@ func Placeholder(segment string) bool {
 	return segment[0] >= 'A' && segment[0] <= 'Z'
 }
 
-// FitsForm reports whether the segments of a target are spelled in the form.
+// FitsForm reports whether the segments of a target are spelled in the form. A last form segment PATH, after
+// at least one other segment, stands for one or more segments, none of them empty or a wildcard.
 func FitsForm(segments, form []string) bool {
+	if n := len(form); n >= 2 && form[n-1] == "PATH" && len(segments) >= n {
+		for _, rest := range segments[n-1:] {
+			if rest == "" || rest == "*" {
+				return false
+			}
+		}
+		segments, form = segments[:n-1], form[:n-1]
+	}
 	if len(segments) != len(form) {
 		return false
 	}

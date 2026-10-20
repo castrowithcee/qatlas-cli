@@ -436,3 +436,39 @@ func TestKeepValidTakesWildcardOnlyWhereAFormSpellsIt(t *testing.T) {
 		t.Error("a wildcard parent was accepted")
 	}
 }
+
+func TestNestedKindListsBelowItsParentKindAndItsOwnEntries(t *testing.T) {
+	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
+		{Name: "drive", Forms: []string{"drive/ID"}},
+		{Name: "files", Forms: []string{"drive/ID/PATH"}, Parent: "drive", Nested: true},
+		{Name: "folder", Forms: []string{"folder", "folder/PATH"}, Nested: true},
+		{Name: "plain", Forms: []string{"plain/ID"}},
+	}}
+	list := func(kind, parent string) error {
+		return checkListRequest(metadata, config.TargetListRequest{Kind: kind, Parent: parent})
+	}
+	for _, c := range [][2]string{
+		{"files", "drive/1"}, {"files", "drive/1/a"}, {"files", "drive/1/a/b"},
+		{"folder", ""}, {"folder", "folder"}, {"folder", "folder/a"}, {"folder", "folder/a/b"}, {"plain", ""},
+	} {
+		if err := list(c[0], c[1]); err != nil {
+			t.Errorf("%v refused: %v", c, err)
+		}
+	}
+	for _, c := range [][2]string{
+		{"files", ""}, {"files", "drive/*"}, {"files", "drive/1/*"}, {"files", "plain/x"},
+		{"folder", "folder/*"}, {"folder", "folder/a/*"}, {"folder", "plain/x"},
+		{"plain", "folder/a"}, {"plain", "plain/x"},
+	} {
+		if err := list(c[0], c[1]); err == nil {
+			t.Errorf("%v accepted", c)
+		}
+	}
+	kept := keepValid(metadata, []config.TargetEntry{
+		{Target: "folder/a/b", Name: "b", Kind: "folder", HasChildren: true},
+		{Target: "plain/x", Name: "x", Kind: "plain", HasChildren: true},
+	}, "", maxPageEntries)
+	if len(kept) != 2 || !kept[0].HasChildren || kept[1].HasChildren {
+		t.Errorf("kept = %+v", kept)
+	}
+}
