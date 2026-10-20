@@ -22,6 +22,7 @@ const (
 	maxRolePermissions = 100
 
 	permissionsInstanceWide = "content permissions of shelves"
+	chapterPermissions      = "content permissions of chapters"
 	guestProtected          = "the change would open content to the guest role (public access) or remove its " +
 		"protection; Qatlas does not create access for anonymous visitors"
 	guestOwner = "owner_id must not be a user of the guest role (public access)"
@@ -35,8 +36,8 @@ const (
 )
 
 const permissionsNote = "Owners and role names are personal data and untrusted provider content. On a connection " +
-	"bound to books a page or chapter is proven to lie in a bound book first, a book must be a bound book, and " +
-	"a shelf is only reachable on a connection without targets"
+	"with targets a page is proven to lie in them first, a book or chapter must lie in a bound book or on a bound " +
+	"shelf, and a shelf is only reachable on a connection without targets"
 
 var (
 	contentPermissionsRead = capability.Risk{
@@ -319,6 +320,14 @@ func (t permissionTarget) requireLocalBinding(resolved *config.Resolved) error {
 		return bound.checkBook(t.id)
 	case "bookshelf":
 		return requireInstanceScope(resolved, permissionsInstanceWide)
+	case "chapter":
+		bound, err := boundScope(resolved)
+		if err != nil {
+			return err
+		}
+		if bound.bound() && !bound.bookWide() {
+			return needsBook(chapterPermissions)
+		}
 	}
 	return nil
 }
@@ -359,20 +368,19 @@ func invokeContentPermissionsUpdate(ctx context.Context, resolved *config.Resolv
 	return client.UpdateContentPermissions(ctx, target, change)
 }
 
-// bindPermissionTarget proves a chapter or page on a bound connection through one read of the item.
+// bindPermissionTarget proves the item on a bound connection: a book or a chapter must be reached as a whole
+// book, since a bound chapter grants its pages and not the chapter's permissions; a page must lie in the
+// connection.
 func (c *Client) bindPermissionTarget(ctx context.Context, t permissionTarget) error {
 	switch t.kind {
 	case "book":
-		return c.scope.checkBook(t.id)
+		return c.requireBook(ctx, t.id)
 	case "bookshelf":
 		if c.scope.bound() {
-			return invalidRequest("this connection is bound to books, so it cannot use " + permissionsInstanceWide)
+			return instanceRefusal(c.scope, permissionsInstanceWide)
 		}
 	case "chapter":
-		if c.scope.bound() {
-			_, err := c.chapterBook(ctx, t.id)
-			return err
-		}
+		return c.requireChapterBookWide(ctx, t.id, chapterPermissions)
 	case "page":
 		return c.requirePageBound(ctx, strconv.FormatInt(t.id, 10))
 	}
