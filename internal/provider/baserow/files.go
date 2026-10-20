@@ -266,7 +266,7 @@ func invokeFilesUpload(ctx context.Context, resolved *config.Resolved, secrets *
 		}
 	}
 
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +472,7 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 			}
 		}()
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
