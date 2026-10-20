@@ -122,6 +122,9 @@ func invokeScenesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if !validSceneName(input.Name) {
 		return nil, invalidRequest("name must be 1 to 250 printable characters")
 	}
+	if err := requireCollections(bound); err != nil {
+		return nil, err
+	}
 	if input.CollectionID == "" {
 		only, ok := bound.single()
 		if !ok {
@@ -166,11 +169,8 @@ func invokeScenesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("update scene", "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	if err := selectScene(resolved, input.SceneID); err != nil {
 		return nil, err
-	}
-	if !validID(input.SceneID) {
-		return nil, invalidRequest("scene_id is not a valid identifier")
 	}
 	if input.Name == nil && input.CollectionID == nil {
 		return nil, invalidRequest("name or collection_id is required")

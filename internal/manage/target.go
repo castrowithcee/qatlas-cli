@@ -34,7 +34,9 @@ const (
 // base URL, or "" where none is known. secrets is the resolver the read must take the connection's secrets
 // from, or nil for the surface's own.
 type TargetSource struct {
-	List func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	// Browses reports whether the provider has a way to list its targets; nil means none has.
+	Browses func(providerID string) bool
+	List    func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		req config.TargetListRequest) (config.TargetPage, error)
 	ResolveURL func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		origin, rawURL string) ([]config.TargetEntry, error)
@@ -45,6 +47,11 @@ func (s *Service) WithTargetSource(source TargetSource) *Service {
 	c := *s
 	c.targets = source
 	return &c
+}
+
+// CanBrowseTargets reports whether a surface can offer to choose targets of the provider from its list.
+func (s *Service) CanBrowseTargets(providerID string) bool {
+	return s.targets.Browses != nil && s.targets.Browses(providerID)
 }
 
 // TargetChoiceError is the only error a target choice returns for a failure of the read itself. Code is the

@@ -161,6 +161,15 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 		}
 	})
 
+	t.Run("target picker search", func(t *testing.T) {
+		m := pickerModel(t, &listSource{list: pickPage(group("a"), group("b"))})
+		openPicker(t, m)
+		press(t, m, "j", "k")
+		if got := m.targetPick.top().list.query(); got != "jk" {
+			t.Fatalf("picker search = %q, want the letters as text", got)
+		}
+	})
+
 	t.Run("template choice", func(t *testing.T) {
 		m, _ := templateModel(t)
 		openSectionByName(t, m, sectionConnections)
@@ -258,6 +267,17 @@ func TestQuestionMarkOpensTheHelpWhereNothingIsTyped(t *testing.T) {
 		press(t, p, "a", "?")
 		if p.screen != screenPaths || !strings.Contains(p.pathInput.Value(), "?") {
 			t.Fatalf("? in the typed path: screen %v value %q, want it as text", p.screen, p.pathInput.Value())
+		}
+	})
+
+	t.Run("target picker", func(t *testing.T) {
+		m := pickerModel(t, &listSource{list: pickPage(group("a"))})
+		openPicker(t, m)
+		helpRoundTrip(t, m, "the target picker")
+		press(t, m, "x", "?")
+		if m.screen != screenTargets || m.targetPick.top().list.query() != "x?" {
+			t.Fatalf("? with a search typed: screen %v search %q, want it as text", m.screen,
+				m.targetPick.top().list.query())
 		}
 	})
 
@@ -414,6 +434,10 @@ func TestFootersNameTheHelpWhereItWorks(t *testing.T) {
 	if strings.Contains(flat(m), "? help") {
 		t.Errorf("the add menu names ? while a line is typed:\n%s", screenOf(m))
 	}
+
+	pm := pickerModel(t, &listSource{list: pickPage(group("a"))})
+	openPicker(t, pm)
+	want(pm, "the target picker", "? help", "enter take", "esc close")
 
 	tm, _ := templateModel(t)
 	openSectionByName(t, tm, sectionConnections)

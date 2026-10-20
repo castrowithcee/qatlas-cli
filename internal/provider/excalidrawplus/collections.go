@@ -116,7 +116,11 @@ func invokeCollectionsList(ctx context.Context, resolved *config.Resolved, secre
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list collections", "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireCollections(bound); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
