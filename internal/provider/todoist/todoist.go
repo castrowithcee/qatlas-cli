@@ -3,12 +3,12 @@
 // filters, and confirmed changes of its tasks, comments, reminders, personal projects, sections, and
 // personal labels. Workspaces, collaborators, and account or notification settings are not reachable.
 //
-// A connection binds one personal API token either to an explicit set of projects or, after a deliberate
-// choice, to the whole account through the * wildcard. A project connection answers only with tasks,
-// sections, comments, and reminders of its projects: no argument names a scope, a project or task argument
-// only selects inside it, and every result is checked against it again before it is returned. A task filter
-// expression reaches Todoist only through the dedicated filter tool, and even its results are held to the
-// same projects.
+// A connection binds one personal API token to an explicit set of targets or, after a deliberate choice,
+// to the whole account through the * wildcard. A target is one project, a project with all its subprojects,
+// or one section. A bound connection answers only with tasks, sections, comments, and reminders inside its
+// targets: no argument names a scope, a project or task argument only selects inside it, and every result
+// is checked against it again before it is returned. A task filter expression reaches Todoist only through
+// the dedicated filter tool, and even its results are held to the same targets.
 //
 // Every list reads exactly one Todoist page per request and hands the caller an opaque cursor for the
 // next one; no follow-up page is ever loaded unasked. The cursor is bound to the connection's scope and the
@@ -20,8 +20,8 @@
 //
 // A change is sent once and never repeated. On a project connection it first reads the task, comment,
 // reminder, section, or project it concerns and every task, section, or project it names, so nothing outside
-// the connection's projects is changed, moved into, or attached to. A change of the whole account, such as a
-// new project or a label, is offered only by a * connection.
+// the connection is changed, moved into, or attached to. A change of the whole account, such as a label, is
+// offered only by a * connection, and a new project only by one that can place it below a project tree.
 package todoist
 
 import (
@@ -37,6 +37,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -87,47 +88,103 @@ const maxHold = time.Minute
 // limiters holds the rate-limit budget of every token this process has used.
 var limiters = ratelimit.NewRegistry(minInterval)
 
-// scope is the complete project boundary of one connection. A wildcard is explicit configuration; an
-// empty target never becomes the whole account by accident.
+// Spellings of a target besides the bare project ID and the wildcard.
+const (
+	treePrefix    = "project/"
+	sectionPrefix = "section/"
+)
+
+// scope is the complete boundary of one connection, the union of its targets. A wildcard is explicit
+// configuration; an empty target never becomes the whole account by accident.
 type scope struct {
-	all      bool
+	all bool
+	// projects hold exactly these projects, trees these projects with every subproject at any depth, and
+	// sections only the tasks of these sections.
 	projects []string
+	trees    []string
+	sections []string
 }
 
-// allows reports whether a project belongs to this connection.
-func (s scope) allows(projectID string) bool {
-	if s.all {
-		return true
-	}
-	for _, id := range s.projects {
-		if id == projectID {
-			return true
-		}
-	}
-	return false
+// exact reports whether a project is one of the connection's projects without looking at subprojects.
+func (s scope) exact(projectID string) bool {
+	return s.all || slices.Contains(s.projects, projectID)
 }
 
-// single returns the one project of a connection bound to exactly one.
+func (s scope) root(projectID string) bool { return slices.Contains(s.trees, projectID) }
+
+func (s scope) hasSection(sectionID string) bool { return slices.Contains(s.sections, sectionID) }
+
+// projectLevel reports whether the connection reaches projects at all, rather than sections only.
+func (s scope) projectLevel() bool { return s.all || len(s.projects)+len(s.trees) > 0 }
+
+// single returns the one project of a connection bound to exactly one project and nothing else, so a list
+// can always be narrowed to it at Todoist.
 func (s scope) single() (string, bool) {
-	if !s.all && len(s.projects) == 1 {
+	if !s.all && len(s.projects) == 1 && len(s.trees) == 0 && len(s.sections) == 0 {
 		return s.projects[0], true
 	}
 	return "", false
+}
+
+// defaultProject returns the project a change falls back to when it names none: the sole project or the
+// root of the sole project tree.
+func (s scope) defaultProject() (string, bool) {
+	switch {
+	case s.all || len(s.projects)+len(s.trees) != 1:
+		return "", false
+	case len(s.projects) == 1:
+		return s.projects[0], true
+	}
+	return s.trees[0], true
+}
+
+// defaultPlacement returns the project or section a new task falls back to when it names no place: the
+// sole target of the connection.
+func (s scope) defaultPlacement() (projectID, sectionID string, ok bool) {
+	if s.all || len(s.projects)+len(s.trees)+len(s.sections) != 1 {
+		return "", "", false
+	}
+	if len(s.sections) == 1 {
+		return "", s.sections[0], true
+	}
+	projectID, ok = s.defaultProject()
+	return projectID, "", ok
 }
 
 func (s scope) String() string {
 	if s.all {
 		return wildcard
 	}
-	sorted := append([]string(nil), s.projects...)
-	sort.Strings(sorted)
-	return strings.Join(sorted, ",")
+	values := append([]string(nil), s.projects...)
+	for _, id := range s.trees {
+		values = append(values, treePrefix+id)
+	}
+	for _, id := range s.sections {
+		values = append(values, sectionPrefix+id)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
+}
+
+// errNeedsProject refuses a tool that acts on projects on a connection bound to sections only.
+func errNeedsProject() error {
+	return invalidRequest("this tool acts on projects, which a connection bound to sections does not reach")
+}
+
+// requireProjectLevel refuses a tool that acts on projects or on the sections of a project when the
+// connection is bound to sections only.
+func (s scope) requireProjectLevel() error {
+	if !s.projectLevel() {
+		return errNeedsProject()
+	}
+	return nil
 }
 
 // selectProject checks a project argument against the scope before any request: an empty argument
-// selects nothing, and a project outside the connection is refused.
+// selects nothing, and a project no target can reach is refused. A project below a project tree is only
+// known once the tree is read, so the call checks it again with requireProject.
 func (s scope) selectProject(projectID string) error {
-	if projectID != "" && !s.allows(projectID) {
+	if projectID != "" && !s.exact(projectID) && len(s.trees) == 0 {
 		return outsideScope("project")
 	}
 	return nil
@@ -138,44 +195,66 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 	return parseScope(values)
 }
 
-// parseScope reads the target list of one connection: the * wildcard alone, or one or more project IDs.
-// No error quotes a value.
+// parseScope reads the target list of one connection: the * wildcard alone, or one or more entries, each
+// a project ID, project/PROJECT_ID, or section/SECTION_ID. No error quotes a value.
 func parseScope(values []string) (scope, error) {
 	if len(values) == 0 {
-		return scope{}, errors.New("a Todoist connection needs one or more project IDs or the * wildcard")
+		return scope{}, errors.New("a Todoist connection needs one or more targets or the * wildcard")
 	}
 	if len(values) == 1 && strings.TrimSpace(values[0]) == wildcard {
 		return scope{all: true}, nil
 	}
-	bound := scope{projects: make([]string, 0, len(values))}
+	var bound scope
 	seen := map[string]bool{}
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == wildcard {
 			return scope{}, errors.New("the Todoist * wildcard must be the only configured target")
 		}
-		if err := validateTarget(trimmed); err != nil {
+		id, list, err := parseTarget(trimmed)
+		if err != nil {
 			return scope{}, err
 		}
 		if seen[trimmed] {
-			return scope{}, errors.New("the Todoist project list names a project more than once")
+			return scope{}, errors.New("the Todoist target list names a target more than once")
 		}
 		seen[trimmed] = true
-		bound.projects = append(bound.projects, trimmed)
+		switch list {
+		case treePrefix:
+			bound.trees = append(bound.trees, id)
+		case sectionPrefix:
+			bound.sections = append(bound.sections, id)
+		default:
+			bound.projects = append(bound.projects, id)
+		}
 	}
 	return bound, nil
 }
 
-// validateTarget checks one configured target: the wildcard or one project ID.
+// parseTarget splits one target into its ID and its prefix, empty for a bare project ID.
+func parseTarget(value string) (id, prefix string, err error) {
+	id = value
+	for _, candidate := range []string{treePrefix, sectionPrefix} {
+		if rest, ok := strings.CutPrefix(value, candidate); ok {
+			id, prefix = rest, candidate
+			break
+		}
+	}
+	if !validID(id) {
+		return "", "", errors.New("a Todoist target must be a project ID, project/PROJECT_ID, " +
+			"section/SECTION_ID, or the * wildcard")
+	}
+	return id, prefix, nil
+}
+
+// validateTarget checks one configured target: the wildcard, a project ID, or a project tree or section.
 func validateTarget(raw string) error {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == wildcard {
 		return nil
 	}
-	if !validID(trimmed) {
-		return errors.New("a Todoist target must be a project ID of letters and digits, or the * wildcard")
-	}
-	return nil
+	_, _, err := parseTarget(trimmed)
+	return err
 }
 
 // validID mirrors idPattern: the letters and digits of a Todoist API v1 identifier.
@@ -270,6 +349,9 @@ type Client struct {
 	auth    string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	// tree holds the projects read to resolve project trees. A client lives for one call, so a project
+	// created or moved by a later call is always seen.
+	tree projectTree
 }
 
 // Open resolves the token of one selected connection and returns a client for its configured scope.
@@ -322,8 +404,8 @@ func isAPIRoot(raw string) bool {
 var transport http.RoundTripper
 
 // TestConnection performs the smallest authenticated read of the configured scope: each configured
-// project, or one project of the account for a wildcard connection. Success proves that this token can see
-// the scope; plan-dependent reads such as reminders are checked by Todoist on each request.
+// project and section, or one project of the account for a wildcard connection. Success proves that this
+// token can see the scope; plan-dependent reads such as reminders are checked by Todoist on each request.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := Open(ctx, resolved, secrets, red)
@@ -339,11 +421,19 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		var page pageJSON
 		err = client.get(ctx, op, "/projects", url.Values{"limit": {"1"}}, &page)
 	} else {
-		for _, id := range client.scope.projects {
+		bound := client.scope
+		for _, id := range append(append([]string(nil), bound.projects...), bound.trees...) {
 			var project rawProject
 			if err = client.get(ctx, op, "/projects/"+url.PathEscape(id), nil, &project); err != nil {
 				break
 			}
+		}
+		for _, id := range bound.sections {
+			if err != nil {
+				break
+			}
+			var section rawSection
+			err = client.get(ctx, op, "/sections/"+url.PathEscape(id), nil, &section)
 		}
 	}
 	if err != nil {
