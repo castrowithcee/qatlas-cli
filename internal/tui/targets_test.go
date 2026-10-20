@@ -673,9 +673,18 @@ func TestF2SavesFromTheMenuAndTheBuilder(t *testing.T) {
 	}
 }
 
+// registerPlain registers a provider with a target list and no kinds.
+func registerPlain(reg *capability.Registry) error {
+	return reg.RegisterProvider(config.ProviderMetadata{
+		ID: "plain", Name: "Plain", DefaultBaseURL: "https://plain.example.invalid",
+		SecretRoles: []config.SecretRole{{Name: "token", Description: "token"}},
+		Target:      config.TargetMetadata{Label: "table", Required: true, Multiple: true},
+	}, nil)
+}
+
 // A provider without kinds still offers the targets of its service, and a typed one as before.
 func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
-	reg := targetsRegistry(t, seatable.Register)
+	reg := targetsRegistry(t, registerPlain)
 	m, path := toolsModel(t, reg, map[string]config.Connection{
 		"rows-a": {Service: "wiki", Credential: "reader", Targets: []string{"Kunden", "Tickets"}}})
 	openSectionByName(t, m, sectionConnections)
