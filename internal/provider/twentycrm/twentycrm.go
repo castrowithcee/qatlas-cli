@@ -247,6 +247,7 @@ func Register(reg *capability.Registry) error {
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
+			Reaches:     reaches,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
@@ -260,6 +261,9 @@ func Register(reg *capability.Registry) error {
 		}},
 		Groups: toolGroups,
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: browseList, ResolveURL: browseResolveURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
