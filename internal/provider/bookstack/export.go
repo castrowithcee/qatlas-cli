@@ -132,21 +132,19 @@ func readExportRequest(raw json.RawMessage, formats []string) (exportRequest, st
 	return in, path, err
 }
 
-// requireExportBound proves that the exported item belongs to a book of the connection: a book is checked locally,
-// a chapter or page through one evidence read. An unbound connection reads nothing.
+// requireExportBound proves that the exported item lies in the connection: a book must be reached as a whole,
+// a chapter must be bound or lie in such a book, a page must lie in the connection. An unbound connection reads
+// nothing.
 func (c *Client) requireExportBound(ctx context.Context, in exportRequest) error {
 	switch in.Type {
 	case "book":
-		return c.scope.checkBook(in.ID)
+		return c.requireBook(ctx, in.ID)
 	case "chapter":
-		if c.scope.bound() {
-			_, err := c.chapterBook(ctx, in.ID)
-			return err
-		}
+		_, err := c.chapterIn(ctx, in.ID)
+		return err
 	default:
 		return c.requirePageBound(ctx, strconv.FormatInt(in.ID, 10))
 	}
-	return nil
 }
 
 func invokeContentExport(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

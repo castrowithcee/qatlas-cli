@@ -17,7 +17,7 @@ import (
 const recycleBinInstanceWide = "recycle bin"
 
 const recycleBinRoles = "BookStack requires the role permissions settings-manage and restrictions-manage-all for the token's user. " +
-	"The recycle bin covers the whole instance, so a connection bound to books cannot use this tool"
+	"The recycle bin covers the whole instance, so a connection with targets cannot use this tool"
 
 const recycleBinListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"deleted_by":{"type":"integer"},"created_at":{"type":"string"},"deletable_type":{"type":"string"},"deletable_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"parent_type":{"type":"string"},"parent_id":{"type":"integer"},"pages_count":{"type":"integer"},"chapters_count":{"type":"integer"}},"required":["id","deleted_by","created_at","deletable_type","deletable_id"]}}`
 
