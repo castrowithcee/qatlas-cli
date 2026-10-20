@@ -792,3 +792,38 @@ func TestAnEntryOfANestedKindOpensALevelOfTheSameKind(t *testing.T) {
 		t.Errorf("roots %v", got)
 	}
 }
+
+// urlOnlyRegistry is a provider whose kinds have no list, as a service without an index of its entries.
+func urlOnlyRegistry(t *testing.T) *capability.Registry {
+	t.Helper()
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
+			{Name: "group", Forms: []string{"g/NAME"}, Unlisted: true},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+func TestAnUnlistedKindOffersNoListButResolvesAnAddress(t *testing.T) {
+	src := &listSource{list: pickPage(), resolve: func(string) ([]config.TargetEntry, error) {
+		return []config.TargetEntry{group("a")}, nil
+	}}
+	m := pickerModelOn(t, urlOnlyRegistry(t), src)
+	if rows := strings.Join(addRows(m), "|"); strings.Contains(rows, "provider's list") {
+		t.Fatalf("the add menu offers a list: %q", rows)
+	}
+	typeText(t, m, wikiURL)
+	if rows := strings.Join(addRows(m), "|"); !strings.Contains(rows, "look up the address") {
+		t.Fatalf("the typed row does not offer the lookup: %q", rows)
+	}
+	_, cmd := m.Update(keyMsg("enter"))
+	deliver(m, cmd)
+	if got := m.targetList.all; len(got) != 1 || got[0] != "g/a" || len(src.reqs) != 0 {
+		t.Fatalf("list %v, list reads %d, want the address taken without a list read", got, len(src.reqs))
+	}
+}

@@ -43,14 +43,17 @@ var targetKinds = []config.TargetKind{{
 	Name:        "chat",
 	Description: "a chat the chat tools may address; repeatable, a single chat is chosen implicitly",
 	Forms:       []string{"CHAT_ID", "@CHANNEL_USERNAME"},
+	Unlisted:    true,
 }, {
 	Name:        "bot",
 	Description: "unlocks bot-wide tools that address no chat; optional",
 	Forms:       []string{botTarget},
+	Unlisted:    true,
 }, {
 	Name:        "business",
 	Description: "unlocks the tools of one business connection; optional, repeatable",
 	Forms:       []string{businessPrefix + "CONNECTION_ID"},
+	Unlisted:    true,
 }}
 
 func parseTarget(raw string) (kind, value string, err error) {
