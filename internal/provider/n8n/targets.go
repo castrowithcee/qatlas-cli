@@ -219,3 +219,32 @@ func requireInstanceScope(resolved *config.Resolved, what string) error {
 	}
 	return nil
 }
+
+// reaches says whether a binding reaches a tool, mirroring what the call itself refuses. Instance-wide tools
+// (requireInstanceScope) and project creation are refused by any project or workflow target and no target
+// form reaches them. Credentials, variables, data tables, columns, rows, project changes, project members,
+// and workflow creation are refused by any workflow target; a project target alone reaches them. A
+// connection without targets, or whose targets do not parse, reaches everything; the checks at the call stay
+// in force.
+func reaches(tool string, targets []string) (bool, []string) {
+	bound, err := parseScope(targets)
+	if err != nil || bound.instanceWide() {
+		return true, nil
+	}
+	switch {
+	case strings.HasPrefix(tool, Provider+".tags."), strings.HasPrefix(tool, Provider+".users."),
+		strings.HasPrefix(tool, Provider+".source-control."), tool == Provider+".audit.generate",
+		tool == projectsCreate.ID:
+		return false, nil
+	case len(bound.workflows) == 0:
+		return true, nil
+	case strings.HasPrefix(tool, Provider+".credentials."), strings.HasPrefix(tool, Provider+".variables."),
+		strings.HasPrefix(tool, Provider+".data-"), strings.HasPrefix(tool, Provider+".project-members."),
+		tool == projectsUpdate.ID, tool == projectsDelete.ID, tool == workflowsCreate.ID:
+		if len(bound.projects) > 0 {
+			return false, nil
+		}
+		return false, []string{"project/PROJECT_ID"}
+	}
+	return true, nil
+}
