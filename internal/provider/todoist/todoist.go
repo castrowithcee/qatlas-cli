@@ -370,6 +370,13 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
+	return build(ctx, resolved, secrets, red, lim, bound)
+}
+
+// build resolves the token and returns a client for a given scope. Choosing targets uses it with an empty
+// scope, because the connection may still be a draft without targets.
+func build(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
 	if !isAPIRoot(resolved.BaseURL) {
 		return nil, providerError("open", "a Todoist service must use the official API root "+apiRoot)
 	}
