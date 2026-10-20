@@ -514,7 +514,7 @@ func TestValidateKindParents(t *testing.T) {
 
 func TestValidTarget(t *testing.T) {
 	target := TargetMetadata{
-		Kinds: []TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "bot"}}},
+		Kinds: []TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*", "bot"}}},
 		Validate: func(v string) error {
 			if strings.Contains(v, "bad") {
 				return errors.New("bad")
@@ -523,7 +523,8 @@ func TestValidTarget(t *testing.T) {
 		},
 	}
 	for value, want := range map[string]bool{
-		"repos/o/r": true, "bot": true, "repos/o/*": false, "repos/o": false, "": false, "repos/bad/r": false,
+		"repos/o/r": true, "bot": true, "repos/o/*": true, "repos/*/r": false, "repos/*/*": false, "*": false,
+		"repos/o": false, "": false, "repos/bad/r": false, "repos/bad/*": false,
 	} {
 		if got := target.ValidTarget("repo", value); got != want {
 			t.Errorf("ValidTarget(%q) = %v, want %v", value, got, want)

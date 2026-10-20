@@ -204,11 +204,11 @@ func (t TargetMetadata) ValidateKindParents() error {
 	return nil
 }
 
-// ValidTarget reports whether target is spelled in a form of the kind and passes the provider's Validate. It
-// refuses a wildcard: a chosen entry names one thing.
+// ValidTarget reports whether target is spelled in a form of the kind and passes the provider's Validate. A
+// wildcard passes only where a form of the kind spells it, such as repos/OWNER/*, never for a placeholder.
 func (t TargetMetadata) ValidTarget(kind, target string) bool {
 	k, ok := t.KindByName(kind)
-	if !ok || target == "" || strings.Contains(target, "*") {
+	if !ok || target == "" {
 		return false
 	}
 	segments := strings.Split(target, "/")
