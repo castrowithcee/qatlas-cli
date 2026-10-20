@@ -88,6 +88,9 @@ func invokeBooksSetCover(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
+	if err := client.requireBook(ctx, id); err != nil {
+		return nil, err
+	}
 	var book bookJSON
 	// BookStack takes a multipart body only on POST; _method makes it the update of the book.
 	if err := client.sendFile(ctx, op, "/api/books/"+strconv.FormatInt(id, 10), "image",

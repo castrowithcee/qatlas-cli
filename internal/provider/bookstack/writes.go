@@ -10,7 +10,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -21,7 +20,10 @@ const (
 	maxDescriptionHTMLChars = 2000
 )
 
-const outsideTemplate = "default_template_id is outside the books this connection is bound to"
+const outsideTemplate = "default_template_id"
+
+// chapterChanges names the change of a chapter itself in a refusal by needsBook.
+const chapterChanges = "chapter changes"
 
 func bookWriteRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
 	return capability.Risk{Effect: effect, Idempotency: idempotency,
@@ -277,7 +279,7 @@ func invokeBooksCreate(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	if bound.bound() {
-		return nil, invalidRequest("a connection bound to books cannot create books, a new book would lie outside them")
+		return nil, bookCreateRefusal(bound)
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -355,6 +357,13 @@ func invokeChaptersDelete(ctx context.Context, resolved *config.Resolved, secret
 	if id <= 0 || len(strconv.FormatInt(id, 10)) > maxIDDigits {
 		return nil, invalidRequest("id must be a positive integer")
 	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if bound.bound() && !bound.bookWide() {
+		return nil, needsBook(chapterChanges)
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -410,6 +419,9 @@ func invokeChaptersUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
+	if bound.bound() && !bound.bookWide() {
+		return nil, needsBook(chapterChanges)
+	}
 	if change.BookID != 0 {
 		if err := bound.checkBook(change.BookID); err != nil {
 			return nil, err
@@ -429,20 +441,24 @@ func (c *Client) requireTemplateBound(ctx context.Context, input containerMutati
 	if err != nil || id == 0 || !c.scope.bound() {
 		return err
 	}
-	var ref bookRef
-	if err := c.get(ctx, "get page", "/api/pages/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission); err != nil {
+	allowed, err := c.pageInScope(ctx, id)
+	if err != nil {
 		return err
 	}
-	if !c.scope.allows(ref.BookID) {
-		return invalidRequest(outsideTemplate)
+	if !allowed {
+		return c.scope.outside(outsideTemplate)
 	}
 	return nil
 }
 
-// CreateBook sends one create request. A connection bound to books may not create one.
+func bookCreateRefusal(s scope) error {
+	return invalidRequest("a connection bound to " + s.boundTo() + " cannot create books, a new book would lie outside them")
+}
+
+// CreateBook sends one create request. A bound connection may not create one.
 func (c *Client) CreateBook(ctx context.Context, input containerMutation) (output.Object, error) {
 	if c.scope.bound() {
-		return output.Object{}, invalidRequest("a connection bound to books cannot create books, a new book would lie outside them")
+		return output.Object{}, bookCreateRefusal(c.scope)
 	}
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
@@ -458,7 +474,7 @@ func (c *Client) UpdateBook(ctx context.Context, id int64, input containerMutati
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
 	}
-	if err := c.scope.checkBook(id); err != nil {
+	if err := c.requireBook(ctx, id); err != nil {
 		return output.Object{}, err
 	}
 	if err := c.requireTemplateBound(ctx, input); err != nil {
@@ -475,7 +491,7 @@ func (c *Client) CreateChapter(ctx context.Context, input containerMutation) (ou
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
 	}
-	if err := c.scope.checkBook(input.BookID); err != nil {
+	if err := c.requireBook(ctx, input.BookID); err != nil {
 		return output.Object{}, err
 	}
 	if err := c.requireTemplateBound(ctx, input); err != nil {
@@ -499,8 +515,11 @@ func (c *Client) UpdateChapter(ctx context.Context, id int64, input containerMut
 			return output.Object{}, err
 		}
 	}
-	if c.scope.bound() {
-		if _, err := c.chapterBook(ctx, id); err != nil {
+	if err := c.requireChapterBookWide(ctx, id, chapterChanges); err != nil {
+		return output.Object{}, err
+	}
+	if c.scope.bound() && input.BookID != 0 {
+		if err := c.requireBook(ctx, input.BookID); err != nil {
 			return output.Object{}, err
 		}
 	}
@@ -514,9 +533,9 @@ func (c *Client) UpdateChapter(ctx context.Context, id int64, input containerMut
 	return chapterWriteObject(chapter), nil
 }
 
-// DeleteBook sends one delete request; the caller has checked the book against the connection's books.
+// DeleteBook proves the book first and sends one delete request.
 func (c *Client) DeleteBook(ctx context.Context, id int64) error {
-	if err := c.scope.checkBook(id); err != nil {
+	if err := c.requireBook(ctx, id); err != nil {
 		return err
 	}
 	return c.mutate(ctx, "delete book", http.MethodDelete, "/api/books/"+strconv.FormatInt(id, 10), nil, nil, argNames(booksDelete))
@@ -525,10 +544,8 @@ func (c *Client) DeleteBook(ctx context.Context, id int64) error {
 // DeleteChapter proves the chapter's book first on a bound connection; a foreign chapter ends the call
 // without a delete.
 func (c *Client) DeleteChapter(ctx context.Context, id int64) error {
-	if c.scope.bound() {
-		if _, err := c.chapterBook(ctx, id); err != nil {
-			return err
-		}
+	if err := c.requireChapterBookWide(ctx, id, chapterChanges); err != nil {
+		return err
 	}
 	return c.mutate(ctx, "delete chapter", http.MethodDelete, "/api/chapters/"+strconv.FormatInt(id, 10), nil, nil, argNames(chaptersDelete))
 }

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	outsideAttachment = "the attachment is outside the books this connection is bound to"
+	outsideAttachment = "the attachment"
 	maxLinkChars      = 2048
 )
 
@@ -129,7 +129,7 @@ func invokeAttachmentsList(ctx context.Context, resolved *config.Resolved, secre
 		return nil, err
 	}
 	if bound.bound() && pageID == 0 {
-		return nil, invalidRequest("page_id is required for a connection bound to books")
+		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -159,7 +159,7 @@ func invokeAttachmentsGet(ctx context.Context, resolved *config.Resolved, secret
 // and offset count the rows that remain.
 func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offset int) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
-		return output.Collection{}, invalidRequest("page_id is required for a connection bound to books")
+		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
 	query := url.Values{}
 	if pageID != 0 {
@@ -195,11 +195,11 @@ func (c *Client) bindAttachment(ctx context.Context, a *attachmentJSON) error {
 		return nil
 	}
 	if a.UploadedTo <= 0 {
-		return invalidRequest(outsideAttachment)
+		return c.scope.outside(outsideAttachment)
 	}
 	if err := c.requirePageBound(ctx, strconv.FormatInt(a.UploadedTo, 10)); err != nil {
 		if isInvalid(err) {
-			return invalidRequest(outsideAttachment)
+			return c.scope.outside(outsideAttachment)
 		}
 		return err
 	}

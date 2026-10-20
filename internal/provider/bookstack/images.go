@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	outsideImage = "the image is outside the books this connection is bound to"
+	outsideImage = "the image"
 	// maxImageDownloadBytes bounds the image data a download writes.
 	maxImageDownloadBytes = 64 << 20
 	imageTooLarge         = "the image is larger than the limit of 64 MiB"
@@ -165,7 +165,7 @@ func invokeImagesList(ctx context.Context, resolved *config.Resolved, secrets *s
 		return nil, err
 	}
 	if bound.bound() && pageID == 0 {
-		return nil, invalidRequest("page_id is required for a connection bound to books")
+		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -195,7 +195,7 @@ func invokeImagesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 // offset count the rows that remain.
 func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string, limit, offset int) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
-		return output.Collection{}, invalidRequest("page_id is required for a connection bound to books")
+		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
 	query := url.Values{}
 	if pageID != 0 {
@@ -233,11 +233,11 @@ func (c *Client) readImage(ctx context.Context, op string, id int64) (imageJSON,
 	}
 	if c.scope.bound() {
 		if m.UploadedTo <= 0 {
-			return m, invalidRequest(outsideImage)
+			return m, c.scope.outside(outsideImage)
 		}
 		if err := c.requirePageBound(ctx, strconv.FormatInt(m.UploadedTo, 10)); err != nil {
 			if isInvalid(err) {
-				return m, invalidRequest(outsideImage)
+				return m, c.scope.outside(outsideImage)
 			}
 			return m, err
 		}

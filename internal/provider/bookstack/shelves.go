@@ -235,8 +235,13 @@ func invokeShelvesGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	if err := requireInstanceScope(resolved, shelvesInstanceWide); err != nil {
+	// A bound shelf may be read; every other shelf is instance-wide.
+	bound, err := boundScope(resolved)
+	if err != nil {
 		return nil, err
+	}
+	if bound.bound() && !bound.hasShelf(in.ID) {
+		return nil, instanceRefusal(bound, shelvesInstanceWide)
 	}
 	if err := checkShelfID(in.ID); err != nil {
 		return nil, err
@@ -315,8 +320,11 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int) (output.Col
 	return output.Collection{Columns: fieldNames(shelvesList), Rows: rows}, nil
 }
 
-// GetShelf returns one shelf with its books.
+// GetShelf returns one shelf with its books. A bound connection reads only a bound shelf.
 func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) {
+	if c.scope.bound() && !c.scope.hasShelf(id) {
+		return output.Object{}, instanceRefusal(c.scope, shelvesInstanceWide)
+	}
 	var shelf shelfJSON
 	if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &shelf, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err

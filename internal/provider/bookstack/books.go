@@ -228,8 +228,12 @@ func invokeBooksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	if _, err := boundScope(resolved); err != nil {
+	bound, err := boundScope(resolved)
+	if err != nil {
 		return nil, err
+	}
+	if bound.bound() && !bound.bookWide() {
+		return nil, needsBook("books.list")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -281,7 +285,7 @@ func invokeChaptersList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := bound.listBook(target); err != nil {
+	if _, err := bound.listBook(target.BookID, "chapters.list"); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -309,14 +313,20 @@ func invokeChaptersGet(ctx context.Context, resolved *config.Resolved, secrets *
 	return client.GetChapter(ctx, in.ID)
 }
 
-// ListBooks returns books. On a bound connection the rows are filtered here to the bound books, so limit
-// and offset count the remaining rows.
+// ListBooks returns books. On a bound connection the rows are filtered here to the bound books and the books
+// on the bound shelves, so limit and offset count the remaining rows.
 func (c *Client) ListBooks(ctx context.Context, limit, offset int) (output.Collection, error) {
+	if c.scope.bound() && !c.scope.bookWide() {
+		return output.Collection{}, needsBook("books.list")
+	}
+	if err := c.loadShelves(ctx, 0); err != nil {
+		return output.Collection{}, err
+	}
 	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
 		op: "list books", path: "/api/books", filtered: c.scope.bound(), limit: limit, offset: offset,
 		arguments: argNames(booksList),
 		id:        func(b listedJSON) int64 { return b.ID },
-		keep:      func(b listedJSON) bool { return !c.scope.bound() || c.scope.allows(b.ID) },
+		keep:      func(b listedJSON) bool { return !c.scope.bound() || c.inBook(b.ID) },
 		row: func(b listedJSON) output.Row {
 			return output.Row{
 				"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString),
@@ -333,19 +343,24 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int) (output.Colle
 // ListChapters returns chapters, of one book when bookID is given. A bound connection always has a book here
 // (the argument or its only book); every row is checked against that book on the client.
 func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset int) (output.Collection, error) {
-	target, err := c.scope.listBook(listTarget{BookID: bookID})
+	bookID, err := c.scope.listBook(bookID, "chapters.list")
 	if err != nil {
 		return output.Collection{}, err
 	}
+	if bookID != 0 {
+		if err := c.requireBook(ctx, bookID); err != nil {
+			return output.Collection{}, err
+		}
+	}
 	query := url.Values{}
-	if target.BookID != 0 {
-		query.Set("filter[book_id]", strconv.FormatInt(target.BookID, 10))
+	if bookID != 0 {
+		query.Set("filter[book_id]", strconv.FormatInt(bookID, 10))
 	}
 	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
-		op: "list chapters", path: "/api/chapters", query: query, filtered: target.BookID != 0,
+		op: "list chapters", path: "/api/chapters", query: query, filtered: bookID != 0,
 		limit: limit, offset: offset, narrow: "book_id", arguments: argNames(chaptersList),
 		id:   func(ch listedJSON) int64 { return ch.ID },
-		keep: func(ch listedJSON) bool { return target.BookID == 0 || ch.BookID == target.BookID },
+		keep: func(ch listedJSON) bool { return bookID == 0 || ch.BookID == bookID },
 		row: func(ch listedJSON) output.Row {
 			return output.Row{
 				"id": ch.ID, "book_id": ch.BookID, "name": clip(ch.Name, maxResultString), "slug": clip(ch.Slug, maxResultString),
@@ -361,7 +376,7 @@ func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset i
 
 // GetBook returns one book with its content tree. The book is checked against the targets before any request.
 func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
-	if err := c.scope.checkBook(id); err != nil {
+	if err := c.requireBook(ctx, id); err != nil {
 		return output.Object{}, err
 	}
 	var book bookJSON
@@ -409,15 +424,25 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 	return output.Object{Fields: fields}, nil
 }
 
-// GetChapter returns one chapter. On a bound connection this single read is also the evidence that the
-// chapter belongs to one of the books; a foreign chapter is refused before anything is shown.
+// GetChapter returns one chapter. On a bound connection a bound chapter is read as it is; for any other one
+// this single read is also the evidence that its book is reached, and a foreign chapter is refused before
+// anything is shown.
 func (c *Client) GetChapter(ctx context.Context, id int64) (output.Object, error) {
+	if !c.scope.mayReachChapter(id) {
+		return output.Object{}, c.scope.outside(outsideChapter)
+	}
 	var chapter chapterJSON
 	if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &chapter, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
-	if c.scope.bound() && !c.scope.allows(chapter.BookID) {
-		return output.Object{}, invalidRequest(outsideChapter)
+	if c.scope.bound() && !c.scope.hasChapter(id) {
+		allowed, err := c.bookAllowed(ctx, chapter.BookID)
+		if err != nil {
+			return output.Object{}, err
+		}
+		if !allowed {
+			return output.Object{}, c.scope.outside(outsideChapter)
+		}
 	}
 	budget := maxTreeEntries
 	pages, truncated := treePages(chapter.Pages, &budget)

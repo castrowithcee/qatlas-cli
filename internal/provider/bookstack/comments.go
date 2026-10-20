@@ -27,7 +27,7 @@ const (
 )
 
 const (
-	outsideComment = "the comment is outside the books this connection is bound to"
+	outsideComment = "the comment"
 	notPageComment = "the comment does not belong to a page"
 )
 
@@ -233,7 +233,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	if bound.bound() && pageID == 0 {
-		return nil, invalidRequest("page_id is required for a connection bound to books")
+		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -331,7 +331,7 @@ func invokeCommentsDelete(ctx context.Context, resolved *config.Resolved, secret
 // offset count the rows that remain.
 func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset int) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
-		return output.Collection{}, invalidRequest("page_id is required for a connection bound to books")
+		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
 	if pageID != 0 {
 		if err := c.requirePageBound(ctx, strconv.FormatInt(pageID, 10)); err != nil {
@@ -379,7 +379,7 @@ func (c *Client) bindComment(ctx context.Context, m commentJSON) error {
 	}
 	if err := c.requirePageBound(ctx, strconv.FormatInt(m.CommentableID, 10)); err != nil {
 		if isInvalid(err) {
-			return invalidRequest(outsideComment)
+			return c.scope.outside(outsideComment)
 		}
 		return err
 	}

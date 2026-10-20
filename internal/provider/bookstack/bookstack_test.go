@@ -1264,7 +1264,7 @@ func TestInvalidTargetsFailClosedWithoutQuotingTheValue(t *testing.T) {
 		{"negative", []string{"book/-4"}},
 		{"duplicate", []string{"book/7", "book/7"}},
 		{"wildcard", []string{"*"}},
-		{"wrong form", []string{"shelf/7"}},
+		{"wrong form", []string{"bookshelf/7"}},
 		{"text id", []string{"book/seven77"}},
 		{"too many", huge},
 	} {
