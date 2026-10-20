@@ -68,6 +68,9 @@ func invokeProjectsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseFileOnly(resolved, "list projects"); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err

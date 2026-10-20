@@ -289,7 +289,7 @@ func (c *Client) deletedFileOf(ctx context.Context, op, projectID, fileID string
 			if reported := entry.id("teamid"); reported != "" && reported != teamID {
 				continue
 			}
-			if entry.id("projectid") != projectID || !c.scope.allowsProject(projectID) {
+			if entry.id("projectid") != projectID || !c.scope.allowsFile(projectID, fileID) {
 				continue
 			}
 			return teamID, nil
@@ -302,7 +302,7 @@ func (c *Client) deletedFileOf(ctx context.Context, op, projectID, fileID string
 // the deleted file bound through the team's deleted files and its project.
 func boundDeletedFileOf(ctx context.Context, op string, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, input recoveryArguments) (*Client, string, string, string, error) {
-	projectID, err := selectProject(resolved, input.ProjectID)
+	projectID, err := selectProjectForFile(resolved, "project_id", input.ProjectID, input.FileID)
 	if err != nil {
 		return nil, "", "", "", err
 	}
