@@ -203,13 +203,35 @@ const (
 	OperationTargetResolve = "config.target.resolve"
 )
 
+// The operations of a target choice for a connection that is not saved yet, read before any approval of it
+// with the surface's admin session. Their Connection is DraftConnection and they carry no connection id; a
+// listing names its kind the way TargetListOperation does.
+const (
+	OperationDraftTargetList    = "config.target.draft.list"
+	OperationDraftTargetResolve = "config.target.draft.resolve"
+)
+
+// DraftConnection is what the entry of a draft's target choice names as its connection. It is no valid
+// connection name, so it never stands for a saved connection, and it carries nothing the person typed.
+const DraftConnection = "(draft)"
+
 // TargetListOperation is the operation of a listing of the entries of kind.
 func TargetListOperation(kind string) string { return OperationTargetList + ":" + kind }
 
-// IsTargetOperation reports whether operation is the one of a target listing or URL resolution.
+// DraftTargetListOperation is the operation of a listing of the entries of kind for a draft.
+func DraftTargetListOperation(kind string) string { return OperationDraftTargetList + ":" + kind }
+
+// IsTargetOperation reports whether operation is the one of a target listing or URL resolution, a draft's
+// included.
 func IsTargetOperation(operation string) bool {
 	return operation == OperationTargetResolve || operation == OperationTargetList ||
-		strings.HasPrefix(operation, OperationTargetList+":")
+		strings.HasPrefix(operation, OperationTargetList+":") || IsDraftTargetOperation(operation)
+}
+
+// IsDraftTargetOperation reports whether operation is the one of a draft's target listing or URL resolution.
+func IsDraftTargetOperation(operation string) bool {
+	return operation == OperationDraftTargetResolve || operation == OperationDraftTargetList ||
+		strings.HasPrefix(operation, OperationDraftTargetList+":")
 }
 
 // The operations the vault process logs for its own decisions, which are not invokes: an approval with an
@@ -296,6 +318,10 @@ func (f Fields) Validate() error {
 	}
 	if IsTargetOperation(f.Operation) && (f.Effect != "read" || f.Connection == "" || f.Path != "tui" && f.Path != "web") {
 		return errors.New("a target choice needs the read effect, a connection, and the tui or web path")
+	}
+	if IsTargetOperation(f.Operation) &&
+		(IsDraftTargetOperation(f.Operation) != (f.Connection == DraftConnection) || IsDraftTargetOperation(f.Operation) && f.ConnectionID != "") {
+		return errors.New("a draft's target choice names the draft and no connection id, and only it does")
 	}
 	if f.ConnectionID != "" && (f.Connection == "" || !connectionIDPattern.MatchString(f.ConnectionID)) {
 		return errors.New("connection_id must be a config id, and needs a connection")

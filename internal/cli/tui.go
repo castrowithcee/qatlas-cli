@@ -389,26 +389,34 @@ func targetSuggester(store *config.Store, opts *Options, reg *capability.Registr
 }
 
 // targetSource binds the management core's target choice to the registry's target browsers, the way
-// connectionTester binds the test. Surfaces reach it only through the manage.Service it is attached to.
+// connectionTester binds the test. Surfaces reach it only through the manage.Service it is attached to. A
+// resolver the core hands over is the only one the read uses; without one it is this run's own.
 func targetSource(opts *Options, reg *capability.Registry) manage.TargetSource {
 	return manage.TargetSource{
-		List: func(ctx context.Context, resolved *config.Resolved,
+		List: func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 			req config.TargetListRequest) (config.TargetPage, error) {
-			secrets, err := opts.resolver()
+			secrets, err := targetSecrets(opts, secrets)
 			if err != nil {
 				return config.TargetPage{}, err
 			}
 			return reg.ListTargets(ctx, resolved, secrets, opts.Redactor, req)
 		},
-		ResolveURL: func(ctx context.Context, resolved *config.Resolved, origin,
+		ResolveURL: func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, origin,
 			rawURL string) ([]config.TargetEntry, error) {
-			secrets, err := opts.resolver()
+			secrets, err := targetSecrets(opts, secrets)
 			if err != nil {
 				return nil, err
 			}
 			return reg.ResolveTargetURL(ctx, resolved, secrets, opts.Redactor, origin, rawURL)
 		},
 	}
+}
+
+func targetSecrets(opts *Options, secrets *secret.Resolver) (*secret.Resolver, error) {
+	if secrets != nil {
+		return secrets, nil
+	}
+	return opts.resolver()
 }
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
