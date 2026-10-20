@@ -93,7 +93,7 @@ var (
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
-			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; required for a connection bound to several books", Target: "book"},
+			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets lists its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
 			{Name: "limit", Description: "Maximum number of pages to return; 0 returns all"},
 			{Name: "offset", Description: "Number of pages to skip"},
@@ -178,7 +178,7 @@ var (
 	pagesUpdate = capability.Descriptor{
 		ID: Provider + ".pages.update", Version: 1, Title: "Update a BookStack page",
 		Description: "Change the title, HTML or Markdown, tags, priority of one page by identifier, record a changelog " +
-			"entry, or move it into a bound book or chapter. tags replaces all existing tags of the page. HTML " +
+			"entry, or move it into a book or chapter of the connection. tags replaces all existing tags of the page. HTML " +
 			"containing data: images makes BookStack store them as gallery images of the page when it is saved. " +
 			"Moving needs the delete permission on the page in BookStack in addition to the update permission",
 		Tags: []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
@@ -222,14 +222,33 @@ func Register(reg *capability.Registry) error {
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
 		},
 		Target: config.TargetMetadata{
-			Label:       "books",
-			Multiple:    true,
-			Description: "optional books this connection is bound to; without a target the whole token scope is reachable",
+			Label:    "shelves, books, chapters, and pages",
+			Multiple: true,
+			Description: "optional shelves, books, chapters, or pages this connection is bound to, at most 100; several " +
+				"targets reach their union; without a target the whole token scope is reachable",
 			Kinds: []config.TargetKind{{
+				Name: "shelf",
+				Description: "a shelf: the books on it when a tool is called, each as if it were bound, and the shelf " +
+					"itself to read; each call reads the shelf once",
+				Forms: []string{"shelf/SHELF_ID"},
+			}, {
 				Name:        "book",
-				Description: "a book whose pages this connection may list, read, create, update, and delete",
+				Description: "a book whose chapters and pages this connection may list, read, create, update, and delete",
 				Forms:       []string{"book/BOOK_ID"},
+			}, {
+				Name: "chapter",
+				Description: "a chapter whose pages this connection may list, read, create, update, and delete, with " +
+					"their attachments, images, and comments; the chapter itself is only read",
+				Forms:  []string{"chapter/CHAPTER_ID"},
+				Parent: "book",
+			}, {
+				Name: "page",
+				Description: "a single page this connection may read, update, and delete, with its attachments, " +
+					"images, and comments",
+				Forms:  []string{"page/PAGE_ID"},
+				Parent: "book",
 			}},
+			Reaches:     reaches,
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
 		},

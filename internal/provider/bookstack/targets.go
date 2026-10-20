@@ -413,3 +413,30 @@ func (c *Client) requirePageBound(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// reaches mirrors the call checks as the tools a binding is offered: an instance-wide tool only without
+// targets, a whole-book tool only with a book or shelf, and a chapter read or a new page not on pages alone.
+// A binding that does not parse reaches everything; configuration validation reports it. The checks at the
+// call stay in force.
+func reaches(tool string, targets []string) (bool, []string) {
+	bound, err := parseScope(targets)
+	if err != nil || !bound.bound() {
+		return true, nil
+	}
+	switch tool {
+	case auditLogList.ID, importsList.ID, importsGet.ID, importsUpload.ID, importsRun.ID, importsDelete.ID,
+		recycleBinList.ID, recycleBinRestore.ID, recycleBinDestroy.ID, usersList.ID, usersGet.ID, usersUpdate.ID,
+		usersDelete.ID, rolesList.ID, rolesGet.ID, rolesCreate.ID, rolesUpdate.ID, rolesDelete.ID, tagsList.ID,
+		tagsValues.ID, shelvesList.ID, shelvesCreate.ID, shelvesUpdate.ID, shelvesDelete.ID, shelvesSetCover.ID,
+		booksCreate.ID:
+		return false, nil
+	case shelvesGet.ID:
+		return len(bound.shelves) > 0, []string{"shelf/SHELF_ID"}
+	case booksList.ID, booksGet.ID, booksUpdate.ID, booksDelete.ID, booksSetCover.ID, chaptersList.ID,
+		chaptersCreate.ID, chaptersUpdate.ID, chaptersDelete.ID:
+		return bound.bookWide(), []string{"book/BOOK_ID", "shelf/SHELF_ID"}
+	case chaptersGet.ID, pagesCreate.ID:
+		return bound.bookWide() || len(bound.chapters) > 0, []string{"chapter/CHAPTER_ID", "book/BOOK_ID", "shelf/SHELF_ID"}
+	}
+	return true, nil
+}

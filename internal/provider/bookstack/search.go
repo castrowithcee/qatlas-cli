@@ -44,7 +44,7 @@ var contentSearch = capability.Descriptor{
 		`"preview_name":{"type":"string"},"preview_content":{"type":"string"}}}},"total":{"type":"integer"}},"required":["results","total"]}`),
 	Arguments: []capability.Argument{
 		{Name: "query", Description: "Search text, 1 to 1000 characters; the BookStack search syntax is allowed", Required: true},
-		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; required for a connection bound to several books unless chapter_id is given", Target: "book"},
+		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets searches its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 		{Name: "chapter_id", Description: "Search only in this chapter; mutually exclusive with book_id"},
 		{Name: "page", Description: "Page number from 1; 1 when omitted"},
 		{Name: "count", Description: "Results per page, 1 to 100; 20 when omitted"},

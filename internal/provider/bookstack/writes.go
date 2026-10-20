@@ -37,7 +37,7 @@ var (
 	booksCreate = capability.Descriptor{
 		ID: Provider + ".books.create", Version: 1, Title: "Create a BookStack book",
 		Description: "Create one book with an optional description, tags, and default page template. Not available " +
-			"for a connection bound to books, because a new book would lie outside them",
+			"for a connection with targets, because a new book would lie outside them",
 		Tags: []string{"knowledge", "books", "bookstack", "create"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"default_template_id":{"type":"integer","minimum":1}},"required":["name"],"additionalProperties":false}`),
@@ -123,7 +123,7 @@ var (
 	chaptersUpdate = capability.Descriptor{
 		ID: Provider + ".chapters.update", Version: 1, Title: "Update a BookStack chapter",
 		Description: "Change the name, description, tags, priority, or default page template of one chapter by " +
-			"identifier, or move it into another bound book with book_id. tags replaces all existing tags of the " +
+			"identifier, or move it into another book of the connection with book_id. tags replaces all existing tags of the " +
 			"chapter; default_template_id null removes the template. Moving needs the delete permission on the " +
 			"chapter in BookStack in addition to the update permission",
 		Tags: []string{"knowledge", "chapters", "bookstack", "update"}, Provider: Provider,

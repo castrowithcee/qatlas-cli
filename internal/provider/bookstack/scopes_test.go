@@ -516,3 +516,54 @@ func TestNewTargetFormsAreValid(t *testing.T) {
 		}
 	}
 }
+
+func TestReachOffersWhatTheBindingServes(t *testing.T) {
+	meta := targetMetadata(t)
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	instanceWide := map[string]bool{}
+	for _, d := range []capability.Descriptor{auditLogList, importsList, importsGet, importsUpload, importsRun, importsDelete,
+		recycleBinList, recycleBinRestore, recycleBinDestroy, usersList, usersGet, usersUpdate, usersDelete, rolesList,
+		rolesGet, rolesCreate, rolesUpdate, rolesDelete, tagsList, tagsValues, shelvesList, shelvesCreate, shelvesUpdate,
+		shelvesDelete, shelvesSetCover, booksCreate} {
+		instanceWide[d.ID] = true
+	}
+	bookWide := map[string]bool{}
+	for _, d := range []capability.Descriptor{booksList, booksGet, booksUpdate, booksDelete, booksSetCover, chaptersList,
+		chaptersCreate, chaptersUpdate, chaptersDelete} {
+		bookWide[d.ID] = true
+	}
+	for _, d := range reg.Provider(Provider) {
+		if reached, hint := meta.Reach(d.ID, nil); !reached {
+			t.Errorf("%s without targets: not reached (%s)", d.ID, hint)
+		}
+		for _, targets := range [][]string{{"shelf/301"}, {"book/701"}, {"chapter/1001"}, {"page/111"}, {"book/701", "page/111"}} {
+			reached, hint := meta.Reach(d.ID, targets)
+			wide := targets[0] == "shelf/301" || targets[0] == "book/701"
+			want := !instanceWide[d.ID] && (wide || !bookWide[d.ID])
+			switch d.ID {
+			case shelvesGet.ID:
+				want = targets[0] == "shelf/301"
+			case chaptersGet.ID, pagesCreate.ID:
+				want = targets[0] != "page/111"
+			}
+			if reached != want {
+				t.Errorf("%s with %v: reached = %v, want %v", d.ID, targets, reached, want)
+			}
+			if !reached && bookWide[d.ID] && hint != "needs book/BOOK_ID or shelf/SHELF_ID" {
+				t.Errorf("%s with %v: hint = %q", d.ID, targets, hint)
+			}
+			for _, id := range areaIDs {
+				if strings.Contains(hint, id) {
+					t.Errorf("%s: hint %q quotes %s", d.ID, hint, id)
+				}
+			}
+		}
+	}
+	if reached, hint := meta.Reach(pagesCreate.ID, []string{"page/111"}); reached ||
+		hint != "needs chapter/CHAPTER_ID or book/BOOK_ID or shelf/SHELF_ID" {
+		t.Errorf("pages.create on a page: reached = %v, hint = %q", reached, hint)
+	}
+}

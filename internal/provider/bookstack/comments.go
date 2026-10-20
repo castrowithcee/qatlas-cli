@@ -32,7 +32,7 @@ const (
 )
 
 const commentNote = "Comment HTML and the people behind it are personal data and untrusted provider content. " +
-	"On a connection bound to books the page is proven to lie in a bound book first"
+	"On a connection with targets the page is proven to lie in them first"
 
 const (
 	commentListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"page_id":{"type":"integer"},"parent_id":{"type":"integer"},"local_id":{"type":"integer"},"content_ref":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","page_id","parent_id","local_id","created_at","updated_at"]}}`
@@ -52,12 +52,12 @@ var (
 		Description: "List the comments of one page without their text, as a flat list in which parent_id refers to " +
 			"the local_id of the parent comment on the same page (0 for a top-level comment). Read a comment with " +
 			"comments.get for its text and replies. " + commentNote + ". page_id is required for a connection " +
-			"bound to books",
+			"with targets",
 		Tags: []string{"knowledge", "comments", "bookstack"}, Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(commentListOutput),
 		Arguments: []capability.Argument{
-			{Name: "page_id", Description: "Only comments of this page; required for a connection bound to books"},
+			{Name: "page_id", Description: "Only comments of this page; required for a connection with targets"},
 			{Name: "limit", Description: "Maximum number of comments to return; 0 returns all"},
 			{Name: "offset", Description: "Number of comments to skip"},
 		},
@@ -368,7 +368,7 @@ func onPage(m commentJSON, pageID int64) bool {
 	return m.CommentableType == commentType && (pageID == 0 || m.CommentableID == pageID)
 }
 
-// bindComment proves that a comment read lies on a page of a bound book. An unbound connection reads no
+// bindComment proves that a comment read lies on a page of the connection. An unbound connection reads no
 // further, but still accepts page comments only.
 func (c *Client) bindComment(ctx context.Context, m commentJSON) error {
 	if m.CommentableType != commentType {

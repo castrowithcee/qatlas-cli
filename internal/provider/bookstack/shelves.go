@@ -49,8 +49,8 @@ var (
 
 	shelvesList = capability.Descriptor{
 		ID: Provider + ".shelves.list", Version: 1, Title: "List BookStack shelves",
-		Description: "List the shelves of a knowledge base. Shelves span the whole instance, so a connection bound " +
-			"to books cannot use this tool",
+		Description: "List the shelves of a knowledge base. Shelves span the whole instance, so a connection with " +
+			"targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
@@ -72,8 +72,8 @@ var (
 
 	shelvesGet = capability.Descriptor{
 		ID: Provider + ".shelves.get", Version: 1, Title: "Get a BookStack shelf",
-		Description: "Read one shelf with its books; the book list holds at most 2000 entries. Shelves span the whole " +
-			"instance, so a connection bound to books cannot use this tool",
+		Description: "Read one shelf with its books; the book list holds at most 2000 entries. A connection with targets " +
+			"reads only a bound shelf",
 		Tags: []string{"knowledge", "shelves", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
@@ -88,7 +88,7 @@ var (
 	shelvesCreate = capability.Descriptor{
 		ID: Provider + ".shelves.create", Version: 1, Title: "Create a BookStack shelf",
 		Description: "Create one shelf with an optional description, tags, and an ordered list of books. Shelves span " +
-			"the whole instance, so a connection bound to books cannot use this tool",
+			"the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack", "create"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},` + shelfWriteProperties + `},"required":["name"],"additionalProperties":false}`),
@@ -108,7 +108,7 @@ var (
 		Description: "Change the name, description, tags, or books of one shelf by identifier. tags replaces all " +
 			"existing tags; books replaces all books on the shelf with the given ordered list, an empty list removes " +
 			"every book from the shelf, and omitting books leaves them unchanged. remove_cover true removes the cover image. Shelves span the whole instance, " +
-			"so a connection bound to books cannot use this tool",
+			"so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack", "update"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + shelfWriteProperties + `,"remove_cover":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
@@ -382,7 +382,7 @@ func shelfWriteObject(shelf shelfJSON) output.Object {
 var shelvesDelete = capability.Descriptor{
 	ID: Provider + ".shelves.delete", Version: 1, Title: "Delete a BookStack shelf",
 	Description: "Delete one shelf by identifier; only the shelf is removed, its books stay. Not available for a " +
-		"connection bound to books, because shelves are instance-wide",
+		"connection with targets, because shelves are instance-wide",
 	Tags: []string{"knowledge", "shelves", "bookstack", "delete"}, Provider: Provider,
 	RequiresToolAllowList: true,
 	Risk:                  bookWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),

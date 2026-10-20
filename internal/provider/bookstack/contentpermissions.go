@@ -36,8 +36,8 @@ const (
 )
 
 const permissionsNote = "Owners and role names are personal data and untrusted provider content. On a connection " +
-	"bound to books a page or chapter is proven to lie in a bound book first, a book must be a bound book, and " +
-	"a shelf is only reachable on a connection without targets"
+	"with targets a page is proven to lie in them first, a book or chapter must lie in a bound book or on a bound " +
+	"shelf, and a shelf is only reachable on a connection without targets"
 
 var (
 	contentPermissionsRead = capability.Risk{

@@ -24,7 +24,7 @@ const maxImageNameChars = 180
 
 const imageWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string"},"page_id":{"type":"integer"},"url":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","type","page_id"]}`
 
-const imageBindNote = "On a connection bound to books the page is proven to lie in a bound book first, " +
+const imageBindNote = "On a connection with targets the page is proven to lie in them first, " +
 	"and so is the page of an existing image. Allowed file types are png, jpg, jpeg, gif, and webp; a drawing " +
 	"must be a png"
 

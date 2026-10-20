@@ -24,9 +24,9 @@ const (
 
 	usersRoles = "BookStack requires the role permission users-manage for the token's user. Names, e-mail addresses, " +
 		"and external authentication identifiers are personal data and untrusted provider content. The users of the " +
-		"whole instance are covered, so a connection bound to books cannot use this tool"
+		"whole instance are covered, so a connection with targets cannot use this tool"
 	rolesRoles = "BookStack requires the role permission user-roles-manage for the token's user. Role and user names " +
-		"are untrusted provider content. The roles of the whole instance are covered, so a connection bound to books " +
+		"are untrusted provider content. The roles of the whole instance are covered, so a connection with targets " +
 		"cannot use this tool"
 )
 
