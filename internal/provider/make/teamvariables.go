@@ -96,7 +96,7 @@ var teamVariablesList = capability.Descriptor{
 	Description: "List the custom and system variables of the bound team, each with name, type, capped value, " +
 		"and is_system; takes no arguments, the team is always the connection's own. Values may be secret. " +
 		"Without the customVariables license Make reports only system variables, so custom_count 0 can mean " +
-		"that the feature is unavailable. Refused on a connection with a scenario allow-list. Needs the " +
+		"that the feature is unavailable. Refused on a connection with a scenario or folder allow-list. Needs the " +
 		"team-variables:read scope",
 	Tags: []string{"make", "team", "variables", "list", "automation"}, Risk: teamVariablesReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(emptyInput),
@@ -121,7 +121,7 @@ var teamVariablesCreate = capability.Descriptor{
 	ID: Provider + ".team-variables.create", Version: 1, Title: "Create a variable in the bound Make team",
 	Description: "Create one custom variable in the bound team; the team is always the connection's own. Needs " +
 		"the customVariables license, which Make's reference ties to the plan. Sends one request and never " +
-		"repeats it. Refused on a connection with a scenario allow-list. Needs the team-variables:write scope",
+		"repeats it. Refused on a connection with a scenario or folder allow-list. Needs the team-variables:write scope",
 	Tags: []string{"make", "team", "variables", "create", "automation"},
 	Risk: teamVariablesChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + variableNameSchema + `,"type":` +
@@ -224,14 +224,14 @@ func variablePath(teamID int64, name string) string {
 }
 
 // openTeamVariables checks the connection's scope before any secret is read: variables belong to the team,
-// not to a scenario, so the narrower reading is that a connection with a scenario allow-list reaches none.
+// not to a scenario, so the narrower reading is that a connection with a scenario or folder allow-list reaches none.
 func openTeamVariables(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (*Client, error) {
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return nil, err
 	}
-	if len(bound.scenarios) > 0 {
+	if bound.restricted() {
 		return nil, invalidRequest("Make team variables are not scenario-bound; a connection with a scenario " +
 			"allow-list cannot reach them")
 	}

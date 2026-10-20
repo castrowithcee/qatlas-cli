@@ -269,12 +269,13 @@ func hookSummaryOf(h hookJSON) HookSummary {
 }
 
 // allowsHook applies the bound team and, narrower than the scenario tools, the scenario allow-list: with a
-// list configured, only a hook assigned to a listed scenario is reachable, never an unassigned one.
+// list configured, only a hook assigned to a listed scenario is reachable, never an unassigned one. A hook
+// names no folder, so a folder target reaches no hook at all.
 func (c *Client) allowsHook(h hookJSON) bool {
-	if !c.scope.allowsTeam(h.TeamID) {
+	if !c.scope.allowsTeam(h.TeamID) || len(c.scope.folders) > 0 {
 		return false
 	}
-	return len(c.scope.scenarios) == 0 || (h.ScenarioID != 0 && c.scope.allowsScenario(h.ScenarioID))
+	return len(c.scope.scenarios) == 0 || (h.ScenarioID != 0 && c.scope.listsScenario(h.ScenarioID))
 }
 
 type hooksListArguments struct {

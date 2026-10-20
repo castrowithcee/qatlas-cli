@@ -269,7 +269,14 @@ func (c *Client) ListScenarios(ctx context.Context, offset, limit int, isActive 
 	}
 	summaries := make([]ScenarioSummary, 0, len(page.Scenarios))
 	for _, s := range page.Scenarios {
-		if !c.scope.allowsTeam(s.TeamID) || !c.scope.allowsScenario(s.ID) {
+		if !c.scope.allowsTeam(s.TeamID) {
+			continue
+		}
+		inScope, err := c.scenarioInScope(ctx, op, s)
+		if err != nil {
+			return nil, err
+		}
+		if !inScope {
 			continue
 		}
 		summaries = append(summaries, summaryOf(s))
@@ -300,7 +307,7 @@ func invokeScenariosGet(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	summary := summaryOf(*scenario)
@@ -328,11 +335,15 @@ func (c *Client) fetchScenario(ctx context.Context, op string, scenarioID int64)
 // configuration alone proves nothing about what a scenario_id really resolves to; this is the live check the
 // package doc describes. A scenario of another team is refused the same way as one outside the allow-list:
 // an invalid request, never a provider error, and the refusal never names the scenario's real team.
-func (c *Client) verifyScenarioScope(scenario *scenarioJSON) error {
+func (c *Client) verifyScenarioScope(ctx context.Context, scenario *scenarioJSON) error {
 	if !c.scope.allowsTeam(scenario.TeamID) {
 		return invalidRequest("scenario_id belongs to a team outside the targets of this connection")
 	}
-	if !c.scope.allowsScenario(scenario.ID) {
+	ok, err := c.scenarioInScope(ctx, "verify scenario scope", *scenario)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return invalidRequest("scenario_id is outside the targets of this connection")
 	}
 	return nil
@@ -344,8 +355,12 @@ func (c *Client) verifyScenarioScope(scenario *scenarioJSON) error {
 // as a provider error, not an invalid request, because the change has already taken effect and this
 // milestone offers no delete tool to undo it, the same distinction n8n's own verifyPlacement draws for its
 // own create and update.
-func (c *Client) verifyScopeAfterChange(op string, scenario *scenarioJSON) error {
-	if !c.scope.allowsTeam(scenario.TeamID) || !c.scope.allowsScenario(scenario.ID) {
+func (c *Client) verifyScopeAfterChange(ctx context.Context, op string, scenario *scenarioJSON) error {
+	inScope, err := c.scenarioInScope(ctx, op, *scenario)
+	if err != nil {
+		return err
+	}
+	if !c.scope.allowsTeam(scenario.TeamID) || !inScope {
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "Make did not keep the result inside this connection's targets; the change already " +
 				"took effect and this milestone has no delete tool to undo it"}
@@ -415,7 +430,7 @@ func invokeScenariosBlueprint(ctx context.Context, resolved *config.Resolved, se
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	return client.GetBlueprint(ctx, input.ScenarioID, input.Draft, input.BlueprintID)
@@ -509,7 +524,7 @@ func invokeScenariosCreate(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	if len(bound.scenarios) > 0 {
+	if bound.restricted() {
 		return nil, invalidRequest("this connection restricts scenarios by an allow-list, so it cannot " +
 			"create one: a newly created scenario can never already be on that list")
 	}
@@ -560,7 +575,7 @@ func (c *Client) CreateScenario(ctx context.Context, blueprint, scheduling json.
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "Make did not report the created scenario" + uncertain}
 	}
-	if err := c.verifyScopeAfterChange(op, &wrapper.Scenario); err != nil {
+	if err := c.verifyScopeAfterChange(ctx, op, &wrapper.Scenario); err != nil {
 		return nil, err
 	}
 	summary := summaryOf(wrapper.Scenario)
@@ -646,7 +661,10 @@ func invokeScenariosUpdate(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
+		return nil, err
+	}
+	if err := client.checkFolderMove(ctx, op, scenario, input.FolderID, input.ClearFolder); err != nil {
 		return nil, err
 	}
 	return client.UpdateScenario(ctx, input.ScenarioID, input.Name, input.Blueprint, input.Scheduling,
@@ -688,7 +706,7 @@ func (c *Client) UpdateScenario(ctx context.Context, scenarioID int64, name stri
 	if err != nil {
 		return nil, err
 	}
-	if err := c.verifyScopeAfterChange(op, scenario); err != nil {
+	if err := c.verifyScopeAfterChange(ctx, op, scenario); err != nil {
 		return nil, err
 	}
 	summary := summaryOf(*scenario)
@@ -755,7 +773,7 @@ func invokeScenarioActivation(ctx context.Context, resolved *config.Resolved, se
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyScenarioScope(scenario); err != nil {
+	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
 	return client.SetScenarioActive(ctx, input.ScenarioID, active)
@@ -777,7 +795,7 @@ func (c *Client) SetScenarioActive(ctx context.Context, scenarioID int64, active
 	if err != nil {
 		return nil, err
 	}
-	if err := c.verifyScopeAfterChange(op, scenario); err != nil {
+	if err := c.verifyScopeAfterChange(ctx, op, scenario); err != nil {
 		return nil, err
 	}
 	if scenario.IsActive != active {
