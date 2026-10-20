@@ -284,6 +284,9 @@ func (c *Client) ListMessages(ctx context.Context, q query) (*MessagesPage, erro
 	}
 	defer conn.close()
 
+	if err := conn.folderOK(op, q.folder); err != nil {
+		return nil, err
+	}
 	// EXAMINE, never SELECT: the folder is read-only for this session.
 	selected, err := conn.client.Select(q.folder, &imap.SelectOptions{ReadOnly: true}).Wait()
 	if err != nil {

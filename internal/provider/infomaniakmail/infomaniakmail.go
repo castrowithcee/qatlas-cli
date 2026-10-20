@@ -15,7 +15,7 @@
 // connection's mailbox/ADDRESS target together with a mailbox password the person created for it; the
 // Infomaniak REST mail API plays no part here.
 //
-// A connection binds exactly one mailbox, plus optional allow-lists of folders (folder/NAME) and sender
+// A connection binds exactly one mailbox, plus optional allow-lists of folders (folder/NAME, or folder/NAME/* with its subfolders) and sender
 // addresses (sender/ADDRESS). Without a folder list every folder of the mailbox is reachable; a folder
 // outside a configured list is refused before any secret is read and before any network access, and the
 // refusal never names the folder that is allowed. The sender list is applied locally to the parsed From
@@ -200,6 +200,36 @@ type session struct {
 	client *imapclient.Client
 	conn   net.Conn
 	close  func()
+	scope  scope
+
+	delimKnown bool
+	delim      string // hierarchy delimiter of the server; empty for a flat hierarchy
+}
+
+// folderOK is the final folder check of one operation, run after login and before any SELECT, EXAMINE, or
+// MOVE on that folder. Without a folder/NAME/* target it adds nothing: the check without network access was
+// already exact. With one it asks the server for the hierarchy delimiter once per session (LIST "" "") unless
+// a LIST answer already provided it. A failed question refuses without naming a folder.
+func (s *session) folderOK(op, name string) error {
+	if len(s.scope.trees) == 0 || s.scope.allowsExact(name) {
+		return nil
+	}
+	if !s.delimKnown {
+		listed, err := s.client.List("", "", nil).Collect()
+		if err != nil {
+			return failure(op, err)
+		}
+		s.delimKnown = true
+		for _, data := range listed {
+			if data.Delim != 0 {
+				s.delim = string(data.Delim)
+			}
+		}
+	}
+	if !s.scope.allowsFolderDelim(name, s.delim) {
+		return invalidRequest("folder is outside the targets of this connection")
+	}
+	return nil
 }
 
 // abort drops the transport at once. It ends a transfer that stopped reading a literal, which a regular
@@ -238,7 +268,7 @@ func (c *Client) connectWithin(ctx context.Context, op string, timeout time.Dura
 		closer()
 		return nil, loginFailure(op, err)
 	}
-	return &session{client: client, conn: conn, close: closer}, nil
+	return &session{client: client, conn: conn, close: closer, scope: c.scope}, nil
 }
 
 // loginFailure normalises a failed LOGIN. A tagged NO or BAD from the server is a rejected login whatever
@@ -381,9 +411,9 @@ func Register(reg *capability.Registry) error {
 				Forms:       []string{"mailbox/ADDRESS"},
 			}, {
 				Name: "folder",
-				Description: "one folder of the mailbox, by its exact name; optional, repeatable; no wildcards " +
-					"and no subfolders implied",
-				Forms: []string{"folder/NAME"},
+				Description: "one folder of the mailbox, by its exact name, or with folder/NAME/* that folder and " +
+					"its subfolders; optional, repeatable; no other wildcards",
+				Forms: []string{"folder/NAME", "folder/NAME/*"},
 			}, {
 				Name: "sender",
 				Description: "one sender address whose messages are listed; optional, repeatable; compared " +

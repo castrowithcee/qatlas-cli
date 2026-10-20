@@ -78,10 +78,15 @@ func item(parent, id string) config.TargetEntry {
 // pickerModel opens the add menu of the connection "lst" over a provider whose listing is src.
 func pickerModel(t *testing.T, src *listSource, targets ...string) *Model {
 	t.Helper()
+	return pickerModelOn(t, listerRegistry(t), src, targets...)
+}
+
+func pickerModelOn(t *testing.T, reg *capability.Registry, src *listSource, targets ...string) *Model {
+	t.Helper()
 	old := pickDelay
 	pickDelay = time.Millisecond
 	t.Cleanup(func() { pickDelay = old })
-	m, _ := toolsModel(t, listerRegistry(t), map[string]config.Connection{
+	m, _ := toolsModel(t, reg, map[string]config.Connection{
 		"lst": {Service: "wiki", Credential: "reader", Targets: targets},
 	})
 	m.svc = m.svc.WithTargetSource(src.targetSource())
@@ -753,5 +758,37 @@ func TestATemplateLabelOfTheSetupIsNotReplacedByTheProviderName(t *testing.T) {
 	want := map[string]string{"g/a": "Mine", "g/b": "Group b", "g/z": "Zed"}
 	if !maps.Equal(draft.TargetLabels, want) {
 		t.Fatalf("labels %v, want %v", draft.TargetLabels, want)
+	}
+}
+
+func TestAnEntryOfANestedKindOpensALevelOfTheSameKind(t *testing.T) {
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
+			{Name: "folder", Forms: []string{"folder", "folder/PATH"}, Nested: true},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &listSource{list: func(req config.TargetListRequest) (config.TargetPage, error) {
+		parent := req.Parent
+		if parent == "" {
+			parent = "folder"
+		}
+		return config.TargetPage{Entries: []config.TargetEntry{
+			{Target: parent + "/sub", Name: "sub", Kind: "folder", HasChildren: true},
+		}}, nil
+	}}
+	m := pickerModelOn(t, reg, src)
+	openPicker(t, m)
+	pump(t, m, "right")
+	last := src.reqs[len(src.reqs)-1]
+	if last.Kind != "folder" || last.Parent != "folder/sub" || len(m.targetPick.levels) != 2 {
+		t.Fatalf("opening read %+v with %d levels, want folders under folder/sub", last, len(m.targetPick.levels))
+	}
+	if got := m.pickKindsUnder(""); len(got) != 1 || got[0] != "folder" {
+		t.Errorf("roots %v", got)
 	}
 }

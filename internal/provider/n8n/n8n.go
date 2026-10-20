@@ -453,7 +453,9 @@ func Register(reg *capability.Registry) error {
 				Name:        "workflow",
 				Description: "one workflow of the bound instance; optional, and may be listed more than once",
 				Forms:       []string{"workflow/WORKFLOW_ID"},
+				Parent:      "project",
 			}},
+			Reaches:     reaches,
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
 		},
@@ -595,6 +597,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{credentialsTest.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: listTargets,
+		ResolveURL: resolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,

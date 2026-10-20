@@ -186,7 +186,7 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := input.validateShape(); err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}

@@ -269,6 +269,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
+	// Folders open below folders: a files target is a parent of files entries as well as a drive target.
+	if files, ok := metadata.Target.KindByName("files"); !ok || !files.Nested || files.Parent != "drive" ||
+		!metadata.Target.HasChildKind("files") || !metadata.Target.ValidTarget("files", "drive/5001/files/30") {
+		t.Fatalf("files kind = %+v", files)
+	}
 	if len(metadata.Tools) != 24 {
 		t.Fatalf("tools = %+v, want 24", metadata.Tools)
 	}

@@ -263,7 +263,8 @@ func (m *Model) targetSuggestions(names []string) []string {
 			continue
 		}
 		for _, form := range forms {
-			if config.FitsForm(segments, form) && slices.Contains(names, form[i]) {
+			// A trailing PATH form fits more segments than it has, so i may lie past its end.
+			if i < len(form) && config.FitsForm(segments, form) && slices.Contains(names, form[i]) {
 				values = append(values, segments[i])
 				break
 			}

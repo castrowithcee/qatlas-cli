@@ -209,7 +209,7 @@ func changeRows(ctx context.Context, op, mode, method, right string, resolved *c
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, tableID)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func invokeRowsBatchDelete(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, tableID)
 	if err != nil {
 		return nil, err
 	}
