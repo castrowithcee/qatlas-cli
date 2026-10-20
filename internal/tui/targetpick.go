@@ -139,10 +139,12 @@ func (m *Model) pickRoots() []string {
 	return m.pickKindsUnder("")
 }
 
+// pickKindsUnder lists the kinds shown below an entry of the kind parent, or at the top for "". A nested kind
+// also sits below its own entries.
 func (m *Model) pickKindsUnder(parent string) []string {
 	var kinds []string
 	for _, kind := range m.targetMetadata().Kinds {
-		if kind.Parent == parent {
+		if kind.Parent == parent || parent != "" && kind.Nested && kind.Name == parent {
 			kinds = append(kinds, kind.Name)
 		}
 	}
