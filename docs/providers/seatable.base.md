@@ -28,6 +28,21 @@ echo '{"table":"id:0000","filters":[{"column":"Name","op":"like","value":"Bike%"
   | qatlas invoke seatable.base.rows.search --connection sales-all-tables
 ```
 
+## Choosing targets
+
+A target is a table (`TABLE`, `id:TABLEID`, or `*` for the whole base) or a view of a table (`TABLE/VIEW`,
+`id:TABLEID/id:VIEWID`). The selection lists the tables of the base and the views of one table from the base
+metadata, without the connection's targets, and writes the `id:` forms because names can be renamed. Names are
+shown as SeaTable reports them.
+
+The address of a base in the web interface, `/workspace/WORKSPACE_ID/dtable/BASE_NAME/?tid=TABLE_ID&vid=VIEW_ID`,
+names a table and a view when its host is the host of the connection's base URL and workspace and base name are
+those of the connection's base; the table and view must exist in it. Any other address names nothing.
+
+Tools that change a table's structure (rename, delete, columns, options, create view) need a connection with a
+table target or `*`; a connection with view targets only does not reach them. The operation log and creating or
+duplicating a table need `*`.
+
 ## Row search
 
 `seatable.base.rows.search` filters, sorts, and pages the rows of an allowed table with structured arguments.

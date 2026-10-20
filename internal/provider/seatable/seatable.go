@@ -178,7 +178,7 @@ var columnsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["table","columns","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: tableArgumentDescription, Target: "*"},
+		{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 		{Name: "start", Description: "Zero-based column offset, up to 10000"},
 		{Name: "limit", Description: "Columns per page, from 1 through 100; 25 when omitted"},
 	},
@@ -211,7 +211,7 @@ var rowsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["rows","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: tableArgumentDescription, Target: "*"},
+		{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 		{Name: "start", Description: "Zero-based row offset inside the selected table or view, up to 10000"},
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
@@ -242,7 +242,7 @@ var rowsGet = capability.Descriptor{
 		`"required":["row_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(rowSchema),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: tableArgumentDescription, Target: "*"},
+		{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 		{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true},
 	},
 	Fields: []capability.Field{
@@ -274,7 +274,7 @@ var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capabi
 const tableArgumentDescription = "Table reference returned by seatable.base.tables.list; required unless the connection has exactly one table"
 
 var (
-	rowTableArgument  = capability.Argument{Name: "table", Description: tableArgumentDescription, Target: "*"}
+	rowTableArgument  = capability.Argument{Name: "table", Description: tableArgumentDescription, Target: tableKind}
 	rowIDArgument     = capability.Argument{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true}
 	rowValuesArgument = capability.Argument{Name: "values", Description: "Object of column name to value; link columns are refused", Required: true}
 )
@@ -306,6 +306,18 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Wildcard: "*",
+			Kinds: []config.TargetKind{{
+				Name: tableKind,
+				Description: "a table, by name or as id:TABLEID, or * for every table of the base; the id: form " +
+					"survives a rename",
+				Forms: []string{"TABLE", "*"},
+			}, {
+				Name:        "view",
+				Description: "one view of a table, by name or as id:TABLEID/id:VIEWID, narrowing rows.list to it",
+				Forms:       []string{"TABLE/VIEW"},
+				Parent:      tableKind,
+			}},
+			Reaches: reaches,
 			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +
 				"Use an allow-list when the whole base is not required.",
 			Description: "one or more tables as an allow-list, or * for the whole base; use " +
@@ -317,6 +329,9 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID, linksList.ID, viewsList.ID, viewsGet.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, targetBrowser()); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
@@ -518,6 +533,12 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 // the transport, so no test ever reaches a productive SeaTable installation.
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
+	return build(ctx, resolved, secrets, red, lim, true)
+}
+
+// build is open with the scope optional: choosing targets reads the base before the connection has any.
+func build(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, withScope bool) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
 	}
@@ -525,9 +546,11 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
-	bound, err := parseScope(resolved)
-	if err != nil {
-		return nil, providerError("open", err.Error())
+	var bound scope
+	if withScope {
+		if bound, err = parseScope(resolved); err != nil {
+			return nil, providerError("open", err.Error())
+		}
 	}
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
