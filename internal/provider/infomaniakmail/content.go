@@ -291,6 +291,9 @@ type loadedMessage struct {
 
 // examine opens the folder read-only and checks the UIDVALIDITY of the reference.
 func examine(conn *session, op string, ref messageRef) error {
+	if err := conn.folderOK(op, ref.folder); err != nil {
+		return err
+	}
 	selected, err := conn.client.Select(ref.folder, &imap.SelectOptions{ReadOnly: true}).Wait()
 	if err != nil {
 		return failure(op, err)
