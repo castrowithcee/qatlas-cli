@@ -125,15 +125,8 @@ func invokeDrivesList(ctx context.Context, resolved *config.Resolved, secrets *s
 // allow-list admits, and whose own account_id matches the bound account: a defence in depth against a drive
 // Infomaniak reported under an account other than the one this connection is bound to.
 func (c *Client) ListDrives(ctx context.Context, page int) (*DrivesPage, error) {
-	const op = "list drives"
-	query := url.Values{
-		"account_id": {strconv.FormatInt(c.scope.accountID, 10)},
-		"page":       {strconv.Itoa(page)},
-		"per_page":   {strconv.Itoa(drivesPerPage)},
-	}
-	var drives []driveJSON
-	var meta paginationJSON
-	if err := c.doInto(ctx, op, "/2/drive", query, &drives, &meta); err != nil {
+	drives, meta, err := c.readDrives(ctx, "list drives", c.scope.accountID, page)
+	if err != nil {
 		return nil, err
 	}
 	entries := make([]DriveEntry, 0, len(drives))
@@ -146,4 +139,22 @@ func (c *Client) ListDrives(ctx context.Context, page int) (*DrivesPage, error) 
 		})
 	}
 	return &DrivesPage{Drives: entries, Page: meta.Page, Pages: meta.Pages, Total: meta.Total, Count: len(entries)}, nil
+}
+
+// readDrives reads one raw page of the drives listing. An accountID of zero omits the filter and lists the
+// drives of every account the token reaches. It applies no allow-list.
+func (c *Client) readDrives(ctx context.Context, op string, accountID int64, page int) ([]driveJSON, paginationJSON, error) {
+	query := url.Values{
+		"page":     {strconv.Itoa(page)},
+		"per_page": {strconv.Itoa(drivesPerPage)},
+	}
+	if accountID != 0 {
+		query.Set("account_id", strconv.FormatInt(accountID, 10))
+	}
+	var drives []driveJSON
+	var meta paginationJSON
+	if err := c.doInto(ctx, op, "/2/drive", query, &drives, &meta); err != nil {
+		return nil, paginationJSON{}, err
+	}
+	return drives, meta, nil
 }

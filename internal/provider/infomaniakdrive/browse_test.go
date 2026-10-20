@@ -1,0 +1,189 @@
+package infomaniakdrive
+
+import (
+	"context"
+	"net/http"
+	"reflect"
+	"testing"
+
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
+)
+
+func browseList(t *testing.T, req config.TargetListRequest, targets ...string) (config.TargetPage, error) {
+	t.Helper()
+	red := &redact.Redactor{}
+	return registry(t).ListTargets(context.Background(), resolvedConnection(targets...), resolver(red, nil), red, req)
+}
+
+func TestTargetBrowserRegistration(t *testing.T) {
+	meta, ok := registry(t).ProviderMetadata(Provider)
+	if !ok {
+		t.Fatal("provider not registered")
+	}
+	account, _ := meta.Target.KindByName("account")
+	drive, _ := meta.Target.KindByName("drive")
+	if account.Parent != "" || drive.Parent != "account" {
+		t.Fatalf("parents = %q, %q", account.Parent, drive.Parent)
+	}
+	if _, err := browseList(t, config.TargetListRequest{Kind: "account"}); errorsIsUnsupported(err) {
+		t.Fatal("no target browser registered")
+	}
+}
+
+func errorsIsUnsupported(err error) bool { return err == config.ErrTargetBrowseUnsupported }
+
+func TestAccountTargetsGroupDrivesAndNameThem(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/2/drive":
+			return jsonResponse(200, `{"result":"success","data":[`+
+				driveJSONOf(foreignDrive, otherAccount, "x")+`,`+driveJSONOf(ownDrive, ownAccount, "a")+`,`+
+				driveJSONOf(otherOwnDrive, otherAccount, "b")+`],"page":1,"pages":2,"total":3}`), nil
+		case "/1/accounts":
+			return jsonResponse(200, `{"result":"success","data":[{"id":1001,"name":"Customer A"},{"id":1002,"name":"Customer B"}]}`), nil
+		}
+		t.Fatalf("unexpected %s", r.URL.Path)
+		return nil, nil
+	}, nil)
+	// A connection without any account target is a draft; the list still works.
+	page, err := browseList(t, config.TargetListRequest{Kind: "account"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []config.TargetEntry{
+		{Target: "account/1002", Name: "Customer B", Kind: "account", HasChildren: true},
+		{Target: "account/1001", Name: "Customer A", Kind: "account", HasChildren: true},
+	}
+	if !reflect.DeepEqual(page.Entries, want) || page.Next != "2" || page.ServerSearch {
+		t.Fatalf("page = %+v", page)
+	}
+	if calls[0].query.Has("account_id") || len(calls) != 2 {
+		t.Fatalf("calls = %+v", calls)
+	}
+}
+
+func TestAccountTargetsFallBackToIDs(t *testing.T) {
+	for status, wantErr := range map[int]provider.Class{403: "", 404: "", 401: provider.ClassAuth, 500: provider.ClassProviderError} {
+		var calls []call
+		serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path == "/1/accounts" {
+				return jsonResponse(status, `{}`), nil
+			}
+			return jsonResponse(200, `{"result":"success","data":[`+driveJSONOf(ownDrive, ownAccount, "a")+`],"page":1,"pages":1,"total":1}`), nil
+		}, nil)
+		page, err := browseList(t, config.TargetListRequest{Kind: "account"})
+		if wantErr != "" {
+			if classOf(err) != wantErr {
+				t.Fatalf("status %d: err = %v", status, err)
+			}
+			continue
+		}
+		if err != nil || len(page.Entries) != 1 || page.Entries[0].Name != "1001" || page.Next != "" {
+			t.Fatalf("status %d: page = %+v, err = %v", status, page, err)
+		}
+	}
+}
+
+func TestDriveTargetsPageThroughCursorsAndIgnoreTargets(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/2/drive" {
+			t.Fatalf("unexpected %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("page") == "2" {
+			return jsonResponse(200, `{"result":"success","data":[`+driveJSONOf(5003, ownAccount, "Third")+`],"page":2,"pages":2,"total":3}`), nil
+		}
+		return jsonResponse(200, `{"result":"success","data":[`+driveJSONOf(ownDrive, ownAccount, "First")+`,`+
+			driveJSONOf(otherOwnDrive, ownAccount, "Second")+`,`+driveJSONOf(foreignDrive, otherAccount, foreignCanary)+
+			`],"page":1,"pages":2,"total":3}`), nil
+	}, nil)
+	// The connection's only drive target is 5001; other drives still appear.
+	req := config.TargetListRequest{Kind: "drive", Parent: "account/1001"}
+	page, err := browseList(t, req, "account/1001", "drive/5001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Entries) != 2 || page.Entries[1].Target != "drive/5002" || page.Entries[1].Name != "Second" ||
+		page.Entries[1].Kind != "drive" || page.Next != "2" || page.ServerSearch {
+		t.Fatalf("page 1 = %+v", page)
+	}
+	req.Cursor = page.Next
+	page, err = browseList(t, req)
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Target != "drive/5003" || page.Next != "" {
+		t.Fatalf("page 2 = %+v, %v", page, err)
+	}
+	if calls[0].query.Get("account_id") != "1001" || calls[1].query.Get("page") != "2" {
+		t.Fatalf("calls = %+v", calls)
+	}
+}
+
+func TestTargetListErrors(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(429, `{}`), nil
+	}, nil)
+	drive := config.TargetListRequest{Kind: "drive", Parent: "account/1001"}
+	if _, err := browseList(t, drive); classOf(err) != provider.ClassRateLimited {
+		t.Fatalf("err = %v", err)
+	}
+	for _, req := range []config.TargetListRequest{
+		{Kind: "folder"},
+		{Kind: "drive"},
+		{Kind: "drive", Parent: "drive/5001"},
+		{Kind: "account", Cursor: "abc"},
+		{Kind: "account", Cursor: "0"},
+	} {
+		if _, err := browseList(t, req); !isInvalidRequest(err) {
+			t.Fatalf("%+v: err = %v", req, err)
+		}
+	}
+	if len(calls) != 1 {
+		t.Fatalf("invalid requests sent %d requests", len(calls)-1)
+	}
+}
+
+func TestResolveTargetURL(t *testing.T) {
+	acc := func(id string) config.TargetEntry {
+		return config.TargetEntry{Target: "account/" + id, Name: id, Kind: "account", HasChildren: true}
+	}
+	drv := func(id string) config.TargetEntry {
+		return config.TargetEntry{Target: "drive/" + id, Name: id, Kind: "drive"}
+	}
+	cases := []struct {
+		name, url string
+		want      []config.TargetEntry
+	}{
+		{"kdrive", "https://kdrive.infomaniak.com/app/drive/5001/files", []config.TargetEntry{drv("5001")}},
+		{"kdrive ignores an account number", "https://kdrive.infomaniak.com/1001/app/drive/5001", []config.TargetEntry{drv("5001")}},
+		{"ksuite with account", "https://ksuite.infomaniak.com/1001/kdrive/app/drive/5001/files/42",
+			[]config.TargetEntry{acc("1001"), drv("5001")}},
+		{"ksuite without account", "https://ksuite.infomaniak.com/kdrive/app/drive/5001", []config.TargetEntry{drv("5001")}},
+		{"file url gives the drive", "https://kdrive.infomaniak.com/app/drive/5001/files/7/preview/8", []config.TargetEntry{drv("5001")}},
+		{"upper case host", "https://KDRIVE.infomaniak.com/app/drive/5001", []config.TargetEntry{drv("5001")}},
+		{"foreign host", "https://example.invalid/app/drive/5001", nil},
+		{"api host", "https://api.infomaniak.com/2/drive/5001", nil},
+		{"lookalike host", "https://kdrive.infomaniak.com.example.invalid/app/drive/5001", nil},
+		{"missing number", "https://kdrive.infomaniak.com/app/drive", nil},
+		{"non numeric", "https://kdrive.infomaniak.com/app/drive/abc", nil},
+		{"zero padded", "https://kdrive.infomaniak.com/app/drive/05001", nil},
+		{"no drive segment", "https://kdrive.infomaniak.com/app/files/5001", nil},
+		{"invalid url", "https://kdrive.infomaniak.com/%zz", nil},
+	}
+	var calls []call
+	serve(t, &calls, func(*http.Request) (*http.Response, error) { return nil, nil }, nil)
+	red := &redact.Redactor{}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := registry(t).ResolveTargetURL(context.Background(), resolvedConnection(), resolver(red, nil), red, apiRoot, tt.url)
+			if err != nil || !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %+v, %v; want %+v", got, err, tt.want)
+			}
+		})
+	}
+	if len(calls) != 0 {
+		t.Fatalf("URL resolution sent %d requests", len(calls))
+	}
+}
