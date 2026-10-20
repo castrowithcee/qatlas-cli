@@ -3,9 +3,10 @@
 // (baserow.io/user-docs/database-api, checked 2026-09-30, not against a live instance).
 //
 // The token is sent as "Authorization: Token ...". A database token carries create, read, update, and
-// delete rights per workspace, database, or table; Qatlas adds its own boundary, the table allow-list of the
-// connection (table/ID entries or *). A table ID outside that allow-list is refused before the credential is
-// resolved and before any request is sent, and the refusal never names the table. Every request is built from
+// delete rights per workspace, database, or table; Qatlas adds its own boundary, the allow-list of the
+// connection (table/ID and database/ID entries, or *). A table ID that no table entry lists is proven against a
+// database entry by one read of the token's table list; outside both it is refused, before the credential is
+// resolved when no database entry exists, without a request on the table, and never naming the table. Every request is built from
 // fixed paths, fixed methods, and validated integers, never from a free URL or method of an agent. The body of
 // a row change carries only cell values whose field names the table's schema confirms as writable.
 //
@@ -72,6 +73,8 @@ type Client struct {
 	http    *http.Client
 	limiter *ratelimit.Limiter
 	red     *redact.Redactor
+	// databaseOf holds each table's database once the table list was read for a database target.
+	databaseOf map[int64]int64
 }
 
 // Open resolves the database token of one selected connection and returns a client for its origin.
@@ -81,10 +84,19 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
-	const op = "open"
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return nil, err
+	}
+	return build(ctx, resolved, secrets, red, lim, bound)
+}
+
+// build is open for a scope already settled; choosing targets passes an empty one.
+func build(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
+	const op = "open"
+	if resolved == nil {
+		return nil, providerError(op, "no connection was selected")
 	}
 	origin, err := originOf(resolved.BaseURL)
 	if err != nil {
@@ -238,11 +250,16 @@ func Register(reg *capability.Registry) error {
 			Wildcard: "*",
 			WildcardWarning: "All tables the database token may read are exposed to the agent. " +
 				"Use a table allow-list when not all of them are required.",
-			Description: "one or more tables as an allow-list, or * for every table the token reads",
+			Description: "tables and databases as an allow-list, or * for every table the token reads",
 			Kinds: []config.TargetKind{{
+				Name:        "database",
+				Description: "a database whose tables, also later ones, this connection may read; optional, repeatable",
+				Forms:       []string{"database/DATABASE_ID"},
+			}, {
 				Name:        "table",
 				Description: "a table whose fields and rows this connection may read",
 				Forms:       []string{"table/TABLE_ID", "*"},
+				Parent:      "database",
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
@@ -254,6 +271,9 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{tablesList.ID, fieldsList.ID, rowsList.ID, rowsGet.ID, rowsSearch.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, targetBrowser()); err != nil {
 		return err
 	}
 	return reg.Register(Provider,

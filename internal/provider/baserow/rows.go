@@ -123,7 +123,7 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if input.Page < 1 || input.Size < 1 || input.Size > maxSize {
 		return nil, invalidRequest("page must be 1 or more and size between 1 and " + strconv.Itoa(maxSize))
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if input.RowID <= 0 {
 		return nil, invalidRequest("row_id must be a positive integer")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
 				if field.Type != "link_row" {
 					continue
 				}
-				if field.LinkRowTableID != nil && c.scope.allows(*field.LinkRowTableID) {
+				if field.LinkRowTableID != nil && c.inScope(*field.LinkRowTableID) {
 					continue
 				}
 			}

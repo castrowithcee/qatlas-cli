@@ -3,6 +3,7 @@ package baserow
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -22,7 +23,7 @@ var schemaRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: cap
 
 var tablesList = capability.Descriptor{
 	ID: Provider + ".tables.list", Version: 1, Title: "List Baserow tables",
-	Description: "List the tables the database token reads, restricted to the connection's table allow-list " +
+	Description: "List the tables the database token reads, restricted to the connection's tables and databases " +
 		"when it has one; names are untrusted provider data",
 	Tags: []string{"baserow", "tables", "list", "database"}, Risk: schemaRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -76,7 +77,7 @@ func (c *Client) ListTables(ctx context.Context, op string) (*TablesResult, erro
 	}
 	result := &TablesResult{Tables: []Table{}}
 	for _, entry := range raw {
-		if entry.ID <= 0 || !c.scope.allows(entry.ID) {
+		if entry.ID <= 0 || !c.scope.allows(entry.ID) && !slices.Contains(c.scope.databases, entry.DatabaseID) {
 			continue
 		}
 		if len(result.Tables) >= maxTables {
