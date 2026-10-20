@@ -311,6 +311,8 @@ access to the repositories on a fine-grained token.
 A person chooses the targets of a connection in two levels: the owner, then its repositories or projects. Owners
 are the account behind the token (`users/LOGIN`) and the organizations it belongs to (`orgs/LOGIN`). Under an
 owner, every repository it owns (`repos/OWNER/REPO`) and every project, open or closed, is offered. The
+repository list of an owner begins with all its repositories (`repos/OWNER/*`); beside it the owner itself
+(`users/LOGIN` or `orgs/LOGIN`) can be chosen, each with its usual meaning. The
 connection's own targets neither filter nor narrow what is offered. Choosing only reads, through no tool and
 for no agent.
 

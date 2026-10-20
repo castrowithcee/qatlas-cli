@@ -225,9 +225,22 @@ func TestBrowseRepositoriesAndProjects(t *testing.T) {
 
 	repos, pages := browseAll(t, base, targets,
 		config.TargetListRequest{Kind: "repository", Parent: "orgs/octo-org"})
-	if pages != 3 || len(repos) != 120 {
-		t.Fatalf("repositories = %d in %d pages, want 120 in 3", len(repos), pages)
+	if pages != 3 || len(repos) != 121 {
+		t.Fatalf("repositories = %d in %d pages, want 121 in 3", len(repos), pages)
 	}
+	if repos[0].Target != "repos/octo-org/*" || repos[0].Kind != "repository" || repos[0].Path != "octo-org" ||
+		repos[0].HasChildren || repos[0].Name == "" {
+		t.Errorf("first entry = %+v, want the wildcard of the owner", repos[0])
+	}
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := reg.ProviderMetadata(Provider)
+	if !metadata.Target.ValidTarget("repository", repos[0].Target) {
+		t.Error("the wildcard entry is no valid target of the repository kind")
+	}
+	repos = repos[1:]
 	seen := map[string]bool{}
 	for _, entry := range repos {
 		if seen[entry.Target] || entry.Kind != "repository" || entry.Path != "octo-org" ||
@@ -283,6 +296,39 @@ func TestBrowseRepositorySearch(t *testing.T) {
 	var failure *provider.Error
 	if !errors.As(err, &failure) || failure.Class != provider.ClassNotFound || page.ServerSearch {
 		t.Errorf("empty query = %+v, %v; want the owner list (not-found for an unknown owner)", page, err)
+	}
+}
+
+func TestBrowseWildcardOnlyOnFirstPage(t *testing.T) {
+	base := serveBrowse(t, &browseFake{repos: 120, projects: 60})
+	req := config.TargetListRequest{Kind: "repository", Parent: "orgs/octo-org"}
+	first, err := browseRead(base, nil, req)
+	if err != nil || len(first.Entries) != 51 || first.Entries[0].Target != "repos/octo-org/*" {
+		t.Fatalf("first page = %d entries, %v", len(first.Entries), err)
+	}
+	req.Cursor = first.Next
+	second, err := browseRead(base, nil, req)
+	if err != nil || len(second.Entries) != 50 {
+		t.Fatalf("second page = %d entries, %v", len(second.Entries), err)
+	}
+	for _, entry := range second.Entries {
+		if strings.Contains(entry.Target, "*") {
+			t.Errorf("wildcard on the second page: %+v", entry)
+		}
+	}
+	req = config.TargetListRequest{Kind: "repository", Parent: "orgs/octo-org", Query: "match"}
+	searched, err := browseRead(base, nil, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range searched.Entries {
+		if strings.Contains(entry.Target, "*") {
+			t.Errorf("wildcard in a search: %+v", entry)
+		}
+	}
+	projects, err := browseRead(base, nil, config.TargetListRequest{Kind: "project", Parent: "orgs/octo-org"})
+	if err != nil || strings.Contains(projects.Entries[0].Target, "*") {
+		t.Errorf("projects = %+v, %v; want no wildcard", projects.Entries[0], err)
 	}
 }
 

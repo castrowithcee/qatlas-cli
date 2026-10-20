@@ -186,6 +186,11 @@ func (c *Client) browseRepositories(ctx context.Context, owner target,
 		return config.TargetPage{}, err
 	}
 	result := config.TargetPage{Next: list.NextCursor}
+	if req.Cursor == "" {
+		// The first page offers the whole owner first: every repository it owns.
+		result.Entries = append(result.Entries, config.TargetEntry{Target: "repos/" + owner.owner + "/*",
+			Name: "All repositories of " + owner.owner, Kind: "repository", Path: owner.owner})
+	}
 	for _, item := range list.Repositories {
 		login, name, _ := strings.Cut(item.Repository, "/")
 		result.Entries = append(result.Entries, repositoryEntry(login, name))
