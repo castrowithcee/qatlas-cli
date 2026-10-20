@@ -634,19 +634,6 @@ func TestRegistryChecksToolGroups(t *testing.T) {
 	}
 }
 
-func TestSuggestTargetWithoutSuggesterIsEmpty(t *testing.T) {
-	reg := NewRegistry()
-	got, err := reg.SuggestTarget(context.Background(), &config.Resolved{Name: "c", Provider: "none"}, nil, nil)
-	if got != "" || err != nil {
-		t.Errorf("SuggestTarget() = %q, %v, want empty and no error", got, err)
-	}
-	if err := reg.RegisterTargetSuggester("none", func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor) (string, error) {
-		return "x", nil
-	}); err == nil {
-		t.Error("a suggester for an unregistered provider was accepted")
-	}
-}
-
 // Each provider registers with the depth its declaration fixes: three segments, four with a service level,
 // and four for <vendor>.<product>. Every other shape is refused with the rule it breaks.
 func TestRegistryEnforcesToolIDDepth(t *testing.T) {

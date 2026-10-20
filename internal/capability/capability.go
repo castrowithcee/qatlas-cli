@@ -136,10 +136,6 @@ type Operation struct {
 // operation catalog: configuring and testing a provider does not imply that an agent operation exists.
 type ConnectionTester func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor) (provider.Class, error)
 
-// TargetSuggester reads one target value a provider can offer for a connection that has none, or "" when
-// it has no suggestion. It only suggests: nothing is saved, and the caller validates what it adopts.
-type TargetSuggester func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor) (string, error)
-
 // TargetBrowser lets a person choose the targets of a connection by reading them from the provider. It is
 // no operation: it is in no catalog and no agent reaches it. Both functions only read, and never through the
 // tools that filter by the connection's targets.
@@ -183,7 +179,6 @@ type Registry struct {
 	byProvider map[string]map[string]Descriptor
 	metadata   map[string]config.ProviderMetadata
 	testers    map[string]ConnectionTester
-	suggesters map[string]TargetSuggester
 	browsers   map[string]TargetBrowser
 }
 
@@ -194,7 +189,6 @@ func NewRegistry() *Registry {
 		byProvider: map[string]map[string]Descriptor{},
 		metadata:   map[string]config.ProviderMetadata{},
 		testers:    map[string]ConnectionTester{},
-		suggesters: map[string]TargetSuggester{},
 		browsers:   map[string]TargetBrowser{},
 	}
 }
@@ -270,32 +264,6 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 		r.testers[metadata.ID] = tester
 	}
 	return nil
-}
-
-// RegisterTargetSuggester adds the optional target suggestion of an already registered provider.
-func (r *Registry) RegisterTargetSuggester(providerID string, suggest TargetSuggester) error {
-	if _, ok := r.metadata[providerID]; !ok {
-		return fmt.Errorf("provider %q must be registered before its target suggester", providerID)
-	}
-	if suggest == nil {
-		return fmt.Errorf("provider %q target suggester must not be nil", providerID)
-	}
-	if _, exists := r.suggesters[providerID]; exists {
-		return fmt.Errorf("provider %q target suggester is already registered", providerID)
-	}
-	r.suggesters[providerID] = suggest
-	return nil
-}
-
-// SuggestTarget asks the provider of the connection for a target to offer, with its secrets resolved for
-// that connection alone. A provider without a suggester yields "" and no error.
-func (r *Registry) SuggestTarget(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor) (string, error) {
-	suggest, ok := r.suggesters[resolved.Provider]
-	if !ok {
-		return "", nil
-	}
-	return suggest(secret.ForConnection(ctx, resolved), resolved, secrets, red)
 }
 
 // RegisterTargetBrowser adds the way to choose targets of an already registered provider, which must
