@@ -150,7 +150,7 @@ func invokeLibrariesList(ctx context.Context, resolved *config.Resolved, secrets
 	result := &LibrariesResult{Libraries: []Library{}}
 	for _, entry := range entries {
 		id, project, team := entry.id("id"), entry.id("projectid"), entry.id("teamid")
-		if id == "" || project == "" || !client.scope.allowsTeam(team) || !client.scope.allowsProject(project) {
+		if id == "" || project == "" || !client.scope.allowsTeam(team) || !client.scope.allowsFile(project, id) {
 			result.OutsideTargets++
 			continue
 		}
@@ -193,7 +193,7 @@ func invokeLibrariesLink(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
-	libraryProject, err := selectProjectAs(resolved, "library_project_id", input.LibraryProjectID)
+	libraryProject, err := selectProjectForFile(resolved, "library_project_id", input.LibraryProjectID, input.LibraryID)
 	if err != nil {
 		return nil, err
 	}
