@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -212,6 +213,9 @@ type field struct {
 	// the row shows every one of them.
 	entries  []string
 	expanded bool
+	// labels belong to a target list: the label of a target by its value. They are part of what the row
+	// holds, so a changed label counts as an unsaved change and retires the problems shown under the row.
+	labels map[string]string
 	// action identifies which vault action a fieldVaultAction row runs on enter (see vaultsettings.go).
 	action string
 	// stored marks the masked row of a payload field that already has a value: left empty, it keeps it.
@@ -371,7 +375,11 @@ func (f field) value() string {
 	}
 	if f.kind == fieldTargets || f.kind == fieldPaths {
 		// One entry per line, so the value tells every list apart, entries with commas included.
-		return strings.Join(f.entries, "\n")
+		value := strings.Join(f.entries, "\n")
+		for _, key := range slices.Sorted(maps.Keys(f.labels)) {
+			value += "\x00" + key + "\x00" + f.labels[key]
+		}
+		return value
 	}
 	if f.kind == fieldMasked {
 		// A secret is taken as typed, like in the masked prompt of a credential.
@@ -438,8 +446,13 @@ type Model struct {
 	// targetList holds the entries of the focused target list while its screen is open; the row takes them
 	// over only when they are kept. targetEdit is the entry typed into targetInput: its index, the length of
 	// the list for a new one, or -1 while nothing is typed. targetRemove asks before the selected entry goes.
-	targetList   filterList
-	targetInput  textinput.Model
+	targetList  filterList
+	targetInput textinput.Model
+	// targetLabels are the labels of the open target screen, labelInput the label being typed for the
+	// selected target while labelEdit is set. They reach the row only when the list is kept.
+	targetLabels map[string]string
+	labelInput   textinput.Model
+	labelEdit    bool
 	targetEdit   int
 	targetRemove bool
 	// targetAdd is the menu that adds a target, with its builder, while it is open.
@@ -665,8 +678,9 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.templateList = newFilterList(m.templateText)
 	m.templateList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
-	m.targetList = newFilterList(func(target string) string { return target })
+	m.targetList = newFilterList(func(target string) string { return target + " " + m.targetLabels[target] })
 	m.targetInput = textField("", "", false).input
+	m.labelInput = textField("", "", false).input
 	m.pathList = newFilterList(func(path string) string { return path })
 	m.pathInput = textField("", "", false).input
 	m.pathInput.ShowSuggestions = true
@@ -2773,7 +2787,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
 				withHint(connectionCredentialHint),
-			targetsField(conn.TargetValues()),
+			targetsField(conn.TargetValues()).withLabels(conn.TargetLabels),
 			pathsField(conn.Paths).withHint(pathsHint),
 			filesField(filesReadLabel, conn.Files.Read),
 			filesField(filesWriteLabel, conn.Files.Write),
@@ -2946,12 +2960,8 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if row := m.field(forwardLabel); row != nil {
 			forward = append(forward, row.marked()...)
 		}
-		// The form has no label rows; a copy takes the source's, and SetConnection drops those without a target.
-		labelsFrom := name
-		if m.editing == "" && m.copyFrom != "" {
-			labelsFrom = m.copyFrom
-		}
-		labels := cfg.Connections[labelsFrom].TargetLabels
+		// SetConnection drops the labels of targets the list no longer holds.
+		labels := targetLabelsOf(m.fields)
 		return cfg.SetConnection(name, config.Connection{
 			Service:        m.fieldValue("service"),
 			Credential:     m.fieldValue("credential"),
@@ -3328,6 +3338,22 @@ func (m *Model) syncFilesRows() {
 // targetsField is the target list row over the targets a connection holds now.
 func targetsField(values []string) field {
 	return field{label: targetsLabel, kind: fieldTargets, entries: values}
+}
+
+// withLabels gives a target list row a copy of the labels of its targets.
+func (f field) withLabels(labels map[string]string) field {
+	f.labels = maps.Clone(labels)
+	return f
+}
+
+// targetLabelsOf are the labels of the target list among fields, or none when there is no such row.
+func targetLabelsOf(fields []field) map[string]string {
+	for _, f := range fields {
+		if f.kind == fieldTargets {
+			return maps.Clone(f.labels)
+		}
+	}
+	return nil
 }
 
 // pathsField is the path list row over the paths a connection holds now.
@@ -3730,6 +3756,9 @@ func (m *Model) leaveSubject() string {
 			return "the new target is not finished"
 		case m.targetAdd != nil || m.targetEdit >= 0:
 			return "the typed target was not taken"
+		}
+		if slices.Equal(m.targetList.all, m.fields[m.focus].entries) {
+			return "the target labels changed"
 		}
 		return "the target list changed"
 	case screenPaths:
@@ -4765,7 +4794,18 @@ func (m *Model) listTable() table {
 
 // describe is what the filter of the list looks at for one entry: every cell of its row, so what can be
 // read can be found. It never holds a secret value.
-func (m *Model) describe(name string) string { return strings.Join(m.cells(name), columnGap) }
+func (m *Model) describe(name string) string {
+	text := strings.Join(m.cells(name), columnGap)
+	if m.section != sectionConnections {
+		return text
+	}
+	// The column shows a label instead of its target, and a count instead of several; both are found.
+	conn := m.cfg.Connections[name]
+	for _, target := range conn.TargetValues() {
+		text += columnGap + target + columnGap + m.logText(conn.TargetLabels[target])
+	}
+	return text
+}
 
 // cells are the values of one entry in the columns of its section. They never show a secret value.
 func (m *Model) cells(name string) []string {
@@ -4809,6 +4849,9 @@ func (m *Model) cells(name string) []string {
 		switch {
 		case len(values) == 1:
 			targets = values[0]
+			if label := conn.TargetLabels[targets]; label != "" {
+				targets = m.logText(label)
+			}
 		case len(values) > 1:
 			targets = fmt.Sprintf("%d targets", len(values))
 		}
@@ -4895,7 +4938,11 @@ func (m *Model) renderField(f field, focused bool) string {
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 		value = hintStyle.Render("(" + emptyTargets(metadata.Target) + ")")
 	case f.kind == fieldTargets && f.expanded:
-		value = listLines(f.entries, "target", "targets")
+		lines := make([]string, len(f.entries))
+		for i, target := range f.entries {
+			lines[i] = m.labelled(target, f.labels)
+		}
+		value = listLines(lines, "target", "targets")
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
