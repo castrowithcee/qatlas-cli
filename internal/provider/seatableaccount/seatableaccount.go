@@ -75,6 +75,22 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
+	client, err := openAccount(ctx, resolved, secrets, red, lim)
+	if err != nil {
+		return nil, err
+	}
+	client.base = base
+	return client, nil
+}
+
+// openAccount resolves the account token without a bound base, which the target picker needs before a
+// connection has one.
+func openAccount(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter) (*Client, error) {
+	const op = "open"
+	if resolved == nil {
+		return nil, providerError(op, "no connection was selected")
+	}
 	origin, err := originOf(resolved.BaseURL)
 	if err != nil {
 		return nil, providerError(op, err.Error())
@@ -95,7 +111,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, base: base, token: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
+	return &Client{origin: origin, token: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // originOf accepts a bare https origin: cloud or self-hosted, but never user info, a path, a query, or a
@@ -256,6 +272,9 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{snapshotsList.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, targetBrowser()); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
