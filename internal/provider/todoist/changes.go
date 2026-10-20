@@ -109,7 +109,7 @@ var tasksCreate = changing(capability.EffectCreate, capability.IdempotencyNonIde
 	append([]capability.Argument{
 		{Name: "content", Description: "Task title, at most 500 characters on one line", Required: true},
 		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted, " +
-			"the Inbox on a * connection", Target: "*"},
+			"the Inbox on a * connection", Target: "project"},
 		{Name: "section_id", Description: "Section of a project of the connection; excludes parent_id"},
 		{Name: "parent_id", Description: "Task of the connection the new task becomes a subtask of; excludes section_id"},
 	}, taskFieldArguments...),
@@ -392,13 +392,17 @@ func checkIDs(values map[string]string) error {
 
 // changedTask checks the task a change answered with. Its request may have changed something, so every
 // failure says so.
-func (c *Client) changedTask(op string, raw rawTask) (*Task, error) {
+func (c *Client) changedTask(ctx context.Context, op string, raw rawTask) (*Task, error) {
 	if raw.ID == "" {
 		return nil, invalidChange(op, true)
 	}
-	if !c.scope.allows(raw.ProjectID) {
+	ok, err := c.taskAllowed(ctx, op, raw)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "Todoist answered with a task outside the connection's projects" + uncertain}
+			Message: "Todoist answered with a task outside the connection" + uncertain}
 	}
 	task := taskOf(raw, true)
 	return &task, nil
@@ -406,8 +410,8 @@ func (c *Client) changedTask(op string, raw rawTask) (*Task, error) {
 
 // placement returns the project a task created in or moved to a section or below a parent belongs to. On
 // a project connection the section or the parent is read first and must lie in the connection; a project
-// that is named as well must be the same. An account connection holds every project, so Todoist alone
-// checks the combination.
+// that is named as well must be the same, and one named alone must belong to the connection. An account
+// connection holds every project, so Todoist alone checks the combination.
 func (c *Client) placement(ctx context.Context, op, projectID, sectionID, parentID string) (string, error) {
 	if c.scope.all {
 		return projectID, nil
@@ -432,7 +436,7 @@ func (c *Client) placement(ctx context.Context, op, projectID, sectionID, parent
 		}
 		return section.ProjectID, nil
 	}
-	return projectID, nil
+	return projectID, c.requireProject(ctx, op, projectID)
 }
 
 // taskInScope reads the task a change concerns on a project connection and refuses one outside it.
@@ -467,26 +471,25 @@ func prepareTasksCreate(bound scope, arguments struct {
 	if arguments.SectionID != "" && arguments.ParentID != "" {
 		return nil, invalidRequest("name section_id or parent_id, not both; a subtask stays in the section of its parent")
 	}
-	project := arguments.ProjectID
-	if project == "" && arguments.SectionID == "" && arguments.ParentID == "" && !bound.all {
-		single, ok := bound.single()
-		if !ok {
+	project, section := arguments.ProjectID, arguments.SectionID
+	if project == "" && section == "" && arguments.ParentID == "" && !bound.all {
+		var ok bool
+		if project, section, ok = bound.defaultPlacement(); !ok {
 			return nil, invalidRequest("name project_id, section_id, or parent_id; a connection with several " +
-				"projects has no default project")
+				"targets has no default place")
 		}
-		project = single
 	}
 	body := arguments.body()
 	return func(ctx context.Context, c *Client) (any, error) {
-		resolved, err := c.placement(ctx, op, project, arguments.SectionID, arguments.ParentID)
+		resolved, err := c.placement(ctx, op, project, section, arguments.ParentID)
 		if err != nil {
 			return nil, err
 		}
 		if resolved != "" {
 			body["project_id"] = resolved
 		}
-		if arguments.SectionID != "" {
-			body["section_id"] = arguments.SectionID
+		if section != "" {
+			body["section_id"] = section
 		}
 		if arguments.ParentID != "" {
 			body["parent_id"] = arguments.ParentID
@@ -495,7 +498,7 @@ func prepareTasksCreate(bound scope, arguments struct {
 		if err := c.change(ctx, op, http.MethodPost, "/tasks", body, &raw); err != nil {
 			return nil, err
 		}
-		return c.changedTask(op, raw)
+		return c.changedTask(ctx, op, raw)
 	}, nil
 }
 
@@ -542,7 +545,7 @@ func prepareTasksUpdate(_ scope, arguments struct {
 		if err := c.change(ctx, op, http.MethodPost, "/tasks/"+url.PathEscape(arguments.TaskID), body, &raw); err != nil {
 			return nil, err
 		}
-		return c.changedTask(op, raw)
+		return c.changedTask(ctx, op, raw)
 	}, nil
 }
 
@@ -580,7 +583,7 @@ func prepareTasksMove(bound scope, arguments struct {
 		if err := c.taskInScope(ctx, op, arguments.TaskID); err != nil {
 			return nil, err
 		}
-		if _, err := c.placement(ctx, op, "", arguments.SectionID, arguments.ParentID); err != nil {
+		if _, err := c.placement(ctx, op, arguments.ProjectID, arguments.SectionID, arguments.ParentID); err != nil {
 			return nil, err
 		}
 		var raw rawTask
@@ -595,7 +598,7 @@ func prepareTasksMove(bound scope, arguments struct {
 				return nil, err
 			}
 		}
-		return c.changedTask(op, raw)
+		return c.changedTask(ctx, op, raw)
 	}, nil
 }
 
@@ -647,6 +650,9 @@ func prepareCommentsCreate(bound scope, arguments struct {
 		body["project_id"] = arguments.ProjectID
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
+		if err := c.requireProject(ctx, op, arguments.ProjectID); err != nil {
+			return nil, err
+		}
 		if arguments.TaskID != "" {
 			if err := c.taskInScope(ctx, op, arguments.TaskID); err != nil {
 				return nil, err
@@ -746,8 +752,14 @@ func (c *Client) commentInScope(ctx context.Context, op, id string) error {
 			return err
 		}
 		return nil
-	case raw.ProjectID != "" && c.scope.allows(raw.ProjectID):
-		return nil
+	case raw.ProjectID != "":
+		ok, err := c.projectAllowed(ctx, op, raw.ProjectID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
 	}
 	return outsideScope("comment")
 }

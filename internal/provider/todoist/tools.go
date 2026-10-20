@@ -340,8 +340,12 @@ func Register(reg *capability.Registry) error {
 			WildcardWarning: "Every project, saved filter, label, and reminder of this Todoist account is exposed " +
 				"to the agent, and a change permission reaches account-wide projects and labels. Use project IDs " +
 				"when the whole account is not required.",
-			Description: "one or more Todoist project IDs as an allow-list, or * for the whole account",
-			Validate:    validateTarget,
+			Description: "one or more entries as an allow-list, each a project ID for exactly that project, " +
+				"project/PROJECT_ID for a project with all its subprojects, or section/SECTION_ID for one " +
+				"section; or * for the whole account",
+			Kinds:    targetKinds,
+			Reaches:  reaches,
+			Validate: validateTarget,
 			ValidateSet: func(values []string) error {
 				_, err := parseScope(values)
 				return err
@@ -405,7 +409,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: remindersUpdate, Handler: handle("update reminder", prepareRemindersUpdate)},
 		capability.Operation{Descriptor: remindersDelete, Handler: handle("delete reminder", prepareRemindersDelete)},
 		capability.Operation{Descriptor: projectsCreate,
-			Handler: accountOnly(projectsCreate.ID, handle("create project", prepareProjectsCreate))},
+			Handler: reachedBy(projectsCreate.ID, func(bound scope) bool { return bound.all || len(bound.trees) > 0 },
+				handle("create project", prepareProjectsCreate))},
 		capability.Operation{Descriptor: projectsUpdate, Handler: handle("update project", prepareProjectsUpdate)},
 		capability.Operation{Descriptor: projectsArchive, Handler: handle("archive project",
 			prepareProjectState("archive project", http.MethodPost, "/archive", "archived", true, false))},
@@ -495,6 +500,9 @@ func prepareProjectsList(bound scope, arguments struct {
 	if err := checkSearch(arguments.Search); err != nil {
 		return nil, err
 	}
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	path, query := searchable("/projects", arguments.Search)
 	call, err := newListCall("list projects", path, query, arguments.Limit, arguments.Cursor,
 		projectsList.ID, bound.String(), arguments.Search)
@@ -530,6 +538,9 @@ func prepareSectionsList(bound scope, arguments struct {
 	if err := checkSearch(arguments.Search); err != nil {
 		return nil, err
 	}
+	if err := bound.requireProjectLevel(); err != nil {
+		return nil, err
+	}
 	if err := bound.selectProject(arguments.ProjectID); err != nil {
 		return nil, err
 	}
@@ -546,6 +557,7 @@ func prepareSectionsList(bound scope, arguments struct {
 	if err != nil {
 		return nil, err
 	}
+	call.project = project
 	return func(ctx context.Context, c *Client) (any, error) { return c.listSections(ctx, call, project) }, nil
 }
 
@@ -575,7 +587,8 @@ func prepareLabelsList(bound scope, arguments struct {
 }
 
 // taskSelection is the project and section a task list narrows to. A connection bound to exactly one
-// project always narrows to it, so Todoist never pages through tasks of other projects.
+// project, or to exactly one section, always narrows to it, so Todoist never pages through tasks of other
+// places.
 func taskSelection(bound scope, projectID, sectionID string) (url.Values, string, error) {
 	if err := checkID("project_id", projectID); err != nil {
 		return nil, "", err
@@ -586,8 +599,16 @@ func taskSelection(bound scope, projectID, sectionID string) (url.Values, string
 	if err := bound.selectProject(projectID); err != nil {
 		return nil, "", err
 	}
+	if sectionID != "" && !bound.projectLevel() && !bound.hasSection(sectionID) {
+		return nil, "", outsideScope("section")
+	}
 	if single, ok := bound.single(); ok && projectID == "" {
 		projectID = single
+	}
+	// Todoist narrows to one section only; with several bound sections or a project the rows are held to
+	// the connection one by one.
+	if sectionID == "" && projectID == "" && !bound.projectLevel() && len(bound.sections) == 1 {
+		sectionID = bound.sections[0]
 	}
 	query := url.Values{}
 	if projectID != "" {
@@ -643,6 +664,7 @@ func prepareTasksList(bound scope, arguments struct {
 	if err != nil {
 		return nil, err
 	}
+	call.project = project
 	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, window, false) }, nil
 }
 
@@ -707,6 +729,7 @@ func prepareCompletedList(bound scope, arguments struct {
 	if err != nil {
 		return nil, err
 	}
+	call.project = project
 	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, dueWindow{}, false) }, nil
 }
 
@@ -738,6 +761,7 @@ func prepareCommentsList(bound scope, arguments struct {
 	if err != nil {
 		return nil, err
 	}
+	call.project = arguments.ProjectID
 	return func(ctx context.Context, c *Client) (any, error) {
 		return c.listComments(ctx, call, arguments.TaskID, arguments.ProjectID)
 	}, nil
