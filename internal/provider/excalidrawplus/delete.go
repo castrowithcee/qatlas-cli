@@ -72,11 +72,8 @@ func invokeScenesDelete(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("delete scene", "the validated arguments could not be read")
 	}
-	if _, err := boundScope(resolved); err != nil {
+	if err := selectScene(resolved, input.SceneID); err != nil {
 		return nil, err
-	}
-	if !validID(input.SceneID) {
-		return nil, invalidRequest("scene_id is not a valid identifier")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
