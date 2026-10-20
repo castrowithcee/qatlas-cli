@@ -216,3 +216,36 @@ func TestSearchResultShapeAndCaps(t *testing.T) {
 		t.Errorf("fields = %v", r)
 	}
 }
+
+// resultIDs returns the identifiers of the rows of a list or the results of a search.
+func resultIDs(t *testing.T, got any) []int64 {
+	t.Helper()
+	switch v := got.(type) {
+	case output.Collection:
+		return ids(v.Rows)
+	case output.Object:
+		for _, f := range v.Fields {
+			if f.Name == "results" {
+				out := []int64{}
+				for _, r := range f.Value.([]map[string]any) {
+					out = append(out, r["id"].(int64))
+				}
+				return out
+			}
+		}
+	}
+	t.Fatalf("no rows in %T", got)
+	return nil
+}
+
+// resultTotal returns the total of a search.
+func resultTotal(t *testing.T, got any) any {
+	t.Helper()
+	for _, f := range got.(output.Object).Fields {
+		if f.Name == "total" {
+			return f.Value
+		}
+	}
+	t.Fatal("no total")
+	return nil
+}

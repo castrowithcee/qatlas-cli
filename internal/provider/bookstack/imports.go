@@ -22,7 +22,7 @@ import (
 const importsInstanceWide = "ZIP imports"
 
 const importsRoles = "BookStack requires the role permission content-import for the token's user. Imports belong to " +
-	"the user of the token, and importing a book creates a new book, so a connection bound to books cannot use " +
+	"the user of the token, and importing a book creates a new book, so a connection with targets cannot use " +
 	"this tool"
 
 const (
