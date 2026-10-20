@@ -1469,9 +1469,9 @@ func (c *Core) connectionRefusal(resolved *config.Resolved, descriptor capabilit
 // refusal says why the catalog of request does not offer a tool, or nothing when it does. With a
 // connection it is that connection's refusal. Otherwise a tool is offered when any connection of its
 // provider offers it; when none does, the refusal of the connection that comes closest wins, in the order
-// not-in-tools-list, requires-tool-allow-list, effect-not-permitted, with connection-disabled ahead of all
-// of them, and a provider without any connection is refused as no-connection. The choice is deterministic
-// and names the smallest change that would offer the tool.
+// not-in-tools-list, requires-tool-allow-list, no-local-files, effect-not-permitted, outside-targets, with
+// connection-disabled ahead of all of them, and a provider without any connection is refused as no-connection.
+// The choice is deterministic and names the smallest change that would offer the tool.
 func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) config.Refusal {
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)
@@ -1484,28 +1484,28 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 	if len(names) == 0 {
 		return config.RefusalNoConnection
 	}
-	closest := config.RefusalEffect
+	closest := config.RefusalOutsideTargets
 	for _, name := range names {
-		switch c.config.ConnectionRefusal(name, descriptor.Tool(), c.now()) {
-		case "":
+		reason := c.config.ConnectionRefusal(name, descriptor.Tool(), c.now())
+		if reason == "" {
 			return ""
-		case config.RefusalDisabled:
-			closest = config.RefusalDisabled
-		case config.RefusalNoLocalFiles:
-			if closest == config.RefusalEffect {
-				closest = config.RefusalNoLocalFiles
-			}
-		case config.RefusalToolsList:
-			if closest != config.RefusalDisabled {
-				closest = config.RefusalToolsList
-			}
-		case config.RefusalToolAllowList:
-			if closest != config.RefusalToolsList && closest != config.RefusalDisabled {
-				closest = config.RefusalToolAllowList
-			}
+		}
+		if refusalRank(reason) < refusalRank(closest) {
+			closest = reason
 		}
 	}
 	return closest
+}
+
+// refusalRank orders the refusals of one tool across connections: the lower, the closer the connection is
+// to offering the tool, and the one that wins.
+func refusalRank(reason config.Refusal) int {
+	order := []config.Refusal{config.RefusalDisabled, config.RefusalToolsList, config.RefusalToolAllowList,
+		config.RefusalNoLocalFiles, config.RefusalEffect, config.RefusalOutsideTargets}
+	if i := slices.Index(order, reason); i >= 0 {
+		return i
+	}
+	return len(order)
 }
 
 // connectionRef names one route with its description. The description is redacted here already, so a
