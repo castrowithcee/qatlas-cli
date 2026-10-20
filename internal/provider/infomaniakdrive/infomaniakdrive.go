@@ -137,6 +137,14 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
+	return build(ctx, resolved, secrets, red, lim, bound)
+}
+
+// build returns a client for an already read scope. The target browser passes the zero scope: choosing the
+// targets happens before any account is bound, so such a client must only use requests that name their
+// account themselves.
+func build(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
 	if !isAPIRoot(resolved.BaseURL) {
 		return nil, providerError("open", "an Infomaniak service must use the official API root "+apiRoot)
 	}
@@ -464,6 +472,7 @@ func Register(reg *capability.Registry) error {
 				Name:        "drive",
 				Description: "one kDrive of the bound account; optional, and may be listed more than once",
 				Forms:       []string{"drive/DRIVE_ID"},
+				Parent:      "account",
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseAllowlist(values); return err },
@@ -487,6 +496,9 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID, filesUpload.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,

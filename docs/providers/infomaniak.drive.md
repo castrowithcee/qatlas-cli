@@ -92,6 +92,21 @@ defensively before it is reported. A successful `qatlas connection test` reads o
 of the bound account: it proves the token is accepted and that it may list drives of that account, not that
 every drive on a narrower allow-list exists, is reachable, or actually belongs to that account.
 
+## Choosing targets
+
+The target picker offers two levels: `account`, then `drive` below the chosen account. It works on a draft
+connection that has no account yet, and it lists what the token reaches, not only the current targets.
+Accounts are read from the drives listing without an `account_id` and grouped; their names come from the
+accounts endpoint when the token may read it, otherwise an account is named by its ID. Names are untrusted
+data. Lists are paged on request only; an account that holds drives on several pages can appear on each of
+them. The picker never searches on the server.
+
+A URL of the web interface on `kdrive.infomaniak.com` or `ksuite.infomaniak.com` is turned into
+`drive/DRIVE_ID`, and on `ksuite.infomaniak.com` with an account number before the drive also into
+`account/ACCOUNT_ID`. Any other host or form gives nothing. A folder or file in the URL is ignored, and the
+entries are named by their IDs. Reading a URL sends no request; every list read counts against the shared
+60 requests per minute budget, and an account page costs two.
+
 ## Tools
 
 | Tool | Does |

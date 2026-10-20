@@ -388,7 +388,8 @@ func checkListRequest(t config.TargetMetadata, req config.TargetListRequest) err
 		}
 		return nil
 	}
-	if !t.ValidTarget(kind.Parent, req.Parent) {
+	// A parent names the one entry the listing sits under, never a wildcard.
+	if strings.Contains(req.Parent, "*") || !t.ValidTarget(kind.Parent, req.Parent) {
 		return invalid
 	}
 	return nil

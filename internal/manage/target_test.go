@@ -413,3 +413,26 @@ func TestServiceWithoutTargetSourceRefusesBeforeAnything(t *testing.T) {
 		t.Error("a refused choice was logged")
 	}
 }
+
+func TestKeepValidTakesWildcardOnlyWhereAFormSpellsIt(t *testing.T) {
+	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
+		{Name: "owner", Forms: []string{"users/LOGIN"}},
+		{Name: "repository", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Parent: "owner"},
+	}}
+	kept := keepValid(metadata, []config.TargetEntry{
+		{Target: "repos/o/*", Name: "all", Kind: "repository"},
+		{Target: "repos/*/r", Name: "placeholder", Kind: "repository"},
+		{Target: "users/*", Name: "owner wildcard", Kind: "owner"},
+		{Target: "repos/o/r", Name: "one", Kind: "repository"},
+	}, "", maxPageEntries)
+	var got []string
+	for _, e := range kept {
+		got = append(got, e.Target)
+	}
+	if strings.Join(got, ",") != "repos/o/*,repos/o/r" {
+		t.Errorf("kept = %v, want repos/o/*,repos/o/r", got)
+	}
+	if err := checkListRequest(metadata, config.TargetListRequest{Kind: "repository", Parent: "users/*"}); err == nil {
+		t.Error("a wildcard parent was accepted")
+	}
+}
