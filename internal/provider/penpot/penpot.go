@@ -7,8 +7,8 @@
 // interface carries no stability promise; this provider is a beta.
 //
 // The access token is sent as "Authorization: Token ...". It has no scopes and acts for every team of its
-// account; Qatlas adds its own boundary: the team targets of the connection (required) and an optional project
-// allow-list. Fixed commands are called, each from a handler that names it: get-teams, get-projects,
+// account; Qatlas adds its own boundary: the team targets of the connection (required) and an optional
+// project or file allow-list. Fixed commands are called, each from a handler that names it: get-teams, get-projects,
 // get-project-files, get-file-summary, get-page, the comment reads get-comment-threads and get-comments, and the
 // comment changes create-, update-, and delete-comment-thread or -comment, the management changes
 // create-, rename-, and delete-project, create-file, rename-file, and move-files, the snapshot read
@@ -147,10 +147,20 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
-	const op = "open"
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return nil, err
+	}
+	return openScoped(ctx, resolved, secrets, red, lim, bound)
+}
+
+// openScoped is open for a scope that is already settled: choosing targets opens the token without the
+// scope of the connection, which has no targets yet.
+func openScoped(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	lim *ratelimit.Limiter, bound scope) (*Client, error) {
+	const op = "open"
+	if resolved == nil {
+		return nil, providerError(op, "no connection was selected")
 	}
 	origin, err := originOf(resolved.BaseURL)
 	if err != nil {
@@ -454,11 +464,12 @@ func Register(reg *capability.Registry) error {
 				"sent as 'Authorization: Token ...'",
 		}},
 		Target: config.TargetMetadata{
-			Label:    "teams and projects",
+			Label:    "teams, projects, and files",
 			Required: true,
 			Multiple: true,
-			Description: "one or more team/TEAM_ID targets, and optionally a project/PROJECT_ID allow-list of " +
-				"projects of those teams; without a project target every project of the bound teams is reachable",
+			Description: "one or more team/TEAM_ID targets, and optionally an allow-list of project/PROJECT_ID " +
+				"projects and file/FILE_ID files of those teams; without a project or file target every project of " +
+				"the bound teams is reachable",
 			Kinds: []config.TargetKind{{
 				Name:        "team",
 				Description: "a team whose projects and files this connection may read; required, repeatable",
@@ -467,9 +478,16 @@ func Register(reg *capability.Registry) error {
 				Name:        "project",
 				Description: "a project of a bound team that narrows the connection; optional, repeatable",
 				Forms:       []string{"project/PROJECT_ID"},
+				Parent:      "team",
+			}, {
+				Name:        "file",
+				Description: "a single file of a bound team that narrows the connection to it; optional, repeatable",
+				Forms:       []string{"file/FILE_ID"},
+				Parent:      "project",
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
+			Reaches:     reaches,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, projects, and files", Recommended: true,
@@ -477,6 +495,9 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{teamsList.ID, projectsList.ID, filesList.ID, filesGet.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: browseList, ResolveURL: browseResolveURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
