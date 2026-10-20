@@ -35,10 +35,15 @@
 // as a path segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP
 // method, and the only provider request bodies are the name or conflict choice of a change, the validated
 // targets and right of an access change, and the content of an
-// upload. A connection binds an account and drives, never
-// single files, so a file, folder, or destination identifier is bound by the drive it is used in: a change is
-// refused locally against the allow-list and then, before the change request, against the live account of the
-// drive; Infomaniak resolves every identifier of a change inside that one drive only.
+// upload. A connection may further limit a drive to a folder or file (drive/DRIVE_ID/files/FILE_ID, repeatable):
+// a folder reaches everything below it, and the drive of such a target is reachable only inside it unless the
+// drive is bound as a whole too. For a drive bound only that way, every file, folder, or destination
+// identifier of a call is proven, with one extra read of the object with its parents, to be a target or to
+// lie below one, before the call has any effect; an unprovable object is refused without being named. The
+// tools that act on a whole drive (the trash and the list of share links) are not reached by such a binding. A
+// file, folder, or destination identifier is otherwise bound by the drive it is used in: a change is refused
+// locally against the allow-list and then, before the change request, against the live account of the drive;
+// Infomaniak resolves every identifier of a change inside that one drive only.
 //
 // Mail, CalDAV/CardDAV, and kChat are deliberately out of this provider's scope even though they are also
 // Infomaniak products: kDrive is read here through a Bearer API token against api.infomaniak.com, while
@@ -456,8 +461,10 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "exactly one account/ACCOUNT_ID target this connection is bound to, plus an optional, " +
-				"repeatable allow-list of drive/DRIVE_ID targets of that account; without a drive target, every " +
-				"kDrive of the bound account is reachable. A drive_id argument outside a configured allow-list is " +
+				"repeatable allow-list of drive/DRIVE_ID targets of that account and of drive/DRIVE_ID/files/FILE_ID " +
+				"targets, each limiting access to one folder or file of a drive; without a drive or files target, " +
+				"every kDrive of the bound account is reachable. A drive bound only by files targets is read with " +
+				"one extra request per file or folder identifier to prove it lies inside them. A drive_id argument outside a configured allow-list is " +
 				"refused locally, before any request is sent; every files.list, files.stat, and files.get call " +
 				"also confirms with Infomaniak itself, in one extra request, that the drive actually belongs to " +
 				"the bound account, and is refused before the file endpoint is called when it does not or when " +
@@ -473,7 +480,15 @@ func Register(reg *capability.Registry) error {
 				Description: "one kDrive of the bound account; optional, and may be listed more than once",
 				Forms:       []string{"drive/DRIVE_ID"},
 				Parent:      "account",
+			}, {
+				Name: "files",
+				Description: "one folder or file of a bound drive, with everything below a folder; optional, and " +
+					"may be listed more than once. The drive of it is reachable, but only inside this folder or " +
+					"file unless the drive is also listed whole",
+				Forms:  []string{"drive/DRIVE_ID/files/FILE_ID"},
+				Parent: "drive",
 			}},
+			Reaches:     reaches,
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseAllowlist(values); return err },
 		},

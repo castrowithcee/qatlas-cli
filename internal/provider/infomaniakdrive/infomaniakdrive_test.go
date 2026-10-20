@@ -266,7 +266,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Infomaniak kDrive" || metadata.DefaultBaseURL != apiRoot ||
 		len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != roleToken || !metadata.Target.Required ||
-		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
+		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	if len(metadata.Tools) != 24 {
