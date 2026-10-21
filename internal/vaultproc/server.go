@@ -298,6 +298,8 @@ func (s *Server) serveConn(conn net.Conn) {
 		resp = s.answerLog(req)
 	case opApproveToken:
 		resp = s.answerToken(req)
+	case opNames:
+		resp = s.answerNames()
 	default:
 		resp = s.answer(req)
 	}
@@ -592,6 +594,31 @@ func (s *Server) answerToken(req request) response {
 		}
 	}
 	return response{V: Version, Approval: &result, Unlogged: !logged}
+}
+
+// answerNames answers one checked names request from the vault on disk, opened with the server's key, as
+// answerToken does. It does not restart the idle period, and the answer holds ids and names only.
+func (s *Server) answerNames() response {
+	s.mu.Lock()
+	locked := s.locked || s.stopping()
+	key, dir := s.key, s.vaultDir
+	s.mu.Unlock()
+	if locked {
+		return response{V: Version, Error: codeLocked}
+	}
+	id, ok := key.(*age.X25519Identity)
+	if dir == "" || !ok {
+		return response{V: Version, Error: codeNoNames}
+	}
+	v, err := vault.OpenWithKey(dir, id)
+	if err != nil {
+		return response{V: Version, Error: codeNamesFailed}
+	}
+	names, err := v.KnownNames()
+	if err != nil {
+		return response{V: Version, Error: codeNamesFailed}
+	}
+	return response{V: Version, Names: &names}
 }
 
 // resultAdminRequired is the result a refused token approval is logged with, the code the command fails with.
