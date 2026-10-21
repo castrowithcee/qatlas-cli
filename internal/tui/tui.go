@@ -133,7 +133,7 @@ const (
 	screenRename
 	// screenFindings lists the renames found in the vault and offers the action for each; see renamefind.go.
 	screenFindings
-	// screenTransfer is the guided export of the configuration; see transfer.go.
+	// screenTransfer is the guided export or import of the configuration; see transfer.go.
 	screenTransfer
 	// screenCommand is the command line over the screen it was opened from; see commandline.go.
 	screenCommand
@@ -426,8 +426,9 @@ type Model struct {
 	findings *findingsState
 	// rename is the prompt or dry run of screenRename while it is open.
 	rename *renameState
-	// export is the guided export of screenTransfer while it is open.
+	// export and imp are the guided export or import of screenTransfer while one is open; never both.
 	export *exportState
+	imp    *importState
 	fields []field
 	focus  int
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
@@ -729,6 +730,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleAdminVerified(msg)
 	case exportDoneMsg:
 		return m, m.handleExportDone(msg)
+	case importPlannedMsg:
+		return m, m.handleImportPlanned(msg)
+	case importDoneMsg:
+		return m, m.handleImportDone(msg)
+	case importApprovedMsg:
+		return m, m.handleImportApproved(msg)
 	case planVaultMigrateMsg:
 		return m, m.handlePlannedVaultMigrate(msg)
 	case vaultMigrateWrittenMsg:
@@ -865,7 +872,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenCommand:
 			cmd = m.updateCommandLine(msg)
 		case screenTransfer:
-			cmd = m.updateExport(msg)
+			cmd = m.updateTransfer(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -1201,6 +1208,12 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.closeFindings()
 		return nil
 	case screenTransfer:
+		if m.imp != nil {
+			if m.imp.working == "" {
+				return m.importBack()
+			}
+			return nil
+		}
 		if m.export != nil && !m.export.writing {
 			return m.exportBack()
 		}
@@ -1326,6 +1339,11 @@ func (m *Model) interrupt() tea.Cmd {
 		m.status = "Wait until the export is written"
 		return nil
 	}
+	if m.imp != nil && m.imp.working != "" {
+		// The configuration and the secrets are being written; quitting now could leave them half done.
+		m.status = "Wait until the import is " + map[string]string{"reading": "read", "writing": "written"}[m.imp.working]
+		return nil
+	}
 	if m.payloadSaving || (m.wizard != nil && (m.wizard.saving || m.wizard.saved != "")) || !m.unsaved() {
 		return m.quit()
 	}
@@ -1368,6 +1386,9 @@ func (m *Model) unsaved() bool {
 			return true
 		}
 	case screenTransfer:
+		if m.imp != nil {
+			return m.imp.dirty()
+		}
 		return m.export.dirty()
 	case screenForm, screenSummary, screenProviders, screenSecret, screenVaultOffer:
 	default:
@@ -1440,7 +1461,7 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 			return m.startSetupSave()
 		case screenTransfer:
 			m.screen = from
-			return m.updateExport(key)
+			return m.updateTransfer(key)
 		case screenPicker:
 			m.keepPicker()
 		}
@@ -1490,6 +1511,10 @@ func (m *Model) discard() tea.Cmd {
 		m.status = "Selection discarded; the row is as it was"
 		return nil
 	case screenTransfer:
+		if m.imp != nil {
+			m.cancelImport()
+			return nil
+		}
 		m.cancelExport()
 		return nil
 	}
@@ -3503,6 +3528,9 @@ func (m *Model) editorView() string {
 	case screenFindings:
 		return m.findingsView()
 	case screenTransfer:
+		if m.imp != nil {
+			return m.importView()
+		}
 		return m.exportView()
 	}
 	var b strings.Builder
@@ -3705,6 +3733,9 @@ const (
 // exactly the answers that apply; they come right under the warning, so even a tiny terminal shows them.
 func (m *Model) leaveView() string {
 	if m.leaveFrom == screenTransfer {
+		if m.imp != nil {
+			return m.importLeaveView()
+		}
 		return m.exportLeaveView()
 	}
 	what := "New " + m.section.entry()
