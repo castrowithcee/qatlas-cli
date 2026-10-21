@@ -19,7 +19,7 @@ func firstWords(topic helptopics.Topic) string {
 func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	if keys := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(keys, "c setup · ? help") {
+	if keys := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(keys, ": cmds") || !strings.Contains(keys, "? help") {
 		t.Errorf("the sidebar keys do not offer ? help:\n%s", screenOf(m))
 	}
 
@@ -56,7 +56,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 	}
 
 	press(t, m, "enter")
-	if keys := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(keys, "sections · ? help · q quit") {
+	if keys := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(keys, ": cmds") || !strings.Contains(keys, "? help") {
 		t.Errorf("the list keys do not offer ? help:\n%s", screenOf(m))
 	}
 	press(t, m, "?", "right")

@@ -336,7 +336,7 @@ func (m *Model) pathFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close · ? help"
+	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close · : cmds · ? help"
 	switch {
 	case m.pathEdit >= 0:
 		label := "add path: "
@@ -361,7 +361,7 @@ func (m *Model) pathFrame() (string, string) {
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
 		foot.WriteString("\n" + m.wrapped(warningStyle, "Remove "+quoted+" from the list?") + "\n")
-		keys = "y remove · n/esc keep · ? help"
+		keys = "y remove · n/esc keep · : cmds · ? help"
 	}
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()

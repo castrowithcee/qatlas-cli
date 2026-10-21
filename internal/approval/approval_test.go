@@ -407,3 +407,25 @@ func TestDirectApprovableIgnoresRenames(t *testing.T) {
 			DirectApprovable(withTables), DirectApprovable(without))
 	}
 }
+
+// Approving records the config id of each connection that has one; a connection without one is approved
+// without an id.
+func TestApproveRecordsConnectionID(t *testing.T) {
+	cfg, v := fixture(t)
+	read := cfg.Connections["wiki-read"]
+	read.ID = "0123456789abcdef0123456789abcdef"
+	cfg.Connections["wiki-read"] = read
+	if _, _, err := Approve(context.Background(), cfg, v, nil); err != nil {
+		t.Fatal(err)
+	}
+	approvals, err := v.Approvals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := approvals["wiki-read"].ConnectionID; got != read.ID {
+		t.Errorf("wiki-read ConnectionID = %q, want %q", got, read.ID)
+	}
+	if got := approvals["wiki-write"].ConnectionID; got != "" {
+		t.Errorf("wiki-write ConnectionID = %q, want none", got)
+	}
+}

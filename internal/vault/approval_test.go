@@ -278,3 +278,38 @@ func TestCarryApproval(t *testing.T) {
 		t.Errorf("CheckApproval() under the new name after undo() = %v, want ErrApprovalRequired", err)
 	}
 }
+
+// An approval records the config id of its connection without changing the fingerprint; a connection without
+// an id, and an approval given without ids, keep none.
+func TestApproveConnectionsRecordsID(t *testing.T) {
+	lowWorkFactor(t)
+	v := New(t.TempDir())
+	if err := v.Set("wiki-reader", "token", "synthetic-token", offering("s3cret-phrase")); err != nil {
+		t.Fatalf("Set() = %v", err)
+	}
+	scope := wikiScope()
+	other := scope
+	other.Connection = "wiki-other"
+	if err := v.ApproveConnections([]Scope{scope, other}, map[string]string{scope.Connection: "0123abcd"}); err != nil {
+		t.Fatalf("ApproveConnections() = %v", err)
+	}
+	approvals, err := v.Approvals()
+	if err != nil {
+		t.Fatalf("Approvals() = %v", err)
+	}
+	if got := approvals[scope.Connection].ConnectionID; got != "0123abcd" {
+		t.Errorf("ConnectionID = %q, want the recorded id", got)
+	}
+	if got := approvals[other.Connection].ConnectionID; got != "" {
+		t.Errorf("ConnectionID without an id = %q, want none", got)
+	}
+	if err := v.CheckApproval(scope); err != nil {
+		t.Errorf("CheckApproval() = %v", err)
+	}
+	if err := v.Approve([]Scope{other}); err != nil {
+		t.Fatalf("Approve() = %v", err)
+	}
+	if approvals, _ = v.Approvals(); approvals[other.Connection].ConnectionID != "" {
+		t.Errorf("Approve() ConnectionID = %q, want none", approvals[other.Connection].ConnectionID)
+	}
+}
