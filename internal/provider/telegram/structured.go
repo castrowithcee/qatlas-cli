@@ -339,7 +339,8 @@ func invokeLocationsSend(ctx context.Context, resolved *config.Resolved, secrets
 	if err := arguments.LocationOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +359,8 @@ func invokeVenuesSend(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := arguments.VenueOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +379,8 @@ func invokeContactsSend(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := arguments.ContactOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +399,8 @@ func invokeDiceSend(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := arguments.DiceOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}

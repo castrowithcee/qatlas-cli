@@ -233,6 +233,16 @@ type topicSelector struct {
 	General         bool   `json:"general"`
 }
 
+// openTopic opens the chat of a topic tool whose selector passed check. The General topic has no thread ID a
+// topic target could name, so it needs the whole chat bound.
+func openTopic(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	s *topicSelector) (*Client, error) {
+	if s.General {
+		return openChat(ctx, resolved, secrets, red, s.Chat)
+	}
+	return openThread(ctx, resolved, secrets, red, s.Chat, &s.MessageThreadID, 0)
+}
+
 // check requires exactly one of a positive message_thread_id and general: true.
 func (s topicSelector) check(op string) error {
 	if (s.MessageThreadID > 0) == s.General || s.MessageThreadID < 0 {
@@ -288,7 +298,7 @@ func invokeTopicsEdit(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := options.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openTopic(ctx, resolved, secrets, red, &arguments.topicSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +325,7 @@ func invokeTopicState(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := arguments.check(op); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openTopic(ctx, resolved, secrets, red, &arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +345,7 @@ func invokeTopicsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 	if arguments.General || arguments.MessageThreadID <= 0 {
 		return nil, providerError(op, "a positive message_thread_id is required; the General topic cannot be deleted")
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openTopic(ctx, resolved, secrets, red, &arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +362,7 @@ func invokeTopicsUnpinAll(ctx context.Context, resolved *config.Resolved, secret
 	if err := arguments.check(op); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openTopic(ctx, resolved, secrets, red, &arguments)
 	if err != nil {
 		return nil, err
 	}

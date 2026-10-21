@@ -165,7 +165,18 @@ func invokeGamesSend(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := arguments.GameOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openNumericChat(ctx, resolved, secrets, red, arguments.Chat, "sendGame")
+	if resolved == nil {
+		return nil, providerError("open", "no connection was selected")
+	}
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireNumericChat("sendGame", chat); err != nil {
+		return nil, err
+	}
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, newHTTPClient())
 	if err != nil {
 		return nil, err
 	}

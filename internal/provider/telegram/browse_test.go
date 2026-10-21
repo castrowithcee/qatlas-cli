@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -22,6 +23,9 @@ func TestResolveTargetURL(t *testing.T) {
 		{"private chat", "https://t.me/c/1234567890/55", "-1001234567890", "-1001234567890"},
 		{"private chat only", "https://t.me/c/1234567890", "-1001234567890", "-1001234567890"},
 		{"private chat topic", "https://t.me/c/1234567890/7/55", "-1001234567890", "-1001234567890"},
+		{"private chat topic zero", "https://t.me/c/1234567890/0/55", "-1001234567890", "-1001234567890"},
+		{"private chat topic leading zero", "https://t.me/c/1234567890/07/55", "-1001234567890", "-1001234567890"},
+		{"private chat topic too large", "https://t.me/c/1234567890/99999999999999999999/55", "-1001234567890", "-1001234567890"},
 		{"bot api origin is ignored", "https://t.me/news_room", "@news_room", "news_room"},
 
 		{"invalid username characters", "https://t.me/ab-cdef", "", ""},
@@ -59,6 +63,8 @@ func TestResolveTargetURL(t *testing.T) {
 		{"broken", "https://t.me/%zz", "", ""},
 		{"no scheme", "t.me/alerts_channel", "", ""},
 	}
+	// Only a forum message link, with three numbers after c, also names its topic; c/{id}/{n} is the chat alone.
+	topics := map[string]string{"private chat topic": "-1001234567890/topics/7"}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := resolveTargetURL(context.Background(), nil, nil, nil, "https://api.telegram.org", tc.url)
@@ -71,12 +77,17 @@ func TestResolveTargetURL(t *testing.T) {
 				}
 				return
 			}
-			want := config.TargetEntry{Target: tc.target, Name: tc.label, Kind: "chat"}
-			if len(got) != 1 || got[0] != want {
-				t.Fatalf("entries = %+v, want [%+v]", got, want)
+			want := []config.TargetEntry{{Target: tc.target, Name: tc.label, Kind: "chat"}}
+			if topic := topics[tc.name]; topic != "" {
+				want = append(want, config.TargetEntry{Target: topic, Name: topic, Kind: "topic", Path: tc.target})
 			}
-			if err := validateTarget(got[0].Target); err != nil {
-				t.Errorf("resolved target is invalid: %v", err)
+			if !slices.Equal(got, want) {
+				t.Fatalf("entries = %+v, want %+v", got, want)
+			}
+			for _, entry := range got {
+				if kind, _, err := parseTarget(entry.Target); err != nil || kind != entry.Kind {
+					t.Errorf("resolved target %q is %q, %v", entry.Target, kind, err)
+				}
 			}
 		})
 	}
@@ -92,6 +103,9 @@ func TestResolvedTargetsAreValidForTheKind(t *testing.T) {
 		if !metadata.Target.ValidTarget("chat", target) {
 			t.Errorf("%q is no valid chat target", target)
 		}
+	}
+	if !metadata.Target.ValidTarget("topic", "-1001234567890/topics/7") {
+		t.Error("the topic of a forum link is no valid topic target")
 	}
 }
 

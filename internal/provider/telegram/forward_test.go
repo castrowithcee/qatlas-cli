@@ -39,8 +39,9 @@ func pairClient(t *testing.T, status int, payload string, transportErr error) (*
 		return response(status, payload), nil
 	})
 	resolver := secret.NewWith(func(string) string { return testToken }, nil, nil, &redact.Redactor{})
+	var thread int64
 	client, _, err := openChatPairWithHTTP(context.Background(), resolvedWith("-1001", "-1002"), resolver, nil,
-		"-1001", "-1002", httpClient)
+		"-1001", "-1002", &thread, httpClient)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +242,7 @@ func TestTransferAcceptsBoundChatsAndEquality(t *testing.T) {
 			t.Fatal(err)
 		}
 		client, source, err := openChatPairWithHTTP(ctx, tc.resolved, resolver, nil, arguments.Chat,
-			arguments.FromChat, httpClient)
+			arguments.FromChat, &arguments.MessageThreadID, httpClient)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.args, err)
 		}

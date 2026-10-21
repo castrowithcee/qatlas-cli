@@ -5,14 +5,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-13
+updated: 2026-10-21
 ---
 
 # Telegram
 
-A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is a chat
-(a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. Every changing tool requires
-confirmation, and Telegram's own restrictions still apply.
+A connection binds one bot token to its targets (`target` or `targets`): a chat (a numeric chat ID, also
+negative, or an `@username`), a forum topic `CHAT_ID/topics/THREAD_ID` of a chat with a numeric ID, `bot`, or
+`business/<id>`. Every changing tool requires confirmation; Telegram's own restrictions still apply.
 
 `telegram.messages.send` sends text; Telegram's parser decides whether `parse_mode` markup is valid, and
 `reply_to_message_id` replies only within the same chat.
@@ -33,17 +33,24 @@ Without `chat`, the tool uses the one bound chat and refuses when the connection
 that is not bound is refused before the credential is read and before any request, without naming it. A chat
 ID from an invocation argument or a Telegram response never becomes a target on its own.
 
+A topic target binds only its topic, and together with a chat target of the same chat the whole chat. In a chat
+bound only through topics, the tools with `message_thread_id` that send or manage a topic stay in a bound topic:
+an omitted one becomes the only bound topic, and `chat` may name the topic target. Another topic, the General
+topic, and a reply are refused before the credential is read, since Telegram returns and quotes the replied
+message. Every other chat tool and `from_chat` act on the whole chat or on a message whose topic is unknown without
+a read, so they are refused there and not offered.
+
 `bot` unlocks only bot-wide tools and `business/<id>` only the tools of that one business connection; both
 combine with chats, and a connection with only `bot` has no chat. A tool missing its target is refused before the
 credential is read, and methods that accept only a numeric chat ID refuse an `@username` chat locally.
 
-The Bot API has no chat list, so setup offers none. A `https://t.me/<username>` link, also with a message
-number, becomes the target `@<username>`, and a `https://t.me/c/<id>/...` link becomes `-100<id>`. No request is
-made. Invite links and other `t.me` feature paths name no chat and yield no target.
+The Bot API has no chat list, so setup offers none. Without a request, `https://t.me/<username>` (also with a
+message number) becomes `@<username>`, `https://t.me/c/<id>/...` becomes `-100<id>`, and a forum message link
+`https://t.me/c/<id>/<topic>/<message>` also yields `-100<id>/topics/<topic>`; other `t.me` paths yield none.
 
 Tool groups only sort tools for display. The base URL must be a plain `https` URL with a host and without user,
-query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
-rejects any other base URL. Errors never carry Telegram's own error text.
+query, or fragment, with no exception for local addresses, and redirects are never followed. Errors never carry
+Telegram's own error text.
 
 A tool that takes a `local_path` is offered only on a connection that releases a directory for it (`files`): for
 reading to upload, for writing to download. A path outside it is refused before the credential is read, and an
@@ -51,16 +58,12 @@ upload's size is checked before the file is read. A local file is sent under a n
 name stay local.
 
 The credential provides `bot-token`. Connection effects only reduce what Qatlas exposes and executes; they do
-not broaden the bot's provider-side rights. A connection may instead select named tools with a `tools` list,
-for example `[telegram.messages.send]` for a chat that may receive but never lose messages. Mutations are never retried after an ambiguous network result.
+not broaden the bot's provider-side rights. A connection may instead select named tools with a `tools` list.
+Mutations are never retried after an ambiguous network result.
 
-`telegram.messages.delete` is offered only through a `tools` list, since no effect offers it. Its reach is
-that of the Bot API `deleteMessage`: in a bound chat the bot deletes its own messages and, as an administrator,
-those of others; in a private chat it also deletes incoming messages.
-
-`telegram.messages.delete-many` deletes up to 100 messages of one chat, with the reach of
-`telegram.messages.delete` and also only through a `tools` list. Telegram skips missing or undeletable
-identifiers silently, so success does not say which messages are gone.
+`telegram.messages.delete` and `.delete-many` (up to 100 messages of one chat) are offered only through a `tools`
+list. Their reach is that of `deleteMessage`: the bot deletes its own messages and, as an administrator, those of
+others; in a private chat also incoming ones. `.delete-many` skips missing or undeletable identifiers silently.
 
 `telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages from `from_chat` to `chat`, two
 bound chats that follow the rule for `chat` above and may be the same. The source is one `message_id` or
@@ -148,11 +151,10 @@ new one that the result does not contain; creating, exporting, or editing invite
 
 ## Reading updates
 
-`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat and
-business connection. It needs at least one chat or business target. Every other update, whatever its chat or
-type, is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
-`@username` target is matched through a fixed `getChat` call on the configured name; the ID that returns is used
-for matching only. A long poll (`wait_seconds`) waits for a new update.
+`telegram.updates.list` (`read`) shows the pending updates of the bot for every bound chat, topic, and business
+connection; of a topic only its messages and button presses, with the topic target as `chat`. Every other update
+is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
+`@username` target is matched through a fixed `getChat` call; the ID that returns is used for matching only.
 
 `telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again until Telegram
 drops them after at most 24 hours. Telegram allows one consumer per bot: the call conflicts with an active webhook
@@ -301,9 +303,6 @@ and an omitted mask position or thumbnail or an empty keyword list removes the v
 
 ## Setup profiles
 
-The terminal editor starts a new connection on the setup profile `send` (`[telegram.messages.send]`):
-the read tools expose incoming message content, while a send reaches only a bound chat after confirmation. The
-profiles `read`, `messaging` (also `telegram.messages.delete`), `pins`, `media`, `moderation` (only
-`telegram.members.unban`), `chat-admin`, and `payments-read` (the Stars and gifts tools) select the tools their titles
-name. Every other Telegram tool is in no profile. A profile is only a visible starting selection: every tick can be
-changed before saving, and a saved connection never follows a profile.
+The terminal editor starts a new connection on the setup profile `send`: the read tools expose incoming message
+content, while a send reaches only a bound chat after confirmation. A profile is only a visible starting selection:
+every tick can be changed before saving, and a saved connection never follows a profile.
