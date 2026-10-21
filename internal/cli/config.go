@@ -12,6 +12,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -46,6 +47,15 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"starting with '~/', and glob patterns are refused. An entry that names no existing directory is\n" +
 			"valid, since the directory may be created later; validate names it by its position in a warning\n" +
 			"on stderr and still succeeds. Validate itself checks every connection, wherever it is run.\n\n" +
+			"Validate also looks for a connection or credential renamed by hand in the file while the vault\n" +
+			"still holds its approval or entry under the old name. It reads the vault's names, never a secret,\n" +
+			"and never asks for a passphrase or starts a vault process: an unencrypted vault is read directly,\n" +
+			"an encrypted one only where a running vault process holds it unlocked. Each rename it finds is a\n" +
+			"note on stderr with the 'qatlas config rename <kind> <old> <new> --adopt' command that moves the\n" +
+			"vault after it, or, where it cannot tell which entry is meant, a note without a command. The\n" +
+			"validation still succeeds. Where the vault cannot be read this way, one note says it was not\n" +
+			"checked. --output json adds hand_renames (kind, old, new, ambiguous, command) when there are any\n" +
+			"and vault_checked false when the vault was not checked.\n\n" +
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
 			"source delivers each of them, so an environment variable that overrides the credential store\n" +
 			"is visible instead of silent. It prints where a secret comes from, never what it is, and it\n" +
@@ -76,14 +86,20 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s still holds plaintext secrets; run 'qatlas "+
 					"vault migrate' to move them into the vault\n", opts.Redactor.Apply(legacyPath))
 			}
+			renames, notChecked := vaultHandRenames(c, opts, cfg)
 			if !secrets {
 				if opts.Format == output.FormatTable {
 					_, err := fmt.Fprintf(c.OutOrStdout(), "configuration is valid: %s\n", opts.Redactor.Apply(path))
 					return err
 				}
-				return emit(c, opts, output.Object{Fields: []output.Field{
-					{Name: "valid", Value: true}, {Name: "path", Value: path},
-				}})
+				fields := []output.Field{{Name: "valid", Value: true}, {Name: "path", Value: path}}
+				if len(renames) > 0 {
+					fields = append(fields, output.Field{Name: "hand_renames", Value: renames})
+				}
+				if notChecked {
+					fields = append(fields, output.Field{Name: "vault_checked", Value: false})
+				}
+				return emit(c, opts, output.Object{Fields: fields})
 			}
 			result, err := secretSources(contextOrBackground(c.Context()), cfg, opts)
 			if err != nil {
@@ -103,6 +119,26 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 
 	cmd.AddCommand(validate, newConfigRenameCommand(opts, reg))
 	return cmd
+}
+
+// vaultHandRenames notes on stderr every rename made by hand in cfg that the vault shows, with the command that
+// adopts it, as far as the vault can be read without a passphrase (see readableVaultNames); where it cannot,
+// one sentence says so. It changes nothing and starts nothing. A notice never fails the validation.
+func vaultHandRenames(c *cobra.Command, opts *Options, cfg *config.Config) (found []handRenameDocument, notChecked bool) {
+	names, present, checked := readableVaultNames(contextOrBackground(c.Context()), opts)
+	switch {
+	case !present:
+		return nil, false
+	case !checked:
+		fmt.Fprintln(c.ErrOrStderr(), "qatlas: note: the vault was not checked for renames made by hand: it is "+
+			"encrypted and no vault process holds it unlocked that can tell its names")
+		return nil, true
+	}
+	for _, r := range manage.HandRenames(cfg, names) {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: note: %s\n", handRenameText(opts, r))
+		found = append(found, handRenameDocumentOf(opts, r))
+	}
+	return found, false
 }
 
 // secretSourceColumns is the stable field order of the source report.
