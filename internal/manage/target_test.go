@@ -26,7 +26,7 @@ const (
 
 var browseKinds = []config.TargetKind{
 	{Name: "space", Forms: []string{"spaces/KEY"}},
-	{Name: "page", Forms: []string{"spaces/KEY/pages/ID"}, Parent: "space"},
+	{Name: "page", Forms: []string{"spaces/KEY/pages/ID"}, Parents: []string{"space"}},
 }
 
 type browseCatalog struct{}
@@ -417,7 +417,7 @@ func TestServiceWithoutTargetSourceRefusesBeforeAnything(t *testing.T) {
 func TestKeepValidTakesWildcardOnlyWhereAFormSpellsIt(t *testing.T) {
 	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
 		{Name: "owner", Forms: []string{"users/LOGIN"}},
-		{Name: "repository", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Parent: "owner"},
+		{Name: "repository", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Parents: []string{"owner"}},
 	}}
 	kept := keepValid(metadata, []config.TargetEntry{
 		{Target: "repos/o/*", Name: "all", Kind: "repository"},
@@ -440,7 +440,7 @@ func TestKeepValidTakesWildcardOnlyWhereAFormSpellsIt(t *testing.T) {
 func TestNestedKindListsBelowItsParentKindAndItsOwnEntries(t *testing.T) {
 	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
 		{Name: "drive", Forms: []string{"drive/ID"}},
-		{Name: "files", Forms: []string{"drive/ID/PATH"}, Parent: "drive", Nested: true},
+		{Name: "files", Forms: []string{"drive/ID/PATH"}, Parents: []string{"drive"}, Nested: true},
 		{Name: "folder", Forms: []string{"folder", "folder/PATH"}, Nested: true},
 		{Name: "plain", Forms: []string{"plain/ID"}},
 	}}

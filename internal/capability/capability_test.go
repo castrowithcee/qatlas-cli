@@ -726,8 +726,8 @@ func TestRegistryRefusesVendorCollision(t *testing.T) {
 
 func TestRegisterProviderRefusesInvalidKindParents(t *testing.T) {
 	for name, kinds := range map[string][]config.TargetKind{
-		"unknown parent": {{Name: "a", Forms: []string{"a/ID"}, Parent: "zz"}},
-		"cycle":          {{Name: "a", Forms: []string{"a/ID"}, Parent: "b"}, {Name: "b", Forms: []string{"b/ID"}, Parent: "a"}},
+		"unknown parent": {{Name: "a", Forms: []string{"a/ID"}, Parents: []string{"zz"}}},
+		"cycle":          {{Name: "a", Forms: []string{"a/ID"}, Parents: []string{"b"}}, {Name: "b", Forms: []string{"b/ID"}, Parents: []string{"a"}}},
 	} {
 		err := NewRegistry().RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake",
 			Target: config.TargetMetadata{Kinds: kinds}}, nil)

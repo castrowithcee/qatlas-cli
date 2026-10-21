@@ -557,8 +557,8 @@ func Register(reg *capability.Registry) error {
 				Name: "channel",
 				Description: "one channel of a bound team, or one direct or group channel whose other " +
 					"participants are members of them; optional, and may be listed more than once",
-				Forms:  []string{"channel/CHANNEL_ID"},
-				Parent: "team",
+				Forms:   []string{"channel/CHANNEL_ID"},
+				Parents: []string{"team"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },

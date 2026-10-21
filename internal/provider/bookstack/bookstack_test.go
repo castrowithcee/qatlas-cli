@@ -1315,7 +1315,7 @@ func targetMetadata(t *testing.T) config.TargetMetadata {
 	target := meta.Target
 	kinds := []string{}
 	for _, kind := range target.Kinds {
-		kinds = append(kinds, kind.Name+":"+strings.Join(kind.Forms, ",")+":"+kind.Parent)
+		kinds = append(kinds, kind.Name+":"+strings.Join(kind.Forms, ",")+":"+strings.Join(kind.Parents, ","))
 	}
 	want := []string{"shelf:shelf/SHELF_ID:", "book:book/BOOK_ID:", "chapter:chapter/CHAPTER_ID:book", "page:page/PAGE_ID:book"}
 	if !target.Multiple || !equal(kinds, want) || target.Required || target.Wildcard != "" || target.Reaches == nil ||

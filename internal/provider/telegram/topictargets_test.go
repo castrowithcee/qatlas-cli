@@ -47,7 +47,7 @@ func TestParseTopicTarget(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	kind, ok := metadata.Target.KindByName("topic")
-	if !ok || kind.Parent != "chat" || !kind.Unlisted || !metadata.Target.ValidTarget("topic", topicBinding) ||
+	if !ok || strings.Join(kind.Parents, ",") != "chat" || !kind.Unlisted || !metadata.Target.ValidTarget("topic", topicBinding) ||
 		metadata.Target.ValidTarget("chat", topicBinding) || metadata.Target.ValidTarget("topic", "@news/topics/7") {
 		t.Errorf("topic kind = %+v, %v", kind, ok)
 	}

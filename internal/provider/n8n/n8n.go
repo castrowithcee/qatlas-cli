@@ -453,7 +453,7 @@ func Register(reg *capability.Registry) error {
 				Name:        "workflow",
 				Description: "one workflow of the bound instance; optional, and may be listed more than once",
 				Forms:       []string{"workflow/WORKFLOW_ID"},
-				Parent:      "project",
+				Parents:     []string{"project"},
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,
