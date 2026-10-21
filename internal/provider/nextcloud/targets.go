@@ -72,7 +72,8 @@ var targetKinds = []config.TargetKind{{
 	Name: kindFolder,
 	Description: "the Files folder this connection may access; optional, at most one; the kind alone binds the " +
 		"whole Files root of the identity, and PATH may have several segments such as Team/Reports",
-	Forms: []string{kindFolder, kindFolder + "/PATH"},
+	Forms:  []string{kindFolder, kindFolder + "/PATH"},
+	Nested: true,
 }, {
 	Name:        kindCalendar,
 	Description: "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
@@ -94,7 +95,8 @@ var targetKinds = []config.TargetKind{{
 	Name: kindNotes,
 	Description: "all notes of the identity, or the notes of one category, which may be a sub-folder such as " +
 		"Work/Plans; optional, and may be listed more than once",
-	Forms: []string{kindNotes, kindNotes + "/CATEGORY"},
+	Forms:  []string{kindNotes, kindNotes + "/PATH"},
+	Nested: true,
 }, {
 	Name: kindAccount,
 	Description: "the account-wide and instance-wide reach of the identity: notifications, activity, search, " +

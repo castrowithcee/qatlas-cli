@@ -316,6 +316,7 @@ func Register(reg *capability.Registry) error {
 				"whole Files root), and calendar, addressbook, talk, deck, notes, account, or admin targets; a " +
 				"single target field holds only a root folder such as Reports or Team/Reports, or / for the whole Files root",
 			Kinds:          targetKinds,
+			Reaches:        reaches,
 			Validate:       validateTarget,
 			ValidateSet:    validateTargetSet,
 			ValidateSingle: validateSingleTarget,
@@ -359,6 +360,9 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID, eventsCreate.ID, eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
