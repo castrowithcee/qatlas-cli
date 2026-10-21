@@ -98,7 +98,7 @@ func writeLegacyPlaintext(t *testing.T, dir, credential, role, value string) {
 func runWithInput(t *testing.T, opts *Options, stdin string, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	cmd := newRootCommand(opts, defaultRegistry())
+	cmd := newRootCommand(opts, sharedRegistry())
 	cmd.SetIn(strings.NewReader(stdin))
 	code := run(cmd, opts, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()

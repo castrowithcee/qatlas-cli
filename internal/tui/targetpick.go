@@ -723,7 +723,7 @@ func (m *Model) pickFrame() (string, string) {
 		keys += "close"
 	}
 	if lv.list.query() == "" {
-		keys += " · ? help"
+		keys += " · : cmds · ? help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

@@ -67,7 +67,7 @@ func (b *syncBuffer) String() string {
 func TestWebCommandNoArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	opts := &Options{Redactor: &redact.Redactor{}}
-	code := run(newRootCommand(opts, defaultRegistry()), opts, []string{"web", "extra"}, &stdout, &stderr)
+	code := run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "extra"}, &stdout, &stderr)
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr.String())
 	}
@@ -93,7 +93,7 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 	var stderr bytes.Buffer
 	codeCh := make(chan int, 1)
 	go func() {
-		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web", "--config", path}, stdout,
+		codeCh <- run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "--config", path}, stdout,
 			&stderr)
 	}()
 
@@ -185,7 +185,7 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 	var stderr bytes.Buffer
 	codeCh := make(chan int, 1)
 	go func() {
-		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web", "--config", configIn(dir)},
+		codeCh <- run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "--config", configIn(dir)},
 			stdout, &stderr)
 	}()
 	t.Cleanup(func() {

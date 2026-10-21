@@ -92,7 +92,7 @@ func runNextcloudCLI(t *testing.T, reads *atomic.Int32, input string, args ...st
 		Input: strings.NewReader(input), Redactor: redactor,
 		Secrets: secret.NewWith(lookup, nil, nil, redactor),
 	}
-	code := run(newRootCommand(options, defaultRegistry()), options, args, &stdout, &stderr)
+	code := run(newRootCommand(options, sharedRegistry()), options, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -265,7 +265,7 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 			`,"name":"qatlas.invoke","arguments":{"operation":"nextcloud.files.files.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
-	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
+	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
 	}

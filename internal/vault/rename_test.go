@@ -227,3 +227,23 @@ func TestRenameCredentialResumesAStoppedRename(t *testing.T) {
 		t.Errorf("EntryCredentialIDs() while locked = %v, want ErrNotUnlocked", err)
 	}
 }
+
+// KnownNames reads an unencrypted vault without a passphrase, which has entries and no approvals, and an
+// absent vault, which has neither.
+func TestKnownNamesOfAnUnencryptedVault(t *testing.T) {
+	v := New(t.TempDir())
+	names, err := v.KnownNames()
+	if err != nil || len(names.Entries) != 0 || len(names.Approvals) != 0 {
+		t.Fatalf("KnownNames() of an absent vault = %+v, %v", names, err)
+	}
+	if err := v.Set("wiki-reader", "token", "synthetic-token", nil); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := v.State(); state != StateUnencrypted {
+		t.Skipf("Set() left the vault %v, not unencrypted", state)
+	}
+	names, err = v.KnownNames()
+	if _, held := names.Entries["wiki-reader"]; err != nil || !held || len(names.Approvals) != 0 {
+		t.Errorf("KnownNames() = %+v, %v, want the entry and no approval", names, err)
+	}
+}

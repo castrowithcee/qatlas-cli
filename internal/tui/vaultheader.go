@@ -389,7 +389,7 @@ func (m *Model) vaultLockConfirmView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Lock the vault now?") + "\n\n")
 	b.WriteString(m.indented("running invokes stop working until it is unlocked again") + "\n")
-	b.WriteString(m.keyHint("y lock · n/esc stay unlocked · ? help"))
+	b.WriteString(m.keyHint("y lock · n/esc stay unlocked · : cmds · ? help"))
 	return b.String()
 }
 
@@ -459,4 +459,25 @@ func (m *Model) checkVaultProcess() tea.Cmd {
 		_, err = client.Status(context.Background())
 		return vaultProcessCheckMsg{unlocked: err == nil}
 	}
+}
+
+// lockUnavailable is why ctrl+l would not lock the vault now.
+func (m *Model) lockUnavailable() string {
+	if !m.vaultLockKeyAllowed() {
+		return "cannot lock the vault from this screen; leave it first (esc)"
+	}
+	v := m.secrets.Vault()
+	if v == nil {
+		return "no vault is configured for this run"
+	}
+	state, err := v.State()
+	switch {
+	case err != nil:
+		return "the vault state is unknown"
+	case m.vaultDisplayUnlocked(state):
+		return ""
+	case state == vault.StateLocked:
+		return "the vault is already locked"
+	}
+	return "the vault is not encrypted, so there is nothing to lock"
 }

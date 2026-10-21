@@ -298,7 +298,7 @@ func TestTUIRefusesAgentMode(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	opts := &Options{}
 
-	code := run(newRootCommand(opts, defaultRegistry()), opts, []string{"tui", "--agent"}, &stdout, &stderr)
+	code := run(newRootCommand(opts, sharedRegistry()), opts, []string{"tui", "--agent"}, &stdout, &stderr)
 
 	if code != exitUsage {
 		t.Errorf("exit code = %d, want %d", code, exitUsage)

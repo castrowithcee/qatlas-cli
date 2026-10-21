@@ -100,7 +100,7 @@ func runSeatableCLI(t *testing.T, reads *atomic.Int32, input string, args ...str
 		Input: strings.NewReader(input), Redactor: redactor,
 		Secrets: secret.NewWith(lookup, nil, nil, redactor),
 	}
-	code := run(newRootCommand(options, defaultRegistry()), options, args, &stdout, &stderr)
+	code := run(newRootCommand(options, sharedRegistry()), options, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -264,7 +264,7 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 			`,"name":"qatlas.invoke","arguments":{"operation":"seatable.base.rows.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
-	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
+	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
 	}

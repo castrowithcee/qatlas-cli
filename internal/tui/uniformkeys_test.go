@@ -412,7 +412,7 @@ func TestTabAndShiftTabCycleThroughTheAreas(t *testing.T) {
 	}
 }
 
-func TestFootersNameTheHelpWhereItWorks(t *testing.T) {
+func TestFootersNameTheHelpAndCommandsWhereTheyWork(t *testing.T) {
 	flat := func(m *Model) string { return strings.Join(strings.Fields(screenOf(m)), " ") }
 	want := func(m *Model, what string, keys ...string) {
 		t.Helper()
@@ -427,33 +427,33 @@ func TestFootersNameTheHelpWhereItWorks(t *testing.T) {
 	m, _, _ := knownTargetsModel(t)
 	openEntryForm(t, m, sectionConnections, "gh-a")
 	openTargetList(t, m)
-	want(m, "the target list", "? help")
+	want(m, "the target list", ": cmds", "? help")
 	press(t, m, "a")
-	want(m, "the add menu", "? help")
+	want(m, "the add menu", ": cmds", "? help")
 	press(t, m, "x")
-	if strings.Contains(flat(m), "? help") {
+	if strings.Contains(flat(m), "? help") || strings.Contains(flat(m), ": cmds") {
 		t.Errorf("the add menu names ? while a line is typed:\n%s", screenOf(m))
 	}
 
 	pm := pickerModel(t, &listSource{list: pickPage(group("a"))})
 	openPicker(t, pm)
-	want(pm, "the target picker", "? help", "enter take", "esc close")
+	want(pm, "the target picker", ": cmds", "? help", "enter take", "esc close")
 
 	tm, _ := templateModel(t)
 	openSectionByName(t, tm, sectionConnections)
 	tm.screen = screenList
 	press(t, tm, "n")
-	want(tm, "the template question", "? help")
+	want(tm, "the template question", ": cmds", "? help")
 
 	sm, _, _, _, _ := newStoreModel(t)
 	walkSetup(t, sm, stepSummary)
-	want(sm, "the setup summary", "? help")
+	want(sm, "the setup summary", ": cmds", "? help")
 
 	f := newLogFixture(t)
 	f.append("cli", "", "op.one", "wiki", "success")
 	lm := f.model(true, f.localToday())
 	lm.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
-	want(lm, "the Logs screen", "1-8 section", "? help", "q quit")
+	want(lm, "the Logs screen", "1-8 section", ": cmds", "? help", "q quit")
 	press(t, lm, "down", "enter")
-	want(lm, "the log detail", "1-8 section", "? help")
+	want(lm, "the log detail", "1-8 section", ": cmds", "? help")
 }

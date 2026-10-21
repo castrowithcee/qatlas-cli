@@ -58,7 +58,7 @@ func runInvoke(t *testing.T, arguments string, args ...string) (int, string, str
 	var stdout, stderr bytes.Buffer
 	opts := testOptions(t, nil)
 	opts.Input = strings.NewReader(arguments)
-	code := run(newRootCommand(opts, defaultRegistry()), opts, args, &stdout, &stderr)
+	code := run(newRootCommand(opts, sharedRegistry()), opts, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -233,11 +233,11 @@ func TestInvokeArgumentsAreBoundedAndValidatedBeforeTheProvider(t *testing.T) {
 	// An argument the input schema rejects never reaches a provider.
 	var calls atomic.Int32
 	reg := capability.NewRegistry()
-	metadata, _ := defaultRegistry().ProviderMetadata("bookstack")
+	metadata, _ := sharedRegistry().ProviderMetadata("bookstack")
 	if err := reg.RegisterProvider(metadata, nil); err != nil {
 		t.Fatalf("RegisterProvider() = %v", err)
 	}
-	descriptor, _, _ := defaultRegistry().Lookup("bookstack.pages.list")
+	descriptor, _, _ := sharedRegistry().Lookup("bookstack.pages.list")
 	if err := reg.Register("bookstack", capability.Operation{Descriptor: descriptor, Handler: func(
 		context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage,
 	) (any, error) {
@@ -523,7 +523,7 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			var out, errOut bytes.Buffer
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 				`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
-			if err := newMCPServer(opts, defaultRegistry(), &out, &errOut).serve(context.Background(),
+			if err := newMCPServer(opts, sharedRegistry(), &out, &errOut).serve(context.Background(),
 				strings.NewReader(input)); err != nil {
 				t.Fatal(err)
 			}

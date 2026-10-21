@@ -209,7 +209,7 @@ func (m *Model) approvalDetailView() string {
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
 		// is nothing left here to show or approve.
-		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · ? help")
+		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
 	}
 	var change *approval.Change
 	for i := range report.Open {
@@ -221,7 +221,7 @@ func (m *Model) approvalDetailView() string {
 	if change == nil {
 		// Approved or removed elsewhere while this screen was open.
 		return title + m.wrapped(hintStyle, "this connection is no longer open; nothing to approve") +
-			m.keyHint("esc back · ? help")
+			m.keyHint("esc back · : cmds · ? help")
 	}
 	return m.approvalChangeView(title, *change)
 }
@@ -241,11 +241,11 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 		}
 		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
 	}
-	keys := "o logs · y approve · n/esc back, stays open · ? help"
+	keys := "o logs · y approve · n/esc back, stays open · : cmds · ? help"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "e unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "e fold unchanged · o logs · y approve · n/esc back, stays open · ? help"
+			keys = "e fold unchanged · o logs · y approve · n/esc back, stays open · : cmds · ? help"
 		}
 	}
 	room := m.approvalRoom(title, keys, len(lines))
@@ -287,7 +287,7 @@ func (m *Model) approveAllConfirmView() string {
 			"also removes %d stale approval(s) of a connection that no longer reads the vault",
 			len(report.Stale))) + "\n")
 	}
-	b.WriteString(m.keyHint("y approve all · n/esc cancel · ? help"))
+	b.WriteString(m.keyHint("y approve all · n/esc cancel · : cmds · ? help"))
 	return b.String()
 }
 

@@ -15,10 +15,7 @@ import (
 func encryptedTokenFixture(t *testing.T) string {
 	t.Helper()
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	approveConnections(t, dir, v)
 	return dir
 }

@@ -454,7 +454,7 @@ func TestNarrowNavigation(t *testing.T) {
 	t.Run("below 80 columns left/right choose the section with wraparound", func(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
 		m.screen, m.section = screenNav, sectionServices
-		if !strings.Contains(m.View(), "left/right move") {
+		if !strings.Contains(m.View(), "←/→ move") {
 			t.Errorf("footer does not name left/right below 80 columns:\n%s", m.View())
 		}
 		press(t, m, "left")

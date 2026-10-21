@@ -52,6 +52,7 @@ func TestMain(m *testing.M) {
 	_ = os.Unsetenv("QATLAS_CONFIG")
 	_ = os.Setenv("QATLAS_CLI_HOME", home)
 	code := m.Run()
+	removeSeeds()
 	_ = os.RemoveAll(home)
 	os.Exit(code)
 }
