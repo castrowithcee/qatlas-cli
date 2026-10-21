@@ -1,12 +1,17 @@
 package manage
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // ImportMode says what an import does with an entry whose name the target already has. Entries are matched
@@ -19,7 +24,8 @@ const (
 	// ImportModeMerge adds what is missing and leaves existing entries as they are.
 	ImportModeMerge ImportMode = "merge"
 	// ImportModeOverwrite replaces existing entries with the file's. A replaced entry keeps the id of the
-	// entry it replaces, so approvals and vault entries that record the id stay attached.
+	// entry it replaces, so approvals and vault entries that record the id stay attached; an approval that
+	// would cover a secret the file brings is withdrawn (see ApplyImportWith).
 	ImportModeOverwrite ImportMode = "overwrite"
 )
 
@@ -71,7 +77,7 @@ type ImportEntry struct {
 }
 
 // ImportPlan is what importing a file does, found without writing anything. PlanImport makes it and
-// ApplyImport carries it out.
+// ApplyImportWith carries it out.
 type ImportPlan struct {
 	Mode ImportMode
 	// Source is the file read.
@@ -83,10 +89,26 @@ type ImportPlan struct {
 	// CredentialsKeepSecret are the replaced credentials. Whatever secret the target holds for the name stays
 	// untouched, and it may not fit the replacement.
 	CredentialsKeepSecret []string
+	// SecretRoles names, per created or replaced credential, the roles whose secret the file brings (never a
+	// value). Such a credential is in neither of the two lists above. The secrets of a skipped credential
+	// are not part of the plan. SourceEncrypted tells whether the file was an age file.
+	SecretRoles     map[string][]string
+	SourceEncrypted bool
 
 	before, cfg *config.Config
 	base        config.Revision
+	// secrets are the values behind SecretRoles. They stay in the plan and in nothing it prints.
+	secrets map[string]map[string]string
 }
+
+// String and GoString keep the secret values of a plan out of every fmt verb, which would print the
+// unexported fields.
+func (p ImportPlan) String() string {
+	created, replaced, skipped := p.Count()
+	return fmt.Sprintf("import plan of %s: %d created, %d replaced, %d skipped", p.Source, created, replaced, skipped)
+}
+
+func (p ImportPlan) GoString() string { return p.String() }
 
 // Count returns how many entries the plan creates, replaces and skips.
 func (p *ImportPlan) Count() (created, replaced, skipped int) {
@@ -116,6 +138,21 @@ type ImportResult struct {
 	Created, Replaced, Skipped int
 	// Warnings are the redacted failures after the save, none of which undoes it.
 	Warnings []string
+	// SecretStore is where the secrets the file brought were written, config.CredentialTypeKeyring or
+	// config.CredentialTypeVault, "" when it brought none. Every credential with such a secret has this type
+	// afterwards. KeyringOverSSH is set when that is the system keyring in an SSH session (see SSHSession).
+	SecretStore    string
+	KeyringOverSSH bool
+	// Withdrawn names the connections whose approval the import withdrew because they read or forward a
+	// credential whose secrets it wrote to the vault: no approval given for the secrets before covers the
+	// ones the file brought. They stay open until approved.
+	Withdrawn []string
+	// Connections are the connections the import created or replaced. UsedBy are the connections of the
+	// target, outside the file, that use a service or credential it replaced (see ImportEntry.UsedBy).
+	Connections, UsedBy []string
+
+	// saved is the configuration as the import saved it, for ApproveImport.
+	saved *config.Config
 }
 
 // PlanImport reads the export file at path, checks it completely and works out what mode does to the
@@ -129,10 +166,18 @@ type ImportResult struct {
 // An id the file brings stays only if the target has no entry of that kind with it. Otherwise, and for an
 // entry without one, a new id is assigned.
 func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) {
+	return s.PlanImportFile(path, mode, nil)
+}
+
+// PlanImportFile is PlanImport for a file that may hold secrets and be encrypted. ask returns the export
+// passphrase and is called only for an encrypted file; with a nil ask such a file is refused. A wrong
+// passphrase is a refusal (errors.Is(err, vault.ErrWrongExportPassphrase)) with nothing planned. The
+// secrets are checked together with the rest of the file and kept in the plan, never in its text.
+func (s *Service) PlanImportFile(path string, mode ImportMode, ask vault.PassphraseFunc) (*ImportPlan, error) {
 	if _, err := ParseImportMode(string(mode)); err != nil {
 		return nil, err
 	}
-	file, fileCfg, err := s.readTransfer(path)
+	file, fileCfg, err := s.readTransfer(path, ask)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +191,7 @@ func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) 
 	}
 	before := target
 	cand := target.Clone()
-	plan := &ImportPlan{Mode: mode, Source: path, before: before, cfg: cand, base: rev}
+	plan := &ImportPlan{Mode: mode, Source: path, SourceEncrypted: file.encrypted, before: before, cfg: cand, base: rev}
 	var exists []string
 
 	// decide gives the action for one entry and records a conflict of ImportModeCreate.
@@ -218,7 +263,16 @@ func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) 
 			if id != "" {
 				taken[ImportCredentials][id] = true
 			}
+			if brought := file.Secrets[name]; len(brought) > 0 {
+				if plan.secrets == nil {
+					plan.secrets = map[string]map[string]string{}
+					plan.SecretRoles = map[string][]string{}
+				}
+				plan.secrets[name] = brought
+				plan.SecretRoles[name] = sortedNames(brought)
+			}
 			switch {
+			case plan.secrets[name] != nil:
 			case action == ImportActionReplace:
 				plan.CredentialsKeepSecret = append(plan.CredentialsKeepSecret, name)
 			case v.Type != config.CredentialTypeEnv:
@@ -356,26 +410,323 @@ func (p *ImportPlan) noteUsedBy(file *transferFile) {
 	}
 }
 
-// ApplyImport writes plan, which PlanImport made, as one change: the configuration is saved only if the file
-// still has the revision the plan was based on, and then completely. Another change since the plan is a
-// *config.ConflictError (errors.Is(err, config.ErrConflict)) with nothing written and nothing merged; plan
-// again to see the new state. It touches no secret, vault entry or approval. A plan that changes nothing
-// writes nothing.
+// ApplyImport is ApplyImportWith without options for a plan that brings no secret; a plan with secrets is
+// refused with nothing written, since where they go and whether a new vault is encrypted are choices only
+// ApplyImportWith takes.
 func (s *Service) ApplyImport(plan *ImportPlan) (ImportResult, error) {
+	if plan != nil && len(plan.secrets) > 0 {
+		return ImportResult{}, errors.New("this import brings secrets; apply it with the choice of where they go")
+	}
+	return s.ApplyImportWith(plan, ImportOptions{})
+}
+
+// ImportOptions are the choices of an import that brings secrets.
+type ImportOptions struct {
+	// SecretStore is where the secrets go, config.CredentialTypeKeyring or config.CredentialTypeVault, or ""
+	// for the defaults.secret_store of the configuration as the import leaves it.
+	SecretStore string
+	// Offer is asked for a passphrase only when a secret here would be the vault's very first.
+	Offer vault.PassphraseFunc
+}
+
+// ApplyImportWith writes plan, which PlanImport or PlanImportFile made, as one change: the configuration is
+// saved only if the file still has the revision the plan was based on, and then completely. Another change
+// since the plan is a *config.ConflictError (errors.Is(err, config.ErrConflict)) with nothing written and
+// nothing merged; plan again to see the new state. A plan that changes nothing writes nothing.
+//
+// The secrets the plan brings are written first, all of them, to the store opts names (see SecretStoreFor),
+// and every credential they belong to gets that store as its type, so they are read where they were
+// written. The configuration is the commit point: when a secret or the save fails, every secret written is
+// rolled back, the vault byte for byte, the keyring to the values it held. A failure of that rollback is
+// named in the error, never a value. In an encrypted vault the approval of every connection that reads or
+// forwards such a credential is withdrawn in the same change (ImportResult.Withdrawn); a locked vault is
+// refused before anything is written, since its approvals cannot be withdrawn without its passphrase. A
+// secret the plan does not bring stays as the target holds it. No approval or agent token is taken from the
+// file; ApproveImport approves afterwards.
+func (s *Service) ApplyImportWith(plan *ImportPlan, opts ImportOptions) (ImportResult, error) {
 	var res ImportResult
 	if plan == nil || plan.cfg == nil {
 		return res, errors.New("no import was planned")
 	}
 	res.Created, res.Replaced, res.Skipped = plan.Count()
+	res.Connections, res.UsedBy = plan.connections()
 	if res.Created+res.Replaced == 0 {
 		return res, nil
 	}
-	warning, err := s.SaveConfig(plan.before, plan.cfg, plan.base)
+	if len(plan.secrets) == 0 {
+		warning, err := s.SaveConfig(plan.before, plan.cfg, plan.base)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		if warning != "" {
+			res.Warnings = append(res.Warnings, warning)
+		}
+		res.saved = plan.cfg
+		return res, nil
+	}
+
+	store, overSSH, err := plan.SecretStoreFor(opts.SecretStore)
 	if err != nil {
 		return ImportResult{}, err
 	}
-	if warning != "" {
+	if s.secrets == nil {
+		return ImportResult{}, errNoSecretStore
+	}
+	cand := plan.cfg.Clone()
+	var sets []secretSet
+	for _, name := range sortedNames(plan.secrets) {
+		cred := cand.Credentials[name]
+		cred.Type = store
+		cand.Credentials[name] = cred
+		values := plan.secrets[name]
+		if s.redactor != nil {
+			for _, value := range values {
+				s.redactor.Add(value)
+			}
+		}
+		sets = append(sets, secretSet{credential: name, toVault: store == config.CredentialTypeVault,
+			roles: sortedNames(values), values: values})
+	}
+	if err := cand.Validate(); err != nil {
+		return ImportResult{}, s.refuse(fmt.Errorf("the import would leave the configuration invalid: %w", &config.InvalidError{Path: s.store.Path(), Err: err}))
+	}
+
+	var prepare func() (func() error, error)
+	unlocked := false
+	if store == config.CredentialTypeVault {
+		v := s.vault()
+		if v == nil {
+			return ImportResult{}, ErrNoVault
+		}
+		state, err := v.State()
+		if err != nil {
+			return ImportResult{}, s.redactErr(err)
+		}
+		if state == vault.StateLocked {
+			return ImportResult{}, errors.New("the vault is locked: unlock it before importing secrets into it, " +
+				"so the approvals that cover the secrets they replace can be withdrawn")
+		}
+		unlocked = state == vault.StateUnlocked
+		prepare = func() (func() error, error) {
+			restore, err := v.Checkpoint()
+			if err != nil {
+				return nil, err
+			}
+			if !unlocked {
+				return restore, nil
+			}
+			names, err := approvalsCovering(cand, v, sortedNames(plan.secrets))
+			if err == nil && len(names) > 0 {
+				_, err = v.Revoke(names)
+			}
+			if err != nil {
+				if restoreErr := restore(); restoreErr != nil {
+					err = fmt.Errorf("%w; the vault could not be put back as it was before: %v", err, restoreErr)
+				}
+				return nil, err
+			}
+			res.Withdrawn = names
+			return restore, nil
+		}
+	}
+	written, err := s.commitSecretSets(cand, plan.base, sets, opts.Offer, prepare)
+	if err != nil {
+		return ImportResult{}, s.redactErr(err)
+	}
+	res.SecretStore, res.KeyringOverSSH, res.saved = store, overSSH, cand
+	if store == config.CredentialTypeVault {
+		v := s.vault()
+		// The withdrawn approvals reach the vault process before the secrets they no longer cover.
+		if warning := s.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
+			if bindings, err := v.Bindings(); err == nil {
+				if err := client.Bind(ctx, bindings); err != nil {
+					return err
+				}
+			}
+			for _, set := range written {
+				if err := set.sendTo(ctx, client); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); warning != "" {
+			res.Warnings = append(res.Warnings, warning)
+		}
+	}
+	if warning := s.RecordConnections(plan.before, cand); warning != "" {
 		res.Warnings = append(res.Warnings, warning)
 	}
 	return res, nil
+}
+
+// SecretStoreFor returns where ApplyImportWith writes the secrets of the plan for the store option override:
+// override itself, or for "" the defaults.secret_store of the configuration as the import leaves it.
+// keyringOverSSH is set when that is the system keyring and this is an SSH session, where a keyring often
+// cannot be unlocked. An override that is no store is an error.
+func (p *ImportPlan) SecretStoreFor(override string) (store string, keyringOverSSH bool, err error) {
+	switch override {
+	case "":
+		store = p.cfg.SecretStore()
+	case config.CredentialTypeKeyring, config.CredentialTypeVault:
+		store = override
+	default:
+		return "", false, fmt.Errorf("unknown secret store %q, use %s or %s", override, config.CredentialTypeKeyring,
+			config.CredentialTypeVault)
+	}
+	return store, store == config.CredentialTypeKeyring && SSHSession(), nil
+}
+
+// SSHSession reports whether this process runs in an SSH session, as the variables sshd sets say.
+func SSHSession() bool {
+	for _, name := range []string{"SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"} {
+		if os.Getenv(name) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// connections returns the connections the plan creates or replaces, and the connections of the target
+// outside the file that use what it replaces, both sorted.
+func (p *ImportPlan) connections() (imported, usedBy []string) {
+	seen := map[string]bool{}
+	for _, e := range p.Entries {
+		if e.Section == ImportConnections && e.Action != ImportActionSkip {
+			imported = append(imported, e.Name)
+		}
+		for _, name := range e.UsedBy {
+			if !seen[name] {
+				seen[name] = true
+				usedBy = append(usedBy, name)
+			}
+		}
+	}
+	slices.Sort(imported)
+	slices.Sort(usedBy)
+	return imported, usedBy
+}
+
+// approvalsCovering names, sorted, the connections of cfg the unlocked vault v holds an approval for that
+// read or forward one of credentials.
+func approvalsCovering(cfg *config.Config, v *vault.Vault, credentials []string) ([]string, error) {
+	approvals, err := v.Approvals()
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, name := range sortedNames(cfg.Connections) {
+		if _, ok := approvals[name]; !ok {
+			continue
+		}
+		conn := cfg.Connections[name]
+		for _, credential := range credentials {
+			if conn.Credential == credential || slices.Contains(conn.ForwardSecrets, credential) {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names, nil
+}
+
+// redactErr returns err with its text passed through the service's redaction; errors.Is and errors.As still
+// see err.
+func (s *Service) redactErr(err error) error {
+	if err == nil || s.redactor == nil {
+		return err
+	}
+	return &redactedError{msg: s.redact(err.Error()), err: err}
+}
+
+type redactedError struct {
+	msg string
+	err error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+func (e *redactedError) Unwrap() error { return e.err }
+
+// ImportApproval is what ApproveImport did. Failing to approve never undoes the import.
+type ImportApproval struct {
+	// Approved lists the connections approved, sorted.
+	Approved []string
+	// Open are the connections of ImportResult.Connections and ImportResult.UsedBy the vault still holds open,
+	// sorted by name.
+	Open []ImportOpen
+	// VaultUnencrypted is set for a vault that is not encrypted: it binds no connection, so there is nothing
+	// to approve. VaultLocked is set for an encrypted vault not unlocked here, where nothing can be approved.
+	VaultUnencrypted, VaultLocked bool
+	// Err is the first failure to determine or approve the open connections, never with a secret.
+	Err error
+	// Warnings are hints from handing the approvals to a running vault process.
+	Warnings []string
+}
+
+// ImportOpen is one connection an import left open.
+type ImportOpen struct {
+	Connection string
+	// Reason is the short reason it is open (see StaysOpenReason). Imported is false for a connection of the
+	// target that only uses what the import replaced; ApproveImport never approves such a one.
+	Reason   string
+	Imported bool
+	// ForwardChanged says it is open for a changed release of payload secrets, which only an explicit
+	// approval releases.
+	ForwardChanged bool
+}
+
+// ApproveImport approves, after res succeeded, the connections the import created or replaced, each by the
+// rule for a connection saved directly by name (ApprovalDirectOnly): one open for a reason the import's own
+// entry does not show, or for a changed release of payload secrets, stays open. ApprovalNone approves
+// nothing and only reports what is open. Neither policy approves a connection of res.UsedBy: it changed
+// without being part of the file. The vault must be encrypted and unlocked in this process.
+func (s *Service) ApproveImport(ctx context.Context, res ImportResult, policy ApprovalPolicy) ImportApproval {
+	var out ImportApproval
+	v := s.vault()
+	if v == nil || res.saved == nil {
+		return out
+	}
+	state, err := v.State()
+	switch {
+	case err != nil:
+		out.Err = s.redactErr(err)
+		return out
+	case state == vault.StateUnencrypted:
+		out.VaultUnencrypted = true
+		return out
+	case state == vault.StateLocked:
+		out.VaultLocked = true
+		return out
+	case state != vault.StateUnlocked:
+		return out
+	}
+	if policy != ApprovalNone {
+		for _, name := range res.Connections {
+			r := ApproveAfterChange(ctx, v, ApprovalSnapshot{}, res.saved, name, ApprovalDirectOnly)
+			out.Approved = append(out.Approved, r.Approved...)
+			if r.Warning != "" {
+				out.Warnings = append(out.Warnings, s.redact(r.Warning))
+			}
+			if err := errors.Join(r.CheckErr, r.ApproveErr); err != nil {
+				out.Err = s.redactErr(err)
+				break
+			}
+		}
+		slices.Sort(out.Approved)
+	}
+	report, err := approval.Pending(res.saved, v)
+	if err != nil {
+		if out.Err == nil {
+			out.Err = s.redactErr(err)
+		}
+		return out
+	}
+	for _, c := range report.Open {
+		imported := slices.Contains(res.Connections, c.Connection)
+		if !imported && !slices.Contains(res.UsedBy, c.Connection) {
+			continue
+		}
+		out.Open = append(out.Open, ImportOpen{Connection: c.Connection, Reason: StaysOpenReason(c),
+			Imported: imported, ForwardChanged: releaseChanged(c)})
+	}
+	return out
 }
