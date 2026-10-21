@@ -82,6 +82,31 @@ func (v *Vault) EntryCredentialIDs() (map[string]string, error) {
 	return out, nil
 }
 
+// Names is what a vault knows by name and config id, without any secret: the config id each entry records,
+// by entry name, and the config id each approval records, by connection name; "" where one records none.
+type Names struct {
+	Entries   map[string]string `json:"entries"`
+	Approvals map[string]string `json:"approvals"`
+}
+
+// KnownNames returns the Names of an unencrypted vault or one unlocked in this process; a locked one fails
+// with ErrNotUnlocked. An unencrypted or absent vault binds no connection and has no approvals.
+func (v *Vault) KnownNames() (Names, error) {
+	entries, err := v.EntryCredentialIDs()
+	if err != nil {
+		return Names{}, err
+	}
+	approvals, err := v.Approvals()
+	if err != nil && !errors.Is(err, ErrNotEncrypted) {
+		return Names{}, err
+	}
+	names := Names{Entries: entries, Approvals: make(map[string]string, len(approvals))}
+	for name, approval := range approvals {
+		names.Approvals[name] = approval.ConnectionID
+	}
+	return names, nil
+}
+
 // resumable reports whether doc holds what r.Resume expects: the entry To with r.CredentialID and no entry
 // From.
 func (d *document) resumable(r CredentialRename) bool {
