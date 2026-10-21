@@ -88,6 +88,13 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { return m.askExport() },
 		},
 		command{
+			name:        "import",
+			desc:        "Import an exported configuration file, optionally with secrets",
+			aliases:     []string{"import config", "restore"},
+			unavailable: onScreens("import", screenNav, screenList),
+			run:         func(m *Model) tea.Cmd { return m.askImport() },
+		},
+		command{
 			name:        "lock vault",
 			desc:        "Lock the vault (ctrl+l)",
 			aliases:     []string{"lock"},

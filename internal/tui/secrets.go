@@ -488,6 +488,14 @@ func (m *Model) openVaultOffer(title, hint string, optional, twice bool,
 	m.clearMessages()
 }
 
+// openVaultOfferFor is openVaultOffer for a caller that may not name the vault package: resume gets the offer
+// as a plain function, which converts to the core's passphrase function where it is handed on.
+func (m *Model) openVaultOfferFor(title, hint string, optional, twice bool,
+	resume func(offer func(string) (string, error)) tea.Cmd, cancel func() tea.Cmd) {
+	m.openVaultOffer(title, hint, optional, twice,
+		func(offer vault.PassphraseFunc) tea.Cmd { return resume(offer) }, cancel)
+}
+
 // updateVaultOffer handles the masked entry of a vault passphrase prompt: the first time through it takes a
 // passphrase, and, while twice is set, the second time asks for the same one again to confirm it. A
 // mismatch is an error that leaves the prompt open, back at the first entry, rather than closing it or

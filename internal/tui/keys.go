@@ -27,7 +27,7 @@ func (m *Model) typing() bool {
 	case screenRename:
 		return m.renameTyping()
 	case screenTransfer:
-		return m.exportTyping()
+		return m.exportTyping() || m.importTyping()
 	case screenLogs:
 		return m.logs.dialog != nil || m.logs.pick != nil || m.logs.list.editing
 	}
