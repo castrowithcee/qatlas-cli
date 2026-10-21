@@ -94,10 +94,13 @@ func (v *Vault) readDocument() (*document, error) {
 // Names is what a vault knows by name and config id, without any secret: the config id each entry records,
 // by entry name, and the config id each approval records, by connection name; "" where one records none.
 // Renamed holds the RenamedFrom name of each entry that has one, by entry name, and nothing for the others.
+// ApprovalCredentials holds the name of the credential each approval was given for, by connection name: what
+// tells an approval that records no config id apart.
 type Names struct {
-	Entries   map[string]string `json:"entries"`
-	Approvals map[string]string `json:"approvals"`
-	Renamed   map[string]string `json:"renamed,omitempty"`
+	Entries             map[string]string `json:"entries"`
+	Approvals           map[string]string `json:"approvals"`
+	Renamed             map[string]string `json:"renamed,omitempty"`
+	ApprovalCredentials map[string]string `json:"approval_credentials,omitempty"`
 }
 
 // KnownNames returns the Names of an unencrypted vault or one unlocked in this process; a locked one fails
@@ -124,6 +127,12 @@ func (v *Vault) KnownNames() (Names, error) {
 	}
 	for name, approval := range approvals {
 		names.Approvals[name] = approval.ConnectionID
+		if approval.Scope.Credential != "" {
+			if names.ApprovalCredentials == nil {
+				names.ApprovalCredentials = map[string]string{}
+			}
+			names.ApprovalCredentials[name] = approval.Scope.Credential
+		}
 	}
 	return names, nil
 }

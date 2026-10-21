@@ -55,9 +55,19 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"it, and the same command with --revert puts the secrets and the approvals back under the old name\n" +
 			"and removes keyring keys under the new name that copy the old ones, leaving the configuration as it\n" +
 			"is.\n\n" +
+			"A connection or credential renamed by hand in config.yaml leaves its approvals and secrets under\n" +
+			"the old name; 'qatlas config validate' and 'qatlas vault approve' name it when they can read the\n" +
+			"vault. Renaming it again the usual way would not fix that. With --adopt the configuration is taken\n" +
+			"as it is, with the new name and every reference to it, and what the vault and the system keyring\n" +
+			"hold under the old name follows it: a connection's approval, a credential's vault entry and\n" +
+			"keyring keys, and the approvals of the connections that read it. <old> is the name they are held\n" +
+			"under and must no longer be configured. --adopt runs only in an admin session, since the\n" +
+			"configuration alone does not prove who renamed it. Approvals move as they are, valid or open. It\n" +
+			"is refused for a service, which nothing binds by name, and together with --revert. With --dry-run\n" +
+			"it lists what it would move and changes nothing.\n\n" +
 			"--output json writes one document with the fields kind, old, new, id, references, approval,\n" +
-			"approval_carried, lapsed_tokens, vault_unread, outside, dry_run, renamed, and vault_backups; for a\n" +
-			"credential also credential, with revert, resumes, keyring_roles, vault_entry, pending_writes,\n" +
+			"approval_carried, lapsed_tokens, vault_unread, outside, adopt, dry_run, renamed, and vault_backups;\n" +
+			"for a credential also credential, with revert, resumes, keyring_roles, vault_entry, pending_writes,\n" +
 			"readers (connection, approval, carried), env_vars (role, old, new), and carried.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
@@ -67,7 +77,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 		{manage.RenameConnection, "Rename a connection, the defaults that name it, and its approval"},
 		{manage.RenameCredential, "Rename a credential, its secrets, the connections' references, and their approvals"},
 	} {
-		var dryRun, revert bool
+		var dryRun, revert, adopt bool
 		sub := &cobra.Command{
 			Use:   kind.name + " <old> <new>",
 			Short: kind.short,
@@ -80,7 +90,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 				return nil
 			},
 			RunE: func(c *cobra.Command, args []string) error {
-				return runRename(c, opts, reg, kind.name, args[0], args[1], dryRun, revert)
+				return runRename(c, opts, reg, kind.name, args[0], args[1], dryRun, revert, adopt)
 			},
 		}
 		sub.Flags().BoolVar(&dryRun, "dry-run", false, "list what the rename touches and change nothing")
@@ -88,12 +98,18 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			sub.Flags().BoolVar(&revert, "revert", false,
 				"put back what a rename from <old> to <new> that stopped early left, instead of finishing it")
 		}
+		sub.Flags().BoolVar(&adopt, "adopt", false, "take a rename made by hand in config.yaml as it is and "+
+			"move the vault's entry, the keyring's keys, and the approvals under the old name after it")
 		cmd.AddCommand(sub)
 	}
 	return cmd
 }
 
-func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, old, name string, dryRun, revert bool) error {
+func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, old, name string,
+	dryRun, revert, adopt bool) error {
+	if adopt && revert {
+		return newSyntaxError(errors.New("--adopt and --revert cannot be combined"))
+	}
 	// The admin check is what lets a rename carry approvals over; a dry run without a terminal goes on
 	// without it and reads no locked vault.
 	admin := !dryRun || checkInteractive()
@@ -111,9 +127,12 @@ func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, 
 		return err
 	}
 	var plan *manage.RenamePlan
-	if revert {
+	switch {
+	case revert:
 		plan, err = svc.PlanRevertRename(old, name, admin)
-	} else {
+	case adopt:
+		plan, err = svc.PlanAdopt(kind, old, name, admin)
+	default:
 		plan, err = svc.PlanRename(kind, old, name, admin)
 	}
 	if err != nil {
@@ -144,7 +163,11 @@ func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, 
 		return err
 	}
 	if !confirmed {
-		fmt.Fprintln(c.ErrOrStderr(), "qatlas: rename cancelled, nothing was changed")
+		what := "rename"
+		if plan.Adopt {
+			what = "adopt"
+		}
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: %s cancelled, nothing was changed\n", what)
 		return finishRename(c, asJSON, doc)
 	}
 	res, err := svc.Rename(contextOrBackground(c.Context()), plan)
@@ -184,6 +207,10 @@ func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, 
 		fmt.Fprintf(out, "environment variables that override the stored secrets are read under the new name: %s; "+
 			"qatlas changed no environment\n", strings.Join(pairs, ", "))
 	}
+	if plan.Adopt {
+		fmt.Fprintf(out, "adopted the rename of %s %s to %s\n", kind, apply(old), apply(name))
+		return finishRename(c, asJSON, doc)
+	}
 	fmt.Fprintf(out, "renamed %s %s to %s\n", kind, apply(old), apply(name))
 	return finishRename(c, asJSON, doc)
 }
@@ -219,7 +246,12 @@ func renameQuestion(opts *Options, plan *manage.RenamePlan) string {
 		return fmt.Sprintf("put credential %s back as it was before the rename to %s? [y/N] ",
 			opts.Redactor.Apply(plan.Old), opts.Redactor.Apply(plan.New))
 	}
-	question := fmt.Sprintf("rename %s %s to %s", plan.Kind, opts.Redactor.Apply(plan.Old), opts.Redactor.Apply(plan.New))
+	verb := "rename"
+	if plan.Adopt {
+		verb = "adopt the rename of"
+	}
+	question := fmt.Sprintf("%s %s %s to %s", verb, plan.Kind, opts.Redactor.Apply(plan.Old),
+		opts.Redactor.Apply(plan.New))
 	if len(plan.LapsedTokens) > 0 {
 		question += fmt.Sprintf(", ending the cover of agent %s %s through it", plural(len(plan.LapsedTokens),
 			"token", "tokens"), redactAll(opts.Redactor, plan.LapsedTokens))
@@ -234,11 +266,21 @@ func writeRenamePlan(out io.Writer, opts *Options, plan *manage.RenamePlan) {
 		writeRevertPlan(out, opts, plan)
 		return
 	}
-	fmt.Fprintf(out, "rename %s %s -> %s\n", plan.Kind, apply(plan.Old), apply(plan.New))
-	fmt.Fprintf(out, "  id        %s, kept\n", plan.ID)
-	fmt.Fprintf(out, "  entry     %ss.%s -> %ss.%s\n", plan.Kind, apply(plan.Old), plan.Kind, apply(plan.New))
-	for _, ref := range plan.References {
-		fmt.Fprintf(out, "  rewrites  %s\n", apply(ref))
+	if plan.Adopt {
+		fmt.Fprintf(out, "adopt the rename of %s %s -> %s, made by hand in the configuration\n", plan.Kind,
+			apply(plan.Old), apply(plan.New))
+		fmt.Fprintf(out, "  id        %s, kept\n", plan.ID)
+		fmt.Fprintf(out, "  config    %ss.%s is there already; written as it is\n", plan.Kind, apply(plan.New))
+		for _, ref := range plan.References {
+			fmt.Fprintf(out, "  changed   %s, by hand\n", apply(ref))
+		}
+	} else {
+		fmt.Fprintf(out, "rename %s %s -> %s\n", plan.Kind, apply(plan.Old), apply(plan.New))
+		fmt.Fprintf(out, "  id        %s, kept\n", plan.ID)
+		fmt.Fprintf(out, "  entry     %ss.%s -> %ss.%s\n", plan.Kind, apply(plan.Old), plan.Kind, apply(plan.New))
+		for _, ref := range plan.References {
+			fmt.Fprintf(out, "  rewrites  %s\n", apply(ref))
+		}
 	}
 	switch plan.Kind {
 	case manage.RenameConnection:
@@ -367,6 +409,7 @@ type renameDocument struct {
 	LapsedTokens    []string                  `json:"lapsed_tokens"`
 	VaultUnread     bool                      `json:"vault_unread"`
 	Outside         []string                  `json:"outside"`
+	Adopt           bool                      `json:"adopt"`
 	DryRun          bool                      `json:"dry_run"`
 	Renamed         bool                      `json:"renamed"`
 	VaultBackups    []string                  `json:"vault_backups"`
@@ -404,8 +447,8 @@ func renameDocumentOf(opts *Options, plan *manage.RenamePlan, dryRun bool) renam
 		Kind: plan.Kind, Old: opts.Redactor.Apply(plan.Old), New: opts.Redactor.Apply(plan.New), ID: plan.ID,
 		References: redactEach(opts.Redactor, plan.References), Approval: plan.Approval,
 		ApprovalCarried: plan.CarryApproval, LapsedTokens: redactEach(opts.Redactor, plan.LapsedTokens),
-		VaultUnread: plan.VaultUnread, Outside: redactEach(opts.Redactor, plan.Outside), DryRun: dryRun,
-		VaultBackups: []string{},
+		VaultUnread: plan.VaultUnread, Outside: redactEach(opts.Redactor, plan.Outside), Adopt: plan.Adopt,
+		DryRun: dryRun, VaultBackups: []string{},
 	}
 	if plan.Kind != manage.RenameCredential {
 		return doc

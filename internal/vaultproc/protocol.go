@@ -38,8 +38,9 @@ const (
 	// opHandover hands the unlocked vault over to a successor, in two phases on one connection: prepare,
 	// which verifies a release, and commit, once the program was replaced; see Client.PrepareHandover.
 	opHandover = "handover"
-	// opNames asks for the entry names and approval keys the vault holds, with their config ids and nothing
-	// else. A process of an earlier version does not know it and answers bad-request.
+	// opNames asks for the entry names and approval keys the vault holds, with their config ids and the
+	// credential name of each approval, and nothing else. A process of an earlier version does not know it
+	// and answers bad-request.
 	opNames = "names"
 )
 

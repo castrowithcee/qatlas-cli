@@ -65,6 +65,9 @@ type RenamePlan struct {
 	VaultUnread bool
 	// Outside names what may refer to the entry by its name and is out of qatlas's reach.
 	Outside []string
+	// Adopt says the configuration carries the new name already (see PlanAdopt): References are what the hand
+	// rename changed there, and Rename writes the configuration as it is.
+	Adopt bool
 
 	// The rest describes a credential's rename.
 	CredentialPlan
@@ -99,10 +102,18 @@ func (s *Service) PlanRename(kind, old, name string, approve bool) (*RenamePlan,
 	if err != nil {
 		return nil, err
 	}
+	return s.planRename(cfg, rev, kind, old, name, approve)
+}
+
+// planRename is PlanRename from cfg, the configuration the plan starts from, whose file has the revision rev
+// that Rename checks.
+func (s *Service) planRename(cfg *config.Config, rev config.Revision, kind, old, name string,
+	approve bool) (*RenamePlan, error) {
 	cand := cfg.Clone()
 	cand.AssignIDs()
 	before := cand.Clone()
 	plan := &RenamePlan{Kind: kind, Old: old, New: name, cfg: cand, base: rev}
+	var err error
 	switch kind {
 	case RenameService:
 		plan.References, err = cand.RenameService(old, name)

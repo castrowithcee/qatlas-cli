@@ -284,6 +284,12 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"left under the new name, unencrypted vault included, with the command that finishes the rename\n" +
 			"and the one that puts it back. --output json lists both under rename_leftovers, each with its kind:\n" +
 			"connection with approval and connection, or credential with credential, new, and approvals.\n" +
+			"A connection or credential renamed by hand in config.yaml, while the vault still holds its\n" +
+			"approval or entry under the old name, is always named with the 'qatlas config rename <kind> <old>\n" +
+			"<new> --adopt' command that moves them after it, or without a command where it is unclear which\n" +
+			"is meant; --output json lists them under hand_renames (kind, old, new, ambiguous, command). Such\n" +
+			"an approval is not removed as stale, so that adopting still finds it: it releases nothing while no\n" +
+			"connection has its name.\n" +
 			"--connection leaves a stale approval untouched. A name given with --connection that does not read a\n" +
 			"stored vault credential at all is refused before anything is approved; one that is already approved\n" +
 			"as it is configured now is reported and left alone, nothing written.\n\n" +
@@ -1175,6 +1181,9 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 			if err := writeCredentialLeftovers(out, opts, cfg, v, &doc); err != nil {
 				return classifyUserError(err)
 			}
+			if err := writeHandRenames(out, opts, cfg, v, nil, &doc); err != nil {
+				return classifyUserError(err)
+			}
 		}
 		if asJSON {
 			return emitDocument(c, output.FormatJSON, doc)
@@ -1195,8 +1204,13 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	if err := writeCredentialLeftovers(out, opts, cfg, v, &doc); err != nil {
 		return classifyUserError(err)
 	}
+	if err := writeHandRenames(out, opts, cfg, v, report.HandRenames, &doc); err != nil {
+		return classifyUserError(err)
+	}
+	// An approval taken for a hand rename stays, so that adopting the rename still finds it.
+	stale := withoutHandRenames(report.Stale, report.HandRenames)
 
-	if len(names) == 0 && len(report.Open) == 0 && len(report.Stale) == 0 {
+	if len(names) == 0 && len(report.Open) == 0 && len(stale) == 0 {
 		if asJSON {
 			return emitDocument(c, output.FormatJSON, doc)
 		}
@@ -1279,8 +1293,8 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		doc.AlreadyApproved = append(doc.AlreadyApproved, opts.Redactor.Apply(name))
 	}
 
-	if len(names) == 0 && len(report.Stale) > 0 {
-		removed, warning, err := approval.Revoke(ctx, v, report.Stale)
+	if len(names) == 0 && len(stale) > 0 {
+		removed, warning, err := approval.Revoke(ctx, v, stale)
 		if err != nil {
 			return classifyUserError(err)
 		}
@@ -1289,8 +1303,8 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		}
 		if removed > 0 {
 			fmt.Fprintf(out, "removed %d stale %s no longer read from the vault: %s\n", removed,
-				plural(removed, "approval", "approvals"), redactAll(opts.Redactor, report.Stale))
-			doc.RemovedStale = redactEach(opts.Redactor, report.Stale)
+				plural(removed, "approval", "approvals"), redactAll(opts.Redactor, stale))
+			doc.RemovedStale = redactEach(opts.Redactor, stale)
 		}
 	}
 	if asJSON {
@@ -1356,6 +1370,7 @@ type vaultApproveDocument struct {
 	AlreadyApproved []string                 `json:"already_approved"`
 	RemovedStale    []string                 `json:"removed_stale"`
 	RenameLeftovers []renameLeftoverDocument `json:"rename_leftovers"`
+	HandRenames     []handRenameDocument     `json:"hand_renames"`
 }
 
 // renameLeftoverDocument is one rest of an unfinished rename by kind: for a connection the stale approval and
@@ -1395,10 +1410,50 @@ func writeCredentialLeftovers(out io.Writer, opts *Options, cfg *config.Config, 
 	return nil
 }
 
+// writeHandRenames names every rename made by hand in cfg that the vault shows, with the command that adopts
+// it, and adds it to doc: connections are the approvals Pending found, credentials the entries v holds.
+func writeHandRenames(out io.Writer, opts *Options, cfg *config.Config, v *vault.Vault,
+	connections []approval.HandRename, doc *vaultApproveDocument) error {
+	names, err := v.KnownNames()
+	if err != nil {
+		return err
+	}
+	var found []manage.HandRename
+	for _, r := range connections {
+		found = append(found, manage.HandRename{Kind: manage.RenameConnection, Old: r.Approval, New: r.Connection,
+			Ambiguous: r.Ambiguous})
+	}
+	for _, r := range manage.HandRenames(cfg, names) {
+		if r.Kind == manage.RenameCredential {
+			found = append(found, r)
+		}
+	}
+	for _, r := range found {
+		fmt.Fprintln(out, handRenameText(opts, r))
+		doc.HandRenames = append(doc.HandRenames, handRenameDocumentOf(opts, r))
+	}
+	return nil
+}
+
+// withoutHandRenames returns the stale approvals that are no hand rename.
+func withoutHandRenames(stale []string, renames []approval.HandRename) []string {
+	byHand := map[string]bool{}
+	for _, r := range renames {
+		byHand[r.Approval] = true
+	}
+	var out []string
+	for _, name := range stale {
+		if !byHand[name] {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 func newVaultApproveDocument() vaultApproveDocument {
 	return vaultApproveDocument{
 		Open: []approvalChangeDocument{}, Approved: []string{}, AlreadyApproved: []string{}, RemovedStale: []string{},
-		RenameLeftovers: []renameLeftoverDocument{},
+		RenameLeftovers: []renameLeftoverDocument{}, HandRenames: []handRenameDocument{},
 	}
 }
 
