@@ -397,7 +397,11 @@ func Path(explicit string) (string, error) {
 
 // Load reads and validates the configuration at path.
 func Load(path string, providers ...ProviderCatalog) (*Config, error) {
-	data, err := readFile(path)
+	return load(path, Observer{}, providers...)
+}
+
+func load(path string, obs Observer, providers ...ProviderCatalog) (*Config, error) {
+	data, err := readFile(path, obs)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &NotFoundError{Path: path}

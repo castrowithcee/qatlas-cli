@@ -19,47 +19,6 @@ const (
 	workerNameEnv = "QATLAS_CONFIG_TEST_NAME"
 )
 
-func TestMain(m *testing.M) {
-	mode := os.Getenv(workerModeEnv)
-	if mode == "" {
-		os.Exit(m.Run())
-	}
-	store := NewStore(os.Getenv(workerPathEnv), testProviders)
-	name := os.Getenv(workerNameEnv)
-	add := func(cfg *Config) error {
-		return cfg.SetService(name, Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"})
-	}
-	if mode == lockWaitMode {
-		os.Exit(lockWaitWorker(store, name))
-	}
-	var err error
-	switch mode {
-	case "update":
-		err = store.Update(add)
-	case "cas":
-		// Retry on conflict like a caller of the optimistic API would.
-		for {
-			var cfg *Config
-			var rev Revision
-			cfg, rev, err = store.LoadVersioned()
-			if err != nil {
-				break
-			}
-			if err = add(cfg); err != nil {
-				break
-			}
-			if err = store.SaveIfUnchanged(cfg, rev); !errors.Is(err, ErrConflict) {
-				break
-			}
-		}
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	os.Exit(0)
-}
-
 func runWorkers(t *testing.T, mode, path string, n int) {
 	t.Helper()
 	var wg sync.WaitGroup

@@ -39,7 +39,7 @@ func (s *Store) backupBeforeReplace() error {
 	if fi, err := os.Stat(s.path); err == nil && fi.IsDir() {
 		return nil
 	}
-	data, err := readFile(s.path)
+	data, err := readFile(s.path, s.observe)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
