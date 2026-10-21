@@ -62,7 +62,7 @@ var targetKinds = []config.TargetKind{{
 	Description: "one forum topic of a chat; the chat tools then send and read only in this topic, and tools that " +
 		"act on the whole chat or on a message by its ID need the chat itself; repeatable",
 	Forms:    []string{"CHAT_ID" + topicInfix + "THREAD_ID"},
-	Parent:   "chat",
+	Parents:  []string{"chat"},
 	Unlisted: true,
 }, {
 	Name:        "bot",

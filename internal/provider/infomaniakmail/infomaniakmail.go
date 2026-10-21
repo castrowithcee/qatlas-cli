@@ -416,8 +416,8 @@ func Register(reg *capability.Registry) error {
 				Description: "the one mailbox this connection logs in to; required, exactly one",
 				Forms:       []string{"mailbox/ADDRESS"},
 			}, {
-				Name:   "folder",
-				Parent: "mailbox",
+				Name:    "folder",
+				Parents: []string{"mailbox"},
 				Description: "one folder of the mailbox, by its exact name, or with folder/PATH/* that folder and " +
 					"its subfolders; optional, repeatable; no other wildcards",
 				Forms: []string{"folder/PATH", "folder/PATH/*"},

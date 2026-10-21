@@ -164,7 +164,7 @@ func TestKindsAreTwoLevelsAndBrowserIsRegistered(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	workflow, _ := metadata.Target.KindByName("workflow")
 	project, _ := metadata.Target.KindByName("project")
-	if workflow.Parent != "project" || project.Parent != "" {
+	if strings.Join(workflow.Parents, ",") != "project" || strings.Join(project.Parents, ",") != "" {
 		t.Fatalf("kinds = %+v, %+v", project, workflow)
 	}
 	serve(t, &[]call{}, func(*http.Request) (*http.Response, error) {

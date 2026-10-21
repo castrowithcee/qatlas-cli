@@ -176,7 +176,7 @@ func TestBrowserRegistration(t *testing.T) {
 	}
 	for kind, parent := range map[string]string{"owner": "", "repository": "owner", "project": "owner"} {
 		got, ok := metadata.Target.KindByName(kind)
-		if !ok || got.Parent != parent {
+		if !ok || strings.Join(got.Parents, ",") != parent {
 			t.Errorf("kind %s = %+v, %v; want parent %q", kind, got, ok, parent)
 		}
 	}

@@ -25,8 +25,8 @@ func TestTargetBrowserRegistration(t *testing.T) {
 	}
 	account, _ := meta.Target.KindByName("account")
 	drive, _ := meta.Target.KindByName("drive")
-	if account.Parent != "" || drive.Parent != "account" {
-		t.Fatalf("parents = %q, %q", account.Parent, drive.Parent)
+	if strings.Join(account.Parents, ",") != "" || strings.Join(drive.Parents, ",") != "account" {
+		t.Fatalf("parents = %q, %q", strings.Join(account.Parents, ","), strings.Join(drive.Parents, ","))
 	}
 	if _, err := browseList(t, config.TargetListRequest{Kind: "account"}); errorsIsUnsupported(err) {
 		t.Fatal("no target browser registered")

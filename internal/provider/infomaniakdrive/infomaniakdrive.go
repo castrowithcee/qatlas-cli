@@ -479,15 +479,15 @@ func Register(reg *capability.Registry) error {
 				Name:        "drive",
 				Description: "one kDrive of the bound account; optional, and may be listed more than once",
 				Forms:       []string{"drive/DRIVE_ID"},
-				Parent:      "account",
+				Parents:     []string{"account"},
 			}, {
 				Name: "files",
 				Description: "one folder or file of a bound drive, with everything below a folder; optional, and " +
 					"may be listed more than once. The drive of it is reachable, but only inside this folder or " +
 					"file unless the drive is also listed whole",
-				Forms:  []string{"drive/DRIVE_ID/files/FILE_ID"},
-				Parent: "drive",
-				Nested: true,
+				Forms:   []string{"drive/DRIVE_ID/files/FILE_ID"},
+				Parents: []string{"drive"},
+				Nested:  true,
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

@@ -127,8 +127,8 @@ func (t TargetMetadata) knowsForm(form string) bool {
 // TargetKind is one kind of target, such as a repository or a project. Forms lists the accepted spellings
 // with upper-case placeholders, for example repos/OWNER/REPO, and Description says what an entry allows.
 //
-// Parent names the kind one level above, empty for a top-level kind; the parents of all kinds form the levels
-// an editor browses through. Entries of a kind with a parent are listed under one target of that parent.
+// Parents names the kinds one level above, empty for a top-level kind; the parents of all kinds form the levels
+// an editor browses through. Entries of a kind with parents are listed under one target of one of them.
 //
 // Nested says that entries of the kind also sit below an entry of the same kind, such as a folder inside a
 // folder. They are listed under one target of the kind itself.
@@ -140,7 +140,7 @@ type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
-	Parent      string
+	Parents     []string
 	Nested      bool
 	Unlisted    bool
 }
@@ -192,25 +192,46 @@ func (t TargetMetadata) KindByName(name string) (TargetKind, bool) {
 // entries of its own kind.
 func (t TargetMetadata) HasChildKind(name string) bool {
 	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool {
-		return kind.Parent == name || kind.Nested && kind.Name == name
+		return slices.Contains(kind.Parents, name) || kind.Nested && kind.Name == name
 	})
 }
 
-// ValidateKindParents checks that every Parent names a kind of its own provider and that the parents form no
+// ValidateKindParents checks that every parent names a kind of its own provider and that the parents form no
 // cycle.
 func (t TargetMetadata) ValidateKindParents() error {
 	for _, kind := range t.Kinds {
-		seen := map[string]bool{kind.Name: true}
-		for parent := kind.Parent; parent != ""; {
-			next, ok := t.KindByName(parent)
-			if !ok {
+		for _, parent := range kind.Parents {
+			if _, ok := t.KindByName(parent); !ok {
 				return fmt.Errorf("target kind %q names unknown parent kind %q", kind.Name, parent)
 			}
-			if seen[parent] {
-				return fmt.Errorf("target kind %q has a parent cycle", kind.Name)
+		}
+	}
+	const (
+		visiting = 1
+		done     = 2
+	)
+	state := map[string]int{}
+	var cyclic func(name string) bool
+	cyclic = func(name string) bool {
+		switch state[name] {
+		case visiting:
+			return true
+		case done:
+			return false
+		}
+		state[name] = visiting
+		kind, _ := t.KindByName(name)
+		for _, parent := range kind.Parents {
+			if cyclic(parent) {
+				return true
 			}
-			seen[parent] = true
-			parent = next.Parent
+		}
+		state[name] = done
+		return false
+	}
+	for _, kind := range t.Kinds {
+		if cyclic(kind.Name) {
+			return fmt.Errorf("target kind %q has a parent cycle", kind.Name)
 		}
 	}
 	return nil

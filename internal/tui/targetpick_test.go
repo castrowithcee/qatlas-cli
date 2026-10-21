@@ -58,7 +58,7 @@ func listerRegistry(t *testing.T) *capability.Registry {
 		ID: "lister", Name: "Lister",
 		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
 			{Name: "group", Forms: []string{"g/NAME"}},
-			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parent: "group"},
+			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}},
 		}},
 	}, nil)
 	if err != nil {

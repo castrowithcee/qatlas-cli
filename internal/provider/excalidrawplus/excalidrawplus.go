@@ -375,8 +375,8 @@ func Register(reg *capability.Registry) error {
 				Name: "scene",
 				Description: "a single scene of the workspace that narrows the connection to it; optional, repeatable, " +
 					"and it does not open its collection",
-				Forms:  []string{"scene/SCENE_ID"},
-				Parent: "collection",
+				Forms:   []string{"scene/SCENE_ID"},
+				Parents: []string{"collection"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

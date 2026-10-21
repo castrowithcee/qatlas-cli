@@ -129,7 +129,7 @@
   }
 
   function startTop() {
-    var names = kinds.filter(function (k) { return !k.parent && !k.unlisted; }).map(function (k) { return k.name; });
+    var names = kinds.filter(function (k) { return !(k.parents && k.parents.length) && !k.unlisted; }).map(function (k) { return k.name; });
     levels = [{ title: "", kinds: names, kind: names[0], parent: "", entries: [], next: "", serverSearch: false, fixed: false }];
     marks.clear();
     render();
@@ -289,7 +289,7 @@
 
   function open(entry) {
     var children = kinds.filter(function (k) {
-      return !k.unlisted && (k.parent === entry.kind || (k.nested && k.name === entry.kind));
+      return !k.unlisted && ((k.parents || []).indexOf(entry.kind) >= 0 || (k.nested && k.name === entry.kind));
     }).map(function (k) { return k.name; });
     if (!children.length) {
       return;

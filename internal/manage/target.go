@@ -390,7 +390,7 @@ func checkListRequest(t config.TargetMetadata, req config.TargetListRequest) err
 		return invalid
 	}
 	if req.Parent == "" {
-		if kind.Parent != "" {
+		if len(kind.Parents) > 0 {
 			return invalid
 		}
 		return nil
@@ -398,7 +398,7 @@ func checkListRequest(t config.TargetMetadata, req config.TargetListRequest) err
 	// A parent names the one entry the listing sits under, never a wildcard. A nested kind also lists under
 	// an entry of its own kind.
 	if strings.Contains(req.Parent, "*") ||
-		!(kind.Parent != "" && t.ValidTarget(kind.Parent, req.Parent) || kind.Nested && t.ValidTarget(kind.Name, req.Parent)) {
+		!(slices.ContainsFunc(kind.Parents, func(parent string) bool { return t.ValidTarget(parent, req.Parent) }) || kind.Nested && t.ValidTarget(kind.Name, req.Parent)) {
 		return invalid
 	}
 	return nil
