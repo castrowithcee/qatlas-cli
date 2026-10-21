@@ -20,7 +20,7 @@ import (
 func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Inspect the qatlas configuration and rename its entries",
+		Short: "Inspect the qatlas configuration, rename its entries, and move parts of it between installations",
 		Args:  noArgs,
 		RunE:  func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -117,7 +117,8 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	validate.Flags().StringSliceVar(&fields, "fields", nil,
 		"restrict the report to these fields, in this order")
 
-	cmd.AddCommand(validate, newConfigRenameCommand(opts, reg))
+	cmd.AddCommand(validate, newConfigRenameCommand(opts, reg), newConfigExportCommand(opts, reg),
+		newConfigImportCommand(opts, reg))
 	return cmd
 }
 
