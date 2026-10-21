@@ -146,75 +146,126 @@ func (s *Service) SaveConfig(before, after *config.Config, base config.Revision)
 // the vault unlocked. The redacted warning that returns, if any, is no reason to roll anything back.
 func (s *Service) CommitSecrets(cfg *config.Config, base config.Revision, credential string, toVault bool,
 	roles []string, values map[string]string, offer vault.PassphraseFunc) (warning string, err error) {
+	written, err := s.commitSecretSets(cfg, base, []secretSet{{credential: credential, toVault: toVault, roles: roles,
+		values: values}}, offer, nil)
+	if err != nil {
+		return "", err
+	}
+	if len(written) == 0 || !written[0].toVault {
+		return "", nil
+	}
+	return s.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
+		return written[0].sendTo(ctx, client)
+	}), nil
+}
+
+// secretSet is the secrets of one credential a commit writes: the roles in order, each with its value in
+// values, where a role without one is skipped.
+type secretSet struct {
+	credential string
+	toVault    bool
+	roles      []string
+	values     map[string]string
+}
+
+// sendTo hands the roles of set to a vault process.
+func (set secretSet) sendTo(ctx context.Context, client *vaultproc.Client) error {
+	for _, role := range set.roles {
+		if err := client.Set(ctx, set.credential, role, set.values[role]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// commitSecretSets is the commit of CommitSecrets for the secrets of several credentials: all of them are
+// written first, in order, and the configuration is saved as the commit point; any failure rolls back every
+// secret of every set written so far. It returns the sets as written, each with only the roles it wrote.
+//
+// prepare, when set, runs under the lock after the revision check and before the first secret. A failing
+// prepare must leave nothing behind itself. The restore it returns, when not nil, puts the vault back as a
+// whole on a rollback, in place of the undo of each vault secret.
+func (s *Service) commitSecretSets(cfg *config.Config, base config.Revision, sets []secretSet,
+	offer vault.PassphraseFunc, prepare func() (restoreVault func() error, err error)) ([]secretSet, error) {
 	// A forward credential's fields are checked before anything is written. The message never carries a value.
-	if cred, ok := cfg.Credentials[credential]; ok && cred.Forward {
-		for _, role := range roles {
-			if value, ok := values[role]; ok {
-				if err := cred.CheckForwardValue(role, value); err != nil {
-					return "", fmt.Errorf("credential %s: %v", credential, err)
+	for _, set := range sets {
+		if cred, ok := cfg.Credentials[set.credential]; ok && cred.Forward {
+			for _, role := range set.roles {
+				if value, ok := set.values[role]; ok {
+					if err := cred.CheckForwardValue(role, value); err != nil {
+						return nil, fmt.Errorf("credential %s: %v", set.credential, err)
+					}
 				}
 			}
 		}
 	}
 	// The save would assign a new credential's id anyway; it is assigned now so its vault entry records it.
 	cfg.AssignIDs()
-	var written []string
+	var written []secretSet
 	var undos []undoStep
 	// The revision is checked before the first secret is written and the lock is held until the configuration
 	// is saved, so a conflict is found before any secret of another change could be overwritten, and a
 	// rollback never races a second writer that uses the same credential name.
-	err = s.store.Transact(base, func(save func(*config.Config) error) error {
+	err := s.store.Transact(base, func(save func(*config.Config) error) error {
 		previous := map[string]previousSecret{}
-		if !toVault {
-			for _, role := range roles {
-				if _, ok := values[role]; !ok {
-					continue
-				}
-				prev, err := s.previousKeyringSecret(credential, role)
-				if err != nil {
-					return fmt.Errorf("reading the stored secret of %s.%s before replacing it: %w", credential, role, err)
-				}
-				previous[role] = prev
-			}
-		}
-		for _, role := range roles {
-			value, ok := values[role]
-			if !ok {
+		for _, set := range sets {
+			if set.toVault {
 				continue
 			}
-			var undo func() error
-			var writeErr error
-			if toVault {
-				undo, writeErr = s.secrets.SetVaultUndoable(credential, cfg.Credentials[credential].ID, role, value, offer)
-			} else {
-				writeErr = s.secrets.Set(credential, role, value)
-				undo = s.keyringUndo(credential, role, previous[role])
+			for _, role := range set.roles {
+				if _, ok := set.values[role]; !ok {
+					continue
+				}
+				prev, err := s.previousKeyringSecret(set.credential, role)
+				if err != nil {
+					return fmt.Errorf("reading the stored secret of %s.%s before replacing it: %w", set.credential, role, err)
+				}
+				previous[set.credential+"/"+role] = prev
 			}
-			if writeErr != nil {
-				return rollback(credential, undos, fmt.Errorf("storing the secret for %s.%s: %w", credential, role, writeErr))
+		}
+		var restoreVault func() error
+		if prepare != nil {
+			var err error
+			if restoreVault, err = prepare(); err != nil {
+				return err
 			}
-			undos = append(undos, undoStep{role: role, undo: undo, removal: !toVault && !previous[role].had})
-			written = append(written, role)
+		}
+		for _, set := range sets {
+			done := secretSet{credential: set.credential, toVault: set.toVault, values: set.values}
+			for _, role := range set.roles {
+				value, ok := set.values[role]
+				if !ok {
+					continue
+				}
+				var undo func() error
+				var writeErr error
+				prev := previous[set.credential+"/"+role]
+				if set.toVault {
+					undo, writeErr = s.secrets.SetVaultUndoable(set.credential, cfg.Credentials[set.credential].ID, role, value, offer)
+				} else {
+					writeErr = s.secrets.Set(set.credential, role, value)
+					undo = s.keyringUndo(set.credential, role, prev)
+				}
+				if writeErr != nil {
+					return rollback(undos, restoreVault, fmt.Errorf("storing the secret for %s.%s: %w", set.credential, role, writeErr))
+				}
+				undos = append(undos, undoStep{credential: set.credential, role: role, undo: undo, vault: set.toVault,
+					removal: !set.toVault && !prev.had})
+				done.roles = append(done.roles, role)
+			}
+			if len(done.roles) > 0 {
+				written = append(written, done)
+			}
 		}
 		if err := save(cfg); err != nil {
-			return rollback(credential, undos, err)
+			return rollback(undos, restoreVault, err)
 		}
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if !toVault || len(written) == 0 {
-		return "", nil
-	}
-	return s.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
-		for _, role := range written {
-			if err := client.Set(ctx, credential, role, values[role]); err != nil {
-				return err
-			}
-		}
-		return nil
-	}), nil
+	return written, nil
 }
 
 // previousSecret is what one keyring role held before a commit.
@@ -261,35 +312,53 @@ func (s *Service) keyringUndo(credential, role string, prev previousSecret) func
 }
 
 // undoStep puts one written role back as it was. removal is true where that means removing a keyring entry
-// that did not exist before.
+// that did not exist before; vault marks a role written to the vault.
 type undoStep struct {
-	role    string
-	undo    func() error
-	removal bool
+	credential, role string
+	undo             func() error
+	removal, vault   bool
 }
 
 // rollback runs the undo of every role a failed commit wrote and says which ones, if any, could not be put
-// back, so nothing is silently left behind.
-func rollback(credential string, steps []undoStep, cause error) error {
-	var notRemoved, notRestored []string
+// back, so nothing is silently left behind. With restoreVault the vault is put back as a whole instead of
+// role by role, and only if that fails is each of its roles undone.
+func rollback(steps []undoStep, restoreVault func() error, cause error) error {
+	vaultBack := false
+	if restoreVault != nil {
+		if err := restoreVault(); err != nil {
+			cause = fmt.Errorf("%w; the vault could not be put back as it was before (%v), so each secret written "+
+				"to it was undone on its own", cause, err)
+		} else {
+			vaultBack = true
+		}
+	}
+	var order []string
+	notRemoved, notRestored := map[string][]string{}, map[string][]string{}
 	for _, step := range steps {
-		if step.undo == nil || step.undo() == nil {
+		if (step.vault && vaultBack) || step.undo == nil || step.undo() == nil {
 			continue
 		}
+		if len(notRemoved[step.credential]) == 0 && len(notRestored[step.credential]) == 0 {
+			order = append(order, step.credential)
+		}
 		if step.removal {
-			notRemoved = append(notRemoved, step.role)
+			notRemoved[step.credential] = append(notRemoved[step.credential], step.role)
 		} else {
-			notRestored = append(notRestored, step.role)
+			notRestored[step.credential] = append(notRestored[step.credential], step.role)
 		}
 	}
-	if len(notRestored) > 0 {
-		cause = fmt.Errorf("%w; the secrets of %s (%s) could not be put back as they were before, check what "+
-			"they hold now", cause, credential, strings.Join(notRestored, ", "))
+	for _, credential := range order {
+		if roles := notRestored[credential]; len(roles) > 0 {
+			cause = fmt.Errorf("%w; the secrets of %s (%s) could not be put back as they were before, check what "+
+				"they hold now", cause, credential, strings.Join(roles, ", "))
+		}
 	}
-	if len(notRemoved) > 0 {
-		cause = fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
-			"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(notRemoved, ", "),
-			credential)
+	for _, credential := range order {
+		if roles := notRemoved[credential]; len(roles) > 0 {
+			cause = fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
+				"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(roles, ", "),
+				credential)
+		}
 	}
 	return cause
 }

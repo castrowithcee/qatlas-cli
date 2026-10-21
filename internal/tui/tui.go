@@ -131,6 +131,10 @@ const (
 	screenTemplate
 	// screenRename is the new-name prompt and the dry run of renaming a list entry; see rename.go.
 	screenRename
+	// screenFindings lists the renames found in the vault and offers the action for each; see renamefind.go.
+	screenFindings
+	// screenTransfer is the guided export or import of the configuration; see transfer.go.
+	screenTransfer
 	// screenCommand is the command line over the screen it was opened from; see commandline.go.
 	screenCommand
 )
@@ -418,8 +422,13 @@ type Model struct {
 	template *templateChoice
 	// cmdline is the command line of screenCommand while it is open.
 	cmdline *commandLine
+	// findings is the list of screenFindings while it is open.
+	findings *findingsState
 	// rename is the prompt or dry run of screenRename while it is open.
 	rename *renameState
+	// export and imp are the guided export or import of screenTransfer while one is open; never both.
+	export *exportState
+	imp    *importState
 	fields []field
 	focus  int
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
@@ -719,6 +728,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleVaultPassphraseVerified(msg)
 	case adminVerifiedMsg:
 		return m, m.handleAdminVerified(msg)
+	case exportDoneMsg:
+		return m, m.handleExportDone(msg)
+	case importPlannedMsg:
+		return m, m.handleImportPlanned(msg)
+	case importDoneMsg:
+		return m, m.handleImportDone(msg)
+	case importApprovedMsg:
+		return m, m.handleImportApproved(msg)
 	case planVaultMigrateMsg:
 		return m, m.handlePlannedVaultMigrate(msg)
 	case vaultMigrateWrittenMsg:
@@ -850,8 +867,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateTemplate(msg)
 		case screenRename:
 			cmd = m.updateRename(msg)
+		case screenFindings:
+			cmd = m.updateFindings(msg)
 		case screenCommand:
 			cmd = m.updateCommandLine(msg)
+		case screenTransfer:
+			cmd = m.updateTransfer(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -1023,6 +1044,8 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.duplicateSelected()
 	case "r":
 		return m.askRename()
+	case "f":
+		return m.openFindings()
 	case "s":
 		if m.section == sectionCredentials {
 			return m.openPayloadNew()
@@ -1075,7 +1098,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		// approval left over from a deleted or renamed connection, or both, the same way 'qatlas vault
 		// approve' with no --connection does.
 		if report, unavailable := m.approvalsReport(); unavailable == "" &&
-			(len(report.Open) > 0 || len(report.Stale) > 0) {
+			(len(report.Open) > 0 || len(report.RevocableStale()) > 0) {
 			m.approveAllConfirm = true
 			m.screen = screenConfirm
 			m.clearMessages()
@@ -1180,6 +1203,20 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenRename:
 		m.cancelRename()
+		return nil
+	case screenFindings:
+		m.closeFindings()
+		return nil
+	case screenTransfer:
+		if m.imp != nil {
+			if m.imp.working == "" {
+				return m.importBack()
+			}
+			return nil
+		}
+		if m.export != nil && !m.export.writing {
+			return m.exportBack()
+		}
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -1297,11 +1334,22 @@ func (m *Model) interrupt() tea.Cmd {
 		m.leaveQuit = true
 		return nil
 	}
+	if m.export != nil && m.export.writing {
+		// The file is being written; quitting now could leave it half done.
+		m.status = "Wait until the export is written"
+		return nil
+	}
+	if m.imp != nil && m.imp.working != "" {
+		// The configuration and the secrets are being written; quitting now could leave them half done.
+		m.status = "Wait until the import is " + map[string]string{"reading": "read", "writing": "written"}[m.imp.working]
+		return nil
+	}
 	if m.payloadSaving || (m.wizard != nil && (m.wizard.saving || m.wizard.saved != "")) || !m.unsaved() {
 		return m.quit()
 	}
 	var cmd tea.Cmd
 	switch m.screen {
+	case screenTransfer:
 	case screenForm, screenSummary, screenProviders, screenPicker, screenTargets, screenPaths:
 	default:
 		cmd = m.leaveScreen()
@@ -1337,6 +1385,11 @@ func (m *Model) unsaved() bool {
 		if m.pickerChanged() {
 			return true
 		}
+	case screenTransfer:
+		if m.imp != nil {
+			return m.imp.dirty()
+		}
+		return m.export.dirty()
 	case screenForm, screenSummary, screenProviders, screenSecret, screenVaultOffer:
 	default:
 		return false
@@ -1406,6 +1459,9 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 		case screenSummary:
 			m.screen = from
 			return m.startSetupSave()
+		case screenTransfer:
+			m.screen = from
+			return m.updateTransfer(key)
 		case screenPicker:
 			m.keepPicker()
 		}
@@ -1453,6 +1509,13 @@ func (m *Model) discard() tea.Cmd {
 	case screenPicker:
 		m.screen = screenForm
 		m.status = "Selection discarded; the row is as it was"
+		return nil
+	case screenTransfer:
+		if m.imp != nil {
+			m.cancelImport()
+			return nil
+		}
+		m.cancelExport()
 		return nil
 	}
 	setup := m.wizard != nil
@@ -3462,6 +3525,13 @@ func (m *Model) editorView() string {
 		return m.templateView()
 	case screenRename:
 		return m.renameView()
+	case screenFindings:
+		return m.findingsView()
+	case screenTransfer:
+		if m.imp != nil {
+			return m.importView()
+		}
+		return m.exportView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -3662,6 +3732,12 @@ const (
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
 // exactly the answers that apply; they come right under the warning, so even a tiny terminal shows them.
 func (m *Model) leaveView() string {
+	if m.leaveFrom == screenTransfer {
+		if m.imp != nil {
+			return m.importLeaveView()
+		}
+		return m.exportLeaveView()
+	}
 	what := "New " + m.section.entry()
 	where := "the " + m.section.title() + " list"
 	switch {
@@ -3805,6 +3881,10 @@ func (m *Model) listFrame() (string, string) {
 	}
 
 	back := m.backToSectionsHint()
+	var finds []renameFinding
+	if m.screen == screenList && !m.list.editing {
+		finds = m.sectionFindings()
+	}
 	var keys string
 	switch {
 	case m.screen == screenNav:
@@ -3814,7 +3894,7 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · " + back + " · : cmds · ? help · q quit"
+		keys = "enter details · a approve all · " + findKeys(finds) + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
 		keys = "enter unlock · n new · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
@@ -3823,11 +3903,11 @@ func (m *Model) listFrame() (string, string) {
 		keys = "/ filter · n new · p duplicate · enter show · d revoke · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionConnections:
 		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c setup · " +
-			back +
+			findKeys(finds) + back +
 			" · : cmds · ? help · q quit"
 	case m.section == sectionCredentials:
 		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c setup · " +
-			back + " · : cmds · ? help · q quit"
+			findKeys(finds) + back + " · : cmds · ? help · q quit"
 	case m.templateSection(m.section):
 		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c setup · " + back +
 			" · : cmds · ? help · q quit"
@@ -3837,7 +3917,7 @@ func (m *Model) listFrame() (string, string) {
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
 	}
-	foot := m.keyHint(keys)
+	foot := m.findingsNotice(finds) + m.keyHint(keys)
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
 			if m.needsDescription(name) {
@@ -3856,6 +3936,14 @@ func (m *Model) listFrame() (string, string) {
 		foot = m.testLine() + idle.String() + foot
 	}
 	return head.String(), foot + m.notes()
+}
+
+// findKeys is the key that reviews the renames found, with its separator, where there are any.
+func findKeys(finds []renameFinding) string {
+	if len(finds) == 0 {
+		return ""
+	}
+	return "f renames · "
 }
 
 // navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.

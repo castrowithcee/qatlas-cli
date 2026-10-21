@@ -53,6 +53,22 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { m.askSetupTemplate(); return nil },
 		},
 		command{
+			name:    "renames",
+			desc:    "Review the renames found in the vault (f)",
+			aliases: []string{"adopt", "rename leftovers"},
+			unavailable: func(m *Model) string {
+				if r := onScreens("review renames", screenList)(m); r != "" {
+					return r
+				}
+				switch m.section {
+				case sectionApprovals, sectionConnections, sectionCredentials:
+					return ""
+				}
+				return "renames are reviewed from Connections, Credentials, or Approvals"
+			},
+			run: func(m *Model) tea.Cmd { return m.openFindings() },
+		},
+		command{
 			name:    "update",
 			desc:    "Install the newer release (u)",
 			aliases: []string{"upgrade"},
@@ -63,6 +79,20 @@ func (m *Model) commands() []command {
 				return m.updateUnavailable()
 			},
 			run: func(m *Model) tea.Cmd { m.askUpdate(); return nil },
+		},
+		command{
+			name:        "export",
+			desc:        "Export the configuration to a file, optionally with secrets",
+			aliases:     []string{"export config", "backup"},
+			unavailable: onScreens("export", screenNav, screenList),
+			run:         func(m *Model) tea.Cmd { return m.askExport() },
+		},
+		command{
+			name:        "import",
+			desc:        "Import an exported configuration file, optionally with secrets",
+			aliases:     []string{"import config", "restore"},
+			unavailable: onScreens("import", screenNav, screenList),
+			run:         func(m *Model) tea.Cmd { return m.askImport() },
 		},
 		command{
 			name:        "lock vault",

@@ -53,8 +53,9 @@ func namesFixture(t *testing.T) (*Server, *Client) {
 	return s, &Client{Recipient: key.Recipient().String(), Verify: allow}
 }
 
-// The vault process tells the entry names and approval keys with their config ids and the former name of a
-// renamed entry, and no value, role name, fingerprint or scope.
+// The vault process tells the entry names and approval keys with their config ids, the former name of a
+// renamed entry and the credential name an approval was given for, and no value, role name, fingerprint or
+// any other part of a scope.
 func TestServerTellsTheNamesOfTheVault(t *testing.T) {
 	s, c := namesFixture(t)
 	resp, err := exchangeOverPipe(t, s, c, request{Op: opNames})
@@ -70,12 +71,16 @@ func TestServerTellsTheNamesOfTheVault(t *testing.T) {
 	if got := resp.Names.Approvals["vorbild"]; got != namesConnectionID || len(resp.Names.Approvals) != 1 {
 		t.Errorf("approvals = %v, want vorbild with its config id", resp.Names.Approvals)
 	}
+	if got := resp.Names.ApprovalCredentials; len(got) != 1 || got["vorbild"] != "gh-a" {
+		t.Errorf("approval credentials = %v, want vorbild given for gh-a", got)
+	}
 
 	data, err := json.Marshal(resp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{namesSecret, namesRole, "s3cret", "fingerprint", "scope", "https://api.github.com"} {
+	for _, forbidden := range []string{namesSecret, namesRole, "s3cret", "fingerprint", "scope", "https://api.github.com",
+		`"github"`, "create"} {
 		if strings.Contains(string(data), forbidden) {
 			t.Errorf("the answer %s holds %q", data, forbidden)
 		}
@@ -83,7 +88,7 @@ func TestServerTellsTheNamesOfTheVault(t *testing.T) {
 
 	names, err := namesResult(resp, nil)
 	if err != nil || names.Entries["gh-a"] != namesCredentialID || names.Approvals["vorbild"] != namesConnectionID ||
-		names.Renamed["gh-b"] != "gh-old" {
+		names.Renamed["gh-b"] != "gh-old" || names.ApprovalCredentials["vorbild"] != "gh-a" {
 		t.Errorf("names = %+v, %v", names, err)
 	}
 }

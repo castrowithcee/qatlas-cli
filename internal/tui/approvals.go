@@ -282,10 +282,14 @@ func (m *Model) approveAllConfirmView() string {
 	var b strings.Builder
 	b.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Approve %d connection(s)?", len(report.Open))) + "\n\n")
 	b.WriteString(m.indented("every connection currently open is approved as it is configured now") + "\n")
-	if len(report.Stale) > 0 {
+	if stale := report.RevocableStale(); len(stale) > 0 {
 		b.WriteString(m.indented(fmt.Sprintf(
 			"also removes %d stale approval(s) of a connection that no longer reads the vault",
-			len(report.Stale))) + "\n")
+			len(stale))) + "\n")
+	}
+	if n := len(report.HandRenames); n > 0 {
+		b.WriteString(m.indented(fmt.Sprintf(
+			"keeps %d approval(s) of a rename made by hand, so that adopting it still finds them", n)) + "\n")
 	}
 	b.WriteString(m.keyHint("y approve all · n/esc cancel · : cmds · ? help"))
 	return b.String()
@@ -330,7 +334,8 @@ func (m *Model) approveOne(name string) tea.Cmd {
 // approveAll approves every connection the Approvals section currently lists open, and, like
 // 'qatlas vault approve' with no --connection, also removes every stale approval it finds: one left over
 // from a connection that was deleted or renamed outside a delete this editor itself ran, which already
-// revokes it on its own (see revokeApproval).
+// revokes it on its own (see revokeApproval). An approval of a rename made by hand stays, so that adopting
+// the rename still finds it (see approval.Report.RevocableStale).
 func (m *Model) approveAll() tea.Cmd {
 	if m.vaultBusy {
 		m.status = "a vault write is already in progress; wait for it to finish"
@@ -355,9 +360,9 @@ func (m *Model) approveAll() tea.Cmd {
 			return approvalActionMsg{err: err}
 		}
 		var removed int
-		if len(report.Stale) > 0 {
+		if stale := report.RevocableStale(); len(stale) > 0 {
 			var staleWarning string
-			removed, staleWarning, err = approval.Revoke(context.Background(), v, report.Stale)
+			removed, staleWarning, err = approval.Revoke(context.Background(), v, stale)
 			if err != nil {
 				return approvalActionMsg{err: err}
 			}
@@ -595,4 +600,16 @@ func (m *Model) openApprovalLogs(name string) tea.Cmd {
 	lv.list.clearFilter()
 	m.approvalDetail = ""
 	return m.openSection(sectionLogs)
+}
+
+// renameFindings are the renames the vault shows that the configuration does not: a connection or credential
+// renamed by hand and the rest of a rename that stopped early. Finding them is the core's
+// (manage.RenameFindings), which reads the vault only where that needs no passphrase.
+func (m *Model) renameFindings() []renameFinding {
+	var out []renameFinding
+	for _, f := range manage.RenameFindings(m.cfg, m.secrets.Vault()) {
+		out = append(out, renameFinding{kind: f.Kind, entry: f.Entry, from: f.From, to: f.To,
+			leftover: f.Leftover, ambiguous: f.Ambiguous, carried: f.Carried})
+	}
+	return out
 }
