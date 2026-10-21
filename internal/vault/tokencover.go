@@ -92,6 +92,13 @@ type model struct {
 // one, in which case the returned approval names it; nothing is written then.
 func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, now time.Time) (TokenApproval,
 	error) {
+	return v.ApproveWithTokenConnections(value, current, nil, only, now)
+}
+
+// ApproveWithTokenConnections is ApproveWithToken that also records the config id of each connection it
+// approves, from connectionIDs by connection name, as ApproveConnections does.
+func (v *Vault) ApproveWithTokenConnections(value string, current []Scope, connectionIDs map[string]string,
+	only []string, now time.Time) (TokenApproval, error) {
 	doc, err := v.unlockedDocument()
 	if err != nil {
 		return TokenApproval{}, err
@@ -213,7 +220,7 @@ func (v *Vault) ApproveWithToken(value string, current []Scope, only []string, n
 			} else {
 				next[change.Connection] = Approval{
 					Fingerprint: Fingerprint(c.scope, c.id), Scope: c.scope.Normalized(), CredentialID: c.id,
-					Approved: now.UTC(),
+					Approved: now.UTC(), ConnectionID: connectionIDs[change.Connection],
 				}
 			}
 		}

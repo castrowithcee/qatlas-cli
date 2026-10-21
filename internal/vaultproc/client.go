@@ -174,12 +174,14 @@ func (c *Client) Log(ctx context.Context, f invokelog.Fields) error {
 
 // ApproveWithToken asks the vault process to approve every open connection change the agent token covers,
 // or only the changes of the connections names lists. scopes is the scope of every connection that reads a
-// vault credential, as configured now. The process checks the token and decides, writes the approvals into
-// the vault, and logs each decision; unlogged is true when it could not log one. vault.ErrTokenUnknown and
+// vault credential, as configured now, and connectionIDs the config ids of those connections by name, which
+// the approvals record. The process checks the token and decides, writes the approvals into the vault, and
+// logs each decision; unlogged is true when it could not log one. vault.ErrTokenUnknown and
 // vault.ErrTokenExpired refuse the token; ErrNotRunning means no vault process holds the vault unlocked.
-func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []vault.Scope, names []string) (
-	approval vault.TokenApproval, unlogged bool, err error) {
-	resp, err := c.call(ctx, request{Op: opApproveToken, Token: token, Scopes: scopes, Names: names})
+func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []vault.Scope,
+	connectionIDs map[string]string, names []string) (approval vault.TokenApproval, unlogged bool, err error) {
+	resp, err := c.call(ctx, request{Op: opApproveToken, Token: token, Scopes: scopes,
+		ConnectionIDs: connectionIDs, Names: names})
 	if err != nil {
 		return vault.TokenApproval{}, false, err
 	}

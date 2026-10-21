@@ -369,7 +369,8 @@ func runVaultApproveWithToken(c *cobra.Command, opts *Options, reg *capability.R
 	if err != nil {
 		return classifyUserError(err)
 	}
-	result, unlogged, err := client.ApproveWithToken(contextOrBackground(c.Context()), token, scopes, names)
+	result, unlogged, err := client.ApproveWithToken(contextOrBackground(c.Context()), token, scopes,
+		approval.ConnectionIDs(cfg), names)
 	switch {
 	case errors.Is(err, vaultproc.ErrNotRunning):
 		return &secret.VaultLockedError{}

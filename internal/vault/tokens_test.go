@@ -519,3 +519,26 @@ func TestCoverGapsFiles(t *testing.T) {
 		}
 	}
 }
+
+// A token approval records the config id of the connection it approves; without one it records none.
+func TestApproveWithTokenRecordsConnectionID(t *testing.T) {
+	v := tokenVault(t)
+	vorbild := vorbildScope(t.TempDir())
+	approveScopes(t, v, vorbild)
+	token := createToken(t, v, "agent", vorbild.Connection)
+	with, without := vorbild, vorbild
+	with.Connection, without.Connection = "with-id", "no-id"
+	result, err := v.ApproveWithTokenConnections(token.Value, []Scope{vorbild, with, without},
+		map[string]string{"with-id": "0123abcd"}, nil, time.Now())
+	if err != nil || len(result.Changes) != 2 {
+		t.Fatalf("ApproveWithTokenConnections() = %+v, %v", result, err)
+	}
+	approvals, err := v.Approvals()
+	if err != nil {
+		t.Fatalf("Approvals() = %v", err)
+	}
+	if approvals["with-id"].ConnectionID != "0123abcd" || approvals["no-id"].ConnectionID != "" {
+		t.Errorf("ids = %q, %q, want the recorded id and none", approvals["with-id"].ConnectionID,
+			approvals["no-id"].ConnectionID)
+	}
+}
