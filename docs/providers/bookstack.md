@@ -103,8 +103,8 @@ at most 1900 characters) and `description_html` (at most 2000 characters), `tags
 `chapters.create` and `chapters.update` take the same fields and `priority` (0 or more); `chapters.create`
 requires `book_id` and `name`, `chapters.update` requires only `id`. `books.update` and `chapters.update`
 need at least one field to change. A violation of these limits is refused locally as `invalid-request` before
-any secret is read and before any request. A description cannot be emptied through these tools. Deleting is
-not available; for cover images see below.
+any secret is read and before any request. A description cannot be emptied through these tools. For deleting
+see Deleting, for cover images see below.
 
 - `tags` replaces all existing tags; an empty list removes them. Omit `tags` to keep them.
 - `default_template_id` is the identifier of a template page. On `update`, `null` removes the default
@@ -140,8 +140,8 @@ never be rendered or run.
 
 Violations of these limits are refused locally before any secret is read and before any request. The result
 shows the changed shelf without its books; read it with `shelves.get`. Both tools require confirmation and are
-part of no profile; `create` is not idempotent. Each change is sent once and never retried. Deleting shelves is
-not available.
+part of no profile; `create` is not idempotent. Each change is sent once and never retried. For deleting see
+Deleting.
 
 ### Cover images
 
