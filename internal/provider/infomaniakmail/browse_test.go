@@ -41,7 +41,7 @@ func TestBrowseRegistersTwoLevels(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	folder, _ := metadata.Target.KindByName("folder")
 	sender, _ := metadata.Target.KindByName("sender")
-	if folder.Parent != "mailbox" || sender.Parent != "" || !metadata.Target.HasChildKind("mailbox") {
+	if strings.Join(folder.Parents, ",") != "mailbox" || strings.Join(sender.Parents, ",") != "" || !metadata.Target.HasChildKind("mailbox") {
 		t.Errorf("kinds = %+v", metadata.Target.Kinds)
 	}
 	if !metadata.Target.ValidTarget("folder", "folder/Kunden/*") || !metadata.Target.ValidTarget("folder", "folder/Kunden") {

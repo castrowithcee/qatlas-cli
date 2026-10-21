@@ -30,8 +30,8 @@ func TestTargetBrowserRegistration(t *testing.T) {
 	}
 	team, _ := meta.Target.KindByName("team")
 	channel, _ := meta.Target.KindByName("channel")
-	if team.Parent != "" || channel.Parent != "team" {
-		t.Fatalf("parents = %q, %q", team.Parent, channel.Parent)
+	if strings.Join(team.Parents, ",") != "" || strings.Join(channel.Parents, ",") != "team" {
+		t.Fatalf("parents = %q, %q", strings.Join(team.Parents, ","), strings.Join(channel.Parents, ","))
 	}
 	var calls []call
 	serve(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, `[]`), nil })

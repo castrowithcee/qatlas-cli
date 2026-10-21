@@ -491,7 +491,11 @@ func TestValidateKindParents(t *testing.T) {
 	kinds := func(parents ...string) TargetMetadata {
 		var t TargetMetadata
 		for i, parent := range parents {
-			t.Kinds = append(t.Kinds, TargetKind{Name: string(rune('a' + i)), Forms: []string{"x/ID"}, Parent: parent})
+			kind := TargetKind{Name: string(rune('a' + i)), Forms: []string{"x/ID"}}
+			if parent != "" {
+				kind.Parents = []string{parent}
+			}
+			t.Kinds = append(t.Kinds, kind)
 		}
 		return t
 	}
@@ -568,7 +572,7 @@ func TestNestedKindHoldsEntriesOfItsOwnKind(t *testing.T) {
 	m := TargetMetadata{Kinds: []TargetKind{
 		{Name: "folder", Forms: []string{"folder", "folder/PATH"}, Nested: true},
 		{Name: "leaf", Forms: []string{"leaf/ID"}},
-		{Name: "plain", Forms: []string{"plain/ID"}, Parent: "leaf"},
+		{Name: "plain", Forms: []string{"plain/ID"}, Parents: []string{"leaf"}},
 	}}
 	if !m.HasChildKind("folder") || !m.HasChildKind("leaf") || m.HasChildKind("plain") {
 		t.Error("HasChildKind ignores nesting or parents")

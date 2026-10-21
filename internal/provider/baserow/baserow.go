@@ -259,7 +259,7 @@ func Register(reg *capability.Registry) error {
 				Name:        "table",
 				Description: "a table whose fields and rows this connection may read",
 				Forms:       []string{"table/TABLE_ID", "*"},
-				Parent:      "database",
+				Parents:     []string{"database"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

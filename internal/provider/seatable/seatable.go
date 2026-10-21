@@ -315,7 +315,7 @@ func Register(reg *capability.Registry) error {
 				Name:        "view",
 				Description: "one view of a table, by name or as id:TABLEID/id:VIEWID, narrowing rows.list to it",
 				Forms:       []string{"TABLE/VIEW"},
-				Parent:      tableKind,
+				Parents:     []string{tableKind},
 			}},
 			Reaches: reaches,
 			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +

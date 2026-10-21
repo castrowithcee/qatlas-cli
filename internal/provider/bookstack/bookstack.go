@@ -239,14 +239,14 @@ func Register(reg *capability.Registry) error {
 				Name: "chapter",
 				Description: "a chapter whose pages this connection may list, read, create, update, and delete, with " +
 					"their attachments, images, and comments; the chapter itself is only read",
-				Forms:  []string{"chapter/CHAPTER_ID"},
-				Parent: "book",
+				Forms:   []string{"chapter/CHAPTER_ID"},
+				Parents: []string{"book"},
 			}, {
 				Name: "page",
 				Description: "a single page this connection may read, update, and delete, with its attachments, " +
 					"images, and comments",
-				Forms:  []string{"page/PAGE_ID"},
-				Parent: "book",
+				Forms:   []string{"page/PAGE_ID"},
+				Parents: []string{"book"},
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

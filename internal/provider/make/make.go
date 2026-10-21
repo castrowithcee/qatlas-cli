@@ -669,20 +669,20 @@ func Register(reg *capability.Registry) error {
 				Name: "team",
 				Description: "the Make team this connection may reach; required in team mode, exactly one, and absent in organization mode; find it as the " +
 					"numeric team identifier in Make's team settings URL or in a scenario's own teamId",
-				Forms:  []string{"team/TEAM_ID"},
-				Parent: "organization",
+				Forms:   []string{"team/TEAM_ID"},
+				Parents: []string{"organization"},
 			}, {
 				Name: "folder",
 				Description: "one scenario folder of the bound team; optional, may be listed more than once, team mode only. " +
 					"It allows the scenarios in that folder and in all folders below it, together with " +
 					"any scenario targets; each scenario is confirmed to sit there when it is read",
-				Forms:  []string{"folder/FOLDER_ID"},
-				Parent: "team",
+				Forms:   []string{"folder/FOLDER_ID"},
+				Parents: []string{"team"},
 			}, {
 				Name:        "scenario",
 				Description: "one scenario of the bound team; optional, and may be listed more than once",
 				Forms:       []string{"scenario/SCENARIO_ID"},
-				Parent:      "team",
+				Parents:     []string{"team"},
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

@@ -176,5 +176,5 @@ var targetKinds = []config.TargetKind{{
 	Name:        "section",
 	Description: "one section of a project, reaching only its tasks and their comments and reminders",
 	Forms:       []string{sectionForm},
-	Parent:      "project",
+	Parents:     []string{"project"},
 }}

@@ -147,7 +147,7 @@ func (m *Model) pickKindsUnder(parent string) []string {
 		if kind.Unlisted {
 			continue
 		}
-		if kind.Parent == parent || parent != "" && kind.Nested && kind.Name == parent {
+		if parent == "" && len(kind.Parents) == 0 || slices.Contains(kind.Parents, parent) || parent != "" && kind.Nested && kind.Name == parent {
 			kinds = append(kinds, kind.Name)
 		}
 	}
