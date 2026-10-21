@@ -288,7 +288,7 @@ func (m *Model) renameView() string {
 	if n := len(r.plan.LapsedTokens); n > 0 {
 		question += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
 	}
-	foot := "\n" + m.wrapped(hintStyle, question) + m.keyHint("y rename · n/esc cancel · up/down scroll · ? help") + m.notes()
+	foot := "\n" + m.wrapped(hintStyle, question) + m.keyHint("y rename · n/esc cancel · up/down scroll · : cmds · ? help") + m.notes()
 	var body []string
 	for _, line := range m.renameLines(r.plan) {
 		style := hintStyle
