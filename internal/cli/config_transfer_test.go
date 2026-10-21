@@ -331,7 +331,7 @@ func TestConfigTransferJSONOutput(t *testing.T) {
 	if code != exitOK || !strings.Contains(stdout, "dry_run") || strings.Contains(stdout, "imported 3") {
 		t.Errorf("toon: exit %d, stdout %q", code, stdout)
 	}
-	if _, err := config.Load(configIn(target), defaultRegistry()); err != nil {
+	if _, err := config.Load(configIn(target), sharedRegistry()); err != nil {
 		t.Errorf("target configuration: %v", err)
 	}
 }
