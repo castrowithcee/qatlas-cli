@@ -64,6 +64,7 @@ type payloadFormData struct {
 	CfgVer          string
 	CSRF            string
 	Notice          string
+	Findings        []findingView
 	Error           string
 }
 
@@ -146,6 +147,7 @@ func (s *Server) renderPayload(w http.ResponseWriter, cfg *config.Config, data p
 	if data.Edit {
 		data.Action = "/credentials/" + url.PathEscape(data.Name) + "/payload"
 		cred := cfg.Credentials[data.Name]
+		data.Findings = s.findingViews(cfg, manage.RenameCredential, data.Name)
 		for i := range data.Rows {
 			data.Rows[i].State = s.roleState(data.Name, cred, data.Rows[i].Name)
 		}
@@ -403,6 +405,7 @@ const payloadTemplates = `
 <p>A payload credential holds freely named fields. A tool may pass their values on to a third party by reference, but only through a connection that lists it in forward_secrets.</p>
 {{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
 {{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
+{{template "findings" .Findings}}
 {{if .BindingNote}}<p class="notice" role="status">{{.BindingNote}}</p>{{end}}
 <form method="post" action="{{.Action}}">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
