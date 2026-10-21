@@ -16,12 +16,16 @@ import (
 // pending write can be merged into the entry it belongs to by name even though the id was chosen without
 // seeing the vault's content. Name is the credential name it belongs to; Roles holds one secret per role.
 // CredentialID is the stable id of the credential in config.yaml, not the entry's own ID and not part of any
-// fingerprint. It is set once, never replaced, and an older build ignores it. A vault entry carries no
-// configuration value beyond the name and that id: everything else a credential needs, such as its provider
-// or its type, stays in config.yaml.
+// fingerprint. It is set once, never replaced, and an older build ignores it. RenamedFrom is the name the
+// entry had before a credential rename that is not yet committed to config.yaml; the run that renames the
+// entry sets it and removes it once the configuration is saved. It is a hint about the direction of a rename,
+// never a proof, and an older build ignores it. A vault entry carries no configuration value beyond the name,
+// that id and that mark: everything else a credential needs, such as its provider or its type, stays in
+// config.yaml.
 type Entry struct {
 	ID           string            `json:"id"`
 	CredentialID string            `json:"credential_id,omitempty"`
+	RenamedFrom  string            `json:"renamed_from,omitempty"`
 	Name         string            `json:"name"`
 	Roles        map[string]string `json:"roles"`
 	Created      time.Time         `json:"created"`

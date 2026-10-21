@@ -262,7 +262,7 @@ func (s *Service) planRevertVault(plan *RenamePlan, cred config.Credential, appr
 
 // revertCredential carries out a plan of PlanRevertRename under the configuration's lock, which it does not
 // write: if the configuration still has the revision the plan was based on, it backs up the vault's files and
-// gives the entry its old name again with the approvals the plan carries back (see
+// gives the entry its old name again, without a rename mark, with the approvals the plan carries back (see
 // vault.Vault.RenameCredential), the commit point. Then it removes each keyring copy that still holds the
 // very secret of the old key and hands the entry and the approvals to a vault process that holds the vault
 // unlocked; a failure there is returned as a warning.
