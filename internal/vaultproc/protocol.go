@@ -38,6 +38,9 @@ const (
 	// opHandover hands the unlocked vault over to a successor, in two phases on one connection: prepare,
 	// which verifies a release, and commit, once the program was replaced; see Client.PrepareHandover.
 	opHandover = "handover"
+	// opNames asks for the entry names and approval keys the vault holds, with their config ids and nothing
+	// else. A process of an earlier version does not know it and answers bad-request.
+	opNames = "names"
 )
 
 // The phases of a handover request.
@@ -57,6 +60,9 @@ const (
 	codeApproval   = "approval-required"
 	codeNoLog      = "no-log"
 	codeLogFailed  = "log-failed"
+	// The codes of a names request.
+	codeNoNames     = "no-names"
+	codeNamesFailed = "names-failed"
 	// The codes of an approve-token request.
 	codeNoTokens       = "no-tokens"
 	codeTokenUnknown   = "token-unknown"
@@ -92,22 +98,25 @@ type hello struct {
 // one is refused. Bindings replace the server's own on a bind. Entry is what a log appends, and Lines are
 // the stored log lines a logcheck checks. Token, Scopes, and Names belong to approve-token: the agent token
 // presented, the scope of every connection reading a vault credential as configured now, and the
-// connections to limit the approval to, none for all. Phase and Release belong to handover.
+// connections to limit the approval to, none for all. ConnectionIDs are the config ids of those connections
+// by name, which the approvals record; a process of an earlier version ignores them. Phase and Release
+// belong to handover.
 type request struct {
-	V          int             `json:"v"`
-	Op         string          `json:"op"`
-	Credential string          `json:"credential,omitempty"`
-	Role       string          `json:"role,omitempty"`
-	Value      string          `json:"value,omitempty"`
-	Scope      *vault.Scope    `json:"scope,omitempty"`
-	Bindings   *vault.Bindings `json:"bindings,omitempty"`
-	Entry      *logEntry       `json:"entry,omitempty"`
-	Lines      [][]byte        `json:"lines,omitempty"`
-	Token      string          `json:"token,omitempty"`
-	Scopes     []vault.Scope   `json:"scopes,omitempty"`
-	Names      []string        `json:"names,omitempty"`
-	Phase      string          `json:"phase,omitempty"`
-	Release    *ReleaseFiles   `json:"release,omitempty"`
+	V             int               `json:"v"`
+	Op            string            `json:"op"`
+	Credential    string            `json:"credential,omitempty"`
+	Role          string            `json:"role,omitempty"`
+	Value         string            `json:"value,omitempty"`
+	Scope         *vault.Scope      `json:"scope,omitempty"`
+	Bindings      *vault.Bindings   `json:"bindings,omitempty"`
+	Entry         *logEntry         `json:"entry,omitempty"`
+	Lines         [][]byte          `json:"lines,omitempty"`
+	Token         string            `json:"token,omitempty"`
+	Scopes        []vault.Scope     `json:"scopes,omitempty"`
+	Names         []string          `json:"names,omitempty"`
+	ConnectionIDs map[string]string `json:"connection_ids,omitempty"`
+	Phase         string            `json:"phase,omitempty"`
+	Release       *ReleaseFiles     `json:"release,omitempty"`
 }
 
 // ReleaseFiles names the files of a downloaded release that a handover is prepared with, each by its absolute
@@ -162,9 +171,9 @@ func logEntryOf(f invokelog.Fields) *logEntry {
 
 // response is a line a server answers with. Error is empty on success; Proof answers the hello, Found and
 // Value belong to get, PID and LocksAt to status, Valid, one per line asked, to logcheck, Approval and
-// Unlogged to approve-token, Handover to the prepare of a handover, and PID to its commit as well. A status
-// carries Handover too, the vault's update setting as the process reads it, with SettingsUntrusted where
-// settings.age could not be trusted and reads as lock.
+// Unlogged to approve-token, Names to names, Handover to the prepare of a handover, and PID to its commit as
+// well. A status carries Handover too, the vault's update setting as the process reads it, with
+// SettingsUntrusted where settings.age could not be trusted and reads as lock.
 type response struct {
 	V        int                  `json:"v"`
 	Error    string               `json:"error,omitempty"`
@@ -176,6 +185,7 @@ type response struct {
 	Valid    []bool               `json:"valid,omitempty"`
 	Approval *vault.TokenApproval `json:"approval,omitempty"`
 	Unlogged bool                 `json:"unlogged,omitempty"`
+	Names    *vault.Names         `json:"names,omitempty"`
 	Handover string               `json:"handover,omitempty"`
 	// SettingsUntrusted belongs to status.
 	SettingsUntrusted bool `json:"settings_untrusted,omitempty"`
@@ -240,6 +250,12 @@ var ErrReplaced = fmt.Errorf("%w; its own program was replaced since it started"
 // wraps the reason, which never carries a secret or a path.
 var ErrHandover = errors.New("the vault process did not hand the vault over and locked itself")
 
+// badRequestError is the error of a bad-request answer. A client of names tells a process of an earlier
+// version, which answers every op it does not know that way, from one that has the op.
+type badRequestError struct{}
+
+func (badRequestError) Error() string { return "the vault process could not read the request" }
+
 // answerError turns a response's error code into the error the client returns.
 func answerError(code string) error {
 	switch code {
@@ -257,6 +273,12 @@ func answerError(code string) error {
 		return ErrNoLog
 	case codeLogFailed:
 		return errors.New("the vault process could not write the invocation log")
+	case codeNoNames:
+		return ErrNoNames
+	case codeNamesFailed:
+		return errors.New("the vault process could not read the names of the vault")
+	case codeBadRequest:
+		return badRequestError{}
 	case codeNoTokens:
 		return ErrNoTokens
 	case codeTokenUnknown:

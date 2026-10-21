@@ -131,6 +131,8 @@ const (
 	screenTemplate
 	// screenRename is the new-name prompt and the dry run of renaming a list entry; see rename.go.
 	screenRename
+	// screenCommand is the command line over the screen it was opened from; see commandline.go.
+	screenCommand
 )
 
 type fieldKind int
@@ -414,6 +416,8 @@ type Model struct {
 	copyFrom string
 	// template is the question or picker of screenTemplate while it is open.
 	template *templateChoice
+	// cmdline is the command line of screenCommand while it is open.
+	cmdline *commandLine
 	// rename is the prompt or dry run of screenRename while it is open.
 	rename *renameState
 	fields []field
@@ -797,6 +801,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openHelp()
 			return m, nil
 		}
+		if msg.String() == ":" && m.helpReachable() {
+			m.openCommandLine()
+			return m, nil
+		}
 		msg = m.moveKey(msg)
 		var cmd tea.Cmd
 		switch m.screen {
@@ -842,6 +850,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateTemplate(msg)
 		case screenRename:
 			cmd = m.updateRename(msg)
+		case screenCommand:
+			cmd = m.updateCommandLine(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -1182,6 +1192,9 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenHelp:
 		m.screen = m.helpFrom
+		return nil
+	case screenCommand:
+		m.closeCommandLine()
 		return nil
 	case screenUpdate:
 		m.screen = m.updateFrom
@@ -3431,6 +3444,8 @@ func (m *Model) editorView() string {
 		return m.providerTableView()
 	case screenHelp:
 		return m.helpView()
+	case screenCommand:
+		return m.commandLineView()
 	case screenUpdate:
 		return m.updateView() + m.notes()
 	case screenRestart:
@@ -3541,7 +3556,7 @@ func (m *Model) editorView() string {
 		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
-			keys = "y remove · n/esc keep · ? help"
+			keys = "y remove · n/esc keep · : cmds · ? help"
 		}
 		b.WriteString(m.keyHint(keys))
 	case screenSecret:
@@ -3570,7 +3585,7 @@ func (m *Model) editorView() string {
 			b.WriteString(m.indentedWith(warningStyle,
 				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
 					"this machine's files can then read them") + "\n")
-			b.WriteString(m.keyHint("y turn off · n/esc keep it encrypted · ? help"))
+			b.WriteString(m.keyHint("y turn off · n/esc keep it encrypted · : cmds · ? help"))
 			break
 		}
 		if m.migratePlanConfirm {
@@ -3626,7 +3641,7 @@ func (m *Model) editorView() string {
 						"or later with 'qatlas credential delete'") + "\n")
 			}
 		}
-		b.WriteString(m.keyHint("y remove · n/esc keep · ? help"))
+		b.WriteString(m.keyHint("y remove · n/esc keep · : cmds · ? help"))
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
@@ -3673,7 +3688,7 @@ func (m *Model) leaveView() string {
 		discard = "d discard and quit"
 		why = "Quitting would lose them. Nothing was written yet."
 	}
-	return m.wrapped(warningStyle, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · ? help") +
+	return m.wrapped(warningStyle, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · : cmds · ? help") +
 		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
 }
 
@@ -3797,27 +3812,27 @@ func (m *Model) listFrame() (string, string) {
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · 1-8 or " + back + " · ? help · q quit"
+		keys = "enter unlock · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · 1-8 or " + back + " · ? help · q quit"
+		keys = "enter details · a approve all · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
-		keys = "enter unlock · n new · 1-8 or " + back + " · ? help · q quit"
+		keys = "enter unlock · n new · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
-		keys = "1-8 or " + back + " · ? help · q quit"
+		keys = back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · p duplicate · enter show · d revoke · 1-8 or " + back + " · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter show · d revoke · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c guided setup · " +
-			"1-8 or " + back +
-			" · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c setup · " +
+			back +
+			" · : cmds · ? help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c guided setup · " +
-			"1-8 or " + back + " · ? help · q quit"
+		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c setup · " +
+			back + " · : cmds · ? help · q quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c guided setup · 1-8 or " + back +
-			" · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c setup · " + back +
+			" · : cmds · ? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or " + back + " · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c setup · " + back + " · : cmds · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -3846,13 +3861,13 @@ func (m *Model) listFrame() (string, string) {
 // navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
 func (m *Model) navKeys() string {
 	if m.sidebarLayout() {
-		return "up/down section · enter/tab open · 1-8 open · n new · c setup · ? help · q quit"
+		return "up/down section · enter/tab open · 1-8 open · n new · c setup · : cmds · ? help · q quit"
 	}
 	// Below the sidebar width the navigation line follows its own keys: left/right step through the
 	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
 	// here, so it is left out of the hint, the same way the sidebar hint above leaves out right. Kept short
 	// enough to still wrap into two lines at the minimum terminal width.
-	return "left/right move · down open · 1-8 open · n new · c setup · ? help · q quit"
+	return "←/→ move · down open · 1-8 open · n new · c setup · : cmds · ? help · q quit"
 }
 
 // backToSectionsHint names the keys that take the focus from the list back to the sections: esc, and left in
@@ -3860,9 +3875,9 @@ func (m *Model) navKeys() string {
 // left/right instead stay inside the list (see updateList).
 func (m *Model) backToSectionsHint() string {
 	if m.sidebarLayout() {
-		return "esc/left/tab sections"
+		return "1-8 or esc/left/tab sections"
 	}
-	return "esc/tab sections"
+	return "1-8/esc/tab sections"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -4152,6 +4167,8 @@ func (m *Model) frame(workspace string) string {
 	switch {
 	case m.screen == screenHelp:
 		title = "Help"
+	case m.screen == screenCommand:
+		title = "Commands"
 	case m.screen == screenUpdate || m.screen == screenRestart:
 		title = "Update"
 	case m.wizard != nil:
@@ -4261,7 +4278,7 @@ func (m *Model) sidebarLines() []string {
 	if m.wizard != nil {
 		setup = activeStyle.Render("> c guided setup")
 	}
-	lines = append(lines, "", setup, "  ? help", "  q quit")
+	lines = append(lines, "", setup, "  : cmds", "  ? help", "  q quit")
 	if next := render(hintStyle, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(next, "\n")...)
@@ -5087,6 +5104,6 @@ func (m *Model) profileConfirmView() string {
 	b.WriteString(fmt.Sprintf("Replace the access and tool ticks with profile %s?\n", profile.ID))
 	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
 	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
-	b.WriteString(m.keyHint("y replace the ticks · n/esc keep them · ? help"))
+	b.WriteString(m.keyHint("y replace the ticks · n/esc keep them · : cmds · ? help"))
 	return b.String()
 }

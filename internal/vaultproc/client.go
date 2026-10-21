@@ -174,12 +174,14 @@ func (c *Client) Log(ctx context.Context, f invokelog.Fields) error {
 
 // ApproveWithToken asks the vault process to approve every open connection change the agent token covers,
 // or only the changes of the connections names lists. scopes is the scope of every connection that reads a
-// vault credential, as configured now. The process checks the token and decides, writes the approvals into
-// the vault, and logs each decision; unlogged is true when it could not log one. vault.ErrTokenUnknown and
+// vault credential, as configured now, and connectionIDs the config ids of those connections by name, which
+// the approvals record. The process checks the token and decides, writes the approvals into the vault, and
+// logs each decision; unlogged is true when it could not log one. vault.ErrTokenUnknown and
 // vault.ErrTokenExpired refuse the token; ErrNotRunning means no vault process holds the vault unlocked.
-func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []vault.Scope, names []string) (
-	approval vault.TokenApproval, unlogged bool, err error) {
-	resp, err := c.call(ctx, request{Op: opApproveToken, Token: token, Scopes: scopes, Names: names})
+func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []vault.Scope,
+	connectionIDs map[string]string, names []string) (approval vault.TokenApproval, unlogged bool, err error) {
+	resp, err := c.call(ctx, request{Op: opApproveToken, Token: token, Scopes: scopes,
+		ConnectionIDs: connectionIDs, Names: names})
 	if err != nil {
 		return vault.TokenApproval{}, false, err
 	}
@@ -187,6 +189,29 @@ func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []va
 		approval = *resp.Approval
 	}
 	return approval, resp.Unlogged, nil
+}
+
+// Names asks the vault process for the entry names and approval keys the vault holds, with the config id
+// each records, and nothing else: no value, no role, no fingerprint, no scope. ErrNotRunning means no vault
+// process holds the vault unlocked. ErrNoNames means the process cannot tell: it is of an earlier build
+// that does not know the request, or was started without the vault's directory.
+func (c *Client) Names(ctx context.Context) (vault.Names, error) {
+	return namesResult(c.call(ctx, request{Op: opNames}))
+}
+
+// namesResult reads the answer to a names request. A process of an earlier version answers every operation
+// it does not know with bad-request; a process that knows names never does.
+func namesResult(resp response, err error) (vault.Names, error) {
+	var bad badRequestError
+	switch {
+	case errors.As(err, &bad):
+		return vault.Names{}, ErrNoNames
+	case err != nil:
+		return vault.Names{}, err
+	case resp.Names == nil:
+		return vault.Names{}, ErrNoNames
+	}
+	return *resp.Names, nil
 }
 
 // maxLogCheckBatch bounds the stored lines one logcheck carries, before their base64 encoding, so a request
