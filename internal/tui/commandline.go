@@ -53,6 +53,22 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { m.askSetupTemplate(); return nil },
 		},
 		command{
+			name:    "renames",
+			desc:    "Review the renames found in the vault (f)",
+			aliases: []string{"adopt", "rename leftovers"},
+			unavailable: func(m *Model) string {
+				if r := onScreens("review renames", screenList)(m); r != "" {
+					return r
+				}
+				switch m.section {
+				case sectionApprovals, sectionConnections, sectionCredentials:
+					return ""
+				}
+				return "renames are reviewed from Connections, Credentials, or Approvals"
+			},
+			run: func(m *Model) tea.Cmd { return m.openFindings() },
+		},
+		command{
 			name:    "update",
 			desc:    "Install the newer release (u)",
 			aliases: []string{"upgrade"},

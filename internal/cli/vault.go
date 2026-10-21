@@ -1208,7 +1208,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		return classifyUserError(err)
 	}
 	// An approval taken for a hand rename stays, so that adopting the rename still finds it.
-	stale := withoutHandRenames(report.Stale, report.HandRenames)
+	stale := report.RevocableStale()
 
 	if len(names) == 0 && len(report.Open) == 0 && len(stale) == 0 {
 		if asJSON {
@@ -1433,21 +1433,6 @@ func writeHandRenames(out io.Writer, opts *Options, cfg *config.Config, v *vault
 		doc.HandRenames = append(doc.HandRenames, handRenameDocumentOf(opts, r))
 	}
 	return nil
-}
-
-// withoutHandRenames returns the stale approvals that are no hand rename.
-func withoutHandRenames(stale []string, renames []approval.HandRename) []string {
-	byHand := map[string]bool{}
-	for _, r := range renames {
-		byHand[r.Approval] = true
-	}
-	var out []string
-	for _, name := range stale {
-		if !byHand[name] {
-			out = append(out, name)
-		}
-	}
-	return out
 }
 
 func newVaultApproveDocument() vaultApproveDocument {

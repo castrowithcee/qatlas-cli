@@ -25,6 +25,9 @@ type renameState struct {
 	plan *manage.RenamePlan
 	// offset is the first shown line of a dry run longer than the screen.
 	offset int
+	// back is the screen a cancelled dry run returns to; screenFindings for a rename found in the vault (see
+	// renamefind.go), the list otherwise.
+	back screen
 }
 
 // renameKind is the core's kind of the active section, or "" where its entries cannot be renamed.
@@ -67,9 +70,22 @@ func (m *Model) askRename() tea.Cmd {
 
 // cancelRename leaves the rename screen with nothing changed.
 func (m *Model) cancelRename() {
+	status := "Cancelled; nothing was renamed"
+	back := screenList
+	if r := m.rename; r != nil {
+		back = r.back
+		if r.plan != nil && r.plan.Adopt {
+			status = "Cancelled; nothing was adopted"
+		} else if r.plan != nil && r.plan.Revert {
+			status = "Cancelled; nothing was put back"
+		}
+	}
 	m.rename = nil
 	m.screen = screenList
-	m.status = "Cancelled; nothing was renamed"
+	if back == screenFindings {
+		m.reopenFindings()
+	}
+	m.status = status
 }
 
 func (m *Model) updateRename(key tea.KeyMsg) tea.Cmd {
@@ -147,7 +163,11 @@ func (m *Model) runRename() tea.Cmd {
 		m.screen = screenList
 		return nil
 	}
-	cmd := m.returnToList(plan.New)
+	name := plan.New
+	if plan.Revert {
+		name = plan.Old
+	}
+	cmd := m.returnToList(name)
 	m.status = m.renameResult(plan, res)
 	return cmd
 }
@@ -156,11 +176,20 @@ func (m *Model) runRename() tea.Cmd {
 func (m *Model) renameResult(plan *manage.RenamePlan, res manage.RenameResult) string {
 	apply := m.redactor.Apply
 	parts := []string{fmt.Sprintf("Renamed %s %s to %s", plan.Kind, apply(plan.Old), apply(plan.New))}
+	carried := "approvals carried over: "
+	switch {
+	case plan.Revert:
+		parts = []string{fmt.Sprintf("Put credential %s back as it was before the rename to %s", apply(plan.Old),
+			apply(plan.New))}
+		carried = "approvals carried back: "
+	case plan.Adopt:
+		parts = []string{fmt.Sprintf("Adopted the rename of %s %s to %s", plan.Kind, apply(plan.Old), apply(plan.New))}
+	}
 	if len(res.VaultCopies) > 0 {
 		parts = append(parts, "vault files backed up as "+strings.Join(res.VaultCopies, ", "))
 	}
 	if len(res.Carried) > 0 {
-		parts = append(parts, "approvals carried over: "+apply(strings.Join(res.Carried, ", ")))
+		parts = append(parts, carried+apply(strings.Join(res.Carried, ", ")))
 	}
 	if len(res.EnvVars) > 0 {
 		pairs := make([]string, len(res.EnvVars))
@@ -180,12 +209,23 @@ func (m *Model) renameResult(plan *manage.RenamePlan, res manage.RenameResult) s
 // 'qatlas config rename'. A line that starts with "warning" is drawn as one.
 func (m *Model) renameLines(plan *manage.RenamePlan) []string {
 	apply := m.redactor.Apply
-	lines := []string{
-		fmt.Sprintf("id        %s, kept", plan.ID),
-		fmt.Sprintf("entry     %ss.%s -> %ss.%s", plan.Kind, apply(plan.Old), plan.Kind, apply(plan.New)),
+	if plan.Revert {
+		return m.revertLines(plan)
 	}
-	for _, ref := range plan.References {
-		lines = append(lines, "rewrites  "+apply(ref))
+	lines := []string{fmt.Sprintf("id        %s, kept", plan.ID)}
+	if plan.Adopt {
+		// The configuration carries the new name already and is written as it is.
+		lines = append(lines, fmt.Sprintf("config    %ss.%s is there already; written as it is", plan.Kind,
+			apply(plan.New)))
+		for _, ref := range plan.References {
+			lines = append(lines, "changed   "+apply(ref)+", by hand")
+		}
+	} else {
+		lines = append(lines, fmt.Sprintf("entry     %ss.%s -> %ss.%s", plan.Kind, apply(plan.Old), plan.Kind,
+			apply(plan.New)))
+		for _, ref := range plan.References {
+			lines = append(lines, "rewrites  "+apply(ref))
+		}
 	}
 	switch plan.Kind {
 	case manage.RenameConnection:
@@ -206,6 +246,43 @@ func (m *Model) renameLines(plan *manage.RenamePlan) []string {
 		lines = append(lines, "outside   "+apply(outside)+", not changed")
 	}
 	return lines
+}
+
+// revertLines are the places putting back a credential's stopped rename changes, in the order of 'qatlas
+// config rename credential --revert'.
+func (m *Model) revertLines(plan *manage.RenamePlan) []string {
+	apply := m.redactor.Apply
+	lines := []string{fmt.Sprintf("id        %s", plan.ID)}
+	switch {
+	case plan.VaultUnread:
+		lines = append(lines, "vault     not read: the vault is locked")
+	case plan.VaultEntry:
+		lines = append(lines, fmt.Sprintf("vault     entry %s -> %s, keeping its id and its secrets",
+			apply(plan.New), apply(plan.Old)))
+	}
+	if plan.PendingWrites > 0 {
+		lines = append(lines, fmt.Sprintf("pending   %d pending write(s) for %s merged into the entry first",
+			plan.PendingWrites, apply(plan.New)))
+	}
+	for _, role := range plan.KeyringRoles {
+		lines = append(lines, fmt.Sprintf("keyring   removes %s/%s, a copy of %s/%s", apply(plan.New), role,
+			apply(plan.Old), role))
+	}
+	for _, reader := range plan.Readers {
+		text := "no approval in the vault"
+		switch {
+		case reader.Carried:
+			text = "approval carried back to " + apply(plan.Old)
+		case plan.VaultUnread:
+			text = "approval not read"
+		case reader.Approval == manage.ApprovalValid:
+			text = "approved; stays"
+		case reader.Approval == manage.ApprovalOpen:
+			text = "open; stays open until approved"
+		}
+		lines = append(lines, fmt.Sprintf("reader    %s: %s", apply(reader.Connection), text))
+	}
+	return append(lines, "config    not changed")
 }
 
 func (m *Model) renameCredentialLines(plan *manage.RenamePlan) []string {
@@ -283,12 +360,22 @@ func (m *Model) renameView() string {
 			m.indented("the new name; the next step lists everything the rename touches and changes nothing") + "\n" +
 			m.keyHint("enter dry run · esc cancel") + m.notes()
 	}
-	head := m.wrapped(titleStyle, fmt.Sprintf("Rename %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New))) + "\n\n"
+	title, confirm := fmt.Sprintf("Rename %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New)), "y rename"
+	switch {
+	case r.plan.Revert:
+		title = fmt.Sprintf("Put credential %s back, undoing the stopped rename to %s?", apply(r.old), apply(r.plan.New))
+		confirm = "y put back"
+	case r.plan.Adopt:
+		title = fmt.Sprintf("Adopt the rename of %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New))
+		confirm = "y adopt"
+	}
+	head := m.wrapped(titleStyle, title) + "\n\n"
 	question := "Dry run: nothing is changed until you confirm."
 	if n := len(r.plan.LapsedTokens); n > 0 {
 		question += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
 	}
-	foot := "\n" + m.wrapped(hintStyle, question) + m.keyHint("y rename · n/esc cancel · up/down scroll · : cmds · ? help") + m.notes()
+	keys := confirm + " · n/esc cancel · up/down scroll · : cmds · ? help"
+	foot := "\n" + m.wrapped(hintStyle, question) + m.keyHint(keys) + m.notes()
 	var body []string
 	for _, line := range m.renameLines(r.plan) {
 		style := hintStyle
