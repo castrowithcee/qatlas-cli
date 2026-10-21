@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 # Nextcloud
@@ -41,33 +41,34 @@ outcomes are handled as under Local files.
 
 ## Targets
 
-The `targets` list holds typed entries; each kind is either its name alone (everything of that kind the
-identity reaches) or `kind/ID`:
+The `targets` list holds typed entries, each a kind name alone (everything of that kind the identity reaches) or
+`kind/ID`:
 
-- `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
-  Files tools; without one they refuse locally, before any credential access or request.
-- `calendar` or `calendar/URI`, `addressbook` (never the system address book) or `addressbook/URI`,
-  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
-  such as `Work/Plans` is allowed).
-- `account`: the account-wide and instance-wide reach of the identity (account data, status, notifications,
-  activity, search, directory, incoming shares, system tag catalog and its administration).
-- `admin`: the read-only administration of users and groups; only as the sole target of a connection.
+- `folder` (the whole Files root) or `folder/PATH`; at most one. Only it enables the Files tools; without it they
+  refuse locally, before any credential access or request. Relative paths cannot escape the bound folder.
+- `calendar[/URI]`, `addressbook[/URI]` (the kind alone excludes the system address book), `talk[/TOKEN]`,
+  `deck[/BOARD_ID]` (numeric), `notes[/PATH]` (a sub-folder such as `Work/Plans` is allowed).
+- `account` (see Account) and `admin` (read-only user and group administration; only as the sole target).
 
-The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
-IDs are literal single segments without `%`, `\`, or control characters.
+The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries. IDs are
+literal single segments without `%`, `\`, or control characters. The single field `target`, like a bare value in
+`targets`, names the root folder (`Reports`, `Team/Reports`, `/`); one whose first segment is a kind name (such as
+`calendar/2026`) is refused as ambiguous: write `folder/PATH`.
 
-The single field `target`, like a bare value in `targets`, names the root folder (`Reports`, `Team/Reports`, `/`).
-One whose first segment is a kind name (for example `calendar/2026`) is refused as ambiguous; write
-`folder/PATH` in `targets`.
+Credentials provide `user-id` and a revocable `app-password`. The connection test reads the bound folder (or the
+Files root) and each bound calendar. The identity's WebDAV rights stay the ceiling. File content is base64 and never
+written to audit records. A tool is offered only to a binding that holds the kind its call checks; tools that create
+a calendar, address book, board, or conversation need the kind alone.
 
-The connection test reads the bound folder (or the Files root) and each bound calendar; it reports no metadata.
-Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
-Connection effects independently hide and block operations; the identity's WebDAV rights stay the ceiling.
-A connection may instead select named tools with a `tools` list, for example `[nextcloud.files.files.list,
-nextcloud.files.files.stat]` for metadata without file content, and then offers exactly those.
-File content is carried as base64 and never written to audit records. The terminal editor starts a new
-connection on the setup profile `read`, a visible starting selection, not a role: only the ticked `tools`
-are saved, and a saved connection never follows a profile.
+## Choosing targets
+
+The picker lists what the credential reaches, also on a draft. `folder` is browsed folder by folder, `notes` category
+by category (from at most 2000 notes); the other kinds are one list each, first offering the kind alone. A path a
+configured path would refuse is not offered. `account` and `admin` have no list.
+
+A URL of the service's own origin (installation path and `index.php` allowed) becomes a target without a request:
+`/apps/files/files/FILE_ID?dir=/PATH` gives `folder/PATH` (not the Files root), `/apps/deck/board/ID` gives
+`deck/ID`, `/call/TOKEN` gives `talk/TOKEN`; anything else gives nothing.
 
 ## Organising
 
@@ -212,7 +213,7 @@ detected. `files.versions.list` is in the setup profiles `read` and `write`; `ge
 
 ## Notes
 
-The group `notes` (profile `notes-read`) needs a `notes` target; `notes/CATEGORY` binds it and all below. The Notes API
+The group `notes` (profile `notes-read`) needs a `notes` target; `notes/PATH` binds it and all below. The Notes API
 filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally, never shown or
 counted; a chunk may be empty despite a next cursor. A foreign note or attachment reads like a missing note; attachments
 stay note-relative, `local_path` follows `files.files.get`. Writes are in no profile: create, update, and
