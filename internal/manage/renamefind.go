@@ -1,6 +1,7 @@
 package manage
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
@@ -22,6 +23,11 @@ type RenameFinding struct {
 	Ambiguous bool
 	Carried   []string
 }
+
+var (
+	errAmbiguousFinding = errors.New("ambiguous: nothing is suggested, so there is no action")
+	errRevertFinding    = errors.New("only the unfinished rename of a credential can be put back")
+)
 
 // RenameFindings lists every RenameFinding of cfg in v, sorted by kind and name. It reads the vault only
 // where that needs no passphrase, an unencrypted one or one unlocked in this process, and finds nothing
@@ -66,4 +72,23 @@ func RenameFindings(cfg *config.Config, v *vault.Vault) []RenameFinding {
 		return out[i].Leftover && !out[j].Leftover
 	})
 	return out
+}
+
+// CanRevert reports whether PlanRevertRename can put the finding back: only a credential's stopped rename.
+func (f RenameFinding) CanRevert() bool { return f.Leftover && f.Kind == RenameCredential }
+
+// PlanFinding plans the action for f: putting it back when revert, finishing a rest, else adopting a hand
+// rename. approve is as for PlanRename. An ambiguous finding, and a revert of one that cannot be, is refused.
+func (s *Service) PlanFinding(f RenameFinding, revert, approve bool) (*RenamePlan, error) {
+	switch {
+	case f.Ambiguous:
+		return nil, &RenameRefusedError{errAmbiguousFinding}
+	case revert && !f.CanRevert():
+		return nil, &RenameRefusedError{errRevertFinding}
+	case revert:
+		return s.PlanRevertRename(f.From, f.To, approve)
+	case f.Leftover:
+		return s.PlanRename(f.Kind, f.From, f.To, approve)
+	}
+	return s.PlanAdopt(f.Kind, f.From, f.To, approve)
 }

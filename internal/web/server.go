@@ -170,12 +170,12 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *man
 		_ = listener.Close()
 		return nil, err
 	}
-	tmpl, err := template.New("overview").Funcs(layoutFuncs).Parse(layoutTemplates + overviewTemplate)
+	tmpl, err := template.New("overview").Funcs(layoutFuncs).Parse(layoutTemplates + findingTemplates + overviewTemplate)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
 	}
-	credTmpl, err := template.New("credentials").Funcs(layoutFuncs).Parse(layoutTemplates + credentialTemplates + payloadTemplates + renameTemplates)
+	credTmpl, err := template.New("credentials").Funcs(layoutFuncs).Parse(layoutTemplates + credentialTemplates + payloadTemplates + renameTemplates + findingTemplates)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
@@ -312,6 +312,8 @@ func (s *Server) mux() http.Handler {
 	mux.HandleFunc("POST /connections/{name}/forward", s.withAdminGuard(s.handleSetForward))
 	mux.HandleFunc("GET /connections/{name}/rename", s.withSession(s.handleRenameConnectionPlan))
 	mux.HandleFunc("POST /connections/{name}/rename", s.withAdminGuard(s.handleRenameConnectionConfirm))
+	mux.HandleFunc("GET "+findingPlanPath, s.withSession(s.handleFindingPlan))
+	mux.HandleFunc("POST "+findingRunPath, s.withAdminGuard(s.handleFindingRun))
 	mux.HandleFunc("POST /connections/{name}/test", s.withSessionGuard(s.handleTestConnection))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }
@@ -457,6 +459,8 @@ type pageData struct {
 	// the overview page can hide the credential links rather than send a browser to a route that can only
 	// ever refuse.
 	CredentialsUsable bool
+	// Findings are the renames the vault shows that the configuration does not (see renamefind.go).
+	Findings []findingView
 }
 
 // credentialRows rebuilds the Credentials section of the overview from a freshly loaded configuration, the
@@ -523,7 +527,12 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 		overview.Connections = rows
 	}
 
+	var findings []findingView
+	if cfg, err := s.loadFindingConfig(); err == nil {
+		findings = s.findingViews(cfg, "", "")
+	}
 	data := pageData{
+		Findings:           findings,
 		Overview:           overview,
 		AdminActive:        active,
 		AdminUnprotected:   unprotected,
@@ -568,6 +577,13 @@ var overviewTemplate = strings.TrimSpace(`
 </form>
 {{end}}
 </section>
+
+{{if .Findings}}
+<section class="section" id="renames" aria-labelledby="renames-heading">
+<h2 id="renames-heading">Renames found in the vault</h2>
+{{template "findings" .Findings}}
+</section>
+{{end}}
 
 <section class="section" id="providers" aria-labelledby="providers-heading">
 <h2 id="providers-heading">Providers</h2>

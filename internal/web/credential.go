@@ -60,6 +60,7 @@ type credentialData struct {
 	CSRF     string
 	Notice   string
 	Error    string
+	Findings []findingView
 }
 
 // credentialsUnavailable is the one fixed line every credential route shows when this run was not given a
@@ -299,6 +300,7 @@ func (s *Server) renderCredential(w http.ResponseWriter, cfg *config.Config, nam
 	notice, errText string) {
 	data := credentialData{
 		Name: name, Provider: cred.Provider, Type: cred.Type, CSRF: s.csrfValue(), Notice: notice, Error: errText,
+		Findings: s.findingViews(cfg, manage.RenameCredential, name),
 	}
 	for _, role := range manage.OfferedRoles(cfg, name, cred) {
 		data.Roles = append(data.Roles, s.roleRow(cfg, name, cred, role))
@@ -523,6 +525,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <p>Provider: {{.Provider}} · Type: {{.Type}}</p>
 {{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
 {{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
+{{template "findings" .Findings}}
 
 <section class="section" aria-labelledby="roles-heading">
 <h2 id="roles-heading">Roles</h2>
@@ -820,6 +823,7 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <h1>{{.Name}}</h1>
 {{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
 {{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
+{{template "findings" .Findings}}
 <section class="section" aria-labelledby="details-heading">
 <h2 id="details-heading">Details</h2>
 <div class="table-wrap" role="region" aria-labelledby="details-heading" tabindex="0">
