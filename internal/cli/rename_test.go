@@ -41,7 +41,7 @@ func renameVault(t *testing.T) string {
 	t.Helper()
 	dir := twoConnectionVaultFixture(t)
 	// The ids a rename must keep are the ones the file was written with.
-	if err := config.NewStore(configIn(dir), defaultRegistry()).Save(loadConfig(t, dir)); err != nil {
+	if err := config.NewStore(configIn(dir), sharedRegistry()).Save(loadConfig(t, dir)); err != nil {
 		t.Fatal(err)
 	}
 	v := vault.New(dir)

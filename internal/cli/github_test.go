@@ -314,7 +314,7 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 			`,"name":"qatlas.invoke","arguments":{"operation":"github.project-items.list","version":1,` +
 			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
-	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
+	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
 	}
@@ -400,7 +400,7 @@ defaults: {}
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
 			`"arguments":{"operation":"github.issues.get","connection":"` + connection + `","arguments":{"number":42}}}}` +
 			"\n"
-		responses, _ := runMCPWithOptions(t, defaultRegistry(), input, options)
+		responses, _ := runMCPWithOptions(t, sharedRegistry(), input, options)
 		if result := toolResultFrom(t, responses["1"]); !result.IsError || result.Content[0].Text != want {
 			t.Errorf("MCP on %s = %+v, want the error %q", connection, result, want)
 		}

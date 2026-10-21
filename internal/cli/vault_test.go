@@ -67,7 +67,7 @@ const canaryVault = "canary-vault-token-8e5c31"
 // encrypted vault unlocked in the test process, as it is configured now.
 func approveConnections(t *testing.T, dir string, v *vault.Vault) {
 	t.Helper()
-	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	cfg, err := config.Load(configIn(dir), sharedRegistry())
 	if err != nil {
 		t.Fatalf("config.Load() = %v", err)
 	}
@@ -80,7 +80,7 @@ func approveConnections(t *testing.T, dir string, v *vault.Vault) {
 // presents it to the vault.
 func connectionScope(t *testing.T, dir, name string) vault.Scope {
 	t.Helper()
-	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	cfg, err := config.Load(configIn(dir), sharedRegistry())
 	if err != nil {
 		t.Fatalf("config.Load() = %v", err)
 	}
@@ -1144,7 +1144,7 @@ func TestVaultApproveOneConnection(t *testing.T) {
 // loadConfig loads the configuration of dir, failing the test on error.
 func loadConfig(t *testing.T, dir string) *config.Config {
 	t.Helper()
-	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	cfg, err := config.Load(configIn(dir), sharedRegistry())
 	if err != nil {
 		t.Fatalf("config.Load() = %v", err)
 	}
