@@ -680,6 +680,7 @@ type connectionResultData struct {
 	ForwardText    string
 	BindingNote    string
 	CfgVer         string
+	Findings       []findingView
 }
 
 // handleConnectionResult shows one connection: what the guided setup redirects to once it saved, and a
@@ -740,6 +741,7 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 		Files:   approval.FilesText(conn.Files.Read, conn.Files.Write),
 		Effects: config.FormatEffects(cfg.ConnectionEffects(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
+		Findings: s.findingViews(cfg, manage.RenameConnection, name),
 	}
 	choices := manage.ForwardChoices(cfg)
 	for _, listed := range conn.ForwardSecrets {

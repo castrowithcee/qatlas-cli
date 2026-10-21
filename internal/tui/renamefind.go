@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,18 +30,6 @@ type renameFinding struct {
 	ambiguous bool
 	// carried names the connections whose approvals a credential's stopped rename carried over.
 	carried []string
-}
-
-func sortFindings(list []renameFinding) {
-	sort.SliceStable(list, func(i, j int) bool {
-		if list[i].kind != list[j].kind {
-			return list[i].kind < list[j].kind
-		}
-		if list[i].from != list[j].from {
-			return list[i].from < list[j].from
-		}
-		return list[i].leftover && !list[j].leftover
-	})
 }
 
 // canRevert reports whether the core can put the rename back: only a credential's stopped rename.

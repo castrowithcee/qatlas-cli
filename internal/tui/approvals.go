@@ -603,40 +603,13 @@ func (m *Model) openApprovalLogs(name string) tea.Cmd {
 }
 
 // renameFindings are the renames the vault shows that the configuration does not: a connection or credential
-// renamed by hand and the rest of a rename that stopped early. Detection is the core's (manage.HandRenames,
-// manage.CredentialLeftovers, approval.Pending); this only reads the vault where it can be read without a
-// passphrase, an unencrypted one or one unlocked in this process, and finds nothing otherwise.
+// renamed by hand and the rest of a rename that stopped early. Finding them is the core's
+// (manage.RenameFindings), which reads the vault only where that needs no passphrase.
 func (m *Model) renameFindings() []renameFinding {
-	v := m.secrets.Vault()
-	if v == nil {
-		return nil
-	}
-	state, err := v.State()
-	if err != nil || (state != vault.StateUnencrypted && state != vault.StateUnlocked) {
-		return nil
-	}
-	names, err := v.KnownNames()
-	if err != nil {
-		return nil
-	}
 	var out []renameFinding
-	for _, r := range manage.HandRenames(m.cfg, names) {
-		out = append(out, renameFinding{kind: r.Kind, entry: r.New, from: r.Old, to: r.New, ambiguous: r.Ambiguous})
+	for _, f := range manage.RenameFindings(m.cfg, m.secrets.Vault()) {
+		out = append(out, renameFinding{kind: f.Kind, entry: f.Entry, from: f.From, to: f.To,
+			leftover: f.Leftover, ambiguous: f.Ambiguous, carried: f.Carried})
 	}
-	if state == vault.StateUnlocked {
-		if report, err := approval.Pending(m.cfg, v); err == nil {
-			for _, l := range report.Leftovers {
-				out = append(out, renameFinding{kind: manage.RenameConnection, entry: l.Connection,
-					from: l.Connection, to: l.Approval, leftover: true})
-			}
-		}
-	}
-	if left, err := manage.CredentialLeftovers(m.cfg, v); err == nil {
-		for _, l := range left {
-			out = append(out, renameFinding{kind: manage.RenameCredential, entry: l.Credential,
-				from: l.Credential, to: l.New, leftover: true, carried: l.Approvals})
-		}
-	}
-	sortFindings(out)
 	return out
 }

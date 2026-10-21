@@ -35,6 +35,9 @@ type renameData struct {
 	Error          string
 	// Action is the confirming POST route, Back the page of the entry that keeps its name.
 	Action, Back string
+	// Mode, Title and Button are set for a finding's action (see renamefind.go): the action, the heading and
+	// the confirming button.
+	Mode, Title, Button string
 }
 
 func renamePath(kind, name string) string {
@@ -168,15 +171,15 @@ func (s *Server) handleRenameConfirm(w http.ResponseWriter, r *http.Request, kin
 		s.renderRename(w, data)
 		return
 	}
-	s.setNotice(s.renameNotice(kind, old, name, res))
+	s.setNotice(s.renameNotice(fmt.Sprintf("Renamed %s %s to %s.", kind, old, name), res))
 	http.Redirect(w, r, renamePath(kind, name), http.StatusSeeOther)
 }
 
 const errRenamePlanChanged = "what the rename touches changed since this page was opened; open the rename again to see it"
 
 // renameNotice words what a finished rename did beyond the configuration, redacted, for the next page.
-func (s *Server) renameNotice(kind, old, name string, res manage.RenameResult) string {
-	parts := []string{fmt.Sprintf("Renamed %s %s to %s.", kind, old, name)}
+func (s *Server) renameNotice(lead string, res manage.RenameResult) string {
+	parts := []string{lead}
 	if len(res.VaultCopies) > 0 {
 		parts = append(parts, "The vault files are backed up as "+strings.Join(res.VaultCopies, ", ")+".")
 	}
@@ -301,7 +304,7 @@ func (s *Server) renderRename(w http.ResponseWriter, data renameData) {
 const renameTemplates = `
 {{define "rename"}}
 {{template "layout-top" (page "Rename" (print .Kind "s"))}}
-<h1>Rename {{.Kind}} {{.Old}}{{if .New}} to {{.New}}{{end}}</h1>
+<h1>{{if .Title}}{{.Title}}{{else}}Rename {{.Kind}} {{.Old}}{{if .New}} to {{.New}}{{end}}{{end}}</h1>
 {{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 {{if .Rows}}
 <p>Nothing has been changed yet. The rename touches these places:</p>
@@ -322,7 +325,10 @@ const renameTemplates = `
 <input type="hidden" name="cfgver" value="{{.CfgVer}}">
 <input type="hidden" name="digest" value="{{.Digest}}">
 <input type="hidden" name="to" value="{{.New}}">
-<div class="actions"><button type="submit">Rename {{.Kind}}</button></div>
+{{if .Mode}}<input type="hidden" name="kind" value="{{.Kind}}">
+<input type="hidden" name="from" value="{{.Old}}">
+<input type="hidden" name="mode" value="{{.Mode}}">
+{{end}}<div class="actions"><button type="submit">{{if .Button}}{{.Button}}{{else}}Rename {{.Kind}}{{end}}</button></div>
 </form>
 {{else if .Unread}}
 <p class="notice" role="status">The vault is locked, so this rename cannot be carried out here. Unlock it and open the rename again.</p>
