@@ -79,6 +79,16 @@ A tool that a binding does not reach is not offered, and a call is refused local
 Limit of the binding: the proof read and the action are two requests. An object moved out of the targets
 between them, for example by another user, can still be changed once.
 
+### Choosing targets
+
+The picker lists what the token reaches, also on a draft, and changes nothing. The top level holds the shelves and
+all books, also those on no shelf. A shelf opens its books, a book its chapters and the pages outside any chapter,
+a chapter its pages; draft pages are not offered.
+
+A URL of the service's own origin (installation path allowed) becomes a target: `/shelves/SLUG`, `/books/SLUG`,
+`/books/SLUG/chapter/SLUG`, and `/books/SLUG/page/SLUG`. The slug is resolved by a list read, a chapter or page slug
+within its book. An unknown or ambiguous slug, another origin, or another form gives nothing.
+
 ## Books and chapters
 
 `bookstack.books.list` and `bookstack.chapters.list` take `limit` and `offset` and page through the instance

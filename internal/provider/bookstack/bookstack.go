@@ -235,6 +235,8 @@ func Register(reg *capability.Registry) error {
 				Name:        "book",
 				Description: "a book whose chapters and pages this connection may list, read, create, update, and delete",
 				Forms:       []string{"book/BOOK_ID"},
+				Parents:     []string{"shelf"},
+				Top:         true,
 			}, {
 				Name: "chapter",
 				Description: "a chapter whose pages this connection may list, read, create, update, and delete, with " +
@@ -246,7 +248,7 @@ func Register(reg *capability.Registry) error {
 				Description: "a single page this connection may read, update, and delete, with its attachments, " +
 					"images, and comments",
 				Forms:   []string{"page/PAGE_ID"},
-				Parents: []string{"book"},
+				Parents: []string{"book", "chapter"},
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,
@@ -267,6 +269,9 @@ func Register(reg *capability.Registry) error {
 		}
 		return client.TestConnection(ctx), nil
 	}); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, capability.TargetBrowser{List: ListTargets, ResolveURL: ResolveTargetURL}); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
