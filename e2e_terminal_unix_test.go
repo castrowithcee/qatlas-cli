@@ -40,11 +40,19 @@ func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (strin
 	go func() {
 		defer close(done)
 		buf := make([]byte, 4096)
+		// The program asks the terminal for its background color at start (lipgloss, through Bubble Tea's
+		// init), an OSC 11 query followed by a cursor position query. A real terminal answers both; left
+		// unanswered, every run would wait for termenv's timeout before the prompt.
+		answered := 0
 		for {
 			n, err := master.Read(buf)
 			mu.Lock()
 			out.Write(buf[:n])
+			queries := strings.Count(out.String(), "\x1b[6n")
 			mu.Unlock()
+			for ; answered < queries; answered++ {
+				_, _ = io.WriteString(master, "\x1b]11;rgb:0000/0000/0000\x1b\\\x1b[1;1R")
+			}
 			if err != nil {
 				// EIO once the last process holding the terminal ended.
 				return
