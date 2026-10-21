@@ -106,3 +106,18 @@ func TestPendingTellsAHandRename(t *testing.T) {
 		t.Errorf("report = %+v, want the rest of a rename", report)
 	}
 }
+
+func TestRevocableStaleKeepsHandRenames(t *testing.T) {
+	r := Report{
+		Stale: []string{"gone", "hand", "left", "vague"},
+		HandRenames: []HandRename{{Approval: "hand", Connection: "new"},
+			{Approval: "vague", Ambiguous: true}},
+		Leftovers: []Leftover{{Approval: "left", Connection: "other"}},
+	}
+	if got, want := r.RevocableStale(), []string{"gone", "left"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("RevocableStale() = %v, want %v", got, want)
+	}
+	if got := (Report{}).RevocableStale(); got != nil {
+		t.Errorf("RevocableStale() of nothing = %v, want nil", got)
+	}
+}
