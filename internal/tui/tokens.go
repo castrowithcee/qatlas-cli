@@ -436,10 +436,10 @@ func (m *Model) tokenDetailView() string {
 	title := m.wrapped(titleStyle, "Token "+name) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
-		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · ? help")
+		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
 	}
 	if !ok {
-		return title + m.wrapped(hintStyle, "this token no longer exists; nothing to show") + m.keyHint("esc back · ? help")
+		return title + m.wrapped(hintStyle, "this token no longer exists; nothing to show") + m.keyHint("esc back · : cmds · ? help")
 	}
 	var b strings.Builder
 	b.WriteString(title)
@@ -480,7 +480,7 @@ func (m *Model) tokenDetailView() string {
 	}
 	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
 	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
-	b.WriteString(m.keyHint("s reveal/hide · d revoke · esc back · ? help"))
+	b.WriteString(m.keyHint("s reveal/hide · d revoke · esc back · : cmds · ? help"))
 	return b.String()
 }
 
@@ -490,7 +490,7 @@ func (m *Model) tokenRevokeView() string {
 	b.WriteString(m.wrapped(titleStyle, "Revoke agent token "+m.tokenRevoke+"?") + "\n\n")
 	b.WriteString(m.indented("it stops working at once, in a running vault process too; approvals it gave stay") +
 		"\n")
-	b.WriteString(m.keyHint("y revoke · n/esc keep · ? help"))
+	b.WriteString(m.keyHint("y revoke · n/esc keep · : cmds · ? help"))
 	return b.String()
 }
 

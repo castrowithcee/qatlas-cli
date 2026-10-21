@@ -3,10 +3,10 @@ package tui
 import tea "github.com/charmbracelet/bubbletea"
 
 // typing reports whether the current screen reads typed text right now. Letters are text there, so neither
-// the vim movement keys nor ? mean anything else.
+// the vim movement keys, ? nor : mean anything else.
 func (m *Model) typing() bool {
 	switch m.screen {
-	case screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenPicker, screenProviders:
+	case screenCommand, screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenPicker, screenProviders:
 		return true
 	case screenList:
 		return m.list.editing
@@ -32,7 +32,7 @@ func (m *Model) typing() bool {
 	return false
 }
 
-// helpReachable reports whether ? opens the help on the current screen: wherever nothing is typed, and on
+// helpReachable reports whether ? opens the help (and : the command line) on the current screen: wherever nothing is typed, and on
 // the screens whose search line is always there, while that line is empty. A form keeps its letters for
 // its text rows, so only the question inside it is covered.
 func (m *Model) helpReachable() bool {

@@ -643,14 +643,14 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 	}
-	keys := "F2 save · esc back · ? help"
+	keys := "F2 save · esc back · : cmds · ? help"
 	switch {
 	case w.saving:
-		keys = "ctrl+c quit · ? help"
+		keys = "ctrl+c quit · : cmds · ? help"
 	case w.saved != "" && m.testing:
-		keys = "esc cancel test · ? help"
+		keys = "esc cancel test · : cmds · ? help"
 	case w.saved != "":
-		keys = "t test connection · esc connections list · ? help"
+		keys = "t test connection · esc connections list · : cmds · ? help"
 	}
 	if w.saved != "" {
 		b.WriteString(m.testLine())
