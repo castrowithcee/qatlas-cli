@@ -327,6 +327,14 @@ func TestConfigTransferJSONOutput(t *testing.T) {
 		imported.Entries[0].Access == nil || strings.Count(stdout, "\n") != 1 {
 		t.Fatalf("import: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
+	// Whoever confirms sees the plan, on stderr while stdout carries the document.
+	if !strings.Contains(stderr, "create   connections wiki") || !strings.Contains(stderr, "3 to create") {
+		t.Errorf("import asked to confirm without showing the plan: stderr %q", stderr)
+	}
+	code, stdout, stderr = runTransfer(t, transferTarget(t), "config", "import", file, "--yes", "--output", "json")
+	if code != exitOK || json.Unmarshal([]byte(stdout), &imported) != nil || !imported.Imported || stderr != "" {
+		t.Errorf("import --yes: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
 	code, stdout, _ = runTransfer(t, transferTarget(t), "config", "import", file, "--dry-run", "--output", "toon")
 	if code != exitOK || !strings.Contains(stdout, "dry_run") || strings.Contains(stdout, "imported 3") {
 		t.Errorf("toon: exit %d, stdout %q", code, stdout)

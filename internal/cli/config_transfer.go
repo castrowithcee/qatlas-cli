@@ -105,9 +105,10 @@ func newConfigImportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"credentials that hold no secret here until one is set, and the replaced credentials whose secret\n" +
 			"here stays as it is. Connections that bring paths, file directories, or forward credentials are\n" +
 			"marked, because the file comes from elsewhere. Nothing is written until you confirm; --dry-run\n" +
-			"lists and stops, --yes confirms in advance. The file must be complete in itself, and the\n" +
-			"configuration that results must be valid, or nothing is written. If the configuration changed\n" +
-			"since the list was made, nothing is written either.\n\n" +
+			"lists and stops, --yes confirms in advance. With --output json, compact, or toon the list goes to\n" +
+			"stderr before the question, and stdout keeps the document. The file must be complete in itself,\n" +
+			"and the configuration that results must be valid, or nothing is written. If the configuration\n" +
+			"changed since the list was made, nothing is written either.\n\n" +
 			"The import touches no secret, approval, or agent token. Create a secret for a credential listed\n" +
 			"as without secret with 'qatlas credential set'; approve new connections where the vault is\n" +
 			"encrypted with 'qatlas vault approve'.\n\n" +
@@ -145,7 +146,13 @@ func newConfigImportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			if structured {
 				out = io.Discard
 			}
-			writeImportPlan(out, opts, plan)
+			// A structured document only reaches stdout at the end, so a person asked to confirm reads the
+			// plan on stderr instead.
+			planOut := out
+			if structured && !dryRun && !yes {
+				planOut = c.ErrOrStderr()
+			}
+			writeImportPlan(planOut, opts, plan)
 			created, replaced, _ := plan.Count()
 			switch {
 			case dryRun:
