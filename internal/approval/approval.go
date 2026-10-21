@@ -131,6 +131,22 @@ type Report struct {
 	HandRenames []HandRename
 }
 
+// RevocableStale are the stale approvals that approving everything may remove: all but the hand renames, which
+// stay so that adopting the rename still finds them.
+func (r Report) RevocableStale() []string {
+	byHand := make(map[string]bool, len(r.HandRenames))
+	for _, h := range r.HandRenames {
+		byHand[h.Approval] = true
+	}
+	var out []string
+	for _, name := range r.Stale {
+		if !byHand[name] {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // Leftover is a stale approval that records the config id of a connection that exists under another name,
 // while the vault holds an approval under that name too: what remains of renaming that connection, from or
 // to the name of the approval, when the rename stopped between the vault and the configuration. Renaming the

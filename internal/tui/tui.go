@@ -131,6 +131,8 @@ const (
 	screenTemplate
 	// screenRename is the new-name prompt and the dry run of renaming a list entry; see rename.go.
 	screenRename
+	// screenFindings lists the renames found in the vault and offers the action for each; see renamefind.go.
+	screenFindings
 	// screenCommand is the command line over the screen it was opened from; see commandline.go.
 	screenCommand
 )
@@ -418,6 +420,8 @@ type Model struct {
 	template *templateChoice
 	// cmdline is the command line of screenCommand while it is open.
 	cmdline *commandLine
+	// findings is the list of screenFindings while it is open.
+	findings *findingsState
 	// rename is the prompt or dry run of screenRename while it is open.
 	rename *renameState
 	fields []field
@@ -850,6 +854,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateTemplate(msg)
 		case screenRename:
 			cmd = m.updateRename(msg)
+		case screenFindings:
+			cmd = m.updateFindings(msg)
 		case screenCommand:
 			cmd = m.updateCommandLine(msg)
 		}
@@ -1023,6 +1029,8 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.duplicateSelected()
 	case "r":
 		return m.askRename()
+	case "f":
+		return m.openFindings()
 	case "s":
 		if m.section == sectionCredentials {
 			return m.openPayloadNew()
@@ -1075,7 +1083,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		// approval left over from a deleted or renamed connection, or both, the same way 'qatlas vault
 		// approve' with no --connection does.
 		if report, unavailable := m.approvalsReport(); unavailable == "" &&
-			(len(report.Open) > 0 || len(report.Stale) > 0) {
+			(len(report.Open) > 0 || len(report.RevocableStale()) > 0) {
 			m.approveAllConfirm = true
 			m.screen = screenConfirm
 			m.clearMessages()
@@ -1180,6 +1188,9 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenRename:
 		m.cancelRename()
+		return nil
+	case screenFindings:
+		m.closeFindings()
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -3462,6 +3473,8 @@ func (m *Model) editorView() string {
 		return m.templateView()
 	case screenRename:
 		return m.renameView()
+	case screenFindings:
+		return m.findingsView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -3805,6 +3818,10 @@ func (m *Model) listFrame() (string, string) {
 	}
 
 	back := m.backToSectionsHint()
+	var finds []renameFinding
+	if m.screen == screenList && !m.list.editing {
+		finds = m.sectionFindings()
+	}
 	var keys string
 	switch {
 	case m.screen == screenNav:
@@ -3814,7 +3831,7 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · " + back + " · : cmds · ? help · q quit"
+		keys = "enter details · a approve all · " + findKeys(finds) + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
 		keys = "enter unlock · n new · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
@@ -3823,11 +3840,11 @@ func (m *Model) listFrame() (string, string) {
 		keys = "/ filter · n new · p duplicate · enter show · d revoke · " + back + " · : cmds · ? help · q quit"
 	case m.section == sectionConnections:
 		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c setup · " +
-			back +
+			findKeys(finds) + back +
 			" · : cmds · ? help · q quit"
 	case m.section == sectionCredentials:
 		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c setup · " +
-			back + " · : cmds · ? help · q quit"
+			findKeys(finds) + back + " · : cmds · ? help · q quit"
 	case m.templateSection(m.section):
 		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c setup · " + back +
 			" · : cmds · ? help · q quit"
@@ -3837,7 +3854,7 @@ func (m *Model) listFrame() (string, string) {
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
 	}
-	foot := m.keyHint(keys)
+	foot := m.findingsNotice(finds) + m.keyHint(keys)
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
 			if m.needsDescription(name) {
@@ -3856,6 +3873,14 @@ func (m *Model) listFrame() (string, string) {
 		foot = m.testLine() + idle.String() + foot
 	}
 	return head.String(), foot + m.notes()
+}
+
+// findKeys is the key that reviews the renames found, with its separator, where there are any.
+func findKeys(finds []renameFinding) string {
+	if len(finds) == 0 {
+		return ""
+	}
+	return "f renames · "
 }
 
 // navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
