@@ -81,6 +81,13 @@ func (m *Model) commands() []command {
 			run: func(m *Model) tea.Cmd { m.askUpdate(); return nil },
 		},
 		command{
+			name:        "export",
+			desc:        "Export the configuration to a file, optionally with secrets",
+			aliases:     []string{"export config", "backup"},
+			unavailable: onScreens("export", screenNav, screenList),
+			run:         func(m *Model) tea.Cmd { return m.askExport() },
+		},
+		command{
 			name:        "lock vault",
 			desc:        "Lock the vault (ctrl+l)",
 			aliases:     []string{"lock"},

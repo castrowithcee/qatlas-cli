@@ -26,6 +26,8 @@ func (m *Model) typing() bool {
 		return m.template != nil && m.template.picking
 	case screenRename:
 		return m.renameTyping()
+	case screenTransfer:
+		return m.exportTyping()
 	case screenLogs:
 		return m.logs.dialog != nil || m.logs.pick != nil || m.logs.list.editing
 	}
