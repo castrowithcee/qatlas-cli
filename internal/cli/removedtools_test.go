@@ -55,7 +55,7 @@ connections:
 // The tools of the outbound-access cleanup are gone from the registry and from every profile, and a call by
 // the old ID ends as an unknown operation before any secret is read.
 func TestRemovedToolsAreNotRegisteredOrProfiled(t *testing.T) {
-	reg := defaultRegistry()
+	reg := sharedRegistry()
 	for _, tc := range removedToolCases {
 		metadata, ok := reg.ProviderMetadata(tc.provider)
 		if !ok {

@@ -83,10 +83,7 @@ func endVaultProcess(t *testing.T, client *vaultproc.Client) {
 func encryptedVaultFixture(t *testing.T, extra string) string {
 	t.Helper()
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	// The fixture's connection is approved as the base configuration has it, before extra is appended.
 	approveConnections(t, dir, v)
 	if err := vault.New(dir).Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {

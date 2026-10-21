@@ -30,7 +30,7 @@ import (
 // TestProviderConformance runs every shipped provider and every one of its operations through the shared
 // checks. A failure names the provider and the operation, and says which contract it breaks.
 func TestProviderConformance(t *testing.T) {
-	reg := defaultRegistry()
+	reg := sharedRegistry()
 	providers := reg.ProviderMetadataAll()
 	if len(providers) == 0 {
 		t.Fatal("the shipped registry has no provider")
@@ -63,7 +63,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	path := writeConfig(t, "version: 3\ndefaults: {}\n")
-	reg := defaultRegistry()
+	reg := sharedRegistry()
 	var reads atomic.Int32
 	cliJSON := func(args ...string) []byte {
 		t.Helper()
@@ -1087,7 +1087,7 @@ func conformantAllowListed() capability.Descriptor {
 // The output schema every shipped tool publishes stays a valid schema, and only ever requires less than
 // the schema its answer is validated against, since empty members are left out of results.
 func TestPublishedOutputSchemasStayValid(t *testing.T) {
-	reg := defaultRegistry()
+	reg := sharedRegistry()
 	cfg := config.New()
 	core := application.New(reg, cfg, nil, nil)
 	for _, descriptor := range reg.All() {

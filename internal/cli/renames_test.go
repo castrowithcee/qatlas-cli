@@ -219,10 +219,7 @@ connections:
 	if err := os.WriteFile(configIn(dir), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	v := vault.New(dir)
-	if err := v.Set("cred", "token", "synthetic-token", offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatal(err)
-	}
+	v := seedEncryptedVault(t, dir, "cred", "token", "synthetic-token", "s3cret-phrase")
 	// The earlier release knew the provider under its former ID, so the file loads as written.
 	old, err := config.Load(configIn(dir), formerCatalog{})
 	if err != nil {
