@@ -305,19 +305,66 @@ func fitsSegments(segments, form []string) bool {
 }
 
 // FixesTarget reports whether the targets of a connection leave an argument that selects a target of kind
-// no choice: exactly one target is of the kind, and it names one value rather than a wildcard. A provider
-// without kinds takes kind "*" and has no choice left with exactly one target that is not its wildcard.
+// no choice: the targets of the kind and of the kinds below it yield exactly one value for the kind, and it
+// is not a wildcard. A target of a kind below is read through the leading form segments it shares with a
+// form of the kind. A provider without kinds takes kind "*" and has no choice left with exactly one target
+// that is not its wildcard.
 func (t TargetMetadata) FixesTarget(kind string, targets []string) bool {
 	if len(t.Kinds) == 0 {
 		return len(targets) == 1 && targets[0] != t.Wildcard
 	}
-	var own []string
+	values := map[string]bool{}
 	for _, target := range targets {
-		if t.kindOf(target) == kind {
-			own = append(own, target)
+		if value, ok := t.valueOfKind(kind, target); ok {
+			values[value] = true
 		}
 	}
-	return len(own) == 1 && !strings.Contains(own[0], "*")
+	for value := range values {
+		if strings.Contains(value, "*") || (t.Wildcard != "" && value == t.Wildcard) {
+			return false
+		}
+	}
+	return len(values) == 1
+}
+
+// valueOfKind returns the value a target names for kind: the target itself for a target of the kind, the
+// prefix it shares with a form of the kind for a target of a kind below it.
+func (t TargetMetadata) valueOfKind(kind, target string) (string, bool) {
+	own := t.kindOf(target)
+	if own == kind {
+		return target, true
+	}
+	of, ok := t.KindByName(kind)
+	below, _ := t.KindByName(own)
+	if !ok || !t.below(own, kind, map[string]bool{}) {
+		return "", false
+	}
+	segments := strings.Split(target, "/")
+	for _, form := range below.Forms {
+		parts := strings.Split(form, "/")
+		if !FitsForm(segments, parts) {
+			continue
+		}
+		for _, prefix := range of.Forms {
+			head := strings.Split(prefix, "/")
+			if len(head) <= len(parts) && len(head) <= len(segments) && slices.Equal(head, parts[:len(head)]) {
+				return strings.Join(segments[:len(head)], "/"), true
+			}
+		}
+	}
+	return "", false
+}
+
+// below reports whether ancestor is among the transitive parents of kind.
+func (t TargetMetadata) below(kind, ancestor string, seen map[string]bool) bool {
+	if seen[kind] {
+		return false
+	}
+	seen[kind] = true
+	k, _ := t.KindByName(kind)
+	return slices.ContainsFunc(k.Parents, func(parent string) bool {
+		return parent == ancestor || t.below(parent, ancestor, seen)
+	})
 }
 
 // kindOf names the kind whose form a target is spelled in. A target that is a fixed form of its own, such
