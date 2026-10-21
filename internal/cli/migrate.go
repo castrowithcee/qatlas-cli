@@ -18,9 +18,10 @@ import (
 // migrateConfig moves a configuration file of an older schema to the current one before any command reads
 // it, so every way in migrates, 'qatlas mcp' included (see manage.Service.MigrateSchema). It never fails the
 // command and writes only to stderr: stdout carries the command's answer, for 'qatlas mcp' its JSON-RPC.
-// A hidden command is a process qatlas starts itself, such as the vault process, and leaves the file alone.
+// A hidden command is a process qatlas starts itself, such as the vault process, and leaves the file alone;
+// so does every self-contained command, the selftest, which must never touch the installation.
 func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
-	if c.Hidden {
+	if c.Hidden || selfContained(c) {
 		return
 	}
 	path, err := config.Path(opts.Config)

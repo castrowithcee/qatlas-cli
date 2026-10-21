@@ -17,6 +17,8 @@ import (
 	"runtime"
 	"sort"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
 )
 
 // Value is one named number of a measurement. The unit is part of the name, such as "read-p95-ms".
@@ -123,7 +125,9 @@ func Run(ctx context.Context, opts Options) (report *Report, err error) {
 		return nil, fmt.Errorf("cannot create the scratch directory: %w", err)
 	}
 	defer func() {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
+		// On Windows a process that just ended may hold a file for a moment, so a sharing violation is retried.
+		rmErr := fileretry.Do(func() error { return os.RemoveAll(dir) }, fileretry.Transient, nil)
+		if rmErr != nil {
 			err = errors.Join(err, fmt.Errorf("cannot remove the scratch directory %s: %w", dir, rmErr))
 		}
 	}()
