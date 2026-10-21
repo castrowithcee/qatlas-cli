@@ -140,8 +140,17 @@ func (v *exportViews) advance(step exportStep, kind exportKind, path string) {
 	v.t.Fatalf("step %v is not on the way", step)
 }
 
+// unwrapped is a view with its line breaks removed. A long path is wrapped into the width, never cut:
+// the wrap only breaks the line, it adds no indent and no filler, so the path reads whole again without them.
+func unwrapped(view string) string { return strings.ReplaceAll(view, "\n", "") }
+
 func TestExportWithoutSecretsWritesTheFileAfterThePreview(t *testing.T) {
 	v, path := plainExportModel(t)
+	// Longer than the room of a line, so the wrap happens here as it does for the long temp paths of macOS
+	// and Windows, yet short enough to stay below MAX_PATH on Windows.
+	dir := filepath.Join(filepath.Dir(path), strings.Repeat("long-directory-name-", 3))
+	mustNoError(t, os.MkdirAll(dir, 0o700))
+	path = filepath.Join(dir, "out.yaml")
 	m := v.m
 	v.startExport("")
 	if view := screenOf(m); !strings.Contains(view, "everything") || !strings.Contains(view, "connection  docs") {
@@ -163,10 +172,16 @@ func TestExportWithoutSecretsWritesTheFileAfterThePreview(t *testing.T) {
 	v.typePath(path)
 	v.pump("enter")
 	view := screenOf(m)
-	for _, want := range []string{"Export preview", path, "connections docs", "services", "credentials", "F2 write"} {
+	for _, want := range []string{"Export preview", "connections docs", "services", "credentials", "F2 write"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the preview does not show %q:\n%s", want, view)
 		}
+	}
+	if strings.Contains(view, path) {
+		t.Fatalf("the path fits a line, so this test would not see the wrap:\n%s", view)
+	}
+	if !strings.Contains(unwrapped(view), path) {
+		t.Errorf("the preview does not show the whole path %q:\n%s", path, view)
 	}
 	if _, err := os.Stat(path); err == nil {
 		t.Fatal("the preview wrote the file")
