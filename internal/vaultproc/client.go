@@ -192,9 +192,10 @@ func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []va
 }
 
 // Names asks the vault process for the entry names and approval keys the vault holds, with the config id
-// each records, and nothing else: no value, no role, no fingerprint, no scope. ErrNotRunning means no vault
-// process holds the vault unlocked. ErrNoNames means the process cannot tell: it is of an earlier build
-// that does not know the request, or was started without the vault's directory.
+// each records and the credential name each approval was given for (see vault.Names), and nothing else: no
+// value, no role, no fingerprint, no other part of a scope. ErrNotRunning means no vault process holds the
+// vault unlocked. ErrNoNames means the process cannot tell: it is of an earlier build that does not know the
+// request, or was started without the vault's directory.
 func (c *Client) Names(ctx context.Context) (vault.Names, error) {
 	return namesResult(c.call(ctx, request{Op: opNames}))
 }
