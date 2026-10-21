@@ -56,6 +56,10 @@ func TestAStoppedCredentialRenameIsNamedAndFinished(t *testing.T) {
 	if _, ok := cfg.Credentials["vault-reader"]; !ok {
 		t.Fatal("the configuration was saved")
 	}
+	names, err := w.v.KnownNames()
+	if err != nil || !reflect.DeepEqual(names.Renamed, map[string]string{"reader": "vault-reader"}) {
+		t.Errorf("Renamed after the stop = %v, %v, want the mark of the stopped rename", names.Renamed, err)
+	}
 	want := []CredentialLeftover{{Credential: "vault-reader", New: "reader", Approvals: []string{"second-wiki", "vault-wiki"}}}
 	if left, err := CredentialLeftovers(cfg, w.v); err != nil || !reflect.DeepEqual(left, want) {
 		t.Errorf("CredentialLeftovers() = %+v, %v, want %+v", left, err, want)
@@ -96,6 +100,9 @@ func TestAStoppedCredentialRenameIsNamedAndFinished(t *testing.T) {
 	if left, err := CredentialLeftovers(after, w.v); err != nil || len(left) != 0 {
 		t.Errorf("CredentialLeftovers() = %+v, %v, want none", left, err)
 	}
+	if names, err := w.v.KnownNames(); err != nil || len(names.Renamed) != 0 {
+		t.Errorf("Renamed after the resume = %v, %v, want none", names.Renamed, err)
+	}
 	var ops []string
 	for _, e := range w.logged(t) {
 		ops = append(ops, e.Operation+" "+e.Connection)
@@ -116,6 +123,9 @@ func TestAStoppedCredentialRenameIsPutBack(t *testing.T) {
 	approvalsBefore, _ := w.v.Approvals()
 	stopBeforeCommit(t, w.svc, "vault-reader", "reader")
 
+	if names, _ := w.v.KnownNames(); names.Renamed["reader"] != "vault-reader" {
+		t.Errorf("Renamed after the stop = %v, want the mark of the stopped rename", names.Renamed)
+	}
 	plan, err := w.svc.PlanRevertRename("vault-reader", "reader", true)
 	if err != nil {
 		t.Fatal(err)
@@ -140,6 +150,9 @@ func TestAStoppedCredentialRenameIsPutBack(t *testing.T) {
 	}
 	if held, _ := w.v.HasEntry("reader"); held {
 		t.Error("the vault still holds the new name")
+	}
+	if names, err := w.v.KnownNames(); err != nil || len(names.Renamed) != 0 {
+		t.Errorf("Renamed after the revert = %v, %v, want none", names.Renamed, err)
 	}
 	approvals, _ := w.v.Approvals()
 	if !reflect.DeepEqual(approvalsWithoutIDs(approvals), approvalsWithoutIDs(approvalsBefore)) {

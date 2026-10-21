@@ -22,13 +22,15 @@ type ScopeRename struct {
 
 // CredentialRename is what renaming the credential From to To changes in the vault. Entry renames the vault
 // entry of From, a vault credential's, and records CredentialID, its config id, where the entry has none yet.
-// Carry are the connections whose approvals follow the rename.
+// Mark also records From as the entry's RenamedFrom, in the same write, for a rename whose configuration is
+// not saved yet; without it the renamed entry carries no mark. Carry are the connections whose approvals
+// follow the rename.
 //
 // Resume finishes a rename that stopped after the vault: the entry has the name To already and records
 // CredentialID, and the vault holds no entry From. Pending writes for From are merged into it under To.
 type CredentialRename struct {
 	From, To, CredentialID string
-	Entry, Resume          bool
+	Entry, Resume, Mark    bool
 	Carry                  []ScopeRename
 }
 
@@ -60,20 +62,9 @@ func (v *Vault) HasEntry(name string) (bool, error) {
 // that records none. It reads an unencrypted vault and one unlocked in this process; a locked one fails with
 // ErrNotUnlocked, and an absent one holds no entry.
 func (v *Vault) EntryCredentialIDs() (map[string]string, error) {
-	state, err := v.State()
+	doc, err := v.readDocument()
 	if err != nil {
 		return nil, err
-	}
-	doc := newDocument()
-	switch state {
-	case StateUnencrypted:
-		if doc, err = loadPlainDocument(v.plainPath()); err != nil {
-			return nil, err
-		}
-	case StateLocked:
-		return nil, ErrNotUnlocked
-	case StateUnlocked:
-		doc = v.doc
 	}
 	out := make(map[string]string, len(doc.Entries))
 	for _, entry := range doc.Entries {
@@ -82,17 +73,37 @@ func (v *Vault) EntryCredentialIDs() (map[string]string, error) {
 	return out, nil
 }
 
+// readDocument returns the document of an unencrypted vault or one unlocked in this process, for reading; a
+// locked vault fails with ErrNotUnlocked, and an absent one yields an empty document.
+func (v *Vault) readDocument() (*document, error) {
+	state, err := v.State()
+	if err != nil {
+		return nil, err
+	}
+	switch state {
+	case StateUnencrypted:
+		return loadPlainDocument(v.plainPath())
+	case StateLocked:
+		return nil, ErrNotUnlocked
+	case StateUnlocked:
+		return v.doc, nil
+	}
+	return newDocument(), nil
+}
+
 // Names is what a vault knows by name and config id, without any secret: the config id each entry records,
 // by entry name, and the config id each approval records, by connection name; "" where one records none.
+// Renamed holds the RenamedFrom name of each entry that has one, by entry name, and nothing for the others.
 type Names struct {
 	Entries   map[string]string `json:"entries"`
 	Approvals map[string]string `json:"approvals"`
+	Renamed   map[string]string `json:"renamed,omitempty"`
 }
 
 // KnownNames returns the Names of an unencrypted vault or one unlocked in this process; a locked one fails
 // with ErrNotUnlocked. An unencrypted or absent vault binds no connection and has no approvals.
 func (v *Vault) KnownNames() (Names, error) {
-	entries, err := v.EntryCredentialIDs()
+	doc, err := v.readDocument()
 	if err != nil {
 		return Names{}, err
 	}
@@ -100,7 +111,17 @@ func (v *Vault) KnownNames() (Names, error) {
 	if err != nil && !errors.Is(err, ErrNotEncrypted) {
 		return Names{}, err
 	}
-	names := Names{Entries: entries, Approvals: make(map[string]string, len(approvals))}
+	names := Names{Entries: make(map[string]string, len(doc.Entries)),
+		Approvals: make(map[string]string, len(approvals))}
+	for _, entry := range doc.Entries {
+		names.Entries[entry.Name] = entry.CredentialID
+		if entry.RenamedFrom != "" {
+			if names.Renamed == nil {
+				names.Renamed = map[string]string{}
+			}
+			names.Renamed[entry.Name] = entry.RenamedFrom
+		}
+	}
 	for name, approval := range approvals {
 		names.Approvals[name] = approval.ConnectionID
 	}
@@ -179,7 +200,7 @@ func (v *Vault) RenameCredential(r CredentialRename) (carried []string, undo fun
 			return nil, nil, ErrEntryTaken
 		}
 		// An unencrypted vault binds no connection, so there is no approval to carry.
-		if r.Resume || !r.Entry || !doc.renameEntry(r.From, r.To, r.CredentialID) {
+		if r.Resume || !r.Entry || !doc.renameEntry(r.From, r.To, r.CredentialID, r.mark()) {
 			return nil, unchanged, nil
 		}
 		if err := v.writePlain(doc); err != nil {
@@ -240,7 +261,7 @@ func (v *Vault) renameUnlocked(r CredentialRename) ([]string, func() error, erro
 	}
 
 	before := next.bindings().IDs
-	renamed := r.Entry && next.renameEntry(r.From, r.To, r.CredentialID)
+	renamed := r.Entry && next.renameEntry(r.From, r.To, r.CredentialID, r.mark())
 	after := next.bindings().IDs
 	var carried []string
 	for _, c := range r.Carry {
@@ -322,16 +343,70 @@ func (d *document) clone() *document {
 }
 
 // renameEntry gives the entry named from the name to, keeping its id, its secrets and its times, and records
-// credentialID where it has none. It reports whether there was such an entry.
-func (d *document) renameEntry(from, to, credentialID string) bool {
+// credentialID where it has none. It sets the entry's RenamedFrom to renamedFrom, which clears a mark. It
+// reports whether there was such an entry.
+func (d *document) renameEntry(from, to, credentialID, renamedFrom string) bool {
 	entry, ok := d.byName(from)
 	if !ok {
 		return false
 	}
 	entry.Name = to
+	entry.RenamedFrom = renamedFrom
 	if entry.CredentialID == "" {
 		entry.CredentialID = credentialID
 	}
+	d.Entries[entry.ID] = entry
+	return true
+}
+
+// mark is the RenamedFrom a rename leaves on the entry.
+func (r CredentialRename) mark() string {
+	if r.Mark {
+		return r.From
+	}
+	return ""
+}
+
+// ClearRenameMarker removes the RenamedFrom mark of the entry named name from an unencrypted vault or one
+// unlocked in this process, in one write. It writes nothing where the entry is absent or has no mark; a locked
+// vault fails with ErrNotUnlocked.
+func (v *Vault) ClearRenameMarker(name string) error {
+	state, err := v.State()
+	if err != nil {
+		return err
+	}
+	switch state {
+	case StateLocked:
+		return ErrNotUnlocked
+	case StateUnencrypted:
+		doc, err := loadPlainDocument(v.plainPath())
+		if err != nil {
+			return err
+		}
+		if !doc.clearMark(name) {
+			return nil
+		}
+		return v.writePlain(doc)
+	case StateUnlocked:
+		next := v.doc.clone()
+		if !next.clearMark(name) {
+			return nil
+		}
+		if err := v.writeEncrypted(next); err != nil {
+			return err
+		}
+		v.doc = next
+	}
+	return nil
+}
+
+// clearMark removes the RenamedFrom of the entry named name and reports whether it had one.
+func (d *document) clearMark(name string) bool {
+	entry, ok := d.byName(name)
+	if !ok || entry.RenamedFrom == "" {
+		return false
+	}
+	entry.RenamedFrom = ""
 	d.Entries[entry.ID] = entry
 	return true
 }
