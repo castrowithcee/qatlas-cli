@@ -878,7 +878,8 @@ func TestLargeCatalogGrowsOnlyTheData(t *testing.T) {
 func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	root := DocumentationCommand("test")
 	want := []string{
-		"config", "config rename", "config validate", "connections", "credential", "credential delete", "credential set",
+		"config", "config export", "config import", "config rename", "config validate", "connections", "credential",
+		"credential delete", "credential set",
 		"describe", "invoke", "mcp", "providers", "tools", "tui", "update", "vault", "vault approve",
 		"vault decrypt", "vault encrypt", "vault handover", "vault lock", "vault logs", "vault migrate", "vault passphrase",
 		"vault status", "vault token", "vault unlock", "web",

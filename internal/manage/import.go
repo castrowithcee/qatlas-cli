@@ -65,6 +65,9 @@ type ImportEntry struct {
 	// UsedBy names the connections of the target, outside the file, that use a replaced service or credential
 	// and so are changed by it.
 	UsedBy []string
+	// Access names the local access a created or replaced connection brings: "paths", "files.read",
+	// "files.write" and "forward_secrets". It is there so a person sees what a foreign file grants.
+	Access []string
 }
 
 // ImportPlan is what importing a file does, found without writing anything. PlanImport makes it and
@@ -238,6 +241,18 @@ func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) 
 			e.ID = id
 			if id != "" {
 				taken[ImportConnections][id] = true
+			}
+			if len(v.Paths) > 0 {
+				e.Access = append(e.Access, "paths")
+			}
+			if len(v.Files.Read) > 0 {
+				e.Access = append(e.Access, "files.read")
+			}
+			if len(v.Files.Write) > 0 {
+				e.Access = append(e.Access, "files.write")
+			}
+			if len(v.ForwardSecrets) > 0 {
+				e.Access = append(e.Access, "forward_secrets")
 			}
 			ref := func(section, kind, ref string) {
 				if actions[section+"."+ref] == ImportActionSkip {
