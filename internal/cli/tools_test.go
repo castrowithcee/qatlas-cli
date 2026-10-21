@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -77,8 +78,13 @@ defaults: {}
 	return cfg, &calls, providerCanary
 }
 
+// sharedRegistry is the shipped registry, built once per test binary. Only tests that read it may use it;
+// a test that registers into a registry or hands it to code that could builds its own with defaultRegistry.
+var sharedRegistry = sync.OnceValue(defaultRegistry)
+
 // runTools drives the real command tree and the shipped provider registry with a credential resolver that
-// counts every secret lookup, so a discovery run can prove it read none.
+// counts every secret lookup, so a discovery run can prove it read none. The command tree only reads the
+// shared registry.
 func runTools(t *testing.T, reads *atomic.Int32, args ...string) (int, string, string) {
 	t.Helper()
 	redactor := &redact.Redactor{}
@@ -93,7 +99,7 @@ func runTools(t *testing.T, reads *atomic.Int32, args ...string) (int, string, s
 		Input: strings.NewReader(""), Redactor: redactor,
 		Secrets: secret.NewWith(lookup, nil, nil, redactor),
 	}
-	code := run(newRootCommand(opts, defaultRegistry()), opts, args, &stdout, &stderr)
+	code := run(newRootCommand(opts, sharedRegistry()), opts, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -721,7 +727,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 // rendering for every registered tool, not only on average.
 func TestCompactContractIsSmallerAsTOON(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
-	for _, descriptor := range defaultRegistry().All() {
+	for _, descriptor := range sharedRegistry().All() {
 		code, toon, stderr := runTools(t, nil, "describe", descriptor.ID, "--config", cfg)
 		if code != exitOK || stderr != "" {
 			t.Fatalf("%s: exit=%d stderr=%q", descriptor.ID, code, stderr)
