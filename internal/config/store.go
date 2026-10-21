@@ -112,11 +112,21 @@ type Store struct {
 	providers ProviderCatalog
 	// marshal is a seam so a test can simulate an encoding failure.
 	marshal func(any) ([]byte, error)
+	// observe receives measurement events; the zero value observes nothing.
+	observe Observer
 }
 
 // NewStore returns a store for the configuration file at path.
 func NewStore(path string, providers ...ProviderCatalog) *Store {
 	return &Store{path: path, providers: providerCatalog(providers), marshal: yaml.Marshal}
+}
+
+// Observed returns a store like s that reports its file retries and lock waits to obs. s itself is
+// unchanged.
+func (s *Store) Observed(obs Observer) *Store {
+	out := *s
+	out.observe = obs
+	return &out
 }
 
 // Path returns the file this store writes.
@@ -126,13 +136,13 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) New() *Config { return New(s.providers) }
 
 // Load reads the configuration through the same loader the CLI uses.
-func (s *Store) Load() (*Config, error) { return Load(s.path, s.providers) }
+func (s *Store) Load() (*Config, error) { return load(s.path, s.observe, s.providers) }
 
 // HasCurrentSchema reports from the top-level version line alone, without decoding the file, whether the
 // configuration is already in the current schema. It is the cheap check every start makes before it would
 // migrate; false only means the file has to be loaded to know more.
 func (s *Store) HasCurrentSchema() bool {
-	data, err := readFile(s.path)
+	data, err := readFile(s.path, s.observe)
 	if err != nil {
 		return false
 	}
@@ -220,7 +230,7 @@ func (s *Store) replace(data []byte) error {
 	if err := os.Chmod(name, fileMode); err != nil {
 		return fmt.Errorf("cannot set the permissions of %s: %w", name, err)
 	}
-	if err := retryFile(func() error { return os.Rename(name, target) }); err != nil {
+	if err := retryFile(s.observe, func() error { return os.Rename(name, target) }); err != nil {
 		return fmt.Errorf("cannot replace %s: %w", target, err)
 	}
 	moved = true

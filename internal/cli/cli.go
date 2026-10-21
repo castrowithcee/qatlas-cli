@@ -105,7 +105,10 @@ func newSyntaxError(err error) error { return &syntaxError{&UsageError{err}} }
 // Run executes the root command against the given streams and returns the process exit code. It never
 // terminates the process, so callers and tests share the same path.
 func Run(args []string, stdout, stderr io.Writer) int {
-	selfupdate.CleanupLeftovers()
+	// The selftest never touches the installation, the leftovers of an update beside the program included.
+	if len(args) == 0 || args[0] != "selftest" {
+		selfupdate.CleanupLeftovers()
+	}
 	opts := &Options{Redactor: &redact.Redactor{}, Input: os.Stdin}
 	// The standard library and other packages write their diagnostics through the standard logger, for
 	// example the HTTP/2 transport under GODEBUG=http2debug, which prints every request header. Routing it
@@ -125,6 +128,10 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 	executed, err := cmd.ExecuteC()
 	if err == nil {
 		return exitOK
+	}
+	var quiet *quietExit
+	if errors.As(err, &quiet) {
+		return quiet.code
 	}
 
 	r := routeCLI
@@ -226,6 +233,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newTUICommand(opts, reg, version),
 		newWebCommand(opts, reg),
 		newUpdateCommand(opts, version),
+		newSelftestCommand(opts),
 	)
 	// A command without a run function is a help topic: 'qatlas help <topic>' prints its text, and the
 	// root help lists it under the additional help topics.

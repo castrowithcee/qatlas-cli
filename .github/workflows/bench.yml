@@ -21,11 +21,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Benchmarks
+      - name: Selftest storage
+        # The same measurement code the released binary runs for users: 'qatlas selftest storage'.
         run: |
-          go test ./internal/config ./internal/invokelog -run '^$' \
-            -bench 'BenchmarkReadUnderWrite|BenchmarkUpdateLockWait|BenchmarkAppendManyDays' \
-            -benchtime 3x -count 3 -timeout 40m | tee bench.txt
+          go build -o "$RUNNER_TEMP/qatlas" .
+          "$RUNNER_TEMP/qatlas" selftest storage --profile standard | tee bench.txt
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
