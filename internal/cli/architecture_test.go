@@ -199,7 +199,7 @@ var architectureExceptions = []archException{
 
 func TestArchitecture(t *testing.T) {
 	root := moduleRoot(t)
-	findings, err := architectureFindings(os.DirFS(root), defaultRegistry().ProviderMetadataAll())
+	findings, err := architectureFindings(os.DirFS(root), sharedRegistry().ProviderMetadataAll())
 	if err != nil {
 		t.Fatal(err)
 	}

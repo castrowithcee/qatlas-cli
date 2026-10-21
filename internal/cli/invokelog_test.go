@@ -61,10 +61,7 @@ func verifyJSON(t *testing.T, dir string) (int, logsVerifyDocument, string) {
 // unlocked in its own process it checks them too.
 func TestInvokeLogSignsWithAVaultUnlockedHere(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	setter := vault.New(dir)
-	if err := setter.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatal(err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	logger := invokelog.New(filepath.Join(dir, vault.DirName), 90)
 
 	locked := invokeLogWriter{logger: logger, vault: vault.New(dir)}
