@@ -88,6 +88,11 @@ var (
 	// ErrNoLog reports a vault process that does not keep the invocation log, or cannot sign it.
 	ErrNoLog = errors.New("the vault process does not keep the invocation log")
 
+	// ErrNoNames reports a vault process that cannot tell the names of the vault: one of an earlier build,
+	// which does not know the request, or one that was not started with the vault's directory. The process
+	// is otherwise usable; lock it and unlock the vault again to get one that answers.
+	ErrNoNames = errors.New("the vault process cannot tell the names the vault holds")
+
 	// ErrNoTokens reports a vault process that does not approve with agent tokens.
 	ErrNoTokens = errors.New("the vault process does not approve with agent tokens")
 
