@@ -192,7 +192,7 @@ func TestRunRuntimeError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	opts := &Options{}
-	cmd := newRootCommand(opts, defaultRegistry())
+	cmd := newRootCommand(opts, sharedRegistry())
 	cmd.RunE = func(*cobra.Command, []string) error { return errors.New("synthetic internal failure") }
 
 	code := run(cmd, opts, nil, &stdout, &stderr)
@@ -211,7 +211,7 @@ func TestRunRuntimeError(t *testing.T) {
 func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	opts := &Options{Redactor: &redact.Redactor{}}
-	cmd := newRootCommand(opts, defaultRegistry())
+	cmd := newRootCommand(opts, sharedRegistry())
 	cmd.RunE = func(*cobra.Command, []string) error {
 		return withAudit(newSyntaxError(errors.New("confirmed usage failure")),
 			[]byte(`{"request_id":"audit-id","result":"error"}`+"\n"))
@@ -281,7 +281,7 @@ func TestInvalidRequestIsNamedOnce(t *testing.T) {
 // Options receive the parsed global flags so the application core can consume them as a value.
 func TestOptionsAreParsed(t *testing.T) {
 	opts := &Options{}
-	cmd := newRootCommand(opts, defaultRegistry())
+	cmd := newRootCommand(opts, sharedRegistry())
 	cmd.SetArgs([]string{"--config", "/tmp/c.yaml", "--connection", "wiki", "--agent", "--output", "compact"})
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))

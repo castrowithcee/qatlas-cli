@@ -42,7 +42,7 @@ func TestFirstCommandMigratesAndKeepsStdoutClean(t *testing.T) {
 			t.Errorf("stderr lacks %q:\n%s", want, stderr)
 		}
 	}
-	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	cfg, err := config.Load(configIn(dir), sharedRegistry())
 	if err != nil || cfg.Version != config.Version || cfg.Credentials["vault-reader"].ID == "" {
 		t.Fatalf("Load() = %+v, %v", cfg, err)
 	}

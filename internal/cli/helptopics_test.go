@@ -57,7 +57,7 @@ var (
 
 // The topics may only name commands, flags, tools, codes, and contract fields this build has.
 func TestHelpTopicsNameWhatExists(t *testing.T) {
-	root := newRootCommand(&Options{}, defaultRegistry())
+	root := newRootCommand(&Options{}, sharedRegistry())
 	root.InitDefaultHelpCmd()
 	var defined func(c *cobra.Command, name string) bool
 	defined = func(c *cobra.Command, name string) bool {
@@ -90,7 +90,7 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 			assertCommandSnippet(t, root, topics, topic.Name, snippet)
 		}
 		for _, id := range toolID.FindAllString(topic.Text, -1) {
-			if _, _, ok := defaultRegistry().Lookup(id); !ok {
+			if _, _, ok := sharedRegistry().Lookup(id); !ok {
 				t.Errorf("topic %s names the unknown tool %s", topic.Name, id)
 			}
 		}

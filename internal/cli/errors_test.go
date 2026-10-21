@@ -71,7 +71,7 @@ func TestErrorsAreRedacted(t *testing.T) {
 	opts := &Options{Redactor: &redact.Redactor{}}
 	opts.Redactor.Add(canary)
 
-	cmd := newRootCommand(opts, defaultRegistry())
+	cmd := newRootCommand(opts, sharedRegistry())
 	cmd.RunE = func(*cobra.Command, []string) error {
 		return fmt.Errorf("provider rejected Authorization: Token id:%s", canary)
 	}
@@ -99,7 +99,7 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	opts := &Options{}
-	code := run(newRootCommand(opts, defaultRegistry()), opts,
+	code := run(newRootCommand(opts, sharedRegistry()), opts,
 		[]string{"tools", "bookstack", "--agent", "--config", "/nonexistent/qatlas.yaml"}, &stdout, &stderr)
 
 	if code != exitUsage {

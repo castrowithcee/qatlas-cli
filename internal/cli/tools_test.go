@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -77,8 +78,13 @@ defaults: {}
 	return cfg, &calls, providerCanary
 }
 
+// sharedRegistry is the shipped registry, built once per test binary. Only tests that read it may use it;
+// a test that registers into a registry or hands it to code that could builds its own with defaultRegistry.
+var sharedRegistry = sync.OnceValue(defaultRegistry)
+
 // runTools drives the real command tree and the shipped provider registry with a credential resolver that
-// counts every secret lookup, so a discovery run can prove it read none.
+// counts every secret lookup, so a discovery run can prove it read none. The command tree only reads the
+// shared registry.
 func runTools(t *testing.T, reads *atomic.Int32, args ...string) (int, string, string) {
 	t.Helper()
 	redactor := &redact.Redactor{}
@@ -93,7 +99,7 @@ func runTools(t *testing.T, reads *atomic.Int32, args ...string) (int, string, s
 		Input: strings.NewReader(""), Redactor: redactor,
 		Secrets: secret.NewWith(lookup, nil, nil, redactor),
 	}
-	code := run(newRootCommand(opts, defaultRegistry()), opts, args, &stdout, &stderr)
+	code := run(newRootCommand(opts, sharedRegistry()), opts, args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -154,7 +160,7 @@ func toolIDs(t *testing.T, stdout string) []string {
 // says how many providers and tools discovery has to show.
 func registryProviders() []string {
 	var ids []string
-	for _, metadata := range defaultRegistry().ProviderMetadataAll() {
+	for _, metadata := range sharedRegistry().ProviderMetadataAll() {
 		ids = append(ids, metadata.ID)
 	}
 	return ids
@@ -165,7 +171,7 @@ func registryProviders() []string {
 // expectation.
 func registryToolIDs(t *testing.T, provider string, keep func(capability.Descriptor) bool) []string {
 	t.Helper()
-	all := defaultRegistry().Provider(provider)
+	all := sharedRegistry().Provider(provider)
 	if len(all) == 0 {
 		t.Fatalf("the registry has no %s tool", provider)
 	}
@@ -244,15 +250,15 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		if connections == "" {
 			connections = "0,0"
 		}
-		tail := fmt.Sprintf(",%d,%s", len(defaultRegistry().Provider(provider)), connections)
+		tail := fmt.Sprintf(",%d,%s", len(sharedRegistry().Provider(provider)), connections)
 		if i+1 >= len(lines) || !strings.HasPrefix(lines[i+1], "  "+provider+",") || !strings.HasSuffix(lines[i+1], tail) {
 			t.Errorf("row %d does not start with %q and end with %q:\n%s", i+1, "  "+provider+",", tail, stdout)
 		}
 	}
 	// The full rows pin the column format; their tool counts come from the registry.
 	for _, want := range []string{
-		fmt.Sprintf("  bookstack,Self-hosted documentation platform for team knowledge,company handbook,%d,1,1\n", len(defaultRegistry().Provider("bookstack"))),
-		fmt.Sprintf("  telegram,Cloud-based instant messaging service,\"\",%d,1,1\n", len(defaultRegistry().Provider("telegram"))),
+		fmt.Sprintf("  bookstack,Self-hosted documentation platform for team knowledge,company handbook,%d,1,1\n", len(sharedRegistry().Provider("bookstack"))),
+		fmt.Sprintf("  telegram,Cloud-based instant messaging service,\"\",%d,1,1\n", len(sharedRegistry().Provider("telegram"))),
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -316,7 +322,7 @@ defaults: {}
 `)
 		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
 		if code != exitOK || stderr != "" || !strings.Contains(stdout, fmt.Sprintf(`  telegram,Cloud-based instant messaging service,"",%d,0,1`,
-			len(defaultRegistry().Provider("telegram")))) {
+			len(sharedRegistry().Provider("telegram")))) {
 			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram with no usable and one configured "+
 				"connection", code, stdout, stderr)
 		}
@@ -361,7 +367,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		t.Fatalf("stdout = %q, want the connection line, %q and one row per offered tool", stdout, want)
 	}
 	for i, id := range offered {
-		descriptor, _, _ := defaultRegistry().Lookup(id)
+		descriptor, _, _ := sharedRegistry().Lookup(id)
 		if want := "  " + id + "," + descriptor.Title + ",read,"; !strings.HasPrefix(lines[i+2], want) {
 			t.Errorf("row %d = %q, want a prefix %q", i+1, lines[i+2], want)
 		}
@@ -415,7 +421,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			fmt.Sprintf("connections[1]: wiki\ntools[%d]{id,title,effect,requires,target,confirm,reason}:\n", len(defaultRegistry().Provider("bookstack"))),
+			fmt.Sprintf("connections[1]: wiki\ntools[%d]{id,title,effect,requires,target,confirm,reason}:\n", len(sharedRegistry().Provider("bookstack"))),
 			`  bookstack.pages.create,Create a BookStack page,create,name,"",true,effect-not-permitted` + "\n",
 			`  bookstack.pages.delete,Delete a BookStack page,delete,id,"",true,effect-not-permitted` + "\n",
 			`  bookstack.pages.get,Get a BookStack page,read,id,"",false,""` + "\n",
@@ -435,7 +441,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "lexware", "--config", cfg)
 		if code != exitOK || stdout != "tools: []\n" ||
 			stderr != fmt.Sprintf("qatlas: no connection offers any of the %d matching tools; --all lists them with the "+
-				"reason, 'qatlas connections' lists the connections\n", len(defaultRegistry().Provider("lexware"))) {
+				"reason, 'qatlas connections' lists the connections\n", len(sharedRegistry().Provider("lexware"))) {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 		code, stdout, stderr = runTools(t, nil, "tools", "--query", "absent", "--config", cfg)
@@ -593,7 +599,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 		t.Errorf("tool contract = %+v", tool)
 	}
 	// The argument table is derived from the input schema, with the descriptions the descriptor keeps.
-	registered, _, _ := defaultRegistry().Lookup("bookstack.pages.list")
+	registered, _, _ := sharedRegistry().Lookup("bookstack.pages.list")
 	if len(tool.Arguments) != len(registered.Arguments) {
 		t.Fatalf("arguments = %+v, want one row per argument of %+v", tool.Arguments, registered.Arguments)
 	}
@@ -721,7 +727,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 // rendering for every registered tool, not only on average.
 func TestCompactContractIsSmallerAsTOON(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
-	for _, descriptor := range defaultRegistry().All() {
+	for _, descriptor := range sharedRegistry().All() {
 		code, toon, stderr := runTools(t, nil, "describe", descriptor.ID, "--config", cfg)
 		if code != exitOK || stderr != "" {
 			t.Fatalf("%s: exit=%d stderr=%q", descriptor.ID, code, stderr)
@@ -997,7 +1003,7 @@ func TestToolRunsAsAHiddenAliasOfDescribe(t *testing.T) {
 // publish, which is the migration parity their removal rests on.
 func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
-	core, err := applicationCore(&Options{Config: cfg}, defaultRegistry(), false)
+	core, err := applicationCore(&Options{Config: cfg}, sharedRegistry(), false)
 	if err != nil {
 		t.Fatalf("applicationCore() = %v", err)
 	}
@@ -1030,7 +1036,7 @@ func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 			reachable[tool.ID] = true
 		}
 	}
-	for _, descriptor := range defaultRegistry().All() {
+	for _, descriptor := range sharedRegistry().All() {
 		if !reachable[descriptor.ID] {
 			t.Errorf("the cascade never reaches %q", descriptor.ID)
 		}
@@ -1188,7 +1194,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.delete","connection":"wiki",` +
 		`"arguments":{"id":1},"confirm":true}}}` + "\n"
-	responses, mcpStderr := runMCPWithOptions(t, defaultRegistry(), input,
+	responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 		&Options{Config: cfg, Redactor: &redact.Redactor{}})
 	result := toolResultFrom(t, responses["1"])
 	var detail map[string]any
@@ -1222,7 +1228,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
-		responses, mcpStderr := runMCPWithOptions(t, defaultRegistry(), input,
+		responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		var page application.SearchResponse
 		decodeRaw(t, toolResultFrom(t, responses["1"]).Structured, &page)

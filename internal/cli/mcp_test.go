@@ -506,7 +506,7 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
-		responses, stderr := runMCPWithOptions(t, defaultRegistry(), input,
+		responses, stderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		if stderr != "" {
 			t.Fatalf("stderr = %q", stderr)

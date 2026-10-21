@@ -25,5 +25,5 @@ func runAsTUI() int {
 	version = os.Getenv(tuiVersionEnv)
 	opts := &Options{Redactor: &redact.Redactor{}, Input: os.Stdin,
 		Updater: &selfupdate.Client{Version: version, BaseURL: os.Getenv(tuiReleasesEnv)}}
-	return run(newRootCommand(opts, defaultRegistry()), opts, args, os.Stdout, os.Stderr)
+	return run(newRootCommand(opts, sharedRegistry()), opts, args, os.Stdout, os.Stderr)
 }
