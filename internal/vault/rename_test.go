@@ -1,9 +1,11 @@
 package vault
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -245,5 +247,89 @@ func TestKnownNamesOfAnUnencryptedVault(t *testing.T) {
 	names, err = v.KnownNames()
 	if _, held := names.Entries["wiki-reader"]; err != nil || !held || len(names.Approvals) != 0 {
 		t.Errorf("KnownNames() = %+v, %v, want the entry and no approval", names, err)
+	}
+}
+
+// A rename with Mark leaves the old name on the entry in the same write, undo and a rename without Mark leave
+// none, ClearRenameMarker removes it, and the mark is read by name without any secret.
+func TestRenameCredentialMarksTheEntryUntilCleared(t *testing.T) {
+	check := func(t *testing.T, v *Vault) {
+		t.Helper()
+		_, undo, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", CredentialID: "c0ffee",
+			Entry: true, Mark: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names, err := v.KnownNames()
+		if err != nil || !reflect.DeepEqual(names.Renamed, map[string]string{"reader": "wiki-reader"}) {
+			t.Fatalf("Renamed = %v, %v, want the old name by the new one", names.Renamed, err)
+		}
+		if err := v.ClearRenameMarker("reader"); err != nil {
+			t.Fatal(err)
+		}
+		if err := v.ClearRenameMarker("reader"); err != nil {
+			t.Fatalf("clearing a cleared mark = %v", err)
+		}
+		if err := v.ClearRenameMarker("absent"); err != nil {
+			t.Fatalf("clearing an absent entry = %v", err)
+		}
+		if names, _ := v.KnownNames(); len(names.Renamed) != 0 || names.Entries["reader"] != "c0ffee" {
+			t.Errorf("names after clearing = %+v", names)
+		}
+		if value, found := mustGet(t, v, "reader", "token"); !found || value != "synthetic-token" {
+			t.Error("clearing the mark changed the secret")
+		}
+		_ = undo
+	}
+	t.Run("encrypted", func(t *testing.T) {
+		v, _ := renameVault(t)
+		check(t, v)
+	})
+	t.Run("unencrypted", func(t *testing.T) {
+		v := New(t.TempDir())
+		if err := v.Set("wiki-reader", "token", "synthetic-token", nil); err != nil {
+			t.Fatal(err)
+		}
+		check(t, v)
+	})
+	t.Run("undo and unmarked", func(t *testing.T) {
+		v, _ := renameVault(t)
+		before := vaultFiles(t, v)
+		_, undo, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", Entry: true, Mark: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := undo(); err != nil {
+			t.Fatal(err)
+		}
+		if got := vaultFiles(t, v); !reflect.DeepEqual(got, before) {
+			t.Error("undo did not put the vault back byte for byte")
+		}
+		if _, _, err := v.RenameCredential(CredentialRename{From: "wiki-reader", To: "reader", Entry: true}); err != nil {
+			t.Fatal(err)
+		}
+		if names, _ := v.KnownNames(); len(names.Renamed) != 0 {
+			t.Errorf("Renamed = %v, want none without Mark", names.Renamed)
+		}
+	})
+	t.Run("locked", func(t *testing.T) {
+		v, _ := renameVault(t)
+		v.Forget()
+		if err := v.ClearRenameMarker("wiki-reader"); !errors.Is(err, ErrNotUnlocked) {
+			t.Errorf("ClearRenameMarker() while locked = %v, want ErrNotUnlocked", err)
+		}
+	})
+}
+
+// A document written before the mark existed reads without it.
+func TestEntryWithoutRenameMarkerLoads(t *testing.T) {
+	var entry Entry
+	if err := json.Unmarshal([]byte(`{"id":"a","name":"n","roles":{},"created":"2024-01-01T00:00:00Z",`+
+		`"modified":"2024-01-01T00:00:00Z"}`), &entry); err != nil || entry.RenamedFrom != "" {
+		t.Errorf("entry = %+v, %v", entry, err)
+	}
+	data, _ := json.Marshal(Entry{ID: "a", Name: "n"})
+	if strings.Contains(string(data), "renamed_from") {
+		t.Errorf("an unmarked entry is written as %s", data)
 	}
 }
