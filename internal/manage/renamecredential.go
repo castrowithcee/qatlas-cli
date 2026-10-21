@@ -318,6 +318,10 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 // vault.Vault.RenameCredential), and saves the configuration, the commit point. A failure up to the commit
 // removes the new keyring keys again and puts the vault back byte for byte.
 //
+// The vault entry carries a mark of the rename (vault.Entry.RenamedFrom) from its write until the commit; once
+// committed the run removes it in a further write, and a failure there is a warning. A run that stops between
+// the two leaves the mark, and a resumed run removes it.
+//
 // Once committed it removes the old keyring keys, hands the renamed entry and the approvals to a vault process
 // that holds the vault unlocked, and logs every connection whose entry or approval scope changed, the way any
 // credential change is logged. A failure there is returned as a warning: an old key is read by no credential
@@ -351,7 +355,7 @@ func (s *Service) renameCredential(ctx context.Context, plan *RenamePlan, v *vau
 			}
 			res.Carried, undoVault, err = v.RenameCredential(vault.CredentialRename{
 				From: plan.Old, To: plan.New, CredentialID: plan.ID, Entry: toVault, Resume: plan.resumeEntry,
-				Carry: plan.carry,
+				Mark: true, Carry: plan.carry,
 			})
 			if err != nil {
 				discard()
@@ -383,6 +387,14 @@ func (s *Service) renameCredential(ctx context.Context, plan *RenamePlan, v *vau
 			res.Warnings = append(res.Warnings, s.redact(fmt.Sprintf("warning: the system keyring still holds the "+
 				"old key %s: %v; no credential reads it while none is named %s, remove it with the system's key "+
 				"manager", secret.StoreKey(plan.Old, role), err, plan.Old)))
+		}
+	}
+	// The configuration is saved, so the entry no longer stands for a rename in progress. A resumed run clears
+	// the mark a stopped one left.
+	if toVault && v != nil && (vaultWritten || plan.resumeEntry) {
+		if err := v.ClearRenameMarker(plan.New); err != nil {
+			res.Warnings = append(res.Warnings, s.redact(fmt.Sprintf("warning: the vault entry %s still carries "+
+				"the mark of the rename from %s: %v; it is harmless", plan.New, plan.Old, err)))
 		}
 	}
 	// A vault process still holds what it held before a run that stopped, so a resumed one is handed over too.
