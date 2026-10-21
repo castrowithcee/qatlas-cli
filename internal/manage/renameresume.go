@@ -24,14 +24,15 @@ type CredentialLeftover struct {
 }
 
 // CredentialLeftovers finds every CredentialLeftover of cfg in v, which is unencrypted or unlocked in this
-// process, sorted by credential. An entry counts only where it records the config id of a vault credential
-// that is configured under another name, while the vault holds no entry of that name and no credential has
-// the entry's.
+// process, sorted by credential. An entry counts only where it carries the mark of a rename
+// (vault.Entry.RenamedFrom) and records the config id of a vault credential that is configured under another
+// name, while the vault holds no entry of that name and no credential has the entry's. The same entry without
+// the mark is a hand rename of the credential in the configuration (see HandRenames).
 func CredentialLeftovers(cfg *config.Config, v *vault.Vault) ([]CredentialLeftover, error) {
 	if cfg == nil || v == nil {
 		return nil, nil
 	}
-	ids, err := v.EntryCredentialIDs()
+	names, err := v.KnownNames()
 	if err != nil {
 		return nil, err
 	}
@@ -42,16 +43,12 @@ func CredentialLeftovers(cfg *config.Config, v *vault.Vault) ([]CredentialLeftov
 	if err != nil {
 		return nil, err
 	}
-	byID := map[string]string{}
-	for name, cred := range cfg.Credentials {
-		if cred.ID != "" && cred.Type == config.CredentialTypeVault {
-			byID[cred.ID] = name
-		}
-	}
+	ids := names.Entries
+	byID := vaultCredentialsByID(cfg)
 	var out []CredentialLeftover
 	for name, owner := range ids {
 		credential, ok := byID[owner]
-		if owner == "" || !ok || credential == name {
+		if owner == "" || !ok || credential == name || names.Renamed[name] == "" {
 			continue
 		}
 		_, configured := cfg.Credentials[name]

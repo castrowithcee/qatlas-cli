@@ -126,15 +126,113 @@ type Report struct {
 	Stale []string
 	// Leftovers are the stale approvals a rename that did not finish left behind, sorted by approval.
 	Leftovers []Leftover
+	// HandRenames are the stale approvals of connections renamed by hand in the configuration, sorted by
+	// approval. Like the leftovers they are among Stale.
+	HandRenames []HandRename
 }
 
-// Leftover is a stale approval that records the config id of a connection that exists under another name:
-// what remains of renaming that connection, from or to the name of the approval, when the rename stopped
-// between the vault and the configuration. Renaming the connection to Approval, or revoking the approval,
-// clears it; neither releases anything the vault had not approved.
+// Leftover is a stale approval that records the config id of a connection that exists under another name,
+// while the vault holds an approval under that name too: what remains of renaming that connection, from or
+// to the name of the approval, when the rename stopped between the vault and the configuration. Renaming the
+// connection to Approval, or revoking the approval, clears it; neither releases anything the vault had not
+// approved.
 type Leftover struct {
 	Approval   string
 	Connection string
+}
+
+// HandRename is a stale approval under a name no connection has, that belongs to the connection Connection,
+// renamed by hand in the configuration: the vault holds no approval under Connection, and the approval either
+// records Connection's config id or, recording none, was given for the very credential Connection reads, and
+// no other connection could be it (see HandRenames). Adopting the rename carries it over as it is, valid or
+// open; nothing carries it on its own, since the configuration is no trust anchor.
+//
+// Ambiguous says the approval could be that of more than one connection, or its connection that of more than
+// one approval; Connection is "" then, and nothing is suggested.
+type HandRename struct {
+	Approval   string
+	Connection string
+	Ambiguous  bool
+}
+
+// approvalRef is what telling a connection's hand rename needs of one approval: the config id of the
+// connection and the name of the credential it was given for.
+type approvalRef struct{ connectionID, credential string }
+
+// HandRenames finds the HandRename of every approval names lists, sorted by approval: the names of an
+// unencrypted vault or of one unlocked in this process (vault.Vault.KnownNames), or what a vault process that
+// holds it unlocked tells. It reads no secret and writes nothing.
+func HandRenames(cfg *config.Config, names vault.Names) []HandRename {
+	refs := make(map[string]approvalRef, len(names.Approvals))
+	for name, id := range names.Approvals {
+		refs[name] = approvalRef{connectionID: id, credential: names.ApprovalCredentials[name]}
+	}
+	return handRenames(cfg, refs)
+}
+
+// handRenames finds the hand renames among approvals, by connection name. An approval that records a config
+// id belongs to the connection with that id, if one other than itself has it and has no approval of its
+// own; one id claimed by more than one such approval is ambiguous. An approval without an id is matched by
+// its credential only against the connections that read a vault credential, have no approval and are not
+// claimed by an id: exactly one candidate, matched by no other such approval, is a hand rename; any other
+// count but none is ambiguous.
+func handRenames(cfg *config.Config, approvals map[string]approvalRef) []HandRename {
+	if cfg == nil {
+		return nil
+	}
+	claimed := map[string]bool{}
+	byOwner := map[string][]string{}
+	var unrecorded []string
+	for name, ref := range approvals {
+		if ref.connectionID != "" {
+			claimed[ref.connectionID] = true
+		}
+		if _, configured := cfg.Connections[name]; configured {
+			continue
+		}
+		if ref.connectionID == "" {
+			unrecorded = append(unrecorded, name)
+			continue
+		}
+		owner := connectionWithID(cfg, ref.connectionID)
+		if _, held := approvals[owner]; owner != "" && !held {
+			byOwner[owner] = append(byOwner[owner], name)
+		}
+	}
+	var out []HandRename
+	for owner, names := range byOwner {
+		for _, name := range names {
+			if len(names) == 1 {
+				out = append(out, HandRename{Approval: name, Connection: owner})
+			} else {
+				out = append(out, HandRename{Approval: name, Ambiguous: true})
+			}
+		}
+	}
+	candidates := map[string][]string{}
+	matches := map[string]int{}
+	for _, name := range unrecorded {
+		credential := approvals[name].credential
+		if credential == "" || cfg.Credentials[credential].Type != config.CredentialTypeVault {
+			continue
+		}
+		for connection, entry := range cfg.Connections {
+			if _, held := approvals[connection]; held || entry.Credential != credential || claimed[entry.ID] {
+				continue
+			}
+			candidates[name] = append(candidates[name], connection)
+			matches[connection]++
+		}
+	}
+	for name, found := range candidates {
+		if len(found) == 1 && matches[found[0]] == 1 {
+			out = append(out, HandRename{Approval: name, Connection: found[0]})
+		} else {
+			out = append(out, HandRename{Approval: name, Ambiguous: true})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Approval < out[j].Approval })
+	return out
 }
 
 // candidate is one connection of cfg that reads a vault credential the vault holds an entry for.
@@ -197,11 +295,21 @@ func Pending(cfg *config.Config, v *vault.Vault) (Report, error) {
 			})
 		}
 	}
+	refs := make(map[string]approvalRef, len(approvals))
+	for name, approved := range approvals {
+		refs[name] = approvalRef{connectionID: approved.ConnectionID, credential: approved.Scope.Credential}
+	}
+	report.HandRenames = handRenames(cfg, refs)
+	byHand := map[string]bool{}
+	for _, r := range report.HandRenames {
+		byHand[r.Approval] = true
+	}
 	for _, name := range sortedKeys(approvals) {
 		if connection, ok := cfgConnection(cfg, name); !ok ||
 			cfg.Credentials[connection.Credential].Type != config.CredentialTypeVault {
 			report.Stale = append(report.Stale, name)
-			if owner := connectionWithID(cfg, approvals[name].ConnectionID); owner != "" && owner != name {
+			owner := connectionWithID(cfg, approvals[name].ConnectionID)
+			if owner != "" && owner != name && !byHand[name] {
 				report.Leftovers = append(report.Leftovers, Leftover{Approval: name, Connection: owner})
 			}
 		}

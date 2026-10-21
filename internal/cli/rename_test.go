@@ -333,7 +333,8 @@ func TestConfigRenameCredentialDryRunAndAdmin(t *testing.T) {
 }
 
 // stopCredentialRename leaves the vault in dir the way a rename of wiki-vault to wiki-cred that stopped before
-// the configuration does: the entry and the approvals of both connections under the new name.
+// the configuration does: the entry, marked as renamed, and the approvals of both connections under the new
+// name.
 func stopCredentialRename(t *testing.T, dir string) {
 	t.Helper()
 	cfg := loadConfig(t, dir)
@@ -349,7 +350,7 @@ func stopCredentialRename(t *testing.T, dir string) {
 		carry = append(carry, vault.ScopeRename{Before: scope, After: renamed, ConnectionID: cfg.Connections[name].ID})
 	}
 	if _, _, err := v.RenameCredential(vault.CredentialRename{From: "wiki-vault", To: "wiki-cred",
-		CredentialID: cfg.Credentials["wiki-vault"].ID, Entry: true, Carry: carry}); err != nil {
+		CredentialID: cfg.Credentials["wiki-vault"].ID, Entry: true, Mark: true, Carry: carry}); err != nil {
 		t.Fatal(err)
 	}
 }
