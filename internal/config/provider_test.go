@@ -624,3 +624,30 @@ func TestFitsFormTakesSeveralSegmentsForAMiddlePath(t *testing.T) {
 		t.Error("folder/PATH must not fit a target with a trailing wildcard")
 	}
 }
+
+func TestFixesTargetReadsTargetsOfKindsBelow(t *testing.T) {
+	meta := TargetMetadata{Wildcard: "*", Kinds: []TargetKind{
+		{Name: "table", Forms: []string{"TABLE", "*"}},
+		{Name: "view", Forms: []string{"TABLE/VIEW"}, Parents: []string{"table"}},
+	}}
+	for _, c := range []struct {
+		kind    string
+		targets []string
+		want    bool
+	}{
+		{"table", []string{"A"}, true},
+		{"table", []string{"A/V"}, true},
+		{"table", []string{"A", "A/V"}, true},
+		{"table", []string{"A", "A/V", "A/W"}, true},
+		{"table", []string{"A", "B/V"}, false},
+		{"table", []string{"A/V", "B/W"}, false},
+		{"table", []string{"*"}, false},
+		{"table", nil, false},
+		{"view", []string{"A", "A/V"}, true},
+		{"view", []string{"A"}, false},
+	} {
+		if got := meta.FixesTarget(c.kind, c.targets); got != c.want {
+			t.Errorf("FixesTarget(%q, %v) = %v, want %v", c.kind, c.targets, got, c.want)
+		}
+	}
+}

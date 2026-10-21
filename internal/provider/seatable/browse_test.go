@@ -187,3 +187,22 @@ func TestResolveTargetURL(t *testing.T) {
 		t.Errorf("calls = %v", calls)
 	}
 }
+
+func TestFixesTargetWithMixedTableAndViewTargets(t *testing.T) {
+	meta, _ := registry(t).ProviderMetadata(Provider)
+	for _, c := range []struct {
+		targets []string
+		want    bool
+	}{
+		{[]string{"A"}, true},
+		{[]string{"A/V"}, true},
+		{[]string{"A", "A/V"}, true},
+		{[]string{"A", "B/V"}, false},
+		{[]string{"A/V", "B/W"}, false},
+		{[]string{"*"}, false},
+	} {
+		if got := meta.Target.FixesTarget("table", c.targets); got != c.want {
+			t.Errorf("FixesTarget(table, %v) = %v, want %v", c.targets, got, c.want)
+		}
+	}
+}
