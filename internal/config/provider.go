@@ -130,6 +130,8 @@ func (t TargetMetadata) knowsForm(form string) bool {
 // Parents names the kinds one level above, empty for a top-level kind; the parents of all kinds form the levels
 // an editor browses through. Entries of a kind with parents are listed under one target of one of them.
 //
+// Top says that a kind with parents is also listed at the top level; a kind without parents always is.
+//
 // Nested says that entries of the kind also sit below an entry of the same kind, such as a folder inside a
 // folder. They are listed under one target of the kind itself.
 //
@@ -142,6 +144,7 @@ type TargetKind struct {
 	Forms       []string
 	Parents     []string
 	Nested      bool
+	Top         bool
 	Unlisted    bool
 }
 
@@ -200,6 +203,9 @@ func (t TargetMetadata) HasChildKind(name string) bool {
 // cycle.
 func (t TargetMetadata) ValidateKindParents() error {
 	for _, kind := range t.Kinds {
+		if kind.Top && len(kind.Parents) == 0 {
+			return fmt.Errorf("target kind %q is top-level already and cannot set Top", kind.Name)
+		}
 		for _, parent := range kind.Parents {
 			if _, ok := t.KindByName(parent); !ok {
 				return fmt.Errorf("target kind %q names unknown parent kind %q", kind.Name, parent)

@@ -437,6 +437,29 @@ func TestKeepValidTakesWildcardOnlyWhereAFormSpellsIt(t *testing.T) {
 	}
 }
 
+func TestCheckListRequestWithSeveralParentsAndTop(t *testing.T) {
+	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
+		{Name: "a", Forms: []string{"a/ID"}},
+		{Name: "b", Forms: []string{"b/ID"}},
+		{Name: "other", Forms: []string{"other/ID"}},
+		{Name: "multi", Forms: []string{"multi/ID"}, Parents: []string{"a", "b"}},
+		{Name: "both", Forms: []string{"both/ID"}, Parents: []string{"a"}, Top: true},
+	}}
+	for _, c := range []struct {
+		kind, parent string
+		ok           bool
+	}{
+		{"multi", "a/1", true}, {"multi", "b/1", true}, {"multi", "other/1", false},
+		{"multi", "", false}, {"multi", "a/*", false},
+		{"both", "", true}, {"both", "a/1", true}, {"both", "b/1", false},
+	} {
+		err := checkListRequest(metadata, config.TargetListRequest{Kind: c.kind, Parent: c.parent})
+		if (err == nil) != c.ok {
+			t.Errorf("%s under %q = %v, want ok %v", c.kind, c.parent, err, c.ok)
+		}
+	}
+}
+
 func TestNestedKindListsBelowItsParentKindAndItsOwnEntries(t *testing.T) {
 	metadata := config.TargetMetadata{Kinds: []config.TargetKind{
 		{Name: "drive", Forms: []string{"drive/ID"}},

@@ -283,6 +283,24 @@ func TestEmbeddedScriptsAreRestricted(t *testing.T) {
 	}
 }
 
+func TestBuildPageCarriesParentsAndTop(t *testing.T) {
+	old := bookMetadata.Target.Kinds
+	bookMetadata.Target.Kinds = []config.TargetKind{
+		{Name: "a", Forms: []string{"a/ID"}},
+		{Name: "b", Forms: []string{"b/ID"}, Parents: []string{"a", "c"}, Top: true},
+		{Name: "c", Forms: []string{"c/ID"}},
+	}
+	t.Cleanup(func() { bookMetadata.Target.Kinds = old })
+	s, _, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	s.svc = s.svc.WithTargetSource(bookTargetSource(nil, nil))
+	rec := s.request(t, http.MethodGet, "/connections/new?provider=book", s.addr, cookie, nil)
+	want := `data-kinds="[{&#34;name&#34;:&#34;a&#34;},{&#34;name&#34;:&#34;b&#34;,&#34;parents&#34;:[&#34;a&#34;,&#34;c&#34;],&#34;top&#34;:true},{&#34;name&#34;:&#34;c&#34;}]"`
+	if body := rec.Body.String(); !strings.Contains(body, want) {
+		t.Fatalf("build page lacks %s in: %s", want, body)
+	}
+}
+
 func TestBuildPageMarksUnlistedKinds(t *testing.T) {
 	old := bookMetadata.Target.Kinds
 	bookMetadata.Target.Kinds = []config.TargetKind{{Name: "shelf", Forms: []string{"shelf/NAME"}, Unlisted: true}}

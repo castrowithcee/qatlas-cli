@@ -117,6 +117,30 @@ func pickPage(entries ...config.TargetEntry) func(config.TargetListRequest) (con
 	}
 }
 
+func TestPickerKindsFollowParentsAndTop(t *testing.T) {
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
+			{Name: "group", Forms: []string{"g/NAME"}},
+			{Name: "team", Forms: []string{"t/NAME"}},
+			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}, Top: true},
+			{Name: "shared", Forms: []string{"s/ID"}, Parents: []string{"group", "team"}},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := pickerModelOn(t, reg, &listSource{list: pickPage()})
+	for _, c := range []struct{ parent, want string }{
+		{"", "group,team,item"}, {"group", "item,shared"}, {"team", "shared"},
+	} {
+		if got := strings.Join(m.pickKindsUnder(c.parent), ","); got != c.want {
+			t.Errorf("kinds under %q = %q, want %q", c.parent, got, c.want)
+		}
+	}
+}
+
 func TestThePickerIsOfferedOnlyForASavedConnectionWithABrowser(t *testing.T) {
 	src := &listSource{list: pickPage()}
 	m := pickerModel(t, src)

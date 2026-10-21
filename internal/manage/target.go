@@ -390,7 +390,7 @@ func checkListRequest(t config.TargetMetadata, req config.TargetListRequest) err
 		return invalid
 	}
 	if req.Parent == "" {
-		if len(kind.Parents) > 0 {
+		if len(kind.Parents) > 0 && !kind.Top {
 			return invalid
 		}
 		return nil

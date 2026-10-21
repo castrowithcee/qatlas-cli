@@ -516,6 +516,32 @@ func TestValidateKindParents(t *testing.T) {
 	}
 }
 
+func TestValidateKindParentsWithSeveralParentsAndTop(t *testing.T) {
+	kinds := func(kind TargetKind) TargetMetadata {
+		return TargetMetadata{Kinds: []TargetKind{
+			{Name: "a", Forms: []string{"a/ID"}},
+			{Name: "b", Forms: []string{"b/ID"}},
+			kind,
+		}}
+	}
+	k := func(top bool, parents ...string) TargetKind {
+		return TargetKind{Name: "c", Forms: []string{"c/ID"}, Parents: parents, Top: top}
+	}
+	for name, tc := range map[string]struct {
+		target TargetMetadata
+		ok     bool
+	}{
+		"two parents and top":   {kinds(k(true, "a", "b")), true},
+		"unknown second parent": {kinds(k(false, "a", "zz")), false},
+		"top without parents":   {kinds(k(true)), false},
+		"cycle over second":     {TargetMetadata{Kinds: []TargetKind{{Name: "a", Forms: []string{"a/ID"}, Parents: []string{"c"}}, {Name: "c", Forms: []string{"c/ID"}, Parents: []string{"x", "a"}}, {Name: "x", Forms: []string{"x/ID"}}}}, false},
+	} {
+		if err := tc.target.ValidateKindParents(); (err == nil) != tc.ok {
+			t.Errorf("%s: ValidateKindParents() = %v, want ok %v", name, err, tc.ok)
+		}
+	}
+}
+
 func TestValidTarget(t *testing.T) {
 	target := TargetMetadata{
 		Kinds: []TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*", "bot"}}},

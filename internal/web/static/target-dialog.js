@@ -129,7 +129,7 @@
   }
 
   function startTop() {
-    var names = kinds.filter(function (k) { return !(k.parents && k.parents.length) && !k.unlisted; }).map(function (k) { return k.name; });
+    var names = kinds.filter(function (k) { return (!(k.parents && k.parents.length) || k.top) && !k.unlisted; }).map(function (k) { return k.name; });
     levels = [{ title: "", kinds: names, kind: names[0], parent: "", entries: [], next: "", serverSearch: false, fixed: false }];
     marks.clear();
     render();
