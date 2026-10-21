@@ -509,7 +509,7 @@ func Approve(ctx context.Context, cfg *config.Config, v *vault.Vault, names []st
 	if len(scopes) == 0 {
 		return nil, "", nil
 	}
-	if err := v.Approve(scopes); err != nil {
+	if err := v.ApproveConnections(scopes, ConnectionIDs(cfg)); err != nil {
 		return nil, "", err
 	}
 	sort.Strings(approved)
@@ -577,6 +577,20 @@ func VaultScopes(cfg *config.Config) ([]vault.Scope, error) {
 		scopes = append(scopes, secret.ScopeOf(resolved))
 	}
 	return scopes, nil
+}
+
+// ConnectionIDs returns the config id of every connection of cfg that has one, by name.
+func ConnectionIDs(cfg *config.Config) map[string]string {
+	ids := map[string]string{}
+	if cfg == nil {
+		return ids
+	}
+	for name, connection := range cfg.Connections {
+		if connection.ID != "" {
+			ids[name] = connection.ID
+		}
+	}
+	return ids
 }
 
 // LapsedModels names the vorbild connections of token that cover nothing now, sorted: one that is no
