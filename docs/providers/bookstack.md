@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-07
+updated: 2026-10-20
 ---
 
 # BookStack
@@ -13,7 +13,7 @@ A connection selects one BookStack instance and one API token. It supports listi
 chapters, shelves, tags, page comments, page attachments, and gallery images, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, attachments, and images (`create`),
 changing or moving pages and attachments and changing books, chapters, shelves, comments, and images (`update`), and deleting pages, books, chapters, shelves, comments, attachments, and images (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
-bound to individual books (see Books).
+bound to shelves, books, chapters, or pages (see Targets).
 
 Credentials provide `token-id` and `token-secret`. A connection selects its tools by `effects`, which offers
 every tool of the listed effects, or by a `tools` list, which offers exactly the named tools, for example
@@ -39,55 +39,52 @@ followed, so the token never travels to another host.
 Existing connections with an `http://` URL are refused after this change and fail closed. Put TLS in front
 of the instance, for example with a reverse proxy, and change `base_url` to the `https` address.
 
-## Books
+## Targets
 
-A connection may be bound to books with `target` or the `targets` list; each entry has the form
-`book/BOOK_ID`, with a positive integer without a leading zero. A list holds at most 100 entries, names no
-book twice, and accepts no wildcard. Without a target, everything the token reaches stays reachable.
+A connection may be bound with `target` or the `targets` list: at most 100 entries, none twice, no wildcard,
+each identifier a positive integer without a leading zero. A target that does not match these forms makes the
+connection invalid; it fails closed in the configuration check and at every call, and the message never quotes
+the value. Without a target, everything the token reaches stays reachable. Several targets reach their union.
 
-Behavior change: a target that was set freely before and does not match this form now makes the connection
-invalid. The connection fails closed, in the configuration check and at every call, and the message never
-quotes the configured value.
+| Target | Reaches | Proof |
+| --- | --- | --- |
+| `shelf/SHELF_ID` | the books on the shelf at the time of the call, each like a bound book, and the shelf itself through `shelves.get` | one read of the shelf per call, only when a book is not bound itself; a book taken off the shelf is out of reach with the next call, and a shelf that cannot be read fails the call |
+| `book/BOOK_ID` | the book with its chapters and pages | a `book_id` locally, a page or chapter by one read of it |
+| `chapter/CHAPTER_ID` | the pages of the chapter, also new ones, with their attachments, images, and comments; the chapter itself only to read, search, and export | a page by one read of it (its `chapter_id`); the chapter itself needs none |
+| `page/PAGE_ID` | the page with its attachments, images, and comments | none for the page itself |
 
-On a bound connection every tool stays inside the listed books and a refusal never names the foreign target:
+Every identifier from an argument or an answer (page, chapter, book, attachment, image, comment, template page,
+search hit) is proven against the targets before anything is read, changed, or returned. An attachment, image,
+or comment is proven through its page, a move through its source and its target. A refusal is an
+`invalid-request` that names neither the object nor a target. Filters sent to BookStack only narrow a list:
+BookStack silently ignores a filter it does not know, so every row and hit is checked on the client against its
+own book, chapter, and page, and `limit` and `offset` count the remaining rows. A filtered listing sends at most
+200 requests; a server that delivers more fails the call as `invalid-provider-response`. A connection without
+targets sends no proof read.
 
-- `book_id` of `pages.create`, `pages.update` (move), and `pages.list` must be one of the books. It is
-  checked before the secrets are read and before any request is sent.
-- `book_id` of `chapters.list` and `chapters.create`, the `id` of `books.get` and `books.update`, and the target
-  `book_id` of `chapters.update` follow the same rule.
-- A page identifier (`pages.get`, `pages.update`, `pages.delete`) or chapter identifier (`pages.create` and
-  `pages.list` with `chapter_id`, `chapters.get`, `chapters.update`) is bound to its book by one proof read
-  (`GET /api/pages/{id}` or `GET /api/chapters/{id}`) before the detail or the change follows. A move reads
-  the page and the target chapter once each. For `pages.get`
-  and `chapters.get` this read is the answer; no second request is sent. A page or chapter of another book is
-  refused as `invalid-request`.
-- A connection without targets sends no proof read.
+Without `book_id` and `chapter_id`, `pages.list` and `content.search` use the only bound book or the only bound
+chapter, and `chapters.list` the only bound book. A connection bound to pages alone lists these pages; its search
+reads the instance search in pages of 100 hits until every bound page is found, at most 20 requests, and `total`
+counts the bound pages found. Every other binding needs an argument and is refused locally otherwise.
 
-`bookstack.pages.list` takes the optional, mutually exclusive arguments `book_id` and `chapter_id`. On a bound
-connection `book_id` must be one of the books and `chapter_id` is bound through its chapter. Without an
-argument, a connection bound to exactly one book lists that book; a connection bound to several books is
-refused locally as `invalid-request`: "book_id is required for a connection bound to several books". Qatlas
-sends `filter[book_id]` and `filter[chapter_id]` as an optimization only. BookStack silently ignores a filter
-it does not know, so each row is checked against its book (and chapter) on the client and a foreign row is
-dropped. `limit` and `offset` then count the remaining rows. A filtered listing sends at most 200 requests; a
-server that delivers more fails the call as `invalid-provider-response`.
+A tool that a binding does not reach is not offered, and a call is refused locally before any secret is read:
 
-Limit of the binding: the proof read and the change are two requests. A page moved to another book between
-them, for example by another user, can still be changed once.
+| Binding | Not reachable |
+| --- | --- |
+| any target | the instance-wide tools: `books.create`, the shelf tools except `shelves.get`, content permissions of a `bookshelf`, `tags.list`, `tags.values`, and the recycle bin, user, role, audit log, and import tools |
+| no `shelf/` | `shelves.get` |
+| no `book/` or `shelf/` | the whole-book tools `books.list`, `books.get`, `books.update`, `books.delete`, `books.set-cover`, `chapters.list`, `chapters.create`, `chapters.update`, and `chapters.delete`, the export of a `book`, and content permissions of a `book` or `chapter` |
+| only `page/` | also `chapters.get`, `pages.create`, and the export of a `chapter` |
+
+Limit of the binding: the proof read and the action are two requests. An object moved out of the targets
+between them, for example by another user, can still be changed once.
 
 ## Books and chapters
 
 `bookstack.books.list` and `bookstack.chapters.list` take `limit` and `offset` and page through the instance
 in records of at most 500, sorted by `id`. `bookstack.books.get` and `bookstack.chapters.get` take an `id`.
-All four only read.
-
-On a bound connection `books.list` returns only the bound books: BookStack has no filter for it, so each row
-is checked on the client and `limit` and `offset` count the remaining rows. `chapters.list` takes an
-optional `book_id` and follows the rule of `pages.list`: it is required on a connection bound to several
-books ("book_id is required for a connection bound to several books") and implied when exactly one book is
-bound. Qatlas sends `filter[book_id]` as an optimization only and checks every row against its book. A
-filtered listing sends at most 200 requests; a server that delivers more fails the call as
-`invalid-provider-response`. A listing stops as soon as the instance returns no new record.
+All four only read. `chapters.list` takes an optional `book_id`. On a connection with targets `books.list`
+returns only the reached books (see Targets). A listing stops as soon as the instance returns no new record.
 
 `books.get` returns the metadata, `description` and `description_html`, `tags` (at most 50),
 `default_template_id` (0 when there is none), and `contents`: the chapters with their pages and the loose
@@ -115,22 +112,16 @@ not available; for cover images see below.
 - `chapters.update` with `book_id` moves the chapter into that book. BookStack requires the permission to
   delete the chapter in addition to the permission to update it. Without it the call fails as `permission`.
 
-On a bound connection `books.create` is refused locally as `invalid-request`, because a new book would lie
-outside the bound books. For the other three tools the book is checked before the secrets are read: the `id` of
-`books.update`, the `book_id` of `chapters.create`, and a target `book_id` of `chapters.update`. The chapter
-of `chapters.update` is proven by one read, and a `default_template_id` is proven by one read of that page: its
-book must be one of the bound books. A foreign target, chapter, or template page is refused without a change
-request and without naming it. A connection without targets sends no proof read.
+On a connection with targets, the book, the chapter, a target `book_id`, and a `default_template_id` are proven
+before the change (see Targets).
 
 The tools are not part of any profile. All four require confirmation; the creating tools are not idempotent.
 Each change is sent once and never retried; the result shows the changed object without its content tree.
 
 ## Shelves
 
-Shelves hold any books and span the whole instance, so the four shelf tools work only on a connection without
-targets. On a connection bound to books, every shelf tool is refused locally as `invalid-request` before the
-secrets are read and before any request, and the message never names a configured book. This includes
-`shelves.list` and `shelves.get`, although they are part of the `read` profile.
+Shelves hold any books and span the whole instance, so the shelf tools work only on a connection without
+targets; `shelves.get` also reads a bound shelf (see Targets).
 
 `bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
 sorted by `id`. `bookstack.shelves.get` takes an `id` and returns the metadata, `description` and
@@ -159,8 +150,8 @@ from a local file (png, jpg, jpeg, gif, or webp, at most 50 MiB, streamed from d
 connection releases for reading). The file type is checked before any secret is read or any file is opened. The
 request is a multipart `POST` with `_method=PUT` and the file in the field `image`. `books.update` and
 `shelves.update` take `remove_cover: true` to remove the cover (sent as `image: null`); it can be combined with
-the other fields and is a valid change on its own, and `false` sends nothing. On a connection bound to books the
-book `id` must be a bound book; the shelf variants are refused on such a connection. All of these require
+the other fields and is a valid change on its own, and `false` sends nothing. On a connection with targets the
+book is proven and the shelf variants are refused (see Targets). All of these require
 confirmation, are not part of any profile, send one request without retry, and `set-cover` is not idempotent.
 
 ## Tags and instance information
@@ -171,12 +162,12 @@ confirmation, are not part of any profile, send one request without retry, and `
 `value_contains`, `limit`, and `offset` and lists that name's values with the same counts. The contains
 arguments (at most 255 characters, case-insensitive) are sent as a `%...%` filter in which `%`, `_`, and `\` are
 masked as literals; every returned row is checked against the filter again, because BookStack ignores filters
-it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection bound
-to books, like the shelf tools. Names and values are untrusted data. Tags are written through the items that
+it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection with
+targets, like the shelf tools. Names and values are untrusted data. Tags are written through the items that
 carry them.
 
 `bookstack.system.get` returns `version`, `app_name`, `instance_id`, and `base_url` (no logo). It returns no
-content and therefore also works on a connection bound to books.
+content and therefore also works on a connection with targets.
 
 ## Content permissions
 
@@ -216,8 +207,7 @@ cached beyond it.
 
 The tool requires confirmation and a tool allow list, is idempotent, is part of no profile, and sends exactly
 one `PUT` without retry; after a timeout or a 5xx answer the result is reported as uncertain. On a connection
-bound to books a `book` must be a bound book, a `chapter` or `page` is proven to lie in a bound book by one
-read, and a `bookshelf` is only available on a connection without book targets.
+with targets the item is proven first (see Targets).
 
 ## Pages
 
@@ -246,10 +236,8 @@ Side effects of a write:
 
 Moving: `pages.update` with exactly one of `book_id` and `chapter_id` moves the page into that book or chapter.
 BookStack requires the permission to delete the page in addition to the permission to update it and to create
-pages in the target. Without delete permission the call fails as `permission`. On a bound connection the
-target book is checked before the secrets are read; the source page and a target chapter are each proven by
-one read. A foreign page or target is refused as `invalid-request` without a change request and without
-naming it.
+pages in the target. Without delete permission the call fails as `permission`. On a connection with
+targets the source page and the target are proven before the change (see Targets).
 
 ## Recycle bin
 
@@ -262,14 +250,14 @@ data.
 `bookstack.recycle-bin.restore` restores one deletion by `deletion_id` and returns `restore_count`.
 `bookstack.recycle-bin.destroy` destroys one deletion permanently and returns `delete_count`; this cannot be
 undone. BookStack requires the role permissions `settings-manage` and `restrictions-manage-all` for all three.
-The recycle bin spans the whole instance, so the tools are refused on a connection with book targets. Each
+The recycle bin spans the whole instance, so the tools are refused on a connection with targets. Each
 change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
 reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
 that names it and the `delete` effect.
 
 ## Users, roles, and audit log
 
-These tools cover the whole instance, so they are refused on a connection with book targets (before any secret is
+These tools cover the whole instance, so they are refused on a connection with targets (before any secret is
 read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
 authentication identifiers, IP addresses). Names and texts are untrusted data.
 
@@ -289,7 +277,7 @@ users or permissions were cut.
 `bookstack.roles.create`, `bookstack.roles.update`, and `bookstack.roles.delete` need the role permission
 `user-roles-manage`. Role permissions can escalate up to full administrative control of the instance, so these
 tools require a tool allow list, are part of no profile, need confirmation, and are refused on a connection with
-book targets. Each sends exactly one change request without retry; after a timeout, a 5xx answer, or an unreadable
+targets. Each sends exactly one change request without retry; after a timeout, a 5xx answer, or an unreadable
 answer the result is reported as uncertain. `create` and `update` return the role like `roles.get`.
 
 - `roles.create` takes `display_name` (3 to 180 characters, required), `description` (at most 180 characters),
@@ -320,7 +308,7 @@ so the argument does not exist and no request body contains it.
 
 `bookstack.users.update` and `bookstack.users.delete` change or remove existing users and need the role
 permission `users-manage`. They require a tool allow list, are part of no profile, need confirmation, and are
-refused on a connection with book targets (before any secret is read). Each sends exactly one change request
+refused on a connection with targets (before any secret is read). Each sends exactly one change request
 without retry; after a timeout, a 5xx answer, or an unreadable answer the result is reported as uncertain. No tool
 creates or invites users or sets an e-mail address, a password, or an external authentication identifier, and no
 tool creates API tokens: these arguments do not exist, unknown arguments are refused, and no request body contains
@@ -354,7 +342,7 @@ filters. Entries carry `id`, `type`, `detail`, `user_id`, `user_name`, `loggable
 The group `imports` uploads BookStack ZIP exports, shows what BookStack detected in them, and imports them as a
 book, chapter, or page. BookStack requires the role permission `content-import` for the token's user. Imports
 belong to that user, and importing a book creates a new book, so the five tools are instance-wide and refused on
-a connection with book targets, before any secret is read. None of them is part of a profile.
+a connection with targets, before any secret is read. None of them is part of a profile.
 
 `bookstack.imports.list` lists the pending imports (`limit`, `offset`) with `id`, `name`, `size`, `type`
 (`book`, `chapter`, or `page`), `created_by`, `created_at`, and `updated_at`. `bookstack.imports.get` returns the
@@ -389,7 +377,7 @@ show the group so that agents and people can find tools by subject.
 
 Comments are read and managed on pages only; comments on other object types are not reachable.
 
-`comments.list` takes an optional `page_id` (required on a connection bound to books), `limit`, and `offset`. It
+`comments.list` takes an optional `page_id` (required on a connection with targets), `limit`, and `offset`. It
 lists the comments of the page without their text: `id`, `page_id`, `parent_id`, `local_id`, `content_ref`,
 `created_by`, `updated_by`, `created_at`, `updated_at`. `parent_id` is the `local_id` of the parent comment on the
 same page (0 for a top-level comment); `local_id` is a number scoped to the page, `id` is global. Without
@@ -414,11 +402,8 @@ tools. `comments.create` is not idempotent; `comments.update` is idempotent. All
 confirmation, send exactly one request, and are never retried; after a timeout or a 5xx answer the result is
 reported as uncertain.
 
-On a connection bound to books, `comments.list` and `comments.create` prove the page by one read of it. `get`,
-`update`, and `delete` read the comment and prove its page by a second read; only a comment of a page in a bound
-book is returned or changed. A comment that is not a page comment is refused. A refusal is an `invalid-request`
-that does not name the other book, page, or comment, and no change request is sent. A connection without targets
-needs no proof reads.
+A comment that is not a page comment is refused. On a connection with targets, `get`, `update`, and `delete`
+read the comment and prove its page before it is returned or changed (see Targets).
 
 ## Search
 
@@ -431,12 +416,9 @@ beside `page` and `count` no other parameter is sent. The
 [BookStack search syntax](https://www.bookstackapp.com/docs/user/searching/) (`{type:page}`, `[tag=value]`,
 `{created_by:me}`, and so on) is allowed because it only filters within the chosen endpoint.
 
-On a connection bound to books, `book_id` must be one of the books (checked before the secrets are read and
-before any request); `chapter_id` is bound through one proof read of the chapter. Without an argument, a
-connection bound to exactly one book searches that book; a connection bound to several books is refused
-locally as `invalid-request`. Every hit is also checked on the client: hits of other books, shelves, and hits
-without a book are dropped, so a page can hold fewer hits than `count`. A connection without targets can use
-all three endpoints.
+On a connection with targets, `book_id` and `chapter_id` are proven and the defaults of Targets apply. Every hit
+is checked on the client; shelves, hits without a book, and hits outside the targets are dropped, so a page can
+hold fewer hits than `count`.
 
 Each hit has `type`, `id`, `name`, `slug`, `book_id`, `chapter_id`, `url`, `tags` (at most 50 `name`/`value`
 pairs), `preview_name`, and `preview_content`. The previews are untrusted HTML, cut to 2000 characters; never
@@ -458,14 +440,12 @@ confirmation. The answer carries `type`, `id`, `format`, `size`, and `sha256` on
 contains the attachments and images of the exported content.
 
 Both tools need the BookStack role permission `content-export` for the token's user in addition to read access.
-On a connection bound to books, a `book` is checked against the books before the secrets are read and before
-any request; a `chapter` or `page` is bound through one proof read of the item (without targets this read is
-skipped).
+On a connection with targets the item is proven first (see Targets).
 
 ## Attachments
 
 Attachments belong to pages. `bookstack.attachments.list` takes an optional `page_id` (required on a
-connection bound to books), `limit`, and `offset`, and lists `id`, `name`, `extension`, `page_id`, `external` (true
+connection with targets), `limit`, and `offset`, and lists `id`, `name`, `extension`, `page_id`, `external` (true
 for a link), `order`, `created_by`, `updated_by`, `created_at`, and `updated_at`, without any content. The filter
 sent to BookStack is only an optimization: every row is checked again for the page. BookStack before v26.09.1 also
 lists attachments of pages in the recycle bin.
@@ -480,11 +460,9 @@ the local file, decoded as a stream, up to 72 MiB within 10 minutes. A link atta
 file. The answer carries `id`, `name`, `size`, and `sha256` only, never the content. An existing file is replaced
 only with confirmation. Writing needs the connection's local file release for writing.
 
-On a connection bound to books, the page of the attachment is proven to lie in a bound book before anything is
-returned or written: the metadata comes first in the answer of BookStack, the page is read once as proof, and only
-then the first byte of content is decoded; an attachment of another book is refused as `invalid-request` without
-naming the other book, page, or attachment. A connection without targets reads no proof. These three tools are
-read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+On a connection with targets, the page of the attachment is proven before anything is returned or written: the
+metadata comes first in the answer of BookStack, and only after the proof is the first byte of content decoded.
+These three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
 
 ### Changing attachments
 
@@ -504,11 +482,8 @@ accepts a multipart body only on `POST`, so the request is `POST /api/attachment
 `bookstack.attachments.delete` takes the `id` and deletes the attachment; attachments are not kept in the recycle bin,
 so the deletion is final.
 
-On a connection bound to books, `link` and `upload` prove the page by one read. `update`, `replace`, and `delete`
-find the page of an existing attachment through the attachment listing filtered by `id`, which carries no file
-content, and then prove that page by one read; `update` with `page_id` proves the target page as well. A page or an
-attachment of another book is refused as `invalid-request` without naming it, and nothing is changed. A connection
-without targets reads no proof.
+On a connection with targets, `update`, `replace`, and `delete` find the page of an existing attachment through the
+attachment listing filtered by `id`, which carries no file content, and prove that page (see Targets).
 
 Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
 result is reported as uncertain, and the attachments of the page should be read before repeating it. All five
@@ -519,7 +494,7 @@ is idempotent; `replace` updates and is not idempotent; `delete` requires an ent
 ## Images
 
 Gallery images and drawings belong to pages. `bookstack.images.list` takes an optional `page_id` (required on a
-connection bound to books), an optional `type` (`gallery` or `drawio`), `limit`, and `offset`, and lists `id`, `name`,
+connection with targets), an optional `type` (`gallery` or `drawio`), `limit`, and `offset`, and lists `id`, `name`,
 `type`, `page_id`, `url`, `created_by`, `updated_by`, `created_at`, and `updated_at`, without any image data. The
 filters sent to BookStack are only an optimization: every row is checked again for page and type.
 
@@ -532,10 +507,8 @@ to 64 MiB within 10 minutes. The answer carries `id`, `name`, `size`, `sha256`, 
 data. An existing file is replaced only with confirmation. Writing needs the connection's local file release for
 writing. Downloading by an arbitrary image url is not offered.
 
-On a connection bound to books, the image is bound through its page: the metadata is read first and the page of the
-image is read once as proof, and only then is the data requested. An image of another book is refused as
-`invalid-request` without naming the other book, page, or image. A connection without targets reads no proof. These
-three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+On a connection with targets, the metadata of the image is read first and its page proven, and only then is the data
+requested. These three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
 
 ### Changing images
 
@@ -553,9 +526,8 @@ only on `POST`, so the request is `POST /api/image-gallery/{id}` with the form f
 `bookstack.images.delete` takes the `id` and deletes the image: final, without a usage check, and it can leave pages
 with broken image references.
 
-On a connection bound to books, `upload` proves the page by one read; `update`, `replace`, and `delete` read the
-metadata of the existing image and prove its page by one read. A page or image of another book is refused as
-`invalid-request` without naming it, and nothing is changed. A connection without targets reads no proof.
+On a connection with targets, `update`, `replace`, and `delete` read the metadata of the existing image and prove
+its page before the change.
 
 Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
 result is reported as uncertain. All four tools require confirmation and are part of no profile; `delete` also
@@ -579,9 +551,8 @@ the result is reported as uncertain.
 
 These tools require a tool allow list and are part of no profile. A connection offers one only when its `tools`
 list names it; a connection that selects by `effects` does not offer them.
-On a connection bound to books, `books.delete` checks `id` against the books before any request, and
-`chapters.delete` proves the chapter's book by one read; deleting a bound book is allowed, but the target then
-points at nothing. `shelves.delete` is instance-wide and refused on a connection with book targets.
+On a connection with targets, deleting the object a target names is allowed where the binding reaches it (a
+chapter needs a book or shelf target), but the target then points at nothing.
 `bookstack.attachments.delete` follows the same rules but is final (see Attachments).
 
 ## Errors

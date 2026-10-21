@@ -217,6 +217,7 @@ const groupMessages = "messages"
 
 // Register adds Telegram metadata, its read-only connection test, and the message operations.
 func Register(reg *capability.Registry) error {
+	ops := operations()
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Telegram", DefaultBaseURL: defaultURL,
 		ValidateBaseURL: func(raw string) error {
@@ -234,9 +235,10 @@ func Register(reg *capability.Registry) error {
 		}},
 		Target: config.TargetMetadata{
 			Label: "chat ID", Required: true, Multiple: true, Kinds: targetKinds,
-			Description: "one or more chat IDs or @channel usernames, plus optionally bot and business/CONNECTION_ID; " +
-				"chat tools address only the bound chats",
+			Description: "one or more chat IDs, @channel usernames, or forum topics as CHAT_ID/topics/THREAD_ID, " +
+				"plus optionally bot and business/CONNECTION_ID; chat tools address only the bound chats and topics",
 			Validate: validateConfiguredTarget,
+			Reaches:  topicReaches(ops),
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "send", Title: "Send messages", Recommended: true,
@@ -288,7 +290,15 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider,
+	if err := reg.Register(Provider, ops...); err != nil {
+		return err
+	}
+	return reg.RegisterTargetBrowser(Provider, targetBrowser())
+}
+
+// operations lists every Telegram tool with its handler.
+func operations() []capability.Operation {
+	return []capability.Operation{
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: richMessagesSend, Handler: capability.Handler(invokeRichMessagesSend)},
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
@@ -429,7 +439,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: stickersetsSetThumbnail, Handler: capability.Handler(invokeStickersetsSetThumbnail)},
 		capability.Operation{Descriptor: stickersetsSetCustomEmojiThumbnail,
 			Handler: capability.Handler(invokeStickersetsSetCustomEmojiThumbnail)},
-	)
+	}
 }
 
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -455,7 +465,8 @@ func invokeMessagesSendWith(ctx context.Context, resolved *config.Resolved, secr
 	if arguments.Business != nil {
 		return sendBusinessReply(ctx, resolved, secrets, red, httpClient, *arguments.Business, arguments.Chat, arguments.SendOptions)
 	}
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, arguments.Chat, httpClient)
+	client, err := openThreadWithHTTP(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -533,21 +544,58 @@ func openChatWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
+	return openSelected(ctx, resolved, secrets, red, chat, chat, httpClient)
+}
+
+// openThread selects the chat and the topic with selectThread before any credential is resolved; *thread is
+// the topic the request then carries and reply the message it replies to, or 0.
+func openThread(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	requested string, thread *int64, reply int64) (*Client, error) {
+	return openThreadWithHTTP(ctx, resolved, secrets, red, requested, thread, reply, newHTTPClient())
+}
+
+func openThreadWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, requested string, thread *int64, reply int64, httpClient *http.Client) (*Client, error) {
+	if resolved == nil {
+		return nil, providerError("open", "no connection was selected")
+	}
+	chat, binding, err := selectThread(resolved, requested, "chat", thread, reply)
+	if err != nil {
+		return nil, err
+	}
+	return openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
+}
+
+// openSelected opens the client for a chat that a select function returned, with the binding its
+// references carry.
+func openSelected(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	chat, binding string, httpClient *http.Client) (*Client, error) {
 	client, err := openWithHTTP(ctx, resolved, secrets, red, httpClient)
 	if err != nil {
 		return nil, err
 	}
-	client.target = chat
+	client.target, client.binding = chat, binding
 	return client, nil
 }
 
-// Client binds one bot token to one resolved connection; target is the chat its chat tools address.
+// Client binds one bot token to one resolved connection; target is the chat its chat tools address and
+// binding the target spelling of the references it issues for that chat, a topic target when only topics
+// bind the chat.
 type Client struct {
-	base   *url.URL
-	token  string
-	target string
-	http   *http.Client
-	set    targetSet
+	base    *url.URL
+	token   string
+	target  string
+	binding string
+	http    *http.Client
+	set     targetSet
+}
+
+// refBinding is the binding of a reference to a file of the selected chat.
+func (c *Client) refBinding() string {
+	if c.binding != "" {
+		return c.binding
+	}
+	return c.target
 }
 
 // Open resolves the bot token only after the application core selected and confirmed the exact request.

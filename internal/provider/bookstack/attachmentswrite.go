@@ -36,7 +36,7 @@ const notAFile = "the attachment is a link, not a file"
 
 const attachmentWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"extension":{"type":"string"},"page_id":{"type":"integer"},"external":{"type":"boolean"},"order":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","page_id","external"]}`
 
-const attachmentBindNote = "On a connection bound to books the page is proven to lie in a bound book first, " +
+const attachmentBindNote = "On a connection with targets the page is proven to lie in them first, " +
 	"and so is the page of an existing attachment"
 
 var attachmentWriteFields = []capability.Field{

@@ -307,7 +307,8 @@ func invokePollsSend(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := arguments.PollOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +375,7 @@ func invokeChatActionsSend(ctx context.Context, resolved *config.Resolved, secre
 	if !validChatAction(arguments.Action) || arguments.MessageThreadID < 0 {
 		return nil, providerError("send chat action", "the chat action or topic is not supported")
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	client, err := openThread(ctx, resolved, secrets, red, arguments.Chat, &arguments.MessageThreadID, 0)
 	if err != nil {
 		return nil, err
 	}

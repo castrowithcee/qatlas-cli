@@ -132,12 +132,17 @@ func (t TargetMetadata) knowsForm(form string) bool {
 //
 // Nested says that entries of the kind also sit below an entry of the same kind, such as a folder inside a
 // folder. They are listed under one target of the kind itself.
+//
+// Unlisted says that the provider offers no list of the kind (a service without an index of its chats, say):
+// a surface offers no list for it, though entries of it can still come from a resolved web address. The zero
+// value is a listed kind.
 type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
 	Parent      string
 	Nested      bool
+	Unlisted    bool
 }
 
 // ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.
@@ -236,17 +241,26 @@ func Placeholder(segment string) bool {
 	return segment[0] >= 'A' && segment[0] <= 'Z'
 }
 
-// FitsForm reports whether the segments of a target are spelled in the form. A last form segment PATH, after
-// at least one other segment, stands for one or more segments, none of them empty or a wildcard.
+// FitsForm reports whether the segments of a target are spelled in the form. A form segment PATH, once in a
+// form and after at least one other segment, stands for one or more segments, none of them empty or a
+// wildcard; the other form segments before and after it must fit exactly.
 func FitsForm(segments, form []string) bool {
-	if n := len(form); n >= 2 && form[n-1] == "PATH" && len(segments) >= n {
-		for _, rest := range segments[n-1:] {
-			if rest == "" || rest == "*" {
+	if p := slices.Index(form, "PATH"); p >= 1 && slices.Index(form[p+1:], "PATH") < 0 {
+		tail := len(form) - p - 1
+		if len(segments) < p+1+tail {
+			return false
+		}
+		for _, mid := range segments[p : len(segments)-tail] {
+			if mid == "" || mid == "*" {
 				return false
 			}
 		}
-		segments, form = segments[:n-1], form[:n-1]
+		return fitsSegments(segments[:p], form[:p]) && fitsSegments(segments[len(segments)-tail:], form[p+1:])
 	}
+	return fitsSegments(segments, form)
+}
+
+func fitsSegments(segments, form []string) bool {
 	if len(segments) != len(form) {
 		return false
 	}

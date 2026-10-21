@@ -1264,7 +1264,7 @@ func TestInvalidTargetsFailClosedWithoutQuotingTheValue(t *testing.T) {
 		{"negative", []string{"book/-4"}},
 		{"duplicate", []string{"book/7", "book/7"}},
 		{"wildcard", []string{"*"}},
-		{"wrong form", []string{"shelf/7"}},
+		{"wrong form", []string{"bookshelf/7"}},
 		{"text id", []string{"book/seven77"}},
 		{"too many", huge},
 	} {
@@ -1313,8 +1313,13 @@ func targetMetadata(t *testing.T) config.TargetMetadata {
 	}
 	meta, _ := reg.ProviderMetadata(Provider)
 	target := meta.Target
-	if target.Label != "books" || !target.Multiple || len(target.Kinds) != 1 || target.Kinds[0].Name != "book" ||
-		!equal(target.Kinds[0].Forms, []string{"book/BOOK_ID"}) || target.Required || target.Wildcard != "" {
+	kinds := []string{}
+	for _, kind := range target.Kinds {
+		kinds = append(kinds, kind.Name+":"+strings.Join(kind.Forms, ",")+":"+kind.Parent)
+	}
+	want := []string{"shelf:shelf/SHELF_ID:", "book:book/BOOK_ID:", "chapter:chapter/CHAPTER_ID:book", "page:page/PAGE_ID:book"}
+	if !target.Multiple || !equal(kinds, want) || target.Required || target.Wildcard != "" || target.Reaches == nil ||
+		target.ValidateKindParents() != nil {
 		t.Fatalf("target metadata = %+v", target)
 	}
 	return target

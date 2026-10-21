@@ -188,7 +188,7 @@ func TestCouplingThenOverview(t *testing.T) {
 			t.Fatalf("header %s = %q, want %q", k, got, want)
 		}
 	}
-	const wantCSP = "default-src 'none'; style-src 'self'; script-src 'none'; img-src 'none'; " +
+	const wantCSP = "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'none'; " +
 		"base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 	if csp := overview.Header().Get("Content-Security-Policy"); csp != wantCSP {
 		t.Fatalf("CSP = %q, want %q", csp, wantCSP)

@@ -93,7 +93,7 @@ var (
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
-			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; required for a connection bound to several books", Target: "book"},
+			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets lists its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
 			{Name: "limit", Description: "Maximum number of pages to return; 0 returns all"},
 			{Name: "offset", Description: "Number of pages to skip"},
@@ -178,7 +178,7 @@ var (
 	pagesUpdate = capability.Descriptor{
 		ID: Provider + ".pages.update", Version: 1, Title: "Update a BookStack page",
 		Description: "Change the title, HTML or Markdown, tags, priority of one page by identifier, record a changelog " +
-			"entry, or move it into a bound book or chapter. tags replaces all existing tags of the page. HTML " +
+			"entry, or move it into a book or chapter of the connection. tags replaces all existing tags of the page. HTML " +
 			"containing data: images makes BookStack store them as gallery images of the page when it is saved. " +
 			"Moving needs the delete permission on the page in BookStack in addition to the update permission",
 		Tags: []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
@@ -222,14 +222,33 @@ func Register(reg *capability.Registry) error {
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
 		},
 		Target: config.TargetMetadata{
-			Label:       "books",
-			Multiple:    true,
-			Description: "optional books this connection is bound to; without a target the whole token scope is reachable",
+			Label:    "shelves, books, chapters, and pages",
+			Multiple: true,
+			Description: "optional shelves, books, chapters, or pages this connection is bound to, at most 100; several " +
+				"targets reach their union; without a target the whole token scope is reachable",
 			Kinds: []config.TargetKind{{
+				Name: "shelf",
+				Description: "a shelf: the books on it when a tool is called, each as if it were bound, and the shelf " +
+					"itself to read; each call reads the shelf once",
+				Forms: []string{"shelf/SHELF_ID"},
+			}, {
 				Name:        "book",
-				Description: "a book whose pages this connection may list, read, create, update, and delete",
+				Description: "a book whose chapters and pages this connection may list, read, create, update, and delete",
 				Forms:       []string{"book/BOOK_ID"},
+			}, {
+				Name: "chapter",
+				Description: "a chapter whose pages this connection may list, read, create, update, and delete, with " +
+					"their attachments, images, and comments; the chapter itself is only read",
+				Forms:  []string{"chapter/CHAPTER_ID"},
+				Parent: "book",
+			}, {
+				Name: "page",
+				Description: "a single page this connection may read, update, and delete, with its attachments, " +
+					"images, and comments",
+				Forms:  []string{"page/PAGE_ID"},
+				Parent: "book",
 			}},
+			Reaches:     reaches,
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
 		},
@@ -350,7 +369,7 @@ func invokePagesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	if _, err := bound.listBook(target); err != nil {
+	if _, err := bound.listIn(target); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -450,6 +469,9 @@ func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 			return nil, err
 		}
 	}
+	if input.ChapterID != 0 && !bound.mayReachChapter(input.ChapterID) {
+		return nil, bound.outside(outsideChapter)
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -477,14 +499,17 @@ func invokePagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := change.validate(); err != nil {
 		return nil, err
 	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
 	if change.BookID != 0 {
-		bound, err := boundScope(resolved)
-		if err != nil {
-			return nil, err
-		}
 		if err := bound.checkBook(change.BookID); err != nil {
 			return nil, err
 		}
+	}
+	if change.ChapterID != 0 && !bound.mayReachChapter(change.ChapterID) {
+		return nil, bound.outside(outsideChapter)
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -517,6 +542,9 @@ type Client struct {
 	base  *url.URL
 	auth  string
 	http  *http.Client
+	// shelfBooks holds the books on the bound shelves read in this call, shelvesRead those shelves.
+	shelfBooks  map[int64]bool
+	shelvesRead map[int64]bool
 }
 
 // Open builds a client for a resolved connection. The secrets come from the resolver, which owns the
@@ -621,48 +649,28 @@ type errorJSON struct {
 // that ignores the filter or reports an endless total cannot keep the call reading.
 const maxScanRequests = 200
 
-// listTarget names the book or chapter a list is limited to; zero means not given.
-type listTarget struct {
-	BookID    int64
-	ChapterID int64
-}
-
-// listBook applies the local rules of a list against the connection's books, before any request. It returns
-// the target with the book that applies; a chapter still needs its evidence read.
-func (s scope) listBook(t listTarget) (listTarget, error) {
-	if t.BookID != 0 && t.ChapterID != 0 {
-		return t, invalidRequest("book_id and chapter_id are mutually exclusive")
-	}
-	if t.BookID != 0 {
-		return t, s.checkBook(t.BookID)
-	}
-	if !s.bound() || t.ChapterID != 0 {
-		return t, nil
-	}
-	if len(s.books) > 1 {
-		return t, invalidRequest(bookIDRequiredMsg)
-	}
-	t.BookID = s.books[0]
-	return t, nil
-}
-
 // ListPages returns pages, honouring limit and offset. A limit of zero or less returns every page the
 // instance reports, fetched in pages of at most 500 records. With a book or chapter, or a bound connection,
 // every row is checked here against its book and chapter and foreign rows are dropped, because BookStack
 // silently ignores a filter it does not know; limit and offset then count the rows that remain.
 func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset int) (output.Collection, error) {
-	target, err := c.scope.listBook(target)
+	target, err := c.scope.listIn(target)
 	if err != nil {
 		return output.Collection{}, err
 	}
-	if target.ChapterID != 0 && c.scope.bound() {
-		book, err := c.chapterBook(ctx, target.ChapterID)
+	if target.BookID != 0 {
+		if err := c.requireBook(ctx, target.BookID); err != nil {
+			return output.Collection{}, err
+		}
+	}
+	if target.ChapterID != 0 {
+		book, err := c.chapterIn(ctx, target.ChapterID)
 		if err != nil {
 			return output.Collection{}, err
 		}
 		target.BookID = book
 	}
-	filtered := target.BookID != 0 || target.ChapterID != 0
+	filtered := target.BookID != 0 || target.ChapterID != 0 || target.pagesOnly
 
 	query := url.Values{}
 	if target.BookID != 0 {
@@ -671,13 +679,17 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 	if target.ChapterID != 0 {
 		query.Set("filter[chapter_id]", strconv.FormatInt(target.ChapterID, 10))
 	}
+	if target.pagesOnly && len(c.scope.pages) == 1 {
+		query.Set("filter[id]", strconv.FormatInt(c.scope.pages[0], 10))
+	}
 	rows, err := scanList(ctx, c, scanSpec[pageJSON]{
 		op: "list pages", path: "/api/pages", query: query, filtered: filtered, limit: limit, offset: offset,
 		narrow: "book_id or chapter_id", arguments: argNames(pagesList),
 		id: func(p pageJSON) int64 { return p.ID },
 		keep: func(p pageJSON) bool {
 			return !(target.BookID != 0 && p.BookID != target.BookID) &&
-				!(target.ChapterID != 0 && p.ChapterID != target.ChapterID)
+				!(target.ChapterID != 0 && p.ChapterID != target.ChapterID) &&
+				!(target.pagesOnly && !c.scope.hasPage(p.ID))
 		},
 		row: listRow,
 	})
@@ -776,49 +788,25 @@ func scanList[T any](ctx context.Context, c *Client, spec scanSpec[T]) ([]output
 	return rows, nil
 }
 
-// bookRef is the part of a page or chapter read as evidence of the book it belongs to.
-type bookRef struct {
-	ID     int64 `json:"id"`
-	BookID int64 `json:"book_id"`
-}
-
-// chapterBook reads a chapter once and returns its book if the connection is bound to it.
-func (c *Client) chapterBook(ctx context.Context, id int64) (int64, error) {
-	var ref bookRef
-	if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission); err != nil {
-		return 0, err
-	}
-	if !c.scope.allows(ref.BookID) {
-		return 0, invalidRequest(outsideChapter)
-	}
-	return ref.BookID, nil
-}
-
-// requirePageBound reads a page once as evidence of its book before a change; an unbound connection reads
-// nothing.
-func (c *Client) requirePageBound(ctx context.Context, id string) error {
-	if !c.scope.bound() {
-		return nil
-	}
-	var ref bookRef
-	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &ref, nil, provider.ClassPermission); err != nil {
-		return err
-	}
-	if !c.scope.allows(ref.BookID) {
-		return invalidRequest(outsidePage)
-	}
-	return nil
-}
-
 // GetPage returns one page including its untrusted content. On a bound connection this read is also the
-// evidence that the page belongs to one of the books.
+// evidence of the page's chapter and book; a page that no read could prove is refused before it.
 func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) {
+	if n, ok := parseID(id); c.scope.bound() && (!ok || !c.scope.mayReachPage(n)) {
+		return output.Object{}, c.scope.outside(outsidePage)
+	}
 	var page pageJSON
 	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &page, argNames(pagesGet), provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
-	if c.scope.bound() && !c.scope.allows(page.BookID) {
-		return output.Object{}, invalidRequest(outsidePage)
+	if c.scope.bound() {
+		requested, _ := parseID(id)
+		allowed, err := c.pageAllowed(ctx, requested, bookRef{ID: page.ID, BookID: page.BookID, ChapterID: page.ChapterID})
+		if err != nil {
+			return output.Object{}, err
+		}
+		if !allowed {
+			return output.Object{}, c.scope.outside(outsidePage)
+		}
 	}
 
 	return pageObject(page), nil
@@ -827,12 +815,12 @@ func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) 
 func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
 	if c.scope.bound() {
 		if input.BookID != 0 {
-			if err := c.scope.checkBook(input.BookID); err != nil {
+			if err := c.requireBook(ctx, input.BookID); err != nil {
 				return output.Object{}, err
 			}
 		}
 		if input.ChapterID != 0 {
-			if _, err := c.chapterBook(ctx, input.ChapterID); err != nil {
+			if _, err := c.chapterIn(ctx, input.ChapterID); err != nil {
 				return output.Object{}, err
 			}
 		}
@@ -853,12 +841,18 @@ func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) 
 			return output.Object{}, err
 		}
 	}
-	// The source page is proven first; a foreign page or target chapter ends the call without a change.
+	// The source page is proven first; a foreign page, target book, or target chapter ends the call without a
+	// change.
 	if err := c.requirePageBound(ctx, id); err != nil {
 		return output.Object{}, err
 	}
-	if input.ChapterID != 0 && c.scope.bound() {
-		if _, err := c.chapterBook(ctx, input.ChapterID); err != nil {
+	if c.scope.bound() && input.BookID != 0 {
+		if err := c.requireBook(ctx, input.BookID); err != nil {
+			return output.Object{}, err
+		}
+	}
+	if input.ChapterID != 0 {
+		if _, err := c.chapterIn(ctx, input.ChapterID); err != nil {
 			return output.Object{}, err
 		}
 	}

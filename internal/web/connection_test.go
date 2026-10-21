@@ -3,9 +3,11 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -39,8 +41,22 @@ var bookMetadata = config.ProviderMetadata{
 			}
 			return nil
 		},
+		// book.admin acts on a whole library and is reached only by a shelf target.
+		Reaches: func(tool string, targets []string) (bool, []string) {
+			if tool != "book.admin" {
+				return true, nil
+			}
+			for _, target := range targets {
+				if strings.HasPrefix(target, "shelf/") {
+					return true, nil
+				}
+			}
+			return false, []string{"shelf/NAME"}
+		},
+		Kinds: []config.TargetKind{{Name: "shelf", Forms: []string{"shelf/NAME"}}},
 	},
 	Tools: []config.ToolMetadata{
+		{ID: "book.admin", Title: "Administer", Effect: config.EffectRead},
 		{ID: "book.read", Title: "Read a book", Effect: config.EffectRead},
 		{ID: "book.create", Title: "Create a book", Effect: config.EffectCreate},
 	},
@@ -703,5 +719,122 @@ func TestGuidedConnectionKeepsStableIDs(t *testing.T) {
 	}
 	if cfg.Services["book-cloud"].ID != idSvc || cfg.Credentials["book-reader"].ID != idCred || cfg.Connections["book-conn"].ID == "" {
 		t.Errorf("ids = %q %q %q", cfg.Services["book-cloud"].ID, cfg.Credentials["book-reader"].ID, cfg.Connections["book-conn"].ID)
+	}
+}
+
+func labelForm(extra url.Values) url.Values {
+	form := url.Values{
+		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
+		"svcbaseurl": {"https://books.example.test"},
+		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
+		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "access": {"effects"},
+	}
+	for k, v := range extra {
+		form[k] = v
+	}
+	return form
+}
+
+func saveLabelForm(t *testing.T, s *Server, cookie *http.Cookie, csrf string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	if review.Code != http.StatusOK {
+		t.Fatalf("review status = %d, body: %s", review.Code, review.Body.String())
+	}
+	form.Set("cfgver", extractHiddenValue(t, review.Body.String(), "cfgver"))
+	return s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+}
+
+func TestGuidedConnectionTargetLabelsRoundTrip(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	form := labelForm(url.Values{"targets": {"a, b, c"},
+		"label_a": {"Front"}, "label_b": {"  "}, "label_c": {"Back"}, "label_gone": {"Old"}})
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	body := review.Body.String()
+	if !strings.Contains(body, `name="label_a" value="Front"`) || strings.Contains(body, "label_gone") {
+		t.Fatalf("review does not carry the labels of the current targets: %s", body)
+	}
+	if !strings.Contains(body, "a (Front), b, c (Back)") {
+		t.Fatalf("review summary lacks the labels: %s", body)
+	}
+	rec := saveLabelForm(t, s, cookie, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"a": "Front", "c": "Back"}
+	if got := cfg.Connections["book-conn"].TargetLabels; !reflect.DeepEqual(got, want) {
+		t.Fatalf("labels = %v, want %v", got, want)
+	}
+	result := s.request(t, http.MethodGet, "/connections/book-conn", s.addr, cookie, nil)
+	if !strings.Contains(result.Body.String(), "a (Front), b, c (Back)") {
+		t.Fatalf("result page lacks the labels: %s", result.Body.String())
+	}
+}
+
+func TestGuidedConnectionTargetLabelIsEscaped(t *testing.T) {
+	s, _, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	form := labelForm(url.Values{"targets": {"a"}, "label_a": {"<script>x</script>"}})
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	if strings.Contains(review.Body.String(), "<script>x") {
+		t.Fatalf("label is not escaped: %s", review.Body.String())
+	}
+}
+
+func TestGuidedConnectionRefusesInvalidTargetLabel(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	form := labelForm(url.Values{"targets": {"a"}, "label_a": {"two\nlines"}})
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+form.Encode(), s.addr, cookie, nil)
+	if !strings.Contains(review.Body.String(), "notice-error") {
+		t.Fatalf("invalid label shows no error: %s", review.Body.String())
+	}
+	if cfg, _ := store.Load(); len(cfg.Connections) != 0 {
+		t.Fatal("a connection was saved")
+	}
+}
+
+func TestGuidedConnectionShowsAndDropsToolsOutsideTheTargets(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	form := labelForm(url.Values{"targets": {"a"}, "access": {"tools"}, "tool": {"book.admin", "book.read"}})
+	build := s.request(t, http.MethodGet, "/connections/new?"+form.Encode(), s.addr, cookie, nil)
+	body := build.Body.String()
+	if !strings.Contains(body, "not available, outside the targets: needs shelf/NAME") ||
+		!strings.Contains(body, "disabled") {
+		t.Fatalf("build page does not explain the unreached tool: %s", body)
+	}
+	if rec := saveLabelForm(t, s, cookie, csrf, form); rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, _ := store.Load()
+	if got := cfg.Connections["book-conn"].Tools; !reflect.DeepEqual(got, []string{"book.read"}) {
+		t.Fatalf("tools = %v, want only book.read", got)
+	}
+}
+
+func TestGuidedConnectionBuildPageKeepsTargetLabels(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	// An invalid target returns to the build page; the labels of the other targets must survive it.
+	bad := labelForm(url.Values{"targets": {"a, b c"}, "label_a": {"<i>Front</i>"}})
+	build := s.request(t, http.MethodGet, "/connections/new/review?"+bad.Encode(), s.addr, cookie, nil)
+	body := build.Body.String()
+	if !strings.Contains(body, `name="label_a" value="&lt;i&gt;Front&lt;/i&gt;"`) || strings.Contains(body, "<i>Front") {
+		t.Fatalf("build page lacks the escaped label: %s", body)
+	}
+	good := labelForm(url.Values{"targets": {"a"}, "label_a": {"<i>Front</i>"}})
+	if rec := saveLabelForm(t, s, cookie, csrf, good); rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, _ := store.Load()
+	if got := cfg.Connections["book-conn"].TargetLabels["a"]; got != "<i>Front</i>" {
+		t.Fatalf("label = %q", got)
 	}
 }

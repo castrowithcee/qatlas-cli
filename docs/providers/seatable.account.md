@@ -59,6 +59,14 @@ connections:
     target: 42/Customer base
 ```
 
+### Choosing the base
+
+The picker lists the bases of all workspaces of the account (`GET /api/v2.1/workspaces/`, which has no paging)
+as `WORKSPACE_ID/BASE_NAME`, independent of the connection's target. Bases whose name is not a valid target
+are left out. A base address of the web interface on the connection's own host,
+`https://HOST/workspace/WORKSPACE_ID/dtable/BASE_NAME/`, resolves to that target without a request; other
+hosts and `http` resolve to nothing.
+
 ## Tools
 
 | Tool | Effect | Confirmation | Does |

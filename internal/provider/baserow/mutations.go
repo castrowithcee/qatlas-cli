@@ -202,7 +202,7 @@ func (c *Client) checkFields(fields []fieldJSON, values map[string]json.RawMessa
 		if field.Type != "link_row" {
 			continue
 		}
-		if field.LinkRowTableID == nil || !c.scope.allows(*field.LinkRowTableID) {
+		if field.LinkRowTableID == nil || !c.inScope(*field.LinkRowTableID) {
 			return invalidRequest("a named link field leads to a table outside this connection's targets")
 		}
 		if !validLinkValue(value) {
@@ -261,7 +261,7 @@ func changeRow(ctx context.Context, op, method, right string, resolved *config.R
 	if needRow && len(input.Fields) == 0 {
 		return nil, invalidRequest("fields must name at least one cell")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func invokeRowsDelete(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +316,7 @@ func invokeRowsMove(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}

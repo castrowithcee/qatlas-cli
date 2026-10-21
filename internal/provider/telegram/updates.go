@@ -185,7 +185,7 @@ func invokeUpdatesList(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, providerError("list updates", "the configured Telegram targets are unusable")
 	}
-	if len(set.chats) == 0 && len(set.businesses) == 0 {
+	if len(set.chats) == 0 && len(set.topics) == 0 && len(set.businesses) == 0 {
 		return nil, providerError("list updates", "this connection binds no chat or business target")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -292,9 +292,10 @@ type tgCallback struct {
 	From    *tgUser `json:"from"`
 	Data    string  `json:"data"`
 	Message *struct {
-		MessageID int64  `json:"message_id"`
-		Date      int64  `json:"date"`
-		Chat      tgChat `json:"chat"`
+		MessageID       int64  `json:"message_id"`
+		MessageThreadID int64  `json:"message_thread_id"`
+		Date            int64  `json:"date"`
+		Chat            tgChat `json:"chat"`
 	} `json:"message"`
 }
 
@@ -336,8 +337,10 @@ type tgUpdate struct {
 
 // candidate is a supported update before it is matched to a bound chat and its references are signed.
 type candidate struct {
-	out        updateOut
-	chat       int64
+	out  updateOut
+	chat int64
+	// thread is the topic of a message or of the message under a callback; a topic target binds nothing else.
+	thread     int64
 	fileID     string
 	callbackID string
 	joinQuery  string
@@ -394,6 +397,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c.out.Type, c.chat = kind, m.Chat.ID
 		c.business = m.BusinessConnectionID
 		c.out.MessageID, c.out.Date, c.out.MessageThreadID = m.MessageID, m.Date, m.MessageThreadID
+		c.thread = m.MessageThreadID
 		if m.ReplyTo != nil {
 			c.out.ReplyToMessageID = m.ReplyTo.MessageID
 		}
@@ -477,6 +481,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c.out.From = sender(q.From)
 		c.out.CallbackData = capText(q.Data, maxCallbackRunes)
 		c.callbackID = q.ID
+		c.thread = q.Message.MessageThreadID
 		return c, true
 	case u.InlineQuery != nil:
 		q := u.InlineQuery
@@ -501,7 +506,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 // allowed_updates, so Telegram keeps every update; nothing is acknowledged.
 func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]any, error) {
 	const op = "list updates"
-	if len(c.set.chats) == 0 && len(c.set.businesses) == 0 {
+	if len(c.set.chats) == 0 && len(c.set.topics) == 0 && len(c.set.businesses) == 0 {
 		return nil, providerError(op, "this connection binds no chat or business target")
 	}
 	if limit < 1 || limit > maxUpdateLimit || wait < 0 || wait > maxWaitSeconds {
@@ -594,6 +599,11 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 			continue
 		}
 		binding, known := bound[cand.chat]
+		if !known {
+			// A chat that only topics bind shows only the messages and callbacks of a bound topic, under that
+			// topic target.
+			binding, known = c.set.topicBinding(cand.chat, cand.thread)
+		}
 		if !known {
 			skipped++
 			continue

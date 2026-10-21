@@ -22,6 +22,8 @@ const (
 	maxPreviewChars = 2000
 	maxResultTags   = 50
 	maxResultString = 1000
+	// maxSearchScans bounds the search requests of one call that looks for bound pages among all hits.
+	maxSearchScans = 20
 )
 
 var contentSearch = capability.Descriptor{
@@ -42,7 +44,7 @@ var contentSearch = capability.Descriptor{
 		`"preview_name":{"type":"string"},"preview_content":{"type":"string"}}}},"total":{"type":"integer"}},"required":["results","total"]}`),
 	Arguments: []capability.Argument{
 		{Name: "query", Description: "Search text, 1 to 1000 characters; the BookStack search syntax is allowed", Required: true},
-		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; required for a connection bound to several books unless chapter_id is given", Target: "book"},
+		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets searches its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 		{Name: "chapter_id", Description: "Search only in this chapter; mutually exclusive with book_id"},
 		{Name: "page", Description: "Page number from 1; 1 when omitted"},
 		{Name: "count", Description: "Results per page, 1 to 100; 20 when omitted"},
@@ -124,8 +126,9 @@ func invokeContentSearch(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
-	// Without a book or chapter, a bound connection searches its only book; several books need an argument.
-	if target, err = bound.listBook(target); err != nil {
+	// Without a book or chapter, a bound connection searches its only book, its only chapter, or its pages;
+	// any other binding needs an argument.
+	if target, err = bound.listIn(target); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -136,66 +139,137 @@ func invokeContentSearch(ctx context.Context, resolved *config.Resolved, secrets
 }
 
 // Search runs one search against a fixed endpoint. On a bound connection every hit is checked against the
-// book of the target and foreign or unattributable hits are dropped.
+// connection and the target, and foreign or unattributable hits are dropped. A connection bound to pages alone
+// scans the search of the instance for its pages, see searchPages.
 func (c *Client) Search(ctx context.Context, query string, target listTarget, page, count int) (output.Object, error) {
+	if target.pagesOnly {
+		return c.searchPages(ctx, query, page, count)
+	}
 	bookID := target.BookID
 	path := "/api/search"
 	switch {
 	case target.ChapterID != 0:
-		if c.scope.bound() {
-			book, err := c.chapterBook(ctx, target.ChapterID)
-			if err != nil {
-				return output.Object{}, err
-			}
-			bookID = book
+		book, err := c.chapterIn(ctx, target.ChapterID)
+		if err != nil {
+			return output.Object{}, err
 		}
+		bookID = book
 		path = "/api/search/chapter/" + strconv.FormatInt(target.ChapterID, 10)
 	case target.BookID != 0:
+		if err := c.requireBook(ctx, target.BookID); err != nil {
+			return output.Object{}, err
+		}
 		path = "/api/search/book/" + strconv.FormatInt(target.BookID, 10)
 	}
-	q := url.Values{}
-	q.Set("query", query)
-	q.Set("page", strconv.Itoa(page))
-	q.Set("count", strconv.Itoa(count))
-
-	var found searchJSON
-	if err := c.get(ctx, "search content", path, q, &found, argNames(contentSearch), provider.ClassPermission); err != nil {
+	found, err := c.searchOnce(ctx, path, query, page, count)
+	if err != nil {
 		return output.Object{}, err
 	}
 	results := make([]map[string]any, 0, len(found.Data))
 	for _, h := range found.Data {
-		if c.scope.bound() || bookID != 0 {
-			owner := h.BookID
-			if h.Type == "book" {
-				owner = h.ID
-			}
-			if h.Type == "bookshelf" || owner == 0 || (bookID != 0 && owner != bookID) ||
-				(c.scope.bound() && !c.scope.allows(owner)) {
-				continue
-			}
-			if target.ChapterID != 0 && h.Type != "chapter" && h.ChapterID != target.ChapterID {
-				continue
-			}
-			if target.ChapterID != 0 && h.Type == "chapter" && h.ID != target.ChapterID {
-				continue
-			}
+		if (c.scope.bound() || bookID != 0) && !c.hitAllowed(h, target, bookID) {
+			continue
 		}
-		tags := []map[string]string{}
-		for _, t := range h.Tags {
-			if len(tags) >= maxResultTags {
-				break
-			}
-			tags = append(tags, map[string]string{"name": clip(t.Name, maxResultString), "value": clip(t.Value, maxResultString)})
-		}
-		results = append(results, map[string]any{
-			"type": clip(h.Type, maxResultString), "id": h.ID, "name": clip(h.Name, maxResultString),
-			"slug": clip(h.Slug, maxResultString), "book_id": h.BookID, "chapter_id": h.ChapterID,
-			"url": clip(h.URL, maxResultString), "tags": tags,
-			"preview_name":    clip(h.PreviewHTML.Name, maxPreviewChars),
-			"preview_content": clip(h.PreviewHTML.Content, maxPreviewChars),
-		})
+		results = append(results, hitResult(h))
 	}
 	return output.Object{Fields: []output.Field{{Name: "results", Value: results}, {Name: "total", Value: found.Total}}}, nil
+}
+
+func (c *Client) searchOnce(ctx context.Context, path, query string, page, count int) (searchJSON, error) {
+	q := url.Values{}
+	q.Set("query", query)
+	q.Set("page", strconv.Itoa(page))
+	q.Set("count", strconv.Itoa(count))
+	var found searchJSON
+	err := c.get(ctx, "search content", path, q, &found, argNames(contentSearch), provider.ClassPermission)
+	return found, err
+}
+
+// hitAllowed reports whether a hit lies in the book or chapter of the target and, on a bound connection, in
+// the connection. A hit is attributed by its own book and chapter; a shelf or a hit without a book is dropped.
+func (c *Client) hitAllowed(h searchHit, target listTarget, bookID int64) bool {
+	owner := h.BookID
+	if h.Type == "book" {
+		owner = h.ID
+	}
+	if h.Type == "bookshelf" || owner == 0 || (bookID != 0 && owner != bookID) {
+		return false
+	}
+	if target.ChapterID != 0 && h.Type != "chapter" && h.ChapterID != target.ChapterID {
+		return false
+	}
+	if target.ChapterID != 0 && h.Type == "chapter" && h.ID != target.ChapterID {
+		return false
+	}
+	if !c.scope.bound() || c.inBook(owner) {
+		return true
+	}
+	switch h.Type {
+	case "chapter":
+		return c.scope.hasChapter(h.ID)
+	case "page":
+		return c.scope.hasPage(h.ID) || (h.ChapterID > 0 && c.scope.hasChapter(h.ChapterID))
+	}
+	return false
+}
+
+// searchPages answers a search of a connection bound to pages alone. BookStack has no search within one page,
+// so the search of the instance is read in pages of 100 hits until every bound page is found or the hits run
+// out, at most maxSearchScans requests; page and count then apply to the bound pages found, and total counts
+// them, so no number of foreign hits is shown.
+func (c *Client) searchPages(ctx context.Context, query string, page, count int) (output.Object, error) {
+	var kept []map[string]any
+	seen := map[string]bool{}
+	found := map[int64]bool{}
+	for server := 1; len(found) < len(c.scope.pages); server++ {
+		if server > maxSearchScans {
+			return output.Object{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: "search content",
+				Message: "the search exceeds the scan limit; narrow the query"}
+		}
+		answer, err := c.searchOnce(ctx, "/api/search", query, server, maxSearchCount)
+		if err != nil {
+			return output.Object{}, err
+		}
+		added := 0
+		for _, h := range answer.Data {
+			key := h.Type + "/" + strconv.FormatInt(h.ID, 10)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			added++
+			if h.Type == "page" && c.scope.hasPage(h.ID) && !found[h.ID] {
+				found[h.ID] = true
+				kept = append(kept, hitResult(h))
+			}
+		}
+		if added == 0 || server*maxSearchCount >= answer.Total {
+			break
+		}
+	}
+	start := min((page-1)*count, len(kept))
+	results := kept[start:min(start+count, len(kept))]
+	if results == nil {
+		results = []map[string]any{}
+	}
+	return output.Object{Fields: []output.Field{{Name: "results", Value: results}, {Name: "total", Value: len(kept)}}}, nil
+}
+
+func hitResult(h searchHit) map[string]any {
+	tags := []map[string]string{}
+	for _, t := range h.Tags {
+		if len(tags) >= maxResultTags {
+			break
+		}
+		tags = append(tags, map[string]string{"name": clip(t.Name, maxResultString), "value": clip(t.Value, maxResultString)})
+	}
+	return map[string]any{
+		"type": clip(h.Type, maxResultString), "id": h.ID, "name": clip(h.Name, maxResultString),
+		"slug": clip(h.Slug, maxResultString), "book_id": h.BookID, "chapter_id": h.ChapterID,
+		"url": clip(h.URL, maxResultString), "tags": tags,
+		"preview_name":    clip(h.PreviewHTML.Name, maxPreviewChars),
+		"preview_content": clip(h.PreviewHTML.Content, maxPreviewChars),
+	}
 }
 
 // clip shortens s to at most n characters without splitting one.

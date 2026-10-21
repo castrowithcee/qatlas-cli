@@ -21,7 +21,8 @@ import (
 // Config.SetCredential, Config.SetConnection, Config.Validate): this package adds no second provider or
 // permission policy of its own, only HTML pages over the same checks.
 //
-// The journey is two GET pages, without a script: a provider chooser, and a build page that carries every
+// The journey is two GET pages that work without a script (the build page's target chooser is an optional
+// enhancement of its Targets field): a provider chooser, and a build page that carries every
 // later choice (service, credential, scope, access) as ordinary visible or hidden fields. The
 // build page's own form leads, by an ordinary GET, to a review page that shows what would be saved,
 // secretfree, and, only for a new credential, the fields to type its secrets: exactly there, and nowhere
@@ -53,6 +54,8 @@ type connectionForm struct {
 	Access                            string
 	Tools                             []string
 	Forward                           []string
+	// Labels are the typed target labels by target value; those of a target not in Targets are ignored.
+	Labels map[string]string
 }
 
 // The values of the access radio group: a connection offers by effect or by its selected tools.
@@ -70,7 +73,14 @@ func parseConnectionForm(v url.Values) connectionForm {
 			envNames[role] = vals[0]
 		}
 	}
+	labels := map[string]string{}
+	for key, vals := range v {
+		if target, ok := strings.CutPrefix(key, "label_"); ok && len(vals) > 0 {
+			labels[target] = vals[0]
+		}
+	}
 	return connectionForm{
+		Labels:      labels,
 		Provider:    v.Get("provider"),
 		Service:     v.Get("service"),
 		SvcName:     v.Get("svcname"),
@@ -121,9 +131,24 @@ func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraf
 		}
 	}
 	d.Targets = splitTargetInput(f.Targets)
+	for _, target := range d.Targets {
+		if label := strings.TrimSpace(f.Labels[target]); label != "" {
+			if d.TargetLabels == nil {
+				d.TargetLabels = map[string]string{}
+			}
+			d.TargetLabels[target] = label
+		}
+	}
 	// A connection selects by effect or by tools, never both: only the chosen mode's choices are read.
 	if f.Access == accessTools {
-		d.ToolsSelected, d.Tools = true, f.Tools
+		d.ToolsSelected = true
+		metadata, _ := cfg.ProviderMetadata(f.Provider)
+		for _, id := range f.Tools {
+			// A tool the targets do not reach is not saved, whatever the request carried.
+			if reached, _ := metadata.Target.Reach(id, d.Targets); reached {
+				d.Tools = append(d.Tools, id)
+			}
+		}
 	} else if f.PermMode == "custom" {
 		// A custom list without any entry allows nothing; it never falls back to the defaults.
 		d.Effects = strings.Join(f.Perms, ",")
@@ -141,7 +166,7 @@ func buildConnectionCandidate(cfg *config.Config, f connectionForm) (manage.Conn
 
 // splitTargetInput reads the build page's single, comma-separated targets field into the target/targets
 // list the core stores (see manage.SplitTargets). A comma-separated field, not the TUI's own
-// add-one-at-a-time list, is this page's own simplification for a form that ships no script to grow a list
+// add-one-at-a-time list, is this page's own simplification for a form that works without a script to grow a list
 // with.
 func splitTargetInput(raw string) []string {
 	var values []string
@@ -246,11 +271,15 @@ type connectionBuildData struct {
 	FilesRead, FilesWrite bool
 	Effects               []optionRow
 	Tools                 []toolOption
-	StorageHint           string
-	ForwardChoices        []optionRow
-	ForwardText           string
-	BindingNote           string
-	Error                 string
+	Labels                []labelRow
+	// Dialog is set only for a provider whose targets can be listed; the page then carries the data the
+	// script's chooser needs and nothing else of it.
+	Dialog         *targetDialogData
+	StorageHint    string
+	ForwardChoices []optionRow
+	ForwardText    string
+	BindingNote    string
+	Error          string
 }
 
 // toolOption is one row of the tool checklist: its ID, the effect it needs permission for, and whether this
@@ -258,6 +287,35 @@ type connectionBuildData struct {
 type toolOption struct {
 	ID, Effect string
 	Selected   bool
+	// Unreached is the reason, as text, that the targets typed in the form do not reach the tool; such a
+	// tool is shown but cannot be ticked.
+	Unreached string
+}
+
+// labelRow is one target of the build page with its label field.
+type labelRow struct{ Target, Label string }
+
+// targetLabelRows lists the targets typed in the form, each with its typed label.
+func targetLabelRows(f connectionForm) []labelRow {
+	var rows []labelRow
+	for _, target := range splitTargetInput(f.Targets) {
+		if !slices.ContainsFunc(rows, func(r labelRow) bool { return r.Target == target }) {
+			rows = append(rows, labelRow{target, f.Labels[target]})
+		}
+	}
+	return rows
+}
+
+// targetsText reads targets with their labels as "target (label)".
+func targetsText(conn config.Connection) string {
+	var parts []string
+	for _, target := range conn.TargetValues() {
+		if label := conn.TargetLabels[target]; label != "" {
+			target += " (" + label + ")"
+		}
+		parts = append(parts, target)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // connectionReviewData is what the review page renders: a secretfree summary of what pressing "Create
@@ -273,6 +331,7 @@ type connectionReviewData struct {
 	CfgVer         string
 	CSRF           string
 	Form           connectionForm
+	Labels         []labelRow
 	FormValues     url.Values
 	BindingNote    string
 	Error          string
@@ -312,7 +371,15 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		selectedTools[id] = true
 	}
 	for _, tool := range metadata.Tools {
-		tools = append(tools, toolOption{ID: tool.ID, Effect: string(tool.Effect), Selected: selectedTools[tool.ID]})
+		option := toolOption{ID: tool.ID, Effect: string(tool.Effect), Selected: selectedTools[tool.ID]}
+		if reached, hint := metadata.Target.Reach(tool.ID, splitTargetInput(f.Targets)); !reached {
+			option.Selected = false
+			option.Unreached = "outside the targets"
+			if hint != "" {
+				option.Unreached += ": " + hint
+			}
+		}
+		tools = append(tools, option)
 	}
 
 	data := connectionBuildData{
@@ -326,8 +393,12 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		FilesWrite:  metadata.LocalFiles.Write,
 		Effects:     checkedOptions(permissionNames, f.Perms),
 		Tools:       tools,
+		Labels:      targetLabelRows(f),
 		StorageHint: storageHintText,
 		Error:       errText,
+	}
+	if s.svc != nil && s.svc.CanBrowseTargets(f.Provider) {
+		data.Dialog = newTargetDialogData(metadata.Target, s.csrfValue())
 	}
 	if choices := manage.ForwardChoices(cfg); len(choices) > 0 {
 		data.ForwardChoices = checkedOptions(choices, f.Forward)
@@ -400,7 +471,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 	default:
 		tools = strings.Join(conn.Tools, ", ")
 	}
-	targets := strings.Join(conn.TargetValues(), ", ")
+	targets := targetsText(conn)
 	if targets == "" {
 		targets = "none"
 	}
@@ -437,7 +508,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 
 	data := connectionReviewData{
 		Summary: summary, NewCredential: newCredential, CredentialName: conn.Credential, Storage: storage,
-		Roles: roles, CfgVer: cfgver, CSRF: s.csrfValue(), Form: f, BindingNote: bindingNote, Error: errText,
+		Roles: roles, CfgVer: cfgver, CSRF: s.csrfValue(), Form: f, Labels: targetLabelRows(f), BindingNote: bindingNote, Error: errText,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.credTmpl.ExecuteTemplate(w, "connection-review", data); err != nil {
@@ -653,7 +724,7 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 // page (see handleTestConnection); each is "" when there is nothing of that kind to show.
 func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Config, name string,
 	conn config.Connection, notice, testResult string) {
-	targets := strings.Join(conn.TargetValues(), ", ")
+	targets := targetsText(conn)
 	tools := "every tool of its effects"
 	switch {
 	case conn.Tools == nil:

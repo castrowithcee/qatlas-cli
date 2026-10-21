@@ -132,7 +132,8 @@ func invokeRichMessagesSendWith(ctx context.Context, resolved *config.Resolved, 
 	if resolved == nil {
 		return nil, providerError(richOp, "no connection was selected")
 	}
-	chat, err := selectChat(resolved, arguments.Chat)
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,12 +142,12 @@ func invokeRichMessagesSendWith(ctx context.Context, resolved *config.Resolved, 
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareSources(ctx, resolved, richOp, chat, b.kinds, b.sources)
+	prepared, err := prepareSources(ctx, resolved, richOp, binding, b.kinds, b.sources)
 	if err != nil {
 		return nil, err
 	}
 	defer closeUploads(prepared)
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
 	if err != nil {
 		return nil, err
 	}

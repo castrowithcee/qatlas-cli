@@ -57,7 +57,7 @@ const assetSelectorProperties = `,"name":{"type":"string","minLength":1,"maxLeng
 	`"index":{"type":"integer","minimum":0,"maximum":999}`
 
 var fileRowArguments = []capability.Argument{
-	{Name: "table", Description: tableArgumentDescription, Target: "*"},
+	{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 	{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.base.rows.list", Required: true},
 	{Name: "column", Description: "Name of a file or image column of the table", Required: true},
 }

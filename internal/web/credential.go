@@ -130,7 +130,7 @@ func (s *Server) csrfValue() string {
 }
 
 // handleNewCredentialForm shows the new-credential form: a provider chooser, and once a provider is chosen
-// (by its own small GET form, since this page ships no script to react to a selection), the name, the
+// (by its own small GET form, since this page needs no script to react to a selection), the name, the
 // storage choice, and one row per secret role the provider defines.
 func (s *Server) handleNewCredentialForm(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
@@ -438,7 +438,7 @@ func contains(haystack []string, needle string) bool {
 }
 
 // credentialTemplates defines the "new" and "detail" pages, parsed together as one template set. Like
-// overviewTemplate they ship no script and no external asset, and their forms carry no secret value back:
+// overviewTemplate they ship no inline script and no external asset, and their forms carry no secret value back:
 // a secret field is always rendered empty.
 const credentialTemplates = `
 {{define "new"}}
@@ -657,7 +657,14 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <label for="targets">Targets</label>
 <input id="targets" type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off">
 <p class="hint">{{.TargetHint}}</p>
+{{with .Dialog}}<div id="target-dialog" class="target-dialog" hidden data-csrf="{{.CSRF}}" data-list-url="{{.ListURL}}" data-resolve-url="{{.ResolveURL}}" data-kinds="{{.Kinds}}" data-multiple="{{.Multiple}}" data-noun="{{.Noun}}"></div>
+<script src="{{.Script}}"></script>{{end}}
 </div>
+{{range $i, $l := .Labels}}<div class="field">
+<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+<input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
+</div>
+{{end}}{{if not .Labels}}<p class="hint">Labels can be set for each target once the targets are entered and reviewed; the review page keeps them editable.</p>{{end}}
 <div class="field">
 <label for="description">Description</label>
 <input id="description" type="text" name="description" value="{{.Form.Description}}" autocomplete="off">
@@ -695,7 +702,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{end}}</fieldset>
 {{if .Tools}}<fieldset class="field">
 <legend>Tools (access by selected tools)</legend>
-{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}})</label></div>
+{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}{{if $t.Unreached}} disabled{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}}){{if $t.Unreached}} - not available, {{$t.Unreached}}{{end}}</label></div>
 {{end}}</fieldset>{{end}}
 </section>
 
@@ -749,6 +756,14 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{range $role, $value := .Form.EnvNames}}<input type="hidden" name="envname_{{$role}}" value="{{$value}}">
 {{end}}
 <input type="hidden" name="connname" value="{{.Form.ConnName}}">
+{{if .Labels}}<fieldset class="field">
+<legend>Target labels</legend>
+<p class="hint">A label names a target for people; leave it empty for none.</p>
+{{range $i, $l := .Labels}}<div class="field">
+<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+<input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
+</div>
+{{end}}</fieldset>{{end}}
 <input type="hidden" name="targets" value="{{.Form.Targets}}">
 <input type="hidden" name="description" value="{{.Form.Description}}">
 <input type="hidden" name="filesread" value="{{.Form.FilesRead}}">

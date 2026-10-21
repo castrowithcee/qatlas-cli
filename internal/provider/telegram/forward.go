@@ -187,7 +187,8 @@ func invokeMessagesForward(ctx context.Context, resolved *config.Resolved, secre
 	if err := arguments.TransferOptions.validate("forward messages"); err != nil {
 		return nil, err
 	}
-	client, source, err := openChatPair(ctx, resolved, secrets, red, arguments.Chat, arguments.FromChat)
+	client, source, err := openChatPair(ctx, resolved, secrets, red, arguments.Chat, arguments.FromChat,
+		&arguments.MessageThreadID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,26 +207,28 @@ func invokeMessagesCopy(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := arguments.CopyOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, source, err := openChatPair(ctx, resolved, secrets, red, arguments.Chat, arguments.FromChat)
+	client, source, err := openChatPair(ctx, resolved, secrets, red, arguments.Chat, arguments.FromChat,
+		&arguments.MessageThreadID)
 	if err != nil {
 		return nil, err
 	}
 	return client.Copy(ctx, source, arguments.CopyOptions)
 }
 
-// openChatPair selects the target chat and the source chat from the bound chat targets before any credential
-// is resolved. Both may be the same chat.
+// openChatPair selects the target chat with its topic *thread and the source chat before any credential is
+// resolved. Both may be the same chat. The source must be bound as a whole: a message is named by its ID
+// alone, so its topic cannot be told without reading it.
 func openChatPair(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	chat, from string) (*Client, string, error) {
-	return openChatPairWithHTTP(ctx, resolved, secrets, red, chat, from, newHTTPClient())
+	chat, from string, thread *int64) (*Client, string, error) {
+	return openChatPairWithHTTP(ctx, resolved, secrets, red, chat, from, thread, newHTTPClient())
 }
 
 func openChatPairWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, chat, from string, httpClient *http.Client) (*Client, string, error) {
+	red *redact.Redactor, chat, from string, thread *int64, httpClient *http.Client) (*Client, string, error) {
 	if resolved == nil {
 		return nil, "", providerError("open", "no connection was selected")
 	}
-	target, err := selectChatArgument(resolved, chat, "chat")
+	target, binding, err := selectThread(resolved, chat, "chat", thread, 0)
 	if err != nil {
 		return nil, "", err
 	}
@@ -233,11 +236,10 @@ func openChatPairWithHTTP(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, "", err
 	}
-	client, err := openWithHTTP(ctx, resolved, secrets, red, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, target, binding, httpClient)
 	if err != nil {
 		return nil, "", err
 	}
-	client.target = target
 	return client, source, nil
 }
 

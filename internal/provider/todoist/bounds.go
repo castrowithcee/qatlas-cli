@@ -170,6 +170,8 @@ var targetKinds = []config.TargetKind{{
 	Description: "a project: PROJECT_ID binds exactly that project, project/PROJECT_ID the project with all " +
 		"its subprojects, also those created later; * binds the whole account and stands alone",
 	Forms: []string{projectForm, treeForm, wildcard},
+	// Subprojects are listed below their project.
+	Nested: true,
 }, {
 	Name:        "section",
 	Description: "one section of a project, reaching only its tasks and their comments and reminders",

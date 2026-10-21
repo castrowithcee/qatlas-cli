@@ -487,6 +487,7 @@ func Register(reg *capability.Registry) error {
 					"file unless the drive is also listed whole",
 				Forms:  []string{"drive/DRIVE_ID/files/FILE_ID"},
 				Parent: "drive",
+				Nested: true,
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

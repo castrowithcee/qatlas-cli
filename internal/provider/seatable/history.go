@@ -58,7 +58,7 @@ var rowsActivities = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(historyOutputSchema),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: tableArgumentDescription, Target: "*"},
+		{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 		{Name: "row_id", Description: "Row identifier of 22 characters; the row must exist in the selected table", Required: true},
 		{Name: "page", Description: "One-based page number, up to 1000; 1 when omitted"},
 		{Name: "per_page", Description: "Activities per page, from 1 through 100; 25 when omitted"},

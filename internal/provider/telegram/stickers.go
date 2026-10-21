@@ -203,7 +203,8 @@ func invokeStickersSendWith(ctx context.Context, resolved *config.Resolved, secr
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
 	}
-	chat, err := selectChat(resolved, arguments.Chat)
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +217,7 @@ func invokeStickersSendWith(ctx context.Context, resolved *config.Resolved, secr
 			return nil, err
 		}
 		// A sticker of the read tools is bound to the bot; anything else must come from the selected chat.
-		if ref.binding != chat && ref.binding != botTarget {
+		if ref.binding != binding && ref.binding != botTarget {
 			return nil, providerError(op, stickerRefBindingErrorText)
 		}
 	} else {
@@ -231,7 +232,7 @@ func invokeStickersSendWith(ctx context.Context, resolved *config.Resolved, secr
 			return nil, providerError(op, "a sticker file is larger than 512 KB")
 		}
 	}
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
 	if err != nil {
 		return nil, err
 	}

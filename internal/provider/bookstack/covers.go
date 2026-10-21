@@ -22,7 +22,7 @@ var (
 	booksSetCover = capability.Descriptor{
 		ID: Provider + ".books.set-cover", Version: 1, Title: "Set the cover image of a BookStack book",
 		Description: "Set the cover image of one book from a local image file. " + coverFileNote +
-			". On a connection bound to books the book must be a bound book",
+			". On a connection with targets the book must be bound or stand on a bound shelf",
 		Tags: []string{"knowledge", "books", "bookstack", "update", "cover"}, Provider: Provider,
 		LocalFiles:   config.LocalFilesRead,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
@@ -36,7 +36,7 @@ var (
 	shelvesSetCover = capability.Descriptor{
 		ID: Provider + ".shelves.set-cover", Version: 1, Title: "Set the cover image of a BookStack shelf",
 		Description: "Set the cover image of one shelf from a local image file. " + coverFileNote +
-			". Shelves span the whole instance, so a connection bound to books cannot use this tool",
+			". Shelves span the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack", "update", "cover"}, Provider: Provider,
 		LocalFiles:   config.LocalFilesRead,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
@@ -86,6 +86,9 @@ func invokeBooksSetCover(ctx context.Context, resolved *config.Resolved, secrets
 	defer upload.Close()
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
+		return nil, err
+	}
+	if err := client.requireBook(ctx, id); err != nil {
 		return nil, err
 	}
 	var book bookJSON
