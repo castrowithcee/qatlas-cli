@@ -44,10 +44,7 @@ func renameVault(t *testing.T) string {
 	if err := config.NewStore(configIn(dir), sharedRegistry()).Save(loadConfig(t, dir)); err != nil {
 		t.Fatal(err)
 	}
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatal(err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	approveConnections(t, dir, v)
 	if _, err := v.CreateToken("helper", []string{"wiki"}, nil); err != nil {
 		t.Fatal(err)

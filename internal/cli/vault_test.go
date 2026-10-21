@@ -269,10 +269,7 @@ func TestCredentialSetHasNoPlaintextFlag(t *testing.T) {
 // exit as any other locked access, never a bare, unclassified error.
 func TestVaultUnlockWithoutTerminalIsVaultLocked(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, func(string) (string, error) { return "", vault.ErrNoTerminal })
 
@@ -292,10 +289,7 @@ func TestVaultUnlockWithoutTerminalIsVaultLocked(t *testing.T) {
 // while it was locked, all without touching a real terminal.
 func TestVaultUnlockWithInjectedPassphraseMergesPending(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	// Queue a second role while the vault is locked, the way a fresh process would see it.
 	locked := vault.New(dir)
 	if err := locked.Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {
@@ -360,10 +354,7 @@ func TestVaultEncryptCLI(t *testing.T) {
 // unlocked in the command's own process; the vault process makes the same check.
 func TestInvokeThroughAChangedConnectionNeedsApproval(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	if err := v.Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {
 		t.Fatalf("vault Set() = %v", err)
 	}
@@ -416,10 +407,7 @@ func TestVaultEncryptRefusesAMismatchedConfirmation(t *testing.T) {
 // Encrypting an already encrypted vault is refused and names 'vault passphrase' instead.
 func TestVaultEncryptRefusesAnAlreadyEncryptedVault(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	// The admin check asks for the vault's current passphrase first, before 'vault encrypt' ever looks at
 	// its state; only once it unlocks does the command's own already-encrypted check run.
@@ -436,10 +424,7 @@ func TestVaultEncryptRefusesAnAlreadyEncryptedVault(t *testing.T) {
 // TestVaultPassphraseCLI changes the passphrase of an encrypted vault, and the old one no longer opens it.
 func TestVaultPassphraseCLI(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("old-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "old-phrase")
 
 	withVaultPassphrase(t, sequencedPassphrases("old-phrase", "new-phrase", "new-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "passphrase", "--config", configIn(dir))
@@ -463,10 +448,7 @@ func TestVaultPassphraseCLI(t *testing.T) {
 // A wrong current passphrase aborts the change without touching the vault.
 func TestVaultPassphraseWrongCurrentIsRefused(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("old-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "old-phrase")
 
 	withVaultPassphrase(t, sequencedPassphrases("wrong-phrase", "new-phrase", "new-phrase"))
 	code, _, stderr := runWithInput(t, &Options{}, "", "vault", "passphrase", "--config", configIn(dir))
@@ -487,10 +469,7 @@ func TestVaultPassphraseWrongCurrentIsRefused(t *testing.T) {
 // is a plain document 'vault status' warns about.
 func TestVaultDecryptCLI(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "decrypt", "--confirm", "--config", configIn(dir))
@@ -519,10 +498,7 @@ func TestVaultDecryptCLI(t *testing.T) {
 // Without --confirm 'vault decrypt' refuses before asking for anything, and changes nothing.
 func TestVaultDecryptNeedsConfirmFlag(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, func(string) (string, error) {
 		t.Fatal("the passphrase was asked for without --confirm")
@@ -1063,10 +1039,7 @@ func twoConnectionVaultFixture(t *testing.T) string {
 // passphrase; run again once nothing is left open, it says so and changes nothing.
 func TestVaultApproveAllOpenConnections(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
@@ -1104,10 +1077,7 @@ func TestVaultApproveAllOpenConnections(t *testing.T) {
 // '--connection' approves only the connections it names; the rest stay open for a later run.
 func TestVaultApproveOneConnection(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "",
@@ -1155,10 +1125,7 @@ func loadConfig(t *testing.T, dir string) *config.Config {
 // anything is approved, whatever else was open.
 func TestVaultApproveUnknownConnection(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "",
@@ -1188,10 +1155,7 @@ func TestVaultApproveUnknownConnection(t *testing.T) {
 // stale approval alone left to clean up.
 func TestVaultApproveNothingOpen(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	approveConnections(t, dir, v)
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
@@ -1205,10 +1169,7 @@ func TestVaultApproveNothingOpen(t *testing.T) {
 // and named in the outcome; it is untouched by a run naming --connection.
 func TestVaultApproveRemovesStaleApprovals(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	v := seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	approveConnections(t, dir, v)
 
 	// wiki2 is renamed to wiki3: its old approval is now stale, and the new name is open.
@@ -1263,10 +1224,7 @@ func TestVaultApproveOnUnencryptedVault(t *testing.T) {
 // every other management command does.
 func TestVaultApproveWrongPassphraseIsRefused(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, sequencedPassphrases("wrong-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
@@ -1291,10 +1249,7 @@ func TestVaultApproveWrongPassphraseIsRefused(t *testing.T) {
 // this belongs to lives in admin_test.go.
 func TestVaultApproveWithoutTerminal(t *testing.T) {
 	dir := vaultCredentialFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	withInteractive(t, false)
 
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
@@ -1314,10 +1269,7 @@ func TestVaultApproveWithoutTerminal(t *testing.T) {
 // itself. With nothing open it says nothing about approvals at all.
 func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	v := vault.New(dir)
-	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
@@ -1370,9 +1322,7 @@ connections:
 // added, removed, and kept.
 func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	writeConfig := func(permissions, extra string) {
 		t.Helper()
 		body := fmt.Sprintf(approveListsConfig, permissions, extra)
@@ -1457,9 +1407,7 @@ func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 // approval (unsigned here, so unverified), else a change outside qatlas with the file's modification time.
 func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
-	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
 	writeConfig := func(permissions string) {
 		t.Helper()
 		body := fmt.Sprintf(approveListsConfig, permissions, "")
