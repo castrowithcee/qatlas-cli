@@ -261,7 +261,7 @@ func (m *Model) templateView() string {
 		}
 		b.WriteString(m.indentedHanging(style, mark, row) + "\n")
 	}
-	b.WriteString(m.keyHint("up/down move · enter choose · esc cancel · ? help") + m.notes())
+	b.WriteString(m.keyHint("up/down move · enter choose · esc cancel · : cmds · ? help") + m.notes())
 	return b.String()
 }
 
@@ -292,7 +292,7 @@ func (m *Model) templateFrame() (string, string) {
 	}
 	keys := "type to search · up/down move · enter choose · esc back"
 	if l.query() == "" {
-		keys += " · ? help"
+		keys += " · : cmds · ? help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

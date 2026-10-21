@@ -359,9 +359,9 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "F2 next step"
 	}
-	keys := "a add · enter edit · i label · d remove · up/down move · " + save + " · esc close · ? help"
+	keys := "a add · enter edit · i label · d remove · up/down move · " + save + " · esc close · : cmds · ? help"
 	if m.wizard != nil {
-		keys = "a add · enter edit · d remove · up/down move · " + save + " · esc close · ? help"
+		keys = "a add · enter edit · d remove · up/down move · " + save + " · esc close · : cmds · ? help"
 	}
 	switch {
 	case m.labelEdit:
@@ -379,7 +379,7 @@ func (m *Model) targetFrame() (string, string) {
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
-		keys = "y remove · n/esc keep · ? help"
+		keys = "y remove · n/esc keep · : cmds · ? help"
 	}
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()

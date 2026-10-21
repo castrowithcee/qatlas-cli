@@ -154,10 +154,10 @@ func (m *Model) providerTableFrame() (string, string) {
 	t := &m.providers
 	shown, total := len(t.list.matches), len(t.list.all)
 	title := "Choose provider"
-	keys := "type to search · up/down move · enter choose · esc cancel"
+	keys := "type to search · up/down · enter choose · esc cancel"
 	if w := m.wizard; w != nil {
 		title = fmt.Sprintf("Setup step %d of %d · choose provider", w.step+1, setupSteps)
-		keys = "type to search · up/down move · enter next · esc cancel setup"
+		keys = "type to search · up/down · enter next · esc cancel setup"
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("%s  %d/%d (%d total)",
@@ -175,7 +175,7 @@ func (m *Model) providerTableFrame() (string, string) {
 			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
 	}
 	if t.list.query() == "" {
-		keys += " · ? help"
+		keys += " · : cmds · ? help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

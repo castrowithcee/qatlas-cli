@@ -514,7 +514,7 @@ func (m *Model) addFrame() (string, string) {
 		head.WriteString(m.wrapped(hintStyle, "(nothing to choose; type a value)") + "\n")
 	}
 	if a.choices.query() == "" {
-		keys += " · ? help"
+		keys += " · : cmds · ? help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
