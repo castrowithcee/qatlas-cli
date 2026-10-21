@@ -174,9 +174,10 @@ func Fingerprint(scope Scope, credentialID string) string {
 
 // Approval is what the vault keeps for one approved connection: the fingerprint an access must match, and the
 // scope and the credential entry it was given for, so a change can be shown field by field. It never holds a
-// secret. ConnectionID is the config id of the connection, recorded by a rename (see CarryApproval) so a copy
-// left behind by one that did not finish names the connection it belongs to; it is no trust anchor, and an
-// older build ignores it.
+// secret. ConnectionID is the config id of the connection, recorded when it is approved (see ApproveConnections)
+// and by a rename (see CarryApproval), so an approval or a copy left behind by a rename that did not finish
+// names the connection it belongs to. An approval from before the id was recorded has none. It is no trust
+// anchor and no part of the fingerprint, and an older build ignores it.
 type Approval struct {
 	Fingerprint  string    `json:"fingerprint"`
 	Scope        Scope     `json:"scope"`
@@ -310,6 +311,12 @@ func (v *Vault) CheckApprovalFor(scope Scope, credential string) error {
 // vault. It needs the vault unlocked in this process. A scope whose credential the vault holds no entry for is
 // refused, and nothing is written then: there is no secret to approve access to yet.
 func (v *Vault) Approve(scopes []Scope) error {
+	return v.ApproveConnections(scopes, nil)
+}
+
+// ApproveConnections is Approve that also records the config id of each connection, from ids by connection
+// name; a connection without an entry, or with an empty id, is approved without one.
+func (v *Vault) ApproveConnections(scopes []Scope, ids map[string]string) error {
 	doc, err := v.unlockedDocument()
 	if err != nil {
 		return err
@@ -324,7 +331,7 @@ func (v *Vault) Approve(scopes []Scope) error {
 		}
 		approvals[scope.Connection] = Approval{
 			Fingerprint: Fingerprint(scope, entry.ID), Scope: scope.Normalized(), CredentialID: entry.ID,
-			Approved: now,
+			Approved: now, ConnectionID: ids[scope.Connection],
 		}
 	}
 	if len(approvals) == 0 {

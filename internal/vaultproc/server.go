@@ -557,7 +557,7 @@ func (s *Server) answerToken(req request) response {
 	if err != nil {
 		return response{V: Version, Error: codeTokenFailed}
 	}
-	result, err := v.ApproveWithToken(req.Token, req.Scopes, req.Names, time.Now())
+	result, err := v.ApproveWithTokenConnections(req.Token, req.Scopes, req.ConnectionIDs, req.Names, time.Now())
 	refused := invokelog.Fields{Path: "cli", Operation: approveOperation, Result: resultAdminRequired,
 		Token: result.Token}
 	switch {

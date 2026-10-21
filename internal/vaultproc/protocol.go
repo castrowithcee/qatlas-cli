@@ -92,22 +92,25 @@ type hello struct {
 // one is refused. Bindings replace the server's own on a bind. Entry is what a log appends, and Lines are
 // the stored log lines a logcheck checks. Token, Scopes, and Names belong to approve-token: the agent token
 // presented, the scope of every connection reading a vault credential as configured now, and the
-// connections to limit the approval to, none for all. Phase and Release belong to handover.
+// connections to limit the approval to, none for all. ConnectionIDs are the config ids of those connections
+// by name, which the approvals record; a process of an earlier version ignores them. Phase and Release
+// belong to handover.
 type request struct {
-	V          int             `json:"v"`
-	Op         string          `json:"op"`
-	Credential string          `json:"credential,omitempty"`
-	Role       string          `json:"role,omitempty"`
-	Value      string          `json:"value,omitempty"`
-	Scope      *vault.Scope    `json:"scope,omitempty"`
-	Bindings   *vault.Bindings `json:"bindings,omitempty"`
-	Entry      *logEntry       `json:"entry,omitempty"`
-	Lines      [][]byte        `json:"lines,omitempty"`
-	Token      string          `json:"token,omitempty"`
-	Scopes     []vault.Scope   `json:"scopes,omitempty"`
-	Names      []string        `json:"names,omitempty"`
-	Phase      string          `json:"phase,omitempty"`
-	Release    *ReleaseFiles   `json:"release,omitempty"`
+	V             int               `json:"v"`
+	Op            string            `json:"op"`
+	Credential    string            `json:"credential,omitempty"`
+	Role          string            `json:"role,omitempty"`
+	Value         string            `json:"value,omitempty"`
+	Scope         *vault.Scope      `json:"scope,omitempty"`
+	Bindings      *vault.Bindings   `json:"bindings,omitempty"`
+	Entry         *logEntry         `json:"entry,omitempty"`
+	Lines         [][]byte          `json:"lines,omitempty"`
+	Token         string            `json:"token,omitempty"`
+	Scopes        []vault.Scope     `json:"scopes,omitempty"`
+	Names         []string          `json:"names,omitempty"`
+	ConnectionIDs map[string]string `json:"connection_ids,omitempty"`
+	Phase         string            `json:"phase,omitempty"`
+	Release       *ReleaseFiles     `json:"release,omitempty"`
 }
 
 // ReleaseFiles names the files of a downloaded release that a handover is prepared with, each by its absolute
