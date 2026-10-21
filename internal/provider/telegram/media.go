@@ -277,7 +277,7 @@ type preparedSource struct {
 
 // prepareSources validates each source and opens each local file, so a foreign reference, a path outside the
 // release, or an oversized file is refused before the credential is resolved. The caller closes the uploads.
-func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat string, kinds []string,
+func prepareSources(ctx context.Context, resolved *config.Resolved, op, binding string, kinds []string,
 	sources []mediaSource) ([]preparedSource, error) {
 	prepared := make([]preparedSource, 0, len(sources))
 	closeAll := func() {
@@ -304,7 +304,7 @@ func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat str
 		}
 		if hasRef {
 			parsed, err := parseRef(resolved, refFile, source.FileRef)
-			if err == nil && parsed.binding != chat {
+			if err == nil && parsed.binding != binding {
 				// A reference stays with the chat it was issued for, even if the connection binds several.
 				err = providerError(op, "the reference does not belong to the selected chat")
 			}
@@ -432,19 +432,20 @@ func invokeLivePhotosSendWith(ctx context.Context, resolved *config.Resolved, se
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
 	}
-	chat, err := selectChat(resolved, arguments.Chat)
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
 	// Both pairs are checked, each with its limit, before the credential is resolved.
 	still := mediaSource{LocalPath: arguments.PhotoLocalPath, FileRef: arguments.PhotoFileRef}
-	prepared, err := prepareSources(ctx, resolved, op, chat, []string{kindLivePhoto, kindLiveStill},
+	prepared, err := prepareSources(ctx, resolved, op, binding, []string{kindLivePhoto, kindLiveStill},
 		[]mediaSource{arguments.mediaSource, still})
 	if err != nil {
 		return nil, err
 	}
 	defer closeUploads(prepared)
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -475,16 +476,17 @@ func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *s
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
 	}
-	chat, err := selectChat(resolved, arguments.Chat)
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareSources(ctx, resolved, op, chat, []string{kind}, []mediaSource{arguments.mediaSource})
+	prepared, err := prepareSources(ctx, resolved, op, binding, []string{kind}, []mediaSource{arguments.mediaSource})
 	if err != nil {
 		return nil, err
 	}
 	defer closeUploads(prepared)
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -537,16 +539,17 @@ func invokeMediaGroupsSendWith(ctx context.Context, resolved *config.Resolved, s
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
 	}
-	chat, err := selectChat(resolved, arguments.Chat)
+	chat, binding, err := selectThread(resolved, arguments.Chat, "chat", &arguments.MessageThreadID,
+		arguments.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareSources(ctx, resolved, op, chat, kinds, sources)
+	prepared, err := prepareSources(ctx, resolved, op, binding, kinds, sources)
 	if err != nil {
 		return nil, err
 	}
 	defer closeUploads(prepared)
-	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	client, err := openSelected(ctx, resolved, secrets, red, chat, binding, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -852,7 +855,7 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		fileID = message.LivePhoto.FileID
 	}
 	out := map[string]any{"message_id": message.MessageID, "date": message.Date}
-	if ref := signRef(c.token, refFile, c.target, fileID); ref != "" {
+	if ref := signRef(c.token, refFile, c.refBinding(), fileID); ref != "" {
 		out["file_ref"] = ref
 	}
 	return out, true

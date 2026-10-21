@@ -41,51 +41,63 @@ func listTargets(context.Context, *config.Resolved, *secret.Resolver, *redact.Re
 }
 
 // resolveTargetURL reads a t.me link syntactically, without a request: origin is the Bot API's and says
-// nothing about the web host. A link that names no chat yields no entry and no error.
+// nothing about the web host. A link that names no chat yields no entry and no error; a link into a forum topic
+// yields its chat and the topic.
 func resolveTargetURL(_ context.Context, _ *config.Resolved, _ *secret.Resolver, _ *redact.Redactor,
 	_, rawURL string) ([]config.TargetEntry, error) {
-	target, name, ok := chatOfWebURL(rawURL)
+	target, name, topic, ok := chatOfWebURL(rawURL)
 	if !ok {
 		return nil, nil
 	}
-	return []config.TargetEntry{{Target: target, Name: name, Kind: "chat"}}, nil
+	entries := []config.TargetEntry{{Target: target, Name: name, Kind: "chat"}}
+	if topic != "" {
+		entries = append(entries, config.TargetEntry{Target: topic, Name: topic, Kind: "topic", Path: target})
+	}
+	return entries, nil
 }
 
-func chatOfWebURL(rawURL string) (target, name string, ok bool) {
+// chatOfWebURL returns the chat of a t.me link and, for a private forum message link, its topic target.
+func chatOfWebURL(rawURL string) (target, name, topic string, ok bool) {
 	if len(rawURL) > maxWebURLBytes {
-		return "", "", false
+		return "", "", "", false
 	}
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || strings.ToLower(u.Host) != webHost {
-		return "", "", false
+		return "", "", "", false
 	}
 	segments := strings.Split(strings.TrimPrefix(u.EscapedPath(), "/"), "/")
 	if segments[len(segments)-1] == "" {
 		segments = segments[:len(segments)-1]
 	}
 	if len(segments) == 0 {
-		return "", "", false
+		return "", "", "", false
 	}
 	if segments[0] == "c" {
-		// c/{id}[/{topic}][/{message}]: this reads the chat only.
+		// c/{id}[/{message}] or c/{id}/{topic}/{message}: only a forum message link has three numbers, so
+		// c/{id}/{n} stays the chat alone.
 		if len(segments) < 2 || len(segments) > 4 || !numericSegments(segments[1:]) ||
 			len(segments[1]) > maxPrivateChatDigits || segments[1][0] == '0' {
-			return "", "", false
+			return "", "", "", false
 		}
 		target = privateChatBase + segments[1]
 		if validateTarget(target) != nil {
-			return "", "", false
+			return "", "", "", false
 		}
-		return target, target, true
+		if len(segments) == 4 {
+			if _, valid := parseTopic(target + topicInfix + segments[2]); valid {
+				topic = target + topicInfix + segments[2]
+			}
+		}
+		return target, target, topic, true
 	}
 	if len(segments) > 2 || !numericSegments(segments[1:]) || !webUsername(segments[0]) {
-		return "", "", false
+		return "", "", "", false
 	}
 	target = "@" + segments[0]
 	if validateTarget(target) != nil {
-		return "", "", false
+		return "", "", "", false
 	}
-	return target, segments[0], true
+	return target, segments[0], "", true
 }
 
 // webUsername applies Telegram's username rules, which are stricter than validateTarget: a letter first,

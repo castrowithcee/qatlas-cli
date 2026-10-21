@@ -160,5 +160,12 @@ func (s targetSet) binds(binding string) bool {
 			return true
 		}
 	}
+	// A topic reference names its topic target, never its chat, so a reference issued for the whole chat by
+	// another connection of the same bot is not accepted here.
+	for _, topic := range s.topics {
+		if topic.binding == binding {
+			return true
+		}
+	}
 	return false
 }
