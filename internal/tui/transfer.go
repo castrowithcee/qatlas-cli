@@ -261,21 +261,25 @@ func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (e *exportState) scroll(key string, height int) {
+func (e *exportState) scroll(key string, height int) { e.offset = scrollOffset(e.offset, key, height) }
+
+// scrollOffset is the first shown line after a scroll key; the view clamps it to the lines there are.
+func scrollOffset(offset int, key string, height int) int {
 	switch key {
 	case "down":
-		e.offset++
+		return offset + 1
 	case "up":
-		e.offset = max(e.offset-1, 0)
+		return max(offset-1, 0)
 	case "pgdown":
-		e.offset += max(height/2, 1)
+		return offset + max(height/2, 1)
 	case "pgup":
-		e.offset = max(e.offset-max(height/2, 1), 0)
+		return max(offset-max(height/2, 1), 0)
 	case "home":
-		e.offset = 0
+		return 0
 	case "end":
-		e.offset = 1 << 20
+		return 1 << 20
 	}
+	return offset
 }
 
 func (m *Model) updateExportSelect(key tea.KeyMsg) tea.Cmd {
@@ -447,17 +451,22 @@ func (m *Model) updateExportPassphrase(key tea.KeyMsg) tea.Cmd {
 func (m *Model) askExportTarget() {
 	e := m.export
 	e.step = exportTarget
+	value := e.target
+	if value == "" && m.startDir != "" {
+		value = filepath.Join(m.startDir, exportFileName)
+	}
+	e.input = pathInput(value)
+}
+
+// pathInput is a focused one-line input holding value, the cursor at its end.
+func pathInput(value string) textinput.Model {
 	in := textinput.New()
 	in.Prompt = ""
 	in.Cursor.SetMode(cursor.CursorStatic)
-	if e.target != "" {
-		in.SetValue(e.target)
-	} else if m.startDir != "" {
-		in.SetValue(filepath.Join(m.startDir, exportFileName))
-	}
+	in.SetValue(value)
 	in.Focus()
 	in.CursorEnd()
-	e.input = in
+	return in
 }
 
 func (m *Model) updateExportTarget(key tea.KeyMsg) tea.Cmd {
@@ -710,6 +719,12 @@ func (m *Model) exportView() string {
 	if e.writing {
 		keys = "writing, please wait"
 	}
+	return m.linesView(title, question, keys, e.lines, &e.offset)
+}
+
+// linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, between a title
+// and the question and keys of the step. A line that starts with "warning" is drawn as one.
+func (m *Model) linesView(title, question, keys string, lines []string, offset *int) string {
 	head := m.wrapped(titleStyle, title) + "\n\n"
 	foot := "\n"
 	if question != "" {
@@ -717,7 +732,7 @@ func (m *Model) exportView() string {
 	}
 	foot += m.keyHint(keys) + m.notes()
 	var body []string
-	for _, line := range e.lines {
+	for _, line := range lines {
 		style := hintStyle
 		if strings.HasPrefix(line, "warning") {
 			style = warningStyle
@@ -725,8 +740,8 @@ func (m *Model) exportView() string {
 		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
 	}
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 3)
-	e.offset = max(min(e.offset, len(body)-room), 0)
-	return head + strings.Join(body[e.offset:min(e.offset+room, len(body))], "\n") + foot
+	*offset = max(min(*offset, len(body)-room), 0)
+	return head + strings.Join(body[*offset:min(*offset+room, len(body))], "\n") + foot
 }
 
 // exportLeaveView is the leave question over an unfinished export.
