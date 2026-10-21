@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // ImportMode says what an import does with an entry whose name the target already has. Entries are matched
@@ -83,10 +84,26 @@ type ImportPlan struct {
 	// CredentialsKeepSecret are the replaced credentials. Whatever secret the target holds for the name stays
 	// untouched, and it may not fit the replacement.
 	CredentialsKeepSecret []string
+	// SecretRoles names, per created or replaced credential, the roles whose secret the file brings (never a
+	// value). Such a credential is in neither of the two lists above. The secrets of a skipped credential
+	// are not part of the plan. SourceEncrypted tells whether the file was an age file.
+	SecretRoles     map[string][]string
+	SourceEncrypted bool
 
 	before, cfg *config.Config
 	base        config.Revision
+	// secrets are the values behind SecretRoles. They stay in the plan and in nothing it prints.
+	secrets map[string]map[string]string
 }
+
+// String and GoString keep the secret values of a plan out of every fmt verb, which would print the
+// unexported fields.
+func (p ImportPlan) String() string {
+	created, replaced, skipped := p.Count()
+	return fmt.Sprintf("import plan of %s: %d created, %d replaced, %d skipped", p.Source, created, replaced, skipped)
+}
+
+func (p ImportPlan) GoString() string { return p.String() }
 
 // Count returns how many entries the plan creates, replaces and skips.
 func (p *ImportPlan) Count() (created, replaced, skipped int) {
@@ -129,10 +146,18 @@ type ImportResult struct {
 // An id the file brings stays only if the target has no entry of that kind with it. Otherwise, and for an
 // entry without one, a new id is assigned.
 func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) {
+	return s.PlanImportFile(path, mode, nil)
+}
+
+// PlanImportFile is PlanImport for a file that may hold secrets and be encrypted. ask returns the export
+// passphrase and is called only for an encrypted file; with a nil ask such a file is refused. A wrong
+// passphrase is a refusal (errors.Is(err, vault.ErrWrongExportPassphrase)) with nothing planned. The
+// secrets are checked together with the rest of the file and kept in the plan, never in its text.
+func (s *Service) PlanImportFile(path string, mode ImportMode, ask vault.PassphraseFunc) (*ImportPlan, error) {
 	if _, err := ParseImportMode(string(mode)); err != nil {
 		return nil, err
 	}
-	file, fileCfg, err := s.readTransfer(path)
+	file, fileCfg, err := s.readTransfer(path, ask)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +171,7 @@ func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) 
 	}
 	before := target
 	cand := target.Clone()
-	plan := &ImportPlan{Mode: mode, Source: path, before: before, cfg: cand, base: rev}
+	plan := &ImportPlan{Mode: mode, Source: path, SourceEncrypted: file.encrypted, before: before, cfg: cand, base: rev}
 	var exists []string
 
 	// decide gives the action for one entry and records a conflict of ImportModeCreate.
@@ -218,7 +243,16 @@ func (s *Service) PlanImport(path string, mode ImportMode) (*ImportPlan, error) 
 			if id != "" {
 				taken[ImportCredentials][id] = true
 			}
+			if brought := file.Secrets[name]; len(brought) > 0 {
+				if plan.secrets == nil {
+					plan.secrets = map[string]map[string]string{}
+					plan.SecretRoles = map[string][]string{}
+				}
+				plan.secrets[name] = brought
+				plan.SecretRoles[name] = sortedNames(brought)
+			}
 			switch {
+			case plan.secrets[name] != nil:
 			case action == ImportActionReplace:
 				plan.CredentialsKeepSecret = append(plan.CredentialsKeepSecret, name)
 			case v.Type != config.CredentialTypeEnv:
@@ -365,6 +399,9 @@ func (s *Service) ApplyImport(plan *ImportPlan) (ImportResult, error) {
 	var res ImportResult
 	if plan == nil || plan.cfg == nil {
 		return res, errors.New("no import was planned")
+	}
+	if len(plan.secrets) > 0 {
+		return res, errors.New("this import brings secrets, which cannot be written yet")
 	}
 	res.Created, res.Replaced, res.Skipped = plan.Count()
 	if res.Created+res.Replaced == 0 {
