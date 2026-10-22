@@ -2,8 +2,8 @@
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection and scene
   targets, choosing them, the collection, scene, and scene content reads with their client-side search, creating,
-  renaming, and moving scenes, patching and replacing scene content, deleting scenes and collections into the trash, workspace users,
-  the bounds, and the errors.
+  renaming, and moving scenes, patching and replacing scene content, deleting scenes and collections into the trash,
+  workspace users, the bounds, and the errors.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -15,8 +15,9 @@ updated: 2026-10-03
 This provider reads the collections, scenes, and scene content of one Excalidraw+ workspace through its public
 REST API (`https://api.excalidraw.com/api/v1`). The recommended `read` profile changes nothing. The optional `manage`
 profile can create a scene, rename or move one, patch its elements, replace its whole content, and move a scene or a
-collection to the trash. The optional `people` profile reads and manages workspace users, and the optional `activity` profile reads the workspace activity log. There is no tool for team
-management, workspace settings, or restoring from the trash.
+collection to the trash. The optional `people` profile reads and manages workspace users, and the optional `activity`
+profile reads the workspace activity log. There is no tool for team management, workspace settings, or restoring from
+the trash.
 
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
@@ -88,7 +89,7 @@ or enter the identifier.
 | `excalidraw-plus.collections.list` | the allowed collections and their metadata |
 | `excalidraw-plus.scenes.list` | scenes of the allowed collections; optional `collection_id` and `name` |
 | `excalidraw-plus.scenes.get` | one scene's metadata, without preview address or share links (see Boundary) |
-| `excalidraw-plus.scenes.content` | one scene's elements, capped, with their `version`; optional `query`, `offset`, `limit` |
+| `excalidraw-plus.scenes.content` | one scene's header, elements, and file metadata, capped; optional `query`, `offset`, `limit` |
 
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
 collections; with exactly one it is the default, with `*` it is optional.
@@ -137,9 +138,9 @@ request, and is never repeated.
 
 ## Editing scene content
 
-The `manage` profile also offers two content tools. Both are in the Excalidraw+ scene content API, which is a public
-beta, need `confirm`, send exactly one request, and are never repeated. Both first read the scene's metadata and
-continue only when its collection is allowed; a scene of another collection receives no `PATCH` or `PUT`.
+The `manage` profile also offers two content tools. Both need `confirm`, send exactly one request, and are never
+repeated. Both first read the scene's metadata and continue only when its collection is allowed; a scene of another
+collection receives no `PATCH` or `PUT`.
 
 | Tool | Request | Does |
 | --- | --- | --- |
@@ -174,8 +175,7 @@ empty element list is refused. `view_background_color` defaults to `#ffffff`.
 | `expected_version`, `is_deleted` | patch only |
 
 Links, images, embedded frames, freehand strokes, custom data, and bindings are not accepted, and no other field
-passes. The request body is at most 1 MiB. After a timeout, a reset connection, a 5xx answer, or an unreadable
-answer, the error says the change may have taken effect; read the scene before repeating it. Idempotency is reported as
+passes. The request body is at most 1 MiB. An uncertain outcome is reported as for scene changes, with idempotency
 `unknown`. The answer reports `scene_id`, `scene_version`, `sent`, `element_count` (not deleted, as the answer shows),
 and, for a patch, `not_applied`.
 
@@ -198,9 +198,8 @@ repeated.
 - `collections.delete` checks the `collection_id` against the targets before any secret is read or request is sent,
   then reads the collection once. The `private` collection is never deletable, and the default collection is refused
   (`is_default`); both are narrower than the API requires.
-- The answer is `id` and `deleted: true`; the response body of Excalidraw+ is not read. After a timeout, a reset
-  connection, a 5xx answer, or an unreadable answer, the error says the change may have taken effect; read the state
-  in Excalidraw+ before repeating it. Idempotency is reported as `unknown`.
+- The answer is `id` and `deleted: true`; the response body of Excalidraw+ is not read. An uncertain outcome is
+  reported as for scene changes, with idempotency `unknown`.
 
 ## Users
 
@@ -223,29 +222,28 @@ links), so no tool invites a person.
   `teams` holds at most 50 groups with 50 entries of 128 characters each, `rate_limits` at most 50 keys per group,
   the scene histories at most 100 entries, and an entry with an invalid identifier is dropped from a list.
 - The two changes need `confirm`, are offered only to a connection whose `tools` list names them (also with the
-  matching permission), send exactly one request, and are never repeated. Idempotency is reported as `unknown`, the
-  data class is personal. Because a tool cannot be gated by argument, `users.update` is gated as a whole, so a name
+  matching permission), send exactly one request, and are never repeated; after a timeout, a reset connection, a 5xx
+  answer, or an unreadable answer, read the user before repeating. Idempotency is reported as `unknown`, the data class
+  is personal. Because a tool cannot be gated by argument, `users.update` is gated as a whole, so a name
   change and a promotion to `admin` need the same release.
 - `users.remove` is final: Excalidraw+ revokes the user's access and removes the user's workspace data, and Qatlas
   cannot undo it. `users.update` changes neither the e-mail address nor teams.
-- `role` is `member` or `admin`; `user_id` is limited to ASCII letters, digits, hyphen, and underscore, at most 64
-  characters.
-- After a timeout, a reset connection, a 5xx answer, or an unreadable answer, the error says the change may have taken
-  effect; read the user in Excalidraw+ before repeating it.
 
 ## Pagination
 
-Lists take `offset` (0 to 1 000 000) and `limit` (1 to 100, 50 when omitted) and answer `has_next_page` and, when
-true, `next_offset`. A page is filtered after Excalidraw+ answers, so it can hold fewer items than `limit` while
+Lists take `offset` (0 to 1 000 000) and `limit` (1 to 100, 50 when omitted) and answer `has_next_page` and, when true,
+`next_offset`. A page is filtered after Excalidraw+ answers, so it can hold fewer items than `limit` while
 `has_next_page` is true.
 
 ## Scene content and search
 
-Scene content is untrusted data. It is reduced to elements with `id`, `type`, `text`, `name`, position, size,
-`version`, `frame_id`, and `container_id`; deleted elements, links, images, and embedded files are not returned (files are
-only counted in `files_count`). One answer holds at most 1000 elements (200 when `limit` is omitted), 1 KiB per text
-or name, and 256 KiB of text in total; `truncated` and `next_offset` say where to continue. A content body above
-16 MiB is refused.
+Scene content is untrusted data. One answer holds at most 1000 elements (200 when `limit` is omitted), 1 KiB per
+text, name, `original_text`, `link`, and `source`, and 256 KiB of element text in total; `truncated` and `next_offset`
+say where to continue. A content body above 16 MiB is refused. Embedded file content is not returned; only each
+file's metadata appears. A `link` is an address: untrusted, capped text, never fetched. Deleted elements are not part
+of the visible content and are not returned. A free-form object or list over its bound (`custom_data`: depth 6, 100
+entries, 4 KiB; other lists: 1000 entries; `files`: 200) is left out, never cut, and marked by a member ending in
+`_omitted`. `custom_data` keeps the keys Excalidraw+ delivers.
 
 Excalidraw+ has no content search. `query` is searched by Qatlas: an element is kept when its text or name contains the
 query, ignoring case; `matched` counts all matches. `scenes.list` has only a `name` filter, applied to the returned
@@ -272,10 +270,9 @@ or a provider response body.
 ## Boundary
 
 The response shapes follow the API reference's pages for collections, scenes, users, logs, scene content, and rate
-limiting. Error bodies, the identifier format, and the element fields beyond the Excalidraw file format (`text`,
-`name`, `isDeleted`, `frameId`, `containerId`, assumed from that format) are not documented there. The behaviour of
-`collectionId=private` for personal keys is not relied on. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}`
-(`name`, `pinned`, `collectionId`) follow the API reference; the effect of a repeated request is not documented.
+limiting. Error bodies and the identifier format are not documented there. The behaviour of `collectionId=private` for
+personal keys is not relied on. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}` (`name`, `pinned`,
+`collectionId`) follow the API reference; the effect of a repeated request is not documented.
 
 The content endpoints follow the API reference pages for scene content and its schema: `PATCH` takes a partial scene
 content with `elements`, `appState`, and `files` (at least one), merges elements by id with the higher `version`
@@ -287,19 +284,18 @@ the server rejects or ignores a stale version without an error (Qatlas detects i
 Qatlas fills for omitted element fields, the accepted `source` value, a size limit, and the effect of a repeated
 request. The local limits (100 and 500 elements, 2000 text characters, 200 points, 1 MiB) are Qatlas choices.
 
-The delete endpoints follow the API reference (`DELETE` of a scene or collection is a soft deletion into the
-trash). Assumed: the paths `DELETE /scenes/{id}` and `DELETE /collections/{id}`, that any 2xx counts (the body is
-dropped), that the scenes of a deleted collection leave with it, whether the default collection may be deleted
-(refused locally), that `GET /collections/{id}` answers the collection object of the list, and the effect of a
-repeated request.
+The delete endpoints follow the API reference (`DELETE` of a scene or collection is a soft deletion into the trash).
+Assumed: the paths `DELETE /scenes/{id}` and `DELETE /collections/{id}`, that any 2xx counts (the body is dropped), that
+the scenes of a deleted collection leave with it, whether the default collection may be deleted (refused locally), that
+`GET /collections/{id}` answers the collection object of the list, and the effect of a repeated request.
 
-For users, `PATCH` takes `name`, `picture`, `role`, `workspaceTeams`, and `preferences` and does not change the
-e-mail address; `DELETE` removes the user and its workspace data. Assumed: the identifier format (narrowed to the
-local rule), the meaning of the `workspaceTeams` keys, whether a team write replaces or merges (so no team write is
-offered), whether a workspace owner can be removed or demoted, and the effect of a repeated request. No live call has
-been made against any endpoint.
+For users, `PATCH` takes `name`, `picture`, `role`, `workspaceTeams`, and `preferences` and does not change the e-mail
+address; `DELETE` removes the user and its workspace data. Assumed: the identifier format (narrowed to the local rule),
+the meaning of the `workspaceTeams` keys, whether a team write replaces or merges (so no team write is offered), whether
+a workspace owner can be removed or demoted, and the effect of a repeated request. No live call has been made against
+any endpoint.
 
-Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works
-without an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links
-grant access without sign-in and no scene read tool is released separately through `tools`; `isDeleted` and
-`deletedAt`, since items in the trash are not listed and the fields would always be empty.
+Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works without
+an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links grant access
+without sign-in and no scene read tool is released separately through `tools`; `isDeleted` and `deletedAt`, since items
+in the trash are not listed and the fields would always be empty.

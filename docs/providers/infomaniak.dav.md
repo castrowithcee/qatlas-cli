@@ -123,12 +123,12 @@ part of RFC 5545). `VTIMEZONE` definitions are not evaluated; times appear with 
 ## Contacts
 
 Both tools take `addressbook`, the ID of an `addressbook/ID` target; one outside the allow-list is refused as
-`permission` before any secret is read or request is sent; the message does not name it. Contacts carry the data
-sensitivity class `infomaniak-dav-contacts`.
+`permission` before any secret or request, without naming it. Data sensitivity class: `infomaniak-dav-contacts`.
 
-`infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults to 50,
-at most 200. Contacts are sorted by name, then id, and cut at `limit`; `truncated` is true when more were found. Each
-entry reports the same members as the get tool, plus `email`, the first address. An invalid vCard is left out.
+`infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT from fixed fragments, never with `nresults`:
+all hits are sorted by name, then id, before the cut at `limit` (50, at most 200); `truncated` flags more. Filters only
+narrow the answer; every href keeps its path binding. An unsupported collation is a request error; `address-books.list`
+names the supported ones. Entries carry the get tool's members plus the first `email`; invalid vCards are left out.
 
 `infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads it with a GET. It
 reports every vCard 3.0 property (RFC 2426) except those left out below; a list-valued member is cut at 20 entries and
