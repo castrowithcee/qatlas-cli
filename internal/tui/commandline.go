@@ -44,6 +44,7 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { return m.openSection(s) },
 		})
 	}
+	list = append(list, m.selftestCommands()...)
 	return append(list,
 		command{
 			name:        "setup",
