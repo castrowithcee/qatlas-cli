@@ -91,8 +91,7 @@ type RecurringTemplate struct {
 // members are decoded by the shared mapper.
 type recurringJSON struct {
 	invoiceJSON
-	PaymentTermLabel string `json:"paymentTermLabel"`
-	Settings         struct {
+	Settings struct {
 		StartDate           string `json:"startDate"`
 		EndDate             string `json:"endDate"`
 		Finalize            bool   `json:"finalize"`
@@ -315,7 +314,7 @@ func (c *Client) ListRecurringTemplates(ctx context.Context, options RecurringTe
 		voucher := entry.normalize()
 		templates = append(templates, RecurringTemplateSummary{
 			ID: voucher.ID, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
-			UpdatedDate: voucher.UpdatedDate, Title: voucher.Title, PaymentTermLabel: entry.PaymentTermLabel,
+			UpdatedDate: voucher.UpdatedDate, Title: voucher.Title, PaymentTermLabel: termLabel(voucher),
 			Currency: voucher.Currency, TotalNetAmount: voucher.TotalNetAmount,
 			TotalGrossAmount: voucher.TotalGrossAmount, TotalTaxAmount: voucher.TotalTaxAmount,
 			Contact: voucher.Contact, Settings: entry.settings(),
@@ -325,6 +324,14 @@ func (c *Client) ListRecurringTemplates(ctx context.Context, options RecurringTe
 		Templates: templates, Page: page.Number, Size: page.Size, TotalPages: page.TotalPages,
 		TotalElements: page.TotalElements, LastPage: page.Last,
 	}, nil
+}
+
+// termLabel returns the payment term label, which Lexware nests under paymentConditions.
+func termLabel(voucher *SalesVoucher) string {
+	if voucher.PaymentConditions == nil {
+		return ""
+	}
+	return voucher.PaymentConditions.PaymentTermLabel
 }
 
 // GetRecurringTemplate reads exactly the template of a validated identifier and performs no other I/O.
@@ -347,7 +354,7 @@ func (c *Client) GetRecurringTemplate(ctx context.Context, id string) (*Recurrin
 	return &RecurringTemplate{
 		ID: voucher.ID, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
 		UpdatedDate: voucher.UpdatedDate, Language: voucher.Language, Title: voucher.Title,
-		Introduction: voucher.Introduction, Remark: voucher.Remark, PaymentTermLabel: raw.PaymentTermLabel,
+		Introduction: voucher.Introduction, Remark: voucher.Remark, PaymentTermLabel: termLabel(voucher),
 		TaxType: voucher.TaxType, Currency: voucher.Currency, TotalNetAmount: voucher.TotalNetAmount,
 		TotalGrossAmount: voucher.TotalGrossAmount, TotalTaxAmount: voucher.TotalTaxAmount,
 		Contact: voucher.Contact, Shipping: voucher.Shipping, Settings: raw.settings(),
