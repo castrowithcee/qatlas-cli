@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -20,6 +22,15 @@ const maxDataTableNameLength = 128
 
 // maxDataTableColumns bounds the columns one data table read reports.
 const maxDataTableColumns = 200
+
+// maxDataTableIDs bounds the identifiers of one table listing filter.
+const maxDataTableIDs = 50
+
+// dataTableSorts are the orders of n8n's data table listing.
+var dataTableSorts = []string{"name:asc", "name:desc", "createdAt:asc", "createdAt:desc", "updatedAt:asc",
+	"updatedAt:desc", "size:asc", "size:desc"}
+
+var dataTableSortSchema = `"` + strings.Join(dataTableSorts, `","`) + `"`
 
 // dataTableDataSensitivity marks the data table structure the tools read and change; rows are never read.
 const dataTableDataSensitivity = "n8n-data-tables"
@@ -41,17 +52,22 @@ func dataTableChangeRisk(effect capability.Effect, idempotency capability.Idempo
 
 var dataTableNameSchemaJSON = `{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxDataTableNameLength) + `}`
 
+// dataTableColumnReadSchema is a column as the read tools report it, with n8n's timestamps and table when present.
+const dataTableColumnReadSchema = `{"type":"object","properties":{` +
+	`"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},"index":{"type":"integer"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"data_table_id":{"type":"string"}},` +
+	`"required":["id","name","type","index"],"additionalProperties":false}`
+
 var dataTableSummarySchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"project_id":{"type":"string"},` +
+	`"columns":{"type":"array","items":` + dataTableColumnReadSchema + `},` +
 	`"column_count":{"type":"integer"},"size_bytes":{"type":"integer"},` +
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
 	`"required":["id","name","project_id","column_count","created_at","updated_at"],"additionalProperties":false}`
 
 var dataTableDetailSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"project_id":{"type":"string"},` +
-	`"columns":{"type":"array","items":{"type":"object","properties":{` +
-	`"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},"index":{"type":"integer"}},` +
-	`"required":["id","name","type","index"],"additionalProperties":false}},` +
+	`"columns":{"type":"array","items":` + dataTableColumnReadSchema + `},` +
 	`"size_bytes":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
 	`"required":["id","name","project_id","columns","created_at","updated_at"],"additionalProperties":false}`
 
@@ -62,6 +78,9 @@ var dataTableIDArgument = capability.Argument{Name: "data_table_id",
 var dataTableNameArgument = capability.Argument{Name: "name",
 	Description: "Data table name, 1 to " + strconv.Itoa(maxDataTableNameLength) + " characters, no control characters",
 	Required:    true}
+
+var dataTableColumnsField = capability.Field{Name: "columns",
+	Description: "Columns with id, name, type, position, creation and change time, and table; at most 200"}
 
 var dataTableSummaryFields = []capability.Field{
 	{Name: "id", Description: "Data table identifier"},
@@ -76,10 +95,15 @@ var dataTableSummaryFields = []capability.Field{
 var dataTablesList = capability.Descriptor{
 	ID: Provider + ".data-tables.list", Version: 1, Title: "List n8n data tables",
 	Description: "List the data tables of the bound n8n instance, restricted to its project allow-list when it " +
-		"has one, optionally of one project; page by page with an opaque cursor. Refused on a connection that " +
-		"restricts workflows by an allow-list",
+		"has one, optionally of one project, by name, or by identifiers, and sorted; each table carries its " +
+		"columns; page by page with an opaque cursor. Refused on a connection that restricts workflows by an " +
+		"allow-list",
 	Tags: []string{"n8n", "datatables", "list", "automation"}, Risk: dataTableReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":` + targetIDSchema + `,` +
+		`"name":` + dataTableNameSchemaJSON + `,` +
+		`"ids":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(maxDataTableIDs) +
+		`,"uniqueItems":true,"items":` + targetIDSchema + `},` +
+		`"sort_by":{"type":"string","enum":[` + dataTableSortSchema + `]},` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
 		`"additionalProperties":false}`),
@@ -89,15 +113,25 @@ var dataTablesList = capability.Descriptor{
 		`"required":["data_tables","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "project_id", Description: "Only the tables of this project; must be inside the project allow-list"},
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page"},
+		{Name: "name", Description: "Only tables with exactly this name, 1 to " +
+			strconv.Itoa(maxDataTableNameLength) + " characters, no control characters"},
+		{Name: "ids", Description: "Only tables with these identifiers, 1 to " + strconv.Itoa(maxDataTableIDs) +
+			" distinct ones; narrows the result and never widens the project allow-list"},
+		{Name: "sort_by", Description: "Order of the tables, one of " + strings.Join(dataTableSorts, ", ")},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; pass the same project_id, " +
+			"name, ids, and sort_by values again"},
 		{Name: "limit", Description: "Tables per page, 1 to 250; 100 when omitted"},
 	},
 	Fields: append(append([]capability.Field{}, capability.Field{Name: "data_tables",
-		Description: "Tables on this page after the project allow-list was applied"}),
+		Description: "Tables on this page after the project allow-list was applied"},
+		dataTableSummaryFields[0], dataTableSummaryFields[1], dataTableSummaryFields[2], dataTableColumnsField,
+		dataTableSummaryFields[3], dataTableSummaryFields[4], dataTableSummaryFields[5], dataTableSummaryFields[6]),
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, even when this page is empty after filtering"},
 		capability.Field{Name: "count", Description: "Number of tables on this page"}),
-	Examples: []capability.Example{{Description: "List the first page of reachable data tables", Arguments: json.RawMessage(`{}`)}},
+	Examples: []capability.Example{{Description: "List the first page of reachable data tables", Arguments: json.RawMessage(`{}`)},
+		{Description: "Find a table by name, newest first",
+			Arguments: json.RawMessage(`{"name":"customers","sort_by":"createdAt:desc"}`)}},
 }
 
 var dataTablesGet = capability.Descriptor{
@@ -110,7 +144,8 @@ var dataTablesGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(dataTableDetailSchema),
 	Arguments:    []capability.Argument{dataTableIDArgument},
 	Fields: append(append([]capability.Field{}, dataTableSummaryFields[:3]...),
-		capability.Field{Name: "columns", Description: "Column id, name, type, and index; at most 200"},
+		dataTableColumnsField, dataColumnFields[2], dataColumnFields[3],
+		dataColumnListedFields[6],
 		dataTableSummaryFields[4], dataTableSummaryFields[5], dataTableSummaryFields[6]),
 	Examples: []capability.Example{{Description: "Read a data table", Arguments: json.RawMessage(`{"data_table_id":"abcd1234efgh5678"}`)}},
 }
@@ -184,10 +219,13 @@ var dataTablesDelete = capability.Descriptor{
 }
 
 type dataTableColumnJSON struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Type  string `json:"type"`
-	Index int    `json:"index"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Index       int    `json:"index"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	DataTableID string `json:"dataTableId"`
 }
 
 type dataTableJSON struct {
@@ -207,13 +245,14 @@ type dataTablesPageJSON struct {
 
 // DataTableSummary is the stable Qatlas view of one data table in a listing.
 type DataTableSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	ProjectID   string `json:"project_id"`
-	ColumnCount int    `json:"column_count"`
-	SizeBytes   int64  `json:"size_bytes"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID          string                `json:"id"`
+	Name        string                `json:"name"`
+	ProjectID   string                `json:"project_id"`
+	Columns     []DataTableColumnRead `json:"columns,omitempty"`
+	ColumnCount int                   `json:"column_count"`
+	SizeBytes   int64                 `json:"size_bytes"`
+	CreatedAt   string                `json:"created_at"`
+	UpdatedAt   string                `json:"updated_at"`
 }
 
 // DataTablesPage is one paginated, allow-list-filtered listing of data tables.
@@ -232,15 +271,39 @@ type DataTableColumn struct {
 	Index int    `json:"index"`
 }
 
+// DataTableColumnRead is a column as the read tools report it; the timestamps are absent when n8n sends none.
+type DataTableColumnRead struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Index     int    `json:"index"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	// DataTableID is the table n8n names on the column, absent when it names none.
+	DataTableID string `json:"data_table_id,omitempty"`
+}
+
+func readColumns(columns []dataTableColumnJSON) []DataTableColumnRead {
+	out := make([]DataTableColumnRead, 0, min(len(columns), maxDataTableColumns))
+	for i, col := range columns {
+		if i >= maxDataTableColumns {
+			break
+		}
+		out = append(out, DataTableColumnRead{ID: bounded(col.ID), Name: bounded(col.Name), Type: bounded(col.Type),
+			Index: col.Index, CreatedAt: bounded(col.CreatedAt), UpdatedAt: bounded(col.UpdatedAt), DataTableID: bounded(col.DataTableID)})
+	}
+	return out
+}
+
 // DataTableDetail is one data table with its column definitions, never its rows.
 type DataTableDetail struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	ProjectID string            `json:"project_id"`
-	Columns   []DataTableColumn `json:"columns"`
-	SizeBytes int64             `json:"size_bytes"`
-	CreatedAt string            `json:"created_at"`
-	UpdatedAt string            `json:"updated_at"`
+	ID        string                `json:"id"`
+	Name      string                `json:"name"`
+	ProjectID string                `json:"project_id"`
+	Columns   []DataTableColumnRead `json:"columns"`
+	SizeBytes int64                 `json:"size_bytes"`
+	CreatedAt string                `json:"created_at"`
+	UpdatedAt string                `json:"updated_at"`
 }
 
 // DataTableCreated, DataTableRenamed, and DataTableDeleted are what the changing tools report.
@@ -292,16 +355,18 @@ func validDataTableName(name string) error {
 
 func summarizeDataTable(t dataTableJSON) DataTableSummary {
 	return DataTableSummary{ID: bounded(t.ID), Name: bounded(t.Name), ProjectID: bounded(t.ProjectID),
-		ColumnCount: len(t.Columns), SizeBytes: t.SizeBytes, CreatedAt: bounded(t.CreatedAt),
+		Columns: readColumns(t.Columns), ColumnCount: len(t.Columns), SizeBytes: t.SizeBytes, CreatedAt: bounded(t.CreatedAt),
 		UpdatedAt: bounded(t.UpdatedAt)}
 }
 
 type dataTableArguments struct {
-	DataTableID string `json:"data_table_id"`
-	ProjectID   string `json:"project_id"`
-	Name        string `json:"name"`
-	Cursor      string `json:"cursor"`
-	Limit       int    `json:"limit"`
+	DataTableID string   `json:"data_table_id"`
+	ProjectID   string   `json:"project_id"`
+	Name        string   `json:"name"`
+	IDs         []string `json:"ids"`
+	SortBy      string   `json:"sort_by"`
+	Cursor      string   `json:"cursor"`
+	Limit       int      `json:"limit"`
 }
 
 func readDataTableArguments(op string, raw json.RawMessage) (dataTableArguments, error) {
@@ -330,6 +395,17 @@ func invokeDataTablesList(ctx context.Context, resolved *config.Resolved, secret
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
 	}
+	if input.Name != "" {
+		if err := validDataTableName(input.Name); err != nil {
+			return nil, err
+		}
+	}
+	if err := validDataTableIDs(input.IDs); err != nil {
+		return nil, err
+	}
+	if input.SortBy != "" && !slices.Contains(dataTableSorts, input.SortBy) {
+		return nil, invalidRequest("sort_by must be one of " + strings.Join(dataTableSorts, ", "))
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -338,19 +414,62 @@ func invokeDataTablesList(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	page, err := client.ListDataTables(ctx, input.ProjectID, input.Cursor, limit)
+	page, err := client.ListDataTables(ctx, DataTableListOptions{ProjectID: input.ProjectID, Name: input.Name,
+		IDs: input.IDs, SortBy: input.SortBy, Cursor: input.Cursor, Limit: limit})
 	return page, dataTableError(err)
 }
 
-// ListDataTables reads one page of GET /data-tables, with n8n's projectId filter when a project is named,
-// and keeps only the tables of this connection's project allow-list.
-func (c *Client) ListDataTables(ctx context.Context, projectID, cursor string, limit int) (*DataTablesPage, error) {
-	query := url.Values{"limit": {strconv.Itoa(limit)}}
-	if cursor != "" {
-		query.Set("cursor", cursor)
+// validDataTableIDs keeps the identifier filter to 1 to 50 distinct usable identifiers, when given.
+func validDataTableIDs(ids []string) error {
+	if ids == nil {
+		return nil
 	}
-	if projectID != "" {
-		filter, err := json.Marshal(map[string]string{"projectId": projectID})
+	if len(ids) == 0 || len(ids) > maxDataTableIDs {
+		return invalidRequest("ids needs 1 to " + strconv.Itoa(maxDataTableIDs) + " identifiers")
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !validTargetID(id) {
+			return invalidRequest("ids must be usable n8n identifiers")
+		}
+		if seen[id] {
+			return invalidRequest("ids must be distinct")
+		}
+		seen[id] = true
+	}
+	return nil
+}
+
+// DataTableListOptions are the filters, order, and paging of one table listing.
+type DataTableListOptions struct {
+	ProjectID, Name string
+	IDs             []string
+	SortBy, Cursor  string
+	Limit           int
+}
+
+// ListDataTables reads one page of GET /data-tables with n8n's projectId, name, and id filters and its sort
+// order when given, and keeps only the tables of this connection's project allow-list.
+func (c *Client) ListDataTables(ctx context.Context, options DataTableListOptions) (*DataTablesPage, error) {
+	query := url.Values{"limit": {strconv.Itoa(options.Limit)}}
+	if options.Cursor != "" {
+		query.Set("cursor", options.Cursor)
+	}
+	if options.SortBy != "" {
+		query.Set("sortBy", options.SortBy)
+	}
+	filters := map[string]any{}
+	if options.ProjectID != "" {
+		filters["projectId"] = options.ProjectID
+	}
+	if options.Name != "" {
+		filters["name"] = options.Name
+	}
+	if len(options.IDs) > 0 {
+		filters["id"] = options.IDs
+	}
+	if len(filters) > 0 {
+		filter, err := json.Marshal(filters)
 		if err != nil {
 			return nil, providerError("list data tables", "the request could not be built")
 		}
@@ -408,16 +527,8 @@ func invokeDataTablesGet(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, dataTableError(err)
 	}
-	columns := make([]DataTableColumn, 0, len(table.Columns))
-	for i, col := range table.Columns {
-		if i >= maxDataTableColumns {
-			break
-		}
-		columns = append(columns, DataTableColumn{ID: bounded(col.ID), Name: bounded(col.Name),
-			Type: bounded(col.Type), Index: col.Index})
-	}
 	return &DataTableDetail{ID: bounded(table.ID), Name: bounded(table.Name), ProjectID: bounded(table.ProjectID),
-		Columns: columns, SizeBytes: table.SizeBytes, CreatedAt: bounded(table.CreatedAt),
+		Columns: readColumns(table.Columns), SizeBytes: table.SizeBytes, CreatedAt: bounded(table.CreatedAt),
 		UpdatedAt: bounded(table.UpdatedAt)}, nil
 }
 

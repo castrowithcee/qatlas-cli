@@ -152,6 +152,15 @@ const richExecutionDetail = `{` + richExecution + `,"createdAt":"2025-12-31T23:5
 	`"tracingContext":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01","tracestate":"k=v"},` +
 	`"deduplicationKey":"dedup-1","binaryDataSizeBytes":9007199254740995,"usedPrivateCredentials":false}`
 
+// richDataColumn carries every member n8n documents for a data table column; richDataTable carries every
+// member of a data table including such a column.
+const richDataColumn = `{"id":"c1","name":"email","type":"string","index":0,"dataTableId":"` + ownTable + `",` +
+	`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z"}`
+
+const richDataTable = `{"id":"` + ownTable + `","name":"Own","projectId":"` + ownProject + `",` +
+	`"columns":[` + richDataColumn + `],"createdAt":"2026-01-01T00:00:00.000Z",` +
+	`"updatedAt":"2026-01-02T00:00:00.000Z","sizeBytes":8192}`
+
 // outputFieldCases lists the read tools whose every output member must be declared. A tool is added with an
 // answer that carries every member n8n documents for it, so a member the mapper adds without declaring it
 // fails here. minimum guards against an answer that carries too little.
@@ -169,6 +178,8 @@ var outputFieldCases = []struct {
 	{workflowsList.ID, "open", `{}`, "/workflows", `{"data":[` + richWorkflow() + `],"nextCursor":"c"}`, 100},
 	{workflowsGet.ID, "open", `{"workflow_id":"` + ownWorkflow + `"}`, "/workflows/" + ownWorkflow, richWorkflow(), 100},
 	{executionsGet.ID, "open", `{"execution_id":1}`, "/executions/1", richExecutionDetail, 21},
+	{dataTablesList.ID, "open", `{}`, "/data-tables", `{"data":[` + richDataTable + `],"nextCursor":"c"}`, 19},
+	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},
 }
 
 func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
@@ -189,5 +200,18 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 				t.Errorf("checked %d members, want at least %d: %s", seen, tt.minimum, out)
 			}
 		})
+	}
+}
+
+func TestDataColumnsListOutputMembersAreInSchemaAndFields(t *testing.T) {
+	var calls []call
+	var mutations []string
+	env := newEnvironment(t, &calls, columnServer(t, &mutations))
+	out, err := env.invoke(dataColumnsList.ID, "project", `{"data_table_id":"`+ownTable+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seen := assertOutputDeclared(t, dataColumnsList.ID, []byte(out)); seen < 9 {
+		t.Errorf("checked %d members, want at least 9: %s", seen, out)
 	}
 }

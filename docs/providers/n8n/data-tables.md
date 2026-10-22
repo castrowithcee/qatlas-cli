@@ -32,7 +32,7 @@ none of the other profiles. `n8n.data-tables.delete`, `n8n.data-columns.delete`,
 
 ## Data tables
 
-The tools manage the tables only; `get` reports column definitions, not rows, and `list` never returns rows.
+The tools manage the tables only; `get` and `list` report column definitions, not rows.
 
 - **Project binding.** `list` returns only tables of the project allow-list (a `project_id` argument must be
   on it; foreign tables are dropped from the page without being named, so a page may be empty while
@@ -40,7 +40,8 @@ The tools manage the tables only; `get` reports column definitions, not rows, an
   outside the allow-list, or that reports no project, before any change request; the refusal names neither
   the table nor its project. `create` needs a `project_id` on the allow-list when the connection has one,
   checked locally before a secret is read; without an allow-list an omitted `project_id` means the key
-  owner's personal project.
+  owner's personal project. The `name`, `ids`, and `sort_by` arguments of `list` only narrow and order what n8n
+  returns; they never widen the allow-list, which still filters every page.
 - **Workflow allow-list.** A connection with a `workflow/` target refuses every data table tool locally: a
   table cannot be tied to a workflow, so the narrower reading applies.
 - **Create** sends the name, an empty column list, and the project; no CSV import field is offered. Names are
@@ -72,15 +73,18 @@ There is no tool for `rows/clear`.
 - **Filter.** Only a structured filter is accepted: `{type: and|or, conditions: [{column, operator, value}]}`
   with 1 to 10 conditions, operator one of `eq`, `neq`, `like`, `ilike`, `gt`, `gte`, `lt`, `lte`, and a
   string, number, or boolean value. `like` and `ilike` apply to string columns, the orderings to number and
-  date columns. Qatlas builds the provider filter itself; no filter text or object is passed through. Only the
-  table's own columns can be filtered (narrower than the API, which also knows system columns). `update`,
-  `upsert`, and `delete` require a filter; matching all rows is never possible.
+  date columns. Qatlas builds the provider filter itself; no filter text or object is passed through. `list`
+  can additionally filter by the system columns `id` (an integer) and `createdAt` and `updatedAt` (RFC 3339
+  times) with the comparison operators; `update`, `upsert`, and `delete` refuse system columns. They require a
+  filter; matching all rows is never possible.
 - **Data.** Rows contain only string (at most 1024 characters), number, and boolean values for known columns;
   `null`, nested values, and empty rows are refused. `insert` takes 1 to 50 rows and always asks n8n for the
   count only.
 - **Reading.** `list` returns 50 rows per page by default, at most 100 (the API allows 250), with an opaque
   cursor. Row values are untrusted data; text is cut at 1024 characters, non-scalar values are dropped, and
-  the answer is limited to 4 MiB. Sorting, text search, and `id` lookups are not offered.
+  the answer is limited to 4 MiB. `sort_by` names a column of the table read or a system column; `search`
+  is sent to n8n, which searches all text columns. A follow-up call with a cursor must pass the same filter,
+  sort, and search values.
 - **Mass effect.** n8n offers no row limit on `update`, `upsert`, and `delete`; one call can change or remove
   every row that matches. They are therefore in no profile and offered only by a tools list, and each needs
   the per-call confirmation. `upsert` updates all matching rows or inserts one row when none matches. The

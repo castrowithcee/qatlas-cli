@@ -17,8 +17,8 @@ const (
 )
 
 func tableJSONOf(id, name, project string) string {
-	return fmt.Sprintf(`{"id":%q,"name":%q,"columns":[{"id":"c1","name":"email","type":"string","index":0,`+
-		`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"}],"projectId":%q,`+
+	return fmt.Sprintf(`{"id":%[1]q,"name":%[2]q,"columns":[{"id":"c1","name":"email","type":"string","index":0,"dataTableId":%[1]q,`+
+		`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"}],"projectId":%[3]q,`+
 		`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z","sizeBytes":8192}`,
 		id, name, project)
 }
