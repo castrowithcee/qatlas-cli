@@ -37,7 +37,7 @@ func (s *stamp) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(trimmed, &text); err != nil {
 			return err
 		}
-		*s = stamp(text)
+		*s = stamp(boundedText(text, 64))
 		return nil
 	}
 	var seconds int64
@@ -661,6 +661,18 @@ var (
 		}
 		return append(out, member("others", `{}`), member("others_truncated", schemaBool))
 	}()
+	// categorySchema is one file category of a drive, shared by drives and file entries.
+	categorySchema = schemaOf(join(members(schemaInt, "id", "created_by", "user_uses"),
+		members(schemaStr, "name", "color", "created_at"), members(schemaBool, "is_predefined"))...)
+	// rewindSchema is one rewind, shared by drives and folder entries.
+	rewindSchema = schemaOf(join(
+		members(schemaInt, "id", "directory_id", "user_id", "created_by"),
+		members(schemaStr, "status", "mode", "archiving", "directory_name", "rewind_at", "created_at",
+			"finished_at", "expires_at", "approval_at", "rewind_name"),
+		members(schemaBool, "is_approved"),
+		[]string{member("directory", entrySchema),
+			member("sanitizer", schemaOf(join([]string{member("sanitized", schemaInt)}, rewindFigures)...)),
+			member("summary", schemaOf(rewindFigures...))})...)
 )
 
 // withSchemaMembers are the output schema members of the with-loaded drive members.
@@ -703,8 +715,7 @@ var withSchemaMembers = []string{
 		members(schemaStr, "name"))...))),
 	member("tags_truncated", schemaBool),
 	member("rights", schemaOf(members(schemaBool, "technical", "statistic", "check", "sale")...)),
-	member("categories", schemaList(schemaOf(join(members(schemaInt, "id", "created_by", "user_uses"),
-		members(schemaStr, "name", "color", "created_at"), members(schemaBool, "is_predefined"))...))),
+	member("categories", schemaList(categorySchema)),
 	member("categories_truncated", schemaBool),
 	member("categories_permissions", schemaOf(members(schemaBool, "can_create", "can_edit", "can_delete",
 		"can_read_on_file", "can_put_on_file")...)),
@@ -713,14 +724,7 @@ var withSchemaMembers = []string{
 	member("teams", schemaOf(join(members(schemaList(schemaInt), "account", "drive"),
 		members(schemaBool, "account_truncated", "drive_truncated"))...)),
 	member("invitations_count", schemaInt),
-	member("rewind", schemaOf(join(
-		members(schemaInt, "id", "directory_id", "user_id", "created_by"),
-		members(schemaStr, "status", "mode", "archiving", "directory_name", "rewind_at", "created_at",
-			"finished_at", "expires_at", "approval_at", "rewind_name"),
-		members(schemaBool, "is_approved"),
-		[]string{member("directory", entrySchema),
-			member("sanitizer", schemaOf(join([]string{member("sanitized", schemaInt)}, rewindFigures)...)),
-			member("summary", schemaOf(rewindFigures...))})...)),
+	member("rewind", rewindSchema),
 	member("bill_reference", schemaStr),
 	member("description", schemaStr),
 	member("quota", schemaOf(members(schemaStr, "dropbox", "shared_link")...)),

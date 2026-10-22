@@ -46,11 +46,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id + ".org-labels.get", p.id + ".org-labels.list", p.id + ".org-labels.update",
 			p.id + ".release-assets.delete", p.id + ".release-assets.download", p.id + ".release-assets.get",
 			p.id + ".release-assets.list", p.id + ".release-assets.update", p.id + ".release-assets.upload",
-			p.id + ".releases.create",
-			p.id + ".releases.delete", p.id + ".releases.delete-by-tag", p.id + ".releases.get",
-			p.id + ".releases.get-by-tag", p.id + ".releases.get-latest", p.id + ".releases.list",
-			p.id + ".releases.update", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
-			p.id + ".signing-keys.get", p.id + ".version.get"}
+			p.id + ".releases.create", p.id + ".releases.delete", p.id + ".releases.delete-by-tag",
+			p.id + ".releases.get", p.id + ".releases.get-by-tag", p.id + ".releases.get-latest",
+			p.id + ".releases.list", p.id + ".releases.update", p.id + ".repositories.get", p.id + ".repositories.list",
+			p.id + ".settings.get", p.id + ".signing-keys.get", p.id + ".tags.create", p.id + ".tags.delete",
+			p.id + ".tags.get", p.id + ".tags.list", p.id + ".version.get"}
 		if p == forgejo {
 			want = append(want, p.id+".nodeinfo.get")
 			slices.Sort(want)
@@ -63,7 +63,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
-			p.id+".pull-requests.list-pinned")
+			p.id+".pull-requests.list-pinned", p.id+".pull-request-branches.update",
+			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
+			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -120,8 +122,10 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		milestonesCreate, milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet,
 		pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
 		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest,
-		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag, releaseAssetsList,
-		releaseAssetsGet, releaseAssetsDownload, releaseAssetsUpload, releaseAssetsUpdate, releaseAssetsDelete} {
+		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag, pullRequestsCreate,
+		pullRequestsUpdate, pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge, pullRequestsMerge,
+		pullRequestBranchesUpdate, releaseAssetsList, releaseAssetsGet, releaseAssetsDownload, releaseAssetsUpload,
+		releaseAssetsUpdate, releaseAssetsDelete} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))

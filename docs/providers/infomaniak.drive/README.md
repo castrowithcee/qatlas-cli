@@ -244,8 +244,11 @@ restricted drives than a Business kSuite account, which shows up only as fewer o
 
 ## Boundary
 
-Under a drive bound only by `files` targets, a rewind of the drive reports `directory_id` but not the
-`directory`, `directory_name`, or `rewind_name`, because they can name a folder outside the targets.
+Under a drive bound only by `files` targets, a rewind, of the drive or of a folder, reports `directory_id` but
+not the `directory`, `directory_name`, or `rewind_name`, because they can name a folder outside the targets.
+
+Values that grant access without an account are left out of the file, trash, and link listings, except the
+`url` of the `link` of `links.list`; see [Related data](files.md#related-data).
 
 This provider covers kDrive alone. Infomaniak Mail, CalDAV/CardDAV, and kChat are separate Infomaniak products
 with their own authentication: Mail is read over IMAP with mailbox credentials, CalDAV/CardDAV over WebDAV

@@ -137,20 +137,28 @@ const uncertain = "; the change may have been applied, read the current state be
 // reset connection, a 5xx status, or an unreadable answer, carries the uncertain note; a refusal that proves
 // the change was not applied does not.
 func (c *Client) change(ctx context.Context, op, method, path string, body any, out any) error {
+	_, err := c.changeQuery(ctx, op, method, path, nil, body, out)
+	return err
+}
+
+// changeQuery is change with validated query values and the status of the answer, zero when none arrived. The
+// query values are built from enumerated arguments only.
+func (c *Client) changeQuery(ctx context.Context, op, method, path string, query url.Values, body any,
+	out any) (int, error) {
 	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch &&
 		method != http.MethodDelete {
-		return provider.Fail(op, "the request method is not one of this provider")
+		return 0, provider.Fail(op, "the request method is not one of this provider")
 	}
 	spec := request{method: method, change: true}
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return provider.Fail(op, "the request could not be built")
+			return 0, provider.Fail(op, "the request could not be built")
 		}
 		spec.contentType, spec.body = "application/json", encoded
 	}
-	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, spec, out)
-	return err
+	status, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, query, spec, out)
+	return status, err
 }
 
 // transferTimeout bounds the whole transfer of one file upload or download, which the request timeout would
