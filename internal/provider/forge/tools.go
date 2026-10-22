@@ -35,7 +35,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
 	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList, issueConfigGet,
 	issueConfigValidate, commentsList, commentsListRepository, commentsGet, commentsCreate, commentsUpdate,
-	commentsDelete, assigneesList, assigneesCheck, issueAssigneesAdd, issueAssigneesRemove, issueAssigneesCheck}
+	commentsDelete, assigneesList, assigneesCheck, issueAssigneesAdd, issueAssigneesRemove, issueAssigneesCheck,
+	labelsList, labelsGet, labelsCreate, labelsUpdate, labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate,
+	orgLabelsUpdate, orgLabelsDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

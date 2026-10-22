@@ -124,7 +124,7 @@ func TestListPages(t *testing.T) {
 	if got.Rows[0]["name"] != "Alpha" || got.Rows[1]["id"] != int64(2) {
 		t.Errorf("rows = %v", got.Rows)
 	}
-	if want := []string{"id", "name", "slug", "book_id", "chapter_id", "created_at", "updated_at", "priority", "draft", "template", "owned_by"}; !equal(got.Columns, want) {
+	if want := []string{"id", "name", "slug", "book_id", "chapter_id", "created_at", "updated_at", "priority", "draft", "template", "owned_by", "revision_count", "created_by", "updated_by", "editor", "book_slug"}; !equal(got.Columns, want) {
 		t.Errorf("columns = %v, want %v", got.Columns, want)
 	}
 
