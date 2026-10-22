@@ -9,11 +9,6 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	freeObjectDepthMax = 8
-	freeObjectBytesMax = 16 << 10
-)
-
 // addressInText finds scheme-qualified addresses inside a text.
 var addressInText = regexp.MustCompile(`(?i)[a-z][a-z0-9+.\-]*://[^\s"'<>]*`)
 
@@ -29,7 +24,7 @@ func boundFreeObject(raw json.RawMessage, dropKeys ...string) (value any, omitte
 		return nil, true
 	}
 	decoded, err := decodeValue(compact.Bytes())
-	if err != nil || freeObjectDepth(decoded) > freeObjectDepthMax {
+	if err != nil || valueDepth(decoded) > freeObjectDepthMax {
 		return nil, true
 	}
 	if object, ok := decoded.(map[string]any); ok {
@@ -42,24 +37,6 @@ func boundFreeObject(raw json.RawMessage, dropKeys ...string) (value any, omitte
 		return nil, false
 	}
 	return cleaned, false
-}
-
-// freeObjectDepth counts the levels of nested objects and arrays; a scalar has none.
-func freeObjectDepth(value any) int {
-	deepest := 0
-	switch v := value.(type) {
-	case []any:
-		for _, item := range v {
-			deepest = max(deepest, freeObjectDepth(item))
-		}
-		return deepest + 1
-	case map[string]any:
-		for _, item := range v {
-			deepest = max(deepest, freeObjectDepth(item))
-		}
-		return deepest + 1
-	}
-	return 0
 }
 
 // cleanFreeValue removes control characters from texts and drops every value that holds an address with a
