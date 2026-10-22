@@ -49,13 +49,18 @@ const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
 	`<d:displayname/><d:resourcetype/><c:addressbook-description/><oc:invite/></d:prop></d:propfind>`
 
-// contactListProps and contactGetProps name the card properties a read asks the server for. A photo or
-// any other property is never requested.
+// contactListProps and contactGetProps name the card properties a read asks the server for. PHOTO, LOGO,
+// SOUND, KEY, and AGENT are never requested: CardDAV cannot filter by VALUE=uri, so the server would send
+// embedded data. Their references are therefore not reported.
 const (
 	contactListProps = `<card:prop name="VERSION"/><card:prop name="UID"/><card:prop name="FN"/>` +
 		`<card:prop name="N"/><card:prop name="ORG"/><card:prop name="EMAIL"/>`
 	contactGetProps = contactListProps + `<card:prop name="TEL"/><card:prop name="ADR"/>` +
-		`<card:prop name="TITLE"/><card:prop name="BDAY"/><card:prop name="NOTE"/><card:prop name="URL"/>`
+		`<card:prop name="TITLE"/><card:prop name="BDAY"/><card:prop name="NOTE"/><card:prop name="URL"/>` +
+		`<card:prop name="NICKNAME"/><card:prop name="MAILER"/><card:prop name="TZ"/><card:prop name="GEO"/>` +
+		`<card:prop name="ROLE"/><card:prop name="LABEL"/><card:prop name="CATEGORIES"/><card:prop name="CLASS"/>` +
+		`<card:prop name="SORT-STRING"/><card:prop name="REV"/><card:prop name="PRODID"/><card:prop name="NAME"/>` +
+		`<card:prop name="PROFILE"/><card:prop name="SOURCE"/>`
 	contactBodyHead   = `<?xml version="1.0" encoding="UTF-8"?>`
 	contactNamespaces = ` xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">`
 	contactProp       = `<d:prop><d:getetag/><card:address-data>`
@@ -72,15 +77,15 @@ var contactRisk = capability.Risk{
 }
 
 const (
-	contactTypedSchema = `{"type":"object","properties":{"value":{"type":"string"},"type":{"type":"string"}},` +
-		`"additionalProperties":false}`
+	contactTypedSchema = `{"type":"object","properties":{"value":{"type":"string"},"type":{"type":"string"},` +
+		`"pref":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
 	contactNameSchema = `{"type":"object","properties":{"family":{"type":"string"},"given":{"type":"string"},` +
 		`"additional":{"type":"string"},"prefix":{"type":"string"},"suffix":{"type":"string"}},` +
 		`"additionalProperties":false}`
 	contactPostalSchema = `{"type":"object","properties":{"type":{"type":"string"},"po_box":{"type":"string"},` +
 		`"extended":{"type":"string"},"street":{"type":"string"},"locality":{"type":"string"},` +
-		`"region":{"type":"string"},"postal_code":{"type":"string"},"country":{"type":"string"}},` +
-		`"additionalProperties":false}`
+		`"region":{"type":"string"},"postal_code":{"type":"string"},"country":{"type":"string"},` +
+		`"pref":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
 	contactSchema = `{"type":"object","properties":{` +
 		`"id":{"type":"string"},"uid":{"type":"string"},"name":{"type":"string"},"structured_name":` + contactNameSchema + `,` +
 		`"email":{"type":"string"},"emails":{"type":"array","items":` + contactTypedSchema + `},` +
@@ -88,8 +93,8 @@ const (
 		`"addresses":{"type":"array","items":` + contactPostalSchema + `},` +
 		`"organization":{"type":"string"},"title":{"type":"string"},"birthday":{"type":"string"},` +
 		`"note":{"type":"string"},"urls":{"type":"array","items":{"type":"string"}},` +
-		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"}},` +
-		`"required":["id"],"additionalProperties":false}`
+		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"},` +
+		dav.ContactValueProperties + `},"required":["id"],"additionalProperties":false}`
 	addressbookSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"description":{"type":"string"},"read_only":{"type":"boolean"},` +
 		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
@@ -102,16 +107,16 @@ var addressbookArgument = capability.Argument{
 	Description: "URI of a bound address book, the id the addressbooks list reports",
 }
 
-var contactFields = []capability.Field{
+var contactFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the contact resource, the id argument of the get tool"},
 	{Name: "uid", Description: "vCard UID, untrusted data"},
 	{Name: "name", Description: "Formatted name (FN), untrusted personal data; built from the structured name if absent"},
 	{Name: "email", Description: "First e-mail address, untrusted personal data; only the list tool reports it"},
 	{Name: "organization", Description: "Organization, untrusted data"},
 	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix; only the get tool reports it"},
-	{Name: "emails", Description: "At most 20 e-mail addresses with type; only the get tool reports them"},
-	{Name: "phones", Description: "At most 20 phone numbers with type; only the get tool reports them"},
-	{Name: "addresses", Description: "At most 20 postal addresses with type; only the get tool reports them"},
+	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref; only the get tool reports them"},
+	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref; only the get tool reports them"},
+	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref; only the get tool reports them"},
 	{Name: "title", Description: "Job title; only the get tool reports it"},
 	{Name: "birthday", Description: "Birthday as the card states it; only the get tool reports it"},
 	{Name: "note", Description: "Note, untrusted data; only the get tool reports it"},
@@ -119,7 +124,7 @@ var contactFields = []capability.Field{
 	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}
+}, dav.ContactValueFields...)
 
 var addressbooksList = capability.Descriptor{
 	ID: Provider + ".contacts.address-books.list", Version: 1, Title: "List Nextcloud address books",
@@ -177,7 +182,7 @@ var contactsList = capability.Descriptor{
 var contactsGet = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.get", Version: 1, Title: "Get a Nextcloud contact",
 	Description: "Read one contact of a bound address book with its structured fields and entity tag; a " +
-		"photo or other binary data is never returned",
+		"embedded binary data and embedded keys are never returned",
 	Tags: []string{"nextcloud", "contacts", "contact", "get"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"id":{"type":"string","minLength":1,"maxLength":255}},"required":["addressbook","id"],` +
@@ -531,6 +536,8 @@ func (c *Client) getContact(ctx context.Context, book, id string) (*ContactResul
 		if err != nil {
 			return nil, invalidResponse(op, "Nextcloud returned a contact that is not a valid vCard")
 		}
+		// A server may send these anyway; the output schema has no place for them.
+		contact.PhotoURI, contact.LogoURI, contact.SoundURI, contact.AgentURI, contact.KeyURI = "", "", "", "", ""
 		contact.ID = id
 		contact.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])
 		return &ContactResult{Addressbook: book, Contact: *contact}, nil
