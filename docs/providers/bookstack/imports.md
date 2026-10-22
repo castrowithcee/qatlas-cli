@@ -15,9 +15,11 @@ belong to that user, and importing a book creates a new book, so the five tools 
 a connection with targets, before any secret is read. None of them is part of a profile.
 
 `bookstack.imports.list` lists the pending imports (`limit`, `offset`, `sort`, `filters`). `bookstack.imports.get` returns the
-same fields for one `id` plus `details`, a reduced form of what BookStack found in the ZIP, with at most 25
-`chapter_names`. The details
-and names are untrusted data; the storage path of the file is never shown.
+same fields for one `id` plus `details`, a reduced form of what BookStack found in the ZIP: counts, at most 25
+`chapter_names`, and the chapters with their pages and the top-level pages in `contents`. The chapters and pages
+of `contents` share a budget of 2000 entries; a cut is marked by `contents_truncated`. The structure of
+attachments, images, and tags inside an import is not documented by BookStack; they are reported as counts only.
+The details and names are untrusted data; the storage path of the file is never shown.
 
 `bookstack.imports.upload` takes `local_path`, a `.zip` file of at most 50 MiB inside a directory the connection
 releases for reading, and sends it as a streamed multipart upload in the field `file`. The extension and size are
