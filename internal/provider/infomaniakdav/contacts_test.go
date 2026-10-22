@@ -46,7 +46,7 @@ func getContactOf(args string) (any, error) {
 	return invokeContactsGet(context.Background(), resolved("addressbook/main"), resolver(nil), nil, json.RawMessage(args))
 }
 
-func TestContactsListReportsCompactSortedContacts(t *testing.T) {
+func TestContactsListReportsSortedContacts(t *testing.T) {
 	report := multistatus(
 		contactEntry(mainPath+"b.vcf", "e2", vcardOf("UID:u-b", "FN:Zed", "EMAIL;TYPE=work:zed@example.org", "NOTE:private")),
 		contactEntry(mainPath+"bad.vcf", "e3", "not a vcard"),
@@ -63,7 +63,7 @@ func TestContactsListReportsCompactSortedContacts(t *testing.T) {
 	}
 	a, b := page.Contacts[0], page.Contacts[1]
 	if a.Name != "Ada" || a.UID != "u-a" || a.Email != "ada@example.org" || a.Organization != "Analytical, Engine" ||
-		a.ETag != "e1" || a.Emails != nil || a.StructuredName != nil || b.Note != "" {
+		a.ETag != "e1" || len(a.Emails) != 2 || a.StructuredName == nil || b.Note != "private" {
 		t.Errorf("a = %+v, b = %+v", a, b)
 	}
 	last := (*calls)[len(*calls)-1]
