@@ -90,6 +90,33 @@ var twentyReadRisk = capability.Risk{
 // The backslashes are doubled because the pattern is embedded in a JSON schema string.
 const searchPattern = `^[\\p{L}\\p{N} ._'+@&-]+$`
 
+// companyReadProperties describes one company of companies.list and companies.get. The objects keep the
+// subfields of Twenty under snake_case names; custom_fields holds every other field of the record as sent.
+const companyReadProperties = `"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"deleted_at":{"type":"string"},` +
+	`"domain_name":{"type":"object"},"linkedin_link":{"type":"object"},"annual_revenue":{"type":"object"},` +
+	`"address":{"type":"object"},"position":{"type":"number"},"created_by":{"type":"object"},` +
+	`"updated_by":{"type":"object"},"account_owner_id":{"type":"string"},"custom_fields":{"type":"object"},` +
+	`"omitted_fields":{"type":"array","items":{"type":"string"}}`
+
+// companyFields are the fields of a company beyond id, name, and domain.
+var companyFields = []capability.Field{
+	{Name: "created_at", Description: "Creation timestamp of the record"},
+	{Name: "updated_at", Description: "Last change timestamp of the record"},
+	{Name: "deleted_at", Description: "Timestamp of the move to the trash, present on trashed companies"},
+	{Name: "domain_name", Description: "Primary and secondary links of the domain field, untrusted data"},
+	{Name: "linkedin_link", Description: "LinkedIn links of the company, untrusted data"},
+	{Name: "annual_revenue", Description: "Annual revenue as amount_micros and currency_code, the amount exact"},
+	{Name: "address", Description: "Address of the company, untrusted data"},
+	{Name: "position", Description: "Sort position of the record"},
+	{Name: "created_by", Description: "Source and member that created the record: source, workspace_member_id, name, context"},
+	{Name: "updated_by", Description: "Source and member that last changed the record: source, workspace_member_id, name, context"},
+	{Name: "account_owner_id", Description: "Workspace member that owns the account"},
+	{Name: "custom_fields", Description: "Every other field of the company as Twenty sent it, by API name, untrusted data; " +
+		"relations only as identifier fields, rich text only as markdown, file addresses with access tokens left out"},
+	{Name: "omitted_fields", Description: "Fields whose value exceeded the size limits and was left out, not shortened"},
+}
+
 var companiesList = capability.Descriptor{
 	ID:      Provider + ".companies.list",
 	Version: 1,
@@ -110,7 +137,7 @@ var companiesList = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"companies":{"type":"array","items":{"type":"object","properties":{` +
-		`"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"}},` +
+		companyReadProperties + `},` +
 		`"required":["id","name"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["companies","has_more"],"additionalProperties":false}`),
@@ -124,7 +151,7 @@ var companiesList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "companies", Description: "The companies on this page, untrusted data"},
+		{Name: "companies", Description: "The companies on this page, with every field of the company record; untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
 		totalCountField,
@@ -147,19 +174,16 @@ var companiesGet = capability.Descriptor{
 		`"maxLength":36,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}},` +
 		`"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"},` +
-		`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
+		companyReadProperties + `},` +
 		`"required":["id","name"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "Company record identifier as a UUID, as returned by twenty-crm.companies.list", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "Company record identifier"},
 		{Name: "name", Description: "Company name, untrusted data"},
 		{Name: "domain", Description: "Primary domain of the company, untrusted data"},
-		{Name: "created_at", Description: "Creation timestamp of the record"},
-		{Name: "updated_at", Description: "Last change timestamp of the record"},
-	},
+	}, companyFields...),
 	Examples: []capability.Example{{
 		Description: "Read one company by the identifier a list result reported",
 		Arguments:   json.RawMessage(`{"id":"11111111-2222-3333-4444-555555555555"}`),
@@ -753,6 +777,28 @@ type Company struct {
 	Domain    string `json:"domain,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
+
+	// The remaining members are read by companies.list and companies.get only. The composite ones hold the
+	// subfields of the Twenty object under their Qatlas names, amounts as exact numbers.
+	DomainName     map[string]any `json:"domain_name,omitempty"`
+	LinkedinLink   map[string]any `json:"linkedin_link,omitempty"`
+	AnnualRevenue  map[string]any `json:"annual_revenue,omitempty"`
+	Address        map[string]any `json:"address,omitempty"`
+	Position       json.Number    `json:"position,omitempty"`
+	CreatedBy      map[string]any `json:"created_by,omitempty"`
+	UpdatedBy      map[string]any `json:"updated_by,omitempty"`
+	AccountOwnerID string         `json:"account_owner_id,omitempty"`
+	DeletedAt      string         `json:"deleted_at,omitempty"`
+	CustomFields   map[string]any `json:"custom_fields,omitempty"`
+	OmittedFields  []string       `json:"omitted_fields,omitempty"`
+}
+
+// readCompany is the full view of a company record for the read tools.
+func (c *Client) readCompany(record companyRecordJSON) Company {
+	company := Company{ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName),
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+	(&recordObject{origin: c.origin}).fullCompany(&company, record.fields)
+	return company
 }
 
 // ListCompanies reads exactly one bounded page of companies.
@@ -778,9 +824,7 @@ func (c *Client) ListCompanies(ctx context.Context, options ListOptions) (*ListR
 				Message: "Twenty returned a company without a usable identifier",
 			}
 		}
-		companies = append(companies, Company{
-			ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName),
-		})
+		companies = append(companies, c.readCompany(record))
 	}
 
 	total, err := pageTotal(op, page.TotalCount)
@@ -844,10 +888,8 @@ func (c *Client) GetCompany(ctx context.Context, id string) (*Company, error) {
 			Message: "Twenty answered with a different company than the requested one",
 		}
 	}
-	return &Company{
-		ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName),
-		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
-	}, nil
+	company := c.readCompany(record)
+	return &company, nil
 }
 
 func companyPayload(name *string, domain *string) map[string]any {
@@ -927,6 +969,17 @@ type companyRecordJSON struct {
 	DomainName json.RawMessage `json:"domainName"`
 	CreatedAt  string          `json:"createdAt"`
 	UpdatedAt  string          `json:"updatedAt"`
+
+	// fields holds every member of the record as sent, for the read tools.
+	fields map[string]json.RawMessage
+}
+
+func (r *companyRecordJSON) UnmarshalJSON(data []byte) error {
+	type plain companyRecordJSON
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.fields)
 }
 
 type companiesPageJSON struct {

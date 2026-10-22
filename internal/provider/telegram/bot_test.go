@@ -41,10 +41,22 @@ func TestBotGetReturnsOnlyAllowListedFields(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	encoded, _ := json.Marshal(got)
-	want := `{"id":42,"username":"helper_bot","first_name":"Helper","can_join_groups":true,` +
-		`"can_read_all_group_messages":false,"supports_inline_queries":true}`
+	want := `{"id":42,"is_bot":true,"first_name":"Helper","username":"helper_bot","can_join_groups":true,` +
+		`"can_read_all_group_messages":false,"supports_inline_queries":true,"has_main_web_app":true}`
 	if string(encoded) != want {
 		t.Errorf("output = %s", encoded)
+	}
+}
+
+func TestBotGetKeepsTheFormerFlagsWhenTelegramOmitsThem(t *testing.T) {
+	var calls []recorded
+	client, _ := multiClient(t, testToken,
+		botFake(&calls, 200, `{"ok":true,"result":{"id":1,"is_bot":true,"first_name":"B"}}`, ""), "-100")
+	got, err := client.GetBot(context.Background())
+	want := `{"id":1,"is_bot":true,"first_name":"B","can_join_groups":false,` +
+		`"can_read_all_group_messages":false,"supports_inline_queries":false}`
+	if encoded, _ := json.Marshal(got); err != nil || string(encoded) != want {
+		t.Errorf("output = %s, %v", encoded, err)
 	}
 }
 
@@ -60,17 +72,14 @@ func TestBotGetWorksWithChatTargetOnly(t *testing.T) {
 	}
 }
 
-func TestWebhookGetDerivesHasWebhookAndHidesDetails(t *testing.T) {
+func TestWebhookGetPrintsEveryFieldButTheURL(t *testing.T) {
 	info := func(url string) string {
-		return `{"ok":true,"result":{"url":"` + url + `","pending_update_count":3,"last_error_date":1700,` +
-			`"last_error_message":"LEAKEDMESSAGE","ip_address":"203.0.113.9","allowed_updates":["message"]}}`
+		return `{"ok":true,"result":{"url":"` + url + `","has_custom_certificate":false,"pending_update_count":3,` +
+			`"ip_address":"203.0.113.9","last_error_date":1700,"last_error_message":"Connection timed out",` +
+			`"last_synchronization_error_date":1800,"max_connections":40,"allowed_updates":["message","callback_query"]}}`
 	}
-	for _, tt := range []struct {
-		name, url string
-		want      string
-	}{
-		{"active", webhookCanary, `{"has_webhook":true,"pending_update_count":3,"last_error_date":1700}`},
-		{"none", "", `{"has_webhook":false,"pending_update_count":3,"last_error_date":1700}`},
+	for _, tt := range []struct{ name, url, has string }{
+		{"active", webhookCanary, "true"}, {"none", "", "false"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []recorded
@@ -82,8 +91,11 @@ func TestWebhookGetDerivesHasWebhookAndHidesDetails(t *testing.T) {
 			if len(calls) != 1 || calls[0].method != "getWebhookInfo" {
 				t.Fatalf("calls = %+v", calls)
 			}
+			want := `{"has_webhook":` + tt.has + `,"has_custom_certificate":false,"pending_update_count":3,` +
+				`"ip_address":"203.0.113.9","last_error_date":1700,"last_error_message":"Connection timed out",` +
+				`"last_synchronization_error_date":1800,"max_connections":40,"allowed_updates":["message","callback_query"]}`
 			encoded, _ := json.Marshal(got)
-			if string(encoded) != tt.want {
+			if string(encoded) != want || strings.Contains(string(encoded), "canary") {
 				t.Errorf("output = %s", encoded)
 			}
 		})
@@ -94,6 +106,23 @@ func TestWebhookGetDerivesHasWebhookAndHidesDetails(t *testing.T) {
 	got, _ := client.GetWebhook(context.Background())
 	if encoded, _ := json.Marshal(got); string(encoded) != `{"has_webhook":false,"pending_update_count":0}` {
 		t.Errorf("output = %s", encoded)
+	}
+}
+
+func TestWebhookGetBoundsUntrustedTexts(t *testing.T) {
+	var updates []string
+	for i := 0; i < 60; i++ {
+		updates = append(updates, `"`+strings.Repeat("u", 80)+`"`)
+	}
+	body := `{"ok":true,"result":{"url":"` + webhookCanary + `","pending_update_count":1,"ip_address":"` +
+		strings.Repeat("i", 300) + `","last_error_message":"` + strings.Repeat("m", 300) + `","allowed_updates":[` +
+		strings.Join(updates, ",") + `]}}`
+	var calls []recorded
+	client, _ := multiClient(t, testToken, botFake(&calls, 200, "", body), "bot")
+	got, err := client.GetWebhook(context.Background())
+	if err != nil || len(got.IPAddress) != maxNameRunes || len(got.LastErrorMessage) != maxNameRunes ||
+		len(got.AllowedUpdates) != 50 || len(got.AllowedUpdates[0]) != 64 {
+		t.Errorf("not bounded: %+v, %v", got, err)
 	}
 }
 

@@ -24,8 +24,8 @@ import (
 // hide it (hide_secret=true), and the answer is decoded into a shape that has no place for a secret value, so
 // neither the value of the secret field nor any other field of the answer that is not named here can reach a
 // result, an error, or a log. Answers of an unusable shape or size fail with a fixed message that quotes no
-// part of the answer. Only the type, the state, the resolution, the times, and the first location (a path and
-// lines) of a secret are reported.
+// part of the answer. Only the members named in the raw shapes are reported: never the secret, a snippet, or
+// a comment field.
 //
 // Verified 2026-09-30 against https://docs.github.com/en/rest/code-scanning/code-scanning,
 // https://docs.github.com/en/rest/dependabot/alerts, and
@@ -134,12 +134,12 @@ const dependabotFlatProperties = alertCommonProperties + `,"fixed_at":{"type":"s
 
 var dependabotProperties = dependabotFlatProperties + dependabotDetailProperties
 
-const secretScanningProperties = alertCommonProperties + `,"resolution":{"type":"string"},` +
+var secretScanningProperties = alertCommonProperties + `,"resolution":{"type":"string"},` +
 	`"resolved_at":{"type":"string"},"resolved_by":{"type":"string"},"secret_type":{"type":"string"},` +
 	`"secret_type_display_name":{"type":"string"},"validity":{"type":"string"},` +
 	`"publicly_leaked":{"type":"boolean"},"multi_repo":{"type":"boolean"},` +
 	`"push_protection_bypassed":{"type":"boolean"},"location_type":{"type":"string"},` +
-	`"path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"}`
+	`"path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"}` + secretDetailProperties
 
 var alertPagingArguments = []capability.Argument{pagingArguments[0], pagingArguments[1]}
 
@@ -322,17 +322,17 @@ var secretScanningAlertsList = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(secretStates) + `,"secret_type":{"type":"string",` +
 		`"minLength":1,"maxLength":500,"pattern":"` + alertSecretTypeReg + `"},"resolution":` +
-		enumSchema(secretResolutions) + `,` + pagingKeys),
+		enumSchema(secretResolutions) + `,` + secretFilterSchema + `,` + pagingKeys),
 	OutputSchema: alertListOutput("alerts", secretScanningProperties),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "Return only alerts in this state: " + strings.Join(secretStates, ", ")},
 		{Name: "secret_type", Description: "Return only alerts of these secret types, a comma-separated list of " +
 			"GitHub secret type names such as github_personal_access_token"},
 		{Name: "resolution", Description: "Return only alerts resolved this way: " + strings.Join(secretResolutions, ", ")},
-	}, alertPagingArguments...),
+	}, append(append([]capability.Argument(nil), secretFilterArguments...), alertPagingArguments...)...),
 	Fields: append([]capability.Field{
-		{Name: "alerts", Description: "Alerts with number, state, resolution, secret type, validity, and the first " +
-			"location; the secret itself is never included"},
+		{Name: "alerts", Description: "Alerts as the get tool reads them; the secret and the comments are never " +
+			"included"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the open alerts",
@@ -351,7 +351,7 @@ var secretScanningAlertsGet = capability.Descriptor{
 	InputSchema:  inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
 	OutputSchema: alertGetOutput(secretScanningProperties),
 	Arguments:    []capability.Argument{alertNumberArgument},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "secret_type", Description: "Type of the secret; its value is never included"},
 		{Name: "number", Description: "Alert number"},
 		{Name: "state", Description: "State of the alert"},
@@ -370,7 +370,7 @@ var secretScanningAlertsGet = capability.Descriptor{
 		{Name: "path", Description: "File of the location"},
 		{Name: "start_line", Description: "First line of the location"},
 		{Name: "end_line", Description: "Last line of the location"},
-	},
+	}, secretDetailFields...),
 	Examples: []capability.Example{{Description: "Read one alert", Arguments: json.RawMessage(`{"alert_number":3}`)}},
 }
 
@@ -408,6 +408,9 @@ type alertArguments struct {
 	Resolution string `json:"resolution"`
 	Limit      int    `json:"limit"`
 	Cursor     string `json:"cursor"`
+
+	// secret holds the secret scanning list filters, read through secretListArguments.
+	secret secretFilters
 
 	page, perPage int
 	binding       []byte
@@ -458,7 +461,14 @@ func alertsHandler(id string, check func(*alertArguments, target) error,
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 		raw json.RawMessage) (any, error) {
 		var arguments alertArguments
-		if err := json.Unmarshal(raw, &arguments); err != nil {
+		if id == secretScanningAlertsList.ID {
+			var list secretListArguments
+			if err := json.Unmarshal(raw, &list); err != nil {
+				return nil, unreadable(id)
+			}
+			arguments, arguments.secret = list.alertArguments, list.secretFilters
+			arguments.secret.Assignee = list.Assignee
+		} else if err := json.Unmarshal(raw, &arguments); err != nil {
 			return nil, unreadable(id)
 		}
 		bound, err := selectTarget(resolved, kindRepository, raw)
@@ -506,11 +516,15 @@ func listAlertsCheck(list string, states, severities []string) func(*alertArgume
 		if a.Ref != "" && !validRef(a.Ref) {
 			return invalidRequest("ref must be a branch name or Git reference")
 		}
-		if list == "dependabot" {
-			if err := a.checkDependabotFilters(); err != nil {
-				return err
-			}
-		} else if err := a.checkCodeScanningFilters(); err != nil {
+		switch list {
+		case "dependabot":
+			err = a.checkDependabotFilters()
+		case "secret-scanning":
+			err = a.checkSecretFilters()
+		default:
+			err = a.checkCodeScanningFilters()
+		}
+		if err != nil {
 			return err
 		}
 		if a.SecretType != "" && !validSecretTypes(a.SecretType) {
@@ -521,12 +535,17 @@ func listAlertsCheck(list string, states, severities []string) func(*alertArgume
 		}
 		parts := []any{"security-alerts", list, bound.String(), strings.ToLower(a.State),
 			strings.ToLower(a.Severity), a.ToolName, a.Ref, a.SecretType, strings.ToLower(a.Resolution)}
-		if list == "dependabot" {
+		switch {
+		case list == "dependabot":
 			if a.hasDependabotFilters() {
 				// Only a request that sets one of these filters binds them, so a cursor without them stays valid.
 				parts = append(parts, a.dependabotBinding()...)
 			}
-		} else if a.hasCodeScanningFilters() {
+		case list == "secret-scanning":
+			if a.hasSecretFilters() {
+				parts = append(parts, a.secretBinding()...)
+			}
+		case a.hasCodeScanningFilters():
 			// Only a request that sets one of these filters binds them, so a cursor without them stays valid.
 			parts = append(parts, a.ToolGUID, a.PR, strings.ToLower(strings.Join(a.Assignees, ",")),
 				strings.ToLower(a.Sort), strings.ToLower(a.Direction))
@@ -1092,7 +1111,7 @@ func (c *Client) getDependabotAlert(ctx context.Context, a *alertArguments) (*De
 }
 
 // SecretScanningAlert is the compact view of one secret scanning alert. It has no field for the secret, and
-// no free text a user could have pasted a secret into.
+// no comment a user could have pasted a secret into.
 type SecretScanningAlert struct {
 	Number                 int    `json:"number"`
 	State                  string `json:"state"`
@@ -1112,6 +1131,20 @@ type SecretScanningAlert struct {
 	Path                   string `json:"path,omitempty"`
 	StartLine              int    `json:"start_line,omitempty"`
 	EndLine                int    `json:"end_line,omitempty"`
+
+	// The members beyond the compact ones above; the secret and the comment fields have no member at all.
+	Provider                            string                  `json:"provider,omitempty"`
+	ProviderSlug                        string                  `json:"provider_slug,omitempty"`
+	IsBase64Encoded                     *bool                   `json:"is_base64_encoded,omitempty"`
+	HasMoreLocations                    *bool                   `json:"has_more_locations,omitempty"`
+	PushProtectionBypassedBy            *RESTAccount            `json:"push_protection_bypassed_by,omitempty"`
+	PushProtectionBypassedAt            string                  `json:"push_protection_bypassed_at,omitempty"`
+	PushProtectionBypassRequestReviewer *RESTAccount            `json:"push_protection_bypass_request_reviewer,omitempty"`
+	ResolvedByDetail                    *RESTAccount            `json:"resolved_by_detail,omitempty"`
+	AssignedTo                          *RESTAccount            `json:"assigned_to,omitempty"`
+	ClosureRequestReviewer              *RESTAccount            `json:"closure_request_reviewer,omitempty"`
+	FirstLocationDetected               *SecretScanningLocation `json:"first_location_detected,omitempty"`
+	Links                               Links                   `json:"links,omitempty"`
 }
 
 // SecretScanningAlertList is one batch of secret scanning alerts.
@@ -1144,6 +1177,16 @@ type secretScanningAlertJSON struct {
 		StartLine int    `json:"start_line"`
 		EndLine   int    `json:"end_line"`
 	} `json:"first_location_detected"`
+	extras secretExtrasRaw
+}
+
+func (j *secretScanningAlertJSON) UnmarshalJSON(data []byte) error {
+	type plain secretScanningAlertJSON
+	if err := json.Unmarshal(data, (*plain)(j)); err != nil {
+		return err
+	}
+	j.extras = readSecretExtras(data)
+	return nil
 }
 
 func (j secretScanningAlertJSON) view() SecretScanningAlert {
@@ -1154,6 +1197,7 @@ func (j secretScanningAlertJSON) view() SecretScanningAlert {
 	if l := j.FirstLocationDetected; l != nil {
 		v.LocationType, v.Path, v.StartLine, v.EndLine = l.Type, l.Path, l.StartLine, l.EndLine
 	}
+	j.extras.addTo(&v)
 	return v
 }
 
@@ -1163,6 +1207,7 @@ func (c *Client) listSecretScanningAlerts(ctx context.Context, a *alertArguments
 	query.Set("hide_secret", "true")
 	setQuery(query, "state", strings.ToLower(a.State), "secret_type", a.SecretType,
 		"resolution", strings.ToLower(a.Resolution))
+	setQuery(query, a.secretQuery()...)
 	var raw []secretScanningAlertJSON
 	hasNext, err := c.restPage(ctx, op, c.alertPath("secret-scanning", 0), query, &raw)
 	if err != nil {

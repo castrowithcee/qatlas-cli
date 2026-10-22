@@ -24,6 +24,8 @@ type alertFake struct {
 	codeScanning string
 	// dependabot replaces the Dependabot alert the routes answer with.
 	dependabot string
+	// secretScanning replaces the secret scanning alert the routes answer with.
+	secretScanning string
 	// queries records the raw query of every request by route.
 	queries []string
 }
@@ -96,7 +98,10 @@ func (a *alertFake) route(w http.ResponseWriter, req *http.Request) bool {
 			`"description":"details","severity":"high","cvss":{"score":7.5}},"security_vulnerability":` +
 			`{"vulnerable_version_range":"<4.17.21","first_patched_version":{"identifier":"4.17.21"}}}`
 	default:
-		single = secretAlertJSON(3)
+		single = a.secretScanning
+		if single == "" {
+			single = secretAlertJSON(3)
+		}
 	}
 	list = "[" + single + "]"
 	if number == "" {

@@ -337,3 +337,128 @@ func TestViewAnswersAreBounded(t *testing.T) {
 		t.Errorf("nameless view = %v", err)
 	}
 }
+
+const fieldsViewWire = `"is_locked":false,"rows":["r1","r2"],"formula_rows":{"c1":{"x":1.50}},` +
+	`"link_rows":{"l1":["a"]},"summaries":[{"column_key":"a1b2","type":"sum"}],` +
+	`"groupbys":[{"column_key":"0000","count_type":"day","sort_type":"up"}],` +
+	`"group_rows":[{"key":"g1","n":12345678901234567890}],"groups":[{"k":"g\u0007"}],` +
+	`"colorbys":{"color_option":"by_rules","color_rules":[{"color":"#fff"}]},"colors":{"r1":"#eee"}`
+
+func serveViewFields(t *testing.T, wire string) {
+	t.Helper()
+	serveBase(t, func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path == metaRoute(salesBase) {
+			return jsonResponse(http.StatusOK, viewMetadata), nil
+		}
+		if strings.HasSuffix(request.URL.Path, viewsPath) {
+			return jsonResponse(http.StatusOK, `{"views":[{"_id":"7Yk3","name":"Aktive","type":"table",`+wire+`}]}`), nil
+		}
+		return jsonResponse(http.StatusOK, `{"_id":"7Yk3","name":"Aktive","type":"table",`+wire+`}`), nil
+	})
+}
+
+func TestViewsReportEveryDocumentedField(t *testing.T) {
+	serveViewFields(t, fieldsViewWire)
+	c := linksClient(t, "*")
+	got, err := c.GetView(context.Background(), ViewInput{Table: "Kunden", View: "Aktive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := encoded(got.View)
+	for _, want := range []string{`"is_locked":false`, `"rows":["r1","r2"]`, `"formula_rows":{"c1":{"x":1.50}}`,
+		`"link_rows":{"l1":["a"]}`, `"summaries":[{"column_key":"a1b2","type":"sum"}]`,
+		`"groupbys":[{"column_key":"0000","count_type":"day","sort_type":"up"}]`,
+		`"group_rows":[{"key":"g1","n":12345678901234567890}]`, `"groups":[{"k":"g "}]`,
+		`"colorbys":{"color_option":"by_rules","color_rules":[{"color":"#fff"}]}`, `"colors":{"r1":"#eee"}`} {
+		if !strings.Contains(line, want) {
+			t.Errorf("view lacks %s in %s", want, line)
+		}
+	}
+	list, err := c.ListViews(context.Background(), ViewInput{Table: "Kunden"})
+	if err != nil || len(list.Views) != 1 {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	if !strings.Contains(encoded(list.Views[0]), `"group_rows":[{"key":"g1","n":12345678901234567890}]`) {
+		t.Errorf("list view = %s", encoded(list.Views[0]))
+	}
+}
+
+func TestViewsKeepLinkedTableMembersForWildcardOnly(t *testing.T) {
+	serveViewFields(t, fieldsViewWire)
+	c := linksClient(t, "Kunden")
+	got, err := c.GetView(context.Background(), ViewInput{Table: "Kunden", View: "Aktive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := encoded(got.View)
+	if strings.Contains(line, "formula_rows") || strings.Contains(line, "link_rows") || strings.Contains(line, "omitted_fields") {
+		t.Errorf("bound connection view = %s", line)
+	}
+	if !strings.Contains(line, `"summaries"`) || !strings.Contains(line, `"groupbys"`) {
+		t.Errorf("bound connection lost plain members: %s", line)
+	}
+	list, err := c.ListViews(context.Background(), ViewInput{Table: "Kunden"})
+	if err != nil || strings.Contains(encoded(list), "formula_rows") {
+		t.Errorf("bound list = %s, %v", encoded(list), err)
+	}
+}
+
+func TestViewMembersBeyondTheBoundsAreOmittedAndNamed(t *testing.T) {
+	serveViewFields(t, `"groupbys":[{"k":"`+strings.Repeat("x", 4100)+`"}],"colors":{"a":1},"summaries":"text",`+
+		`"is_locked":"yes","rows":[],"groups":{},"colorbys":null`)
+	got, err := linksClient(t, "*").GetView(context.Background(), ViewInput{Table: "Kunden", View: "Aktive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := encoded(got.View)
+	want := `{"id":"7Yk3","name":"Aktive","type":"table","colors":{"a":1},"omitted_fields":["is_locked","groupbys","summaries"]}`
+	if line != want {
+		t.Errorf("view = %s\nwant %s", line, want)
+	}
+}
+
+// viewsOutputCoverage runs the field coverage for both view tools; TestEveryOutputMemberIsInSchemaAndFields calls it.
+func viewsOutputCoverage(t *testing.T) {
+	serveViewFields(t, fieldsViewWire)
+	got, err := linksClient(t, "*").GetView(context.Background(), ViewInput{Table: "Kunden", View: "Aktive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	_ = json.Unmarshal([]byte(encoded(got)), &out)
+	outputCoverage(t, descriptorOf(t, "seatable.base.views.get"), out)
+
+	serveViewFields(t, `"is_locked":true,"rows":["r1"],"formula_rows":{"c":1},"summaries":[{"a":1}],`+
+		`"groupbys":[{"a":1}],"group_rows":[{"a":1}],"groups":[{"a":1}],"filter_conjunction":"And"`)
+	list, err := linksClient(t, "*").ListViews(context.Background(), ViewInput{Table: "Kunden"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = nil
+	_ = json.Unmarshal([]byte(encoded(list)), &out)
+	outputCoverage(t, descriptorOf(t, "seatable.base.views.list"), out)
+
+	serveViewFields(t, `"groupbys":[{"k":"`+strings.Repeat("x", 4100)+`"}]`)
+	got, _ = linksClient(t, "*").GetView(context.Background(), ViewInput{Table: "Kunden", View: "Aktive"})
+	out = nil
+	_ = json.Unmarshal([]byte(encoded(got)), &out)
+	if !strings.Contains(encoded(out), "omitted_fields") {
+		t.Fatalf("no omitted_fields in %v", out)
+	}
+	outputCoverage(t, descriptorOf(t, "seatable.base.views.get"), out)
+}
+
+func TestViewsKeepFormerOutputWithoutNewFields(t *testing.T) {
+	serveViews(t, http.StatusOK, `{}`)
+	list, err := linksClient(t, "*").ListViews(context.Background(), ViewInput{Table: "Kunden"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"table":"Kunden","views":[{"id":"0000","name":"Standard","type":"table"},` +
+		`{"id":"7Yk3","name":"Aktive","type":"table","filter_conjunction":"And","filters":[{"column":"a1b2",` +
+		`"predicate":"greater","term":"` + cellCanary + `"}],"sorts":[{"column":"0000","direction":"up"}],` +
+		`"hidden_columns":["c3d4"]},{"id":"Zz99","name":"Archiv","type":"table"}],"truncated":false}`
+	if got := encoded(list); got != want {
+		t.Errorf("list = %s\nwant %s", got, want)
+	}
+}
