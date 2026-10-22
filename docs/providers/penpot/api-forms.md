@@ -16,6 +16,11 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
 
 - Backend RPC `POST /api/rpc/command/<name>` with `Authorization: Token ...` (documented). None of the read commands
   paginates; `get-page` returns the first page when `page-id` is omitted.
+- Pages (`files.clj` `get-page`, `common/types/page.cljc`, `shape.cljc`, `shape/layout.cljc`, `variant.cljc`):
+  `get-page` returns the page record with its `objects` map of shapes, minus each shape's `thumbnail`; the schemas
+  fix the page metadata and the attributes of each shape type, including the layout and variant attributes of a
+  board. With the `fdata/path-data` feature a path may arrive as binary data instead of a JSON structure. Assumed: the
+  attribute values arrive as JSON structures of the schema's shape, and such binary data as text.
 - Listings (`teams.clj`, `projects.clj`, `files.clj`, `binfile/common.clj`, `nitrate.clj`): `get-teams` returns the
   columns of the `team` table with the account's permissions; the subscription is added only with the `subscriptions`
   flag, the organization only with the `admin-console` flag (teams with an expired organization license are then
@@ -67,5 +72,4 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
   JSON when `Accept: application/json` is sent, and their keys are read case- and separator-insensitively (camelCase
   or kebab-case); the summary's categories carry `count` and `sample`; the answers of `create-project` and
   `create-file` carry the new ID as `id`, and the other management changes answer without a readable body that Qatlas
-  needs; a page's `objects` map is keyed by shape ID with `type`, `name`, `parent-id`, `frame-id`, `x`, `y`, `width`,
-  `height`. A different form yields empty fields, not an error.
+  needs; a page's `objects` map is keyed by shape ID. A different form yields empty fields, not an error.
