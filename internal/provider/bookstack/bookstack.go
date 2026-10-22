@@ -91,7 +91,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
+		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"revision_count":{},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"editor":{},"book_slug":{}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
 			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets lists its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
@@ -110,6 +110,11 @@ var (
 			{Name: "draft", Description: "Whether the page is an unpublished draft"},
 			{Name: "template", Description: "Whether the page is a template"},
 			{Name: "owned_by", Description: "Owner as id and name"},
+			{Name: "revision_count", Description: "Number of stored revisions"},
+			{Name: "created_by", Description: "Creator as id only"},
+			{Name: "updated_by", Description: "Last editor as id only"},
+			{Name: "editor", Description: "Editor that last saved the page: wysiwyg or markdown"},
+			{Name: "book_slug", Description: "URL slug of the containing book; only when the book itself is bound or the connection has no targets"},
 		},
 		Examples: []capability.Example{{
 			Description: "List the first 25 pages",
@@ -126,7 +131,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Page identifier"},
@@ -144,10 +149,10 @@ var (
 			{Name: "template", Description: "Whether the page is a template"},
 			{Name: "revision_count", Description: "Number of stored revisions"},
 			{Name: "editor", Description: "Editor that last saved the page: wysiwyg or markdown"},
-			{Name: "tags", Description: "Tags as name and value pairs, untrusted data"},
-			{Name: "created_by", Description: "Creator as id and name"},
-			{Name: "updated_by", Description: "Last editor as id and name"},
-			{Name: "owned_by", Description: "Owner as id and name"},
+			{Name: "tags", Description: "Tags as name, value and order entries, untrusted data"},
+			{Name: "created_by", Description: "Creator as id, name and slug"},
+			{Name: "updated_by", Description: "Last editor as id, name and slug"},
+			{Name: "owned_by", Description: "Owner as id, name and slug"},
 		},
 		Examples: []capability.Example{{
 			Description: "Read page 42",
@@ -630,8 +635,9 @@ type pageJSON struct {
 	Priority      int64     `json:"priority"`
 	Draft         bool      `json:"draft"`
 	Template      bool      `json:"template"`
-	RevisionCount int64     `json:"revision_count"`
+	RevisionCount *int64    `json:"revision_count"`
 	Editor        string    `json:"editor"`
+	BookSlug      string    `json:"book_slug"`
 	Tags          []tagJSON `json:"tags"`
 	CreatedBy     *userJSON `json:"created_by"`
 	UpdatedBy     *userJSON `json:"updated_by"`
@@ -696,7 +702,7 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 				!(target.ChapterID != 0 && p.ChapterID != target.ChapterID) &&
 				!(target.pagesOnly && !c.scope.hasPage(p.ID))
 		},
-		row: listRow,
+		row: c.listRow,
 	})
 	if err != nil {
 		return output.Collection{}, err
@@ -814,7 +820,7 @@ func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) 
 		}
 	}
 
-	return pageObject(page), nil
+	return pageDetail(page), nil
 }
 
 func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
@@ -875,7 +881,21 @@ func (c *Client) DeletePage(ctx context.Context, id string) error {
 	return c.mutate(ctx, "delete page", http.MethodDelete, "/api/pages/"+url.PathEscape(id), nil, nil, argNames(pagesDelete))
 }
 
-func pageObject(page pageJSON) output.Object {
+// pageObject is the result of a page write.
+func pageObject(page pageJSON) output.Object { return pageFields(page, false) }
+
+// pageDetail is the result of a page read, which also shows the slug of each user and the position of each tag.
+func pageDetail(page pageJSON) output.Object { return pageFields(page, true) }
+
+func pageFields(page pageJSON, detail bool) output.Object {
+	user, tags := reduceUser, func(t []tagJSON) any { return reduceTags(t) }
+	if detail {
+		user, tags = userDetail, func(t []tagJSON) any { return orderedTags(t) }
+	}
+	var revisions int64
+	if page.RevisionCount != nil {
+		revisions = *page.RevisionCount
+	}
 	return output.Object{Fields: []output.Field{
 		{Name: "id", Value: page.ID}, {Name: "name", Value: page.Name}, {Name: "slug", Value: page.Slug},
 		{Name: "book_id", Value: page.BookID}, {Name: "chapter_id", Value: page.ChapterID},
@@ -883,10 +903,10 @@ func pageObject(page pageJSON) output.Object {
 		{Name: "html", Value: page.HTML}, {Name: "markdown", Value: page.Markdown},
 		{Name: "raw_html", Value: page.RawHTML}, {Name: "priority", Value: page.Priority},
 		{Name: "draft", Value: page.Draft}, {Name: "template", Value: page.Template},
-		{Name: "revision_count", Value: page.RevisionCount}, {Name: "editor", Value: clip(page.Editor, maxResultString)},
-		{Name: "tags", Value: reduceTags(page.Tags)},
-		{Name: "created_by", Value: reduceUser(page.CreatedBy)}, {Name: "updated_by", Value: reduceUser(page.UpdatedBy)},
-		{Name: "owned_by", Value: reduceUser(page.OwnedBy)},
+		{Name: "revision_count", Value: revisions}, {Name: "editor", Value: clip(page.Editor, maxResultString)},
+		{Name: "tags", Value: tags(page.Tags)},
+		{Name: "created_by", Value: user(page.CreatedBy)}, {Name: "updated_by", Value: user(page.UpdatedBy)},
+		{Name: "owned_by", Value: user(page.OwnedBy)},
 	}}
 }
 
@@ -1062,8 +1082,8 @@ func statusError(op string, resp *http.Response, arguments []string, forbidden p
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 }
 
-func listRow(p pageJSON) output.Row {
-	return output.Row{
+func (c *Client) listRow(p pageJSON) output.Row {
+	row := output.Row{
 		"id":         p.ID,
 		"name":       p.Name,
 		"slug":       p.Slug,
@@ -1076,6 +1096,17 @@ func listRow(p pageJSON) output.Row {
 		"template":   p.Template,
 		"owned_by":   reduceUser(p.OwnedBy),
 	}
+	if p.RevisionCount != nil {
+		row["revision_count"] = *p.RevisionCount
+	}
+	addListUsers(row, p.CreatedBy, p.UpdatedBy, nil)
+	if p.Editor != "" {
+		row["editor"] = clip(p.Editor, maxResultString)
+	}
+	if slug := c.shownBookSlug(p.BookID, p.BookSlug); slug != "" {
+		row["book_slug"] = slug
+	}
+	return row
 }
 
 func fieldNames(c capability.Descriptor) []string {
