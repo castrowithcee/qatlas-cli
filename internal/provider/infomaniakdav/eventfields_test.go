@@ -124,3 +124,48 @@ func TestEventsGetEveryMemberIsInSchemaAndFields(t *testing.T) {
 		t.Errorf("problems: %v", problems)
 	}
 }
+
+func TestEventsListFieldsMatchSchema(t *testing.T) {
+	series := icsOf(vevent("DTSTAMP:19960704T120000Z", "UID:s@example.com", "RECURRENCE-ID:20260303T100000Z",
+		"DTSTART:20260303T100000Z", "DTEND:20260303T110000Z", "SUMMARY:Daily", "LOCATION:Room 1", "STATUS:CONFIRMED",
+		"RRULE:FREQ=DAILY"))
+	serve(t, eventsFake(t, multistatus(eventEntry(workPath+"s.ics", "e1", series)), nil))
+	out, err := listEventsOf(t, []string{"calendar/work"}, `{"calendar":"work",`+rangeArgs+`,"expand":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out)
+	var page struct {
+		Events []map[string]json.RawMessage `json:"events"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil || len(page.Events) != 1 {
+		t.Fatalf("page = %s, err = %v", raw, err)
+	}
+	var schema struct {
+		Properties struct {
+			Events struct {
+				Items struct {
+					Properties map[string]json.RawMessage `json:"properties"`
+				} `json:"items"`
+			} `json:"events"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(eventsList.OutputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]bool{}
+	for _, f := range eventsList.Fields {
+		fields[f.Name] = true
+	}
+	for key := range page.Events[0] {
+		if _, ok := schema.Properties.Events.Items.Properties[key]; !ok {
+			t.Errorf("%s missing in the list schema", key)
+		}
+		if !fields[key] {
+			t.Errorf("%s missing in the list fields", key)
+		}
+	}
+	if _, ok := page.Events[0]["recurrence_id"]; !ok {
+		t.Error("recurrence_id not reported")
+	}
+}
