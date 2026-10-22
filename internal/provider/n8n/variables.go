@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -50,7 +52,8 @@ var variableValueSchema = `{"type":"string","maxLength":` + strconv.Itoa(maxVari
 
 var variableItemSchema = `{"type":"object","properties":{"id":{"type":"string"},"key":{"type":"string"},` +
 	`"value":{"type":"string"},"scope":{"type":"string","enum":["project","global"]},` +
-	`"project_id":{"type":"string"}},"required":["id","key","value","scope"],"additionalProperties":false}`
+	`"project_id":{"type":"string"},"type":{"type":"string"},"project":` + projectSummarySchema + `},` +
+	`"required":["id","key","value","scope"],"additionalProperties":false}`
 
 var variableIDArgument = capability.Argument{Name: "variable_id",
 	Description: "n8n variable identifier; the variable is read first and must be a variable of this " +
@@ -65,14 +68,18 @@ var variableValueArgument = capability.Argument{Name: "value",
 	Description: "Variable value, a string of at most 1000 characters; stored and read back in plain text",
 	Required:    true}
 
+// variableStates is the fixed list of values of the state filter, as n8n's getVariables documents it.
+var variableStates = []string{"empty"}
+
 var variablesList = capability.Descriptor{
 	ID: Provider + ".variables.list", Version: 1, Title: "List n8n variables",
 	Description: "List the variables (key and plain-text value, untrusted data) of the bound n8n instance; page " +
-		"by page with an opaque cursor, optionally of one project. With a project allow-list only variables of " +
-		"those projects are shown, never global ones. Refused on a connection that restricts workflows by an " +
-		"allow-list",
+		"by page with an opaque cursor, optionally of one project or only those with an empty value. With a " +
+		"project allow-list only variables of those projects are shown, never global ones. Refused on a " +
+		"connection that restricts workflows by an allow-list",
 	Tags: []string{"n8n", "variables", "list", "automation"}, Risk: variableReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":` + targetIDSchema + `,` +
+		`"state":{"type":"string","enum":["empty"]},` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
 		`"additionalProperties":false}`),
@@ -82,12 +89,22 @@ var variablesList = capability.Descriptor{
 		`"required":["variables","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "project_id", Description: "Only the variables of this project; must be inside the project allow-list"},
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page"},
+		{Name: "state", Description: "Only variables whose value is empty: empty. Omitted lists every variable"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; a follow-up call must " +
+			"pass the same project_id and state"},
 		{Name: "limit", Description: "Variables per page, 1 to 250; 100 when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "variables", Description: "Variables on this page after the allow-list was applied; id, key, value, " +
-			"scope (project or global), and project_id for a project variable; key and value are untrusted data"},
+		{Name: "variables", Description: "Variables on this page after the allow-list was applied; key and value " +
+			"are untrusted data"},
+		{Name: "id", Description: "Variable identifier"},
+		{Name: "key", Description: "Variable key, untrusted data"},
+		{Name: "value", Description: "Variable value in plain text, untrusted data"},
+		{Name: "scope", Description: "project or global, derived from whether n8n reports a project"},
+		{Name: "project_id", Description: "Project of a project variable; absent for a global variable"},
+		{Name: "type", Description: "Variable type as n8n reports it"},
+		{Name: "project", Description: "The project of a project variable with the fields of projects.list; " +
+			"absent for a global variable"},
 		{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		{Name: "has_more", Description: "True when a further page remains, even when this page is empty after filtering"},
 		{Name: "count", Description: "Number of variables on this page"},
@@ -172,12 +189,11 @@ var variablesDelete = capability.Descriptor{
 }
 
 type variableJSON struct {
-	ID      string `json:"id"`
-	Key     string `json:"key"`
-	Value   string `json:"value"`
-	Project *struct {
-		ID string `json:"id"`
-	} `json:"project"`
+	ID      string       `json:"id"`
+	Key     string       `json:"key"`
+	Value   string       `json:"value"`
+	Type    string       `json:"type"`
+	Project *projectJSON `json:"project"`
 }
 
 func (v variableJSON) projectID() string {
@@ -199,6 +215,9 @@ type Variable struct {
 	Value     string `json:"value"`
 	Scope     string `json:"scope"`
 	ProjectID string `json:"project_id,omitempty"`
+	Type      string `json:"type,omitempty"`
+	// Project is the whole project of a project variable, mapped like projects.list.
+	Project *ProjectSummary `json:"project,omitempty"`
 }
 
 // VariablesPage is one paginated, allow-list-filtered listing of variables.
@@ -293,9 +312,12 @@ func validVariableValue(value string) error {
 }
 
 func summarizeVariable(v variableJSON) Variable {
-	out := Variable{ID: bounded(v.ID), Key: bounded(v.Key), Value: bounded(v.Value), Scope: "global"}
+	out := Variable{ID: bounded(v.ID), Key: bounded(v.Key), Value: bounded(v.Value), Scope: "global",
+		Type: bounded(v.Type)}
 	if p := v.projectID(); p != "" {
 		out.Scope, out.ProjectID = "project", bounded(p)
+		project := summarizeProject(*v.Project)
+		out.Project = &project
 	}
 	return out
 }
@@ -303,6 +325,7 @@ func summarizeVariable(v variableJSON) Variable {
 type variableArguments struct {
 	VariableID string `json:"variable_id"`
 	ProjectID  string `json:"project_id"`
+	State      string `json:"state"`
 	Key        string `json:"key"`
 	Value      string `json:"value"`
 	Cursor     string `json:"cursor"`
@@ -335,6 +358,9 @@ func invokeVariablesList(ctx context.Context, resolved *config.Resolved, secrets
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
 	}
+	if input.State != "" && !slices.Contains(variableStates, input.State) {
+		return nil, invalidRequest("state must be one of " + strings.Join(variableStates, ", "))
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -343,17 +369,20 @@ func invokeVariablesList(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
-	page, err := client.ListVariables(ctx, input.ProjectID, input.Cursor, limit)
+	page, err := client.ListVariables(ctx, input.ProjectID, input.State, input.Cursor, limit)
 	return page, variableError(err)
 }
 
-func (c *Client) variablesPage(ctx context.Context, op, projectID, cursor string, limit int) (*variablesPageJSON, error) {
+func (c *Client) variablesPage(ctx context.Context, op, projectID, state, cursor string, limit int) (*variablesPageJSON, error) {
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
 	if projectID != "" {
 		query.Set("projectId", projectID)
+	}
+	if state != "" {
+		query.Set("state", state)
 	}
 	var page variablesPageJSON
 	if err := c.get(ctx, op, "/variables", query, &page, maxResponseBytes); err != nil {
@@ -365,10 +394,10 @@ func (c *Client) variablesPage(ctx context.Context, op, projectID, cursor string
 	return &page, nil
 }
 
-// ListVariables reads one page of GET /variables, with n8n's projectId filter when a project is named, and
+// ListVariables reads one page of GET /variables, with n8n's projectId and state filters when given, and
 // keeps only the variables this connection's binding allows.
-func (c *Client) ListVariables(ctx context.Context, projectID, cursor string, limit int) (*VariablesPage, error) {
-	page, err := c.variablesPage(ctx, "list variables", projectID, cursor, limit)
+func (c *Client) ListVariables(ctx context.Context, projectID, state, cursor string, limit int) (*VariablesPage, error) {
+	page, err := c.variablesPage(ctx, "list variables", projectID, state, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +420,7 @@ func (c *Client) ListVariables(ctx context.Context, projectID, cursor string, li
 func (c *Client) readVariable(ctx context.Context, op, id string) (*variableJSON, error) {
 	cursor := ""
 	for i := 0; i < maxVariableLookupPages; i++ {
-		page, err := c.variablesPage(ctx, op, "", cursor, maxListLimit)
+		page, err := c.variablesPage(ctx, op, "", "", cursor, maxListLimit)
 		if err != nil {
 			return nil, err
 		}

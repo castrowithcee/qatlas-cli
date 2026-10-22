@@ -26,7 +26,14 @@ const (
 const sceneSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 	`"collection_id":{"type":"string"},"is_untitled":{"type":"boolean"},"is_private":{"type":"boolean"},` +
 	`"pinned":{"type":"boolean"},"created":{"type":"string"},"updated":{"type":"string"},` +
-	`"scene_version":{"type":"string"},"total_elements":{"type":"integer"}},` +
+	`"scene_version":{"type":"string"},"total_elements":{"type":"integer"},` +
+	`"workspace":{"type":"string"},"creator":{"type":"string"},"updater":{"type":"string"},` +
+	`"preview_filename":{"type":"string"},"preview_background":{"type":"string"},` +
+	`"content_epoch":{"type":"integer"},"link_sharing":{"type":"integer"},` +
+	`"read_comments":{"type":"boolean"},"write_comments":{"type":"boolean"},"allow_calls":{"type":"boolean"},` +
+	`"update_count":{"type":"integer"},"revision_count":{"type":"integer"},"last_revision":{"type":"string"},` +
+	`"deleted_elements":{"type":"integer"},"has_non_deleted_frames":{"type":"boolean"},` +
+	`"is_slides_sharing_enabled":{"type":"boolean"},"is_welcome_scene":{"type":"boolean"}},` +
 	`"required":["id","name","collection_id"],"additionalProperties":false}`
 
 var sceneFields = []capability.Field{
@@ -40,6 +47,23 @@ var sceneFields = []capability.Field{
 	{Name: "updated", Description: "Last update time, as Excalidraw+ reports it"},
 	{Name: "scene_version", Description: "Opaque scene version, as Excalidraw+ reports it"},
 	{Name: "total_elements", Description: "Number of elements Excalidraw+ counts in the scene"},
+	{Name: "workspace", Description: "Workspace identifier, untrusted data"},
+	{Name: "creator", Description: "Identifier of the creating user, untrusted data"},
+	{Name: "updater", Description: "Identifier of the last updating user, untrusted data"},
+	{Name: "preview_filename", Description: "File name of the scene preview, untrusted data; the preview itself is not returned"},
+	{Name: "preview_background", Description: "Background of the scene preview, untrusted data"},
+	{Name: "content_epoch", Description: "Content epoch counter, as Excalidraw+ reports it"},
+	{Name: "link_sharing", Description: "Link-sharing mode as the number Excalidraw+ reports; the share links themselves are not returned"},
+	{Name: "read_comments", Description: "Whether comments may be read; false is reported"},
+	{Name: "write_comments", Description: "Whether comments may be written; false is reported"},
+	{Name: "allow_calls", Description: "Whether calls are allowed; false is reported"},
+	{Name: "update_count", Description: "Number of updates, as Excalidraw+ reports it"},
+	{Name: "revision_count", Description: "Number of revisions, as Excalidraw+ reports it"},
+	{Name: "last_revision", Description: "Identifier of the last revision, untrusted data"},
+	{Name: "deleted_elements", Description: "Number of deleted elements Excalidraw+ counts in the scene"},
+	{Name: "has_non_deleted_frames", Description: "Whether the scene has frames that are not deleted; false is reported"},
+	{Name: "is_slides_sharing_enabled", Description: "Whether slides sharing is enabled; false is reported"},
+	{Name: "is_welcome_scene", Description: "Whether this is the welcome scene; false is reported"},
 }
 
 var sceneIDArgument = capability.Argument{Name: "scene_id", Required: true,
@@ -78,7 +102,7 @@ var scenesGet = capability.Descriptor{
 	ID:          Provider + ".scenes.get",
 	Version:     1,
 	Title:       "Get an Excalidraw+ scene",
-	Description: "Read the metadata of one scene of an allowed collection; share links and previews are not returned",
+	Description: "Read the metadata of one scene of an allowed collection; share links and the preview address are not returned",
 	Tags:        []string{"excalidrawplus", "scenes", "get", "whiteboard"},
 	Risk:        readRisk,
 	Provider:    Provider,
@@ -152,8 +176,25 @@ type sceneMetaJSON struct {
 	SceneVersion    string `json:"sceneVersion"`
 	Collection      string `json:"collection"`
 	TotalElements   int    `json:"totalElements"`
-	DeletedElements int    `json:"deletedElements"`
+	DeletedElements number `json:"deletedElements"`
 	Pinned          bool   `json:"pinned"`
+
+	Workspace              string `json:"workspace"`
+	Creator                string `json:"creator"`
+	Updater                string `json:"updater"`
+	PreviewFilename        string `json:"previewFilename"`
+	PreviewBackground      string `json:"previewBackground"`
+	ContentEpoch           number `json:"contentEpoch"`
+	LinkSharing            number `json:"linkSharing"`
+	ReadComments           *bool  `json:"readComments"`
+	WriteComments          *bool  `json:"writeComments"`
+	AllowCalls             *bool  `json:"allowCalls"`
+	UpdateCount            number `json:"updateCount"`
+	RevisionCount          number `json:"revisionCount"`
+	LastRevision           string `json:"lastRevision"`
+	HasNonDeletedFrames    *bool  `json:"hasNonDeletedFrames"`
+	IsSlidesSharingEnabled *bool  `json:"isSlidesSharingEnabled"`
+	IsWelcomeScene         *bool  `json:"isWelcomeScene"`
 }
 
 // sceneEntryJSON is one scene as the list and detail endpoints answer: metadata plus share links, which are
@@ -167,8 +208,7 @@ type scenesPageJSON struct {
 	Data []sceneEntryJSON `json:"data"`
 }
 
-// Scene is the stable view of one scene's metadata. Creator, updater, preview, and share links are not
-// passed on.
+// Scene is the stable view of one scene's metadata. The preview address and the share links are not passed on.
 type Scene struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -180,12 +220,37 @@ type Scene struct {
 	Updated       string `json:"updated,omitempty"`
 	SceneVersion  string `json:"scene_version,omitempty"`
 	TotalElements int    `json:"total_elements,omitempty"`
+
+	Workspace              string `json:"workspace,omitempty"`
+	Creator                string `json:"creator,omitempty"`
+	Updater                string `json:"updater,omitempty"`
+	PreviewFilename        string `json:"preview_filename,omitempty"`
+	PreviewBackground      string `json:"preview_background,omitempty"`
+	ContentEpoch           number `json:"content_epoch,omitempty"`
+	LinkSharing            number `json:"link_sharing,omitempty"`
+	ReadComments           *bool  `json:"read_comments,omitempty"`
+	WriteComments          *bool  `json:"write_comments,omitempty"`
+	AllowCalls             *bool  `json:"allow_calls,omitempty"`
+	UpdateCount            number `json:"update_count,omitempty"`
+	RevisionCount          number `json:"revision_count,omitempty"`
+	LastRevision           string `json:"last_revision,omitempty"`
+	DeletedElements        number `json:"deleted_elements,omitempty"`
+	HasNonDeletedFrames    *bool  `json:"has_non_deleted_frames,omitempty"`
+	IsSlidesSharingEnabled *bool  `json:"is_slides_sharing_enabled,omitempty"`
+	IsWelcomeScene         *bool  `json:"is_welcome_scene,omitempty"`
 }
 
 func sceneOf(m sceneMetaJSON) Scene {
 	return Scene{ID: m.ID, Name: boundedValue(m.Name), CollectionID: m.Collection, IsUntitled: m.IsUntitled,
 		IsPrivate: m.IsPrivate, Pinned: m.Pinned, Created: boundedValue(m.Created), Updated: boundedValue(m.Updated),
-		SceneVersion: boundedValue(m.SceneVersion), TotalElements: m.TotalElements}
+		SceneVersion: boundedValue(m.SceneVersion), TotalElements: m.TotalElements,
+		Workspace: cleanValue(m.Workspace), Creator: cleanValue(m.Creator), Updater: cleanValue(m.Updater),
+		PreviewFilename: cleanValue(m.PreviewFilename), PreviewBackground: cleanValue(m.PreviewBackground),
+		ContentEpoch: m.ContentEpoch, LinkSharing: m.LinkSharing, ReadComments: m.ReadComments,
+		WriteComments: m.WriteComments, AllowCalls: m.AllowCalls, UpdateCount: m.UpdateCount,
+		RevisionCount: m.RevisionCount, LastRevision: cleanValue(m.LastRevision), DeletedElements: m.DeletedElements,
+		HasNonDeletedFrames: m.HasNonDeletedFrames, IsSlidesSharingEnabled: m.IsSlidesSharingEnabled,
+		IsWelcomeScene: m.IsWelcomeScene}
 }
 
 // admitted reports whether a scene belongs to this connection: a valid identifier, not in the trash, and

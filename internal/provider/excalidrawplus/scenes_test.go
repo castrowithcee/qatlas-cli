@@ -10,7 +10,7 @@ import (
 
 func metaJSON(id, name, collection string) string {
 	return fmt.Sprintf(`{"id":%q,"name":%q,"collection":%q,"created":"c","updated":"u","totalElements":3,`+
-		`"creator":"creator-canary","previewUrl":"https://preview.invalid/x"}`, id, name, collection)
+		`"previewUrl":"https://preview.invalid/x"}`, id, name, collection)
 }
 
 func entryJSON(id, name, collection string) string {
@@ -72,7 +72,7 @@ func TestScenesListFiltersAndNameFilter(t *testing.T) {
 	if calls[0].query.Get("collectionId") != ownCollection {
 		t.Fatalf("query = %v, want the only allowed collection", calls[0].query)
 	}
-	for _, leaked := range []string{"s-foreign", "Plan B", "s-none", "creator-canary", "preview.invalid", "link-canary"} {
+	for _, leaked := range []string{"s-foreign", "Plan B", "s-none", "preview.invalid", "link-canary"} {
 		if strings.Contains(result, leaked) {
 			t.Fatalf("result leaked %q: %s", leaked, result)
 		}
