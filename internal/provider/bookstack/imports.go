@@ -55,12 +55,12 @@ var (
 			"type. " + importsRoles,
 		Tags: []string{"knowledge", "imports", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + importListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{` + importOutputProperties + `},"required":["id","name","size","type"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of imports to return; 0 returns all"},
 			{Name: "offset", Description: "Number of imports to skip"},
-		},
+		}, importListSchema.arguments()...),
 		Fields:   importFields,
 		Examples: []capability.Example{{Description: "List the first 25 imports", Arguments: json.RawMessage(`{"limit":25}`)}},
 	}
@@ -203,29 +203,38 @@ func reduceImportDetails(raw json.RawMessage) map[string]any {
 
 func invokeImportsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	var in struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
-	}
+	var in pagingInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, importsInstanceWide); err != nil {
 		return nil, err
 	}
+	query, err := parseListQuery(importListSchema, in.Sort, in.Filters)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := scanList(ctx, client, scanSpec[importJSON]{
-		op: "list imports", path: "/api/imports", limit: in.Limit, offset: in.Offset,
+	return client.ListImports(ctx, in.Limit, in.Offset, query)
+}
+
+// ListImports returns the reduced pending imports. BookStack ignores a filter it does not know, so each row is
+// checked here; limit and offset count the rows that remain.
+func (c *Client) ListImports(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[importJSON]{
+		op: "list imports", path: "/api/imports", limit: limit, offset: offset,
 		arguments: argNames(importsList),
 		id:        func(i importJSON) int64 { return i.ID },
 		keep:      func(importJSON) bool { return true },
 		row:       func(i importJSON) output.Row { return output.Row(importFieldsMap(i)) },
-	})
+	}
+	spec.withListQuery(q, importValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
-		return nil, err
+		return output.Collection{}, err
 	}
 	return output.Collection{Columns: fieldNames(importsList), Rows: rows}, nil
 }

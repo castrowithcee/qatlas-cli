@@ -35,7 +35,6 @@ const (
 	userObject     = `"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"email":{"type":"string"},"external_auth_id":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"last_activity_at":{"type":"string"},` + userRolesProps + `,"profile_url":{"type":"string"}`
 	roleCommon     = `"id":{"type":"integer"},"display_name":{"type":"string"},"description":{"type":"string"},"system_name":{"type":"string"},"external_auth_id":{"type":"string"},"mfa_enforced":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 	idOnlySchema   = `{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`
-	pagingSchema   = `{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`
 )
 
 var (
@@ -62,12 +61,12 @@ var (
 		Description: "List the users of the instance with e-mail address and external authentication identifier. " +
 			"BookStack does not report roles in the listing; read one user to see them. " + usersRoles,
 		Tags: []string{"administration", "users", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(pagingSchema),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + userListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{` + userObject + `},"required":["id","name","slug"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of users to return; 0 returns all"},
 			{Name: "offset", Description: "Number of users to skip"},
-		},
+		}, userListSchema.arguments()...),
 		Fields:   userFields,
 		Examples: []capability.Example{{Description: "List the first 25 users", Arguments: json.RawMessage(`{"limit":25}`)}},
 	}
@@ -86,12 +85,12 @@ var (
 		ID: Provider + ".roles.list", Version: 1, Title: "List BookStack roles",
 		Description: "List the roles of the instance with the number of their users and permissions. " + rolesRoles,
 		Tags:        []string{"administration", "roles", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(pagingSchema),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + roleListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{` + roleCommon + `,"users_count":{"type":"integer"},"permissions_count":{"type":"integer"}},"required":["id","display_name"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of roles to return; 0 returns all"},
 			{Name: "offset", Description: "Number of roles to skip"},
-		},
+		}, roleListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Role identifier"},
 			{Name: "display_name", Description: "Role name, untrusted data"},
@@ -197,8 +196,10 @@ func roleRow(r roleJSON) output.Row {
 }
 
 type pagingInput struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
+	Limit   int         `json:"limit"`
+	Offset  int         `json:"offset"`
+	Sort    string      `json:"sort"`
+	Filters []filterArg `json:"filters"`
 }
 
 func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -210,11 +211,15 @@ func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := requireInstanceScope(resolved, usersInstanceWide); err != nil {
 		return nil, err
 	}
+	query, err := parseListQuery(userListSchema, in.Sort, in.Filters)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListUsers(ctx, in.Limit, in.Offset)
+	return client.ListUsers(ctx, in.Limit, in.Offset, query)
 }
 
 func invokeRolesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -226,11 +231,15 @@ func invokeRolesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := requireInstanceScope(resolved, rolesInstanceWide); err != nil {
 		return nil, err
 	}
+	query, err := parseListQuery(roleListSchema, in.Sort, in.Filters)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListRoles(ctx, in.Limit, in.Offset)
+	return client.ListRoles(ctx, in.Limit, in.Offset, query)
 }
 
 func invokeUsersGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -276,14 +285,17 @@ func decodePeopleID(raw json.RawMessage, what string, resolved *config.Resolved)
 	return in.ID, nil
 }
 
-// ListUsers returns the reduced users of the instance.
-func (c *Client) ListUsers(ctx context.Context, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[accountJSON]{
+// ListUsers returns the reduced users of the instance. BookStack ignores a filter it does not know, so each
+// row is checked here; limit and offset count the rows that remain.
+func (c *Client) ListUsers(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[accountJSON]{
 		op: "list users", path: "/api/users", limit: limit, offset: offset, arguments: argNames(usersList),
 		id:   func(u accountJSON) int64 { return u.ID },
 		keep: func(accountJSON) bool { return true },
 		row:  userRow,
-	})
+	}
+	spec.withListQuery(q, accountValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
@@ -300,14 +312,17 @@ func (c *Client) GetUser(ctx context.Context, id int64) (output.Object, error) {
 	return rowObject(userRow(user), fieldNames(usersGet)), nil
 }
 
-// ListRoles returns the reduced roles of the instance.
-func (c *Client) ListRoles(ctx context.Context, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[roleJSON]{
+// ListRoles returns the reduced roles of the instance. BookStack ignores a filter it does not know, so each
+// row is checked here; limit and offset count the rows that remain.
+func (c *Client) ListRoles(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[roleJSON]{
 		op: "list roles", path: "/api/roles", limit: limit, offset: offset, arguments: argNames(rolesList),
 		id:   func(r roleJSON) int64 { return r.ID },
 		keep: func(roleJSON) bool { return true },
 		row:  roleRow,
-	})
+	}
+	spec.withListQuery(q, roleValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}

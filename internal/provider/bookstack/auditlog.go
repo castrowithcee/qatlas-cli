@@ -42,9 +42,9 @@ var auditLogList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` +
 		`"type":{"type":"string","pattern":"^[a-z0-9_]{1,64}$"},"user_id":{"type":"integer","minimum":1},` +
 		`"loggable_type":{"type":"string","enum":["page","chapter","book","bookshelf"]},"loggable_id":{"type":"integer","minimum":1},` +
-		`"created_after":{"type":"string","maxLength":40},"created_before":{"type":"string","maxLength":40}},"additionalProperties":false}`),
+		`"created_after":{"type":"string","maxLength":40},"created_before":{"type":"string","maxLength":40},` + auditLogListSchema.properties() + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"detail":{"type":"string"},"user_id":{"type":"integer"},"user_name":{"type":"string"},"loggable_type":{"type":"string"},"loggable_id":{"type":"integer"},"ip":{"type":"string"},"created_at":{"type":"string"}},"required":["id","type","created_at"]}}`),
-	Arguments: []capability.Argument{
+	Arguments: append([]capability.Argument{
 		{Name: "limit", Description: "Maximum number of entries to return; 0 returns all"},
 		{Name: "offset", Description: "Number of matching entries to skip"},
 		{Name: "type", Description: "Only entries of this activity type, lowercase letters, digits, and underscores, at most 64 characters"},
@@ -53,7 +53,7 @@ var auditLogList = capability.Descriptor{
 		{Name: "loggable_id", Description: "Only entries about this object"},
 		{Name: "created_after", Description: "Only entries at or after this time, YYYY-MM-DD or RFC 3339"},
 		{Name: "created_before", Description: "Only entries at or before this time, YYYY-MM-DD or RFC 3339"},
-	},
+	}, auditLogListSchema.arguments()...),
 	Fields: []capability.Field{
 		{Name: "id", Description: "Entry identifier"},
 		{Name: "type", Description: "Activity type"},
@@ -156,65 +156,71 @@ func parseAuditTime(name, value string) (time.Time, error) {
 	return t, nil
 }
 
-func parseAuditFilter(raw json.RawMessage) (auditFilter, int, int, error) {
+func parseAuditFilter(raw json.RawMessage) (auditFilter, listQuery, int, int, error) {
 	var in struct {
-		Limit        int     `json:"limit"`
-		Offset       int     `json:"offset"`
-		Type         *string `json:"type"`
-		UserID       *int64  `json:"user_id"`
-		LoggableType *string `json:"loggable_type"`
-		LoggableID   *int64  `json:"loggable_id"`
-		After        *string `json:"created_after"`
-		Before       *string `json:"created_before"`
+		Limit        int         `json:"limit"`
+		Offset       int         `json:"offset"`
+		Type         *string     `json:"type"`
+		UserID       *int64      `json:"user_id"`
+		LoggableType *string     `json:"loggable_type"`
+		LoggableID   *int64      `json:"loggable_id"`
+		After        *string     `json:"created_after"`
+		Before       *string     `json:"created_before"`
+		Sort         string      `json:"sort"`
+		Filters      []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return auditFilter{}, 0, 0, invalidRequest("the arguments could not be read")
+		return auditFilter{}, listQuery{}, 0, 0, invalidRequest("the arguments could not be read")
 	}
 	var f auditFilter
 	if in.Limit < 0 || in.Offset < 0 {
-		return f, 0, 0, invalidRequest("limit and offset must not be negative")
+		return f, listQuery{}, 0, 0, invalidRequest("limit and offset must not be negative")
 	}
 	if in.Type != nil {
 		if !auditTypePattern.MatchString(*in.Type) {
-			return f, 0, 0, invalidRequest("type must use lowercase letters, digits, and underscores, at most 64 characters")
+			return f, listQuery{}, 0, 0, invalidRequest("type must use lowercase letters, digits, and underscores, at most 64 characters")
 		}
 		f.Type = *in.Type
 	}
 	if in.UserID != nil {
 		if *in.UserID <= 0 {
-			return f, 0, 0, invalidRequest("user_id must be a positive integer")
+			return f, listQuery{}, 0, 0, invalidRequest("user_id must be a positive integer")
 		}
 		f.UserID = *in.UserID
 	}
 	if in.LoggableType != nil {
 		if !slices.Contains(auditLoggableTypes, *in.LoggableType) {
-			return f, 0, 0, invalidRequest("loggable_type must be page, chapter, book, or bookshelf")
+			return f, listQuery{}, 0, 0, invalidRequest("loggable_type must be page, chapter, book, or bookshelf")
 		}
 		f.LoggableType = *in.LoggableType
 	}
 	if in.LoggableID != nil {
 		if *in.LoggableID <= 0 {
-			return f, 0, 0, invalidRequest("loggable_id must be a positive integer")
+			return f, listQuery{}, 0, 0, invalidRequest("loggable_id must be a positive integer")
 		}
 		f.LoggableID = *in.LoggableID
 	}
 	var err error
 	if in.After != nil {
 		if f.After, err = parseAuditTime("created_after", *in.After); err != nil {
-			return f, 0, 0, err
+			return f, listQuery{}, 0, 0, err
 		}
 	}
 	if in.Before != nil {
 		if f.Before, err = parseAuditTime("created_before", *in.Before); err != nil {
-			return f, 0, 0, err
+			return f, listQuery{}, 0, 0, err
 		}
 	}
-	return f, in.Limit, in.Offset, nil
+	q, err := parseListQuery(auditLogListSchema, in.Sort, in.Filters)
+	if err != nil {
+		return f, q, 0, 0, err
+	}
+	return f, q, in.Limit, in.Offset, nil
 }
 
 func invokeAuditLogList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	filter, limit, offset, err := parseAuditFilter(raw)
+	filter, query, limit, offset, err := parseAuditFilter(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -225,12 +231,12 @@ func invokeAuditLogList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.ListAuditLog(ctx, filter, limit, offset)
+	return client.ListAuditLog(ctx, filter, query, limit, offset)
 }
 
 // ListAuditLog returns the reduced entries that match the filter.
-func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[auditEntryJSON]{
+func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, q listQuery, limit, offset int) (output.Collection, error) {
+	spec := scanSpec[auditEntryJSON]{
 		op: "list audit log", path: "/api/audit-log", query: filter.query(), filtered: filter.active(),
 		narrow: "type, user_id, or created_after and created_before", limit: limit, offset: offset,
 		arguments: argNames(auditLogList),
@@ -253,7 +259,9 @@ func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, limit, of
 			}
 			return row
 		},
-	})
+	}
+	spec.withListQuery(q, auditEntryValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
