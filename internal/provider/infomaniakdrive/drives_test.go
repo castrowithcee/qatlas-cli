@@ -92,7 +92,7 @@ func TestDrivesListKeepsTheFormerOutputForAFormerResponse(t *testing.T) {
 		t.Fatalf("result = %s\nwant     %s", result, want)
 	}
 	query := calls[0].query
-	for _, name := range []string{"in_maintenance", "maintenance_reasons", "tags"} {
+	for _, name := range []string{"with", "in_maintenance", "maintenance_reasons", "tags"} {
 		if _, ok := query[name]; ok {
 			t.Fatalf("query = %v, want no %s without the argument", query, name)
 		}
@@ -107,7 +107,7 @@ const fullDriveBody = `{"id":5001,"name":"Own","size":1000000,"used_size":500000
  "is_locked":false,"is_demo":true,"is_in_app_subscription":false,"role":"admin","account_admin":true,
  "bdd_storage_host":"db1.example.test","status":"ok"}`
 
-func TestDrivesListReturnsEveryDriveField(t *testing.T) {
+func TestDrivesListReturnsEveryDriveFieldWithoutWith(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"result":"success","data":[`+fullDriveBody+`],"page":1,"pages":1,"total":1,"items_per_page":100}`), nil
@@ -150,18 +150,19 @@ func TestDrivesListCapsMaintenanceTypesAndCleansTexts(t *testing.T) {
 	}
 }
 
-func TestDrivesListSendsFiltersInTheRequest(t *testing.T) {
+func TestDrivesListSendsFiltersAndWithInTheRequest(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"result":"success","data":[`+legacyDriveBody+`],"page":1,"pages":1,"total":1}`), nil
 	}, nil)
 	if _, err := env.invoke(drivesList.ID, "drive",
-		`{"in_maintenance":false,"maintenance_reasons":["technical","demo_end"],"tags":[3,1]}`); err != nil {
+		`{"in_maintenance":false,"maintenance_reasons":["technical","demo_end"],"tags":[3,1],`+
+			`"with":["account","tags.#products","pack.prices"]}`); err != nil {
 		t.Fatal(err)
 	}
 	query := calls[0].query
 	if query.Get("in_maintenance") != "false" || !reflect.DeepEqual(query["maintenance_reasons"], []string{"technical", "demo_end"}) ||
-		!reflect.DeepEqual(query["tags"], []string{"3", "1"}) ||
+		!reflect.DeepEqual(query["tags"], []string{"3", "1"}) || query.Get("with") != "account,tags.#products,pack.prices" ||
 		query.Get("per_page") != "100" || query.Get("account_id") != strconv.FormatInt(ownAccount, 10) {
 		t.Fatalf("query = %v", query)
 	}
@@ -176,6 +177,9 @@ func TestDrivesListRefusesInvalidArgumentsBeforeAnySecretRead(t *testing.T) {
 		"unknown reason":   `{"maintenance_reasons":["gone"]}`,
 		"repeated reason":  `{"maintenance_reasons":["technical","technical"]}`,
 		"empty reasons":    `{"maintenance_reasons":[]}`,
+		"unknown with":     `{"with":["limits"]}`,
+		"unoffered total":  `{"with":["total"]}`,
+		"repeated with":    `{"with":["account","account"]}`,
 		"too many tags":    `{"tags":[` + strings.Join(tags, ",") + `]}`,
 		"repeated tag":     `{"tags":[2,2]}`,
 		"non-positive tag": `{"tags":[0]}`,
@@ -201,6 +205,7 @@ func TestDrivesListRefusesInvalidArgumentsBeforeAnySecretRead(t *testing.T) {
 
 func TestDriveFilterValidateRefusesWhatTheSchemaWould(t *testing.T) {
 	for _, filter := range []DriveFilter{
+		{With: []string{"limits"}}, {With: []string{"account", "account"}},
 		{MaintenanceReasons: []string{"x"}}, {Tags: []int64{1, 1}}, {Tags: []int64{0}},
 	} {
 		if err := filter.validate(); !isInvalidRequest(err) {
@@ -212,8 +217,8 @@ func TestDriveFilterValidateRefusesWhatTheSchemaWould(t *testing.T) {
 	}
 }
 
-// The ownership check and the target picker read drives without any filter.
-func TestOwnershipCheckAndTargetPickerSendNoFilter(t *testing.T) {
+// The ownership check and the target picker read drives without any with value or filter.
+func TestOwnershipCheckAndTargetPickerSendNoWithOrFilter(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path == "/2/drive" {
@@ -233,7 +238,7 @@ func TestOwnershipCheckAndTargetPickerSendNoFilter(t *testing.T) {
 		if c.path == "/2/drive" {
 			seenPicker = true
 		}
-		for _, name := range []string{"in_maintenance", "maintenance_reasons", "tags"} {
+		for _, name := range []string{"with", "in_maintenance", "maintenance_reasons", "tags"} {
 			if _, ok := c.query[name]; ok {
 				t.Fatalf("%s sent %s: %v", c.path, name, c.query)
 			}
@@ -247,9 +252,9 @@ func TestOwnershipCheckAndTargetPickerSendNoFilter(t *testing.T) {
 func TestEveryDriveOutputMemberIsInSchemaAndFields(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
-		return jsonResponse(200, `{"result":"success","data":[`+fullDriveBody+`],"page":1,"pages":1,"total":1,"items_per_page":100}`), nil
+		return jsonResponse(200, `{"result":"success","data":[`+withBody(allWithMembers)+`],"page":1,"pages":1,"total":1,"items_per_page":100}`), nil
 	}, nil)
-	result, err := env.invoke(drivesList.ID, "drive", `{}`)
+	result, err := env.invoke(drivesList.ID, "drive", `{"with":`+allWith+`}`)
 	if err != nil {
 		t.Fatal(err)
 	}

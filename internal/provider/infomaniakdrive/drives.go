@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -28,6 +29,15 @@ const maxDriveTags = 50
 // maintenanceReasons are the values the maintenance_reasons filter accepts.
 var maintenanceReasons = []string{"demo_end", "invoice_overdue", "not_renew", "technical"}
 
+// driveWithValues are the values the with argument accepts, in the order the API documents them. Each one
+// loads related data of the Drive resource that the listing never carries on its own.
+var driveWithValues = []string{
+	"account", "capabilities", "pack", "pack.capabilities", "pack.limits", "pack.prices", "settings",
+	"preferences", "k_suite", "tags", "tags.#products", "rights", "categories", "categories.user_uses",
+	"categories_permissions", "users", "teams", "invitations_count", "rewind", "rewind.directory",
+	"rewind.sanitizer", "rewind.summary", "bill_reference", "description", "quota",
+}
+
 func quotedList(values []string) string {
 	quoted, _ := json.Marshal(values)
 	return string(quoted)
@@ -45,10 +55,11 @@ var driveSchema = `{"type":"object","properties":{` +
 	`"product_id":{"type":"integer"},"account_id":{"type":"integer"},` +
 	`"is_locked":{"type":"boolean"},"is_demo":{"type":"boolean"},"is_in_app_subscription":{"type":"boolean"},` +
 	`"role":{"type":"string"},"account_admin":{"type":"boolean"},` +
-	`"bdd_storage_host":{"type":"string"},"status":{"type":"string"}},` +
+	`"bdd_storage_host":{"type":"string"},"status":{"type":"string"},` +
+	strings.Join(withSchemaMembers, ",") + `},` +
 	`"required":["id","name","size","used_size","in_maintenance"],"additionalProperties":false}`
 
-var driveFields = []capability.Field{
+var driveBaseFields = []capability.Field{
 	{Name: "id", Description: "Drive identifier, used as drive_id by every other tool of this provider"},
 	{Name: "name", Description: "Display name of the kDrive, untrusted data"},
 	{Name: "size", Description: "Maximum storage of this drive, in bytes"},
@@ -75,6 +86,8 @@ var driveFields = []capability.Field{
 	{Name: "status", Description: "Status of the drive: initializing, ok or uninitialized"},
 }
 
+var driveFields = slices.Concat(driveBaseFields, withFields)
+
 var drivesReadRisk = capability.Risk{
 	Effect:          capability.EffectRead,
 	Idempotency:     capability.IdempotencySafe,
@@ -97,7 +110,9 @@ var drivesList = capability.Descriptor{
 		`"maintenance_reasons":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(len(maintenanceReasons)) +
 		`,"uniqueItems":true,"items":{"type":"string","enum":` + quotedList(maintenanceReasons) + `}},` +
 		`"tags":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(maxDriveTags) +
-		`,"uniqueItems":true,"items":{"type":"integer","minimum":1}}},` +
+		`,"uniqueItems":true,"items":{"type":"integer","minimum":1}},` +
+		`"with":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(len(driveWithValues)) +
+		`,"uniqueItems":true,"items":{"type":"string","enum":` + quotedList(driveWithValues) + `}}},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drives":{"type":"array","items":` + driveSchema + `},` +
@@ -109,6 +124,7 @@ var drivesList = capability.Descriptor{
 		{Name: "in_maintenance", Description: "Only drives that are (true) or are not (false) in maintenance"},
 		{Name: "maintenance_reasons", Description: "Only drives in maintenance for one of these reasons (demo_end, invoice_overdue, not_renew, technical); the API ignores it when in_maintenance is set"},
 		{Name: "tags", Description: "Only drives carrying one of these tag identifiers; at most 50 positive integers"},
+		{Name: "with", Description: "Related data to load per drive; each value adds the fields it documents, and a drive's field exists only when its value is requested"},
 	},
 	Fields: append(append([]capability.Field{}, driveFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
@@ -147,6 +163,8 @@ type driveJSON struct {
 	AccountAdmin        *bool                  `json:"account_admin"`
 	BddStorageHost      string                 `json:"bdd_storage_host"`
 	Status              string                 `json:"status"`
+
+	withData
 }
 
 // DriveEntry is the stable Qatlas view of one kDrive.
@@ -176,6 +194,27 @@ type DriveEntry struct {
 	AccountAdmin              *bool                  `json:"account_admin,omitempty"`
 	BddStorageHost            string                 `json:"bdd_storage_host,omitempty"`
 	Status                    string                 `json:"status,omitempty"`
+
+	// Members below exist only when their with value was asked for.
+	Account               *AccountEntry               `json:"account,omitempty"`
+	Capabilities          *DriveCapabilities          `json:"capabilities,omitempty"`
+	Pack                  *PackEntry                  `json:"pack,omitempty"`
+	Settings              *SettingsEntry              `json:"settings,omitempty"`
+	Preferences           *PreferencesEntry           `json:"preferences,omitempty"`
+	KSuite                *KSuiteEntry                `json:"k_suite,omitempty"`
+	Tags                  []TagEntry                  `json:"tags,omitempty"`
+	TagsTruncated         bool                        `json:"tags_truncated,omitempty"`
+	Rights                *RightsEntry                `json:"rights,omitempty"`
+	Categories            []CategoryEntry             `json:"categories,omitempty"`
+	CategoriesTruncated   bool                        `json:"categories_truncated,omitempty"`
+	CategoriesPermissions *CategoriesPermissionsEntry `json:"categories_permissions,omitempty"`
+	Users                 *UsersEntry                 `json:"users,omitempty"`
+	Teams                 *TeamsEntry                 `json:"teams,omitempty"`
+	InvitationsCount      *int64                      `json:"invitations_count,omitempty"`
+	Rewind                *RewindEntry                `json:"rewind,omitempty"`
+	BillReference         string                      `json:"bill_reference,omitempty"`
+	Description           string                      `json:"description,omitempty"`
+	Quota                 *QuotaEntry                 `json:"quota,omitempty"`
 }
 
 // MaintenanceTypeEntry is one active maintenance type of a drive. All texts are untrusted data.
@@ -210,17 +249,19 @@ type drivesListArguments struct {
 	InMaintenance      *bool    `json:"in_maintenance"`
 	MaintenanceReasons []string `json:"maintenance_reasons"`
 	Tags               []int64  `json:"tags"`
+	With               []string `json:"with"`
 }
 
-// DriveFilter narrows one drives listing. The zero value sends no filter.
+// DriveFilter narrows and enriches one drives listing. The zero value sends neither filter nor with.
 type DriveFilter struct {
 	InMaintenance      *bool
 	MaintenanceReasons []string
 	Tags               []int64
+	With               []string
 }
 
-// values adds the filter to a listing query. Lists go as repeated parameters, in the order the caller gave
-// them.
+// values adds the filter to a listing query. Lists go as repeated parameters, with as one comma-separated
+// value, in the order the caller gave them.
 func (f DriveFilter) values(query url.Values) {
 	if f.InMaintenance != nil {
 		query.Set("in_maintenance", strconv.FormatBool(*f.InMaintenance))
@@ -231,17 +272,19 @@ func (f DriveFilter) values(query url.Values) {
 	for _, tag := range f.Tags {
 		query.Add("tags", strconv.FormatInt(tag, 10))
 	}
+	if len(f.With) > 0 {
+		query.Set("with", strings.Join(f.With, ","))
+	}
 }
 
 // validate refuses an argument outside the fixed value lists and bounds before anything is requested. The
 // input schema already enforces this; the check keeps the filter safe for any other caller.
 func (f DriveFilter) validate() error {
-	seenReason := map[string]bool{}
-	for _, reason := range f.MaintenanceReasons {
-		if seenReason[reason] || !slices.Contains(maintenanceReasons, reason) {
-			return invalidRequest("maintenance_reasons must hold distinct values this tool offers")
-		}
-		seenReason[reason] = true
+	if err := checkValues(f.MaintenanceReasons, maintenanceReasons, "maintenance_reasons"); err != nil {
+		return err
+	}
+	if err := checkValues(f.With, driveWithValues, "with"); err != nil {
+		return err
 	}
 	if len(f.Tags) > maxDriveTags {
 		return invalidRequest("tags holds more identifiers than allowed")
@@ -252,6 +295,17 @@ func (f DriveFilter) validate() error {
 			return invalidRequest("tags must be distinct positive integers")
 		}
 		seen[tag] = true
+	}
+	return nil
+}
+
+func checkValues(values, allowed []string, name string) error {
+	seen := map[string]bool{}
+	for _, value := range values {
+		if seen[value] || !slices.Contains(allowed, value) {
+			return invalidRequest(name + " must hold distinct values this tool offers")
+		}
+		seen[value] = true
 	}
 	return nil
 }
@@ -285,7 +339,7 @@ func invokeDrivesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	}
 	filter := DriveFilter{
 		InMaintenance: input.InMaintenance, MaintenanceReasons: input.MaintenanceReasons,
-		Tags: input.Tags,
+		Tags: input.Tags, With: input.With,
 	}
 	if err := filter.validate(); err != nil {
 		return nil, err
@@ -313,7 +367,7 @@ func (c *Client) ListDrives(ctx context.Context, page int, filter DriveFilter) (
 		if d.AccountID != c.scope.accountID || !c.scope.allowsDrive(d.ID) {
 			continue
 		}
-		entries = append(entries, driveEntryOf(d))
+		entries = append(entries, driveEntryOf(d, filter.With, c.scope.wholeDrive(d.ID)))
 	}
 	return &DrivesPage{
 		Drives: entries, Page: meta.Page, Pages: meta.Pages, Total: meta.Total, Count: len(entries),
@@ -322,7 +376,10 @@ func (c *Client) ListDrives(ctx context.Context, page int, filter DriveFilter) (
 }
 
 // driveEntryOf maps one admitted drive. Foreign texts are cleaned of control characters and bounded.
-func driveEntryOf(d driveJSON) DriveEntry {
+//
+// wholeDrive tells whether the connection reaches the entire drive; for a drive bound only by files targets
+// the with-loaded rewind members that can name a folder outside the targets are left out.
+func driveEntryOf(d driveJSON, with []string, wholeDrive bool) DriveEntry {
 	entry := DriveEntry{
 		ID: d.ID, Name: bounded(d.Name), Size: d.Size, UsedSize: d.UsedSize, InMaintenance: d.InMaintenance,
 		CreatedAt: timestampOf(d.CreatedAt), UpdatedAt: timestampOf(d.UpdatedAt),
@@ -345,6 +402,7 @@ func driveEntryOf(d driveJSON) DriveEntry {
 			Description: boundedText(kind.Description, 1024),
 		})
 	}
+	d.applyWith(&entry, with, wholeDrive)
 	return entry
 }
 
@@ -354,7 +412,7 @@ func (c *Client) readDrives(ctx context.Context, op string, accountID int64, pag
 	return c.readDrivesFiltered(ctx, op, accountID, page, DriveFilter{})
 }
 
-// readDrivesFiltered is readDrives with the optional filter of the drives.list tool; every
+// readDrivesFiltered is readDrives with the optional filter and with values of the drives.list tool; every
 // other caller goes through readDrives and so never sends them.
 func (c *Client) readDrivesFiltered(ctx context.Context, op string, accountID int64, page int,
 	filter DriveFilter) ([]driveJSON, paginationJSON, error) {
