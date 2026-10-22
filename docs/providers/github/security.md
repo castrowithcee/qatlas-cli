@@ -36,8 +36,8 @@ Alert texts (rule and advisory descriptions, messages, dismissal comments, paths
 accounts and are untrusted data. Each is cut at 500 characters (4000 for the rule help and the advisory
 description of a `.get`), and `truncated` says so.
 
-The members a code scanning alert carries beyond these are cleaned the same way, and each of their cuts says
-so in its own `*_truncated` member, never in `truncated`.
+The members a code scanning or Dependabot alert carries beyond these are cleaned the same way, and each of
+their cuts says so in its own `*_truncated` member, never in `truncated`.
 
 A secret scanning alert never shows the found secret. The request asks GitHub to hide it (`hide_secret=true`),
 and the answer is decoded into a shape that has no field for a secret value, a snippet, or a comment, so

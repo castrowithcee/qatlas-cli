@@ -37,8 +37,8 @@ import (
 // https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
 // a fine-grained token needs the repository permission Code scanning alerts, Dependabot alerts, or Secret
 // scanning alerts, each with read access. The filters mirror the official GitHub MCP server (MIT):
-// code scanning ref, state, severity, and tool_name; Dependabot state and severity; secret scanning state,
-// secret_type, and resolution.
+// code scanning ref, state, severity, and tool_name; Dependabot state and severity (the other Dependabot
+// filters follow the REST parameters); secret scanning state, secret_type, and resolution.
 
 const (
 	alertTextLimit     = 500
@@ -123,7 +123,7 @@ var codeScanningListProperties = alertCommonProperties + `,"fixed_at":{"type":"s
 var codeScanningProperties = codeScanningListProperties + `,"linked_pull_requests":{"type":"array",` +
 	`"maxItems":100,"items":` + restPullSimpleSchema + `},"linked_pull_requests_truncated":{"type":"boolean"}`
 
-const dependabotProperties = alertCommonProperties + `,"fixed_at":{"type":"string"},` +
+const dependabotFlatProperties = alertCommonProperties + `,"fixed_at":{"type":"string"},` +
 	`"dismissed_at":{"type":"string"},"dismissed_by":{"type":"string"},"dismissed_reason":{"type":"string"},` +
 	`"dismissed_comment":{"type":"string"},"auto_dismissed_at":{"type":"string"},"ecosystem":{"type":"string"},` +
 	`"package":{"type":"string"},"manifest_path":{"type":"string"},"scope":{"type":"string"},` +
@@ -131,6 +131,8 @@ const dependabotProperties = alertCommonProperties + `,"fixed_at":{"type":"strin
 	`"summary":{"type":"string"},"description":{"type":"string"},"severity":{"type":"string"},` +
 	`"cvss_score":{"type":"number"},"vulnerable_version_range":{"type":"string"},` +
 	`"first_patched_version":{"type":"string"},"truncated":{"type":"boolean"}`
+
+var dependabotProperties = dependabotFlatProperties + dependabotDetailProperties
 
 const secretScanningProperties = alertCommonProperties + `,"resolution":{"type":"string"},` +
 	`"resolved_at":{"type":"string"},"resolved_by":{"type":"string"},"secret_type":{"type":"string"},` +
@@ -252,15 +254,15 @@ var dependabotAlertsList = capability.Descriptor{
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(dependabotStates) + `,"severity":` +
-		enumSchema(dependabotSeverities) + `,` + pagingKeys),
+		enumSchema(dependabotSeverities) + `,` + dependabotFilterSchema + `,` + pagingKeys),
 	OutputSchema: alertListOutput("alerts", dependabotProperties),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "Return only alerts in this state: " + strings.Join(dependabotStates, ", ")},
 		{Name: "severity", Description: "Return only alerts of this severity: " + strings.Join(dependabotSeverities, ", ")},
-	}, alertPagingArguments...),
+	}, append(append([]capability.Argument(nil), dependabotFilterArguments...), alertPagingArguments...)...),
 	Fields: append([]capability.Field{
-		{Name: "alerts", Description: "Alerts with number, state, package, advisory identifiers, severity, and " +
-			"patched version; texts are untrusted data cut at 500 characters (truncated says so)"},
+		{Name: "alerts", Description: "Alerts as the get tool reads them, with the advisory description cut at 500 " +
+			"characters; texts are untrusted data cut at 500 characters (truncated and the *_truncated members say so)"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the open critical alerts",
@@ -279,7 +281,7 @@ var dependabotAlertsGet = capability.Descriptor{
 	InputSchema:  inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
 	OutputSchema: alertGetOutput(dependabotProperties),
 	Arguments:    []capability.Argument{alertNumberArgument},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "description", Description: "Advisory description; untrusted data cut at 4000 characters (truncated says so)"},
 		{Name: "number", Description: "Alert number"},
 		{Name: "state", Description: "State of the alert"},
@@ -305,7 +307,7 @@ var dependabotAlertsGet = capability.Descriptor{
 		{Name: "vulnerable_version_range", Description: "Versions that are affected"},
 		{Name: "first_patched_version", Description: "First version that fixes the vulnerability"},
 		{Name: "truncated", Description: "True when a text of the alert was cut"},
-	},
+	}, dependabotDetailFields...),
 	Examples: []capability.Example{{Description: "Read one alert", Arguments: json.RawMessage(`{"alert_number":7}`)}},
 }
 
@@ -389,10 +391,23 @@ type alertArguments struct {
 	Assignees   []string `json:"assignees"`
 	Sort        string   `json:"sort"`
 	Direction   string   `json:"direction"`
-	SecretType  string   `json:"secret_type"`
-	Resolution  string   `json:"resolution"`
-	Limit       int      `json:"limit"`
-	Cursor      string   `json:"cursor"`
+
+	// The Dependabot list filters.
+	Classification []string `json:"classification"`
+	Ecosystem      []string `json:"ecosystem"`
+	Package        []string `json:"package"`
+	Manifest       []string `json:"manifest"`
+	EPSSMin        *float64 `json:"epss_min"`
+	EPSSMax        *float64 `json:"epss_max"`
+	Has            []string `json:"has"`
+	Assignee       []string `json:"assignee"`
+	Scope          string   `json:"scope"`
+	Relationship   []string `json:"relationship"`
+
+	SecretType string `json:"secret_type"`
+	Resolution string `json:"resolution"`
+	Limit      int    `json:"limit"`
+	Cursor     string `json:"cursor"`
 
 	page, perPage int
 	binding       []byte
@@ -491,7 +506,11 @@ func listAlertsCheck(list string, states, severities []string) func(*alertArgume
 		if a.Ref != "" && !validRef(a.Ref) {
 			return invalidRequest("ref must be a branch name or Git reference")
 		}
-		if err := a.checkCodeScanningFilters(); err != nil {
+		if list == "dependabot" {
+			if err := a.checkDependabotFilters(); err != nil {
+				return err
+			}
+		} else if err := a.checkCodeScanningFilters(); err != nil {
 			return err
 		}
 		if a.SecretType != "" && !validSecretTypes(a.SecretType) {
@@ -502,7 +521,12 @@ func listAlertsCheck(list string, states, severities []string) func(*alertArgume
 		}
 		parts := []any{"security-alerts", list, bound.String(), strings.ToLower(a.State),
 			strings.ToLower(a.Severity), a.ToolName, a.Ref, a.SecretType, strings.ToLower(a.Resolution)}
-		if a.hasCodeScanningFilters() {
+		if list == "dependabot" {
+			if a.hasDependabotFilters() {
+				// Only a request that sets one of these filters binds them, so a cursor without them stays valid.
+				parts = append(parts, a.dependabotBinding()...)
+			}
+		} else if a.hasCodeScanningFilters() {
 			// Only a request that sets one of these filters binds them, so a cursor without them stays valid.
 			parts = append(parts, a.ToolGUID, a.PR, strings.ToLower(strings.Join(a.Assignees, ",")),
 				strings.ToLower(a.Sort), strings.ToLower(a.Direction))
@@ -936,6 +960,17 @@ type DependabotAlert struct {
 	VulnerableVersionRange string  `json:"vulnerable_version_range,omitempty"`
 	FirstPatchedVersion    string  `json:"first_patched_version,omitempty"`
 	Truncated              bool    `json:"truncated,omitempty"`
+
+	// The members below hold the rest of GitHub's alert. url stays the web address; the REST url sits in
+	// Links, and the account that dismissed the alert in DismissedByDetail next to the flat login.
+	Links                 Links                       `json:"links,omitempty"`
+	Dependency            *DependabotDependency       `json:"dependency,omitempty"`
+	SecurityAdvisory      *DependabotAdvisory         `json:"security_advisory,omitempty"`
+	SecurityVulnerability *DependabotVulnerability    `json:"security_vulnerability,omitempty"`
+	DismissedByDetail     *RESTAccount                `json:"dismissed_by_detail,omitempty"`
+	DismissalRequest      *DependabotDismissalRequest `json:"dismissal_request,omitempty"`
+	Assignees             []RESTAccount               `json:"assignees,omitempty"`
+	AssigneesTruncated    bool                        `json:"assignees_truncated,omitempty"`
 }
 
 // DependabotAlertList is one batch of Dependabot alerts.
@@ -982,6 +1017,16 @@ type dependabotAlertJSON struct {
 			Identifier string `json:"identifier"`
 		} `json:"first_patched_version"`
 	} `json:"security_vulnerability"`
+	extras dependabotExtrasRaw
+}
+
+func (j *dependabotAlertJSON) UnmarshalJSON(data []byte) error {
+	type plain dependabotAlertJSON
+	if err := json.Unmarshal(data, (*plain)(j)); err != nil {
+		return err
+	}
+	j.extras = readExtras(data)
+	return nil
 }
 
 func (j dependabotAlertJSON) view(detail bool) DependabotAlert {
@@ -1008,6 +1053,7 @@ func (j dependabotAlertJSON) view(detail bool) DependabotAlert {
 		v.Description = clip(j.SecurityAdvisory.Description, alertHelpLimit)
 	}
 	v.Truncated = cut
+	j.extras.addTo(&v, detail)
 	return v
 }
 
@@ -1015,6 +1061,7 @@ func (c *Client) listDependabotAlerts(ctx context.Context, a *alertArguments) (*
 	const op = "list Dependabot alerts"
 	query := a.query()
 	setQuery(query, "state", strings.ToLower(a.State), "severity", strings.ToLower(a.Severity))
+	a.setDependabotQuery(query)
 	var raw []dependabotAlertJSON
 	hasNext, err := c.restPage(ctx, op, c.alertPath("dependabot", 0), query, &raw)
 	if err != nil {
