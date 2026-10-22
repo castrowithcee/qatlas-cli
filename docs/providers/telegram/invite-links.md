@@ -9,10 +9,11 @@ updated: 2026-10-22
 
 # Invite links
 
-`telegram.invite-links.primary` (`read`) returns only the `invite_link` field of the chat, and no other chat
-data; [`telegram.chats.get`](chats.md#reading-chats) never shows it. The link grants joining the chat and carries
-the data class `telegram-invite-link`: it appears only in this result, never in errors, logs, or the audit trail. A
-value that is not a `t.me` invite link is dropped.
+`telegram.invite-links.primary` (`read`) returns the primary invite link of the chat;
+[`telegram.chats.get`](chats.md#reading-chats) never shows it. An invite link grants joining the chat without
+sign-in; `telegram.invite-links.primary` is therefore available only through a `tools` list that names it, and no
+other tool returns an invite link. The link carries the data class `telegram-invite-link`: it appears only in this
+result, never in errors, logs, or the audit trail. A value that is not a `t.me` invite link is dropped.
 
 `telegram.invite-links.revoke` revokes one link of the bound chat and requires a `tools` list. It accepts only
 `https://t.me/+TOKEN` or `https://t.me/joinchat/TOKEN` with the exact host `t.me`, checked before the

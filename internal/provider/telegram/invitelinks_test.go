@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -156,11 +158,58 @@ func TestPrimaryErrorsCarryNoLinkAndRevokeNeedsToolList(t *testing.T) {
 	if _, err := client.GetPrimaryInviteLink(context.Background()); err == nil || strings.Contains(err.Error(), "t.me") {
 		t.Errorf("err = %v", err)
 	}
-	if !invitelinksRevoke.RequiresToolAllowList || invitelinksPrimary.RequiresToolAllowList {
-		t.Error("only revoke requires a tools list")
+	if !invitelinksRevoke.RequiresToolAllowList || !invitelinksPrimary.RequiresToolAllowList || invitelinksPrimary.Version != 2 {
+		t.Error("both invite link tools require a tools list")
 	}
 	if invitelinksRevoke.Risk.Confirmation != "required" || invitelinksRevoke.Risk.DataSensitivity != inviteLinkSensitivity ||
 		invitelinksPrimary.Risk.DataSensitivity != inviteLinkSensitivity {
 		t.Errorf("risks = %+v %+v", invitelinksRevoke.Risk, invitelinksPrimary.Risk)
+	}
+}
+
+func TestPrimaryIsOfferedOnlyThroughAToolsListNamingIt(t *testing.T) {
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	document := `version: 1
+services:
+  tg:
+    provider: telegram
+    base_url: https://api.telegram.org
+credentials:
+  tg-bot:
+    provider: telegram
+    type: env
+    values:
+      bot-token: QATLAS_TG_TOKEN
+connections:
+  effects:
+    service: tg
+    credential: tg-bot
+    target: "-1001111111111"
+    effects: [read]
+  other:
+    service: tg
+    credential: tg-bot
+    target: "-1001111111111"
+    tools: [telegram.chats.get]
+  listed:
+    service: tg
+    credential: tg-bot
+    target: "-1001111111111"
+    tools: [telegram.invite-links.primary]
+`
+	cfg, err := config.Decode(strings.NewReader(document), reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := invitelinksPrimary.Tool()
+	for name, want := range map[string]config.Refusal{
+		"effects": config.RefusalToolAllowList, "other": config.RefusalToolsList, "listed": "",
+	} {
+		if got := cfg.ConnectionRefusal(name, tool, time.Time{}); got != want {
+			t.Errorf("connection %s refusal = %q, want %q", name, got, want)
+		}
 	}
 }

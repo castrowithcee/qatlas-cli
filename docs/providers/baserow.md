@@ -1,9 +1,7 @@
 ---
 description: >
-  Describes the Baserow provider: the database token and Baserow Cloud or self-hosted base URL, the
-  table and database targets, choosing targets, the read tools, row changes, and file upload and download, schema checks, link-field
-  masking and link values outside the allow-list, bounds, errors, uncertain results, and the documented limits of
-  lookup and formula fields.
+  Describes the Baserow provider: database token and base URL, table and database targets, the read tools, row
+  changes, file transfer, link masking and target binding of schema properties, bounds, errors, and API checks.
 type: knowledge
 edit: shared
 created: 2026-09-30
@@ -79,12 +77,11 @@ installation may differ from its API address. Any other host names nothing.
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `baserow.tables.list` | read | none | lists the tables of the targets, also those of a listed database, with `id`, `name`, `database_id` |
-| `baserow.fields.list` | read | none | lists one table's fields: `id`, `name`, `type`, `primary`, `read_only`, select options |
+| `baserow.tables.list` | read | none | lists the tables of the targets, also those of a listed database |
+| `baserow.fields.list` | read | none | lists one table's fields with their type-specific schema properties |
 | `baserow.rows.list` | read | none | lists one table's rows page by page |
 | `baserow.rows.get` | read | none | reads one row |
 | `baserow.rows.search` | read | none | searches, filters, and sorts one table's rows page by page |
-
 | `baserow.rows.create` | create | required | creates one row from cell values keyed by field name |
 | `baserow.rows.update` | update | required | changes the named cells of one row |
 | `baserow.rows.delete` | delete | required, tool allow-list | deletes one row |
@@ -95,20 +92,15 @@ installation may differ from its API address. Any other host names nothing.
 | `baserow.files.upload` | update | required | uploads a file and appends it to a file field of one row |
 | `baserow.files.get` | read | none | downloads one file of a file field, inline or to a local path |
 
-The read profile offers the five read tools. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
-(1 to 200; 50 when omitted), and `user_field_names` (true when omitted: values keyed by field name; false:
-keyed `field_ID`). It answers `rows` (`id`, `order`, `fields`), `count` (the table's total row count as
-Baserow reports it), `page`, `size`, and `has_more`, which is true when Baserow reports a next page. It has
-no filters, search, or sorting; `rows.search` does. `rows.get` takes `table_id`, `row_id`, and `user_field_names`.
+The read profile offers the five read tools.
 
 ## Not offered: row history and comments
 
 Row history (`GET /api/database/rows/table/{table_id}/{row_id}/history/`) and row comments
-(`GET /api/row_comments/{table_id}/{row_id}/`, a premium feature) are not tools. The official API schema of
-the instance (Baserow 2.4.0, `/api/schema.json`) lists only JWT (user session) authentication for both
-endpoints, while the row endpoints list JWT and database token. A database token therefore cannot be shown to
-work for them, and Qatlas does not send a user session. Both stay out until the official documentation
-lists the database token for them.
+(`GET /api/row_comments/{table_id}/{row_id}/`, a premium feature) are not tools. The official API schema
+(Baserow 2.4.0, `/api/schema.json`) lists only JWT (user session) authentication for both endpoints, while the
+row endpoints list JWT and database token. Qatlas does not send a user session, so both stay out until the
+documentation lists the database token for them.
 
 ## Searching rows
 
@@ -212,8 +204,7 @@ stored name.
 Transfers of file content have a timeout of 30 minutes; all other requests keep 30 seconds.
 
 Because both tools declare local file access, a connection offers them only when it lists `files` entries
-for their direction (`read` for the upload, `write` for the download). This holds for inline and `url` uploads
-and for inline downloads too: without a matching `files` entry the tool is not offered at all.
+for their direction (`read` for the upload, `write` for the download), also for inline and `url` transfers.
 
 **File addresses are untrusted.** The address in a cell is used only when it is `https`, has no user info or
 fragment, is on exactly the host (and port) of the connection's base URL, and its path is exactly
@@ -239,8 +230,19 @@ A link field (`link_row`) whose other table is outside the targets gives only th
 `[{"id": 4}]`, without display values. The same applies when the other table cannot be determined (for
 example, it was deleted) and to a link-shaped value whose field is not found. A connection with `*` keeps the
 display values. To decide, `rows.list` and `rows.get` read the table's fields in one extra request, and only
-when a row holds a link-shaped value. `fields.list` names a link field's other table (`link_table_id`) only
-when it is inside the targets.
+when a row holds a link-shaped value.
+
+`fields.list` follows the same boundary without an extra request. A property that points to a table outside the
+targets is shown only for a connection with `*` or a table inside the targets:
+
+- A link field's mirror field, limiting view, and primary field name appear only with `link_table_id`.
+- A lookup or rollup shows its target field only when the table of its link field (`through_field_id`, read from the
+  same answer) is inside the targets.
+- A formula text can name fields of linked tables. `formula` and `error` of formula, count, rollup, lookup, and AI
+  fields are left out as soon as the table has a link field whose table is outside the targets or undeterminable.
+
+Deprecated members are never shown. A free value (AI prompt, field constraints) beyond the size limits of a cell is
+left out and marked as omitted, not cut.
 
 **Limit:** lookup and formula fields can carry values of other tables, and a lookup of a table outside the
 targets is not masked; such values are passed through as Baserow reports them. Keep the token's rights and
@@ -267,44 +269,32 @@ Qatlas never renders, follows, or executes them.
 
 Checked against the official documentation (baserow.io/user-docs/database-api), not against a live instance:
 
-- Database token authentication with `Authorization: Token ...`, and that tokens work for listing tables,
-  listing fields, and row reads.
-- `GET /api/database/tables/all-tables/` (a list of tables with `id`, `name`, `database_id`).
-- `GET /api/database/fields/table/{table_id}/` (fields with `id`, `name`, `type`, `primary`, `read_only`,
-  `link_row_table_id`, `select_options`).
+- Database token authentication with `Authorization: Token ...` for listing tables, listing fields, and row reads.
+- `GET /api/database/tables/all-tables/` and `GET /api/database/fields/table/{table_id}/`: checked field by field
+  against the official OpenAPI schema (Baserow 2.4.1, `/api/schema.json`), without deprecated members.
 - `GET /api/database/rows/table/{table_id}/` with `page`, `size` (at most 200), and `user_field_names`,
-  answering `count`, `next`, `previous`, and `results`.
-- `GET /api/database/rows/table/{table_id}/{row_id}/` with `user_field_names`.
-- `POST /api/database/rows/table/{table_id}/`, `PATCH .../{row_id}/`, `DELETE .../{row_id}/`, and
-  `PATCH .../{row_id}/move/` as the four row endpoints (listed in the official documentation).
-
-- The official API schema (Baserow 2.4.0) lists JWT only for the row history and row comment endpoints, and
-  JWT or database token for the row endpoints; hence the two are not offered.
-
-- The official API schema (Baserow 2.4.0) lists the database token, next to JWT, as security for
+  answering `count`, `next`, `previous`, and `results`; `GET .../{row_id}/` with `user_field_names`.
+- `POST /api/database/rows/table/{table_id}/`, `PATCH`, `DELETE`, and `PATCH .../move/` on a row.
+- The official API schema (Baserow 2.4.0) lists the database token, next to JWT, for
   `POST /api/user-files/upload-file/` (multipart field `file`) and `POST /api/user-files/upload-via-url/`
-  (body `{"url": ...}`); both answer a user file with `name`, `original_name`, `size`, `url`, and more. A file
-  cell is an array of objects with `name`, `visible_name`, `url`, `size`; a row change references a file by
-  `name` (and optionally `visible_name`). The stored-name form, the `/media/user_files/` path, and the
-  address guard of `upload-via-url` are taken from the Baserow source (tag 2.4.0). None of this was tried
-  against a live instance; in particular, which token right Baserow requires for an upload is not documented, and
-  the media path is the default, not that of every installation.
+  (body `{"url": ...}`); both answer a user file. A file cell is an array of objects with `name`, `visible_name`,
+  `url`, `size`; a row change references a file by `name`. The stored-name form, the `/media/user_files/` path, and
+  the address guard of `upload-via-url` come from the Baserow source (tag 2.4.0), not from a live instance; which
+  token right an upload needs is not documented, and the media path is the default, not that of every installation.
 
-Not checked against the official documentation in this change, taken from the Baserow list-rows API as
-known: the query parameters `search`, `search_mode`, `filter__{field}__{type}` with `user_field_names=true`,
-`filter_type`, `order_by` (comma-separated, `-` prefix for descending), and `view_id`, the filter type names
-listed above, and `GET /api/database/views/table/{table_id}/` answering a list of views with `id`.
+Taken from the Baserow list-rows API as known, not checked against the documentation: the query parameters `search`,
+`search_mode`, `filter__{field}__{type}` with `user_field_names=true`, `filter_type`, `order_by` (comma-separated,
+`-` prefix for descending), and `view_id`, the filter type names above, and `GET /api/database/views/table/{table_id}/`
+answering a list of views with `id`.
 
-Assumed, not verified here: `user_field_names=true` and a JSON body keyed by field name for create and update,
-the row object as the answer of create, update, and move (move's answer is not read), an empty answer with
-status 204 for delete, `before_id` as the query parameter of move, `403` for a missing token right,
-the field flags and types listed above, link values as arrays of row IDs or texts, the object shapes of a table and a field as listed above, link
-entries as objects with `id` and `value`, `link_row_table_id` being null when the other table is not available, and that the
-table list of a token also contains the tables its token may not read, which is why the target filter is
-applied to it.
+Assumed, not verified: `user_field_names=true` and a JSON body keyed by field name for create and update, the row
+object as the answer of create, update, and move (move's answer is not read), an empty 204 answer for delete,
+`before_id` as the query parameter of move, `403` for a missing token right, link values as arrays of row IDs or
+texts, link entries as objects with `id` and `value`, `link_row_table_id` being null when the other table is not
+available, and that the table list of a token also contains the tables it may not read, which is why the target
+filter is applied to it.
 
-Batch endpoints (assumed from the documented API shape, not fetched or tried against an instance in this
-change): `POST .../table/{table_id}/batch/` with `{"items": [cells]}` and `PATCH .../batch/` with
-`{"items": [{"id": N, ...cells}]}`, both with `user_field_names=true` and answering `{"items": [rows]}` in request
-order; `POST .../batch-delete/` with `{"items": [ids]}` and an empty 204 answer; a limit of 200 rows per call
-(`BATCH_ROWS_SIZE_LIMIT`).
+Batch endpoints, assumed from the documented API shape: `POST .../table/{table_id}/batch/` with
+`{"items": [cells]}` and `PATCH .../batch/` with `{"items": [{"id": N, ...cells}]}`, both with
+`user_field_names=true` and answering `{"items": [rows]}` in request order; `POST .../batch-delete/` with
+`{"items": [ids]}` and an empty 204 answer; a limit of 200 rows per call (`BATCH_ROWS_SIZE_LIMIT`).
