@@ -52,8 +52,7 @@
 // an owner target; github.repositories.fork forks a repository a connection allows the same way,
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
 // one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
-// reads the collaborators of a repository with their login, account type, role, and permissions, never an
-// email address or another personal detail. github.rulesets.list and github.rulesets.get read the rulesets
+// reads the collaborators of a repository. github.rulesets.list and github.rulesets.get read the rulesets
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
 // create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
@@ -1863,12 +1862,19 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 func (c *Client) authorize(req *http.Request) {
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	if accept, ok := req.Context().Value(acceptKey{}).(string); ok {
+		req.Header.Set("Accept", accept)
+	}
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
 	req.Header.Set("User-Agent", "qatlas-cli")
 	if features, ok := req.Context().Value(graphQLFeaturesKey{}).(string); ok {
 		req.Header.Set("GraphQL-Features", features)
 	}
 }
+
+// acceptKey carries the media type a read asks for instead of the default one, such as the text match
+// variant of a search.
+type acceptKey struct{}
 
 // graphQLFeaturesKey carries the GraphQL feature flag a request needs for a preview field.
 type graphQLFeaturesKey struct{}

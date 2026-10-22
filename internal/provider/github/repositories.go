@@ -27,9 +27,9 @@ import (
 // belong to a customer other than the one the connection's targets name. github.repositories.delete deletes
 // one repository permanently and is offered only where a connection's tools list names it; confirm_name must
 // repeat the repository's owner/name exactly, checked before any credential is resolved, since this cannot be
-// undone. github.collaborators.list reads the collaborators of a repository with their login, account type,
-// role, and permissions, filtered by affiliation and permission, paged; it never answers an email address or
-// any other personal detail GitHub's collaborator object may carry.
+// undone. github.collaborators.list reads the collaborators of a repository, filtered by affiliation and
+// permission, paged, with every member of GitHub's collaborator object, including a name or email address
+// GitHub reports for a person.
 
 // repositoryNameSchema mirrors validRepoName loosely; the check itself refuses "." and ".." and any other
 // character validRepoName does not allow.
@@ -159,16 +159,16 @@ var repositoriesDelete = capability.Descriptor{
 // list accepts, mirrored from the input schema's enums.
 var (
 	collaboratorAffiliationValues = []string{"outside", "direct", "all"}
-	collaboratorPermissionValues  = []string{"pull", "triage", "push", "maintain", "admin"}
+	collaboratorPermissionValues  = []string{"pull", "triage", "triage_plus", "push", "maintain", "admin"}
 )
 
 const collaboratorPermissionsProperties = `"pull":{"type":"boolean"},"triage":{"type":"boolean"},` +
 	`"push":{"type":"boolean"},"maintain":{"type":"boolean"},"admin":{"type":"boolean"}`
 
-const collaboratorProperties = `"login":{"type":"string"},"type":{"type":"string"},` +
+var collaboratorProperties = `"login":{"type":"string"},"type":{"type":"string"},` +
 	`"role_name":{"type":"string"},"permissions":{"type":"object","properties":{` +
 	collaboratorPermissionsProperties + `},"required":["pull","triage","push","maintain","admin"],` +
-	`"additionalProperties":false}`
+	`"additionalProperties":false},` + accountPersonProperties + `,"url":{"type":"string"}`
 
 const collaboratorRequired = `"required":["login","type","role_name","permissions"],"additionalProperties":false`
 
@@ -177,21 +177,22 @@ var collaboratorsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub repository collaborators",
 	Description: "List one bounded batch of the collaborators of a repository a connection allows, " +
-		"with login, account type, role, and permissions; never an email address or another personal detail",
+		"with every member GitHub reports, including the name and email address of a person",
 	Tags:     []string{"github", "repositories", "collaborators", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"affiliation":{"type":"string","enum":["outside","direct","all"]},` +
-		`"permission":{"type":"string","enum":["pull","triage","push","maintain","admin"]},` + pagingKeys),
+		`"permission":{"type":"string","enum":["pull","triage","triage_plus","push","maintain","admin"]},` + pagingKeys),
 	OutputSchema: listOutput("collaborators", collaboratorProperties, collaboratorRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "affiliation", Description: "outside, direct, or all; all when omitted"},
 		{Name: "permission", Description: "Return only collaborators with at least this permission level"},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "collaborators", Description: "Collaborators with login, type, role_name, and permissions; " +
-			"never an email address or another personal detail"},
-	}, pagingFields...),
+			"a person's name and email address as GitHub reports them, untrusted data"},
+		{Name: "url", Description: "Web address of the collaborator, untrusted data, never fetched"},
+	}, accountPersonFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List outside collaborators",
 		Arguments:   json.RawMessage(`{"affiliation":"outside"}`),
@@ -569,7 +570,7 @@ func (o *collaboratorListOptions) normalize(bound target) error {
 		return invalidRequest("affiliation must be outside, direct, or all")
 	}
 	if o.Permission != "" && !containsFold(collaboratorPermissionValues, o.Permission) {
-		return invalidRequest("permission must be pull, triage, push, maintain, or admin")
+		return invalidRequest("permission must be pull, triage, triage_plus, push, maintain, or admin")
 	}
 	o.binding = fingerprint("collaborators", "list", bound.String(), strings.ToLower(o.Affiliation),
 		strings.ToLower(o.Permission))
@@ -608,13 +609,37 @@ type CollaboratorPermissions struct {
 	Admin    bool `json:"admin"`
 }
 
-// RepositoryCollaborator is the compact, non-personal view of one collaborator: login, account type, role, and
-// permissions only, never an email address or another personal detail.
+// RepositoryCollaborator is the view of one collaborator. Login, type, role, and permissions are read as
+// they always were; the rest is what GitHub reports beyond them.
 type RepositoryCollaborator struct {
 	Login       string                  `json:"login"`
 	Type        string                  `json:"type"`
 	RoleName    string                  `json:"role_name"`
 	Permissions CollaboratorPermissions `json:"permissions"`
+	AccountPerson
+	URL *string `json:"url,omitempty"`
+}
+
+type collaboratorRaw struct {
+	Login       string `json:"login"`
+	Type        string `json:"type"`
+	RoleName    string `json:"role_name"`
+	Permissions struct {
+		Pull     bool `json:"pull"`
+		Triage   bool `json:"triage"`
+		Push     bool `json:"push"`
+		Maintain bool `json:"maintain"`
+		Admin    bool `json:"admin"`
+	} `json:"permissions"`
+	account accountRaw
+}
+
+func (r *collaboratorRaw) UnmarshalJSON(data []byte) error {
+	type plain collaboratorRaw
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.account)
 }
 
 // CollaboratorList is one batch of the collaborators of a repository.
@@ -624,23 +649,10 @@ type CollaboratorList struct {
 	HasMore       bool                     `json:"has_more"`
 }
 
-// listCollaborators reads one page of the collaborators of the bound repository. GitHub's collaborator
-// object may carry further personal fields such as an email address; only login, type, role_name, and
-// permissions are ever read into the result.
+// listCollaborators reads one page of the collaborators of the bound repository.
 func (c *Client) listCollaborators(ctx context.Context, o *collaboratorListOptions) (*CollaboratorList, error) {
 	const op = "list collaborators"
-	var raw []struct {
-		Login       string `json:"login"`
-		Type        string `json:"type"`
-		RoleName    string `json:"role_name"`
-		Permissions struct {
-			Pull     bool `json:"pull"`
-			Triage   bool `json:"triage"`
-			Push     bool `json:"push"`
-			Maintain bool `json:"maintain"`
-			Admin    bool `json:"admin"`
-		} `json:"permissions"`
-	}
+	var raw []collaboratorRaw
 	hasNext, err := c.restPage(ctx, op, c.repoPath("collaborators"), o.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, collaboratorsReadPermission)
@@ -653,7 +665,8 @@ func (c *Client) listCollaborators(ctx context.Context, o *collaboratorListOptio
 		result.Collaborators = append(result.Collaborators, RepositoryCollaborator{Login: entry.Login, Type: entry.Type,
 			RoleName: entry.RoleName, Permissions: CollaboratorPermissions{Pull: entry.Permissions.Pull,
 				Triage: entry.Permissions.Triage, Push: entry.Permissions.Push,
-				Maintain: entry.Permissions.Maintain, Admin: entry.Permissions.Admin}})
+				Maintain: entry.Permissions.Maintain, Admin: entry.Permissions.Admin},
+			AccountPerson: entry.account.person(), URL: address(entry.account.HTMLURL)})
 	}
 	result.HasMore, result.NextCursor = morePage(o.binding, o.page, o.perPage, hasNext)
 	return result, nil
