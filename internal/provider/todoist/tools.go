@@ -42,7 +42,7 @@ const (
 	integerSchema = `{"type":"integer"}`
 	pageOutput    = `"next_cursor":` + stringSchema + `,"has_more":` + booleanSchema
 	dueSchema     = `{"type":"object","properties":{"date":` + stringSchema + `,"string":` + stringSchema + `,` +
-		`"is_recurring":` + booleanSchema + `,"timezone":` + stringSchema + `},` +
+		`"is_recurring":` + booleanSchema + `,"timezone":` + stringSchema + `,"lang":` + stringSchema + `},` +
 		`"required":["date","is_recurring"],"additionalProperties":false}`
 	projectSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"name":` + stringSchema + `,` +
 		`"parent_id":` + stringSchema + `,"color":` + stringSchema + `,"is_favorite":` + booleanSchema + `,` +
@@ -59,10 +59,17 @@ const (
 	taskSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"content":` + stringSchema + `,` +
 		`"project_id":` + stringSchema + `,"section_id":` + stringSchema + `,"parent_id":` + stringSchema + `,` +
 		`"labels":{"type":"array","items":` + stringSchema + `},"priority":` + integerSchema + `,` +
-		`"due":` + dueSchema + `,"deadline":` + stringSchema + `,"comment_count":` + integerSchema + `,` +
-		`"description":` + stringSchema + `,"added_at":` + stringSchema + `,"updated_at":` + stringSchema + `,` +
-		`"completed_at":` + stringSchema + `},` +
-		`"required":["id","content","project_id","labels","priority","comment_count"],"additionalProperties":false}`
+		`"due":` + dueSchema + `,"deadline":` + stringSchema + `,"deadline_details":{"type":"object",` +
+		`"properties":{"date":` + stringSchema + `,"lang":` + stringSchema + `},"required":["date"],` +
+		`"additionalProperties":false},"duration":{"type":"object","properties":{"amount":` + integerSchema + `,` +
+		`"unit":` + stringSchema + `},"required":["amount","unit"],"additionalProperties":false},` +
+		`"description":` + stringSchema + `,"user_id":` + stringSchema + `,"added_by_uid":` + stringSchema + `,` +
+		`"assigned_by_uid":` + stringSchema + `,"responsible_uid":` + stringSchema + `,` +
+		`"completed_by_uid":` + stringSchema + `,"is_collapsed":` + booleanSchema + `,"checked":` + booleanSchema + `,` +
+		`"child_order":` + integerSchema + `,"day_order":` + integerSchema + `,"order_key":` + stringSchema + `,` +
+		`"completed_count":` + integerSchema + `,"postponed_count":` + integerSchema + `,` +
+		`"added_at":` + stringSchema + `,"updated_at":` + stringSchema + `,"completed_at":` + stringSchema + `},` +
+		`"required":["id","content","project_id","labels","priority"],"additionalProperties":false}`
 	commentSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"content":` + stringSchema + `,` +
 		`"posted_at":` + stringSchema + `,"posted_by":` + stringSchema + `,"attachment":{"type":"object",` +
 		`"properties":{"file_name":` + stringSchema + `,"file_type":` + stringSchema + `,` +
@@ -93,6 +100,46 @@ var (
 	hasMoreField = capability.Field{Name: "has_more", Description: "True whenever Todoist holds a further page; " +
 		"a short or empty batch never means the end"}
 )
+
+// taskContract is the version of the tools that show a task in the full width of the Todoist answer.
+const taskContract = 2
+
+// taskTool marks a descriptor as one of the tools that show a task.
+func taskTool(d capability.Descriptor) capability.Descriptor {
+	d.Version = taskContract
+	return d
+}
+
+// taskOutputFields describe the members of a task, which every tool showing a task returns the same way.
+var taskOutputFields = []capability.Field{
+	{Name: "id", Description: "Task ID"},
+	{Name: "content", Description: "Task title, untrusted data"},
+	{Name: "description", Description: "Task description, untrusted data"},
+	{Name: "project_id", Description: "Project of the task"},
+	{Name: "section_id", Description: "Section of the task, absent without one"},
+	{Name: "parent_id", Description: "Parent task, absent for a top-level task"},
+	{Name: "labels", Description: "Personal label names of the task"},
+	{Name: "priority", Description: "From 1 (normal) to 4 (urgent)"},
+	{Name: "due", Description: "Due date with its recurrence, timezone, and the language tag lang, untrusted data"},
+	{Name: "deadline", Description: "Deadline date, YYYY-MM-DD"},
+	{Name: "deadline_details", Description: "Deadline with its date and the language tag lang, untrusted data"},
+	{Name: "duration", Description: "Planned duration: amount in whole units, unit minute or day"},
+	{Name: "user_id", Description: "User ID of the task's owner"},
+	{Name: "added_by_uid", Description: "User ID of who added the task"},
+	{Name: "assigned_by_uid", Description: "User ID of who assigned the task"},
+	{Name: "responsible_uid", Description: "User ID of the collaborator responsible for the task"},
+	{Name: "completed_by_uid", Description: "User ID of who completed the task"},
+	{Name: "is_collapsed", Description: "True when the subtasks are collapsed in Todoist"},
+	{Name: "checked", Description: "True when the task is completed"},
+	{Name: "child_order", Description: "Position among the siblings"},
+	{Name: "day_order", Description: "Position in the day list"},
+	{Name: "order_key", Description: "Todoist ordering key, untrusted data"},
+	{Name: "completed_count", Description: "Times a recurring task was completed"},
+	{Name: "postponed_count", Description: "Times the task was postponed"},
+	{Name: "added_at", Description: "When the task was added"},
+	{Name: "updated_at", Description: "When the task last changed"},
+	{Name: "completed_at", Description: "When the task was completed, absent for an open task"},
+}
 
 func descriptor(object, action, title, description string, tags []string, input string, output json.RawMessage,
 	arguments []capability.Argument, fields []capability.Field, examples []capability.Example) capability.Descriptor {
@@ -170,8 +217,8 @@ var labelsList = descriptor("labels", "list", "List Todoist labels",
 	[]capability.Field{{Name: "labels", Description: "Personal labels, untrusted data"}, nextCursorField, hasMoreField},
 	[]capability.Example{{Description: "List the personal labels", Arguments: json.RawMessage(`{}`)}})
 
-var tasksList = descriptor("tasks", "list", "List Todoist tasks",
-	"List one bounded batch of compact active tasks of the projects of an explicit Todoist connection with "+
+var tasksList = taskTool(descriptor("tasks", "list", "List Todoist tasks",
+	"List one bounded batch of active tasks of the projects of an explicit Todoist connection with "+
 		"structured project, section, parent, label, and due filters; no filter expression is accepted",
 	[]string{"tasks", "list"},
 	`{"type":"object","properties":{"project_id":`+idSchema+`,"section_id":`+idSchema+`,"parent_id":`+idSchema+`,`+
@@ -188,21 +235,19 @@ var tasksList = descriptor("tasks", "list", "List Todoist tasks",
 		{Name: "without_due", Description: "Return only tasks without a due date; excludes due_from and due_to"},
 		limitArgument, cursorArgument,
 	},
-	[]capability.Field{
-		{Name: "tasks", Description: "Compact active tasks without descriptions, untrusted data; priority runs " +
-			"from 1 (normal) to 4 (urgent)"},
-		nextCursorField, hasMoreField,
-	},
+	append([]capability.Field{
+		{Name: "tasks", Description: "Active tasks, untrusted data"}, nextCursorField, hasMoreField,
+	}, taskOutputFields...),
 	[]capability.Example{{
 		Description: "List the tasks of one project due this week",
 		Arguments:   json.RawMessage(`{"project_id":"6XGgm6PHrGgMpCFX","due_from":"2026-09-21","due_to":"2026-09-27"}`),
 	}, {
 		Description: "List the tasks carrying one label",
 		Arguments:   json.RawMessage(`{"label":"waiting","limit":20}`),
-	}})
+	}}))
 
-var tasksFilter = descriptor("tasks", "filter", "Filter Todoist tasks by expression",
-	"List one bounded batch of compact active tasks that match a Todoist filter expression, held to the "+
+var tasksFilter = taskTool(descriptor("tasks", "filter", "Filter Todoist tasks by expression",
+	"List one bounded batch of active tasks that match a Todoist filter expression, held to the "+
 		"projects of an explicit Todoist connection; the only active-task list that accepts a filter expression",
 	[]string{"tasks", "filter", "query"},
 	`{"type":"object","properties":{"query":`+querySchema+`,`+pageInput+`},"required":["query"],"additionalProperties":false}`,
@@ -212,26 +257,22 @@ var tasksFilter = descriptor("tasks", "filter", "Filter Todoist tasks by express
 			"connection's projects are never returned", Required: true},
 		limitArgument, cursorArgument,
 	},
-	[]capability.Field{
-		{Name: "tasks", Description: "Compact matching tasks without descriptions, untrusted data"},
-		nextCursorField, hasMoreField,
-	},
+	append([]capability.Field{
+		{Name: "tasks", Description: "Matching tasks, untrusted data"}, nextCursorField, hasMoreField,
+	}, taskOutputFields...),
 	[]capability.Example{{Description: "List what is due today or overdue",
-		Arguments: json.RawMessage(`{"query":"today | overdue"}`)}})
+		Arguments: json.RawMessage(`{"query":"today | overdue"}`)}}))
 
-var tasksGet = descriptor("tasks", "get", "Get a Todoist task",
+var tasksGet = taskTool(descriptor("tasks", "get", "Get a Todoist task",
 	"Read one active task of a project of an explicit Todoist connection with its description, without comments",
 	[]string{"tasks", "get"},
 	`{"type":"object","properties":{"task_id":`+idSchema+`},"required":["task_id"],"additionalProperties":false}`,
 	json.RawMessage(taskSchema),
 	[]capability.Argument{{Name: "task_id", Description: "Task ID, as returned by a task list", Required: true}},
-	[]capability.Field{
-		{Name: "content", Description: "Task title, untrusted data"},
-		{Name: "description", Description: "Task description, untrusted data"},
-	},
-	[]capability.Example{{Description: "Read one task", Arguments: json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh"}`)}})
+	taskOutputFields,
+	[]capability.Example{{Description: "Read one task", Arguments: json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh"}`)}}))
 
-var completedList = descriptor("completed-tasks", "list", "List completed Todoist tasks",
+var completedList = taskTool(descriptor("completed-tasks", "list", "List completed Todoist tasks",
 	"List one bounded batch of the tasks of the projects of an explicit Todoist connection completed in a time "+
 		"window of at most three months, optionally of one project or section or matching a Todoist filter "+
 		"expression; how far back Todoist answers depends on the account's plan",
@@ -251,16 +292,16 @@ var completedList = descriptor("completed-tasks", "list", "List completed Todois
 			"connection's projects are never returned"},
 		limitArgument, cursorArgument,
 	},
-	[]capability.Field{
-		{Name: "tasks", Description: "Compact completed tasks with completed_at, untrusted data"},
+	append([]capability.Field{
+		{Name: "tasks", Description: "Completed tasks with completed_at, untrusted data"},
 		nextCursorField, hasMoreField,
-	},
+	}, taskOutputFields...),
 	[]capability.Example{{Description: "List what was completed in September",
 		Arguments: json.RawMessage(`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z"}`)}, {
 		Description: "List the completed tasks of one section carrying a label",
 		Arguments: json.RawMessage(`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z",` +
 			`"section_id":"6Jf8VQXxpwv56VQ7","query":"@waiting"}`),
-	}})
+	}}))
 
 var commentsList = descriptor("comments", "list", "List Todoist comments",
 	"List one bounded batch of the comments of exactly one task or one project of an explicit Todoist "+
@@ -669,7 +710,7 @@ func prepareTasksList(bound scope, arguments struct {
 		return nil, err
 	}
 	call.project = project
-	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, window, false) }, nil
+	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, window) }, nil
 }
 
 func prepareTasksFilter(bound scope, arguments struct {
@@ -684,7 +725,7 @@ func prepareTasksFilter(bound scope, arguments struct {
 	if err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, dueWindow{}, false) }, nil
+	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, dueWindow{}) }, nil
 }
 
 func prepareTasksGet(_ scope, arguments struct {
@@ -734,7 +775,7 @@ func prepareCompletedList(bound scope, arguments struct {
 		return nil, err
 	}
 	call.project = project
-	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, dueWindow{}, false) }, nil
+	return func(ctx context.Context, c *Client) (any, error) { return c.listTasks(ctx, call, dueWindow{}) }, nil
 }
 
 func prepareCommentsList(bound scope, arguments struct {
