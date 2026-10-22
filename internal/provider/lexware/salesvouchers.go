@@ -209,31 +209,69 @@ func salesLineItemsSchema(alternatives bool) string {
 // voucherExtras returns the schema members and fields every sales voucher type shares beyond the original
 // set: prices adds discounts and tax amounts, payment adds the payment conditions.
 func voucherExtras(name string, prices, payment bool) (string, []capability.Field) {
-	properties := `"organization_id":{"type":"string"},"electronic_document_profile":{"type":"string"},` +
-		`"print_layout_id":{"type":"string"},"contact_person":{"type":"string"},` +
-		`"tax_sub_type":{"type":"string"},"tax_type_note":{"type":"string"}`
-	fields := []capability.Field{
-		{Name: "organization_id", Description: "Identifier of the Lexware organization the " + name + " belongs to"},
-		{Name: "electronic_document_profile", Description: "Electronic document profile, for example NONE, EN16931, or XRechnung"},
-		{Name: "print_layout_id", Description: "Identifier of the print layout of the " + name},
-		{Name: "contact_person", Description: "Contact person of the recipient, untrusted data"},
-		{Name: "tax_sub_type", Description: "Tax subtype, for example distanceSales or electronicServices; absent for a standard voucher"},
-		{Name: "tax_type_note", Description: "Note on a vat-free tax type, untrusted data"},
-	}
+	parts := []extraPart{organizationExtra(name), documentExtras(name), recipientExtras()}
 	if prices {
-		properties += `,"total_discount_absolute":{"type":"number"},"total_discount_percentage":{"type":"number"},` +
-			`"tax_amounts":` + taxAmountsSchema
-		fields = append(fields,
-			capability.Field{Name: "total_discount_absolute", Description: "Total discount as an absolute amount; absent without one"},
-			capability.Field{Name: "total_discount_percentage", Description: "Total discount as a percentage; absent without one"},
-			capability.Field{Name: "tax_amounts", Description: "Net and tax amount per tax rate: tax_rate_percentage, tax_amount, net_amount"},
-		)
+		parts = append(parts, priceExtras())
 	}
 	if payment {
-		properties += `,"payment_conditions":` + paymentConditionsSchema
-		fields = append(fields, capability.Field{Name: "payment_conditions", Description: "Payment term and cash discount: payment_term_label and payment_term_label_template (untrusted data), payment_term_duration in days, payment_discount_conditions with discount_percentage and discount_range in days"})
+		parts = append(parts, paymentExtra())
 	}
-	return properties, fields
+	return joinExtras(parts...)
+}
+
+// extraPart is a group of schema members with their fields, so a read tool carries only the groups its type
+// documents.
+type extraPart struct {
+	properties string
+	fields     []capability.Field
+}
+
+func joinExtras(parts ...extraPart) (string, []capability.Field) {
+	var properties []string
+	var fields []capability.Field
+	for _, part := range parts {
+		properties = append(properties, part.properties)
+		fields = append(fields, part.fields...)
+	}
+	return strings.Join(properties, ","), fields
+}
+
+func organizationExtra(name string) extraPart {
+	return extraPart{`"organization_id":{"type":"string"}`, []capability.Field{
+		{Name: "organization_id", Description: "Identifier of the Lexware organization the " + name + " belongs to"},
+	}}
+}
+
+func documentExtras(name string) extraPart {
+	return extraPart{`"electronic_document_profile":{"type":"string"},"print_layout_id":{"type":"string"}`,
+		[]capability.Field{
+			{Name: "electronic_document_profile", Description: "Electronic document profile, for example NONE, EN16931, or XRechnung"},
+			{Name: "print_layout_id", Description: "Identifier of the print layout of the " + name},
+		}}
+}
+
+func recipientExtras() extraPart {
+	return extraPart{`"contact_person":{"type":"string"},"tax_sub_type":{"type":"string"},"tax_type_note":{"type":"string"}`,
+		[]capability.Field{
+			{Name: "contact_person", Description: "Contact person of the recipient, untrusted data"},
+			{Name: "tax_sub_type", Description: "Tax subtype, for example distanceSales or electronicServices; absent for a standard voucher"},
+			{Name: "tax_type_note", Description: "Note on a vat-free tax type, untrusted data"},
+		}}
+}
+
+func priceExtras() extraPart {
+	return extraPart{`"total_discount_absolute":{"type":"number"},"total_discount_percentage":{"type":"number"},` +
+		`"tax_amounts":` + taxAmountsSchema, []capability.Field{
+		{Name: "total_discount_absolute", Description: "Total discount as an absolute amount; absent without one"},
+		{Name: "total_discount_percentage", Description: "Total discount as a percentage; absent without one"},
+		{Name: "tax_amounts", Description: "Net and tax amount per tax rate: tax_rate_percentage, tax_amount, net_amount"},
+	}}
+}
+
+func paymentExtra() extraPart {
+	return extraPart{`"payment_conditions":` + paymentConditionsSchema, []capability.Field{
+		{Name: "payment_conditions", Description: "Payment term and cash discount: payment_term_label and payment_term_label_template (untrusted data), payment_term_duration in days, payment_discount_conditions with discount_percentage and discount_range in days"},
+	}}
 }
 
 // salesVoucherDescriptor builds the read tool of one voucher type. Output schema and fields differ only in
