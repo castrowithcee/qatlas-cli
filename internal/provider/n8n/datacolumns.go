@@ -56,6 +56,12 @@ var dataColumnFields = []capability.Field{
 	{Name: "index", Description: "Zero-based column position"},
 }
 
+// dataColumnListedFields are the members of a column in the read tools.
+var dataColumnListedFields = append(append([]capability.Field{}, dataColumnFields...),
+	capability.Field{Name: "created_at", Description: "Creation time of the column, as n8n reports it"},
+	capability.Field{Name: "updated_at", Description: "Last change time of the column, as n8n reports it"},
+	capability.Field{Name: "data_table_id", Description: "Table the column belongs to, as n8n reports it"})
+
 var dataColumnsList = capability.Descriptor{
 	ID: Provider + ".data-columns.list", Version: 1, Title: "List the columns of an n8n data table",
 	Description: "List the columns (id, name, type, position) of one data table of the project allow-list; the " +
@@ -64,11 +70,13 @@ var dataColumnsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"data_table_id":` + targetIDSchema + `},` +
 		`"required":["data_table_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"columns":{"type":"array","items":` + dataColumnSchema + `},"count":{"type":"integer"}},` +
+		`"columns":{"type":"array","items":` + dataTableColumnReadSchema + `},"count":{"type":"integer"}},` +
 		`"required":["columns","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{dataTableIDArgument},
 	Fields: []capability.Field{
 		{Name: "columns", Description: "Columns of the table, at most 200"},
+		dataColumnListedFields[0], dataColumnListedFields[1], dataColumnListedFields[2], dataColumnListedFields[3],
+		dataColumnListedFields[4], dataColumnListedFields[5], dataColumnListedFields[6],
 		{Name: "count", Description: "Number of columns reported"},
 	},
 	Examples: []capability.Example{{Description: "List the columns of a data table",
@@ -144,8 +152,8 @@ var dataColumnsDelete = capability.Descriptor{
 
 // DataTableColumns, DataTableColumnChanged, and DataTableColumnDeleted are what the column tools report.
 type DataTableColumns struct {
-	Columns []DataTableColumn `json:"columns"`
-	Count   int               `json:"count"`
+	Columns []DataTableColumnRead `json:"columns"`
+	Count   int                   `json:"count"`
 }
 
 type DataTableColumnChanged struct {
@@ -254,14 +262,7 @@ func invokeDataColumnsList(ctx context.Context, resolved *config.Resolved, secre
 	if err := client.get(ctx, op, columnsPath(input.DataTableID), nil, &columns, maxResponseBytes); err != nil {
 		return nil, dataTableError(err)
 	}
-	result := make([]DataTableColumn, 0, len(columns))
-	for i, col := range columns {
-		if i >= maxDataTableColumns {
-			break
-		}
-		result = append(result, DataTableColumn{ID: bounded(col.ID), Name: bounded(col.Name),
-			Type: bounded(col.Type), Index: col.Index})
-	}
+	result := readColumns(columns)
 	return &DataTableColumns{Columns: result, Count: len(result)}, nil
 }
 
