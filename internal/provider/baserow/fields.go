@@ -21,26 +21,24 @@ var tableIDArgument = capability.Argument{Name: "table_id", Required: true,
 
 var fieldsList = capability.Descriptor{
 	ID: Provider + ".fields.list", Version: 1, Title: "List Baserow fields",
-	Description: "List the fields of one table: id, name, type, primary and read-only flags, and select options. " +
-		"A link field shows its other table only when that table is inside the connection's targets. " +
-		"Names and options are untrusted provider data",
+	Description: "List the fields of one table with their type-specific schema properties. " +
+		"What points into another table (link target, lookup and rollup target, formula text) is shown only when " +
+		"that table is inside the connection's targets. Names, options, and formulas are untrusted provider data",
 	Tags: []string{"baserow", "fields", "list", "schema"}, Risk: schemaRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `},` +
 		`"required":["table_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"fields":{"type":"array","items":` +
-		`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string"},` +
-		`"primary":{"type":"boolean"},"read_only":{"type":"boolean"},"link_table_id":{"type":"integer"},` +
-		`"select_options":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},` +
-		`"value":{"type":"string"},"color":{"type":"string"}},"additionalProperties":false}}},` +
+		`{"type":"object","properties":{` + fieldsItemProperties() + `},` +
 		`"required":["id","name","type"],"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["fields","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{tableIDArgument},
-	Fields: []capability.Field{
-		{Name: "fields", Description: "Fields with id, name, type, primary, read_only, link_table_id for an allowed link target, and select_options"},
+	Fields: append([]capability.Field{
+		{Name: "fields", Description: "Fields of the table with their schema members; members that point into a table " +
+			"outside the targets are left out"},
 		{Name: "count", Description: "Number of fields in this answer"},
 		{Name: "truncated", Description: "True when the answer was cut at 500 fields"},
-	},
+	}, fieldItemDescriptions()...),
 	Examples: []capability.Example{{Description: "List the fields of one table", Arguments: json.RawMessage(`{"table_id":1}`)}},
 }
 
@@ -58,6 +56,7 @@ type fieldJSON struct {
 	ReadOnly       bool               `json:"read_only"`
 	LinkRowTableID *int64             `json:"link_row_table_id"`
 	SelectOptions  []selectOptionJSON `json:"select_options"`
+	fieldExtra
 }
 
 // SelectOption is one option of a select field.
@@ -76,6 +75,7 @@ type Field struct {
 	ReadOnly      bool           `json:"read_only,omitempty"`
 	LinkTableID   int64          `json:"link_table_id,omitempty"`
 	SelectOptions []SelectOption `json:"select_options,omitempty"`
+	FieldSchema
 }
 
 // FieldsResult is the answer of fields.list.
@@ -109,6 +109,7 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
+	gate := client.gateFields(raws)
 	result := &FieldsResult{Fields: []Field{}}
 	for _, entry := range raws {
 		if len(result.Fields) >= maxFields {
@@ -117,9 +118,11 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 		}
 		field := Field{ID: entry.ID, Name: bounded(entry.Name), Type: bounded(entry.Type),
 			Primary: entry.Primary, ReadOnly: entry.ReadOnly}
-		if entry.LinkRowTableID != nil && client.inScope(*entry.LinkRowTableID) {
+		linkInScope := entry.LinkRowTableID != nil && client.inScope(*entry.LinkRowTableID)
+		if linkInScope {
 			field.LinkTableID = *entry.LinkRowTableID
 		}
+		field.FieldSchema = schemaOf(entry, linkInScope, gate)
 		for i, option := range entry.SelectOptions {
 			if i >= maxSelectOptions {
 				break
