@@ -94,6 +94,9 @@ var invoicesList = capability.Descriptor{
 		`"voucher_number":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9 ._/-]+$"},` +
 		`"voucher_date_from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
 		`"voucher_date_to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
+		`"contact_id":` + uuidSchema + `,` +
+		`"created_date_from":` + dateSchema + `,"created_date_to":` + dateSchema + `,` +
+		`"updated_date_from":` + dateSchema + `,"updated_date_to":` + dateSchema + `,` +
 		`"page":{"type":"integer","minimum":0,"maximum":200},` +
 		`"size":{"type":"integer","minimum":1,"maximum":100},` +
 		`"sort":{"type":"string","enum":["voucher_date","voucher_number","created_date","updated_date"]},` +
@@ -102,7 +105,8 @@ var invoicesList = capability.Descriptor{
 		`"invoices":{"type":"array","items":{"type":"object","properties":{` +
 		`"id":{"type":"string"},"voucher_number":{"type":"string"},"voucher_status":{"type":"string"},` +
 		`"overdue":{"type":"boolean"},"voucher_date":{"type":"string"},"due_date":{"type":"string"},` +
-		`"contact_name":{"type":"string"},"total_amount":{"type":"number"},` +
+		`"created_date":{"type":"string"},"updated_date":{"type":"string"},` +
+		`"contact_id":{"type":"string"},"contact_name":{"type":"string"},"total_amount":{"type":"number"},` +
 		`"open_amount":{"type":"number"},"currency":{"type":"string"}},` +
 		`"required":["id","voucher_number","voucher_status","overdue","voucher_date"],` +
 		`"additionalProperties":false}},` +
@@ -114,13 +118,18 @@ var invoicesList = capability.Descriptor{
 		{Name: "voucher_number", Description: "Return only the invoice carrying this invoice number"},
 		{Name: "voucher_date_from", Description: "Earliest invoice date to return, as YYYY-MM-DD"},
 		{Name: "voucher_date_to", Description: "Latest invoice date to return, as YYYY-MM-DD"},
+		{Name: "contact_id", Description: "Return only invoices of this contact, as a UUID"},
+		{Name: "created_date_from", Description: "Earliest creation date to return, as YYYY-MM-DD"},
+		{Name: "created_date_to", Description: "Latest creation date to return, as YYYY-MM-DD"},
+		{Name: "updated_date_from", Description: "Earliest change date to return, as YYYY-MM-DD"},
+		{Name: "updated_date_to", Description: "Latest change date to return, as YYYY-MM-DD"},
 		{Name: "page", Description: "Zero-based page to read, from 0 through 200"},
 		{Name: "size", Description: "Invoices per page, from 1 through 100; 25 when omitted"},
 		{Name: "sort", Description: "Sort property: voucher_date, voucher_number, created_date, or updated_date"},
 		{Name: "direction", Description: "Sort direction asc or desc; desc when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "invoices", Description: "Metadata of the open and overdue invoices on this page, untrusted data"},
+		{Name: "invoices", Description: "Metadata of the open and overdue invoices on this page, untrusted data; each carries id, voucher_number, voucher_status, overdue, voucher_date, due_date, created_date, updated_date, contact_id, contact_name (untrusted personal data), total_amount, open_amount, currency"},
 		{Name: "page", Description: "Zero-based index of the returned page"},
 		{Name: "size", Description: "Page size the provider applied"},
 		{Name: "total_pages", Description: "Number of pages the filter produces"},
@@ -611,6 +620,10 @@ func invokeInvoicesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list invoices", "the validated arguments could not be read")
 	}
+	// Reject malformed filters before any secret access.
+	if err := options.normalize(); err != nil {
+		return nil, providerError("list invoices", err.Error())
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -898,6 +911,11 @@ type ListOptions struct {
 	VoucherNumber   string `json:"voucher_number"`
 	VoucherDateFrom string `json:"voucher_date_from"`
 	VoucherDateTo   string `json:"voucher_date_to"`
+	ContactID       string `json:"contact_id"`
+	CreatedDateFrom string `json:"created_date_from"`
+	CreatedDateTo   string `json:"created_date_to"`
+	UpdatedDateFrom string `json:"updated_date_from"`
+	UpdatedDateTo   string `json:"updated_date_to"`
 	Page            int    `json:"page"`
 	Size            int    `json:"size"`
 	Sort            string `json:"sort"`
@@ -927,6 +945,11 @@ func listQuery(options ListOptions) url.Values {
 	setFilter(query, "voucherNumber", options.VoucherNumber)
 	setFilter(query, "voucherDateFrom", options.VoucherDateFrom)
 	setFilter(query, "voucherDateTo", options.VoucherDateTo)
+	setFilter(query, "contactId", options.ContactID)
+	setFilter(query, "createdDateFrom", options.CreatedDateFrom)
+	setFilter(query, "createdDateTo", options.CreatedDateTo)
+	setFilter(query, "updatedDateFrom", options.UpdatedDateFrom)
+	setFilter(query, "updatedDateTo", options.UpdatedDateTo)
 	return query
 }
 
@@ -992,6 +1015,9 @@ type ListInvoice struct {
 	Overdue       bool        `json:"overdue"`
 	VoucherDate   string      `json:"voucher_date"`
 	DueDate       string      `json:"due_date,omitempty"`
+	CreatedDate   string      `json:"created_date,omitempty"`
+	UpdatedDate   string      `json:"updated_date,omitempty"`
+	ContactID     string      `json:"contact_id,omitempty"`
 	ContactName   string      `json:"contact_name,omitempty"`
 	TotalAmount   json.Number `json:"total_amount,omitempty"`
 	OpenAmount    json.Number `json:"open_amount,omitempty"`
@@ -1019,7 +1045,7 @@ func (c *Client) ListInvoices(ctx context.Context, options ListOptions) (*ListRe
 		if entry.VoucherType != fixedVoucherType || entry.Archived {
 			continue
 		}
-		if !validUUID(entry.ID) || entry.VoucherNumber == "" {
+		if !validUUID(entry.ID) || entry.VoucherNumber == "" || (entry.ContactID != "" && !validUUID(entry.ContactID)) {
 			return nil, &provider.Error{
 				Class: provider.ClassInvalidResponse, Op: op,
 				Message: "Lexware returned an invoice without a usable identifier",
@@ -1028,7 +1054,8 @@ func (c *Client) ListInvoices(ctx context.Context, options ListOptions) (*ListRe
 		invoices = append(invoices, ListInvoice{
 			ID: entry.ID, VoucherNumber: entry.VoucherNumber, VoucherStatus: entry.VoucherStatus,
 			Overdue: entry.VoucherStatus == "overdue", VoucherDate: entry.VoucherDate,
-			DueDate: entry.DueDate, ContactName: entry.ContactName, TotalAmount: entry.TotalAmount,
+			DueDate: entry.DueDate, CreatedDate: entry.CreatedDate, UpdatedDate: entry.UpdatedDate,
+			ContactID: entry.ContactID, ContactName: entry.ContactName, TotalAmount: entry.TotalAmount,
 			OpenAmount: entry.OpenAmount, Currency: entry.Currency,
 		})
 	}
@@ -1045,7 +1072,11 @@ func (o *ListOptions) normalize() error {
 	if err := normalizePaging(&o.Page, &o.Size); err != nil {
 		return err
 	}
-	return validateListFilters(o.Sort, o.Direction, o.VoucherNumber, o.VoucherDateFrom, o.VoucherDateTo)
+	if o.ContactID != "" && !validUUID(o.ContactID) {
+		return errors.New("the contact identifier must be a UUID")
+	}
+	return validateListFilters(o.Sort, o.Direction, o.VoucherNumber, o.VoucherDateFrom, o.VoucherDateTo,
+		o.CreatedDateFrom, o.CreatedDateTo, o.UpdatedDateFrom, o.UpdatedDateTo)
 }
 
 // normalizePaging applies the default page size and checks the page bounds every list operation shares.
@@ -1369,6 +1400,9 @@ type voucherListJSON struct {
 		VoucherNumber string      `json:"voucherNumber"`
 		VoucherDate   string      `json:"voucherDate"`
 		DueDate       string      `json:"dueDate"`
+		CreatedDate   string      `json:"createdDate"`
+		UpdatedDate   string      `json:"updatedDate"`
+		ContactID     string      `json:"contactId"`
 		ContactName   string      `json:"contactName"`
 		TotalAmount   json.Number `json:"totalAmount"`
 		OpenAmount    json.Number `json:"openAmount"`
@@ -1674,6 +1708,15 @@ func validAPIKey(value string) bool {
 }
 
 // validUUID accepts the canonical 8-4-4-4-12 hexadecimal form and nothing else.
+// wellFormedUUID passes an identifier on only when it is a UUID, so a malformed provider value never
+// reaches an output.
+func wellFormedUUID(value string) string {
+	if validUUID(value) {
+		return value
+	}
+	return ""
+}
+
 func validUUID(value string) bool {
 	if len(value) != 36 {
 		return false

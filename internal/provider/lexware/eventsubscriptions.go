@@ -40,11 +40,12 @@ var eventSubscriptionDeleteRisk = capability.Risk{
 	Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: integrationSensitivity,
 }
 
-const eventSubscriptionProperties = `"id":{"type":"string"},"created_date":{"type":"string"},` +
+const eventSubscriptionProperties = `"id":{"type":"string"},"organization_id":{"type":"string"},"created_date":{"type":"string"},` +
 	`"event_type":{"type":"string"},"callback_target":{"type":"string"}`
 
 var eventSubscriptionFields = []capability.Field{
 	{Name: "id", Description: "Identifier of the subscription"},
+	{Name: "organization_id", Description: "Identifier of the Lexware organization the subscription belongs to (untrusted data)"},
 	{Name: "created_date", Description: "Creation timestamp reported by Lexware"},
 	{Name: "event_type", Description: "Event type the subscription listens to (untrusted data)"},
 	{Name: "callback_target", Description: "Scheme and host of the callback URL followed by /…; path, query, " +
@@ -60,7 +61,7 @@ var eventSubscriptionsList = capability.Descriptor{
 	InputSchema:  json.RawMessage(noArguments),
 	OutputSchema: listSchema("subscriptions", eventSubscriptionProperties),
 	Fields: []capability.Field{
-		{Name: "subscriptions", Description: "Subscriptions: id, created_date, event_type, callback_target (untrusted data)"},
+		{Name: "subscriptions", Description: "Subscriptions: id, organization_id, created_date, event_type, callback_target (untrusted data)"},
 		{Name: "truncated", Description: truncatedField},
 	},
 	Examples: referenceExample("List the webhook subscriptions of the organization"),
@@ -111,20 +112,22 @@ var eventSubscriptionsDelete = capability.Descriptor{
 // EventSubscription is one webhook subscription with a masked callback target.
 type EventSubscription struct {
 	ID             string `json:"id"`
+	OrganizationID string `json:"organization_id,omitempty"`
 	CreatedDate    string `json:"created_date,omitempty"`
 	EventType      string `json:"event_type,omitempty"`
 	CallbackTarget string `json:"callback_target"`
 }
 
 type eventSubscriptionJSON struct {
-	ID          string `json:"subscriptionId"`
-	CreatedDate string `json:"createdDate"`
-	EventType   string `json:"eventType"`
-	CallbackURL string `json:"callbackUrl"`
+	ID             string `json:"subscriptionId"`
+	OrganizationID string `json:"organizationId"`
+	CreatedDate    string `json:"createdDate"`
+	EventType      string `json:"eventType"`
+	CallbackURL    string `json:"callbackUrl"`
 }
 
 func (r eventSubscriptionJSON) normalize() EventSubscription {
-	return EventSubscription{ID: r.ID, CreatedDate: r.CreatedDate, EventType: r.EventType,
+	return EventSubscription{ID: r.ID, OrganizationID: wellFormedUUID(r.OrganizationID), CreatedDate: r.CreatedDate, EventType: r.EventType,
 		CallbackTarget: maskCallback(r.CallbackURL)}
 }
 
