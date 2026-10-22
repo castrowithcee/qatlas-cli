@@ -19,36 +19,39 @@ const (
 	maxRRuleLength      = 512
 )
 
-// Person is an organizer or attendee.
+// Person is an organizer or attendee. An organizer carries only the parameters RFC 5545 documents for it.
 type Person struct {
-	Address string `json:"address,omitempty"`
-	Name    string `json:"name,omitempty"`
-	Status  string `json:"status,omitempty"`
+	Address          string   `json:"address,omitempty"`
+	Name             string   `json:"name,omitempty"`
+	Status           string   `json:"status,omitempty"`
+	Role             string   `json:"role,omitempty"`
+	CUType           string   `json:"cutype,omitempty"`
+	RSVP             *bool    `json:"rsvp,omitempty"`
+	Member           []string `json:"member,omitempty"`
+	MemberTruncated  bool     `json:"member_truncated,omitempty"`
+	DelegatedTo      []string `json:"delegated_to,omitempty"`
+	DelegatedToCut   bool     `json:"delegated_to_truncated,omitempty"`
+	DelegatedFrom    []string `json:"delegated_from,omitempty"`
+	DelegatedFromCut bool     `json:"delegated_from_truncated,omitempty"`
+	SentBy           string   `json:"sent_by,omitempty"`
+	Dir              string   `json:"dir,omitempty"`
+	Language         string   `json:"language,omitempty"`
 }
 
-// Event is one calendar event. A compact read leaves the long and personal members out.
+// Event is one calendar event. A compact read leaves the long, personal, and later members out.
 type Event struct {
-	ID                 string   `json:"id"`
-	UID                string   `json:"uid,omitempty"`
-	Summary            string   `json:"summary,omitempty"`
-	Description        string   `json:"description,omitempty"`
-	Location           string   `json:"location,omitempty"`
-	Start              string   `json:"start,omitempty"`
-	End                string   `json:"end,omitempty"`
-	AllDay             bool     `json:"all_day,omitempty"`
-	Timezone           string   `json:"timezone,omitempty"`
-	Status             string   `json:"status,omitempty"`
-	RRule              string   `json:"rrule,omitempty"`
-	Organizer          *Person  `json:"organizer,omitempty"`
-	Attendees          []Person `json:"attendees,omitempty"`
-	AttendeesTruncated bool     `json:"attendees_truncated,omitempty"`
-	ETag               string   `json:"etag,omitempty"`
+	ID string `json:"id"`
+	EventBody
+	ETag               string      `json:"etag,omitempty"`
+	Overrides          []EventBody `json:"overrides,omitempty"`
+	OverridesTruncated bool        `json:"overrides_truncated,omitempty"`
 }
 
 var errNoEvent = errors.New("no event")
 
 // ParseEvent reads the first event of an iCalendar object, preferring the main one of a recurring series
-// over its overrides. With full unset, description, organizer, and attendees are left out.
+// over its overrides. With full unset, only the compact members are filled: the description, the people,
+// and every later member stay out, and overrides are not read.
 func ParseEvent(data string, full bool) (event *Event, err error) {
 	defer func() {
 		if recover() != nil {
@@ -75,33 +78,50 @@ func ParseEvent(data string, full bool) (event *Event, err error) {
 	if chosen == nil {
 		return nil, errNoEvent
 	}
-	event = &Event{
+	event = &Event{EventBody: bodyOf(chosen, full)}
+	if !full {
+		return event, nil
+	}
+	for _, child := range calendar.Children {
+		if child.Name != ical.CompEvent || child == chosen || child.Props.Get(ical.PropRecurrenceID) == nil {
+			continue
+		}
+		event.Overrides = appendCapped(event.Overrides, &event.OverridesTruncated, MaxOverrides, bodyOf(child, true))
+	}
+	return event, nil
+}
+
+// bodyOf reads one VEVENT component.
+func bodyOf(chosen *ical.Component, full bool) EventBody {
+	body := EventBody{
 		UID:      Clean(textOf(chosen, ical.PropUID), maxEventTextLength),
 		Summary:  Clean(textOf(chosen, ical.PropSummary), MaxSummaryLength),
 		Location: Clean(textOf(chosen, ical.PropLocation), MaxLocationLength),
 		Status:   Clean(textOf(chosen, ical.PropStatus), 32),
 	}
-	event.Start, event.AllDay, event.Timezone = timeOf(chosen.Props.Get(ical.PropDateTimeStart))
-	event.End, _, _ = timeOf(chosen.Props.Get(ical.PropDateTimeEnd))
+	body.Start, body.AllDay, body.Timezone = timeOf(chosen.Props.Get(ical.PropDateTimeStart))
+	var endZone string
+	body.End, _, endZone = timeOf(chosen.Props.Get(ical.PropDateTimeEnd))
 	if prop := chosen.Props.Get(ical.PropRecurrenceRule); prop != nil {
-		event.RRule = Clean(prop.Value, maxRRuleLength)
+		body.RRule = Clean(prop.Value, maxRRuleLength)
 	}
 	if !full {
-		return event, nil
+		return body
 	}
-	event.Description = CleanText(textOf(chosen, ical.PropDescription), MaxEventDescription, true)
+	body.Description = CleanText(textOf(chosen, ical.PropDescription), MaxEventDescription, true)
 	if prop := chosen.Props.Get(ical.PropOrganizer); prop != nil {
-		person := personOf(prop)
-		event.Organizer = &person
+		person := personOf(prop, true)
+		body.Organizer = &person
 	}
 	for _, prop := range chosen.Props.Values(ical.PropAttendee) {
-		if len(event.Attendees) >= MaxAttendees {
-			event.AttendeesTruncated = true
+		if len(body.Attendees) >= MaxAttendees {
+			body.AttendeesTruncated = true
 			break
 		}
-		event.Attendees = append(event.Attendees, personOf(&prop))
+		body.Attendees = append(body.Attendees, personOf(&prop, false))
 	}
-	return event, nil
+	fullFields(&body, chosen, endZone)
+	return body
 }
 
 func textOf(component *ical.Component, name string) string {
@@ -115,25 +135,17 @@ func textOf(component *ical.Component, name string) string {
 	return prop.Value
 }
 
-func personOf(prop *ical.Prop) Person {
-	address := strings.TrimSpace(prop.Value)
-	if len(address) >= 7 && strings.EqualFold(address[:7], "mailto:") {
-		address = address[7:]
-	}
-	return Person{
-		Address: Clean(address, maxEventTextLength),
-		Name:    Clean(prop.Params.Get(ical.ParamCommonName), maxEventTextLength),
-		Status:  Clean(prop.Params.Get(ical.ParamParticipationStatus), 32),
-	}
-}
-
 // timeOf renders a DTSTART or DTEND value without resolving zones: a date, a UTC time, or a local time with
 // the zone name of the property. A value that is none of these yields nothing.
 func timeOf(prop *ical.Prop) (value string, allDay bool, zone string) {
 	if prop == nil {
 		return "", false, ""
 	}
-	raw := strings.TrimSpace(prop.Value)
+	return timeValue(prop.Value, prop.Params.Get(ical.ParamTimezoneID))
+}
+
+func timeValue(value, zoneName string) (string, bool, string) {
+	raw := strings.TrimSpace(value)
 	if t, err := time.Parse("20060102", raw); err == nil {
 		return t.Format("2006-01-02"), true, ""
 	}
@@ -141,7 +153,7 @@ func timeOf(prop *ical.Prop) (value string, allDay bool, zone string) {
 		return t.Format("2006-01-02T15:04:05Z"), false, "UTC"
 	}
 	if t, err := time.Parse("20060102T150405", raw); err == nil {
-		return t.Format("2006-01-02T15:04:05"), false, Clean(prop.Params.Get(ical.ParamTimezoneID), 64)
+		return t.Format("2006-01-02T15:04:05"), false, Clean(zoneName, 64)
 	}
 	return "", false, ""
 }

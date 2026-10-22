@@ -196,6 +196,7 @@ in no profile. A task is replaced only if Qatlas can write all of it. The trash 
 calendar's entry is neither listed nor counted, and refused like a missing one; whole calendars are not restored.
 Sharing gives one user or group access to an own calendar, never by link, e-mail, or team; Nextcloud ignores an
 unknown recipient, so check `shares` of `calendar.calendars.list`.
+`calendar.events.get` has the limits and the `overrides` rule of [infomaniak.dav.md](infomaniak.dav.md#events).
 
 ## Contacts
 
@@ -255,9 +256,9 @@ it cannot be told apart from a missing right. Unclear outcomes are checked with 
 The tool group `account` reads the own account data, status, notifications, activity stream, and unified search of
 the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
 without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
-`truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
-only its label and method and is never followed. `account.status.set` and `account.status.clear` send one request, need `confirm`,
-and are in no profile.
+`truncated` when cut. Icons, previews, and rich objects are never reported, nor are links except a search hit's, which
+is untrusted text and never fetched; an action of a notification shows only its label and method and is never followed.
+`account.status.set` and `account.status.clear` send one request, need `confirm`, and are in no profile.
 
 `account.notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
 reported as `unchanged`. `account.activity.list` takes a filter from a fixed list that the instance must also offer,

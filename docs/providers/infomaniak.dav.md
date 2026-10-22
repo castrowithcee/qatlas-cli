@@ -103,20 +103,25 @@ refused as `permission` before any secret is read or any request is sent, and th
 `infomaniak.dav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after
 `start` and at most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REPORT of the
 `VEVENT` components that overlap the range. `limit` defaults to 50 and may be at most 200. Events are sorted
-by start and cut at `limit`; `truncated` is true when more matched. The list is compact: `id`, `uid`,
-`summary`, `location`, `start`, `end`, `all_day`, `timezone`, `status`, `rrule`, and `etag`.
+by start and cut at `limit`; `truncated` is true when more matched. The list is compact.
 
-`infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that one
-event with a GET. Besides the compact members it returns `description`, `organizer`, and at most 50
-`attendees` (`attendees_truncated` when there were more). The `etag` is the entity tag of the event version.
+`infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that one event
+with a GET: every property of the `VEVENT`, its alarms, and the parameters of organizer and attendees. A list
+cut at its cap is flagged `<name>_truncated`; a raw value over its cap is left out instead of cut.
 
-A repeating event is reported once with its recurrence rule as `rrule`; it is never expanded into
-occurrences, and overrides of single occurrences are not reported. `start` and `end` are a date for an
-all-day event, a UTC time ending in `Z`, or a local time with the zone name in `timezone`; zones are not
-resolved. The `id` is one literal path segment under the calendar, with the same rules as a target ID,
-and is checked before any request. Every event href of an answer must be a direct child of the allowed
-calendar, otherwise the whole answer is refused as an invalid response. The list leaves out an event whose
-data is not a valid iCalendar object.
+A repeating event is reported once with its recurrence rule as `rrule` and never expanded. Overrides of single
+occurrences are `overrides`, at most 50 and flagged when there are more; only an override carries
+`recurrence_id`. `start` and `end` are a date for an all-day event, a UTC time ending in `Z`, or a local time
+with the zone name; zones are not resolved. The `id` is one literal path segment under the calendar, with the
+same rules as a target ID, and is checked before any request. Every event href of an answer must be a direct
+child of the allowed calendar, otherwise the whole answer is refused as an invalid response. The list leaves out
+an event whose data is not a valid iCalendar object.
+
+Addresses (`url`, attachments, `dir`, `sent_by`, `member`, `delegated_*`) are bounded, untrusted text and are
+never fetched. Not reported: embedded binary attachments (`ATTACH` with `VALUE=BINARY`); addresses with user
+information, a query, or a fragment, which can carry an access token while a connection need not name the
+event tools in `tools`; X-properties and vendor extensions, which are not part of RFC 5545. `VTIMEZONE`
+definitions are not evaluated; times appear with their `TZID`.
 
 ## Contacts
 
