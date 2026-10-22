@@ -172,7 +172,11 @@ var columnsList = capability.Descriptor{
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":{"type":"string"},"columns":{"type":"array","items":{"type":"object","properties":{` +
-		`"key":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"}},` +
+		`"key":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
+		`"width":{"type":"number"},"editable":{"type":"boolean"},"resizable":{"type":"boolean"},` +
+		`"draggable":{"type":"boolean"},"data":{"type":"object"},"permission_type":{"type":"string"},` +
+		`"permitted_users":{"type":"array","items":{"type":"string"}},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
 		`"required":["key","name","type"],"additionalProperties":false}},` +
 		`"start":{"type":"integer"},"limit":{"type":"integer"},"next_start":{"type":"integer"},` +
 		`"has_more":{"type":"boolean"}},` +
@@ -184,7 +188,11 @@ var columnsList = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "table", Description: "The selected table reference"},
-		{Name: "columns", Description: "Column keys, names and SeaTable types"},
+		{Name: "columns", Description: "Per column the members key, name, type, width, editable, resizable, draggable, " +
+			"data, permission_type, permitted_users and omitted_fields, untrusted data; data is the type-specific " +
+			"settings object, without the members that name a joined table outside the connection's allow-list; " +
+			"permitted_users are internal SeaTable user identifiers; omitted_fields names the members left out " +
+			"because they exceed the size bounds"},
 		{Name: "start", Description: "Column offset this page started at"},
 		{Name: "limit", Description: "Page size the request applied"},
 		{Name: "next_start", Description: "Offset of the following page, absent on the last page"},
@@ -931,6 +939,7 @@ type Column struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 	Type string `json:"type"`
+	columnExtras
 }
 
 // ColumnsResult is one bounded page of a selected table's columns.
@@ -1049,7 +1058,8 @@ func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*Colu
 				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 					Message: "SeaTable returned a column without a usable key, name, or type"}
 			}
-			columns[i] = Column{Key: column.Key, Name: column.Name, Type: column.Type}
+			columns[i] = Column{Key: column.Key, Name: column.Name, Type: column.Type,
+				columnExtras: c.columnExtrasOf(document, table, column)}
 		}
 		result := &ColumnsResult{Table: formatTarget(selected), Columns: []Column{},
 			Start: page.Start, Limit: page.Limit}
@@ -1506,6 +1516,16 @@ type columnJSON struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 	Type string `json:"type"`
+
+	Width          json.RawMessage `json:"width"`
+	Editable       json.RawMessage `json:"editable"`
+	Resizable      json.RawMessage `json:"resizable"`
+	Draggable      json.RawMessage `json:"draggable"`
+	PermissionType json.RawMessage `json:"permission_type"`
+	PermittedUsers json.RawMessage `json:"permitted_users"`
+	// RawData is the data object as sent; columnJSON.UnmarshalJSON fills it.
+	RawData json.RawMessage `json:"-"`
+
 	Data struct {
 		TableID      string `json:"table_id"`
 		OtherTableID string `json:"other_table_id"`

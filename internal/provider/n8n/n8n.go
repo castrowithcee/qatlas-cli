@@ -48,13 +48,17 @@
 // A workflow read never returns a credential's value: n8n's own API does not put one in a workflow response
 // either, only the credential's id and name per node (workflowPublicDto's node.credentials), which is how
 // this provider passes it on, unmodified, and it is what a person editing the workflow already sees in the
-// n8n editor. An execution read never returns its run data: the base execution resource already excludes it
-// (includeData=false), and executions.get additionally fetches with includeData=true only when the base
-// answer reports status "error" or "crashed", and only to extract the result error's message and the node it
-// occurred on (data.resultData.error and data.resultData.lastNodeExecuted); every other part of that
-// includeData answer, in particular the per-node run data other n8n API consumers use for replay or
-// debugging, is read only far enough to find the error and is never part of the output. workflowData on an
-// execution (a snapshot of the whole workflow at run time) is dropped the same way for the same reason.
+// n8n editor. A node's parameters can still hold credentials typed in place of a credential reference, and a
+// trigger's webhook id and path form a URL that starts the workflow without authentication; every output of
+// node parameters therefore passes maskParameters, and workflows.update restores what it withheld from its
+// own read before the PUT (withheld.go). An execution read never returns its run data: the base execution
+// resource already excludes it (includeData=false), and executions.get additionally fetches with
+// includeData=true only when the base answer reports status "error" or "crashed", and only to extract the
+// result error's message and the node it occurred on (data.resultData.error and
+// data.resultData.lastNodeExecuted); every other part of that includeData answer, in particular the per-node
+// run data other n8n API consumers use for replay or debugging, is read only far enough to find the error and
+// is never part of the output. workflowData on an execution (a snapshot of the whole workflow at run time) is
+// dropped the same way for the same reason.
 //
 // A base URL must use https. n8n does not document local-only http support the way this codebase's generic
 // configuration validator leaves http open for a local test server; every other provider here that can also

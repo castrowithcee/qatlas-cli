@@ -353,3 +353,36 @@ func jsonMembers(typ reflect.Type) []string {
 	}
 	return out
 }
+
+// Every member of a row or a rows page is in the output schema and in the field list of the tools that return it.
+func TestEveryRowMemberIsInSchemaAndFields(t *testing.T) {
+	registry := registry(t)
+	want := map[string][]string{
+		rowsGet.ID: jsonMembers(reflect.TypeOf(Row{})), rowsList.ID: jsonMembers(reflect.TypeOf(RowsPage{})),
+		rowsSearch.ID: jsonMembers(reflect.TypeOf(RowsPage{})),
+	}
+	for _, d := range registry.Provider(Provider) {
+		members, ok := want[d.ID]
+		if !ok {
+			continue
+		}
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		if err := json.Unmarshal(d.OutputSchema, &schema); err != nil {
+			t.Fatal(err)
+		}
+		described := map[string]bool{}
+		for _, f := range d.Fields {
+			described[f.Name] = true
+		}
+		for _, member := range members {
+			if _, ok := schema.Properties[member]; !ok || !described[member] {
+				t.Errorf("%s: %s is missing in the schema or the fields", d.ID, member)
+			}
+		}
+		if len(schema.Properties) != len(members) || len(described) != len(members) {
+			t.Errorf("%s: schema has %d members and fields %d, want %d", d.ID, len(schema.Properties), len(described), len(members))
+		}
+	}
+}
