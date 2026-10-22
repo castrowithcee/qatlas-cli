@@ -56,7 +56,8 @@ type SalesVoucher struct {
 	PaymentConditions         *PaymentConditions `json:"payment_conditions,omitempty"`
 }
 
-// SalesLineItem is a position of a sales voucher. Recurring templates keep the narrower LineItem.
+// SalesLineItem is a position of a sales voucher or recurring template; a template carries no quotation
+// members.
 type SalesLineItem struct {
 	LineItem
 	ID           string `json:"id,omitempty"`
@@ -165,15 +166,9 @@ const (
 		`"city":{"type":"string"},"country_code":{"type":"string"}},"additionalProperties":false}`
 	shippingSchema = `{"type":"object","properties":{"shipping_type":{"type":"string"},` +
 		`"shipping_date":{"type":"string"},"shipping_end_date":{"type":"string"}},"additionalProperties":false}`
-	lineItemsSchema = `{"type":"array","items":{"type":"object","properties":{` +
-		`"type":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},` +
-		`"quantity":{"type":"number"},"unit_name":{"type":"string"},` +
-		`"unit_net_amount":{"type":"number"},"unit_gross_amount":{"type":"number"},` +
-		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},` +
-		`"amount":{"type":"number"}},"additionalProperties":false}}`
 )
 
-// Schema fragments only the sales voucher and invoice read tools carry.
+// Schema fragments of the price, payment, and sales voucher members.
 const (
 	numberProperty   = `{"type":"number"}`
 	taxAmountsSchema = `{"type":"array","items":{"type":"object","properties":{"tax_rate_percentage":` + numberProperty + `,` +
