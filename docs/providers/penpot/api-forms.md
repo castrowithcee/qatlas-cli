@@ -1,0 +1,60 @@
+---
+description: >
+  Describes the source and version of the Penpot RPC forms the provider relies on, the behavior of Penpot it
+  depends on, and the assumptions that were not verified against a live instance.
+type: knowledge
+edit: shared
+created: 2026-10-22
+updated: 2026-10-22
+---
+
+# Penpot: API forms
+
+Read from the Penpot 2.18.0 command sources and help.penpot.app (technical guide, integration), not against a live
+instance. The request and answer fields are fixed by the tool descriptors and schemas in
+`internal/provider/penpot`; this page keeps the source, the Penpot behavior the tools depend on, and the assumptions.
+
+- Backend RPC `POST /api/rpc/command/<name>` with `Authorization: Token ...` (documented). None of the read commands
+  paginates; `get-page` returns the first page when `page-id` is omitted.
+- Comments (`comments.clj`): the update and delete commands check that the caller owns the comment or thread and
+  answer without a body. `get-comment-threads` also returns owner name and email, which Qatlas drops. `share-id` and
+  `mentions` are optional and never sent.
+- Project and file management (`projects.clj`, `files.clj`, `files_create.clj`, `management.clj`): `delete-project`
+  marks the project deleted and refuses the default project; `move-files` takes a set of file IDs and the target
+  project, refuses a move into the same project, and answers without a body. Names are at most 250 characters. The
+  optional `id` (user-provided UUID), `is-shared`, and `features` of the create commands are never sent.
+- Libraries (`files.clj`): `get-file-libraries` returns the libraries the file uses, directly or through another
+  library; `link-file-to-library` requires edit permission on both files and the same team. Assumed: the answers of
+  `set-file-shared` and `link-file-to-library` are not read.
+- Snapshots and deleted files (`files_snapshot.clj`, `files.clj`): `create-file-snapshot` needs edit permission;
+  `restore-file-snapshot` and `delete-file` answer without a body. `restore-deleted-team-files` and
+  `permanently-delete-team-files` take a set of file IDs and answer a server-sent event stream whose `end` event
+  carries the IDs acted on. The permanent deletion acts on any file ID of the team, so the tool checks the
+  deleted-file list first. Assumed: the stream lines are `event:` and `data:` with a JSON array in the `end` event,
+  the answers of the other changes are read only as far as stated, and the response is delivered with
+  `Accept: application/json`.
+- Media and transfer (`rpc/commands/media.clj`, `binfile.clj`, `app/media.clj`, `app/http/sse.clj`):
+  `upload-file-media-object` is multipart and its file part must have an image content type;
+  `create-file-media-object-from-url` lets Penpot fetch the URL, follow up to three redirects, and needs a size and an
+  image type in the answer; `export-binfile` answers a server-sent event stream whose `end` event carries the URI
+  `<public-uri>/assets/by-id/<id>` of a temporary object; `import-binfile` is multipart with the archive as the
+  `file` part, detects the version, and answers a server-sent event stream. Assumed: the multipart field names are the
+  kebab-case parameter names, the part's content type becomes the `mtype`, the URI of the export is found by its
+  `/assets/by-id/<uuid>` tail whatever its encoding, the UUIDs in the `end` event of an import are the new file IDs,
+  and the temporary object is readable without the token.
+- Webhooks (`webhooks.clj`): `update-webhook` requires `uri`, `mtype` (one of `application/json` and
+  `application/transit+json`), and `is-active`; `uri` is always the stored one; it resets the error counters.
+  `delete-webhook` answers without a body. Edit permission on the team is checked by Penpot. Assumed: the answers of
+  the changes are not read, and a webhook ID is not tied to a team by the command itself, which is why the tool
+  proves it through `get-webhooks` first.
+- Teams (`teams.clj`, `common/types/team.cljc`): `update-team-member-role` accepts `owner`, `admin`, `editor`, and
+  `viewer`; Qatlas sends the last three only. The optional `id`, `features`, `organization-id`, and `is-default` of
+  `create-team` are never sent. `delete-team` answers without a body. Assumed: the answer of `create-team` carries the
+  new ID as `id`, and the answers of the other changes are not read.
+- Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
+  the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are
+  JSON when `Accept: application/json` is sent, and their keys are read case- and separator-insensitively (camelCase
+  or kebab-case); the summary's categories carry `count` and `sample`; the answers of `create-project` and
+  `create-file` carry the new ID as `id`, and the other management changes answer without a readable body that Qatlas
+  needs; a page's `objects` map is keyed by shape ID with `type`, `name`, `parent-id`, `frame-id`, `x`, `y`, `width`,
+  `height`. A different form yields empty fields, not an error.
