@@ -99,6 +99,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -508,6 +510,26 @@ func bounded(value string) string {
 	return value
 }
 
+// cleanText turns control characters and invalid UTF-8 of a provider string into spaces and caps it at max
+// bytes on a rune boundary, so untrusted text cannot smuggle terminal or line control into a result.
+func cleanText(value string, max int) string {
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == utf8.RuneError {
+			return ' '
+		}
+		return r
+	}, strings.ToValidUTF8(value, " "))
+	value = strings.TrimSpace(value)
+	if len(value) <= max {
+		return value
+	}
+	cut := max
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut]
+}
+
 // jsonDepth reports how deeply nested a JSON value is: a scalar is depth 0, and an object or array is one
 // more than its deepest child. raw must already be known-valid JSON; the central schema validator proves
 // that before any of this package's write handlers ever call this, so a decode failure here can only be this
@@ -708,7 +730,7 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{teamGet.ID, teamUsage.ID, teamMembers.ID},
 		}, {
 			ID: "organization", Title: "Read the bound team's organization",
-			Description: "reads the zone and license limits of the organization the bound team belongs to; " +
+			Description: "reads the organization the bound team belongs to, with its license limits; " +
 				"changes nothing and needs the organizations:read and teams:read scopes",
 			Tools: []string{organizationGet.ID},
 		}, {

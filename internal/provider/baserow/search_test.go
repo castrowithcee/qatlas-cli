@@ -128,3 +128,30 @@ func TestRowsSearchMasksLinks(t *testing.T) {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 }
+
+func TestRowsSearchColumnSelection(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, searchServer(`[]`))
+	result, err := env.invoke(rowsSearch.ID, "list", `{"table_id":11,"include":["Name","Lieferant"],"exclude":["Betrag"]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(result, "secret-supplier") {
+		t.Fatalf("a foreign display value leaked: %s", result)
+	}
+	if len(calls) != 2 || calls[0].path != "/api/database/fields/table/11/" || calls[1].path != "/api/database/rows/table/11/" {
+		t.Fatalf("calls = %+v", calls)
+	}
+	if q := calls[1].query; q.Get("include") != "Name,Lieferant" || q.Get("exclude") != "Betrag" || len(q) != 5 {
+		t.Fatalf("query = %v", q)
+	}
+	calls = nil
+	for _, args := range []string{`{"table_id":11,"include":["Unbekannt"]}`, `{"table_id":11,"exclude":["Unbekannt"]}`} {
+		if _, err := env.invoke(rowsSearch.ID, "list", args); err == nil {
+			t.Errorf("%s was accepted", args)
+		}
+	}
+	if len(calls) != 2 || calls[0].path != "/api/database/fields/table/11/" || calls[1].path != calls[0].path {
+		t.Fatalf("calls = %+v, want only the schema reads", calls)
+	}
+}

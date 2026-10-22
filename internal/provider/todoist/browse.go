@@ -19,22 +19,28 @@ import (
 const (
 	browsePageSize = 50
 	maxBrowseText  = 200
+	// maxTagText bounds an identifier, a unit, or a language tag; maxOrderKey bounds an order key.
+	maxTagText  = 64
+	maxOrderKey = 128
 	// maxChainDepth bounds the parent chain shown as the path of a project.
 	maxChainDepth = 20
 	webHost       = "app.todoist.com"
 )
 
-// browseText bounds a name Todoist sent: control characters become spaces and the text is cut on a rune
-// boundary.
-func browseText(value string) string {
+// browseText bounds a name Todoist sent.
+func browseText(value string) string { return boundedText(value, maxBrowseText) }
+
+// boundedText bounds a text Todoist sent: control characters become spaces and the text is cut to at most
+// limit bytes on a rune boundary.
+func boundedText(value string, limit int) string {
 	value = strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || r == utf8.RuneError {
 			return ' '
 		}
 		return r
 	}, value))
-	if len(value) > maxBrowseText {
-		cut := maxBrowseText
+	if len(value) > limit {
+		cut := limit
 		for !utf8.RuneStart(value[cut]) {
 			cut--
 		}

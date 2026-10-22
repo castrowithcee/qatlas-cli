@@ -94,6 +94,15 @@ installation may differ from its API address. Any other host names nothing.
 
 The read profile offers the five read tools.
 
+`rows.list` and `rows.search` select columns with `include` and `exclude`. `rows.list` sends the names unchecked;
+`rows.search` checks them against the schema it reads anyway. Link masking applies to the selected columns. Names
+with a comma, with `__`, or with a leading `-` or `+` cannot be selected: such names would need the quoting of
+Baserow's parameters, and Qatlas sends no quoted names. `{link_row_field}__join` is not offered because it reads
+values of other tables through the link.
+
+`rows.get` with `view_id` first reads the table's view list and rejects a view that is not in it; without it the
+call sends one request. `include_metadata` adds `metadata` at no extra request.
+
 ## Not offered: row history and comments
 
 Row history (`GET /api/database/rows/table/{table_id}/{row_id}/history/`) and row comments
@@ -104,27 +113,20 @@ documentation lists the database token for them.
 
 ## Searching rows
 
-`baserow.rows.search` takes `table_id` (inside the targets), `page`, `size` (as `rows.list`), and:
+`baserow.rows.search` takes `table_id` (inside the targets) and the arguments of `rows.list`, plus `search`,
+`search_mode`, `filters` (up to 10, a fixed list of types), `filter_type`, `order_by` (up to 5), and `view_id`, a view
+of this table. Filter and sort field names may not contain `__` or `,` or begin with `-` or `+`.
 
-- `search` (up to 256 characters) and `search_mode` (`full-text`, `full-text-with-count`, or `compat`; needs `search`).
-- `filters` (up to 10): objects with `field` (a field name), `type`, and `value` (a string up to 256 characters,
-  omitted for `empty` and `not_empty`, required for the others). Types: `equal`, `not_equal`, `contains`,
-  `contains_not`, `higher_than`, `higher_than_or_equal`, `lower_than`, `lower_than_or_equal`, `empty`,
-  `not_empty`. `filter_type` is `AND` (default) or `OR`. The same field and type may not repeat.
-- `order_by` (up to 5): objects with `field` and `direction` (`asc` default, `desc`).
-- `view_id`: a view of this table.
+There is no free filter passthrough: values travel only as URL-encoded query parameters. Filtered and sorted
+fields must exist in the table's schema and have a type from a fixed list that leaves out link, lookup, formula,
+rollup, and count fields: such a filter would show whether a value exists in another table. For the same reason
+`search` is refused on a table with such a field unless the connection targets `*`.
 
-There is no free filter passthrough: values travel only as URL-encoded query parameters built from these
-fields. Field names must exist in the table's schema, be of a plain type (text, long text, number, boolean,
-date, rating, single select, email, URL, phone number, autonumber, UUID, created on, last modified), and not
-contain `__` or `,` or begin with `-` or `+`. Link, lookup, formula, rollup, and count fields cannot be filtered
-or sorted: such a filter would show whether a value exists in another table. For the same reason `search` is
-refused on a table that has such a field unless the connection targets `*`.
-
-Order of checks: the table (before the credential), argument shape and limits (before any request), then one
-read of the table's fields, after which an unknown or unsuitable field, or a refused search, is rejected. Only
-then, with `view_id`, the table's view list is read; a view that is not in it is rejected. The rows request
-follows last. The answer is the shape of `rows.list` (rows keyed by field name), link-masked and bounded the same way.
+Order of checks: the table (before the credential), argument shape and limits, including column keys (before any
+request), then one read of the table's fields, after which an unknown or unsuitable field, an unknown `include` or
+`exclude` name, or a refused search is rejected. Only then, with `view_id`, the table's view
+list is read; a view that is not in it is rejected. The rows request follows last. The answer has the shape of
+`rows.list`, keyed by field name, link-masked and bounded the same way.
 
 ## Row changes
 
