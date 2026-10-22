@@ -10,7 +10,7 @@ import (
 
 const logsBody = `{"logs":[{"id":"l1","action":"scene:create","operation":"create","created_at":"2026-01-02T03:04:05Z",` +
 	`"user_id":"u1","user_email":"a@example.com","user_full_name":"name-canary","ip_address":"ip-canary",` +
-	`"details":"details-canary","user_picture":"pic-canary","status":"ok"}],"hasMore":true,"totalCount":9}`
+	`"details":"details-canary","user_picture":"pic-canary","status":200}],"hasMore":true,"totalCount":9}`
 
 func logsHandler(calls *[]call) func(*http.Request) (*http.Response, error) {
 	return func(r *http.Request) (*http.Response, error) {
@@ -53,6 +53,30 @@ func TestLogsQueryAndReducedResult(t *testing.T) {
 	}
 	if !strings.Contains(out, `"next_offset":30`) || !strings.Contains(out, `"user_email":"a@example.com"`) {
 		t.Fatalf("result = %s", out)
+	}
+}
+
+func TestLogsStatusInteger(t *testing.T) {
+	for raw, want := range map[string]string{`200`: `"status":200`, `"404"`: `"status":404`, `-1`: `"status":-1`,
+		`"abc"`: ``, `1.5`: ``, `"1.5"`: ``, `1e3`: ``, `null`: ``, `true`: ``, `""`: ``, `"007"`: ``, `"--5"`: ``, `"-"`: ``, `-0`: ``} {
+		var calls []call
+		body := `{"logs":[{"id":"l1","action":"a","status":` + raw + `}],"hasMore":false}`
+		env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+		out, err := env.invoke(logsList.ID, "every", `{}`)
+		if err != nil || !strings.Contains(out, `"id":"l1"`) {
+			t.Fatalf("%s: out = %s, err = %v", raw, out, err)
+		}
+		if want == "" && strings.Contains(out, `"status"`) || want != "" && !strings.Contains(out, want) {
+			t.Fatalf("%s: out = %s", raw, out)
+		}
+	}
+	var calls []call
+	env := newEnvironment(t, &calls, logsHandler(&calls))
+	if out, _ := env.invoke(logsList.ID, "every", `{}`); !strings.Contains(out, `"status":200`) {
+		t.Fatalf("out = %s", out)
+	}
+	if logsList.Version != 2 || !strings.Contains(string(logsList.OutputSchema), `"status":{"type":"integer"}`) {
+		t.Fatalf("version = %d", logsList.Version)
 	}
 }
 
