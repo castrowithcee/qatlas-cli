@@ -28,9 +28,18 @@ const projectPermissionMessage = "n8n refused this projects operation: the insta
 	"the Projects feature (project roles), the API key may lack the project scope, or its owner's role may not " +
 	"manage projects; Qatlas cannot tell which of the three"
 
+// maxProjectTelemetryTags bounds the custom telemetry tags listed for one project, whatever n8n sends.
+const maxProjectTelemetryTags = 20
+
 var projectSummarySchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
+	`"icon":{"type":"object","properties":{"type":{"type":"string"},"value":{"type":"string"},` +
+	`"color":{"type":"string"}},"additionalProperties":false},` +
+	`"description":{"type":"string"},` +
+	`"custom_telemetry_tags":{"type":"array","items":{"type":"object","properties":{` +
+	`"key":{"type":"string"},"value":{"type":"string"}},"required":["key","value"],"additionalProperties":false}},` +
+	`"creator_id":{"type":"string"}},` +
 	`"required":["id","name","type","created_at","updated_at"],"additionalProperties":false}`
 
 var projectSummaryFields = []capability.Field{
@@ -39,6 +48,11 @@ var projectSummaryFields = []capability.Field{
 	{Name: "type", Description: "personal or team, as n8n reports it"},
 	{Name: "created_at", Description: "Creation time, as n8n reports it"},
 	{Name: "updated_at", Description: "Last change time, as n8n reports it"},
+	{Name: "icon", Description: "Project icon (type, value, color); absent when the project has none; untrusted data"},
+	{Name: "description", Description: "Project description, untrusted data, capped"},
+	{Name: "custom_telemetry_tags", Description: "Custom telemetry tags (key, value) of the project, untrusted data, " +
+		"capped in number and length"},
+	{Name: "creator_id", Description: "Identifier of the user who created the project, personal data, untrusted"},
 }
 
 var projectIDArgument = capability.Argument{Name: "project_id",
@@ -154,13 +168,24 @@ var projectsDelete = capability.Descriptor{
 		Arguments: json.RawMessage(`{"project_id":"VmwOO9HeTEj20kxM"}`)}},
 }
 
-// projectJSON mirrors the subset of n8n's projectPublicDto this provider reads.
+// projectJSON mirrors n8n's projectPublicDto.
 type projectJSON struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	Icon      *struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+		Color string `json:"color"`
+	} `json:"icon"`
+	Description         string `json:"description"`
+	CustomTelemetryTags []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	} `json:"customTelemetryTags"`
+	CreatorID string `json:"creatorId"`
 }
 
 type projectsPageJSON struct {
@@ -168,13 +193,56 @@ type projectsPageJSON struct {
 	NextCursor string        `json:"nextCursor"`
 }
 
-// ProjectSummary is the stable Qatlas view of one project.
+// ProjectIcon is the icon of a project. Its texts are untrusted data.
+type ProjectIcon struct {
+	Type  string `json:"type,omitempty"`
+	Value string `json:"value,omitempty"`
+	Color string `json:"color,omitempty"`
+}
+
+// ProjectTelemetryTag is one custom telemetry tag of a project. Both texts are untrusted data.
+type ProjectTelemetryTag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// ProjectSummary is the stable Qatlas view of one project, shared by projects.list and the project of a
+// variable. The change tools report their own types. Description, icon, tags, and creator are untrusted.
 type ProjectSummary struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID                  string                `json:"id"`
+	Name                string                `json:"name"`
+	Type                string                `json:"type"`
+	CreatedAt           string                `json:"created_at"`
+	UpdatedAt           string                `json:"updated_at"`
+	Icon                *ProjectIcon          `json:"icon,omitempty"`
+	Description         string                `json:"description,omitempty"`
+	CustomTelemetryTags []ProjectTelemetryTag `json:"custom_telemetry_tags,omitempty"`
+	CreatorID           string                `json:"creator_id,omitempty"`
+}
+
+// summarizeProject is the one place that maps n8n's projectPublicDto to the Qatlas view. Missing and empty
+// values stay out; foreign texts lose control characters and are capped in length and number.
+func summarizeProject(p projectJSON) ProjectSummary {
+	out := ProjectSummary{ID: bounded(p.ID), Name: bounded(p.Name), Type: bounded(p.Type),
+		CreatedAt: bounded(p.CreatedAt), UpdatedAt: bounded(p.UpdatedAt),
+		Description: cappedText(p.Description), CreatorID: cappedText(p.CreatorID)}
+	if p.Icon != nil {
+		icon := ProjectIcon{Type: cappedText(p.Icon.Type), Value: cappedText(p.Icon.Value),
+			Color: cappedText(p.Icon.Color)}
+		if icon != (ProjectIcon{}) {
+			out.Icon = &icon
+		}
+	}
+	for _, tag := range p.CustomTelemetryTags {
+		if len(out.CustomTelemetryTags) == maxProjectTelemetryTags {
+			break
+		}
+		if key := cappedText(tag.Key); key != "" {
+			out.CustomTelemetryTags = append(out.CustomTelemetryTags,
+				ProjectTelemetryTag{Key: key, Value: cappedText(tag.Value)})
+		}
+	}
+	return out
 }
 
 // ProjectsPage is one paginated, allow-list-filtered listing of projects.
@@ -298,8 +366,7 @@ func (c *Client) ListProjects(ctx context.Context, cursor string, limit int) (*P
 		if !c.scope.allowsProject(p.ID) {
 			continue
 		}
-		summaries = append(summaries, ProjectSummary{ID: bounded(p.ID), Name: bounded(p.Name), Type: bounded(p.Type),
-			CreatedAt: bounded(p.CreatedAt), UpdatedAt: bounded(p.UpdatedAt)})
+		summaries = append(summaries, summarizeProject(p))
 	}
 	return &ProjectsPage{Projects: summaries, Cursor: page.NextCursor, HasMore: page.NextCursor != "",
 		Count: len(summaries)}, nil

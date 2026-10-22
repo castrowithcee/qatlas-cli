@@ -85,13 +85,13 @@ or enter the identifier.
 
 | Tool | Reads |
 | --- | --- |
-| `excalidraw-plus.collections.list` | the allowed collections: `id`, `name`, `is_default`, `created`, `updated` |
+| `excalidraw-plus.collections.list` | the allowed collections and their metadata |
 | `excalidraw-plus.scenes.list` | scenes of the allowed collections; optional `collection_id` and `name` |
-| `excalidraw-plus.scenes.get` | one scene's metadata, without creator, preview, or share links |
+| `excalidraw-plus.scenes.get` | one scene's metadata, without preview address or share links (see Boundary) |
 | `excalidraw-plus.scenes.content` | one scene's elements, capped, with their `version`; optional `query`, `offset`, `limit` |
 
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
-collections; with exactly one allowed collection it is the default, with `*` it is optional.
+collections; with exactly one it is the default, with `*` it is optional.
 
 ## Activity log
 
@@ -270,13 +270,17 @@ or a provider response body.
 
 ## Boundary
 
-The response shapes follow the API reference's pages for collections, scenes, scene content, and rate limiting; error
-bodies, the identifier format, and the element fields beyond the Excalidraw file format are not documented there, and
-the element fields (`text`, `name`, `isDeleted`, `frameId`, `containerId`) are assumed from that format. The behaviour
-of `collectionId=private` for personal keys is not relied on. The request bodies of `POST /scenes` (`name`,
-`pinned`, `collectionId`) and `PATCH /scenes/{sceneId}` (`name`, `pinned`, `collectionId`, all optional) and their
-answers follow the API reference; the effect of a repeated request and the error bodies are not documented, and no
-live call has been made.
+The response shapes follow the API reference's pages for collections, scenes, scene content, and rate limiting.
+Error bodies, the identifier format, and the element fields beyond the Excalidraw file format (`text`, `name`,
+`isDeleted`, `frameId`, `containerId`, assumed from that format) are not documented there. The behaviour of
+`collectionId=private` for personal keys is not relied on. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}`
+(`name`, `pinned`, `collectionId`) follow the API reference; the effect of a repeated request is not documented, and
+no live call has been made.
+
+Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works
+without an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links
+grant access without sign-in and no scene read tool is released separately through `tools`; `isDeleted` and
+`deletedAt`, since items in the trash are not listed and the fields would always be empty.
 
 The content endpoints follow the API reference pages for scene content and its schema: `PATCH` takes a partial scene
 content with `elements`, `appState`, and `files` (at least one), merges elements by id with the higher `version`
@@ -288,13 +292,11 @@ the server rejects or ignores a stale version without an error (Qatlas detects i
 Qatlas fills for omitted element fields, the accepted `source` value, a size limit, and the effect of a repeated
 request. The local limits (100 and 500 elements, 2000 text characters, 200 points, 1 MiB) are Qatlas choices.
 
-The delete endpoints follow the API reference, which lists `DELETE` for a scene and for a collection as a soft deletion
-into the trash. Not documented, and therefore assumed: the exact paths (`DELETE /scenes/{id}`, `DELETE /collections/{id}`,
-in line with the other endpoints), the success status and body (any 2xx counts, the body is dropped), the error
-bodies, what happens to the scenes of a deleted collection (assumed to leave with it), whether the default
-collection may be deleted (refused locally), the shape of `GET /collections/{id}` (assumed to be the collection object
-as in the list, with `id`, `isDeleted`, and `isDefault`), and the effect of a repeated request. No live call has been
-made.
+The delete endpoints follow the API reference (`DELETE` of a scene or collection is a soft deletion into the
+trash). Assumed: the paths `DELETE /scenes/{id}` and `DELETE /collections/{id}`, that any 2xx counts (the body is
+dropped), that the scenes of a deleted collection leave with it, whether the default collection may be deleted
+(refused locally), that `GET /collections/{id}` answers the collection object of the list, and the effect of a
+repeated request. No live call has been made.
 
 The users tools follow the API reference pages for the user endpoints. Documented: the paths
 above; `limit` (1 to 100) and `offset` on the list; the answer `{limit, offset, hasNextPage, data}` with the user fields

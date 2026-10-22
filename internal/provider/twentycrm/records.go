@@ -80,7 +80,7 @@ var recordsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"object":` + objectNameSchema + `,` + pageProperties +
 		`,"deleted":{"type":"boolean"}},"required":["object"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"records":{"type":"array","items":` + recordSchema + `},` +
-		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},"required":["records","has_more"],` +
+		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},"required":["records","has_more"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
@@ -95,6 +95,7 @@ var recordsList = capability.Descriptor{
 		{Name: "records", Description: "Records with id, created_at, updated_at, and fields (field name to value), untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the object holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{
 		Description: "Read the newest people with two fields",
@@ -144,6 +145,7 @@ type RecordList struct {
 	Records    []Record `json:"records"`
 	NextCursor string   `json:"next_cursor,omitempty"`
 	HasMore    bool     `json:"has_more"`
+	TotalCount *int64   `json:"total_count,omitempty"`
 }
 
 // recordQuery is the validated, normalized request of a record tool. Everything in it was checked without
@@ -430,8 +432,9 @@ func (c *Client) ListRecords(ctx context.Context, query *recordQuery) (*RecordLi
 		values.Set("starting_after", query.After)
 	}
 	var page struct {
-		Data     map[string]json.RawMessage `json:"data"`
-		PageInfo struct {
+		Data       map[string]json.RawMessage `json:"data"`
+		TotalCount json.RawMessage            `json:"totalCount"`
+		PageInfo   struct {
 			HasNextPage bool    `json:"hasNextPage"`
 			EndCursor   *string `json:"endCursor"`
 		} `json:"pageInfo"`
@@ -443,7 +446,11 @@ func (c *Client) ListRecords(ctx context.Context, query *recordQuery) (*RecordLi
 	if json.Unmarshal(page.Data[object.Plural], &items) != nil || items == nil || len(items) > query.Limit {
 		return nil, provider.InvalidResponse(op, "Twenty returned an unusable page of records")
 	}
-	result := &RecordList{Records: make([]Record, 0, len(items)), HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &RecordList{Records: make([]Record, 0, len(items)), HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	for _, item := range items {
 		record, err := object.project(op, item, query.Fields)
 		if err != nil {

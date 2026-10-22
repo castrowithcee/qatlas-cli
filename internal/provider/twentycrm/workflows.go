@@ -79,7 +79,7 @@ var workflowsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":` + workflowLimitSchema +
 		`,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"workflows":{"type":"array","items":` +
-		workflowItemSchema + `},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
+		workflowItemSchema + `},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["workflows","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "limit", Description: "Workflows per page, from 1 through 100; 25 when omitted"},
@@ -89,6 +89,7 @@ var workflowsList = capability.Descriptor{
 		{Name: "workflows", Description: "The workflows on this page, newest first, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{Description: "List the workflows", Arguments: json.RawMessage(`{}`)}},
 }
@@ -149,7 +150,7 @@ var workflowRunsList = capability.Descriptor{
 		`"status":{"type":"string"},"workflow_version_id":{"type":"string"},"enqueued_at":{"type":"string"},` +
 		`"started_at":{"type":"string"},"ended_at":{"type":"string"},"created_at":{"type":"string"}},` +
 		`"required":["id","status"],"additionalProperties":false}},` +
-		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
+		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["runs","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "workflow_id", Description: "UUID of the workflow, as returned by twenty-crm.workflows.list", Required: true},
@@ -161,6 +162,7 @@ var workflowRunsList = capability.Descriptor{
 		{Name: "runs", Description: "The runs on this page, newest first, without outputs or errors, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workflow holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{
 		Description: "Find failed runs of a workflow",
@@ -183,6 +185,7 @@ type WorkflowList struct {
 	Workflows  []WorkflowSummary `json:"workflows"`
 	NextCursor string            `json:"next_cursor,omitempty"`
 	HasMore    bool              `json:"has_more"`
+	TotalCount *int64            `json:"total_count,omitempty"`
 }
 
 // WorkflowVersion carries no trigger or step settings, only their types.
@@ -221,12 +224,14 @@ type WorkflowRunList struct {
 	Runs       []WorkflowRun `json:"runs"`
 	NextCursor string        `json:"next_cursor,omitempty"`
 	HasMore    bool          `json:"has_more"`
+	TotalCount *int64        `json:"total_count,omitempty"`
 }
 
 // workflowPage is the Twenty page envelope; the items stay raw until projected.
 type workflowPage struct {
-	Data     map[string]json.RawMessage `json:"data"`
-	PageInfo struct {
+	Data       map[string]json.RawMessage `json:"data"`
+	TotalCount json.RawMessage            `json:"totalCount"`
+	PageInfo   struct {
 		HasNextPage bool    `json:"hasNextPage"`
 		EndCursor   *string `json:"endCursor"`
 	} `json:"pageInfo"`
@@ -362,7 +367,11 @@ func (c *Client) ListWorkflows(ctx context.Context, connection string, limit int
 	if err != nil {
 		return nil, err
 	}
-	result := &WorkflowList{Workflows: make([]WorkflowSummary, 0, len(items)), HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &WorkflowList{Workflows: make([]WorkflowSummary, 0, len(items)), HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	for _, item := range items {
 		var record workflowRecord
 		if json.Unmarshal(item, &record) != nil {
@@ -521,7 +530,11 @@ func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, s
 	if err != nil {
 		return nil, err
 	}
-	result := &WorkflowRunList{Runs: make([]WorkflowRun, 0, len(items)), HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &WorkflowRunList{Runs: make([]WorkflowRun, 0, len(items)), HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	for _, item := range items {
 		var record runRecord
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) || !equalUUID(record.WorkflowID, workflowID) {
