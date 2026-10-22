@@ -69,28 +69,44 @@ const (
 	viewSummaryProps = `"id":{"type":"string"},"name":{"type":"string"},"object":{"type":"string"},` +
 		`"object_metadata_id":{"type":"string"},"type":{"type":"string"},"key":{"type":"string"},` +
 		`"icon":{"type":"string"},"position":{"type":"number"},"is_custom":{"type":"boolean"},` +
-		`"is_active":{"type":"boolean"}`
+		`"is_active":{"type":"boolean"},"universal_identifier":{"type":"string"},"application_id":{"type":"string"},` +
+		`"is_system_side_effect":{"type":"boolean"},"kanban_aggregate_operation":{"type":"string"},` +
+		`"kanban_aggregate_operation_field_id":{"type":"string"},"should_hide_empty_groups":{"type":"boolean"},` +
+		`"kanban_column_width":{"type":"integer"},"group_load_limit":{"type":"integer"},` +
+		`"calendar_field_id":{"type":"string"},"calendar_end_field_id":{"type":"string"},` +
+		`"calendar_layout":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 	viewSummaryRequired = `"required":["id","name","object_metadata_id","type"]`
 
 	viewFieldRef = `"field_id":{"type":"string"},"field":{"type":"string"}`
+	viewStamps   = `"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 	viewValue    = `"value":{"type":"string"},"value_truncated":{"type":"boolean"}`
 
 	viewSchemaProps = viewSummaryProps + `,"is_compact":{"type":"boolean"},"any_field_filter_value":{"type":"string"},` +
 		`"main_group_by_field_id":{"type":"string"},"main_group_by_field":{"type":"string"},` +
+		`"kanban_aggregate_operation_field":{"type":"string"},"calendar_field":{"type":"string"},` +
+		`"calendar_end_field":{"type":"string"},` +
+		`"field_groups":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+		`"name":{"type":"string"},"position":{"type":"number"},"is_visible":{"type":"boolean"},` +
+		`"is_active":{"type":"boolean"},` + viewStamps + `},"additionalProperties":false}},` +
 		`"fields":{"type":"array","items":{"type":"object","properties":{` + viewFieldRef + `,` +
 		`"is_visible":{"type":"boolean"},"size":{"type":"number"},"position":{"type":"number"},` +
-		`"aggregate_operation":{"type":"string"}},"additionalProperties":false}},` +
+		`"aggregate_operation":{"type":"string"},"field_group_id":{"type":"string"},` +
+		`"universal_identifier":{"type":"string"},"application_id":{"type":"string"},` +
+		`"is_system_side_effect":{"type":"boolean"},"is_active":{"type":"boolean"},` + viewStamps +
+		`},"additionalProperties":false}},` +
 		`"filters":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` + viewFieldRef + `,` +
 		`"operand":{"type":"string"},` + viewValue + `,"filter_group_id":{"type":"string"},"position":{"type":"number"},` +
-		`"sub_field_name":{"type":"string"},"relation_target_field_id":{"type":"string"}},"additionalProperties":false}},` +
+		`"sub_field_name":{"type":"string"},"relation_target_field_id":{"type":"string"},` + viewStamps +
+		`},"additionalProperties":false}},` +
 		`"filter_groups":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
-		`"parent_id":{"type":"string"},"logical_operator":{"type":"string"},"position":{"type":"number"}},` +
-		`"additionalProperties":false}},` +
+		`"parent_id":{"type":"string"},"logical_operator":{"type":"string"},"position":{"type":"number"},` +
+		viewStamps + `},"additionalProperties":false}},` +
 		`"sorts":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` + viewFieldRef + `,` +
-		`"direction":{"type":"string"},"sub_field_name":{"type":"string"}},"additionalProperties":false}},` +
+		`"direction":{"type":"string"},"sub_field_name":{"type":"string"},` + viewStamps +
+		`},"additionalProperties":false}},` +
 		`"groups":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
 		`"field_value":{"type":"string"},"field_value_truncated":{"type":"boolean"},"is_visible":{"type":"boolean"},` +
-		`"position":{"type":"number"}},"additionalProperties":false}}`
+		`"position":{"type":"number"},` + viewStamps + `},"additionalProperties":false}}`
 )
 
 var viewsList = capability.Descriptor{
@@ -140,9 +156,42 @@ var viewsGet = capability.Descriptor{
 		{Name: "id", Description: "UUID of the view, as returned by twenty-crm.views.list", Required: true},
 	},
 	Fields: []capability.Field{
+		{Name: "id", Description: "UUID of the view"},
+		{Name: "name", Description: "Name of the view, untrusted data"},
+		{Name: "object", Description: "Singular API name of the object, when the data model resolves it"},
+		{Name: "object_metadata_id", Description: "UUID of the object"},
+		{Name: "type", Description: "View type; a type unknown to Qatlas is unknown"},
+		{Name: "key", Description: "Key of the view, INDEX for the standard view of an object"},
+		{Name: "icon", Description: "Icon name"},
+		{Name: "position", Description: "Position among the views of the object"},
+		{Name: "is_custom", Description: "True for a view created by a person"},
+		{Name: "is_active", Description: "True while the view is in use"},
+		{Name: "is_compact", Description: "True when rows are shown compact"},
+		{Name: "any_field_filter_value", Description: "Search text over all fields, untrusted data"},
+		{Name: "main_group_by_field_id", Description: "UUID of the field the view groups by"},
+		{Name: "main_group_by_field", Description: "API name of that field"},
+		{Name: "universal_identifier", Description: "Identifier of the view across workspaces"},
+		{Name: "application_id", Description: "UUID of the application that owns the view"},
+		{Name: "is_system_side_effect", Description: "True for a view Twenty created as a side effect"},
+		{Name: "kanban_aggregate_operation", Description: "Aggregate shown in kanban columns"},
+		{Name: "kanban_aggregate_operation_field_id", Description: "UUID of the field the kanban aggregate runs over"},
+		{Name: "kanban_aggregate_operation_field", Description: "API name of that field"},
+		{Name: "should_hide_empty_groups", Description: "True when empty groups are hidden"},
+		{Name: "kanban_column_width", Description: "Width of a kanban column"},
+		{Name: "group_load_limit", Description: "Records loaded per group"},
+		{Name: "calendar_field_id", Description: "UUID of the date field a calendar view starts on"},
+		{Name: "calendar_field", Description: "API name of that field"},
+		{Name: "calendar_end_field_id", Description: "UUID of the date field a calendar view ends on"},
+		{Name: "calendar_end_field", Description: "API name of that field"},
+		{Name: "calendar_layout", Description: "Calendar layout"},
+		{Name: "created_at", Description: "Creation time"},
+		{Name: "updated_at", Description: "Time of the last change"},
+		{Name: "field_groups", Description: "Named groups of columns, at most 200"},
 		{Name: "fields", Description: "The columns in the view, at most 200"},
 		{Name: "filters", Description: "The filters; values are untrusted data, capped at 500 characters"},
 		{Name: "filter_groups", Description: "The nesting of filters by AND, OR, or NOT"},
+		{Name: "sorts", Description: "The sorts of the view"},
+		{Name: "groups", Description: "The group values of a grouped view; values are untrusted data"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read a view",
@@ -162,6 +211,20 @@ type ViewSummary struct {
 	Position         float64 `json:"position"`
 	IsCustom         *bool   `json:"is_custom,omitempty"`
 	IsActive         *bool   `json:"is_active,omitempty"`
+
+	UniversalIdentifier             string      `json:"universal_identifier,omitempty"`
+	ApplicationID                   string      `json:"application_id,omitempty"`
+	IsSystemSideEffect              *bool       `json:"is_system_side_effect,omitempty"`
+	KanbanAggregateOperation        string      `json:"kanban_aggregate_operation,omitempty"`
+	KanbanAggregateOperationFieldID string      `json:"kanban_aggregate_operation_field_id,omitempty"`
+	ShouldHideEmptyGroups           *bool       `json:"should_hide_empty_groups,omitempty"`
+	KanbanColumnWidth               json.Number `json:"kanban_column_width,omitempty"`
+	GroupLoadLimit                  json.Number `json:"group_load_limit,omitempty"`
+	CalendarFieldID                 string      `json:"calendar_field_id,omitempty"`
+	CalendarEndFieldID              string      `json:"calendar_end_field_id,omitempty"`
+	CalendarLayout                  string      `json:"calendar_layout,omitempty"`
+	CreatedAt                       string      `json:"created_at,omitempty"`
+	UpdatedAt                       string      `json:"updated_at,omitempty"`
 }
 
 // ViewList is one page of views.
@@ -179,6 +242,25 @@ type ViewField struct {
 	Size               float64 `json:"size"`
 	Position           float64 `json:"position"`
 	AggregateOperation string  `json:"aggregate_operation,omitempty"`
+
+	FieldGroupID        string `json:"field_group_id,omitempty"`
+	UniversalIdentifier string `json:"universal_identifier,omitempty"`
+	ApplicationID       string `json:"application_id,omitempty"`
+	IsSystemSideEffect  *bool  `json:"is_system_side_effect,omitempty"`
+	IsActive            *bool  `json:"is_active,omitempty"`
+	CreatedAt           string `json:"created_at,omitempty"`
+	UpdatedAt           string `json:"updated_at,omitempty"`
+}
+
+// ViewFieldGroup collects columns of a view under a name.
+type ViewFieldGroup struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name,omitempty"`
+	Position  float64 `json:"position"`
+	IsVisible *bool   `json:"is_visible,omitempty"`
+	IsActive  *bool   `json:"is_active,omitempty"`
+	CreatedAt string  `json:"created_at,omitempty"`
+	UpdatedAt string  `json:"updated_at,omitempty"`
 }
 
 // ViewFilter is one filter of a view. Its value is workspace data.
@@ -193,6 +275,8 @@ type ViewFilter struct {
 	Position              float64 `json:"position"`
 	SubFieldName          string  `json:"sub_field_name,omitempty"`
 	RelationTargetFieldID string  `json:"relation_target_field_id,omitempty"`
+	CreatedAt             string  `json:"created_at,omitempty"`
+	UpdatedAt             string  `json:"updated_at,omitempty"`
 }
 
 // ViewFilterGroup nests filters by a logical operator.
@@ -201,6 +285,8 @@ type ViewFilterGroup struct {
 	ParentID        string  `json:"parent_id,omitempty"`
 	LogicalOperator string  `json:"logical_operator"`
 	Position        float64 `json:"position"`
+	CreatedAt       string  `json:"created_at,omitempty"`
+	UpdatedAt       string  `json:"updated_at,omitempty"`
 }
 
 // ViewSort is one sort of a view.
@@ -210,6 +296,8 @@ type ViewSort struct {
 	Field        string `json:"field,omitempty"`
 	Direction    string `json:"direction"`
 	SubFieldName string `json:"sub_field_name,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
 // ViewGroup is one group value of a grouped view. Its value is workspace data.
@@ -219,20 +307,28 @@ type ViewGroup struct {
 	FieldValueTruncated bool    `json:"field_value_truncated,omitempty"`
 	IsVisible           *bool   `json:"is_visible,omitempty"`
 	Position            float64 `json:"position"`
+	CreatedAt           string  `json:"created_at,omitempty"`
+	UpdatedAt           string  `json:"updated_at,omitempty"`
 }
 
 // View is a view with its layout. It carries neither the creator nor the application of the view.
 type View struct {
 	ViewSummary
-	IsCompact          *bool             `json:"is_compact,omitempty"`
-	AnyFieldFilter     string            `json:"any_field_filter_value,omitempty"`
-	MainGroupByFieldID string            `json:"main_group_by_field_id,omitempty"`
-	MainGroupByField   string            `json:"main_group_by_field,omitempty"`
-	Fields             []ViewField       `json:"fields"`
-	Filters            []ViewFilter      `json:"filters"`
-	FilterGroups       []ViewFilterGroup `json:"filter_groups"`
-	Sorts              []ViewSort        `json:"sorts"`
-	Groups             []ViewGroup       `json:"groups"`
+	IsCompact          *bool  `json:"is_compact,omitempty"`
+	AnyFieldFilter     string `json:"any_field_filter_value,omitempty"`
+	MainGroupByFieldID string `json:"main_group_by_field_id,omitempty"`
+	MainGroupByField   string `json:"main_group_by_field,omitempty"`
+
+	KanbanAggregateOperationField string `json:"kanban_aggregate_operation_field,omitempty"`
+	CalendarField                 string `json:"calendar_field,omitempty"`
+	CalendarEndField              string `json:"calendar_end_field,omitempty"`
+
+	FieldGroups  []ViewFieldGroup  `json:"field_groups,omitempty"`
+	Fields       []ViewField       `json:"fields"`
+	Filters      []ViewFilter      `json:"filters"`
+	FilterGroups []ViewFilterGroup `json:"filter_groups"`
+	Sorts        []ViewSort        `json:"sorts"`
+	Groups       []ViewGroup       `json:"groups"`
 }
 
 type viewRecord struct {
@@ -255,6 +351,21 @@ type viewRecord struct {
 	ViewFilterGroups   json.RawMessage `json:"viewFilterGroups"`
 	ViewSorts          json.RawMessage `json:"viewSorts"`
 	ViewGroups         json.RawMessage `json:"viewGroups"`
+	ViewFieldGroups    json.RawMessage `json:"viewFieldGroups"`
+
+	UniversalIdentifier             *string         `json:"universalIdentifier"`
+	ApplicationID                   *string         `json:"applicationId"`
+	IsSystemSideEffect              *bool           `json:"isSystemSideEffect"`
+	KanbanAggregateOperation        *string         `json:"kanbanAggregateOperation"`
+	KanbanAggregateOperationFieldID *string         `json:"kanbanAggregateOperationFieldMetadataId"`
+	ShouldHideEmptyGroups           *bool           `json:"shouldHideEmptyGroups"`
+	KanbanColumnWidth               json.RawMessage `json:"kanbanColumnWidth"`
+	GroupLoadLimit                  json.RawMessage `json:"groupLoadLimit"`
+	CalendarFieldID                 *string         `json:"calendarFieldMetadataId"`
+	CalendarEndFieldID              *string         `json:"calendarEndFieldMetadataId"`
+	CalendarLayout                  *string         `json:"calendarLayout"`
+	CreatedAt                       *string         `json:"createdAt"`
+	UpdatedAt                       *string         `json:"updatedAt"`
 }
 
 // listed reports whether the view is read at all. Twenty hides other visibilities from a key without a user
@@ -269,6 +380,25 @@ func (r viewRecord) listed() bool {
 		}
 	}
 	return false
+}
+
+// uuidText keeps a well-formed identifier and drops anything else.
+func uuidText(value *string) string {
+	if value == nil || !validUUID(*value) {
+		return ""
+	}
+	return *value
+}
+
+var integerPattern = regexp.MustCompile(`^-?[0-9]{1,9}$`)
+
+// integerNumber passes a JSON integer on as written, without a float round trip; anything else is left out.
+func integerNumber(raw json.RawMessage) json.Number {
+	text := string(bytes.TrimSpace(raw))
+	if !integerPattern.MatchString(text) {
+		return ""
+	}
+	return json.Number(text)
 }
 
 func number(value *float64) float64 {
@@ -288,6 +418,14 @@ func (r viewRecord) summary(op string, objects map[string]string) (ViewSummary, 
 	if r.Key != nil {
 		summary.Key = enumToken(viewKeys, *r.Key)
 	}
+	summary.UniversalIdentifier, summary.ApplicationID = uuidText(r.UniversalIdentifier), uuidText(r.ApplicationID)
+	summary.IsSystemSideEffect, summary.ShouldHideEmptyGroups = r.IsSystemSideEffect, r.ShouldHideEmptyGroups
+	summary.KanbanAggregateOperation = shapedText(r.KanbanAggregateOperation, aggregatePattern)
+	summary.KanbanAggregateOperationFieldID = uuidText(r.KanbanAggregateOperationFieldID)
+	summary.KanbanColumnWidth, summary.GroupLoadLimit = integerNumber(r.KanbanColumnWidth), integerNumber(r.GroupLoadLimit)
+	summary.CalendarFieldID, summary.CalendarEndFieldID = uuidText(r.CalendarFieldID), uuidText(r.CalendarEndFieldID)
+	summary.CalendarLayout = shapedText(r.CalendarLayout, aggregatePattern)
+	summary.CreatedAt, summary.UpdatedAt = timestamp(r.CreatedAt), timestamp(r.UpdatedAt)
 	return summary, nil
 }
 
@@ -353,9 +491,37 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 		return nil, err
 	}
 	view.MainGroupByFieldID, view.MainGroupByField = main, fieldName(fields, main)
+	view.KanbanAggregateOperationField = fieldName(fields, summary.KanbanAggregateOperationFieldID)
+	view.CalendarField = fieldName(fields, summary.CalendarFieldID)
+	view.CalendarEndField = fieldName(fields, summary.CalendarEndFieldID)
 
-	items, err := children(op, r.ViewFields)
+	items, err := children(op, r.ViewFieldGroups)
 	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		var record struct {
+			ID        string   `json:"id"`
+			Name      *string  `json:"name"`
+			Position  *float64 `json:"position"`
+			IsVisible *bool    `json:"isVisible"`
+			IsActive  *bool    `json:"isActive"`
+			CreatedAt *string  `json:"createdAt"`
+			UpdatedAt *string  `json:"updatedAt"`
+			DeletedAt *string  `json:"deletedAt"`
+		}
+		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) {
+			return nil, provider.InvalidResponse(op, "Twenty returned an unusable view field group")
+		}
+		if record.DeletedAt != nil {
+			continue
+		}
+		view.FieldGroups = append(view.FieldGroups, ViewFieldGroup{ID: record.ID, Name: metaText(record.Name, metaNameMax),
+			Position: number(record.Position), IsVisible: record.IsVisible, IsActive: record.IsActive,
+			CreatedAt: timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)})
+	}
+
+	if items, err = children(op, r.ViewFields); err != nil {
 		return nil, err
 	}
 	for _, item := range items {
@@ -365,6 +531,13 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			Size               *float64 `json:"size"`
 			Position           *float64 `json:"position"`
 			AggregateOperation *string  `json:"aggregateOperation"`
+			ViewFieldGroupID   *string  `json:"viewFieldGroupId"`
+			UniversalID        *string  `json:"universalIdentifier"`
+			ApplicationID      *string  `json:"applicationId"`
+			IsSystemSideEffect *bool    `json:"isSystemSideEffect"`
+			IsActive           *bool    `json:"isActive"`
+			CreatedAt          *string  `json:"createdAt"`
+			UpdatedAt          *string  `json:"updatedAt"`
 			DeletedAt          *string  `json:"deletedAt"`
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.FieldMetadataID) {
@@ -376,6 +549,9 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 		field := ViewField{FieldID: record.FieldMetadataID, Field: fieldName(fields, record.FieldMetadataID),
 			IsVisible: record.IsVisible, Size: number(record.Size), Position: number(record.Position)}
 		field.AggregateOperation = shapedText(record.AggregateOperation, aggregatePattern)
+		field.FieldGroupID, field.UniversalIdentifier = uuidText(record.ViewFieldGroupID), uuidText(record.UniversalID)
+		field.ApplicationID, field.IsSystemSideEffect, field.IsActive = uuidText(record.ApplicationID), record.IsSystemSideEffect, record.IsActive
+		field.CreatedAt, field.UpdatedAt = timestamp(record.CreatedAt), timestamp(record.UpdatedAt)
 		view.Fields = append(view.Fields, field)
 	}
 
@@ -392,6 +568,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			Position              *float64        `json:"positionInViewFilterGroup"`
 			SubFieldName          *string         `json:"subFieldName"`
 			RelationTargetFieldID *string         `json:"relationTargetFieldMetadataId"`
+			CreatedAt             *string         `json:"createdAt"`
+			UpdatedAt             *string         `json:"updatedAt"`
 			DeletedAt             *string         `json:"deletedAt"`
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) || !validUUID(record.FieldMetadataID) {
@@ -407,7 +585,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 		}
 		filter := ViewFilter{ID: record.ID, FieldID: record.FieldMetadataID, Field: fieldName(fields, record.FieldMetadataID),
 			Operand: enumToken(viewOperands, record.Operand), FilterGroupID: group, Position: number(record.Position),
-			SubFieldName: metaText(record.SubFieldName, viewSubFieldMax), RelationTargetFieldID: target}
+			SubFieldName: metaText(record.SubFieldName, viewSubFieldMax), RelationTargetFieldID: target,
+			CreatedAt: timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)}
 		filter.Value, filter.ValueTruncated = viewData(jsonValueText(record.Value), viewValueMax)
 		view.Filters = append(view.Filters, filter)
 	}
@@ -421,6 +600,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			ParentID        *string  `json:"parentViewFilterGroupId"`
 			LogicalOperator string   `json:"logicalOperator"`
 			Position        *float64 `json:"positionInViewFilterGroup"`
+			CreatedAt       *string  `json:"createdAt"`
+			UpdatedAt       *string  `json:"updatedAt"`
 			DeletedAt       *string  `json:"deletedAt"`
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) {
@@ -434,7 +615,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			return nil, parentErr
 		}
 		view.FilterGroups = append(view.FilterGroups, ViewFilterGroup{ID: record.ID, ParentID: parent,
-			LogicalOperator: enumToken(viewLogicalOperators, record.LogicalOperator), Position: number(record.Position)})
+			LogicalOperator: enumToken(viewLogicalOperators, record.LogicalOperator), Position: number(record.Position),
+			CreatedAt: timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)})
 	}
 
 	if items, err = children(op, r.ViewSorts); err != nil {
@@ -446,6 +628,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			FieldMetadataID string  `json:"fieldMetadataId"`
 			Direction       string  `json:"direction"`
 			SubFieldName    *string `json:"subFieldName"`
+			CreatedAt       *string `json:"createdAt"`
+			UpdatedAt       *string `json:"updatedAt"`
 			DeletedAt       *string `json:"deletedAt"`
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) || !validUUID(record.FieldMetadataID) {
@@ -456,7 +640,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 		}
 		view.Sorts = append(view.Sorts, ViewSort{ID: record.ID, FieldID: record.FieldMetadataID,
 			Field: fieldName(fields, record.FieldMetadataID), Direction: enumToken(viewDirections, record.Direction),
-			SubFieldName: metaText(record.SubFieldName, viewSubFieldMax)})
+			SubFieldName: metaText(record.SubFieldName, viewSubFieldMax),
+			CreatedAt:    timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)})
 	}
 
 	if items, err = children(op, r.ViewGroups); err != nil {
@@ -468,6 +653,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 			IsVisible  *bool    `json:"isVisible"`
 			FieldValue *string  `json:"fieldValue"`
 			Position   *float64 `json:"position"`
+			CreatedAt  *string  `json:"createdAt"`
+			UpdatedAt  *string  `json:"updatedAt"`
 			DeletedAt  *string  `json:"deletedAt"`
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) {
@@ -476,7 +663,8 @@ func (r viewRecord) project(op string, summary ViewSummary, fields map[string]st
 		if record.DeletedAt != nil {
 			continue
 		}
-		group := ViewGroup{ID: record.ID, IsVisible: record.IsVisible, Position: number(record.Position)}
+		group := ViewGroup{ID: record.ID, IsVisible: record.IsVisible, Position: number(record.Position),
+			CreatedAt: timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)}
 		group.FieldValue, group.FieldValueTruncated = viewData(deref(record.FieldValue), viewValueMax)
 		view.Groups = append(view.Groups, group)
 	}

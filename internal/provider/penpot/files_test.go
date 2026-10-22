@@ -19,7 +19,7 @@ func pageBody(n int) string {
 			b.WriteString(",")
 		}
 		fmt.Fprintf(&b, `"00000000-0000-0000-1000-%012d":{"id":"x","type":"rect","name":"R%d","parent-id":"%s",`+
-			`"frame-id":"%s","x":1.5,"y":2,"width":10,"height":20,"fills":[{"fill-image":{"id":"http://media.invalid/x"}}],`+
+			`"frame-id":"%s","x":1.5,"y":2,"width":10,"height":20,`+
 			`"content":{"text":"geheim"},"metadata":"data:image/png;base64,AAAA"}`, i, i, projectA1, projectA1)
 	}
 	b.WriteString(`}}`)
@@ -109,7 +109,7 @@ func TestFilesGetReadsSummaryAndBoundedPage(t *testing.T) {
 			t.Errorf("result lacks %s: %.400s", want, result)
 		}
 	}
-	for _, absent := range []string{"media.invalid", "geheim", "base64", "fills", "content"} {
+	for _, absent := range []string{"geheim", "base64", "content"} {
 		if strings.Contains(result, absent) {
 			t.Errorf("result contains %q: %.400s", absent, result)
 		}

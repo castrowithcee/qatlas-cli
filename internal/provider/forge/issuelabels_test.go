@@ -17,9 +17,9 @@ const (
 	issueLabels    = "/api/v1/repos/acme/widget/issues/7/labels"
 )
 
-// labelServer answers the evidence read, the label sources (repository label 3 and 4, organization label 30),
+// issueLabelServer answers the evidence read, the label sources (repository label 3 and 4, organization label 30),
 // and the change.
-func labelServer(p *product, change func(call) *http.Response) func(call) *http.Response {
+func issueLabelServer(p *product, change func(call) *http.Response) func(call) *http.Response {
 	return issueServer(p, "open", func(c call) *http.Response {
 		switch {
 		case c.path == repoLabelsPath && c.method == http.MethodGet:
@@ -38,7 +38,7 @@ func labelServer(p *product, change func(call) *http.Response) func(call) *http.
 
 func TestIssueLabelsListIsBoundToTheRepositoryPath(t *testing.T) {
 	for _, p := range products {
-		e := newEnvironment(t, p, labelServer(p, nil))
+		e := newEnvironment(t, p, issueLabelServer(p, nil))
 		result, err := e.invoke(t, issueLabelsList, "repo", `{"number":8}`)
 		labels, _ := result["labels"].([]any)
 		if err != nil || len(labels) != 1 || labels[0].(map[string]any)["name"] != "bug" {
@@ -61,7 +61,7 @@ func TestIssueLabelsAddAndReplaceProveTheIDsFirst(t *testing.T) {
 			if tl == issueLabelsReplace {
 				method = http.MethodPut
 			}
-			e := newEnvironment(t, p, labelServer(p, func(c call) *http.Response {
+			e := newEnvironment(t, p, issueLabelServer(p, func(c call) *http.Response {
 				if c.method == method && c.path == issueLabels {
 					return jsonResponse(200, `[{"id":3,"name":"bug"},{"id":30,"name":"org-wide"}]`)
 				}
@@ -107,7 +107,7 @@ func TestIssueLabelsAddAndReplaceProveTheIDsFirst(t *testing.T) {
 
 func TestIssueLabelsAcceptAPullRequestAndRefuseOtherRepositories(t *testing.T) {
 	for _, p := range products {
-		e := newEnvironment(t, p, labelServer(p, func(c call) *http.Response {
+		e := newEnvironment(t, p, issueLabelServer(p, func(c call) *http.Response {
 			if c.method == http.MethodPost && strings.HasSuffix(c.path, "/issues/8/labels") {
 				return jsonResponse(200, `[{"id":3,"name":"bug"}]`)
 			}
@@ -127,7 +127,7 @@ func TestIssueLabelsAcceptAPullRequestAndRefuseOtherRepositories(t *testing.T) {
 
 func TestIssueLabelsRemoveAndClear(t *testing.T) {
 	for _, p := range products {
-		e := newEnvironment(t, p, labelServer(p, func(c call) *http.Response {
+		e := newEnvironment(t, p, issueLabelServer(p, func(c call) *http.Response {
 			if c.method == http.MethodDelete {
 				return jsonResponse(204, ``)
 			}
@@ -170,7 +170,7 @@ func TestIssueLabelsRemoveAndClear(t *testing.T) {
 
 func TestIssueLabelsRefuseBadArgumentsBeforeAnyRequest(t *testing.T) {
 	for _, p := range products {
-		e := newEnvironment(t, p, labelServer(p, nil))
+		e := newEnvironment(t, p, issueLabelServer(p, nil))
 		bad := []string{`{"number":7}`, `{"number":7,"labels":[]}`, `{"number":7,"labels":[0]}`,
 			`{"number":7,"labels":["bug"]}`, `{"number":7,"labels":[1],"sudo":"x"}`, `{"labels":[1]}`}
 		for _, tl := range []*tool{issueLabelsAdd, issueLabelsReplace} {
@@ -205,7 +205,7 @@ func TestIssueLabelsRefuseBadArgumentsBeforeAnyRequest(t *testing.T) {
 
 func TestIssueLabelsReplaceWithAnEmptyListSendsPut(t *testing.T) {
 	for _, p := range products {
-		e := newEnvironment(t, p, labelServer(p, func(c call) *http.Response {
+		e := newEnvironment(t, p, issueLabelServer(p, func(c call) *http.Response {
 			if c.method == http.MethodPut {
 				return jsonResponse(200, `[]`)
 			}

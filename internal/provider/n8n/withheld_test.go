@@ -378,9 +378,9 @@ func TestEveryWorkflowOutputMemberIsInSchemaAndFields(t *testing.T) {
 	var schema struct {
 		Properties map[string]json.RawMessage `json:"properties"`
 	}
-	_ = json.Unmarshal([]byte(workflowDetailSchema), &schema)
+	_ = json.Unmarshal([]byte(workflowReadSchema), &schema)
 	fields := map[string]string{}
-	for _, f := range workflowDetailFields {
+	for _, f := range workflowReadFields {
 		fields[f.Name] = f.Description
 	}
 	for key := range out {

@@ -37,6 +37,8 @@ const richCompany = `{"id":"` + companyID + `","name":"Bike","domainName":{"prim
 
 const outputPageInfo = `"pageInfo":{"hasNextPage":true,"endCursor":"cursorABC"}`
 
+const uuidPageInfo = `"pageInfo":{"hasNextPage":true,"endCursor":"` + metaOtherID + `"}`
+
 func outputCases() []outputCase {
 	return []outputCase{
 		{recordsList, invokeRecordsList, `{"object":"person"}`, func(tail string) string {
@@ -74,9 +76,25 @@ func outputCases() []outputCase {
 			return `{"data":{"workspaceMembers":[{"id":"` + memberID + `","name":{"firstName":"Ada","lastName":"L"},` +
 				`"userEmail":"ada@example.test","timeZone":"Europe/Zurich","locale":"de-CH"}]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
+		{viewsList, invokeViewsList, `{}`, func(tail string) string {
+			return `{"data":[` + fullViewJSON(viewID) + `],` + uuidPageInfo + `}`
+		}, false},
+		{viewsGet, invokeViewsGet, `{"id":"` + viewID + `"}`, func(tail string) string { return fullViewJSON(viewID) }, false},
+		{pageLayoutsList, invokePageLayoutsList, `{}`, func(tail string) string {
+			return `{"data":[` + fullLayoutJSON(layoutID, ``) + `],` + uuidPageInfo + `}`
+		}, false},
+		{pageLayoutsGet, invokePageLayoutsGet, `{"id":"` + layoutID + `"}`, func(tail string) string {
+			return fullLayoutJSON(layoutID, ``)
+		}, false},
 		{metaObjectsList, invokeMetaObjectsList, `{}`, func(tail string) string {
-			return `{"data":[` + metaObjectJSON + `]` + tail + `,"pageInfo":{"hasNextPage":true,"endCursor":"` + metaOtherID + `"}}`
+			return `{"data":[` + metaRichObjectJSON + `]` + tail + `,"pageInfo":{"hasNextPage":true,"endCursor":"` + metaOtherID + `"}}`
 		}, true},
+		{metaObjectsGet, invokeMetaObjectsGet, `{"id":"` + metaObjID + `"}`, func(tail string) string {
+			return metaRichObjectJSON
+		}, false},
+		{metaFieldsGet, invokeMetaFieldsGet, `{"id":"` + metaFieldID + `"}`, func(tail string) string {
+			return metaRichFieldJSON
+		}, false},
 	}
 }
 
@@ -140,6 +158,9 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 					continue
 				}
 				element, _ := items[0].(map[string]any)
+				if len(property.Items.Properties) == 0 {
+					continue // elements of a free list declare no members
+				}
 				for member := range element {
 					if _, ok := property.Items.Properties[member]; !ok {
 						problems = append(problems, key+"[]."+member+" (schema)")

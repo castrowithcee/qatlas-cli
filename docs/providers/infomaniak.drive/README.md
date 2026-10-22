@@ -176,7 +176,9 @@ of its own.
 `total` transparently, exactly as Infomaniak answers them for the bound account. `drives` and `count` are
 filtered to the drives of the connection's targets afterwards, so `count` can be lower than what an incomplete page
 alone would suggest, and a further page of the account may still hold a bound drive that this page
-did not.
+did not. Its filters (`in_maintenance`, `maintenance_reasons`, `tags`) are sent to Infomaniak and narrow the
+account's page only; they never widen the targets, which are still applied to every row. The page size is
+fixed at 100 and the account is the connection's binding, so neither is an argument.
 
 ## Content and size limits
 
