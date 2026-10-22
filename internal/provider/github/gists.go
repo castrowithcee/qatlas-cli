@@ -91,6 +91,8 @@ var gistSummaryFields = []capability.Field{
 	{Name: "updated_at", Description: "When the gist last changed"},
 	{Name: "url", Description: "Address of the gist on GitHub"},
 	{Name: "file_count", Description: "Number of files of the gist"},
+	{Name: "description_truncated", Description: "True when description was cut"},
+	{Name: "files_truncated", Description: "True when the gist holds more files than were returned"},
 	{Name: "files", Description: "File names, media types, languages, and sizes in bytes, without content; at most " +
 		"20 files (files_truncated says so)"},
 }

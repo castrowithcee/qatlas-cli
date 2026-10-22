@@ -1,18 +1,14 @@
 ---
 description: >
-  Describes the Infomaniak kDrive provider: API token setup, the account, drive, and folder or file binding, the drive,
-  folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
-  move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
-  deletion, the share link reads and the confirmed deletion of share links with their
-  URL handling, the dropbox (upload link) read and the confirmed deletion
-  of dropboxes, the access read and the confirmed granting, changing, and revoking of user,
-  team, and invitation access with their membership check and personal data handling, pagination and cursor
-  contracts, the Business kSuite versus personal my kSuite compatibility cases, redirect handling on downloads,
-  and the boundary to Mail, CalDAV/CardDAV, and kChat.
+  Describes the Infomaniak kDrive provider as a whole: API token setup, the account, drive, and folder or file
+  binding with its ownership and subtree checks, target picking, the tool overview with effects, allow-list
+  requirements and setup profiles, pagination and cursor contracts, content and size limits with redirect handling,
+  error classes, untrusted data, the Business kSuite versus personal my kSuite compatibility cases, and the boundary
+  to Mail, CalDAV/CardDAV, and kChat. The tool groups are described on the pages for files, trash, and sharing.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-03
+updated: 2026-10-22
 ---
 
 # Infomaniak kDrive
@@ -164,174 +160,9 @@ The profile descriptions of `write` and `upload` stay true: neither shares, gran
 `files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
 setting of the connection.
 
-### Changes
 
-- `drive_id`, `file_id`, `parent_id`, and `destination_id` are plain positive integers of at most 18 digits,
-  validated before any secret is read or request is sent, and used only as path segments of the fixed paths
-  above. An object identifier is bound by the
-  drive it is used in: the drive goes through the checks under Scope (the proof of a subtree binding
-  included) before the change request, and Infomaniak resolves the file and the destination only inside
-  that one drive. A refusal does not name the value. The drive's root (`1`) can be a destination or a parent,
-  but is never renamed, moved, or copied, and `destination_id` must differ from `file_id`.
-- A new name (`name`) is 1 to 255 bytes of text, without a slash, a control character, or the special names
-  `.` and `..`. Only that name is ever sent as a request body; no free URL, method, or provider body exists.
-- `files.move` and `files.copy` take an optional `conflict`, a fixed enum of `error` (default) and `rename`,
-  and always send it explicitly, because Infomaniak's own default differs: `copy` defaults to `rename`, `move`
-  to `error`. With `error` a name that already exists at the destination is refused (HTTP 409), reported as a
-  `conflict` provider error, and nothing changes; with `rename` both are kept and the new one gets an available
-  name. `version`, which the specification also lists for `copy`, is not offered, because it replaces the
-  content of an existing file; any other value is refused locally. Neither tool takes a `name`, and
-  `folders.create` and `files.rename` send nothing but `name`: no `color`, `only_for_me`, or `relative_path`.
-  Only the three trash tools that delete require the tool allow-list, see Trash.
-- A change sends exactly one change request after the ownership check, and Qatlas never repeats it. After a
-  timeout, a dropped connection, a 5xx answer, or an unreadable answer the error says the change may have
-  been applied; read the folder before trying again.
-- `status` is `done` when Infomaniak applied the change. When Infomaniak answers `asynchronous`, the change is
-  accepted but not finished: `status` is `pending`, and `cancel_id` carries Infomaniak's handle when it
-  reports one. A rename or a move answers with a cancel resource (`cancel_id`, `valid_until`) also when it is
-  `done`. Qatlas offers no cancel tool. The request and response shapes follow the Infomaniak OpenAPI
-  specification (`https://developer.infomaniak.com/openapi.json`).
-- The creation and the copy report the new folder or file as `entry`, as untrusted data.
-
-`infomaniak.drive.files.list` and `infomaniak.drive.files.stat` default `folder_id` and `file_id` to `1`, the
-fixed identifier of a drive's own root directory, as Infomaniak documents it; `files.list` under a subtree
-binding defaults as described under Scope. `infomaniak.drive.files.get`
-requires an explicit `file_id`: reading content is never defaulted to the root. A folder identifier passed to
-`files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
-than being refused or silently redirected to a listing.
-
-### Trash
-
-- `trash.list` reads one page of the top level of the trash: `limit` (5 to 1000, default 10) and an opaque
-  `cursor`, with `has_more` and `cursor` answered as for `files.list`. Each entry is the usual entry plus
-  `deleted_at`; names and times are untrusted data and names are length-bounded. A trashed folder's own
-  contents are not listed.
-- `files.trash` sends `DELETE /2/drive/{d}/files/{id}`, `trash.delete` sends `DELETE /2/drive/{d}/trash/{id}`,
-  and `trash.empty` sends `DELETE /2/drive/{d}/trash`. Neither sends a body. `file_id` is a positive integer
-  other than the drive's root `1`; `trash.empty` takes only `drive_id`. A trashed entry stays restorable until
-  `trash.delete` or `trash.empty` removes it; that removal and the emptying cannot be undone.
-- `trash.restore` takes `destination_id`, a required folder of the same drive (the root is `1`), because the
-  specification requires `destination_directory_id` in the request body; Qatlas offers no restore to a place
-  outside the drive. Restoring is the only trash change that needs just the `update` effect.
-- The same rules as for the other changes apply: the drive goes through the checks under Scope before the one
-  request, `files.trash` proves its `file_id` like any object, the four other trash tools act on the whole drive, a refusal names no foreign value, an unclear outcome is reported
-  and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports
-  one. A trash change never reports an entry. A 403, for example because the plan does not allow trash
-  handling, is reported as `permission`.
-
-### Share links
-
-- A share link makes a file or folder reachable by its URL. `right` decides who may open it: `inherit` only
-  users of the drive (the narrowest), `password` anyone with the URL and a password, `public` anyone holding the
-  URL with no further check. Deleting a link needs `confirm` for every right, `public` included, and a
-  connection must list the tool by name besides holding the permission.
-- `file_id` is a positive integer other than the drive's root `1`, validated, like `drive_id`, before any
-  secret is read or request is sent; the checks under Scope follow, and a refusal names no foreign value. Qatlas does not offer a link for the root: whether Infomaniak
-  allows one is not documented, so the narrower reading applies.
-- `links.delete` removes the link; the file stays.
-- No link password is ever read from a provider answer or returned.
-- The link URL is its own sensitivity class, `infomaniak-kdrive-share-links`, which all three link tools carry
-  instead of the file class: the URL is an access capability, not metadata. It is returned only as a string up to
-  1024 characters, only when it is an absolute `https` URL without credentials; any other value from Infomaniak is
-  dropped and the link is returned without `url`. The other link fields (`right`, `valid_until`, the flags,
-  `access_blocked`, and the creation and update times) are untrusted data. A link is only reported for the file
-  it was asked for; an answer that names another file, or an unknown `right`, is an invalid response.
-- `links.list` reads one page of `GET /3/drive/{d}/files/links` with the link included (`with=sharelink`):
-  `limit` (5 to 1000, default 10) and an opaque `cursor`, answered as for `files.list`. Each entry is the usual entry
-  plus its `link`. `links.get` answers `not-found` for a file without a link.
-- A change sends exactly one request after the ownership check and is never repeated. After a timeout, a
-  dropped connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the link before trying again. `asynchronous` is a
-  `pending` change. A 403, for example because the drive's plan does not allow share links, is
-  reported as `permission`.
-
-### Dropbox
-
-- A dropbox is a public upload link for one folder: anyone holding its URL can upload files into the folder
-  without an account. Creating or changing one would open or prolong such an access to the outside, so neither is
-  offered. The tools `dropbox.get` and `dropbox.delete` act
-  on exactly one folder (`file_id`, a positive integer other than the drive's root `1`) of one drive, which goes
-  through the checks under Scope first; a foreign `drive_id` is refused locally,
-  without naming it, before any secret is read or request is sent. Both need an explicit tools list; the
-  deletion needs `confirm`.
-- The dropbox has its own sensitivity class, `infomaniak-kdrive-dropboxes`. A dropbox is reported as `id`, `uuid`,
-  `name`, `url`, `users_count`, `created_at`, `updated_at`, `last_uploaded_at`, `has_password`, `has_notification`,
-  `has_validity`, and `has_size_limit`, all untrusted data and bounded; the `url` is returned only when it is an
-  absolute `https` URL without credentials of at most 1024 characters. Other fields Infomaniak documents (the
-  creator, the containing directory and user via `with`, and the remaining time, size, and usage figures) are not
-  read. `dropbox.get` answers `not-found` for a folder without a dropbox; `dropbox.delete`
-  answers only its `status`.
-- The deletion sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
-  connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the
-  dropbox before trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan
-  does not include dropboxes, is reported as `permission`, and a provider failure as `provider-error`; neither is
-  retried.
-
-### Access
-
-- `access.get` reads one file or folder: `users`, `teams`, and `invitations`, each entry with `id`, the access kind,
-  the display `name`, the `right`, and the `status`. Names and every other value are untrusted data; an invitation's
-  name can be an e-mail address. A list holds at most 200 entries and a name at most 256 bytes; `truncated` says a
-  list was cut. The class of all four tools is `infomaniak-kdrive-access`, separate from file metadata and from link
-  URLs, because who may reach a file is personal data.
-- `access.grant` sends one `POST /2/drive/{d}/files/{id}/access` with `right`, and any of `user_ids` (at most 20),
-  `team_ids` (at most 10), at least one of them. There is no `emails` or `lang` argument, since no tool
-  invites by e-mail. No `message` is offered. `access.update` and `access.revoke` take exactly one of `user_id` and `team_id`. `right` is
-  `read`, `write`, or `manage` (can also share); the API's `none` is not offered, because `access.revoke` removes
-  access explicitly. Nothing else of the provider's body exists.
-- `file_id` is a positive integer other than the drive's root `1`, checked before any secret is read or request is
-  sent; the checks under Scope follow, and a refusal names no foreign value.
-- Every user and team a change names is proven to belong to the same drive before the change request: after the
-  ownership check, Qatlas reads the drive's users page by page with their team identifiers (`GET
-  /2/drive/{d}/users?with=teams`, 100 per page, at most 10 pages, stopping once everything is found) and counts only
-  users whose status is `active`. A user or team that is not among them is an invalid request that does not name the
-  value, and nothing is changed. When the bound ends the search without finding it, or the page count is missing,
-  the target counts as unproven and is refused the same way instead of being guessed. Infomaniak lists no teams of
-  a drive on their own with the `drive` scope, so a team is provable only through an active user of the drive who
-  belongs to it; a team without such a user is refused. The
-  check costs one request per page; it is a read and sends nothing.
-- The grant tool is `open_world`, needs `confirm`, and is never repeated. The result echoes only what Infomaniak
-  reports per target, up to 256 bytes each. The invoke log holds no arguments.
-- A grant answers `done`, or `partial` when Infomaniak reached some targets and refused others; `granted`, `failed`,
-  and `results` (kind, target, whether reached) say which, and Infomaniak's per-target message is never read. An
-  update or revoke answers its `status` and the `user_id` or `team_id`. An answer that cannot be read counts as an
-  unclear outcome.
-- A change sends exactly one request after the checks and is never repeated. After a timeout, a dropped connection,
-  a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the access before
-  trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan or the rights of
-  the token's user do not allow sharing, is reported as `permission`.
-
-### Upload
-
-- `files.upload` creates one file in an existing folder (`directory_id`, the drive's root is `1`) or replaces
-  the content of one existing file as a new version. Replacing needs `file_id` together with its current
-  `etag`, sent as `If-Match`, and takes no `directory_id`, `name`, or `conflict`. If the file changed or is
-  locked since, the call fails as an etag conflict and nothing is replaced. A missing folder is never created.
-- The content comes from `local_path`, a file inside a directory the connection releases for reading, or inline
-  from `content_base64` up to 4 MiB with a `name`. Only metadata comes back: `file_id`, `name`, `size`,
-  `sha256`, `method`, `status`, and `client_token`.
-- A file up to 100 MB goes in one direct request, larger ones through an upload session of several chunk
-  requests; `method` reports which. `client_token`, 16 to 36 characters, is only available for a direct upload
-  and makes a repeated upload return the file of the first one; Qatlas generates one when it is omitted.
-- A new name that exists is refused as a `conflict` unless `conflict` is `rename`, which keeps both.
-- Qatlas never repeats an upload request itself. After a timeout, a dropped connection, a 5xx answer, or an
-  unreadable answer the error says the file may have been saved and names the `client_token` (or the session)
-  to check or to repeat the same upload; read the folder first.
-- An upload session's `upload_url` comes from Infomaniak and is only used when it is `https` on an
-  `infomaniak.com` host.
-- A 403, for example because the plan does not allow it, is reported as `permission`.
-
-### Download
-
-- `files.download` takes `drive_id`, `file_id`, and `local_path`, an absolute path or one starting with `~/` in
-  an existing directory the connection releases for writing. A path outside it is refused before any secret
-  is read or request is sent, without naming the path.
-- An existing file at the path is kept unless the request is confirmed; with `confirm` it is replaced.
-- The content goes to a temporary file that only becomes the target once the transfer is complete and matches
-  the reported size, so an aborted or too large transfer leaves no partial file. The result carries `file_id`,
-  `name`, `size`, and `sha256`, never the content. It costs three requests: the ownership check, a metadata
-  read (the proof under a subtree binding), and the content request.
-- A folder identifier writes Infomaniak's zip archive of it, as with `files.get`. The redirect rules under
-  Content and size limits apply unchanged.
+The tool groups are described on [files](files.md), [trash](trash.md), and [sharing](sharing.md) (share links,
+dropbox, and access).
 
 ## Pagination and cursors
 
@@ -373,7 +204,7 @@ Errors keep stable classes and never carry the token or a raw provider response 
 | `provider-error` | every other rejection, including a `conflict` (HTTP 409: the name already exists or the target is not in a state that allows the change), an etag conflict of a replacing upload, a failed `If-Match` precondition and a redirect on an endpoint that must not answer with one |
 
 A `user_id`, `team_id`, or `user_ids` or `team_ids` entry that is not proven to belong to the drive is an
-invalid request too, see Access. A `drive_id` outside the connection's targets, or one the live ownership check finds belongs to another
+invalid request too, see [Access](sharing.md#access). A `drive_id` outside the connection's targets, or one the live ownership check finds belongs to another
 account, is an invalid request, never a provider error, so a scope refusal is never mistaken for a missing
 drive. A failed or unreadable answer to that ownership check itself keeps its own class (`auth`,
 `permission`, `rate-limited`, `timeout`, `unreachable`, or `invalid-provider-response`) and aborts the request

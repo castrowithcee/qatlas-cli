@@ -185,6 +185,7 @@ var subIssuesAdd = capability.Descriptor{
 		{Name: "sub_issue", Description: "The added sub-issue, by number and, when it differs, repository"},
 		{Name: "sub_issues_summary", Description: "Total, completed, and percent_completed sub-issues of the " +
 			"parent after the change"},
+		{Name: "number", Description: "Parent issue number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Add issue 43 as a sub-issue of issue 42",
@@ -218,6 +219,7 @@ var subIssuesRemove = capability.Descriptor{
 		{Name: "removed", Description: "True once GitHub detached the sub-issue"},
 		{Name: "sub_issues_summary", Description: "Total, completed, and percent_completed sub-issues of the " +
 			"parent after the change"},
+		{Name: "number", Description: "Parent issue number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Detach sub-issue 43 from its parent 42",
@@ -252,6 +254,7 @@ var subIssuesReprioritize = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "sub_issue", Description: "The sub-issue that was moved"},
+		{Name: "number", Description: "Parent issue number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Move sub-issue 44 to just after sub-issue 43",

@@ -114,6 +114,8 @@ var commitsGet = capability.Descriptor{
 			"previous_filename for a rename, and patch cut to at most 4096 bytes with patch_truncated; patch is " +
 			"untrusted data and left out for a file GitHub sends none for"},
 		{Name: "files_truncated", Description: "True when the commit held at least as many files as were returned"},
+		{Name: "sha", Description: "Full commit SHA"},
+		{Name: "message_truncated", Description: "True when message was cut"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read one commit",
