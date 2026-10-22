@@ -64,7 +64,7 @@ var membersList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":` + workflowLimitSchema +
 		`,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"members":{"type":"array","items":` +
-		memberItemSchema + `},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
+		memberItemSchema + `},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["members","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "limit", Description: "Members per page, from 1 through 100; 25 when omitted"},
@@ -74,6 +74,7 @@ var membersList = capability.Descriptor{
 		{Name: "members", Description: "The members on this page, oldest first, untrusted personal data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{Description: "List the members", Arguments: json.RawMessage(`{}`)}},
 }
@@ -113,6 +114,7 @@ type WorkspaceMemberList struct {
 	Members    []WorkspaceMember `json:"members"`
 	NextCursor string            `json:"next_cursor,omitempty"`
 	HasMore    bool              `json:"has_more"`
+	TotalCount *int64            `json:"total_count,omitempty"`
 }
 
 type memberRecord struct {
@@ -178,7 +180,11 @@ func (c *Client) ListWorkspaceMembers(ctx context.Context, connection string, li
 	if err != nil {
 		return nil, err
 	}
-	result := &WorkspaceMemberList{Members: make([]WorkspaceMember, 0, len(items)), HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &WorkspaceMemberList{Members: make([]WorkspaceMember, 0, len(items)), HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	for _, item := range items {
 		var record memberRecord
 		if json.Unmarshal(item, &record) != nil {

@@ -112,7 +112,7 @@ var companiesList = capability.Descriptor{
 		`"companies":{"type":"array","items":{"type":"object","properties":{` +
 		`"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"}},` +
 		`"required":["id","name"],"additionalProperties":false}},` +
-		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
+		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["companies","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "name_contains", Description: "Return only companies whose name contains this text"},
@@ -127,6 +127,7 @@ var companiesList = capability.Descriptor{
 		{Name: "companies", Description: "The companies on this page, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{
 		Description: "Search the newest companies whose name contains a term",
@@ -741,6 +742,7 @@ type ListResult struct {
 	Companies  []Company `json:"companies"`
 	NextCursor string    `json:"next_cursor,omitempty"`
 	HasMore    bool      `json:"has_more"`
+	TotalCount *int64    `json:"total_count,omitempty"`
 }
 
 // Company is the stable Qatlas view of one company record. It carries only the conservative core fields
@@ -781,7 +783,11 @@ func (c *Client) ListCompanies(ctx context.Context, options ListOptions) (*ListR
 		})
 	}
 
-	result := &ListResult{Companies: companies, HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &ListResult{Companies: companies, HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	if page.PageInfo.HasNextPage {
 		result.NextCursor = page.PageInfo.EndCursor
 	}
@@ -924,7 +930,8 @@ type companyRecordJSON struct {
 }
 
 type companiesPageJSON struct {
-	Data struct {
+	TotalCount json.RawMessage `json:"totalCount"`
+	Data       struct {
 		Companies []companyRecordJSON `json:"companies"`
 	} `json:"data"`
 	PageInfo struct {

@@ -142,7 +142,7 @@ func TestBusinessGiftsSendsOnlyPagingAndFiltersOutput(t *testing.T) {
 	}
 	got, _ := json.Marshal(out)
 	want := `{"total_count":2,"next_offset":"n2","gifts":[{"type":"regular","gift_id":"G1","send_date":10,"is_saved":true,` +
-		`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"Bo"},"star_count":50,"convert_star_count":9},` +
+		`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"Bo","last_name":"X"},"star_count":50,"convert_star_count":9},` +
 		`{"type":"unique","gift_id":"G2","name":"Cat","number":8,"send_date":11,"is_saved":false}]}`
 	if string(got) != want {
 		t.Errorf("out = %s\nwant %s", got, want)

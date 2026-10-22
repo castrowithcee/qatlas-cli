@@ -131,7 +131,15 @@ const richScenario = `{"id":10,"name":"Own","teamId":1001,"description":"d","fol
 	`"operations":5,"centicredits":6,"transfer":7,"dlqCount":2,"created":"2026-01-01T00:00:00Z",` +
 	`"lastEdit":"2026-01-02T00:00:00Z","nextExec":"2026-01-03T00:00:00Z",` +
 	`"createdByUser":{"id":1,"name":"A","email":"a@example.test"},` +
-	`"updatedByUser":{"id":2,"name":"B","email":"b@example.test"}}`
+	`"updatedByUser":{"id":2,"name":"B","email":"b@example.test"},` + richScenarioDetails + `}`
+
+const richScenarioDetails = `"hookId":77,"devices":[{"id":5,"scope":"team"}],"folderPath":"CRM/cleanup","concept":false,` +
+	`"usedPackages":["http"],"usedModules":[{"packageName":"http","moduleName":"ActionSendData"}],` +
+	`"iswaiting":false,"allDlqCount":3,"scenarioVersion":4,"moduleSequenceId":9,"type":"scenario",` +
+	`"chainingRole":"child","isShared":true,"executions":8,"errors":1,"customProperties":{"owner":"ops"},` +
+	`"templateMetadata":{"isOem":true,"versionId":1,"metadataId":2,"instantiableId":3},` +
+	`"labels":[{"id":6,"name":"L","colour":"info","scope":"team","teamId":1001,"description":"ld","createdBy":1,` +
+	`"created":"2026-01-01T00:00:00Z","updated":"2026-01-02T00:00:00Z"}],"deleted":true,"deletedAt":"2026-01-04T00:00:00Z"`
 
 const richRun = `{"id":"run-1","teamId":1001,"organizationId":501,"status":3,"type":"execution","eventType":"scheduled",` +
 	`"timestamp":1700000000000,"duration":1200,"operations":3,"transfer":4,"centicredits":5,` +
@@ -144,7 +152,11 @@ func richBlueprint() string {
 	for i := range modules {
 		modules[i] = fmt.Sprintf(`{"id":%d,"module":"http:ActionSendData","mapper":{"authPass":"secret"}}`, i+1)
 	}
-	return `{"code":"OK","response":{"blueprint":{"name":"Own","flow":[` + strings.Join(modules, ",") + `]}}}`
+	return `{"code":"OK","response":{"blueprint":{"name":"Own","flow":[` + strings.Join(modules, ",") + `]},` +
+		`"scheduling":{"type":"daily","interval":900,"date":"2026-01-01T00:00:00Z","between":["a","b"],"time":"10:00",` +
+		`"days":[1],"months":[2],"restrict":[{"time":["10:00",null],"days":[3],"months":[4]}],` +
+		`"maximum_runs_per_minute":5},"idSequence":12,"created":"2026-01-01T00:00:00Z",` +
+		`"last_edit":"2026-01-02T00:00:00Z","version":3}}`
 }
 
 // The output schema is enforced on the way through the core, so a member it lacks fails the call; the
@@ -173,9 +185,9 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 		tool, arguments string
 		minimum         int
 	}{
-		{scenariosList.ID, `{}`, 25},
-		{scenariosGet.ID, `{"scenario_id":` + id + `}`, 19},
-		{scenariosBlueprint.ID, `{"scenario_id":` + id + `}`, 4},
+		{scenariosList.ID, `{}`, 60},
+		{scenariosGet.ID, `{"scenario_id":` + id + `}`, 50},
+		{scenariosBlueprint.ID, `{"scenario_id":` + id + `}`, 20},
 		{runsList.ID, `{"scenario_id":` + id + `}`, 20},
 		{runsGet.ID, `{"scenario_id":` + id + `,"execution_id":"run-1"}`, 17},
 	}
