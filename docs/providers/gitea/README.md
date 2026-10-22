@@ -26,7 +26,8 @@ the Forgejo instance of the connection.
 `base_url` is required and has no default: `https://HOST`, optionally with a port, without a path, user info, query,
 or fragment. An instance served below a path prefix is not supported. `qatlas config validate` refuses a missing or
 other address with `config-invalid` without quoting it. Qatlas appends `/api/v1` and follows no redirect, so the token
-never travels to another host.
+never travels to another host. The only request outside `/api/v1` is the download of a release asset from
+`/attachments/UUID` on the same origin, described in [Releases](releases.md).
 
 The credential provides `token`, an access token created in the account's applications settings. It is sent as
 `Authorization: token ...` and registered with the redactor. Nothing else authenticates a request: no basic
