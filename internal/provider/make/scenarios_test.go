@@ -270,7 +270,7 @@ func TestScenariosBlueprintWithoutCredentialsIsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
-	if want := fmt.Sprintf(`{"blueprint":%s,"scenario_id":%d}`, blueprint, ownScenario); result != want {
+	if want := fmt.Sprintf(`{"blueprint":%s,"code":"OK","scenario_id":%d}`, blueprint, ownScenario); result != want {
 		t.Fatalf("result = %s, want %s", result, want)
 	}
 }

@@ -85,10 +85,10 @@ name stay local.
 
 ## Signed references
 
-Identifiers that belong to no chat (a file, a callback query, a join request query) are returned only as signed
-references, never as Telegram's raw identifier. A reference is bound to its target and the bot token, so rotating
-the token invalidates earlier ones; it is signed, not secret. A tool that accepts one checks format and target
-before the credential is read and the signature before any request.
+Identifiers that belong to no chat (a file, a callback query, an inline query, an inline message, a join request
+query, a guest query) are returned only as signed references, never as Telegram's raw identifier. A reference is
+bound to its target and the bot token, so rotating the token invalidates earlier ones; it is signed, not secret. A
+tool that accepts one checks format and target before the credential is read and the signature before any request.
 
 ## Setup profiles
 

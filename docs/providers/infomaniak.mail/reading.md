@@ -2,7 +2,8 @@
 description: >
   Describes the Infomaniak Mail read tools: listing message envelopes of a folder with typed filters and
   newest-first order, UID binding to folder and UIDVALIDITY, reading one message with bounded text and
-  attachment list, and reading one attachment inline or into a local file.
+  attachment metadata, the limits on untrusted envelope and attachment fields, and reading one attachment
+  inline or into a local file.
 type: knowledge
 edit: shared
 created: 2026-10-01
@@ -16,19 +17,24 @@ The read tools of [Infomaniak Mail](README.md). Reading changes nothing, see
 
 ## Listing messages
 
-`infomaniak.mail.messages.list` takes a `folder` and fixed, typed filters only (dates, unread, one sender, a UID
-window, a limit). The server compares dates only. With a sender allow-list, the `sender` filter must name an
-address on it.
+`infomaniak.mail.messages.list` takes a `folder` and fixed, typed filters only. The server compares dates
+only. With a sender allow-list, the `sender` filter must name an address on it.
 
 There is no free search string and no raw IMAP command: nothing but these typed values ever reaches the
 SEARCH. Results are the newest matches first. `matched` is the number of hits before `limit`, and `has_more`
 is true when older matches were left out.
 
-The folder is opened with `EXAMINE`, not `SELECT`, and envelopes are fetched with `ENVELOPE`, `FLAGS`, and
-`RFC822.SIZE`, so a listing never changes a message's `\Seen` flag.
+The folder is opened with `EXAMINE`, not `SELECT`, and envelopes are fetched with one `FETCH` of `ENVELOPE`,
+`INTERNALDATE`, `FLAGS`, and `RFC822.SIZE`, so a listing never changes a message's `\Seen` flag.
 
-Each message carries only envelope data. Every string has its control characters replaced and is capped
-(subject 256 characters, names 128, at most 10 From and 20 To addresses, at most 20 flags).
+Each message carries only envelope data and `INTERNALDATE`; the descriptor lists the fields. Every string has
+its control characters replaced and is capped (subject 256 characters, names 128, at most 10 From and 20 To
+addresses, at most 20 flags), and every list is bounded. A list that was cut is marked with
+a `<field>_truncated` member. Nothing the server left out is filled in.
+
+The `sender` argument is the From filter. The `sender` field is the ENVELOPE Sender header. They are
+different things, and the allow-list always applies to the From addresses, not to Sender, Reply-To, Cc, or
+Bcc.
 
 ## UIDs belong to a folder and a UIDVALIDITY
 
@@ -57,8 +63,16 @@ is the `Message-ID` header when it is well formed, the value for `in_reply_to` o
   no plain or HTML text; the other plain or HTML parts are alternatives of the text. `part` is the part number
   of the message's own BODYSTRUCTURE, such as `2` or `1.2`. Names have RFC 2047 words decoded and are
   cleaned and capped at 255 characters, types at 100. `size` is the part as stored in the message, in its
-  transfer encoding, so a base64 attachment is about a third larger than the file. A `message/rfc822`
-  attachment is one part; its content is not looked into.
+  transfer encoding, so a base64 attachment is about a third larger than the file.
+- Each attachment also carries what the extended BODYSTRUCTURE says about it, from the `FETCH` that already
+  reads the structure; the descriptor lists the members. All of it is untrusted text, cleaned and bounded in
+  bytes. `parameters` (the Content-Type parameters) is all or nothing: beyond its bounds it is left out and
+  `parameters_truncated` is true, never cut.
+- `location` is the Content-Location as text and is never fetched. An address with user information, a query,
+  or a fragment can carry an access token and is left out, as is one that cannot be parsed.
+- The MD5 checksum of a part (`body-fld-md5`) is not returned: the IMAP library reads it but does not pass it
+  on.
+- A `message/rfc822` attachment is one entry; its nested structure is not evaluated.
 
 ## Reading an attachment
 

@@ -33,15 +33,14 @@ var businessGet = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + businessConnectionSchema + `},` +
 		`"required":["business"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},` +
-		`"user":{"type":"object","properties":{"id":{"type":"integer"},"is_bot":{"type":"boolean"},` +
-		`"first_name":{"type":"string"},"username":{"type":"string"}}},` +
+		`"user":` + userSchema + `,` +
 		`"business_chat_ref":{"type":"string"},"date":{"type":"integer"},"is_enabled":{"type":"boolean"},` +
 		`"rights":{"type":"object","additionalProperties":{"type":"boolean"}}},` +
 		`"required":["id","is_enabled"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "business", Description: businessArgument, Required: true}},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Business connection ID"},
-		{Name: "user", Description: "Account that owns the connection"},
+		{Name: "user", Description: "Account that owns the connection as " + userFieldsText},
 		{Name: "business_chat_ref", Description: "Reference to the private chat with that account, for telegram.business.mark-read"},
 		{Name: "date", Description: "Unix time the connection was established"},
 		{Name: "is_enabled", Description: "Whether the connection is active"},

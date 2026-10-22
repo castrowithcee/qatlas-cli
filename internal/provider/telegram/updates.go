@@ -54,8 +54,7 @@ var updatesList = capability.Descriptor{
 		`"update_id":{"type":"integer"},"type":{"type":"string"},"chat":{"type":"string"},` +
 		`"message_id":{"type":"integer"},"date":{"type":"integer"},"message_thread_id":{"type":"integer"},` +
 		`"reply_to_message_id":{"type":"integer"},` +
-		`"from":{"type":"object","properties":{"id":{"type":"integer"},"is_bot":{"type":"boolean"},` +
-		`"first_name":{"type":"string"},"username":{"type":"string"}}},` +
+		`"from":` + userSchema + `,` +
 		`"text":{"type":"string"},"caption":{"type":"string"},` +
 		`"media":{"type":"object","properties":{"kind":{"type":"string"},"size":{"type":"integer"},` +
 		`"mime_type":{"type":"string"},"file_name":{"type":"string"},"file_ref":{"type":"string"}}},` +
@@ -71,7 +70,7 @@ var updatesList = capability.Descriptor{
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
 	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref"},
+		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText},
 		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or business connection or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
 	},
@@ -195,13 +194,6 @@ func invokeUpdatesList(ctx context.Context, resolved *config.Resolved, secrets *
 	return client.ListUpdates(ctx, limit, wait)
 }
 
-type senderOut struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name,omitempty"`
-	Username  string `json:"username,omitempty"`
-}
-
 type mediaOut struct {
 	Kind     string `json:"kind"`
 	Size     int64  `json:"size,omitempty"`
@@ -237,13 +229,6 @@ type updateOut struct {
 
 type tgChat struct {
 	ID int64 `json:"id"`
-}
-
-type tgUser struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name"`
-	Username  string `json:"username"`
 }
 
 type tgFile struct {
@@ -357,14 +342,6 @@ func capText(value string, limit int) string {
 		return value
 	}
 	return string([]rune(value)[:limit])
-}
-
-func sender(u *tgUser) *senderOut {
-	if u == nil || u.ID == 0 {
-		return nil
-	}
-	return &senderOut{ID: u.ID, IsBot: u.IsBot, FirstName: capText(u.FirstName, maxNameRunes),
-		Username: capText(u.Username, maxNameRunes)}
 }
 
 func (m *tgMessage) media() (string, *tgFile) {

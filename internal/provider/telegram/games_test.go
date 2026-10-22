@@ -50,7 +50,7 @@ func TestGamesBodiesPathsAndResults(t *testing.T) {
 		{"highscores", `{"ok":true,"result":[{"position":1,"score":50,"user":{"id":5,"is_bot":false,"first_name":"Al","username":"al","language_code":"de"},"extra":1},{"position":2,"score":40}]}`,
 			"getGameHighScores", `{"user_id":42,"chat_id":-1001,"message_id":9}`,
 			func(c *Client) (map[string]any, error) { return c.GameHighScores(ctx, 9, 42) },
-			`{"scores":[{"position":1,"score":50,"user":{"id":5,"is_bot":false,"first_name":"Al","username":"al"}},{"position":2,"score":40}]}`},
+			`{"scores":[{"position":1,"score":50,"user":{"id":5,"is_bot":false,"first_name":"Al","username":"al","language_code":"de"}},{"position":2,"score":40}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
