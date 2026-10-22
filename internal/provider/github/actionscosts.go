@@ -43,6 +43,7 @@ var runsUsage = capability.Descriptor{
 		{Name: "billable", Description: "Entries for UBUNTU, MACOS, and WINDOWS that GitHub reports: os, total_ms, " +
 			"jobs, and job_runs with job_id and duration_ms"},
 		{Name: "truncated", Description: "True when job_runs of an operating system were cut at 500 entries"},
+		{Name: "run_id", Description: "Run identifier"},
 	},
 	Examples: []capability.Example{{Description: "Read the billable time of a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
@@ -66,6 +67,7 @@ var runLogsDelete = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "deleted", Description: "True once no logs of the run remain"},
 		{Name: "already_deleted", Description: "True when GitHub reported the logs as already gone and Qatlas deleted nothing"},
+		{Name: "run_id", Description: "Run identifier"},
 	},
 	Examples: []capability.Example{{Description: "Delete the logs of a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
