@@ -12,7 +12,9 @@ updated: 2026-10-22
 ## Data model
 
 `meta-objects.list`, `meta-objects.get`, and `meta-fields.get` (`read`) are workspace-wide and read Twenty's
-metadata API for all objects and fields; default values, settings, and relation details are never read.
+metadata API for all objects and fields. `isUIReadOnly` is marked deprecated in Twenty (replaced by
+`isUIEditable`) and is left out. `defaultValue` and `settings` are free objects; one beyond the size limit is
+left out and named in `omitted_fields`.
 
 `meta-objects.create`, `update`, `delete` and `meta-fields.create`, `update`, `delete` change the schema for
 every user and integration of the workspace. All nine tools need the Twenty right "Data model": use a
