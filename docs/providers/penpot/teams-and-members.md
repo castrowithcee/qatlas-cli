@@ -10,6 +10,12 @@ updated: 2026-10-22
 
 # Penpot: teams and members
 
+`teams.list` describes the team as Penpot returns it, with the permissions of the token's account. Penpot returns
+only teams that are not deleted there; the `deleted-at` field would always be empty and is not returned. The
+organization's image addresses are publicly retrievable or of unproven kind; they count as access values and are not
+returned. Subscription and organization appear only when the instance has the `subscriptions` and `admin-console`
+flags.
+
 The five tools administer teams. `team_id` must be a bound team (checked before the credential is resolved and before
 any request; the refusal never names the team). **There is no wildcard target and Qatlas never adds a target**: the
 team that `teams.create` makes is outside every connection until you add `team/ID` to a connection yourself.
