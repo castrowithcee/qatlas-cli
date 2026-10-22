@@ -63,9 +63,37 @@ const (
 	  "priority":0,"created_at":"2019-05-05T21:49:58.000000Z","updated_at":"2019-08-26T14:32:59.000000Z",
 	  "created_by":1,"updated_by":2,"owned_by":3,"draft":false,"revision_count":2,"template":false,
 	  "editor":"wysiwyg","book_slug":"example-book"}]}`
+
+	fixtureShelvesList = `{"data":[{"id":8,"name":"Qui qui","slug":"qui-qui","description":"Enim dolor",
+	 "created_at":"2019-05-05T22:10:16.000000Z","updated_at":"2020-04-10T13:00:45.000000Z",
+	 "created_by":4,"updated_by":1,"owned_by":2,"cover":{"id":4,"name":"shelf.jpg","url":"https://example.com/shelf.jpg"}}],"total":3}`
+
+	fixtureShelfRead = `{"id":14,"name":"My shelf","slug":"my-shelf","description":"This is my shelf",
+	 "description_html":"<p>This is my shelf</p>",
+	 "created_by":{"id":1,"name":"Admin","slug":"admin"},"updated_by":{"id":2,"name":"Editor","slug":"editor"},
+	 "owned_by":{"id":3,"name":"Owner","slug":"owner"},
+	 "created_at":"2020-04-10T13:24:09.000000Z","updated_at":"2020-04-10T13:31:04.000000Z",
+	 "tags":[{"name":"Category","value":"Guide","order":0}],
+	 "cover":{"id":501,"name":"c.jpg","url":"http://bookstack.local/c.jpg","path":"/uploads/c.jpg"},
+	 "books":[{"id":5,"name":"Sint explicabo","slug":"jbsQrzuaXe","description":"Hic forum est.",
+	  "created_at":"2020-04-10T13:31:04.000000Z","updated_at":"2020-04-11T13:31:04.000000Z",
+	  "created_by":1,"updated_by":2,"owned_by":3}]}`
+
+	fixtureImagesList = `{"data":[{"id":1,"name":"My cat scribbles",
+	 "url":"https:\/\/bookstack.example.com\/uploads\/images\/gallery\/2023-02\/scribbles.jpg",
+	 "path":"\/uploads\/images\/gallery\/2023-02\/scribbles.jpg","type":"gallery","uploaded_to":1,
+	 "created_by":1,"updated_by":2,"created_at":"2023-02-12T16:34:57.000000Z","updated_at":"2023-02-12T16:34:58.000000Z"}],"total":3}`
+
+	fixtureImageRead = `{"id":618,"name":"cute-cat-image.png",
+	 "url":"https:\/\/bookstack.example.com\/uploads\/images\/gallery\/2023-03\/cute-cat-image.png",
+	 "created_at":"2023-03-15T16:32:09.000000Z","updated_at":"2023-03-15T16:32:10.000000Z",
+	 "created_by":{"id":1,"name":"Admin","slug":"admin"},"updated_by":{"id":2,"name":"Editor","slug":"editor"},
+	 "path":"\/uploads\/images\/gallery\/2023-03\/cute-cat-image.png","type":"gallery","uploaded_to":1,
+	 "thumbs":{"gallery":"https:\/\/b.example\/g.png","display":"https:\/\/b.example\/d.png"},
+	 "content":{"html":"<a>x<\/a>","markdown":"![x](y)"}}`
 )
 
-// contentServer answers the six read endpoints with the example responses. Shelf 2 holds book 1.
+// contentServer answers the read endpoints with the example responses. Shelf 2 holds book 1.
 func contentServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	answer := func(body string) http.HandlerFunc {
@@ -78,6 +106,10 @@ func contentServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api/books/16", answer(fixtureBookRead))
 	mux.HandleFunc("/api/chapters", answer(fixtureChaptersList))
 	mux.HandleFunc("/api/chapters/1", answer(fixtureChapterRead))
+	mux.HandleFunc("/api/shelves", answer(fixtureShelvesList))
+	mux.HandleFunc("/api/shelves/14", answer(fixtureShelfRead))
+	mux.HandleFunc("/api/image-gallery", answer(fixtureImagesList))
+	mux.HandleFunc("/api/image-gallery/618", answer(fixtureImageRead))
 	mux.HandleFunc("/api/shelves/2", answer(`{"id":2,"books":[{"id":1}]}`))
 	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
@@ -99,6 +131,10 @@ func contentTools() []contentTool {
 		{booksGet, func(c *Client) (any, error) { return objectJSON(c.GetBook(ctx, 16)) }},
 		{chaptersList, func(c *Client) (any, error) { return rowsJSON(c.ListChapters(ctx, 0, 0, 0)) }},
 		{chaptersGet, func(c *Client) (any, error) { return objectJSON(c.GetChapter(ctx, 1)) }},
+		{shelvesList, func(c *Client) (any, error) { return rowsJSON(c.ListShelves(ctx, 0, 0)) }},
+		{shelvesGet, func(c *Client) (any, error) { return objectJSON(c.GetShelf(ctx, 14)) }},
+		{imagesList, func(c *Client) (any, error) { return rowsJSON(c.ListImages(ctx, 0, "", 0, 0)) }},
+		{imagesGet, func(c *Client) (any, error) { return objectJSON(c.GetImage(ctx, 618)) }},
 	}
 }
 
@@ -307,6 +343,74 @@ func TestContentReadsShowEveryDocumentedField(t *testing.T) {
 	}
 }
 
+func TestShelfAndImageReadsShowEveryDocumentedField(t *testing.T) {
+	c := newClient(t, contentServer(t).URL, nil)
+	id := func(n float64) map[string]any { return map[string]any{"id": n} }
+	detail := func(n float64, name, slug string) map[string]any {
+		return map[string]any{"id": n, "name": name, "slug": slug}
+	}
+	check := func(label string, got any, want map[string]any) {
+		t.Helper()
+		for key, w := range want {
+			if g := at(t, got, key); !reflect.DeepEqual(g, w) {
+				t.Errorf("%s %s = %v, want %v", label, key, g, w)
+			}
+		}
+	}
+
+	list, err := rowsJSON(c.ListShelves(context.Background(), 0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := at(t, list, 0)
+	check("shelves.list", row, map[string]any{
+		"id": 8.0, "name": "Qui qui", "description": "Enim dolor", "created_at": "2019-05-05T22:10:16.000000Z",
+		"created_by": id(4), "updated_by": id(1), "owned_by": id(2),
+	})
+	if _, ok := row.(map[string]any)["cover"]; ok {
+		t.Error("shelves.list shows the cover")
+	}
+
+	shelf, err := objectJSON(c.GetShelf(context.Background(), 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("shelves.get", shelf, map[string]any{
+		"created_by": detail(1, "Admin", "admin"), "updated_by": detail(2, "Editor", "editor"),
+		"owned_by": detail(3, "Owner", "owner"), "truncated": false,
+		"tags": []any{map[string]any{"name": "Category", "value": "Guide", "order": 0.0}},
+		"books": []any{map[string]any{
+			"id": 5.0, "name": "Sint explicabo", "slug": "jbsQrzuaXe", "description": "Hic forum est.",
+			"created_at": "2020-04-10T13:31:04.000000Z", "updated_at": "2020-04-11T13:31:04.000000Z",
+			"created_by": id(1), "updated_by": id(2), "owned_by": id(3),
+		}},
+	})
+	if _, ok := shelf.(map[string]any)["cover"]; ok {
+		t.Error("shelves.get shows the cover")
+	}
+
+	images, err := rowsJSON(c.ListImages(context.Background(), 0, "", 0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("images.list", at(t, images, 0), map[string]any{
+		"id": 1.0, "type": "gallery", "page_id": 1.0, "path": "/uploads/images/gallery/2023-02/scribbles.jpg",
+		"url":        "https://bookstack.example.com/uploads/images/gallery/2023-02/scribbles.jpg",
+		"created_by": map[string]any{"id": 1.0, "name": ""}, "updated_by": map[string]any{"id": 2.0, "name": ""},
+	})
+
+	image, err := objectJSON(c.GetImage(context.Background(), 618))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("images.get", image, map[string]any{
+		"path": "/uploads/images/gallery/2023-03/cute-cat-image.png", "page_id": 1.0,
+		"created_by": detail(1, "Admin", "admin"), "updated_by": detail(2, "Editor", "editor"),
+		"thumbs":  map[string]any{"gallery": "https://b.example/g.png", "display": "https://b.example/d.png"},
+		"content": map[string]any{"html": "<a>x</a>", "markdown": "![x](y)"},
+	})
+}
+
 // Columns keep their former order; the new ones follow.
 func TestListColumnsKeepTheirOrderAndAppendTheNewOnes(t *testing.T) {
 	for _, tc := range []struct {
@@ -316,6 +420,8 @@ func TestListColumnsKeepTheirOrderAndAppendTheNewOnes(t *testing.T) {
 		{pagesList, []string{"id", "name", "slug", "book_id", "chapter_id", "created_at", "updated_at", "priority", "draft", "template", "owned_by"}},
 		{booksList, []string{"id", "name", "slug", "description", "created_at", "updated_at"}},
 		{chaptersList, []string{"id", "book_id", "name", "slug", "description", "created_at", "updated_at"}},
+		{shelvesList, []string{"id", "name", "slug", "description", "created_at", "updated_at"}},
+		{imagesList, []string{"id", "name", "type", "page_id", "url", "created_by", "updated_by", "created_at", "updated_at"}},
 	} {
 		if got := fieldNames(tc.descriptor); !reflect.DeepEqual(got[:len(tc.former)], tc.former) || len(got) == len(tc.former) {
 			t.Errorf("%s columns = %v", tc.descriptor.ID, got)

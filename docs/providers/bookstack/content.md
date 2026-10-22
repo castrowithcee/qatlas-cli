@@ -20,8 +20,8 @@ returns only the reached books (see [Targets](README.md#targets)). A listing sto
 
 `books.get` lists `contents`: the chapters with their pages and the loose pages in book order. `chapters.get`
 lists its `pages`. `default_template_id` is 0 when there is none. Tags are limited to 50. A content tree or page list holds at most 2000 entries in total;
-`truncated` is then `true`. Users are shown as BookStack delivers them: lists and the entries of `pages[]`
-carry only the identifier, so a user appears there with `id` only; a detail answer shows `id`, `name`,
+`truncated` is then `true`. Users are shown as BookStack delivers them: lists and the entries of `pages[]` and
+`books[]` carry only the identifier, so a user appears there with `id` only; a detail answer shows `id`, `name`,
 and `slug`. A user field a list already shows with a name (such as `owned_by` in `pages.list`) keeps it. On a
 connection with targets, `book_slug` is reported only when the book itself is bound; otherwise only `book_id` is
 reported. A book on a bound shelf counts as bound only when the call has read that shelf anyway. Descriptions
@@ -57,8 +57,9 @@ Shelves hold any books and span the whole instance, so the shelf tools work only
 targets; `shelves.get` also reads a bound shelf (see [Targets](README.md#targets)).
 
 `bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
-sorted by `id`. `bookstack.shelves.get` takes an `id` and returns `tags` (at most 50) and `books` (in shelf
-order, at most 2000 entries; `truncated` is then `true`). Names, descriptions, and tags are untrusted data; `description_html` must
+sorted by `id`. `bookstack.shelves.get` takes an `id` and lists `books` in shelf order (at most 2000 entries;
+`truncated` is then `true`) and at most 50 tags. Users follow the rule under
+[Books and chapters](#books-and-chapters). Names, descriptions, and tags are untrusted data; `description_html` must
 never be rendered or run.
 
 `bookstack.shelves.create` and `bookstack.shelves.update` take `name` (1 to 255 characters), at most one of
