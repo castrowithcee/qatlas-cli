@@ -75,8 +75,14 @@ func outputCases() []outputCase {
 				`"userEmail":"ada@example.test","timeZone":"Europe/Zurich","locale":"de-CH"}]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
 		{metaObjectsList, invokeMetaObjectsList, `{}`, func(tail string) string {
-			return `{"data":[` + metaObjectJSON + `]` + tail + `,"pageInfo":{"hasNextPage":true,"endCursor":"` + metaOtherID + `"}}`
+			return `{"data":[` + metaRichObjectJSON + `]` + tail + `,"pageInfo":{"hasNextPage":true,"endCursor":"` + metaOtherID + `"}}`
 		}, true},
+		{metaObjectsGet, invokeMetaObjectsGet, `{"id":"` + metaObjID + `"}`, func(tail string) string {
+			return metaRichObjectJSON
+		}, false},
+		{metaFieldsGet, invokeMetaFieldsGet, `{"id":"` + metaFieldID + `"}`, func(tail string) string {
+			return metaRichFieldJSON
+		}, false},
 	}
 }
 
@@ -140,6 +146,9 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 					continue
 				}
 				element, _ := items[0].(map[string]any)
+				if len(property.Items.Properties) == 0 {
+					continue // elements of a free list declare no members
+				}
 				for member := range element {
 					if _, ok := property.Items.Properties[member]; !ok {
 						problems = append(problems, key+"[]."+member+" (schema)")
