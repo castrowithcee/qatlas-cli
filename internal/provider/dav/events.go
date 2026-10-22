@@ -49,6 +49,34 @@ type Event struct {
 
 var errNoEvent = errors.New("no event")
 
+// ParseOccurrences reads every VEVENT of an iCalendar object as one compact event with its recurrence_id.
+// A server fills such an object when it expanded a recurring event for a range.
+func ParseOccurrences(data string) (events []*Event, err error) {
+	defer func() {
+		if recover() != nil {
+			events, err = nil, errNoEvent
+		}
+	}()
+	calendar, err := ical.NewDecoder(strings.NewReader(data)).Decode()
+	if err != nil {
+		return nil, err
+	}
+	for _, child := range calendar.Children {
+		if child.Name != ical.CompEvent {
+			continue
+		}
+		event := &Event{EventBody: bodyOf(child, false)}
+		if prop := child.Props.Get(ical.PropRecurrenceID); prop != nil {
+			event.RecurrenceID, _, _ = timeOf(prop)
+		}
+		events = append(events, event)
+	}
+	if len(events) == 0 {
+		return nil, errNoEvent
+	}
+	return events, nil
+}
+
 // ParseEvent reads the first event of an iCalendar object, preferring the main one of a recurring series
 // over its overrides. With full unset, only the compact members are filled: the description, the people,
 // and every later member stay out, and overrides are not read.

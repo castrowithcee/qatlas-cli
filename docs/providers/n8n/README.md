@@ -147,8 +147,8 @@ see "Scope" above for what happens when an instance or Public API version never 
 
 `n8n.workflows.get` never returns a credential's value: n8n's own Public API does not put one in a workflow
 response either, only a referenced credential's `id` and `name` per node, which is what a person editing the
-workflow in the n8n editor already sees, and what this provider passes on unmodified. A node's `parameters`
-are the workflow's own content and are passed through as-is, bounded only by the overall response size limit.
+workflow in the n8n editor already sees, and what this provider passes on unmodified. Webhook paths and
+credentials in node parameters are withheld, see [workflows.md](workflows.md#withheld-node-parameters).
 `staticData` and `pinData`, which can hold accumulated runtime state or pinned example payloads with real
 data, are deliberately not read in this milestone.
 

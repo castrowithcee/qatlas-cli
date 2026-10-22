@@ -35,11 +35,14 @@ var credentialRefSchema = `{"type":"object","properties":{"id":{"type":"string"}
 
 // nodeSchema deliberately has no "parameters" length limit of its own: a node's parameters are the
 // workflow's own logic, already bounded by the overall response size limit, and credentials never carries
-// more than the id/name pair n8n's own API reports, see the package doc.
+// more than the id/name pair n8n's own API reports, see the package doc. Parameters always pass
+// maskParameters first.
 var nodeSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
 	`"type_version":{"type":"number"},"position":{"type":"array","items":{"type":"number"}},` +
 	`"disabled":{"type":"boolean"},"parameters":{"type":"object"},` +
+	`"withheld_parameters":{"type":"array","maxItems":` + strconv.Itoa(maxWithheldPointers) +
+	`,"items":{"type":"string"}},"parameters_withheld":{"type":"boolean"},` +
 	`"credentials":{"type":"object","additionalProperties":` + credentialRefSchema + `}},` +
 	`"required":["id","name","type","disabled"],"additionalProperties":false}`
 
@@ -124,10 +127,12 @@ var workflowDetailSchema = `{"type":"object","properties":{` +
 
 var workflowsGet = capability.Descriptor{
 	ID:      Provider + ".workflows.get",
-	Version: 1,
+	Version: 2,
 	Title:   "Get an n8n workflow",
 	Description: "Read one workflow of the bound n8n instance, including its nodes and their connections; " +
-		"never a credential's value, only the id and name n8n itself attaches to a node",
+		"never a credential's value, only the id and name n8n itself attaches to a node. Webhook ids, the " +
+		"paths of webhook, form, and MCP trigger nodes, and credentials recognised in node parameters are " +
+		"withheld",
 	Tags:     []string{"n8n", "workflows", "get", "automation"},
 	Risk:     n8nReadRisk,
 	Provider: Provider,
@@ -144,7 +149,12 @@ var workflowsGet = capability.Descriptor{
 // returns the same re-read, scope-checked workflow.
 var workflowDetailFields = append(append([]capability.Field{}, workflowSummaryFields...),
 	capability.Field{Name: "nodes", Description: "Every node of the workflow; parameters are the workflow's " +
-		"own untrusted content, credentials show only a referenced credential's id and name"},
+		"own untrusted content, except that the path of a webhook, form, or MCP trigger node and credentials " +
+		"recognised by fixed rules are replaced by " + withheldPlaceholder + " and listed as JSON pointers " +
+		"relative to parameters in withheld_parameters; a node with more than " +
+		strconv.Itoa(maxWithheldPointers) + " such values reports no parameters and parameters_withheld true " +
+		"instead. A node's webhook id is never reported. credentials show only a referenced credential's id " +
+		"and name"},
 	capability.Field{Name: "connections", Description: "How the nodes are wired together, keyed by source " +
 		"node name, untrusted data"},
 )
@@ -170,6 +180,8 @@ type nodeJSON struct {
 	Disabled    bool                         `json:"disabled"`
 	Parameters  json.RawMessage              `json:"parameters"`
 	Credentials map[string]credentialRefJSON `json:"credentials"`
+	// WebhookID is part of a trigger's URL; it is read only for workflows.update to send back, never output.
+	WebhookID string `json:"webhookId"`
 }
 
 // sharedJSON is one entry of a workflow's "shared" array: which project it is shared into, and with which
@@ -227,17 +239,19 @@ type CredentialRef struct {
 	Name string `json:"name"`
 }
 
-// Node is the stable Qatlas view of one workflow node. Parameters are the workflow's own untrusted content;
-// Credentials never carries a secret.
+// Node is the stable Qatlas view of one workflow node. Parameters are the workflow's own untrusted content,
+// masked by maskParameters; Credentials never carries a secret.
 type Node struct {
-	ID          string                   `json:"id"`
-	Name        string                   `json:"name"`
-	Type        string                   `json:"type"`
-	TypeVersion float64                  `json:"type_version,omitempty"`
-	Position    []float64                `json:"position,omitempty"`
-	Disabled    bool                     `json:"disabled"`
-	Parameters  json.RawMessage          `json:"parameters,omitempty"`
-	Credentials map[string]CredentialRef `json:"credentials,omitempty"`
+	ID                 string                   `json:"id"`
+	Name               string                   `json:"name"`
+	Type               string                   `json:"type"`
+	TypeVersion        float64                  `json:"type_version,omitempty"`
+	Position           []float64                `json:"position,omitempty"`
+	Disabled           bool                     `json:"disabled"`
+	Parameters         json.RawMessage          `json:"parameters,omitempty"`
+	WithheldParameters []string                 `json:"withheld_parameters,omitempty"`
+	ParametersWithheld bool                     `json:"parameters_withheld,omitempty"`
+	Credentials        map[string]CredentialRef `json:"credentials,omitempty"`
 }
 
 // WorkflowSummary is the stable, allow-list-filtered listing view of one workflow.
@@ -273,20 +287,28 @@ func summaryOf(w workflowJSON) WorkflowSummary {
 	}
 }
 
+// nodeOf is the one conversion of a node n8n reported into its output view; every output of nodes goes
+// through it, so none bypasses maskParameters.
+func nodeOf(n nodeJSON) Node {
+	var refs map[string]CredentialRef
+	if len(n.Credentials) > 0 {
+		refs = make(map[string]CredentialRef, len(n.Credentials))
+		for kind, ref := range n.Credentials {
+			refs[kind] = CredentialRef{ID: bounded(ref.ID), Name: bounded(ref.Name)}
+		}
+	}
+	parameters, withheld, all := maskParameters(n.Type, n.Parameters)
+	return Node{
+		ID: bounded(n.ID), Name: bounded(n.Name), Type: bounded(n.Type), TypeVersion: n.TypeVersion,
+		Position: n.Position, Disabled: n.Disabled, Parameters: parameters, WithheldParameters: withheld,
+		ParametersWithheld: all, Credentials: refs,
+	}
+}
+
 func detailOf(w workflowJSON) WorkflowDetail {
 	nodes := make([]Node, 0, len(w.Nodes))
 	for _, n := range w.Nodes {
-		var refs map[string]CredentialRef
-		if len(n.Credentials) > 0 {
-			refs = make(map[string]CredentialRef, len(n.Credentials))
-			for kind, ref := range n.Credentials {
-				refs[kind] = CredentialRef{ID: bounded(ref.ID), Name: bounded(ref.Name)}
-			}
-		}
-		nodes = append(nodes, Node{
-			ID: bounded(n.ID), Name: bounded(n.Name), Type: bounded(n.Type), TypeVersion: n.TypeVersion,
-			Position: n.Position, Disabled: n.Disabled, Parameters: n.Parameters, Credentials: refs,
-		})
+		nodes = append(nodes, nodeOf(n))
 	}
 	connections := w.Connections
 	if len(connections) == 0 {
@@ -477,7 +499,9 @@ var nodeCredentialsSchema = `{"type":"object","additionalProperties":` + credent
 // type_version, position, disabled, parameters, credentials): n8n's own create/update schemas additionally
 // accept execution-behaviour fields such as notes, onError, retryOnFail, maxTries, and webhookId.
 // qatlas-dev: this is a deliberate simplification, not a spec limit; extend nodeWriteSchema and nodeInput
-// together, in step, if a caller needs one of those fields.
+// together, in step, if a caller needs one of those fields. webhookId is never taken from a caller:
+// workflows.update sends back the one it read, see restoreWithheld. withheld_parameters and
+// parameters_withheld are accepted so a read node can be sent back unchanged; the former is informational.
 var nodeWriteSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string","minLength":1,"maxLength":128},` +
 	`"name":{"type":"string","minLength":1,"maxLength":128},` +
@@ -485,6 +509,8 @@ var nodeWriteSchema = `{"type":"object","properties":{` +
 	`"type_version":{"type":"number"},` +
 	`"position":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},` +
 	`"disabled":{"type":"boolean"},"parameters":{"type":"object"},` +
+	`"withheld_parameters":{"type":"array","maxItems":` + strconv.Itoa(maxWithheldPointers) +
+	`,"items":{"type":"string","maxLength":4096}},"parameters_withheld":{"type":"boolean"},` +
 	`"credentials":` + nodeCredentialsSchema + `},` +
 	`"required":["id","name","type"],"additionalProperties":false}`
 
@@ -499,6 +525,10 @@ type nodeInput struct {
 	Disabled    bool                         `json:"disabled"`
 	Parameters  json.RawMessage              `json:"parameters"`
 	Credentials map[string]credentialRefJSON `json:"credentials"`
+	// ParametersWithheld asks workflows.update to keep the parameters the read withheld as a whole.
+	ParametersWithheld bool `json:"parameters_withheld"`
+	// WebhookID is set only by restoreWithheld, never from an argument.
+	WebhookID string `json:"-"`
 }
 
 // wire converts one node argument to the shape n8n's createWorkflow and updateWorkflow requests read. It
@@ -513,6 +543,9 @@ func (n nodeInput) wire() map[string]any {
 	}
 	if len(n.Parameters) > 0 {
 		out["parameters"] = n.Parameters
+	}
+	if n.WebhookID != "" {
+		out["webhookId"] = n.WebhookID
 	}
 	if len(n.Credentials) > 0 {
 		credentials := make(map[string]map[string]string, len(n.Credentials))
@@ -620,15 +653,19 @@ var workflowWriteInputProperties = `"name":{"type":"string","minLength":1,"maxLe
 	`"nodes":{"type":"array","maxItems":` + strconv.Itoa(maxWorkflowNodes) + `,"items":` + nodeWriteSchema + `},` +
 	`"connections":{"type":"object"},"settings":` + settingsWriteSchema
 
-var workflowWriteArguments = []capability.Argument{
-	{Name: "name", Description: "Workflow name, 1 to 128 characters", Required: true},
-	{Name: "nodes", Description: "Every node of the workflow, replacing whatever it held before; the id, " +
-		"name, and type n8n itself validates are required, and a credential reference carries only the id and " +
-		"name n8n itself resolves", Required: true},
-	{Name: "connections", Description: "How the nodes are wired together, keyed by source node name, " +
-		"replacing whatever the workflow held before", Required: true},
-	{Name: "settings", Description: "Execution and behaviour settings of the workflow, replacing whatever it " +
-		"held before; {} keeps n8n's own defaults", Required: true},
+// workflowWriteArguments builds the four arguments workflows.create and workflows.update share; withheld
+// says how each of them treats the placeholder of a withheld parameter.
+func workflowWriteArguments(withheld string) []capability.Argument {
+	return []capability.Argument{
+		{Name: "name", Description: "Workflow name, 1 to 128 characters", Required: true},
+		{Name: "nodes", Description: "Every node of the workflow, replacing whatever it held before; the id, " +
+			"name, and type n8n itself validates are required, and a credential reference carries only the id " +
+			"and name n8n itself resolves. " + withheld, Required: true},
+		{Name: "connections", Description: "How the nodes are wired together, keyed by source node name, " +
+			"replacing whatever the workflow held before", Required: true},
+		{Name: "settings", Description: "Execution and behaviour settings of the workflow, replacing whatever " +
+			"it held before; {} keeps n8n's own defaults", Required: true},
+	}
 }
 
 // workflowWriteBody validates one create or update argument set and builds the shared request body: name,
@@ -668,7 +705,7 @@ func workflowWriteBody(name string, nodes []nodeInput, connections json.RawMessa
 
 var workflowsCreate = capability.Descriptor{
 	ID:      Provider + ".workflows.create",
-	Version: 1,
+	Version: 2,
 	Title:   "Create an n8n workflow",
 	Description: "Create one workflow of the bound n8n instance from its name, nodes, connections, and " +
 		"settings; a repeated call creates a second workflow. There is no tool to start the created workflow: " +
@@ -680,7 +717,8 @@ var workflowsCreate = capability.Descriptor{
 		`"project_id":` + targetIDSchema + `},"required":["name","nodes","connections","settings"],` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(workflowDetailSchema),
-	Arguments: append(append([]capability.Argument{}, workflowWriteArguments...),
+	Arguments: append(workflowWriteArguments("A parameter holding "+withheldPlaceholder+", or a node with "+
+		"parameters_withheld true, is refused: a new workflow has no value to restore"),
 		capability.Argument{Name: "project_id", Description: "Project to create the workflow in; required, " +
 			"and must be inside this connection's project allow-list, when this connection restricts projects; " +
 			"otherwise optional, defaulting to the API key owner's personal project"},
@@ -725,6 +763,9 @@ func invokeWorkflowsCreate(ctx context.Context, resolved *config.Resolved, secre
 			return nil, err
 		}
 	}
+	if err := refuseWithheldPlaceholders(input.Nodes); err != nil {
+		return nil, err
+	}
 	body, err := workflowWriteBody(input.Name, input.Nodes, input.Connections, input.Settings)
 	if err != nil {
 		return nil, err
@@ -767,7 +808,7 @@ func (c *Client) CreateWorkflow(ctx context.Context, body map[string]any) (*Work
 
 var workflowsUpdate = capability.Descriptor{
 	ID:      Provider + ".workflows.update",
-	Version: 1,
+	Version: 2,
 	Title:   "Replace an n8n workflow",
 	Description: "Replace one workflow's name, nodes, connections, and settings of the bound n8n instance " +
 		"with a full PUT, exactly as n8n's own updateWorkflow endpoint is: fields left out are not kept, they " +
@@ -779,7 +820,11 @@ var workflowsUpdate = capability.Descriptor{
 		workflowWriteInputProperties + `,"publish_if_active":{"type":"boolean"}},` +
 		`"required":["workflow_id","name","nodes","connections","settings"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(workflowDetailSchema),
-	Arguments: append(append([]capability.Argument{workflowIDArgument}, workflowWriteArguments...),
+	Arguments: append(append([]capability.Argument{workflowIDArgument}, workflowWriteArguments("For a node "+
+		"with the same id and type as in the current workflow, "+withheldPlaceholder+" at a position "+
+		"workflows.get withheld gets back its current value, an omitted webhook path is kept, the webhook id "+
+		"is kept, and parameters_withheld true without parameters keeps all current parameters; any other "+
+		withheldPlaceholder+" is refused before the update is sent")...),
 		capability.Argument{Name: "publish_if_active", Description: "When the workflow is currently active, " +
 			"whether n8n republishes it with this new content right away; true (n8n's own default) when " +
 			"omitted. false saves the change as a draft on the currently active version instead. Has no " +
@@ -827,6 +872,13 @@ func invokeWorkflowsUpdate(ctx context.Context, resolved *config.Resolved, secre
 	if err := client.verifyWorkflowScope(workflow); err != nil {
 		return nil, err
 	}
+	if err := restoreWithheld(input.Nodes, workflow.Nodes); err != nil {
+		return nil, err
+	}
+	// Rebuilt because restoring changes the nodes and may push the body over its size limit.
+	if body, err = workflowWriteBody(input.Name, input.Nodes, input.Connections, input.Settings); err != nil {
+		return nil, err
+	}
 	return client.UpdateWorkflow(ctx, input.WorkflowID, body, input.PublishIfActive)
 }
 
@@ -861,7 +913,7 @@ func (c *Client) UpdateWorkflow(ctx context.Context, workflowID string, body map
 func workflowActivationDescriptor(action, title, description string) capability.Descriptor {
 	return capability.Descriptor{
 		ID:          Provider + ".workflows." + action,
-		Version:     1,
+		Version:     2,
 		Title:       title,
 		Description: description,
 		Tags:        []string{"n8n", "workflows", action, "automation"},
