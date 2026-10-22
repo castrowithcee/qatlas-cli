@@ -12,11 +12,10 @@ updated: 2026-10-04
 
 # Infomaniak Calendar and Contacts
 
-Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity.
-It lists the calendars and address books the connection allows, reads the events of the allowed calendars,
-and creates, replaces, and deletes such events from structured fields. It lists and reads the contacts of the
-allowed address books and creates, replaces, and deletes such contacts from structured fields. It changes no
-collection.
+Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity. It lists
+the calendars and address books the connection allows, reads the events of the allowed calendars, and creates, replaces,
+and deletes such events from structured fields. It lists and reads the contacts of the allowed address books and
+creates, replaces, and deletes such contacts from structured fields. It changes no collection.
 
 ## Configuration
 
@@ -50,10 +49,10 @@ credentials:
 | `calendar/ID` | one calendar; repeatable, at most 100 |
 | `addressbook/ID` | one address book; repeatable, at most 100 |
 
-`ID` is the last path segment of the collection below its home set, for example `work` for
-`/calendars/AB12345/work/`. It is one literal segment of at most 128 bytes: no separator, no percent sign, no
-`.` or `..`, no control character. Matching is exact and case-sensitive; there are no wildcards. A connection with only `calendar/ID` targets is not offered the contact and
-address book tools, and one with only `addressbook/ID` targets not the calendar and event tools.
+`ID` is the last path segment of the collection below its home set, for example `work` for `/calendars/AB12345/work/`.
+It is one literal segment of at most 128 bytes: no separator, no percent sign, no `.` or `..`, no control character.
+Matching is exact and case-sensitive; there are no wildcards. A connection with only `calendar/ID` targets is not
+offered the contact and address book tools, and one with only `addressbook/ID` targets not the calendar and event tools.
 
 ```yaml
 connections:
@@ -63,11 +62,10 @@ connections:
     targets: [calendar/work, calendar/team, addressbook/default]
 ```
 
-The allow-list is required: a connection needs at least one target, and a target named twice within its kind
-is refused. Only listed collections are reported. If a connection lists only calendars,
-`infomaniak.dav.address-books.list` returns an empty set (and the other way round) without contacting
-Infomaniak or reading a secret. A listed collection the server does not show is simply absent. No error
-quotes a configured value.
+The allow-list is required: a connection needs at least one target, and a target named twice within its kind is refused.
+Only listed collections are reported. If a connection lists only calendars, `infomaniak.dav.address-books.list` returns
+an empty set (and the other way round) without contacting Infomaniak or reading a secret. A listed collection the server
+does not show is simply absent. No error quotes a configured value.
 
 ## Tools
 
@@ -86,62 +84,64 @@ quotes a configured value.
 | `infomaniak.dav.contacts.update` | update | required | replaces one contact, bound to its etag |
 | `infomaniak.dav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
 
-The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
-needs the `read` effect. The profile `events` adds `events.create` and `events.update`
-(effects `create` and `update`); it is not recommended. The profile `contacts` likewise adds
-`contacts.create` and `contacts.update` and is not recommended. `events.delete` and `contacts.delete`
-belong to no profile: a connection offers one only when its `tools` list names it.
+The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and needs the
+`read` effect. The profile `events` adds `events.create` and `events.update` (effects `create` and `update`); it is not
+recommended. The profile `contacts` likewise adds `contacts.create` and `contacts.update` and is not recommended.
+`events.delete` and `contacts.delete` belong to no profile: a connection offers one only when its `tools` list names it.
 
 Each collection carries `id`, `name`, `description`, and, for a calendar, `color` when the server reports a
 valid hex value.
 
 ## Events
 
-Both event tools take `calendar`, the ID of a `calendar/ID` target. A calendar outside the allow-list is
-refused as `permission` before any secret is read or any request is sent, and the message does not name it.
+Both tools take `calendar`, the ID of a `calendar/ID` target; one outside the allow-list is refused as `permission`
+before any secret is read or request is sent; the message does not name it.
 
-`infomaniak.dav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after
-`start` and at most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REPORT of the
-`VEVENT` components that overlap the range. `limit` defaults to 50 and may be at most 200. Events are sorted
-by start and cut at `limit`; `truncated` is true when more matched. The list is compact. Filters only narrow the
-answer; every href keeps its path binding. An unsupported collation is a request error; `calendars.list` names
-the supported ones. `limit-recurrence-set` is not offered: the list reports only the main component of a series.
+`infomaniak.dav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after `start` and at
+most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REPORT of the overlapping `VEVENT`
+components. `limit` defaults to 50, at most 200. Events are sorted by start and cut at `limit`; `truncated` flags more.
+Filters only narrow the answer; every href keeps its path binding. An unsupported collation is a request error;
+`calendars.list` names the supported ones. `limit-recurrence-set` is not offered: without `expand` the list reports only
+the main component of a series.
 
-`infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that one event
-with a GET: every property of the `VEVENT`, its alarms, and the parameters of organizer and attendees. A list
-cut at its cap is flagged `<name>_truncated`; a raw value over its cap is left out instead of cut.
+`infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that event with a GET:
+every `VEVENT` property, its alarms, and the parameters of organizer and attendees. A list cut at its cap is flagged
+`<name>_truncated`; a raw value over its cap is omitted, not cut.
 
-A repeating event is reported once with its recurrence rule as `rrule`; `expand` has the server resolve it over the
-range into one entry per occurrence with `recurrence_id`, and `limit` counts occurrences. `start` and `end` are a date
-for an all-day event, a UTC time ending in `Z`, or a local time with the zone name; zones are not resolved. The `id`
-is one literal path segment under the calendar, with the same rules as a target ID, and is checked before any request.
-Every event href of an answer must be a direct child of the allowed calendar, otherwise the whole answer is refused as
-an invalid response. The list leaves out an event whose data is not a valid iCalendar object.
+A repeating event is reported once with its rule as `rrule`; `expand` has the server resolve it over the range into one
+entry per occurrence with `recurrence_id`, and `limit` counts occurrences. Overrides of single occurrences are
+`overrides`, at most 50 and flagged when there are more. `start` and `end` are a date for an all-day event, a UTC time
+ending in `Z`, or a local time with its zone name, unresolved. The `id` is one literal path segment under the calendar,
+checked like a target ID before any request. An event href that is no direct child of the allowed calendar refuses the
+whole answer as an invalid response. The list omits invalid events.
 
-Addresses (`url`, attachments, `dir`, `sent_by`, `member`, `delegated_*`) are bounded, untrusted text and are
-never fetched. Not reported: embedded binary attachments (`ATTACH` with `VALUE=BINARY`); addresses with user
-information, a query, or a fragment, which can carry an access token while a connection need not name the
-event tools in `tools`; X-properties and vendor extensions, which are not part of RFC 5545. `VTIMEZONE`
-definitions are not evaluated; times appear with their `TZID`.
+Addresses (`url`, attachments, `dir`, `sent_by`, `member`, `delegated_*`) are bounded, untrusted, never fetched. Not
+reported: embedded binary attachments (`ATTACH` with `VALUE=BINARY`); addresses with user information, a query, or a
+fragment, which can carry an access token while a connection need not name the event tools in `tools`; X-properties (not
+part of RFC 5545). `VTIMEZONE` definitions are not evaluated; times appear with their `TZID`.
 
 ## Contacts
 
-Both contact tools take `addressbook`, the ID of an `addressbook/ID` target. An address book outside the
-allow-list is refused as `permission` before any secret is read or any request is sent, and the message does
-not name it. Contacts are personal data and carry the data sensitivity class `infomaniak-dav-contacts`.
+Both tools take `addressbook`, the ID of an `addressbook/ID` target; one outside the allow-list is refused as
+`permission` before any secret is read or request is sent; the message does not name it. Contacts carry the data
+sensitivity class `infomaniak-dav-contacts`.
 
-`infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults
-to 50 and may be at most 200. Contacts are sorted by name, then id, and cut at `limit`; `truncated` is true
-when more were found. The list is compact: `id`, `uid`, `name`, the first `email`, `organization`, and `etag`.
-A card that is not a valid vCard is left out of the list.
+`infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults to 50,
+at most 200. Contacts are sorted by name, then id, and cut at `limit`; `truncated` is true when more were found. The
+list is compact: `id`, `uid`, `name`, the first `email`, `organization`, and `etag`. An invalid vCard is left out.
 
-`infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads that one
-contact with a GET. It returns `structured_name`, at most 20 `emails` and 20 `phones` with their `type`, at
-most 20 `addresses`, `organization`, `title`, `birthday`, `note`, and at most 20 `urls`. A member cut at its
-cap is named in `truncated`. A photo or other binary property is never returned. The `name` is the formatted
-name, built from the structured name when the card has none. The `id` is one literal path segment under the
-address book, checked before any request. Every contact href of an answer must be a direct child of the
-allowed address book, otherwise the whole answer is refused as an invalid response.
+`infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads it with a GET. It
+reports every vCard 3.0 property (RFC 2426) except those left out below; a list-valued member is cut at 20 entries and
+named in `truncated`. The `name` is the formatted or the built structured name. The `id` is one literal path segment
+under the address book, checked before any request. A contact href that is no direct child of the allowed address book
+refuses the whole answer as an invalid response. Left out:
+
+- Embedded photo, logo, sound, and key data (`ENCODING=b`) and an embedded `AGENT` card; only an `http` or `https`
+  address with `VALUE=uri` is reported.
+- An address with user information, a query, or a fragment can carry an access token and is omitted; addresses are
+  untrusted text, never fetched; `key_uri` is reported, as a public key's address is no access value.
+- vCard 4.0 only properties (RFC 6350) and `X-` properties; CardDAV requires vCard 3.0. `PREF=n` is reported as `pref`;
+  in vCard 3.0 it stays in `type`.
 
 ## Writing events
 
