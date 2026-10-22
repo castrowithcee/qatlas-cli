@@ -314,7 +314,7 @@ func TestIssueDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 			t.Fatalf("%s descriptor = %+v", p.id, d)
 		}
 		for _, other := range reg.Provider(p.id) {
-			if other.ID != d.ID && other.ID != p.toolID(commentsDelete) && other.RequiresToolAllowList {
+			if other.ID != d.ID && other.RequiresToolAllowList && !strings.HasSuffix(other.ID, ".delete") {
 				t.Errorf("%s is listed-only too", other.ID)
 			}
 		}

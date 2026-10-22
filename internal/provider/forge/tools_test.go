@@ -37,7 +37,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id + ".issue-config.validate", p.id + ".issue-deadlines.set", p.id + ".issue-templates.list",
 			p.id + ".issue-timeline.list", p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete",
 			p.id + ".issues.get", p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search",
-			p.id + ".issues.update", p.id + ".markdown.render", p.id + ".markup.render", p.id + ".repositories.get",
+			p.id + ".issues.update", p.id + ".labels.create", p.id + ".labels.delete", p.id + ".labels.get",
+			p.id + ".labels.list", p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render",
+			p.id + ".org-labels.create", p.id + ".org-labels.delete", p.id + ".org-labels.get",
+			p.id + ".org-labels.list", p.id + ".org-labels.update", p.id + ".repositories.get",
 			p.id + ".repositories.list", p.id + ".settings.get", p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
 			want = append(want, p.id+".nodeinfo.get")
@@ -97,7 +100,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet,
 		signingKeysGet, markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate,
 		issuesClose, issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList,
-		issueConfigGet, issueConfigValidate, assigneesList} {
+		issueConfigGet, issueConfigValidate, assigneesList, labelsList, labelsGet, labelsCreate, labelsUpdate,
+		labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))

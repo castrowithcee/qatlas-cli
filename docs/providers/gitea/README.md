@@ -177,6 +177,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Issues](issues.md): issues, due dates, timelines, issue templates, and the issue configuration
 - [Comments](comments.md): comments on issues and pull requests
 - [Assignees](assignees.md): assignable users and the assignees of an issue
+- [Labels](labels.md): repository and organization labels
 
 ## Not offered
 
