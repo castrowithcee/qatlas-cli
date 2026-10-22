@@ -267,12 +267,17 @@ func (s scope) allowsCredential(shared []credentialShareJSON) bool {
 
 // cappedText bounds a provider text by characters and replaces control characters.
 func cappedText(value string) string {
+	return cappedTextN(value, maxCredentialTextLength)
+}
+
+// cappedTextN is cappedText with an explicit bound in characters.
+func cappedTextN(value string, limit int) string {
 	if !utf8.ValidString(value) {
 		value = string([]rune(value))
 	}
 	out := make([]rune, 0, len(value))
 	for _, r := range value {
-		if len(out) >= maxCredentialTextLength {
+		if len(out) >= limit {
 			break
 		}
 		if unicode.IsControl(r) {
