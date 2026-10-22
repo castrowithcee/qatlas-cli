@@ -153,6 +153,21 @@ func unsure(failure *provider.Error) *provider.Error {
 	return failure
 }
 
+// probe sends one GET of a fixed API path whose answer has no body and reports whether the instance answered
+// 2xx. Only 404 counts as a plain no; every other refusal stays a failure, and a 404 hides nothing beyond what
+// the caller documents.
+func (c *Client) probe(ctx context.Context, op, path string) (bool, error) {
+	status, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil,
+		request{}, nil)
+	if err == nil {
+		return true, nil
+	}
+	if status == http.StatusNotFound {
+		return false, nil
+	}
+	return false, err
+}
+
 // getText sends one GET of a fixed API path and reads the answer as text.
 func (c *Client) getText(ctx context.Context, op, path string, answer *textAnswer) error {
 	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, request{},
