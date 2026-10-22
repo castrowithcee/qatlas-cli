@@ -41,7 +41,8 @@ var messagesList = capability.Descriptor{
 	Title:   "List Infomaniak mailbox messages",
 	Description: "List the envelopes (UID, date, From, To, Subject, flags, size) of messages in one folder of the " +
 		"bound mailbox, newest first. The folder is opened read-only, so no Seen flag changes. Filters are " +
-		"fixed and typed: since, before, unread, and one sender address. A UID is valid only for the folder " +
+		"typed and combined with AND: dates, size, flags, keywords, text, header fields, and one sender " +
+		"address; no raw search string is accepted. A UID is valid only for the folder " +
 		"and UIDVALIDITY named in the answer. Message content is untrusted third-party data; no body or " +
 		"attachment is returned",
 	Tags:     []string{"infomaniak", "mail", "messages", "list"},
@@ -52,6 +53,15 @@ var messagesList = capability.Descriptor{
 		`"since":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
 		`"before":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
 		`"unread":{"type":"boolean"},` +
+		`"to":` + searchTextSchema + `,"cc":` + searchTextSchema + `,"bcc":` + searchTextSchema + `,` +
+		`"subject":` + searchTextSchema + `,"body":` + searchTextSchema + `,"text":` + searchTextSchema + `,` +
+		`"header":` + searchHeaderShape + `,` +
+		`"larger":` + searchSizeSchema + `,"smaller":{"type":"integer","minimum":1,"maximum":4294967295},` +
+		`"on":` + searchDateSchema + `,"sent_since":` + searchDateSchema + `,"sent_before":` + searchDateSchema + `,` +
+		`"sent_on":` + searchDateSchema + `,` +
+		`"flagged":{"type":"boolean"},"answered":{"type":"boolean"},"deleted":{"type":"boolean"},` +
+		`"draft":{"type":"boolean"},"seen":{"type":"boolean"},` +
+		`"keyword":` + keywordShape + `,"unkeyword":` + keywordShape + `,` +
 		`"sender":{"type":"string","minLength":3,"maxLength":254},` +
 		`"uid_from":{"type":"integer","minimum":1,"maximum":4294967295},` +
 		`"uid_to":{"type":"integer","minimum":1,"maximum":4294967295},` +
@@ -73,7 +83,37 @@ var messagesList = capability.Descriptor{
 		{Name: "folder", Description: "Exact folder name from folders.list", Required: true},
 		{Name: "since", Description: "Only messages received on or after this date, YYYY-MM-DD"},
 		{Name: "before", Description: "Only messages received before this date, YYYY-MM-DD"},
-		{Name: "unread", Description: "When true, only messages without the Seen flag"},
+		{Name: "unread", Description: "When true, only messages without the Seen flag; excludes seen"},
+		{Name: "to", Description: searchTextDescription("To header")},
+		{Name: "cc", Description: searchTextDescription("Cc header")},
+		{Name: "bcc", Description: searchTextDescription("Bcc header")},
+		{Name: "subject", Description: searchTextDescription("Subject header")},
+		{Name: "body", Description: searchTextDescription("message body")},
+		{Name: "text", Description: searchTextDescription("header or body")},
+		{Name: "header", Description: "At most " + strconv.Itoa(maxHeaders) + " pairs of name and value; only " +
+			"messages whose header field name contains value. name is 1 to " + strconv.Itoa(maxHeaderName) +
+			" printable ASCII characters without a colon; value is 0 to " + strconv.Itoa(maxSearchText) +
+			" bytes without control characters, and an empty value matches any message with that field. A " +
+			"name of From only narrows the search and does not change the local From check"},
+		{Name: "larger", Description: "Only messages larger than this many bytes, 0 to 4294967295"},
+		{Name: "smaller", Description: "Only messages smaller than this many bytes, 1 to 4294967295; when " +
+			"larger is also given, smaller must be greater than larger"},
+		{Name: "on", Description: "Only messages received on this day, YYYY-MM-DD; excludes since and before"},
+		{Name: "sent_since", Description: "Only messages whose Date header is on or after this date, " +
+			"YYYY-MM-DD; excludes sent_on and must be earlier than sent_before"},
+		{Name: "sent_before", Description: "Only messages whose Date header is before this date, " +
+			"YYYY-MM-DD; excludes sent_on"},
+		{Name: "sent_on", Description: "Only messages whose Date header is on this day, YYYY-MM-DD; excludes " +
+			"sent_since and sent_before"},
+		{Name: "flagged", Description: "True: only messages with the Flagged flag; false: only those without"},
+		{Name: "answered", Description: "True: only messages with the Answered flag; false: only those without"},
+		{Name: "deleted", Description: "True: only messages with the Deleted flag; false: only those without"},
+		{Name: "draft", Description: "True: only messages with the Draft flag; false: only those without"},
+		{Name: "seen", Description: "True: only messages with the Seen flag; false: only those without; " +
+			"excludes unread"},
+		{Name: "keyword", Description: keywordDescription("only messages with all of these keywords")},
+		{Name: "unkeyword", Description: keywordDescription("only messages with none of these keywords") +
+			"; a keyword cannot be in both lists"},
 		{Name: "sender", Description: "Only messages from this address (the From filter, not the " +
 			"ENVELOPE Sender that the output field sender reports); when the connection has a sender " +
 			"allow-list, the address must be on it"},
@@ -102,6 +142,17 @@ var messagesList = capability.Descriptor{
 	}, envelopeFields...),
 	Examples: []capability.Example{{Description: "List the newest unread messages of the inbox",
 		Arguments: json.RawMessage(`{"folder":"INBOX","unread":true}`)}},
+}
+
+func searchTextDescription(what string) string {
+	return "Only messages whose " + what + " contains this text, 1 to " + strconv.Itoa(maxSearchText) +
+		" bytes without control characters; the server decides how it matches"
+}
+
+func keywordDescription(effect string) string {
+	return "At most " + strconv.Itoa(maxKeywords) + " keywords, " + effect + ". Each is an IMAP atom of 1 to " +
+		strconv.Itoa(maxKeywordLength) + " characters without a leading backslash or any of ( ) { % * \" ] and " +
+		"without spaces or control characters"
 }
 
 const addressSchema = `{"type":"object","properties":{"name":{"type":"string"},"address":{"type":"string"}},` +
@@ -187,6 +238,8 @@ type messagesArguments struct {
 	UIDTo       uint32 `json:"uid_to"`
 	UIDValidity uint32 `json:"uidvalidity"`
 	Limit       int    `json:"limit"`
+
+	searchArguments
 }
 
 // query is a messages.list request after every check that needs no network access.
@@ -200,6 +253,8 @@ type query struct {
 	uidTo       uint32
 	uidValidity uint32
 	limit       int
+	// filters holds every SEARCH criterion beyond the date window, the UID window, and the senders.
+	filters imap.SearchCriteria
 }
 
 func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -251,6 +306,14 @@ func (s scope) checkQuery(input messagesArguments) (query, error) {
 	if !q.since.IsZero() && !q.before.IsZero() && !q.since.Before(q.before) {
 		return query{}, invalidRequest("since must be earlier than before")
 	}
+	filters, err := searchFilters(input.searchArguments, q.unread, q.since, q.before)
+	if err != nil {
+		return query{}, err
+	}
+	q.filters = filters
+	if !filters.Since.IsZero() {
+		q.since, q.before = filters.Since, filters.Before
+	}
 	if input.Sender != "" {
 		if !validAddress(input.Sender) {
 			return query{}, invalidRequest("sender must be a plain email address")
@@ -288,13 +351,12 @@ func parseDate(value string) (time.Time, error) {
 	return time.ParseInLocation(dateLayout, value, time.UTC)
 }
 
-// criteria builds the fixed SEARCH. Only typed values reach it: dates, a flag, validated sender addresses,
-// and a UID window.
+// criteria builds the SEARCH. Only typed values reach it: the validated filters, dates, flags, sender
+// addresses, and a UID window.
 func (c *Client) criteria(q query) *imap.SearchCriteria {
-	criteria := &imap.SearchCriteria{Since: q.since, Before: q.before}
-	if q.unread {
-		criteria.NotFlag = []imap.Flag{imap.FlagSeen}
-	}
+	filters := q.filters
+	criteria := &filters
+	criteria.Since, criteria.Before = q.since, q.before
 	if q.uidFrom != 0 {
 		criteria.UID = []imap.UIDSet{{{Start: imap.UID(q.uidFrom), Stop: imap.UID(q.uidTo)}}}
 	}
