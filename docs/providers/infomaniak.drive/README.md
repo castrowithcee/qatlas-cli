@@ -180,6 +180,17 @@ did not. Its filters (`in_maintenance`, `maintenance_reasons`, `tags`) are sent 
 account's page only; they never widen the targets, which are still applied to every row. The page size is
 fixed at 100 and the account is the connection's binding, so neither is an argument.
 
+Drive members that Infomaniak documents as `with` values come only through `with`; a member is dropped when
+its value was not asked for, even if Infomaniak sends it. `with` offers the documented values that load a
+member of the drive: `limits` and `account.has_customization_url` are not offered because the specification
+documents no response member for them, and `total` is not offered because it loads no member. The ownership
+check and the target picker never send `with` or a filter.
+
+Lists in a drive are cut at 100 entries, user and team identifiers at 1000 per group, and a cut list sets
+its `<name>_truncated` flag, so a long list is never mistaken for a complete one. Price amounts keep
+Infomaniak's exact decimal text. The sanitizer and summary figures of a rewind are passed on as bounded free
+objects: one beyond the bounds (depth, member count, text length) is left out whole and flagged, never cut.
+
 ## Content and size limits
 
 `infomaniak.drive.files.get` reads at most 4 MiB and returns it as base64; for a larger file, or to keep the
@@ -232,6 +243,9 @@ restricted drives than a Business kSuite account, which shows up only as fewer o
 `infomaniak.drive.drives.list`, never as a different error class.
 
 ## Boundary
+
+Under a drive bound only by `files` targets, a rewind of the drive reports `directory_id` but not the
+`directory`, `directory_name`, or `rewind_name`, because they can name a folder outside the targets.
 
 This provider covers kDrive alone. Infomaniak Mail, CalDAV/CardDAV, and kChat are separate Infomaniak products
 with their own authentication: Mail is read over IMAP with mailbox credentials, CalDAV/CardDAV over WebDAV
