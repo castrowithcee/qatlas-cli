@@ -175,7 +175,7 @@ func TestBooksGetTreeUsersAndShelves(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := fieldMap(got)
-	if !reflect.DeepEqual(m["created_by"], map[string]any{"id": int64(3), "name": "Editor"}) {
+	if !reflect.DeepEqual(m["created_by"], map[string]any{"id": int64(3), "name": "Editor", "slug": "editor"}) {
 		t.Errorf("created_by = %v", m["created_by"])
 	}
 	if _, ok := m["shelves"]; !ok {
@@ -244,7 +244,7 @@ func TestChaptersGetIsOneRequestAndRefusesForeign(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := fieldMap(got)
-	if m["book_slug"] != "own" || !reflect.DeepEqual(m["owned_by"], map[string]any{"id": int64(3), "name": "Editor"}) {
+	if m["book_slug"] != "own" || !reflect.DeepEqual(m["owned_by"], map[string]any{"id": int64(3), "name": "Editor", "slug": "editor"}) {
 		t.Errorf("chapter = %v", m)
 	}
 	if _, paths, _, _ := rec.snapshot(); !reflect.DeepEqual(paths, []string{"/api/chapters/10"}) {
@@ -319,4 +319,42 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}
 	}
+}
+
+// rowsJSON and objectJSON render a result as the application core normalizes it: a row holds every column,
+// an absent one as null, and numbers are plain JSON numbers.
+func rowsJSON(c output.Collection, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]any, len(c.Rows))
+	for i, row := range c.Rows {
+		object := map[string]any{}
+		for _, column := range c.Columns {
+			object[column] = row[column]
+		}
+		rows[i] = object
+	}
+	return reencode(rows)
+}
+
+func objectJSON(o output.Object, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	object := map[string]any{}
+	for _, f := range o.Fields {
+		object[f.Name] = f.Value
+	}
+	return reencode(object)
+}
+
+func reencode(value any) (any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var out any
+	err = json.Unmarshal(encoded, &out)
+	return out, err
 }

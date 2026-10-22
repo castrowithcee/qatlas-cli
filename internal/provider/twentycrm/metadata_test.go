@@ -22,6 +22,7 @@ const (
 	metaSetCn   = "canary-settings-6622"
 	metaRelCn   = "canary-relation-7733"
 	metaTypeCn  = "CANARY_TYPE_8844"
+	metaUnivID  = "eeeeeeee-0000-4000-8000-000000000005"
 )
 
 const metaFieldJSON = `{"id":"` + metaFieldID + `","type":"SELECT","name":"stage","label":"Sta\u0007ge","description":"d",` +
@@ -78,7 +79,7 @@ func runMeta(t *testing.T, handler capability.Handler, args string) (string, err
 		return "", err
 	}
 	out, _ := json.Marshal(result)
-	for _, canary := range []string{metaDefCn, metaSetCn, metaRelCn, metaTypeCn, "\\u0007"} {
+	for _, canary := range []string{metaTypeCn, "\\u0007"} {
 		if strings.Contains(string(out), canary) {
 			t.Errorf("%s reached the output: %s", canary, out)
 		}
@@ -127,11 +128,16 @@ func TestMetadataBothFormatsNormalizeIdentically(t *testing.T) {
 	if strings.Contains(objects[0], "object_metadata_id") || !strings.Contains(fields[0], `"object_metadata_id":"`+metaObjID+`"`) {
 		t.Errorf("object_metadata_id: %s / %s", objects[0], fields[0])
 	}
-	for _, leak := range []string{"color", "defaultValue", "default_value", "settings", "relation"} {
+	for _, leak := range []string{"isUIReadOnly", "is_ui_read_only", "deprecation_reason", "defaultValue", "color"} {
 		for _, out := range []string{lists[0], objects[0], fields[0]} {
 			if strings.Contains(out, leak) {
 				t.Errorf("%s reached an output: %s", leak, out)
 			}
+		}
+	}
+	for _, want := range []string{metaDefCn, metaSetCn, metaRelCn} {
+		if !strings.Contains(objects[0], want) || !strings.Contains(fields[0], want) {
+			t.Errorf("%s missing: %s / %s", want, objects[0], fields[0])
 		}
 	}
 }
@@ -320,5 +326,183 @@ func TestMetadataToolsStayOutOfEveryProfile(t *testing.T) {
 				t.Errorf("%s is in profile %s", d.ID, profile.ID)
 			}
 		}
+	}
+}
+
+// metaRichFieldJSON is a field in the shape of FieldMetadataDTO with every member set, the deprecated alias
+// isUIReadOnly included.
+const metaRichFieldJSON = `{"id":"` + metaFieldID + `","universalIdentifier":"` + metaUnivID + `","type":"RELATION",` +
+	`"name":"owner","label":"Owner","description":"d","icon":"IconUser","isActive":true,"isSystem":false,` +
+	`"isUIEditable":true,"writability":"WRITABLE","isUIReadOnly":false,"isNullable":true,"isUnique":false,` +
+	`"isSearchable":true,"isAuditLogged":true,"defaultValue":{"amountMicros":9007199254740993,"nested":[1.50,{"a":null}]},` +
+	`"settings":{"relationType":"MANY_TO_ONE","joinColumnName":"ownerId"},"objectMetadataId":"` + metaObjID + `",` +
+	`"isLabelSyncedWithName":false,"morphId":"` + metaOtherID + `","applicationId":"` + metaOtherID + `",` +
+	`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z",` +
+	`"relation":{"type":"MANY_TO_ONE","sourceObjectMetadata":{"id":"` + metaObjID + `","nameSingular":"deal"},` +
+	`"targetObjectMetadata":{"id":"` + metaOtherID + `","nameSingular":"person"},` +
+	`"targetFieldMetadata":{"id":"` + metaUnivID + `","name":"deals"}},` +
+	`"morphRelations":[{"type":"ONE_TO_MANY","targetObjectMetadata":{"id":"` + metaOtherID + `"}}]}`
+
+// metaRichObjectJSON is an object in the shape of ObjectMetadataDTO with every member set.
+const metaRichObjectJSON = `{"id":"` + metaObjID + `","universalIdentifier":"` + metaUnivID + `","nameSingular":"deal",` +
+	`"namePlural":"deals","labelSingular":"Deal","labelPlural":"Deals","description":"Sales","icon":"IconBriefcase",` +
+	`"shortcut":"D","color":"blue","isRemote":false,"isActive":true,"isSystem":false,"isUIEditable":true,` +
+	`"isUICreatable":false,"isUIReadOnly":false,"isSearchable":true,"openRecordIn":"SIDE_PANEL","readability":"READABLE",` +
+	`"readabilityParentFieldUniversalIdentifiers":["` + metaUnivID + `"],"sharingReach":"WORKSPACE","writability":"WRITABLE",` +
+	`"applicationId":"` + metaOtherID + `","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z",` +
+	`"labelIdentifierFieldMetadataId":"` + metaFieldID + `","imageIdentifierFieldMetadataId":"` + metaOtherID + `",` +
+	`"isLabelSyncedWithName":true,"duplicateCriteria":[["name"],["amount","stage"]],"fields":[` + metaRichFieldJSON + `]}`
+
+func decodeNumbers(t *testing.T, text string) map[string]any {
+	t.Helper()
+	value, err := decodeValue(json.RawMessage(text))
+	object, ok := value.(map[string]any)
+	if err != nil || !ok {
+		t.Fatalf("not an object: %v %s", err, text)
+	}
+	return object
+}
+
+func TestMetadataEveryDocumentedMemberArrivesExactly(t *testing.T) {
+	serveMeta(t, metaFormat{list: `{"data":[` + metaRichObjectJSON + `],"pageInfo":{"hasNextPage":false}}`,
+		objectGet: metaRichObjectJSON, fldGet: metaRichFieldJSON})
+	wantObject := map[string]any{"universal_identifier": metaUnivID, "icon": "IconBriefcase", "shortcut": "D", "color": "blue",
+		"is_remote": false, "is_ui_editable": true, "is_ui_creatable": false, "is_searchable": true,
+		"open_record_in": "SIDE_PANEL", "readability": "READABLE", "sharing_reach": "WORKSPACE", "writability": "WRITABLE",
+		"application_id": metaOtherID, "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-02T00:00:00.000Z",
+		"label_identifier_field_metadata_id": metaFieldID, "image_identifier_field_metadata_id": metaOtherID,
+		"is_label_synced_with_name": true}
+	wantField := map[string]any{"universal_identifier": metaUnivID, "icon": "IconUser", "is_ui_editable": true,
+		"writability": "WRITABLE", "is_unique": false, "is_searchable": true, "is_audit_logged": true,
+		"is_label_synced_with_name": false, "morph_id": metaOtherID, "application_id": metaOtherID,
+		"created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-02T00:00:00.000Z"}
+	freeField := `{"default_value":{"amountMicros":9007199254740993,"nested":[1.50,{"a":null}]},` +
+		`"settings":{"relationType":"MANY_TO_ONE","joinColumnName":"ownerId"},` +
+		`"relation":{"type":"MANY_TO_ONE","sourceObjectMetadata":{"id":"` + metaObjID + `","nameSingular":"deal"},` +
+		`"targetObjectMetadata":{"id":"` + metaOtherID + `","nameSingular":"person"},` +
+		`"targetFieldMetadata":{"id":"` + metaUnivID + `","name":"deals"}},` +
+		`"morph_relations":[{"type":"ONE_TO_MANY","targetObjectMetadata":{"id":"` + metaOtherID + `"}}]}`
+	check := func(name string, got map[string]any, want map[string]any) {
+		t.Helper()
+		for key, value := range want {
+			if got[key] != value {
+				t.Errorf("%s %s = %v, want %v", name, key, got[key], value)
+			}
+		}
+		for _, banned := range []string{"is_ui_read_only", "isUIReadOnly", "deprecation_reason", "omitted_fields"} {
+			if _, ok := got[banned]; ok {
+				t.Errorf("%s carries %s", name, banned)
+			}
+		}
+	}
+	checkFree := func(name string, got map[string]any) {
+		t.Helper()
+		gotJSON, _ := json.Marshal(map[string]any{"default_value": got["default_value"], "settings": got["settings"],
+			"relation": got["relation"], "morph_relations": got["morph_relations"]})
+		wantJSON, _ := json.Marshal(decodeNumbers(t, freeField))
+		if string(gotJSON) != string(wantJSON) {
+			t.Errorf("%s free objects changed:\n%s\n%s", name, gotJSON, wantJSON)
+		}
+	}
+
+	out, err := runMeta(t, invokeMetaObjectsGet, `{"id":"`+metaObjID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object := decodeNumbers(t, out)
+	check("object", object, wantObject)
+	if got, _ := json.Marshal(object["readability_parent_field_universal_identifiers"]); string(got) != `["`+metaUnivID+`"]` {
+		t.Errorf("readability parents = %s", got)
+	}
+	if got, _ := json.Marshal(object["duplicate_criteria"]); string(got) != `[["name"],["amount","stage"]]` {
+		t.Errorf("duplicate_criteria = %s", got)
+	}
+	nested := object["fields"].([]any)[0].(map[string]any)
+	check("object field", nested, wantField)
+	checkFree("object field", nested)
+	if !strings.Contains(out, `"amountMicros":9007199254740993`) {
+		t.Errorf("number lost precision: %s", out)
+	}
+
+	out, err = runMeta(t, invokeMetaFieldsGet, `{"id":"`+metaFieldID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	field := decodeNumbers(t, out)
+	check("field", field, wantField)
+	checkFree("field", field)
+
+	out, err = runMeta(t, invokeMetaObjectsList, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := decodeNumbers(t, out)["objects"].([]any)[0].(map[string]any)
+	check("listed object", listed, wantObject)
+}
+
+func TestMetadataWithoutNewMembersKeepsTheEarlierOutput(t *testing.T) {
+	plain := `{"id":"` + metaFieldID + `","type":"TEXT","name":"n","label":"L",` +
+		`"isNullable":false,"defaultValue":null,"settings":{},"relation":null,"morphRelations":[]}`
+	object := `{"id":"` + metaObjID + `","nameSingular":"deal","namePlural":"deals","labelSingular":"Deal",` +
+		`"labelPlural":"Deals","isCustom":true,"fields":[` + plain + `]}`
+	serveMeta(t, metaFormat{objectGet: object, fldGet: plain})
+	out, err := runMeta(t, invokeMetaObjectsGet, `{"id":"`+metaObjID+`"}`)
+	want := `{"id":"` + metaObjID + `","name_singular":"deal","name_plural":"deals","label_singular":"Deal",` +
+		`"label_plural":"Deals","is_custom":true,"field_count":1,"fields":[{"id":"` + metaFieldID + `","name":"n",` +
+		`"label":"L","type":"TEXT","is_nullable":false}]}`
+	if err != nil || out != want {
+		t.Errorf("object = %s, %v", out, err)
+	}
+	out, err = runMeta(t, invokeMetaFieldsGet, `{"id":"`+metaFieldID+`"}`)
+	want = `{"id":"` + metaFieldID + `","name":"n","label":"L","type":"TEXT","is_nullable":false}`
+	if err != nil || out != want {
+		t.Errorf("field = %s, %v", out, err)
+	}
+}
+
+func nestedJSON(levels int) string {
+	return strings.Repeat(`{"a":`, levels) + `1` + strings.Repeat(`}`, levels)
+}
+
+func TestMetadataOversizedFreeObjectsAreOmittedAndNamed(t *testing.T) {
+	big := `{"x":"` + strings.Repeat("y", freeObjectBytesMax) + `"}`
+	edge := `{"x":"` + strings.Repeat("y", freeObjectBytesMax-20) + `"}`
+	field := `{"id":"` + metaFieldID + `","type":"TEXT","name":"n","label":"L","defaultValue":` + nestedJSON(freeObjectDepthMax+1) +
+		`,"settings":` + big + `,"relation":` + nestedJSON(freeObjectDepthMax) + `,"morphRelations":[` + edge + `]}`
+	object := `{"id":"` + metaObjID + `","duplicateCriteria":[` + big + `],"fields":[` + field + `]}`
+	serveMeta(t, metaFormat{objectGet: object, fldGet: field})
+	out, err := runMeta(t, invokeMetaFieldsGet, `{"id":"`+metaFieldID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got MetaField
+	if json.Unmarshal([]byte(out), &got); got.DefaultValue != nil || got.Settings != nil ||
+		strings.Join(got.OmittedFields, ",") != "default_value,settings" || got.Relation == nil || got.MorphRelations == nil {
+		t.Errorf("field = %s", out)
+	}
+	out, err = runMeta(t, invokeMetaObjectsGet, `{"id":"`+metaObjID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj MetaObject
+	if json.Unmarshal([]byte(out), &obj); obj.DuplicateCriteria != nil || strings.Join(obj.OmittedFields, ",") != "duplicate_criteria" ||
+		len(obj.Fields) != 1 || strings.Join(obj.Fields[0].OmittedFields, ",") != "default_value,settings" {
+		t.Errorf("object = %s", out)
+	}
+}
+
+func TestMetadataTextMembersAreCleanedAndCapped(t *testing.T) {
+	long := strings.Repeat("c", 500)
+	serveMeta(t, metaFormat{objectGet: `{"id":"` + metaObjID + `","icon":"Ic\u0007on","shortcut":"` + long + `",` +
+		`"color":"bl\u202eue","applicationId":"not-a-uuid","labelIdentifierFieldMetadataId":"x","readabilityParentFieldUniversalIdentifiers":["x","` + metaUnivID + `"],"fields":[]}`})
+	out, err := runMeta(t, invokeMetaObjectsGet, `{"id":"`+metaObjID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got MetaObject
+	json.Unmarshal([]byte(out), &got)
+	if got.Icon != "Icon" || len(got.Shortcut) != metaTokenMax || got.Color != "blue" || got.ApplicationID != "" ||
+		got.LabelIdentifierFieldMetadataID != "" || len(got.ReadabilityParentFieldUniversalIdentifiers) != 1 {
+		t.Errorf("object = %s", out)
 	}
 }

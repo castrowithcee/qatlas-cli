@@ -436,6 +436,13 @@ func TestNoToolReachesAccountAdministration(t *testing.T) {
 			// The read-only workspace_id filter narrows the completed tasks; the connection still holds them.
 			schema = strings.ReplaceAll(schema, `"workspace_id"`, "")
 		}
+		switch descriptor.ID {
+		case "todoist.projects.list":
+			// The read-only workspace_id and folder_id filters narrow the projects; the connection still holds them.
+			schema = strings.ReplaceAll(strings.ReplaceAll(schema, `"workspace_id"`, ""), `"folder_id"`, "")
+		case "todoist.sections.list":
+			schema = strings.ReplaceAll(schema, `"workspace_id"`, "")
+		}
 		for _, forbidden := range []string{"workspace", "commands", "notification", "collaborator", "folder",
 			"\"path\"", "\"method\"", "\"url\""} {
 			if strings.Contains(schema, forbidden) {
@@ -702,7 +709,7 @@ func TestPlanLimitsArePermissionFailures(t *testing.T) {
 func TestRemindersGetStaysOnTheConnectionsTasks(t *testing.T) {
 	env := newEnvironment(t, &fakeTodoist{})
 	result, err := env.invoke("todoist.reminders.get", "one", `{"reminder_id":"remOne"}`)
-	if err != nil || result != `{"id":"remOne","is_urgent":false,"minute_offset":30,"task_id":"taskDue","type":"relative"}` {
+	if err != nil || result != `{"id":"remOne","is_urgent":false,"minute_offset":30,"notify_uid":"1","task_id":"taskDue","type":"relative"}` {
 		t.Errorf("reminder = %s, %v", result, err)
 	}
 	requests := env.fake.recorded()

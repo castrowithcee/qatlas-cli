@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -167,5 +168,40 @@ func TestEventsListFieldsMatchSchema(t *testing.T) {
 	}
 	if _, ok := page.Events[0]["recurrence_id"]; !ok {
 		t.Error("recurrence_id not reported")
+	}
+}
+
+func TestEventsListReportsTheMembersOfGet(t *testing.T) {
+	serve(t, eventsFake(t, multistatus(eventEntry(workPath+"u1.ics", "e1", richEvent)), func(*http.Request) (*http.Response, error) {
+		resp := xmlResponse(200, richEvent)
+		resp.Header.Set("ETag", `"e1"`)
+		return resp, nil
+	}))
+	listed, err := listEventsOf(t, []string{"calendar/work"}, allArgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := invokeEventsGet(context.Background(), resolved("calendar/work"), resolver(nil), nil,
+		json.RawMessage(`{"calendar":"work","id":"u1.ics"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		Events []map[string]any `json:"events"`
+	}
+	var get struct {
+		Event map[string]any `json:"event"`
+	}
+	for v, dst := range map[any]any{listed: &list, got: &get} {
+		raw, _ := json.Marshal(v)
+		if err := json.Unmarshal(raw, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(list.Events) != 1 || !reflect.DeepEqual(list.Events[0], get.Event) {
+		t.Errorf("list = %v, get = %v", list.Events, get.Event)
+	}
+	if _, ok := get.Event["overrides"]; !ok {
+		t.Error("example carries no overrides")
 	}
 }

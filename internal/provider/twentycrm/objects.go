@@ -68,7 +68,7 @@ var objectsGet = capability.Descriptor{
 	Title:   "Get a Twenty CRM object",
 	Description: "Read the fields of one object of the Twenty workspace of a connection that the connection " +
 		"reaches: JSON type, subfields of composite fields, whether a value is required or writable, and the " +
-		"reachable object a relation points to",
+		"reachable object a relation points to, enum values of selection fields, and field descriptions",
 	Tags:     []string{"twentycrm", "crm", "objects", "get", "schema", "fields"},
 	Risk:     twentyReadRisk,
 	Provider: Provider,
@@ -79,8 +79,11 @@ var objectsGet = capability.Descriptor{
 		`"name":{"type":"string"},"type":{"type":"string"},"format":{"type":"string"},` +
 		`"required":{"type":"boolean"},"writable":{"type":"boolean"},` +
 		`"subfields":{"type":"array","items":{"type":"object","properties":{` +
-		`"name":{"type":"string"},"type":{"type":"string"}},"required":["name"],"additionalProperties":false}},` +
-		`"relation":{"type":"string"}},"required":["name","required","writable"],"additionalProperties":false}}},` +
+		`"name":{"type":"string"},"type":{"type":"string"},"description":{"type":"string"},` +
+		`"enum":{"type":"array","items":{"type":"string"}}},"required":["name"],"additionalProperties":false}},` +
+		`"relation":{"type":"string"},"description":{"type":"string"},` +
+		`"enum":{"type":"array","items":{"type":"string"}}},"required":["name","required","writable"],"additionalProperties":false}},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
 		`"required":["name","plural","fields"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "object", Description: "Singular API name of the object in camelCase, as returned by twenty-crm.objects.list", Required: true},
@@ -88,7 +91,8 @@ var objectsGet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "name", Description: "Singular API name of the object"},
 		{Name: "plural", Description: "Plural API name of the object"},
-		{Name: "fields", Description: "The fields of the object sorted by name, untrusted data"},
+		{Name: "fields", Description: "The fields of the object sorted by name, with enum values and descriptions of the workspace, untrusted data"},
+		{Name: "omitted_fields", Description: "Enum lists that were left out because they have too many values or a value of an unexpected form, as fields.<name>.enum or fields.<name>.subfields.<name>.enum"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the fields of the person object",
@@ -110,8 +114,10 @@ type ObjectList struct {
 
 // SubfieldInfo is one part of a composite field.
 type SubfieldInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type,omitempty"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
 }
 
 // FieldInfo is one field of an object.
@@ -123,6 +129,9 @@ type FieldInfo struct {
 	Writable  bool           `json:"writable"`
 	Subfields []SubfieldInfo `json:"subfields,omitempty"`
 	Relation  string         `json:"relation,omitempty"`
+	// Description and Enum are untrusted workspace data.
+	Description string   `json:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
 }
 
 // ObjectInfo is the result of GetObject.
@@ -130,6 +139,8 @@ type ObjectInfo struct {
 	Name   string      `json:"name"`
 	Plural string      `json:"plural"`
 	Fields []FieldInfo `json:"fields"`
+	// OmittedFields names the enum lists left out, not shortened.
+	OmittedFields []string `json:"omitted_fields,omitempty"`
 }
 
 // ListObjects returns the objects the connection reaches. It reads the workspace document at most once.
@@ -166,9 +177,16 @@ func (c *Client) GetObject(ctx context.Context, name string) (*ObjectInfo, error
 		info := &ObjectInfo{Name: object.Name, Plural: object.Plural, Fields: make([]FieldInfo, 0, len(object.Fields))}
 		for _, field := range object.Fields {
 			item := FieldInfo{Name: field.Name, Type: field.Type, Format: field.Format, Required: field.Required,
-				Writable: field.Writable, Relation: field.Relation}
+				Writable: field.Writable, Relation: field.Relation, Description: field.Description, Enum: field.OutEnum}
+			if field.OutEnumOmitted {
+				info.OmittedFields = append(info.OmittedFields, "fields."+field.Name+".enum")
+			}
 			for _, sub := range field.Subfields {
-				item.Subfields = append(item.Subfields, SubfieldInfo{Name: sub.Name, Type: sub.Type})
+				item.Subfields = append(item.Subfields, SubfieldInfo{Name: sub.Name, Type: sub.Type,
+					Description: sub.Description, Enum: sub.OutEnum})
+				if sub.OutEnumOmitted {
+					info.OmittedFields = append(info.OmittedFields, "fields."+field.Name+".subfields."+sub.Name+".enum")
+				}
 			}
 			info.Fields = append(info.Fields, item)
 		}

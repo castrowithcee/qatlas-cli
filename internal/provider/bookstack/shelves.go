@@ -21,9 +21,14 @@ const (
 	shelvesInstanceWide = "shelves"
 )
 
-const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","slug","description","created_at","updated_at"]}}`
+// listUserSchema is untyped: a list renders an absent column as null, which a typed schema member refuses.
+const listUserSchema = `{"properties":{"id":{"type":"integer"}}}`
 
-const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array"},"truncated":{"type":"boolean"}},"required":["id","name","slug","books","truncated"]}`
+const bookUserSchema = `{"type":"object","properties":{"id":{"type":"integer"}}}`
+
+const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + listUserSchema + `,"updated_by":` + listUserSchema + `,"owned_by":` + listUserSchema + `},"required":["id","name","slug","description","created_at","updated_at"]}}`
+
+const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + bookUserSchema + `,"updated_by":` + bookUserSchema + `,"owned_by":` + bookUserSchema + `}}},"truncated":{"type":"boolean"}},"required":["id","name","slug","books","truncated"]}`
 
 const shelfWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"}},"required":["id","name","slug"]}`
 
@@ -66,6 +71,9 @@ var (
 			{Name: "description", Description: "Plain description, untrusted data"},
 			{Name: "created_at", Description: "Creation timestamp"},
 			{Name: "updated_at", Description: "Last change timestamp"},
+			{Name: "created_by", Description: "Creator as id only"},
+			{Name: "updated_by", Description: "Last editor as id only"},
+			{Name: "owned_by", Description: "Owner as id only"},
 		},
 		Examples: []capability.Example{{Description: "List the first 25 shelves", Arguments: json.RawMessage(`{"limit":25,"offset":0}`)}},
 	}
@@ -79,8 +87,8 @@ var (
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(shelfGetOutput),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Shelf identifier", Required: true}},
-		Fields: append(append([]capability.Field{}, shelfMetadataFields...),
-			capability.Field{Name: "books", Description: "Books on the shelf in shelf order with id, name, and slug"},
+		Fields: append(shelfGetFields(),
+			capability.Field{Name: "books", Description: "Books on the shelf in shelf order; each also with description (untrusted data), timestamps, and creator, last editor, and owner as id only"},
 			capability.Field{Name: "truncated", Description: "True when the book list was cut at 2000 entries"}),
 		Examples: []capability.Example{{Description: "Read shelf 3", Arguments: json.RawMessage(`{"id":3}`)}},
 	}
@@ -126,23 +134,50 @@ var (
 	}
 )
 
+// shelfGetFields is shelfMetadataFields as a read shows them: users with their slug and tags with their position.
+func shelfGetFields() []capability.Field {
+	fields := append([]capability.Field{}, shelfMetadataFields...)
+	for i, f := range fields {
+		switch f.Name {
+		case "created_by":
+			fields[i].Description = "Creator with id, name, and slug"
+		case "updated_by":
+			fields[i].Description = "Last editor with id, name, and slug"
+		case "owned_by":
+			fields[i].Description = "Owner with id, name, and slug"
+		case "tags":
+			fields[i].Description = "At most 50 entries with name, value, and order"
+		}
+	}
+	return fields
+}
+
 type shelfJSON struct {
-	ID              int64     `json:"id"`
-	Name            string    `json:"name"`
-	Slug            string    `json:"slug"`
-	Description     string    `json:"description"`
-	DescriptionHTML string    `json:"description_html"`
-	CreatedAt       string    `json:"created_at"`
-	UpdatedAt       string    `json:"updated_at"`
-	CreatedBy       *userJSON `json:"created_by"`
-	UpdatedBy       *userJSON `json:"updated_by"`
-	OwnedBy         *userJSON `json:"owned_by"`
-	Tags            []tagJSON `json:"tags"`
-	Books           []struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
-		Slug string `json:"slug"`
-	} `json:"books"`
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	Slug            string          `json:"slug"`
+	Description     string          `json:"description"`
+	DescriptionHTML string          `json:"description_html"`
+	CreatedAt       string          `json:"created_at"`
+	UpdatedAt       string          `json:"updated_at"`
+	CreatedBy       *userJSON       `json:"created_by"`
+	UpdatedBy       *userJSON       `json:"updated_by"`
+	OwnedBy         *userJSON       `json:"owned_by"`
+	Tags            []tagJSON       `json:"tags"`
+	Books           []shelfBookJSON `json:"books"`
+}
+
+// shelfBookJSON is a book of a shelf read; BookStack gives its users as identifiers only.
+type shelfBookJSON struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description"`
+	CreatedAt   string    `json:"created_at"`
+	UpdatedAt   string    `json:"updated_at"`
+	CreatedBy   *userJSON `json:"created_by"`
+	UpdatedBy   *userJSON `json:"updated_by"`
+	OwnedBy     *userJSON `json:"owned_by"`
 }
 
 // shelfMutation is the request body of a shelf write and, decoded from the arguments, its input. Books keeps
@@ -308,10 +343,12 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int) (output.Col
 		id:        func(s listedJSON) int64 { return s.ID },
 		keep:      func(listedJSON) bool { return true },
 		row: func(s listedJSON) output.Row {
-			return output.Row{
+			row := output.Row{
 				"id": s.ID, "name": clip(s.Name, maxResultString), "slug": clip(s.Slug, maxResultString),
 				"description": clip(s.Description, maxDescriptionChars), "created_at": s.CreatedAt, "updated_at": s.UpdatedAt,
 			}
+			addListUsers(row, s.CreatedBy, s.UpdatedBy, s.OwnedBy)
+			return row
 		},
 	})
 	if err != nil {
@@ -335,9 +372,32 @@ func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) 
 		if len(books) >= maxTreeEntries {
 			break
 		}
-		books = append(books, map[string]any{"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString)})
+		item := map[string]any{"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString)}
+		if b.Description != "" {
+			item["description"] = clip(b.Description, maxDescriptionChars)
+		}
+		if b.CreatedAt != "" {
+			item["created_at"] = b.CreatedAt
+		}
+		if b.UpdatedAt != "" {
+			item["updated_at"] = b.UpdatedAt
+		}
+		addListUsers(item, b.CreatedBy, b.UpdatedBy, b.OwnedBy)
+		books = append(books, item)
 	}
 	fields := shelfWriteObject(shelf).Fields
+	for i, f := range fields {
+		switch f.Name {
+		case "created_by":
+			fields[i].Value = userDetail(shelf.CreatedBy)
+		case "updated_by":
+			fields[i].Value = userDetail(shelf.UpdatedBy)
+		case "owned_by":
+			fields[i].Value = userDetail(shelf.OwnedBy)
+		case "tags":
+			fields[i].Value = orderedTags(shelf.Tags)
+		}
+	}
 	fields = append(fields, output.Field{Name: "books", Value: books}, output.Field{Name: "truncated", Value: truncated})
 	return output.Object{Fields: fields}, nil
 }

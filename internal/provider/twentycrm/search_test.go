@@ -323,20 +323,6 @@ func TestSearchCursorIsBoundToTheConditions(t *testing.T) {
 	}
 }
 
-func TestSearchDoesNotShowEnumValues(t *testing.T) {
-	requests := searchRequests(t, emptyPeople)
-	_ = requests
-	out, err := runTool(t, invokeObjectsGet, `{"object":"person"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, value := range []string{"LOST_X", "has space", `"enum"`} {
-		if strings.Contains(string(out), value) {
-			t.Errorf("objects.get shows %q: %s", value, out)
-		}
-	}
-}
-
 func TestEnumValuesAreBoundedAndPlain(t *testing.T) {
 	long := strings.Repeat("A", 65)
 	many := make([]string, 101)

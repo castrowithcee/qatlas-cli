@@ -269,13 +269,13 @@ func TestGetAndListShowThePageFields(t *testing.T) {
 		got["revision_count"] != int64(6) || got["editor"] != "markdown" {
 		t.Errorf("fields = %v", got)
 	}
-	if !reflect.DeepEqual(got["tags"], []map[string]string{{"name": "k", "value": "v"}}) {
+	if !reflect.DeepEqual(got["tags"], []map[string]any{{"name": "k", "value": "v", "order": int64(0)}}) {
 		t.Errorf("tags = %v", got["tags"])
 	}
 	for name, want := range map[string]map[string]any{
-		"created_by": {"id": int64(1), "name": "Creator"},
-		"updated_by": {"id": int64(2), "name": "Editor"},
-		"owned_by":   {"id": int64(3), "name": "Owner"},
+		"created_by": {"id": int64(1), "name": "Creator", "slug": "private"},
+		"updated_by": {"id": int64(2), "name": "Editor", "slug": "private"},
+		"owned_by":   {"id": int64(3), "name": "Owner", "slug": "private"},
 	} {
 		if !reflect.DeepEqual(got[name], want) {
 			t.Errorf("%s = %v, want %v", name, got[name], want)

@@ -12,8 +12,10 @@ updated: 2026-10-22
 
 The comment tools take `project_id` and `file_id`, bind the file through its project ([README](README.md#scope)), and
 work on the threads and comments of that file. Comment texts and the people behind them are personal data: the tools
-have their own sensitivity class, `penpot-comments`. An answer carries owner IDs, never names or email addresses, and
-no comment text is ever echoed after a change.
+have their own sensitivity class, `penpot-comments`. The reading tools give out the author details Penpot sends
+(name, email address, profile image ID) as untrusted personal data; a thread whose team or project lies outside the
+connection's targets keeps identifiers only. Refusals, errors, and logs never carry them, and no comment text is
+ever echoed after a change.
 
 - `comments.threads` lists the file's threads with an `excerpt` of the first comment (up to 750 bytes).
 - `comments.list` lists the comments of a `thread_id`, oldest first, with `content` of up to 3000 bytes.
