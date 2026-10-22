@@ -49,6 +49,10 @@ var commentsUpdate = capability.Descriptor{
 		{Name: "id", Description: "Comment identifier"},
 		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "body", Description: "Comment body in Markdown, untrusted data"},
+		{Name: "created_at", Description: "When the comment was created"},
+		{Name: "updated_at", Description: "When the comment last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Correct a comment",

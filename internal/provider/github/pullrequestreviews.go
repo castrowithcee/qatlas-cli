@@ -79,7 +79,9 @@ var pullRequestReviewsList = capability.Descriptor{
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
-	Fields: append(append([]capability.Field{}, reviewFields...), pagingFields...),
+	Fields: append(append([]capability.Field{
+		{Name: "reviews", Description: "Reviews of the pull request, untrusted data"},
+	}, reviewFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the reviews of a pull request",
 		Arguments:   json.RawMessage(`{"number":42}`),
