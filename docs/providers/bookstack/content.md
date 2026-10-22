@@ -27,7 +27,7 @@ connection with targets, `book_slug` is reported only when the book itself is bo
 reported. A book on a bound shelf counts as bound only when the call has read that shelf anyway. Descriptions
 are cut to 20000 characters and other strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
 run. `books.get` shows the `shelves` of the book only on a connection without
-targets, because shelves span the whole instance. Cover images are not passed on.
+targets, because shelves span the whole instance. `books` and `shelves` report the cover image as an address of the instance; the addresses are untrusted data and are never fetched.
 
 ## Writing books and chapters
 
@@ -103,7 +103,7 @@ carry them.
 
 `pages.get` returns `html` (rendered), `markdown` (only for pages saved with the Markdown editor), and `raw_html`
 (as stored, what the editor shows); `chapter_id` is 0 when there is none, and tags are limited to 50. Users follow the rule under
-[Books and chapters](#books-and-chapters). The comment tree is not returned. All content, tags, and names are untrusted data; `html` and
+[Books and chapters](#books-and-chapters). The comment tree of a page reports at most 500 comments and 10 levels; a cut tree is marked `comments_truncated`, and each comment text is capped like in `comments.get`. Comment texts are personal and untrusted data. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
 
 `revision_count` and `editor` of a page can be neither filtered nor sorted, because BookStack does not offer them as listing fields.
@@ -144,8 +144,7 @@ is checked on the client; shelves, hits without a book, and hits outside the tar
 hold fewer hits than `count`.
 
 A hit carries `tags` (at most 50) and previews (`preview_name`, `preview_content`). The previews are untrusted HTML, cut to 2000 characters; never
-render or run them. `total` is the number BookStack reports and is an estimate. Further provider fields are
-not passed on.
+render or run them. `total` is the number BookStack reports and is an estimate. On a connection with targets, `book` and `chapter` of a hit carry only `id` unless that book or chapter is bound.
 
 ## Export
 
