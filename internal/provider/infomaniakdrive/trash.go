@@ -27,18 +27,17 @@ var trashListDescriptor = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
-		fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
+		listFilterInput(trashOrderByValues, false) + `,` + fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + fileEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
 		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","entries","has_more","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		driveIDArgument,
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page, valid only with the same filter and sort arguments; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
-		fileWithArgument,
-	},
+	}, listFilterArguments(false), []capability.Argument{fileWithArgument}),
 	Fields: append(slices.Concat(entryFields, fileWithFields),
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not the whole trash"},
@@ -166,6 +165,7 @@ type trashListArguments struct {
 	Cursor  string   `json:"cursor"`
 	Limit   int      `json:"limit"`
 	With    []string `json:"with"`
+	listFilter
 }
 
 func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -178,6 +178,13 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
 		return nil, err
 	}
+	if err := input.validate(trashOrderByValues, false); err != nil {
+		return nil, err
+	}
+	cursor, err := input.openCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -186,12 +193,23 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListTrash(ctx, input.DriveID, input.Cursor, limit, input.With)
+	page, err := client.listTrash(ctx, input.DriveID, cursor, limit, input.With, input.listFilter)
+	if err != nil {
+		return nil, err
+	}
+	page.Cursor = input.sealCursor(page.Cursor)
+	return page, nil
 }
 
-// ListTrash reads one page of the top level of a drive's trash, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself. with loads related data per entry.
+// ListTrash reads one unfiltered page of the top level of a drive's trash, cursor-paginated exactly as
+// Infomaniak answers: it never follows has_more itself, and the cursor stays Infomaniak's own. with loads
+// related data per entry.
 func (c *Client) ListTrash(ctx context.Context, driveID int64, cursor string, limit int, with []string) (*TrashPage, error) {
+	return c.listTrash(ctx, driveID, cursor, limit, with, listFilter{})
+}
+
+func (c *Client) listTrash(ctx context.Context, driveID int64, cursor string, limit int, with []string,
+	filter listFilter) (*TrashPage, error) {
 	const op = "list trash"
 	if err := checkValues(with, fileWithValues, "with"); err != nil {
 		return nil, err
@@ -200,6 +218,7 @@ func (c *Client) ListTrash(ctx context.Context, driveID int64, cursor string, li
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
+	filter.apply(query)
 	if len(with) > 0 {
 		query.Set("with", withQuery("", with))
 	}

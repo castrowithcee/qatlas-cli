@@ -25,7 +25,6 @@ const (
 	minListLimit     = 5
 	maxListLimit     = 1000
 	defaultListLimit = 10
-	maxCursorLength  = 2048
 )
 
 // idSchema is the JSON Schema of one drive or file identifier: a plain positive integer used only as a path
@@ -100,20 +99,19 @@ var filesList = capability.Descriptor{
 		`"drive_id":` + idSchema + `,"folder_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
-		fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
+		listFilterInput(filesOrderByValues, false) + `,` + fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"folder_id":{"type":"integer"},` +
 		`"entries":{"type":"array","items":` + fileEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
 		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","folder_id","entries","has_more","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		driveIDArgument,
 		{Name: "folder_id", Description: "Folder identifier below the same drive; the drive's root (1) when omitted, or the one files target of a drive bound only by files targets"},
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page, valid only with the same filter and sort arguments; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
-		fileWithArgument,
-	},
+	}, listFilterArguments(false), []capability.Argument{fileWithArgument}),
 	Fields: append(slices.Concat(entryFields, fileWithFields),
 		capability.Field{Name: "folder_id", Description: "Folder that was listed"},
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
@@ -323,6 +321,7 @@ type filesListArguments struct {
 	Cursor   string   `json:"cursor"`
 	Limit    int      `json:"limit"`
 	With     []string `json:"with"`
+	listFilter
 }
 
 func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -332,6 +331,13 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, providerError("list files", "the validated arguments could not be read")
 	}
 	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
+	if err := input.validate(filesOrderByValues, false); err != nil {
+		return nil, err
+	}
+	cursor, err := input.openCursor(input.Cursor)
+	if err != nil {
 		return nil, err
 	}
 	if err := selectDrive(resolved, input.DriveID); err != nil {
@@ -358,7 +364,12 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 			return nil, err
 		}
 	}
-	return client.ListFolder(ctx, input.DriveID, folderID, input.Cursor, limit, input.With)
+	page, err := client.listFolder(ctx, input.DriveID, folderID, cursor, limit, input.With, input.listFilter)
+	if err != nil {
+		return nil, err
+	}
+	page.Cursor = input.sealCursor(page.Cursor)
+	return page, nil
 }
 
 // listFolder names the folder to list. Without folder_id a drive bound as a whole lists its root; a drive
@@ -382,9 +393,15 @@ func listFolder(resolved *config.Resolved, input filesListArguments) (folderID i
 	return roots[0], true, nil
 }
 
-// ListFolder reads one page of the immediate children of one folder, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself. with loads related data per entry.
+// ListFolder reads one unfiltered page of the immediate children of one folder, cursor-paginated exactly as
+// Infomaniak answers: it never follows has_more itself, and the cursor stays Infomaniak's own. with loads
+// related data per entry.
 func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor string, limit int, with []string) (*FolderPage, error) {
+	return c.listFolder(ctx, driveID, folderID, cursor, limit, with, listFilter{})
+}
+
+func (c *Client) listFolder(ctx context.Context, driveID, folderID int64, cursor string, limit int, with []string,
+	filter listFilter) (*FolderPage, error) {
 	const op = "list files"
 	if err := checkValues(with, fileWithValues, "with"); err != nil {
 		return nil, err
@@ -394,6 +411,7 @@ func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
+	filter.apply(query)
 	if len(with) > 0 {
 		query.Set("with", withQuery("", with))
 	}

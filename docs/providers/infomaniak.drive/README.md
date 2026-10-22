@@ -169,8 +169,11 @@ dropbox, and access).
 `infomaniak.drive.files.list`, `infomaniak.drive.trash.list`, and `infomaniak.drive.links.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
 `has_more` and a `cursor` for the next page whenever Infomaniak announced one. Each call reads exactly one
 Infomaniak page; Qatlas never follows `has_more` on its own, and a complete-looking page can still have
-`has_more` true. The cursor is Infomaniak's own opaque value, passed back unchanged; Qatlas adds no binding
-of its own.
+`has_more` true. The cursor wraps Infomaniak's own value, which goes to Infomaniak unchanged, together with a
+fingerprint of the `type`, `order_by`, `order`, `order_for`, and `right` arguments; `limit` and `with` are not
+part of it. A cursor is valid only with the same filter and sort arguments as the page that returned it. A cursor
+from other arguments, an unreadable one, or a bare Infomaniak cursor is refused before any request, and the first
+page must be read again.
 
 `infomaniak.drive.drives.list` takes `page` (default 1) and reports the account's own `page`, `pages`, and
 `total` transparently, exactly as Infomaniak answers them for the bound account. `drives` and `count` are

@@ -133,20 +133,21 @@ var linksList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
-		fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
+		listFilterInput(linksOrderByValues, true) + `,` + fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + linkEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
 		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","entries","has_more","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		driveIDArgument,
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page, valid only with the same filter and sort arguments; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
+	}, listFilterArguments(true), []capability.Argument{
 		{Name: "with", Description: "Related data to load per entry; each value adds the fields it documents, " +
 			"and an entry's field exists only when its value is requested; sharelink adds created_by and " +
 			"sharelink.views adds views to link"},
-	},
+	}),
 	Fields: append(slices.Concat(entryFields, fileWithFieldsWithout("sharelink")),
 		capability.Field{Name: "link", Description: "The share link of the entry; untrusted data, see links.get; " +
 			"created_by with sharelink, views with sharelink.views"},
@@ -325,6 +326,7 @@ type linksListArguments struct {
 	Cursor  string   `json:"cursor"`
 	Limit   int      `json:"limit"`
 	With    []string `json:"with"`
+	listFilter
 }
 
 func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -337,6 +339,13 @@ func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
 		return nil, err
 	}
+	if err := input.validate(linksOrderByValues, true); err != nil {
+		return nil, err
+	}
+	cursor, err := input.openCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -345,13 +354,23 @@ func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListLinks(ctx, input.DriveID, input.Cursor, limit, input.With)
+	page, err := client.listLinks(ctx, input.DriveID, cursor, limit, input.With, input.listFilter)
+	if err != nil {
+		return nil, err
+	}
+	page.Cursor = input.sealCursor(page.Cursor)
+	return page, nil
 }
 
-// ListLinks reads one page of the files that have a share link, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself. with loads related data per entry; the link always comes with
-// sharelink and is reported as link, never as sharelink.
+// ListLinks reads one unfiltered page of the files that have a share link, cursor-paginated exactly as
+// Infomaniak answers: it never follows has_more itself, and the cursor stays Infomaniak's own. with loads
+// related data per entry; the link always comes with sharelink and is reported as link, never as sharelink.
 func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, limit int, with []string) (*LinkPage, error) {
+	return c.listLinks(ctx, driveID, cursor, limit, with, listFilter{})
+}
+
+func (c *Client) listLinks(ctx context.Context, driveID int64, cursor string, limit int, with []string,
+	filter listFilter) (*LinkPage, error) {
 	const op = "list share links"
 	if err := checkValues(with, fileWithValues, "with"); err != nil {
 		return nil, err
@@ -360,6 +379,7 @@ func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, li
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
+	filter.apply(query)
 	var items []struct {
 		fileJSON
 		Sharelink *shareLinkJSON `json:"sharelink"`
