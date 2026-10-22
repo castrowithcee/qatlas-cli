@@ -106,8 +106,9 @@ classified as personal data (`excalidrawplus-workspace-activity`). It belongs to
   after `to`, at most 366 days). They are sent as `user`, `action`, `dateFrom`, and `dateTo`; nothing else is passed on.
 - Paging with `offset` (at most 1 000 000) and `limit` (1 to 100, 50 when omitted); `has_next_page` comes from
   `hasMore`, `next_offset` is `offset + limit`. Each text field is capped at 256 characters.
-- Returned per entry: `id`, `action`, `operation`, `created_at`, `user_id`, `user_email`, `status`. IP addresses,
-  details, user names, pictures, and source fields are not returned. Entries are untrusted data.
+- Returned per entry: `id`, `action`, `operation`, `created_at`, `user_id`, `user_email`, `status` (an integer
+  since contract version 2). IP addresses, details, user names, pictures, and source fields are not returned.
+  Entries are untrusted data.
 - Documented: path, the parameters `limit`, `offset`, `user`, `action`, `dateFrom`, `dateTo`, and the response fields.
   Assumed: that `hasMore` pairs with `offset`/`limit` paging, that the date filters are inclusive, and the action
   identifier form (the documentation names no closed set of actions).
