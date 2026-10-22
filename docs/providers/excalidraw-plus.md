@@ -97,20 +97,21 @@ collections; with exactly one it is the default, with `*` it is optional.
 
 `excalidraw-plus.logs.list` reads the workspace activity log (`GET /logs`). It is read-only, safe to repeat, and
 classified as personal data (`excalidrawplus-workspace-activity`). It belongs to the separate, not recommended
-`activity` profile, never to `read`.
+`activity` profile, never to `read`. The log is workspace-wide: on a connection without the `*` target the tool is
+refused locally, before any secret is read or request is sent, without naming a target.
 
-- The log is workspace-wide, so the tool works only on a connection with the `*` target. On a connection with
-  collection targets it is refused locally, before any secret is read or request is sent, without naming a target.
 - Filters, all validated locally: `user_id` (`[A-Za-z0-9_-]`, at most 64), `action` (lowercase identifier of at most
-  64 characters, for example `scene:create`), and the range `from` and `to` (RFC 3339, given together, `from` not
-  after `to`, at most 366 days). They are sent as `user`, `action`, `dateFrom`, and `dateTo`; nothing else is passed on.
-- Paging with `offset` (at most 1 000 000) and `limit` (1 to 100, 50 when omitted); `has_next_page` comes from
-  `hasMore`, `next_offset` is `offset + limit`. Each text field is capped at 256 characters.
-- Returned per entry: `id`, `action`, `operation`, `created_at`, `user_id`, `user_email`, `status` (an integer
-  since contract version 2). IP addresses, details, user names, pictures, and source fields are not returned.
-  Entries are untrusted data.
-- Documented: path, the parameters `limit`, `offset`, `user`, `action`, `dateFrom`, `dateTo`, and the response fields.
-  Assumed: that `hasMore` pairs with `offset`/`limit` paging, that the date filters are inclusive, and the action
+  64 characters, for example `scene:create`), `operation` (`create`, `read`, `update`, or `delete`; any other value is
+  refused before a request), and the range `from` and `to` (RFC 3339, each usable alone; when both are given, `from`
+  is not after `to` and the range is at most 366 days). They are sent as `user`, `action`, `operation`, `dateFrom`,
+  and `dateTo`; nothing else is passed on.
+- `has_next_page` comes from `hasMore`, `next_offset` is `offset + limit` (paging as under Pagination). Each text
+  field is capped at 256 characters.
+- Entries carry personal data, including the IP address, and are untrusted. `status` is an integer (contract
+  version 2). `details` is text or an object: text is capped, an object beyond the limits is left out and marked.
+- `user_picture` is not returned: the kind of the address is not documented, so it counts as an access value. The
+  API's `cursor`, `page`, and `nextCursor` are not offered; the offset paging applies.
+- Assumed: that `hasMore` pairs with `offset`/`limit` paging, that the date filters are inclusive, and the action
   identifier form (the documentation names no closed set of actions).
 
 ## Creating, renaming, and moving scenes
@@ -204,10 +205,10 @@ repeated.
 ## Users
 
 The `people` profile (not recommended; it holds personal data and access rights, so the recommended `read` profile
-leaves it out) offers four tools. They are **workspace-wide**: only a connection with the target `*` offers them. On a
-connection with collection targets they are refused before any secret is read or request is sent, without naming a
-target, because users belong to no collection. Qatlas creates no permanent access or data paths to the outside
-(webhooks, invitations, public links); reading, pausing, revoking, and deleting remain, so no tool invites a person.
+leaves it out) offers four tools. They are **workspace-wide** because users belong to no collection: only a
+connection with the target `*` offers them, others are refused before any secret is read or request is sent, without
+naming a target. Qatlas creates no permanent access or data paths to the outside (webhooks, invitations, public
+links), so no tool invites a person.
 
 | Tool | Request | Does |
 | --- | --- | --- |
@@ -216,19 +217,19 @@ target, because users belong to no collection. Qatlas creates no permanent acces
 | `excalidraw-plus.users.update` | `PATCH /workspaces/users/{id}` | changes `name` and/or `role` (`member` or `admin`) |
 | `excalidraw-plus.users.remove` | `DELETE /workspaces/users/{id}` | removes a user from the workspace |
 
-- The two reads are safe to repeat. They return `id`, `name`, `email`, `role`, `teams`, `created`, and `last_active`;
-  pictures, preferences, scene history, and rate limits are not passed on. The data is personal and untrusted:
-  strings are capped, `teams` holds at most 50 groups with 50 entries of 128 characters each, and an entry with an
-  invalid identifier is dropped from a list.
+- The two reads are safe to repeat. They return the documented user fields except the picture address (`picture`:
+  its kind is not documented, so it counts as an access value). The scene histories carry identifiers only. Account
+  security data of other people is not part of the answer. The data is personal and untrusted: strings are capped,
+  `teams` holds at most 50 groups with 50 entries of 128 characters each, `rate_limits` at most 50 keys per group,
+  the scene histories at most 100 entries, and an entry with an invalid identifier is dropped from a list.
 - The two changes need `confirm`, are offered only to a connection whose `tools` list names them (also with the
   matching permission), send exactly one request, and are never repeated. Idempotency is reported as `unknown`, the
   data class is personal. Because a tool cannot be gated by argument, `users.update` is gated as a whole, so a name
   change and a promotion to `admin` need the same release.
 - `users.remove` is final: Excalidraw+ revokes the user's access and removes the user's workspace data, and Qatlas
-  cannot undo it. `users.update` does not change the e-mail address (the API does not allow it) and does not change
-  teams.
-- `role` is the closed set `member` or `admin`; `user_id` is limited to ASCII letters, digits, hyphen, and underscore,
-  at most 64 characters.
+  cannot undo it. `users.update` changes neither the e-mail address nor teams.
+- `role` is `member` or `admin`; `user_id` is limited to ASCII letters, digits, hyphen, and underscore, at most 64
+  characters.
 - After a timeout, a reset connection, a 5xx answer, or an unreadable answer, the error says the change may have taken
   effect; read the user in Excalidraw+ before repeating it.
 
@@ -270,17 +271,11 @@ or a provider response body.
 
 ## Boundary
 
-The response shapes follow the API reference's pages for collections, scenes, scene content, and rate limiting.
-Error bodies, the identifier format, and the element fields beyond the Excalidraw file format (`text`, `name`,
-`isDeleted`, `frameId`, `containerId`, assumed from that format) are not documented there. The behaviour of
+The response shapes follow the API reference's pages for collections, scenes, users, logs, scene content, and rate
+limiting. Error bodies, the identifier format, and the element fields beyond the Excalidraw file format (`text`,
+`name`, `isDeleted`, `frameId`, `containerId`, assumed from that format) are not documented there. The behaviour of
 `collectionId=private` for personal keys is not relied on. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}`
-(`name`, `pinned`, `collectionId`) follow the API reference; the effect of a repeated request is not documented, and
-no live call has been made.
-
-Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works
-without an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links
-grant access without sign-in and no scene read tool is released separately through `tools`; `isDeleted` and
-`deletedAt`, since items in the trash are not listed and the fields would always be empty.
+(`name`, `pinned`, `collectionId`) follow the API reference; the effect of a repeated request is not documented.
 
 The content endpoints follow the API reference pages for scene content and its schema: `PATCH` takes a partial scene
 content with `elements`, `appState`, and `files` (at least one), merges elements by id with the higher `version`
@@ -296,13 +291,15 @@ The delete endpoints follow the API reference (`DELETE` of a scene or collection
 trash). Assumed: the paths `DELETE /scenes/{id}` and `DELETE /collections/{id}`, that any 2xx counts (the body is
 dropped), that the scenes of a deleted collection leave with it, whether the default collection may be deleted
 (refused locally), that `GET /collections/{id}` answers the collection object of the list, and the effect of a
-repeated request. No live call has been made.
+repeated request.
 
-The users tools follow the API reference pages for the user endpoints. Documented: the paths
-above; `limit` (1 to 100) and `offset` on the list; the answer `{limit, offset, hasNextPage, data}` with the user fields
-`id`, `email`, `name`, `role`, `workspaceTeams`, `created`, `lastActive`; `PATCH` takes `name`, `picture`, `role`
-(`member` or `admin`), `workspaceTeams`, and `preferences`, and does not change the e-mail address; `DELETE` removes
-the user and its workspace data and answers 200 with a generic object. Not documented, and therefore assumed: the format and length of user identifiers (narrowed to the local rule), the
-meaning of the keys in `workspaceTeams` (a map of string lists), whether a team write replaces or merges,
-whether a workspace owner can be removed or demoted, the error bodies, and the effect of a repeated request.
-Because of these gaps no team write is offered. No live call has been made.
+For users, `PATCH` takes `name`, `picture`, `role`, `workspaceTeams`, and `preferences` and does not change the
+e-mail address; `DELETE` removes the user and its workspace data. Assumed: the identifier format (narrowed to the
+local rule), the meaning of the `workspaceTeams` keys, whether a team write replaces or merges (so no team write is
+offered), whether a workspace owner can be removed or demoted, and the effect of a repeated request. No live call has
+been made against any endpoint.
+
+Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works
+without an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links
+grant access without sign-in and no scene read tool is released separately through `tools`; `isDeleted` and
+`deletedAt`, since items in the trash are not listed and the fields would always be empty.
