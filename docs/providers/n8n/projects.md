@@ -90,8 +90,8 @@ The member tools call only the member routes of the Public API, as of n8n-io/n8n
   there is no email argument. It is not idempotent.
 - **Roles.** `role` is one of `project:admin`, `project:editor`, `project:viewer`. `project:personalOwner`
   and instance roles are refused locally.
-- **Output.** `list` returns no personal data beyond `id`, `email`, name, and `role`, each at most 256
-  characters, with the data sensitivity `n8n-project-members` (personal data). Entries beyond `limit`
+- **Output.** `list` returns the members' personal data n8n documents, each text at most 256 characters and
+  untrusted, with the data sensitivity `n8n-project-members` (personal data). Entries beyond `limit`
   (default 100) are cut and flagged `truncated`.
 - **403.** n8n answers 403 for a missing Projects license, a missing API key scope, and a role that may not
   manage members, and the body is not read, so every 403 is the neutral message "license or role missing",

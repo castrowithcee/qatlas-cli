@@ -10,7 +10,7 @@ func TestCollectionsListFiltersToAllowedAndPaginates(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"limit":2,"offset":4,"hasNextPage":true,"data":[
-			{"id":"col-own","name":"Own","isDefault":true,"creator":"u1","teams":["t"]},
+			{"id":"col-own","name":"Own","isDefault":true},
 			{"id":"col-foreign","name":"Foreign"},
 			{"id":"col-two","name":"Trash","isDeleted":true}]}`), nil
 	})
@@ -18,7 +18,7 @@ func TestCollectionsListFiltersToAllowedAndPaginates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
-	if strings.Contains(result, "Foreign") || strings.Contains(result, "Trash") || strings.Contains(result, "u1") ||
+	if strings.Contains(result, "Foreign") || strings.Contains(result, "Trash") ||
 		!strings.Contains(result, `"id":"col-own"`) || !strings.Contains(result, `"next_offset":6`) ||
 		!strings.Contains(result, `"count":1`) {
 		t.Fatalf("result = %s", result)

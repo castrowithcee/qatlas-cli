@@ -547,13 +547,14 @@ func TestListCompaniesReportsOnlyTheStableProjection(t *testing.T) {
 		t.Fatalf("ListCompanies() = %v", err)
 	}
 
+	total := int64(57)
 	want := &ListResult{
 		Companies: []Company{
 			{ID: companyID, Name: "Bike & Ride GmbH", Domain: "bike-ride.example"},
 			// An empty link label falls back to the link URL rather than reporting no domain.
 			{ID: otherID, Name: "Test GmbH", Domain: "https://test.example"},
 		},
-		NextCursor: "cursor-page-2", HasMore: true,
+		NextCursor: "cursor-page-2", HasMore: true, TotalCount: &total,
 	}
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("result = %#v, want %#v", result, want)

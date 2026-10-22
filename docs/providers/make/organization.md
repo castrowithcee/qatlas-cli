@@ -20,7 +20,8 @@ Which of these tools a binding reaches depends on its mode; see [Scope](README.m
 organization (team mode only). The `team` profile needs `teams:read`; the `organization` profile needs
 `organizations:read` and `teams:read`, because the organization is found through the bound team.
 
-The four tools take no arguments and never accept a team or organization ID. The team
+None of the four tools accepts a team or organization ID; `make.team.usage` takes only the optional
+`organization_timezone`, the others no arguments. The team
 is the connection's own target; `make.organization.get` takes the `organizationId` from the bound team's own
 answer. A configured `organization/ID` target is checked against that answer, and a mismatch is refused as an
 invalid request that never names the other organization. `make.team.members` lists user id and role id only, without
@@ -75,15 +76,24 @@ token, signature, or credential-like query parameter counts as an access value a
 ## Financial data (read only)
 
 `make.organization.subscription`, `make.organization.usage`, and `make.organization.payments` (organization mode
-only, all `organizations:read`) read `GET /organizations/{organizationId}/subscription`, `/usage`, and
-`/payments` of the bound organization (checked 2026-10-06 against developers.make.com, not a live account). The
-subscription answers plan id and name, next billing date, and pause state; usage the daily operations, data
-transfer, and centicredits of Make's last 30 days; payments `invoice_number`, `created`, `type`, `status`,
-`amount_total`, `currency`, `period_from`, and `period_to`, newest first, with `offset` and `limit` (1 to 100, 25
-when omitted; `has_more` is true when a page came back full). Payment methods, the plan price, and invoice links
-are never returned, and no plan change, payment method, discount, or other write is offered. The tools sit in
-their own profile `org-billing-read`, not in `org-admin`. Text values are untrusted. A missing scope answers
-403 and names `organizations:read`.
+only, all `organizations:read`) read the subscription, usage, and payments of the bound organization. No plan
+change, payment method, discount, or other write is offered. The tools sit in their own profile `org-billing-read`,
+not in `org-admin`. Text values are untrusted. A missing scope answers 403 and names `organizations:read`.
+
+Prices of the subscription (plan and coupon) are reported as the exact decimal text Make sends, never as a float.
+
+`make.team.usage` and `make.organization.usage` cut their days in the caller's timezone unless
+`organization_timezone` is true. `make.organization.payments` is sorted by `created`, `desc` unless `sort_dir` is
+`asc`; version 2 reports `id` as text and `invoice_number` as a whole number, and leaves `invoice_number` out when
+Make's value is not one.
+
+Some values are never reported, even when Make sends them:
+
+- `invoice_url` and `hosted_invoice_url`: invoice links may open an invoice without signing in, and the payments
+  tool is part of a profile.
+- `payment_method`: payment card details (brand, last digits, expiry, fingerprint) are payment credentials.
+- `product_name`: Make documents it as an object without properties.
+- `pg[sortBy]`: Make documents no values for the sort field, so only the direction is offered.
 
 ## Team variables
 

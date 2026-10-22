@@ -21,11 +21,14 @@ target rules, the live team check, and the allow-list refusals are in [Scope](RE
 Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and
 `has_more`. Make's own pagination object (`pg`) echoes the request's offset and limit but reports no total
 count, so `has_more` is a heuristic, not a value Make states: it is true exactly when a page came back full,
-the same convention the SeaTable provider's own offset pagination uses. `make.scenarios.list` also forwards
-`is_active` and `name` to Make's own filters of the same kind. `make.runs.list` also accepts
-`status` (`1` success, `2` warning, `3` error, exactly as Make reports it) and `from_ms`/`to_ms`
-(Unix epoch milliseconds). Every returned page is still defensively re-filtered against this connection's
-own team, and, for runs, organization, after Make answers.
+the same convention the SeaTable provider's own offset pagination uses. The descriptors state the fields and
+filters. `include_subfolders` is valid only together with `folder_id`; an invalid filter is refused before any
+request. Every returned page is still defensively re-filtered against this connection's own team and, for
+runs, organization, and every returned scenario row against the folder and scenario targets, whatever filter
+asked for it, `ids`, `folder_id`, and `deleted` included.
+
+`customProperties` are free objects. One that exceeds the depth, entry, or length limit is left out and marked,
+never cut, because a cut object would pass a partial value off as the whole one.
 
 ## Blueprints and connection references
 
