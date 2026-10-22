@@ -62,6 +62,7 @@ var rowsSearch = capability.Descriptor{
 		`"order_by":{"type":"array","maxItems":` + strconv.Itoa(maxOrderFields) + `,"items":{"type":"object","properties":{` +
 		`"field":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxStringLength) + `},` +
 		`"direction":{"type":"string","enum":["asc","desc"]}},"required":["field"],"additionalProperties":false}},` +
+		`"include":` + columnKeysSchema + `,"exclude":` + columnKeysSchema + `,` +
 		`"view_id":` + idSchema + `,"page":{"type":"integer","minimum":1},` +
 		`"size":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxSize) + `}},` +
 		`"required":["table_id"],"additionalProperties":false}`),
@@ -72,6 +73,8 @@ var rowsSearch = capability.Descriptor{
 		{Name: "filters", Description: "Up to " + strconv.Itoa(maxFilters) + " objects with field (name), type (equal, not_equal, contains, contains_not, higher_than, higher_than_or_equal, lower_than, lower_than_or_equal, empty, not_empty), and value (omitted for empty and not_empty)"},
 		{Name: "filter_type", Description: "AND (default) or OR across the filters"},
 		{Name: "order_by", Description: "Up to " + strconv.Itoa(maxOrderFields) + " objects with field (name) and direction asc (default) or desc"},
+		{Name: "include", Description: includeDescription},
+		{Name: "exclude", Description: excludeDescription},
 		{Name: "view_id", Description: "A view of this table whose filters and sorting apply"},
 		{Name: "page", Description: "Page number from 1; 1 when omitted"},
 		{Name: "size", Description: "Rows per page, 1 to " + strconv.Itoa(maxSize) + "; " + strconv.Itoa(defaultSize) + " when omitted"},
@@ -98,6 +101,8 @@ type searchArguments struct {
 	Filters    []searchFilter `json:"filters"`
 	FilterType string         `json:"filter_type"`
 	OrderBy    []searchOrder  `json:"order_by"`
+	Include    []string       `json:"include"`
+	Exclude    []string       `json:"exclude"`
 	ViewID     int64          `json:"view_id"`
 	Page       int            `json:"page"`
 	Size       int            `json:"size"`
@@ -116,6 +121,12 @@ func (a *searchArguments) validateShape() error {
 	}
 	if a.ViewID < 0 || len(strconv.FormatInt(a.ViewID, 10)) > maxIDDigits {
 		return invalidRequest("view_id must be a positive integer")
+	}
+	if err := validateColumnKeys("include", a.Include); err != nil {
+		return err
+	}
+	if err := validateColumnKeys("exclude", a.Exclude); err != nil {
+		return err
 	}
 	if utf8.RuneCountInString(a.Search) > maxSearchLen {
 		return invalidRequest("search is too long")
@@ -209,6 +220,11 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 			return nil, invalidRequest("order_by names a field that is unknown or cannot be sorted")
 		}
 	}
+	for _, key := range append(append([]string{}, input.Include...), input.Exclude...) {
+		if _, ok := byName[key]; !ok {
+			return nil, invalidRequest("include or exclude names a field the table does not have")
+		}
+	}
 	if input.Search != "" && !client.scope.wildcard {
 		for _, field := range fields {
 			if indirectFieldTypes[field.Type] {
@@ -250,6 +266,7 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 		}
 		query.Set("order_by", strings.Join(parts, ","))
 	}
+	setColumnKeys(query, input.Include, input.Exclude)
 	if input.ViewID > 0 {
 		query.Set("view_id", strconv.FormatInt(input.ViewID, 10))
 	}
