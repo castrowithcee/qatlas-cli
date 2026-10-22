@@ -111,7 +111,7 @@ The ID follows the last `-` of the last segment. Any other form or host resolves
 | Tool | Reads |
 | --- | --- |
 | `todoist.projects.list` | active projects, optionally by `search` text |
-| `todoist.projects.get` | one project with its description |
+| `todoist.projects.get` | one project |
 | `todoist.sections.list` | sections, optionally of one `project_id` or by `search` text |
 | `todoist.sections.get` | one section |
 | `todoist.labels.list` | personal labels, optionally by `search` text |
@@ -293,7 +293,8 @@ and keeps no local copy of the account. Tasks and sections of workspace projects
 read and changed like any other project when the connection names them; the workspace project itself is not.
 
 Todoist marks `note_count` as deprecated and always answers 0, so a task has no comment count; its comments
-come from `todoist.comments.list`. `is_deleted` is not returned: Qatlas drops deleted tasks, so the value
-would always be false. The parameter `public_key` of `GET /tasks/{task_id}` and
+come from `todoist.comments.list`. `is_deleted` is not returned: Qatlas drops deleted tasks, projects, and
+sections, so the value would always be false. The parameter `public_key` of `GET /tasks/{task_id}` and
 `GET /tasks/completed/by_completion_date` is not offered: it reads tasks of publicly shared projects of others,
-outside the connection's targets.
+outside the connection's targets. The `public_key` of a project grants access to the publicly shared project
+without a sign-in; as an access value it is not returned.
