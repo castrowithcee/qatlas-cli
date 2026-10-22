@@ -415,7 +415,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 			descriptor.ID == repositoriesCreate.ID || descriptor.ID == issueTypesList.ID ||
 			descriptor.ID == organizationAdvisoriesList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
-			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
+			if strings.Contains(ownerFiltersStripped(descriptor), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}

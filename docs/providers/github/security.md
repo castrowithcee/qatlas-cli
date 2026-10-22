@@ -36,14 +36,14 @@ Alert texts (rule and advisory descriptions, messages, dismissal comments, paths
 accounts and are untrusted data. Each is cut at 500 characters (4000 for the rule help and the advisory
 description of a `.get`), and `truncated` says so.
 
-The members a code scanning or Dependabot alert carries beyond these are cleaned the same way, and each of
-their cuts says so in its own `*_truncated` member, never in `truncated`.
+The members an alert of any kind carries beyond these are cleaned the same way, and each of their cuts says so
+in its own `*_truncated` member, never in `truncated`.
 
-A secret scanning alert never shows the found secret. The request asks GitHub to hide it (`hide_secret=true`),
-and the answer is decoded into a shape that has no field for a secret value, a snippet, or a comment, so
-nothing else GitHub sends can reach a result, an error, or a log. An answer that cannot be read or is too
-large fails with a fixed message that quotes nothing of it. An alert reports its type, state, resolution,
-validity, times, and the first location (kind, path, lines) only.
+A secret scanning alert never shows the found secret, and its comments are withheld because they may repeat it.
+The request asks GitHub to hide the secret (`hide_secret=true`), and the answer is decoded into a shape that
+has no field for the secret, a snippet, or a comment, not even inside the first location, so nothing else
+GitHub sends can reach a result, an error, or a log. An answer that cannot be read or is too large fails with
+a fixed message that quotes nothing of it.
 
 | Tool | Classic token | Fine-grained token |
 | --- | --- | --- |
