@@ -141,10 +141,18 @@ const richScenarioDetails = `"hookId":77,"devices":[{"id":5,"scope":"team"}],"fo
 	`"labels":[{"id":6,"name":"L","colour":"info","scope":"team","teamId":1001,"description":"ld","createdBy":1,` +
 	`"created":"2026-01-01T00:00:00Z","updated":"2026-01-02T00:00:00Z"}],"deleted":true,"deletedAt":"2026-01-04T00:00:00Z"`
 
-const richRun = `{"id":"run-1","teamId":1001,"organizationId":501,"status":3,"type":"execution","eventType":"scheduled",` +
+// richRun carries more services than are kept, so services_truncated is set.
+var richRun = `{"id":"run-1","teamId":1001,"organizationId":501,"status":3,"type":"execution","eventType":"scheduled",` +
 	`"timestamp":1700000000000,"duration":1200,"operations":3,"transfer":4,"centicredits":5,` +
 	`"interruptReason":"hitl","interruptModuleId":"7","authorId":9,"authorName":"C",` +
-	`"detail":{"error":{"message":"boom"}}}`
+	`"imtId":"i","instant":false,"displayStatus":"ERROR","resumeAt":"2026-01-01T00:00:00Z","interruptModuleName":"M",` +
+	`"provenance":{"v":1,"channel":"mcp","auth":"a","services":[` + strings.TrimSuffix(strings.Repeat(`"s",`, maxRunServices+1), ",") + `],"tokenLabel":"t","oauthClientId":"o",` +
+	`"mcp":{"authMethod":"m","client":"c","conversationId":"v","entrypoint":"e","tool":"l","requestId":"r"},` +
+	`"impersonated":true,"requestId":"q"},` +
+	`"detail":{"error":{"message":"boom"},"author":{"name":"N","staff":true},` +
+	`"provenance":{"v":1,"channel":"ui","auth":"a"},` +
+	`"change":{"version":1,"kind":"folder-moved","origin":"direct","fromFolder":{"id":1,"name":"a","path":"a"},` +
+	`"toFolder":{"id":2,"name":"b","path":"a/b"}}}}`
 
 // richBlueprint masks more credential slots than the masked list holds, so masked_truncated is set.
 func richBlueprint() string {
@@ -188,8 +196,8 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 		{scenariosList.ID, `{}`, 60},
 		{scenariosGet.ID, `{"scenario_id":` + id + `}`, 50},
 		{scenariosBlueprint.ID, `{"scenario_id":` + id + `}`, 20},
-		{runsList.ID, `{"scenario_id":` + id + `}`, 20},
-		{runsGet.ID, `{"scenario_id":` + id + `,"execution_id":"run-1"}`, 17},
+		{runsList.ID, `{"scenario_id":` + id + `}`, 55},
+		{runsGet.ID, `{"scenario_id":` + id + `,"execution_id":"run-1"}`, 52},
 	}
 	for _, tt := range cases {
 		t.Run(tt.tool, func(t *testing.T) {

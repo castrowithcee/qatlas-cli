@@ -22,8 +22,8 @@ Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer
 `has_more`. Make's own pagination object (`pg`) echoes the request's offset and limit but reports no total
 count, so `has_more` is a heuristic, not a value Make states: it is true exactly when a page came back full,
 the same convention the SeaTable provider's own offset pagination uses. The descriptors state the fields and
-filters. `include_subfolders` is valid only together with `folder_id`; an invalid filter is refused before any
-request. Every returned page is still defensively re-filtered against this connection's own team and, for
+filters. `include_subfolders` is valid only together with `folder_id`, and on runs `status` and `display_status`
+exclude each other; an invalid filter is refused before any request. Every returned page is still defensively re-filtered against this connection's own team and, for
 runs, organization, and every returned scenario row against the folder and scenario targets, whatever filter
 asked for it, `ids`, `folder_id`, and `deleted` included.
 
@@ -86,13 +86,18 @@ nor `scheduling`: there would be nothing left to change.
 
 ## Runs and their errors
 
-`make.runs.get` reads one run's status, timings, operations, and data volume from Make's own log entry, and,
-only when that entry's `detail` object happens to carry the recognised `detail.error.message` shape, a short
-excerpt of it, bounded to 2048 characters. Make does not document the `detail` object's shape field by
-field, so this extraction is deliberately conservative: anything else `detail` may carry, including the
-versioned scenario-history change Make attaches to a "modify"-type log entry, is never surfaced, never
-passed through raw, and never guessed at. A run never returns a bundle's actual input or output data, which
-this endpoint does not expose in the first place.
+`make.runs.list` and `make.runs.get` are at version 2: `status` is no longer always present. Make reports none
+for a running execution or for a history row that is no execution, and the row then comes without `status`;
+`display_status` carries the state instead. `make.runs.get` adds a short excerpt from `detail.error.message`
+when the entry carries one, bounded to 2048 characters. `detail` is read only in the form Make documents:
+`author`, `provenance`, and a versioned `change`. A `change` is never passed through raw. Only the label
+events and the folder move keep their documented members; any other kind keeps only `version`, `kind`, and
+`origin`, and unknown additional members never appear. Provenance members are identifiers and labels. A value
+that contains the connection's own API token is left out. A run never returns a bundle's actual input or
+output data, which this endpoint does not expose in the first place.
+
+Qatlas pages runs by offset; Make's last-based paging (`pg[showLast]`, `pg[last]`) is not offered. Make
+documents no value list for `pg[sortBy]`, so no sort column is offered either, only `sort_dir`.
 
 `make.scenarios.run` starts exactly one new execution of a scenario on demand (`POST
 /scenarios/{id}/run`), needing the `scenarios:read`, `scenarios:write`, and `scenarios:run` scopes together.
@@ -108,21 +113,19 @@ easily outlast this provider's own request timeout for a long-running scenario a
 merely uncertain when the run in fact started successfully and needs no repeating.
 
 `make.scenarios.run` answers with `execution_id` and, when Make reports one immediately, `status`; `status`
-is passed through opaquely and untyped, since Make's own documentation was not internally consistent about
-its shape during this session's research (a numeric code in one place, a string elsewhere). Use
-`make.runs.get` or `make.runs.list` afterward to learn a run's outcome: Make documents a run's own
-`executionId` identically, word for word, as the identifier a scenario's log entry reports under its own
-`id` key, for both its "Get execution log" and its separate "Get scenario execution details" endpoints, which
-is the basis for pointing a caller at `make.runs.get` (built on the logs endpoint this provider already
-implements) rather than at that separate, undocumented-here `executions` endpoint, which this provider does
-not add a tool for. Whether a still-running execution is already visible through the logs endpoint before it
-finishes is not documented either way and is not assumed; this is a known gap, not a confirmed guarantee.
+is passed through opaquely and untyped, since Make's documentation gives its shape inconsistently (a numeric
+code in one place, a string elsewhere). Use `make.runs.get` or `make.runs.list` afterward to learn a run's
+outcome: Make documents a run's own `executionId` identically, word for word, as the identifier a scenario's
+log entry reports under its own `id` key, for both its "Get execution log" and its separate "Get scenario
+execution details" endpoints, which is the basis for pointing a caller at `make.runs.get` (built on the logs
+endpoint) rather than at that separate `executions` endpoint, which this provider does not add a tool for. A
+running execution is listed with `display_status` `RUNNING` and no `status`.
 
 Unlike every other change of this provider, `make.scenarios.run` is never followed by a re-read: its own
 answer carries no `teamId` or `organizationId` of its own for this provider to re-verify. A timeout, a
 connection reset, or a 5xx after the one run request is reported with a note that names `make.runs.list`
 specifically, not "the current state" of a resource this provider would otherwise show directly.
 
-Running a scenario that is currently inactive (its scheduling turned off) is not specially handled: Make's
-exact error shape for that case was not confirmed during this session's research, so it surfaces through
-the ordinary status classification in [Errors](README.md#errors) rather than a fabricated, scenario-specific one.
+Running a scenario that is currently inactive (its scheduling turned off) is not specially handled: Make
+documents no error shape for that case, so it surfaces through the ordinary status classification in
+[Errors](README.md#errors) rather than a fabricated, scenario-specific one.
