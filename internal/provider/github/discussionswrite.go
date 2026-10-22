@@ -55,6 +55,9 @@ var discussionCommentsCreate = capability.Descriptor{
 		{Name: "id", Description: "Node id of the new comment"},
 		{Name: "database_id", Description: "Numeric identifier of the new comment"},
 		{Name: "url", Description: "Web address of the new comment"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "created_at", Description: "When the comment was created"},
+		{Name: "updated_at", Description: "When the comment last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Answer a top-level comment",
@@ -83,6 +86,10 @@ var discussionCommentsUpdate = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "id", Description: "Node id of the comment"},
 		{Name: "url", Description: "Web address of the comment"},
+		{Name: "database_id", Description: "Numeric identifier of the comment"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "created_at", Description: "When the comment was created"},
+		{Name: "updated_at", Description: "When the comment last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Correct a discussion comment",
