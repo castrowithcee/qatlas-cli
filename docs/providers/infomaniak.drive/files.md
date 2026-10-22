@@ -22,6 +22,8 @@ requires an explicit `file_id`: reading content is never defaulted to the root. 
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
 
+`depth` is not offered as an argument of `files.list`: the tool lists the immediate children of one folder.
+
 ## Changes
 
 - `drive_id`, `file_id`, `parent_id`, and `destination_id` are plain positive integers of at most 18 digits,
