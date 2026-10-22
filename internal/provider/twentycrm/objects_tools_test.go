@@ -38,9 +38,6 @@ func runObjectsTool(t *testing.T, handler capability.Handler, args string, targe
 	if marshalErr != nil {
 		t.Fatal(marshalErr)
 	}
-	if strings.Contains(string(out), descriptionCanary) || strings.Contains(string(out), enumCanary) {
-		t.Errorf("a description or enum value reached the output: %s", out)
-	}
 	return out, nil
 }
 

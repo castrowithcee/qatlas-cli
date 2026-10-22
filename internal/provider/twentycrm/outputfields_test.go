@@ -22,6 +22,9 @@ type outputCase struct {
 	total bool
 }
 
+// outputDocuments replaces the workspace document served for the schema path of a tool that needs one.
+var outputDocuments = map[string]string{objectsGet.ID: objectsOutputDocument}
+
 // richCompany is a company record in the shape of the Twenty company object with a custom field.
 const richCompany = `{"id":"` + companyID + `","name":"Bike","domainName":{"primaryLinkUrl":"https://bike.example",` +
 	`"primaryLinkLabel":"bike.example","secondaryLinks":[{"url":"https://shop.example","label":"Shop"}]},` +
@@ -80,6 +83,7 @@ func outputCases() []outputCase {
 		{metaObjectsGet, invokeMetaObjectsGet, `{"id":"` + metaObjID + `"}`, func(tail string) string {
 			return metaRichObjectJSON
 		}, false},
+		{descriptor: objectsGet, handler: invokeObjectsGet, args: `{"object":"person"}`, body: func(string) string { return `{}` }},
 		{metaFieldsGet, invokeMetaFieldsGet, `{"id":"` + metaFieldID + `"}`, func(tail string) string {
 			return metaRichFieldJSON
 		}, false},
@@ -91,6 +95,9 @@ func outputOf(t *testing.T, tc outputCase, body string) (map[string]any, error) 
 	t.Helper()
 	serve(t, func(request *http.Request) (*http.Response, error) {
 		if request.URL.Path == schemaPath {
+			if document, ok := outputDocuments[tc.descriptor.ID]; ok {
+				return jsonResponse(http.StatusOK, document), nil
+			}
 			return jsonResponse(http.StatusOK, searchSchema), nil
 		}
 		return jsonResponse(http.StatusOK, body), nil
@@ -206,6 +213,9 @@ func outputOfNumbers(t *testing.T, tc outputCase, body string) (map[string]any, 
 	t.Helper()
 	serve(t, func(request *http.Request) (*http.Response, error) {
 		if request.URL.Path == schemaPath {
+			if document, ok := outputDocuments[tc.descriptor.ID]; ok {
+				return jsonResponse(http.StatusOK, document), nil
+			}
 			return jsonResponse(http.StatusOK, searchSchema), nil
 		}
 		return jsonResponse(http.StatusOK, body), nil
