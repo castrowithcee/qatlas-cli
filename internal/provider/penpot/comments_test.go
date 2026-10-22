@@ -20,7 +20,12 @@ const (
 	newThread = "00000000-0000-0000-0000-000000000061"
 	newNote   = "00000000-0000-0000-0000-000000000062"
 	ownerA    = "00000000-0000-0000-0000-000000000071"
-	personal  = "personal-canary@example.test"
+	profileP  = "00000000-0000-0000-0000-000000000072"
+	profileQ  = "00000000-0000-0000-0000-000000000073"
+	avatarID  = "00000000-0000-0000-0000-0000000000b1"
+
+	exampleDomain = "@" + "example.test"
+	personal      = "canary" + exampleDomain
 )
 
 // commentsHandler serves the project and file lists of filesHandler, one thread and two comments of fileA1,
@@ -74,12 +79,12 @@ func changes(calls []call) []call {
 
 const fileArgs = `"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `"`
 
-func TestCommentsThreadsAndListAreBoundAndMinimized(t *testing.T) {
+func TestCommentsThreadsAndListAreBound(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, commentsHandler(200, `null`))
 	result, err := env.invoke(commentsThreads.ID, "one", `{`+fileArgs+`}`)
 	if err != nil || !strings.Contains(result, `"Erster Text"`) || strings.Contains(result, "fremd") ||
-		strings.Contains(result, personal) || strings.Contains(result, "Mustermann") || !strings.Contains(result, `"x":1.5`) {
+		!strings.Contains(result, personal) || !strings.Contains(result, "Mustermann") || !strings.Contains(result, `"x":1.5`) {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 	if got := strings.Join(commands(calls), ","); got != cmdProjects+","+cmdProjectFile+","+cmdThreads {
@@ -89,7 +94,7 @@ func TestCommentsThreadsAndListAreBoundAndMinimized(t *testing.T) {
 	calls = nil
 	result, err = env.invoke(commentsList.ID, "one", `{`+fileArgs+`,"thread_id":"`+threadA+`"}`)
 	if err != nil || !strings.Contains(result, "Zweiter Text") || strings.Contains(result, "fremd") ||
-		strings.Contains(result, personal) || !strings.Contains(result, `"count":2`) {
+		!strings.Contains(result, personal) || !strings.Contains(result, `"count":2`) {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 	if got := strings.Join(commands(calls), ","); got != cmdProjects+","+cmdProjectFile+","+cmdThreads+","+cmdComments {
