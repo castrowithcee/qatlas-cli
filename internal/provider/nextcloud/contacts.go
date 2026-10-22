@@ -50,8 +50,8 @@ const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<d:displayname/><d:resourcetype/><c:addressbook-description/><oc:invite/></d:prop></d:propfind>`
 
 // contactListProps and contactGetProps name the card properties a read asks the server for. PHOTO, LOGO,
-// SOUND, KEY, and AGENT are never requested: the server would send embedded data, up to the answer cap, so their
-// address references are not reported here.
+// SOUND, KEY, and AGENT are never requested: CardDAV cannot filter by VALUE=uri, so the server would send
+// embedded data. Their references are therefore not reported.
 const (
 	contactListProps = `<card:prop name="VERSION"/><card:prop name="UID"/><card:prop name="FN"/>` +
 		`<card:prop name="N"/><card:prop name="ORG"/><card:prop name="EMAIL"/>`
@@ -94,7 +94,7 @@ const (
 		`"organization":{"type":"string"},"title":{"type":"string"},"birthday":{"type":"string"},` +
 		`"note":{"type":"string"},"urls":{"type":"array","items":{"type":"string"}},` +
 		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"},` +
-		dav.ContactFullProperties + `},"required":["id"],"additionalProperties":false}`
+		dav.ContactValueProperties + `},"required":["id"],"additionalProperties":false}`
 	addressbookSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"description":{"type":"string"},"read_only":{"type":"boolean"},` +
 		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
@@ -124,7 +124,7 @@ var contactFields = append([]capability.Field{
 	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}, dav.ContactFullFields...)
+}, dav.ContactValueFields...)
 
 var addressbooksList = capability.Descriptor{
 	ID: Provider + ".contacts.address-books.list", Version: 1, Title: "List Nextcloud address books",
@@ -536,6 +536,8 @@ func (c *Client) getContact(ctx context.Context, book, id string) (*ContactResul
 		if err != nil {
 			return nil, invalidResponse(op, "Nextcloud returned a contact that is not a valid vCard")
 		}
+		// A server may send these anyway; the output schema has no place for them.
+		contact.PhotoURI, contact.LogoURI, contact.SoundURI, contact.AgentURI, contact.KeyURI = "", "", "", "", ""
 		contact.ID = id
 		contact.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])
 		return &ContactResult{Addressbook: book, Contact: *contact}, nil

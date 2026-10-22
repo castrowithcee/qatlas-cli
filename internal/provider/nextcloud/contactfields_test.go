@@ -54,6 +54,14 @@ func TestContactsGetReportsEveryMemberInSchemaAndFields(t *testing.T) {
 	for _, f := range contactsGet.Fields {
 		fields[f.Name] = true
 	}
+	for _, name := range []string{"photo_uri", "logo_uri", "sound_uri", "agent_uri", "key_uri"} {
+		if _, ok := out.Contact[name]; ok {
+			t.Errorf("%s was reported", name)
+		}
+		if _, ok := schema.Properties.Contact.Properties[name]; ok || fields[name] {
+			t.Errorf("%s is in schema or fields", name)
+		}
+	}
 	var missing []string
 	for key := range out.Contact {
 		if _, ok := schema.Properties.Contact.Properties[key]; !ok {
@@ -70,7 +78,7 @@ func TestContactsGetReportsEveryMemberInSchemaAndFields(t *testing.T) {
 	}
 	sort.Strings(missing)
 	if len(missing) > 0 || out.Contact["organization"] != "Engine, Analytical, Dept" ||
-		len(out.Contact["organization_units"].([]any)) != 2 || len(out.Contact) < 28 {
+		len(out.Contact["organization_units"].([]any)) != 2 || len(out.Contact) < 23 {
 		t.Errorf("missing %v; %d members: %v", missing, len(out.Contact), out.Contact)
 	}
 }

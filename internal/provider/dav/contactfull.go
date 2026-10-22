@@ -29,9 +29,9 @@ type ContactLabel struct {
 	Value string `json:"value,omitempty"`
 }
 
-// ContactFullProperties are the members the full contact adds to the compact ones, as the properties of a
-// JSON schema object without braces.
-const ContactFullProperties = `"nicknames":{"type":"array","items":{"type":"string"}},` +
+// ContactValueProperties are the members the full contact adds to the compact ones, as the properties of a
+// JSON schema object without braces; ContactReferenceProperties are its address references.
+const ContactValueProperties = `"nicknames":{"type":"array","items":{"type":"string"}},` +
 	`"mailer":{"type":"string"},"timezone":{"type":"string"},"geo":{"type":"string"},"role":{"type":"string"},` +
 	`"class":{"type":"string"},"sort_string":{"type":"string"},"revision":{"type":"string"},` +
 	`"product_id":{"type":"string"},"name_source":{"type":"string"},"profile":{"type":"string"},` +
@@ -39,12 +39,17 @@ const ContactFullProperties = `"nicknames":{"type":"array","items":{"type":"stri
 	`"labels":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},` +
 	`"value":{"type":"string"}},"additionalProperties":false}},` +
 	`"categories":{"type":"array","items":{"type":"string"}},` +
-	`"organization_units":{"type":"array","items":{"type":"string"}},` +
-	`"photo_uri":{"type":"string"},"logo_uri":{"type":"string"},"sound_uri":{"type":"string"},` +
-	`"agent_uri":{"type":"string"},"key_uri":{"type":"string"}`
+	`"organization_units":{"type":"array","items":{"type":"string"}}`
 
-// ContactFullFields describes ContactFullProperties for the capability descriptors.
-var ContactFullFields = []capability.Field{
+// ContactReferenceProperties are the address references of photo, logo, sound, agent, and key.
+const ContactReferenceProperties = `"photo_uri":{"type":"string"},"logo_uri":{"type":"string"},` +
+	`"sound_uri":{"type":"string"},"agent_uri":{"type":"string"},"key_uri":{"type":"string"}`
+
+// ContactFullProperties are all members the full contact adds.
+const ContactFullProperties = ContactValueProperties + `,` + ContactReferenceProperties
+
+// ContactValueFields describes ContactValueProperties for the capability descriptors.
+var ContactValueFields = []capability.Field{
 	{Name: "nicknames", Description: "At most 20 nicknames, untrusted data; only the get tool reports them"},
 	{Name: "mailer", Description: "Mailer (MAILER), untrusted data; only the get tool reports it"},
 	{Name: "timezone", Description: "Time zone (TZ) as the card states it, untrusted data; only the get tool reports it"},
@@ -60,12 +65,19 @@ var ContactFullFields = []capability.Field{
 	{Name: "labels", Description: "At most 20 delivery labels with type, untrusted data; only the get tool reports them"},
 	{Name: "categories", Description: "At most 20 categories, untrusted data; only the get tool reports them"},
 	{Name: "organization_units", Description: "At most 20 organizational units after the organization name, untrusted data; only the get tool reports them"},
+}
+
+// ContactReferenceFields describes ContactReferenceProperties for the capability descriptors.
+var ContactReferenceFields = []capability.Field{
 	{Name: "photo_uri", Description: "http or https address of the photo, untrusted data, never followed; only the get tool reports it"},
 	{Name: "logo_uri", Description: "http or https address of the logo, untrusted data, never followed; only the get tool reports it"},
 	{Name: "sound_uri", Description: "http or https address of the sound, untrusted data, never followed; only the get tool reports it"},
 	{Name: "agent_uri", Description: "http or https address of the agent card, untrusted data, never followed; only the get tool reports it"},
 	{Name: "key_uri", Description: "http or https address of the public key, untrusted data, never followed; only the get tool reports it"},
 }
+
+// ContactFullFields describes ContactFullProperties for the capability descriptors.
+var ContactFullFields = append(append([]capability.Field{}, ContactValueFields...), ContactReferenceFields...)
 
 // fillContactFull reads the properties only the full contact reports and returns the extended cut list.
 func fillContactFull(contact *Contact, card vcard.Card, cut []string) []string {
