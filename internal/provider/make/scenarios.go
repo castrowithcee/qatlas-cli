@@ -370,11 +370,13 @@ func (c *Client) verifyScopeAfterChange(ctx context.Context, op string, scenario
 
 var scenariosBlueprint = capability.Descriptor{
 	ID:      Provider + ".scenarios.blueprint",
-	Version: 1,
+	Version: 2,
 	Title:   "Get a Make scenario's blueprint",
 	Description: "Read one scenario's blueprint (its modules, their wiring, and their configuration); a " +
-		"connection or key a module references is passed through only as the numeric id Make itself reports, " +
-		"never a stored authorization value, which Make's own blueprint format never carries in the first place",
+		"connection or key a module references appears only as the numeric id Make reports. A module's " +
+		"authPass and its Authorization, Proxy-Authorization, Cookie, X-Api-Key, and X-Auth-Token header values " +
+		"are replaced by [redacted] and listed in masked; a secret typed into any other module field is not " +
+		"recognised",
 	Tags:     []string{"make", "scenarios", "blueprint", "automation"},
 	Risk:     makeReadRisk,
 	Provider: Provider,
@@ -382,7 +384,8 @@ var scenariosBlueprint = capability.Descriptor{
 		`"draft":{"type":"boolean"},"blueprint_id":` + idSchema + `},` +
 		`"required":["scenario_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":{"type":"integer"},` +
-		`"blueprint":{"type":"object"}},"required":["scenario_id","blueprint"],"additionalProperties":false}`),
+		`"blueprint":{"type":"object"},"masked":{"type":"array","items":{"type":"string"}},` +
+		`"masked_truncated":{"type":"boolean"}},"required":["scenario_id","blueprint"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{scenarioIDArgument,
 		{Name: "draft", Description: "When true, read the scenario's unsaved draft blueprint instead of its saved one"},
 		{Name: "blueprint_id", Description: "When set, read this specific saved blueprint version instead of the current one"},
@@ -390,7 +393,10 @@ var scenariosBlueprint = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "scenario_id", Description: "The scenario this blueprint belongs to"},
 		{Name: "blueprint", Description: "The blueprint as Make reports it: modules, their wiring, and their " +
-			"configuration, untrusted data, bounded only by this provider's own response size limit"},
+			"configuration, untrusted data, bounded only by this provider's own response size limit; credentials " +
+			"are replaced by [redacted]"},
+		{Name: "masked", Description: "JSON Pointers (RFC 6901, relative to blueprint) of the masked values, at most 500"},
+		{Name: "masked_truncated", Description: "True when more values were masked than masked lists"},
 	},
 	Examples: []capability.Example{{Description: "Read one scenario's current blueprint",
 		Arguments: json.RawMessage(`{"scenario_id":1}`)}},
@@ -402,11 +408,12 @@ type scenariosBlueprintArguments struct {
 	BlueprintID int64 `json:"blueprint_id"`
 }
 
-// Blueprint is one scenario's blueprint, passed through as Make reports it beyond the connection's own
-// response size bound.
+// Blueprint is one scenario's blueprint as Make reports it, with credentials masked (see maskBlueprint).
 type Blueprint struct {
-	ScenarioID int64           `json:"scenario_id"`
-	Blueprint  json.RawMessage `json:"blueprint"`
+	ScenarioID      int64           `json:"scenario_id"`
+	Blueprint       json.RawMessage `json:"blueprint"`
+	Masked          []string        `json:"masked,omitempty"`
+	MaskedTruncated bool            `json:"masked_truncated,omitempty"`
 }
 
 func invokeScenariosBlueprint(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -458,7 +465,11 @@ func (c *Client) GetBlueprint(ctx context.Context, scenarioID int64, draft bool,
 	if len(wrapper.Response.Blueprint) == 0 {
 		return nil, invalidResponse(op, "Make did not report a blueprint")
 	}
-	return &Blueprint{ScenarioID: scenarioID, Blueprint: wrapper.Response.Blueprint}, nil
+	blueprint, masked, truncated, err := maskBlueprint(wrapper.Response.Blueprint)
+	if err != nil {
+		return nil, err
+	}
+	return &Blueprint{ScenarioID: scenarioID, Blueprint: blueprint, Masked: masked, MaskedTruncated: truncated}, nil
 }
 
 // schedulingWriteSchema is the JSON Schema of a scheduling argument scenarios.create and scenarios.update
@@ -529,6 +540,9 @@ func invokeScenariosCreate(ctx context.Context, resolved *config.Resolved, secre
 			"create one: a newly created scenario can never already be on that list")
 	}
 	if err := validJSONObject(input.Blueprint, maxBlueprintWriteBytes, maxBlueprintDepth, "blueprint"); err != nil {
+		return nil, err
+	}
+	if err := refuseMaskedBlueprint(input.Blueprint); err != nil {
 		return nil, err
 	}
 	if err := validJSONObject(input.Scheduling, maxSchedulingWriteBytes, maxSchedulingDepth, "scheduling"); err != nil {
@@ -645,6 +659,9 @@ func invokeScenariosUpdate(ctx context.Context, resolved *config.Resolved, secre
 	}
 	if len(input.Blueprint) > 0 {
 		if err := validJSONObject(input.Blueprint, maxBlueprintWriteBytes, maxBlueprintDepth, "blueprint"); err != nil {
+			return nil, err
+		}
+		if err := refuseMaskedBlueprint(input.Blueprint); err != nil {
 			return nil, err
 		}
 	}

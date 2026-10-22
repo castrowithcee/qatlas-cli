@@ -94,6 +94,7 @@ var issueDependenciesAdd = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "blocker", Description: "The blocking issue, by number and, when it differs, repository"},
+		{Name: "number", Description: "Issue number that is blocked"},
 	},
 	Examples: []capability.Example{{
 		Description: "Record that issue 42 is blocked by issue 40",
@@ -125,6 +126,7 @@ var issueDependenciesRemove = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "blocker", Description: "The blocking issue that was detached"},
 		{Name: "removed", Description: "True once GitHub removed the dependency"},
+		{Name: "number", Description: "Issue number the dependency was removed from"},
 	},
 	Examples: []capability.Example{{
 		Description: "Remove the dependency on issue 40",

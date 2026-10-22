@@ -312,3 +312,16 @@ number as well, but GitHub answers these plain array routes without a total coun
 whether GitHub's `Link` response header names a following page instead. `github.pull-request-checks.list`
 answers no cursor at all: it reads up to 100 check runs and 100 legacy statuses at the head commit in one
 call and reports `truncated` when GitHub held more of either.
+
+## Result objects
+
+A flat field of a tool result stays as it is. A tool that adds the object behind it names the object
+`<field>_detail`, or `<field>_details` for a list. In an object, `url` is the web address; the REST `url` and
+every other `*_url` sit in its `links`, and each nested object has its own `links`.
+
+A connection GitHub also serves as a list of its own is read with that list; this tool reports its count. A
+tool that does read the first page of a connection takes a fixed number of entries and reports
+`<field>_total_count` and `<field>_truncated`.
+
+`temp_clone_token` grants clone access without sign-in and is withheld. A repository outside the connection's
+targets is named only by its identifiers.

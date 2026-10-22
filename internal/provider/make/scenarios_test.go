@@ -1,11 +1,14 @@
 package makeapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 func scenarioJSONOf(id, teamID int64, name string) string {
@@ -198,5 +201,145 @@ func TestScenariosBlueprintDraftAndBlueprintIDQuery(t *testing.T) {
 	q := calls[len(calls)-1].query
 	if q.Get("draft") != "true" || q.Get("blueprintId") != "7" {
 		t.Fatalf("query = %v, want draft=true and blueprintId=7", q)
+	}
+}
+
+func blueprintEnvironment(t *testing.T, blueprint string, calls *[]call) *environment {
+	t.Helper()
+	return newEnvironment(t, calls, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/blueprint") {
+			return jsonResponse(200, `{"code":"OK","response":{"blueprint":`+blueprint+`}}`), nil
+		}
+		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
+	})
+}
+
+func httpModule(secret string) string {
+	return `{"id":1,"module":"http:ActionSendData","mapper":{"authUser":"user","authPass":"` + secret + `","ca":"cert","qs":[{"name":"token","value":"q-` + secret + `"}],` +
+		`"headers":[{"name":"Authorization","value":"Bearer ` + secret + `"},{"name":"cookie","value":"sid=` + secret + `"},` +
+		`{"name":"X-Other","value":"keep"},{"name":"X-Api-Key","value":""}]}}`
+}
+
+// Credentials are masked in flow, onerror, and router routes; every slot is named in masked and no secret
+// survives anywhere in the result.
+func TestScenariosBlueprintMasksCredentials(t *testing.T) {
+	blueprint := `{"name":"Own","flow":[` + httpModule("s1") + `,{"id":2,"module":"builtin:BasicRouter","routes":[{"flow":[` +
+		httpModule("s2") + `]}]}],"onerror":[` + httpModule("s3") + `],"big":12345678901234567890}`
+	var calls []call
+	result, err := blueprintEnvironment(t, blueprint, &calls).invoke(scenariosBlueprint.ID, "open",
+		fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	for _, secret := range []string{"s1", "s2", "s3"} {
+		if strings.Contains(result, `"`+secret+`"`) || strings.Contains(result, "Bearer "+secret) || strings.Contains(result, "sid="+secret) {
+			t.Fatalf("result leaks %s: %s", secret, result)
+		}
+	}
+	var got struct {
+		Blueprint json.RawMessage `json:"blueprint"`
+		Masked    []string        `json:"masked"`
+		Truncated bool            `json:"masked_truncated"`
+	}
+	if err := json.Unmarshal([]byte(result), &got); err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, base := range []string{"/flow/0", "/flow/1/routes/0/flow/0", "/onerror/0"} {
+		want = append(want, base+"/mapper/authPass", base+"/mapper/headers/0/value", base+"/mapper/headers/1/value")
+	}
+	if strings.Join(got.Masked, " ") != strings.Join(want, " ") || got.Truncated {
+		t.Fatalf("masked = %v truncated = %v, want %v", got.Masked, got.Truncated, want)
+	}
+	if n := strings.Count(string(got.Blueprint), `"[redacted]"`); n != 9 {
+		t.Fatalf("redacted values = %d, want 9: %s", n, got.Blueprint)
+	}
+	for _, keep := range []string{`"authUser":"user"`, `"ca":"cert"`, `"q-s1"`, `"keep"`, `"value":""`, `12345678901234567890`} {
+		if !strings.Contains(string(got.Blueprint), keep) {
+			t.Fatalf("blueprint lost %s: %s", keep, got.Blueprint)
+		}
+	}
+}
+
+// A blueprint without a credential slot is returned as Make reports it, with no masked list.
+func TestScenariosBlueprintWithoutCredentialsIsUnchanged(t *testing.T) {
+	blueprint := `{"flow":[{"id":1,"mapper":{"authPass":"","headers":[{"name":"X-Other","value":"v"}]}}],"name":"Own"}`
+	var calls []call
+	result, err := blueprintEnvironment(t, blueprint, &calls).invoke(scenariosBlueprint.ID, "open",
+		fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	if want := fmt.Sprintf(`{"blueprint":%s,"scenario_id":%d}`, blueprint, ownScenario); result != want {
+		t.Fatalf("result = %s, want %s", result, want)
+	}
+}
+
+// More than 500 slots are all masked, but masked lists only 500 and says so.
+func TestScenariosBlueprintMaskedListIsBounded(t *testing.T) {
+	var flow []string
+	for i := 0; i < 501; i++ {
+		flow = append(flow, `{"mapper":{"authPass":"secret-value"}}`)
+	}
+	var calls []call
+	result, err := blueprintEnvironment(t, `{"flow":[`+strings.Join(flow, ",")+`]}`, &calls).invoke(scenariosBlueprint.ID, "open",
+		fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	var got struct {
+		Masked    []string `json:"masked"`
+		Truncated bool     `json:"masked_truncated"`
+	}
+	if err := json.Unmarshal([]byte(result), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Masked) != 500 || !got.Truncated || strings.Contains(result, "secret-value") {
+		t.Fatalf("masked = %d, truncated = %v, leaked = %v", len(got.Masked), got.Truncated, strings.Contains(result, "secret-value"))
+	}
+}
+
+// A blueprint nested deeper than this provider reads is an invalid response, never partly returned.
+func TestScenariosBlueprintTooDeepIsInvalidResponse(t *testing.T) {
+	deep := strings.Repeat(`{"a":`, maxBlueprintDepth+1) + `1` + strings.Repeat(`}`, maxBlueprintDepth+1)
+	var calls []call
+	_, err := blueprintEnvironment(t, deep, &calls).invoke(scenariosBlueprint.ID, "open",
+		fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
+	if classOf(err) != provider.ClassInvalidResponse {
+		t.Fatalf("class = %q, want invalid-provider-response", classOf(err))
+	}
+}
+
+// create and update refuse a blueprint that still holds the marker, before any request; real values pass.
+func TestScenariosWritesRefuseMaskedBlueprint(t *testing.T) {
+	masked := []string{
+		`{"flow":[{"mapper":{"authPass":"[redacted]"}}]}`,
+		`{"flow":[{"mapper":{"headers":[{"name":"COOKIE","value":"[redacted]"}]}}]}`,
+	}
+	for _, blueprint := range masked {
+		var calls []call
+		env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+			t.Fatalf("unexpected request to %s", r.URL.Path)
+			return nil, nil
+		})
+		_, err := env.confirmed(scenariosCreate.ID, "open",
+			`{"blueprint":`+blueprint+`,"scheduling":`+minimalScheduling+`}`)
+		if !isInvalidRequest(err) || !strings.Contains(err.Error(), "/flow/0/mapper/") {
+			t.Fatalf("create err = %v, want an invalid request naming the pointer", err)
+		}
+		_, err = env.confirmed(scenariosUpdate.ID, "open",
+			fmt.Sprintf(`{"scenario_id":%d,"blueprint":%s}`, ownScenario, blueprint))
+		if !isInvalidRequest(err) || len(calls) != 0 || *env.reads != 0 {
+			t.Fatalf("update err = %v, calls = %+v, secret reads = %d, want a local refusal", err, calls, *env.reads)
+		}
+	}
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(newScenario, ownTeam, "My scenario")+`}`), nil
+	})
+	_, err := env.confirmed(scenariosCreate.ID, "open",
+		`{"blueprint":{"flow":[{"mapper":{"authPass":"real"}}]},"scheduling":`+minimalScheduling+`}`)
+	if err != nil || len(calls) != 1 {
+		t.Fatalf("err = %v, calls = %d, want one created scenario", err, len(calls))
 	}
 }

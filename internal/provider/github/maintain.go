@@ -115,6 +115,8 @@ var workflowFilesGet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "sha", Description: "Blob SHA an update of this file names as the version it replaces"},
 		{Name: "content", Description: "Content of the file as text, untrusted data"},
+		{Name: "path", Description: "Path of the workflow file"},
+		{Name: "size", Description: "Size of the file in bytes"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the CI workflow",
@@ -133,6 +135,8 @@ var workflowFileChangeFields = []capability.Field{
 	{Name: "sha", Description: "Blob SHA of the file after the change"},
 	{Name: "size", Description: "Size of the file after the change in bytes; the content is never echoed"},
 	{Name: "commit_sha", Description: "Commit GitHub created for the change"},
+	{Name: "branch", Description: "Branch the change was committed to"},
+	{Name: "commit_url", Description: "Web address of the commit"},
 }
 
 var workflowFileChangeArguments = []capability.Argument{
@@ -198,6 +202,8 @@ var workflowStateFields = []capability.Field{
 	{Name: "previous_state", Description: "State of the workflow before the change"},
 	{Name: "state", Description: "State after the call: active or disabled_manually, or the disabled state a " +
 		"disable found and left unchanged"},
+	{Name: "workflow_id", Description: "Identifier of the workflow"},
+	{Name: "path", Description: "Path of the workflow file"},
 }
 
 var workflowsEnable = capability.Descriptor{
