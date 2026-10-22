@@ -11,11 +11,19 @@ updated: 2026-10-22
 
 ## Dashboards
 
-`page-layouts.list` and `page-layouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
-widgets. Other layout types and trashed layouts are unknown to both. A widget shows only type, title, position,
-object, and chart type (`unknown` if unknown); an embedded page shows only its origin. Titles are untrusted data
-of their own data class. On the object `dashboard`, `records.create` and `records.batch-create` without a layout
-identifier also create a layout with one tab; `records.destroy` also destroys its layouts, `delete` leaves them.
+`page-layouts.list` and `page-layouts.get` (`read`) are workspace-wide and read dashboard layouts. Other layout
+types and trashed layouts are unknown to both. Titles and widget settings are untrusted data of their own data
+class. Widget `configuration`, `conditionalDisplay`, and `conditionalAvailabilityExpression` are free-form
+objects: each is limited to 8 levels and 16 KiB serialized, and one beyond the limit is left out and named in
+`omitted_fields`, never shortened. Identifiers in them are not resolved.
+
+The address of an embedded page (`configuration.url` of an IFRAME widget) can grant access without signing in,
+so it counts as an access value and is not output; only its origin appears. The same holds for every other
+address with a query, fragment, or credentials in a setting: the value holding it is removed. Deprecated fields
+(`isOverridden`, `gridPosition`) are not output.
+
+On the object `dashboard`, `records.create` and `records.batch-create` without a layout identifier also create a
+layout with one tab; `records.destroy` also destroys its layouts, `delete` leaves them.
 
 The tab and widget write tools are confirmed, need a `tools` entry and the right "Layouts"; no profile ticks
 them. Each reads first and refuses what `get` would not read. Tabs are empty grid tabs; a widget is Markdown, a
