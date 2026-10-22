@@ -28,6 +28,11 @@ var executionIDSchema = `{"type":"string","minLength":1,"maxLength":` + strconv.
 // warning, 3 error. Make reports it as an integer, not a string, and this provider follows that.
 var statusValues = []int{1, 2, 3}
 
+func displayStatusEnum() string {
+	encoded, _ := json.Marshal(displayStatusValues)
+	return string(encoded)
+}
+
 func statusEnum() string {
 	encoded, _ := json.Marshal(statusValues)
 	return string(encoded)
@@ -39,15 +44,16 @@ var runSummarySchema = `{"type":"object","properties":{` +
 	`"type":{"type":"string"},"event_type":{"type":"string"},"timestamp":{},` +
 	`"duration_ms":{"type":"integer"},"operations":{"type":"integer"},"transfer":{"type":"integer"},` +
 	`"centicredits":{"type":"integer"},"interrupt_reason":{"type":"string"},` +
-	`"interrupt_module_id":{"type":"string"},"author_id":{"type":"integer"},"author_name":{"type":"string"}},` +
-	`"required":["id","scenario_id","team_id","status"],"additionalProperties":false}`
+	`"interrupt_module_id":{"type":"string"},"author_id":{"type":"integer"},"author_name":{"type":"string"},` +
+	runExtraSchema + `},"required":["id","scenario_id","team_id"],"additionalProperties":false}`
 
-var runSummaryFields = []capability.Field{
+var runSummaryFields = append([]capability.Field{
 	{Name: "id", Description: "Run identifier, used as execution_id by runs.get"},
 	{Name: "scenario_id", Description: "Scenario this run belongs to, the scenario_id argument this run was read under"},
 	{Name: "team_id", Description: "Team this run belongs to; always the connection's bound team"},
 	{Name: "organization_id", Description: "Organization this run belongs to, present only when Make reports one"},
-	{Name: "status", Description: "1 success, 2 warning, 3 error, as Make reports it"},
+	{Name: "status", Description: "1 success, 2 warning, 3 error, as Make reports it; absent while Make " +
+		"reports none, for a running execution or a history row that is no execution"},
 	{Name: "type", Description: "Kind of log entry Make recorded, for example an execution or a scenario edit"},
 	{Name: "event_type", Description: "How the run was triggered, as Make reports it"},
 	{Name: "timestamp", Description: "When this run happened, exactly as Make reports it, untyped since its " +
@@ -60,11 +66,11 @@ var runSummaryFields = []capability.Field{
 	{Name: "interrupt_module_id", Description: "The module the run is paused at, when interrupt_reason is set"},
 	{Name: "author_id", Description: "Who triggered the run, when Make reports one"},
 	{Name: "author_name", Description: "Name of who triggered the run, when Make reports one"},
-}
+}, runExtraFields...)
 
 var runsList = capability.Descriptor{
 	ID:      Provider + ".runs.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List Make scenario runs",
 	Description: "List the run history (Make's own \"logs\") of one scenario of the bound team; page by " +
 		"page with a numeric offset. The scenario's team membership is confirmed live before any run is listed",
@@ -75,7 +81,14 @@ var runsList = capability.Descriptor{
 		`"offset":{"type":"integer","minimum":0},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
 		`"status":{"type":"integer","enum":` + statusEnum() + `},` +
-		`"from_ms":{"type":"integer","minimum":0},"to_ms":{"type":"integer","minimum":0}},` +
+		`"from_ms":{"type":"integer","minimum":0},"to_ms":{"type":"integer","minimum":0},` +
+		`"display_status":{"type":"string","enum":` + displayStatusEnum() + `},` +
+		`"duration_from":{"type":"integer","minimum":0},"duration_to":{"type":"integer","minimum":0},` +
+		`"operations_from":{"type":"integer","minimum":0},"operations_to":{"type":"integer","minimum":0},` +
+		`"transfer_from":{"type":"integer","minimum":0},"transfer_to":{"type":"integer","minimum":0},` +
+		`"credits_from":{"type":"integer","minimum":0},"credits_to":{"type":"integer","minimum":0},` +
+		`"execution_name":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxTextFilter) + `},` +
+		`"show_check_runs":{"type":"boolean"},"sort_dir":{"type":"string","enum":["asc","desc"]}},` +
 		`"required":["scenario_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"scenario_id":{"type":"integer"},"runs":{"type":"array","items":` + runSummarySchema + `},` +
@@ -88,6 +101,21 @@ var runsList = capability.Descriptor{
 		{Name: "status", Description: "When set, list only runs of this status: 1 success, 2 warning, 3 error"},
 		{Name: "from_ms", Description: "When set, list only runs at or after this time, Unix epoch milliseconds"},
 		{Name: "to_ms", Description: "When set, list only runs at or before this time, Unix epoch milliseconds"},
+		{Name: "display_status", Description: "When set, list only runs of this display status: RUNNING, " +
+			"WAITING, SUCCESS, WARNING, or ERROR; cannot be combined with status"},
+		{Name: "duration_from", Description: "Lower bound of the run duration in milliseconds, inclusive"},
+		{Name: "duration_to", Description: "Upper bound of the run duration in milliseconds, inclusive"},
+		{Name: "operations_from", Description: "Lower bound of the operations a run consumed, inclusive"},
+		{Name: "operations_to", Description: "Upper bound of the operations a run consumed, inclusive"},
+		{Name: "transfer_from", Description: "Lower bound of the data a run transferred in bytes, inclusive"},
+		{Name: "transfer_to", Description: "Upper bound of the data a run transferred in bytes, inclusive"},
+		{Name: "credits_from", Description: "Lower bound of the credits a run consumed in centicredits, inclusive"},
+		{Name: "credits_to", Description: "Upper bound of the credits a run consumed in centicredits, inclusive"},
+		{Name: "execution_name", Description: "When set, list only runs whose execution name matches this " +
+			"text partially, 1 to " + strconv.Itoa(maxTextFilter) + " characters"},
+		{Name: "show_check_runs", Description: "True includes check runs (trigger runs that found nothing " +
+			"new), which are left out when omitted"},
+		{Name: "sort_dir", Description: "Sort direction: asc or desc"},
 	},
 	Fields: append(append([]capability.Field{}, runSummaryFields...),
 		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
@@ -102,7 +130,7 @@ var runsList = capability.Descriptor{
 
 var runsGet = capability.Descriptor{
 	ID:      Provider + ".runs.get",
-	Version: 1,
+	Version: 2,
 	Title:   "Get a Make scenario run",
 	Description: "Read one run's status, timings, operations, and data volume, and, for a failed run, a " +
 		"short best-effort error excerpt; never a bundle's actual input or output data",
@@ -132,49 +160,62 @@ var runDetailSchema = `{"type":"object","properties":{` +
 	`"duration_ms":{"type":"integer"},"operations":{"type":"integer"},"transfer":{"type":"integer"},` +
 	`"centicredits":{"type":"integer"},"interrupt_reason":{"type":"string"},` +
 	`"interrupt_module_id":{"type":"string"},"author_id":{"type":"integer"},"author_name":{"type":"string"},` +
-	`"error":{"type":"string"}},"required":["id","scenario_id","team_id","status"],"additionalProperties":false}`
+	runExtraSchema + `,"error":{"type":"string"}},"required":["id","scenario_id","team_id"],"additionalProperties":false}`
 
 // runJSON mirrors the subset of Make's scenario log entry this provider reads
 // (developers.make.com/api-documentation/api-reference/scenarios/logs).
 type runJSON struct {
-	ID                string          `json:"id"`
-	TeamID            int64           `json:"teamId"`
-	OrganizationID    int64           `json:"organizationId"`
-	Status            int             `json:"status"`
-	Type              string          `json:"type"`
-	EventType         string          `json:"eventType"`
-	Timestamp         json.RawMessage `json:"timestamp"`
-	Duration          int64           `json:"duration"`
-	Operations        int64           `json:"operations"`
-	Transfer          int64           `json:"transfer"`
-	Centicredits      int64           `json:"centicredits"`
-	InterruptReason   string          `json:"interruptReason"`
-	InterruptModuleID string          `json:"interruptModuleId"`
-	AuthorID          int64           `json:"authorId"`
-	AuthorName        string          `json:"authorName"`
-	Detail            json.RawMessage `json:"detail"`
+	ID                  string          `json:"id"`
+	TeamID              int64           `json:"teamId"`
+	OrganizationID      int64           `json:"organizationId"`
+	Status              *int            `json:"status"`
+	IMTID               looseText       `json:"imtId"`
+	Instant             *bool           `json:"instant"`
+	DisplayStatus       string          `json:"displayStatus"`
+	ResumeAt            looseText       `json:"resumeAt"`
+	Type                string          `json:"type"`
+	EventType           string          `json:"eventType"`
+	Timestamp           json.RawMessage `json:"timestamp"`
+	Duration            int64           `json:"duration"`
+	Operations          int64           `json:"operations"`
+	Transfer            int64           `json:"transfer"`
+	Centicredits        int64           `json:"centicredits"`
+	InterruptReason     string          `json:"interruptReason"`
+	InterruptModuleID   looseText       `json:"interruptModuleId"`
+	InterruptModuleName string          `json:"interruptModuleName"`
+	Provenance          json.RawMessage `json:"provenance"`
+	AuthorID            int64           `json:"authorId"`
+	AuthorName          string          `json:"authorName"`
+	Detail              json.RawMessage `json:"detail"`
 }
 
 // RunSummary is the stable, scope-checked listing view of one run. ScenarioID is not a field Make's own log
 // entry is confirmed to carry; this provider sets it from the already scope-checked scenario_id the call was
 // made under, never from an unconfirmed response field.
 type RunSummary struct {
-	ID                string          `json:"id"`
-	ScenarioID        int64           `json:"scenario_id"`
-	TeamID            int64           `json:"team_id"`
-	OrganizationID    int64           `json:"organization_id,omitempty"`
-	Status            int             `json:"status"`
-	Type              string          `json:"type,omitempty"`
-	EventType         string          `json:"event_type,omitempty"`
-	Timestamp         json.RawMessage `json:"timestamp,omitempty"`
-	DurationMS        int64           `json:"duration_ms,omitempty"`
-	Operations        int64           `json:"operations,omitempty"`
-	Transfer          int64           `json:"transfer,omitempty"`
-	Centicredits      int64           `json:"centicredits,omitempty"`
-	InterruptReason   string          `json:"interrupt_reason,omitempty"`
-	InterruptModuleID string          `json:"interrupt_module_id,omitempty"`
-	AuthorID          int64           `json:"author_id,omitempty"`
-	AuthorName        string          `json:"author_name,omitempty"`
+	ID                  string          `json:"id"`
+	ScenarioID          int64           `json:"scenario_id"`
+	TeamID              int64           `json:"team_id"`
+	OrganizationID      int64           `json:"organization_id,omitempty"`
+	Status              *int            `json:"status,omitempty"`
+	IMTID               string          `json:"imt_id,omitempty"`
+	Instant             *bool           `json:"instant,omitempty"`
+	DisplayStatus       string          `json:"display_status,omitempty"`
+	ResumeAt            string          `json:"resume_at,omitempty"`
+	Type                string          `json:"type,omitempty"`
+	EventType           string          `json:"event_type,omitempty"`
+	Timestamp           json.RawMessage `json:"timestamp,omitempty"`
+	DurationMS          int64           `json:"duration_ms,omitempty"`
+	Operations          int64           `json:"operations,omitempty"`
+	Transfer            int64           `json:"transfer,omitempty"`
+	Centicredits        int64           `json:"centicredits,omitempty"`
+	InterruptReason     string          `json:"interrupt_reason,omitempty"`
+	InterruptModuleID   string          `json:"interrupt_module_id,omitempty"`
+	InterruptModuleName string          `json:"interrupt_module_name,omitempty"`
+	Provenance          *RunProvenance  `json:"provenance,omitempty"`
+	Detail              *RunLogDetail   `json:"detail,omitempty"`
+	AuthorID            int64           `json:"author_id,omitempty"`
+	AuthorName          string          `json:"author_name,omitempty"`
 }
 
 // RunDetail is the stable, scope-checked read view of one run.
@@ -183,7 +224,7 @@ type RunDetail struct {
 	Error string `json:"error,omitempty"`
 }
 
-func runSummaryOf(scenarioID int64, r runJSON) RunSummary {
+func (c *Client) runSummaryOf(scenarioID int64, r runJSON) RunSummary {
 	timestamp := r.Timestamp
 	if len(timestamp) == 0 {
 		timestamp = nil
@@ -192,8 +233,12 @@ func runSummaryOf(scenarioID int64, r runJSON) RunSummary {
 		ID: bounded(r.ID), ScenarioID: scenarioID, TeamID: r.TeamID, OrganizationID: r.OrganizationID,
 		Status: r.Status, Type: bounded(r.Type), EventType: bounded(r.EventType), Timestamp: timestamp,
 		DurationMS: r.Duration, Operations: r.Operations, Transfer: r.Transfer, Centicredits: r.Centicredits,
-		InterruptReason: bounded(r.InterruptReason), InterruptModuleID: bounded(r.InterruptModuleID),
+		InterruptReason: bounded(r.InterruptReason), InterruptModuleID: bounded(string(r.InterruptModuleID)),
 		AuthorID: r.AuthorID, AuthorName: bounded(r.AuthorName),
+		IMTID: cleanText(string(r.IMTID), maxShortText), Instant: r.Instant,
+		DisplayStatus: cleanText(r.DisplayStatus, maxShortText), ResumeAt: cleanText(string(r.ResumeAt), maxShortText),
+		InterruptModuleName: cleanText(r.InterruptModuleName, maxNameText),
+		Provenance:          c.provenanceOf(r.Provenance), Detail: c.logDetailOf(r.Detail),
 	}
 }
 
@@ -214,9 +259,7 @@ type runsListArguments struct {
 	ScenarioID int64 `json:"scenario_id"`
 	Offset     int   `json:"offset"`
 	Limit      int   `json:"limit"`
-	Status     int   `json:"status"`
-	FromMS     int64 `json:"from_ms"`
-	ToMS       int64 `json:"to_ms"`
+	RunFilter
 }
 
 func invokeRunsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -224,6 +267,9 @@ func invokeRunsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	var input runsListArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list runs", "the validated arguments could not be read")
+	}
+	if err := input.RunFilter.validate(); err != nil {
+		return nil, err
 	}
 	if err := selectScenario(resolved, input.ScenarioID); err != nil {
 		return nil, err
@@ -244,7 +290,7 @@ func invokeRunsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := client.verifyScenarioScope(ctx, scenario); err != nil {
 		return nil, err
 	}
-	return client.ListRuns(ctx, input.ScenarioID, input.Offset, limit, input.Status, input.FromMS, input.ToMS)
+	return client.ListRuns(ctx, input.ScenarioID, input.Offset, limit, input.RunFilter)
 }
 
 // ListRuns reads one page of a scenario's runs. The caller must already have confirmed the scenario's team
@@ -253,18 +299,13 @@ func invokeRunsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 // entry answer carries its own teamId and organizationId, and this provider trusts its own scope check over
 // Make's filtering. has_more is a heuristic the same way ListScenarios' own is: Make's pagination object
 // carries no total count.
-func (c *Client) ListRuns(ctx context.Context, scenarioID int64, offset, limit, status int, fromMS, toMS int64) (*RunsPage, error) {
+func (c *Client) ListRuns(ctx context.Context, scenarioID int64, offset, limit int, filter RunFilter) (*RunsPage, error) {
 	const op = "list runs"
+	if err := filter.validate(); err != nil {
+		return nil, err
+	}
 	query := url.Values{"pg[offset]": {strconv.Itoa(offset)}, "pg[limit]": {strconv.Itoa(limit)}}
-	if status != 0 {
-		query.Set("status", strconv.Itoa(status))
-	}
-	if fromMS > 0 {
-		query.Set("from", strconv.FormatInt(fromMS, 10))
-	}
-	if toMS > 0 {
-		query.Set("to", strconv.FormatInt(toMS, 10))
-	}
+	filter.apply(query)
 	var page runsPageJSON
 	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/logs", query, &page, needRead); err != nil {
 		return nil, err
@@ -274,7 +315,7 @@ func (c *Client) ListRuns(ctx context.Context, scenarioID int64, offset, limit, 
 		if !c.scope.allowsTeam(r.TeamID) || !c.scope.allowsOrg(r.OrganizationID) {
 			continue
 		}
-		summaries = append(summaries, runSummaryOf(scenarioID, r))
+		summaries = append(summaries, c.runSummaryOf(scenarioID, r))
 	}
 	return &RunsPage{
 		ScenarioID: scenarioID, Runs: summaries, Offset: offset, HasMore: len(page.ScenarioLogs) == limit,
@@ -335,18 +376,15 @@ func (c *Client) GetRun(ctx context.Context, scenarioID int64, executionID strin
 	if !c.scope.allowsTeam(run.TeamID) || !c.scope.allowsOrg(run.OrganizationID) {
 		return nil, invalidRequest("execution_id belongs to a team or organization outside the targets of this connection")
 	}
-	detail := RunDetail{RunSummary: runSummaryOf(scenarioID, run)}
+	detail := RunDetail{RunSummary: c.runSummaryOf(scenarioID, run)}
 	detail.Error = bestEffortError(run.Detail)
 	return &detail, nil
 }
 
-// bestEffortError extracts a short error message from a run's own "detail" object, when its shape happens
-// to carry one under detail.error.message, the common shape Make's own error payloads elsewhere use. The
-// exact schema of a scenario log's "detail" object is not documented field by field, so this is
-// deliberately conservative: anything this cannot recognise, including the versioned scenario-history
-// changes Make attaches to a "modify" log entry, is never surfaced at all rather than guessed at or passed
-// through raw.
-// qatlas-dev: extend this once a real failed run's "detail" shape is confirmed against a live account.
+// bestEffortError extracts a short error message from a run's own "detail" object when it carries one
+// under detail.error.message. Make documents the detail object's author, provenance, and change members but
+// no error member, so this stays conservative: only that message is read, never anything else of the
+// object.
 func bestEffortError(detail json.RawMessage) string {
 	if len(detail) == 0 {
 		return ""
