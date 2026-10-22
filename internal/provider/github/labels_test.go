@@ -332,3 +332,94 @@ func TestLabelsRefuseANonRepositoryTargetBeforeIO(t *testing.T) {
 		}
 	}
 }
+
+// documentedAccount is the simple-user object of GitHub's REST documentation.
+const documentedAccount = `{"login":"octocat","id":1,"node_id":"MDQ6VXNlcjE=","avatar_url":"https://github.com/images/error/octocat_happy.gif",` +
+	`"gravatar_id":"","url":"https://api.github.com/users/octocat","html_url":"https://github.com/octocat",` +
+	`"followers_url":"https://api.github.com/users/octocat/followers","type":"User","site_admin":false}`
+
+const documentedLabel = `{"id":208045947,"node_id":"MDU6TGFiZWwyMDgwNDU5NDc=",` +
+	`"url":"https://api.github.com/repos/octocat/Hello-World/labels/enhancement","name":"enhancement",` +
+	`"description":"New feature or request","color":"a2eeef","default":false,"archived_at":"2023-01-01T12:00:00Z",` +
+	`"archived_by":` + documentedAccount + `}`
+
+// serveRoute answers one GET route of the bound repository, or of the host, with a fixed JSON body.
+func serveRoute(t *testing.T, path, body string) string {
+	t.Helper()
+	f := &fakeGitHub{}
+	f.failure = func(w http.ResponseWriter, req *http.Request) bool {
+		if req.Method != http.MethodGet || req.URL.Path != path {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+		return true
+	}
+	return serve(t, f)
+}
+
+// The label tools report every member GitHub documents for a label; a label without the new members keeps its
+// earlier output exactly. The result is encoded with sorted keys.
+func TestLabelsReportEveryDocumentedMember(t *testing.T) {
+	const full = `{"archived_at":"2023-01-01T12:00:00Z","archived_by":{"avatar_url":"https://github.com/images/error/octocat_happy.gif",` +
+		`"gravatar_id":"","id":1,"links":{"followers_url":"https://api.github.com/users/octocat/followers",` +
+		`"url":"https://api.github.com/users/octocat"},"login":"octocat","node_id":"MDQ6VXNlcjE=","site_admin":false,` +
+		`"type":"User","url":"https://github.com/octocat"},"color":"a2eeef","default":false,` +
+		`"description":"New feature or request","id":208045947,` +
+		`"links":{"url":"https://api.github.com/repos/octocat/Hello-World/labels/enhancement"},` +
+		`"name":"enhancement","node_id":"MDU6TGFiZWwyMDgwNDU5NDc="`
+	const oldLabel = `{"color":"f29513","default":true,"description":"Something isn't working","name":"bug"`
+	const oldBody = `{"name":"bug","color":"f29513","description":"Something isn't working","default":true,` +
+		`"archived_at":null,"archived_by":null}`
+	const repository = `"repository":"octo-org/example"}`
+	for _, tool := range []struct{ id, path, args, body, oldBody, full, old string }{
+		{labelsGet.ID, "/api/v3/repos/octo-org/example/labels/enhancement", `{"name":"enhancement"}`, documentedLabel,
+			oldBody, full + `,` + repository, oldLabel + `,` + repository},
+		{labelsList.ID, "/api/v3/repos/octo-org/example/labels", `{}`, `[` + documentedLabel + `]`,
+			`[` + oldBody + `]`, `{"has_more":false,"labels":[` + full + `}],` + repository,
+			`{"has_more":false,"labels":[` + oldLabel + `}],` + repository},
+	} {
+		red := &redact.Redactor{}
+		for _, c := range []struct{ body, want string }{{tool.body, tool.full}, {tool.oldBody, tool.old}} {
+			core := application.New(registry(t), labelsConfig(serveRoute(t, tool.path, c.body)), resolver(red, nil), red)
+			got, err := invoke(t, core, tool.id, "repo", tool.args, false)
+			if err != nil || string(got) != c.want {
+				t.Errorf("%s = %s, %v, want %s", tool.id, got, err, c.want)
+			}
+		}
+	}
+}
+
+// longText1500 is a value with a control character, longer than every projection bound.
+var longText1500 = "a\x01b" + strings.Repeat("x", 1500)
+
+// Name, color, and description of a label keep their earlier handling, as decoded on ebf8628: no cleaning and
+// no cut. The expected values are the inputs themselves, which that code returned unchanged.
+func TestLabelsKeepTheEarlierHandlingOfTheCompactMembers(t *testing.T) {
+	body, _ := json.Marshal(map[string]any{"name": longText1500, "color": longText1500, "description": longText1500,
+		"default": true})
+	for _, tool := range []struct{ id, path, args, body string }{
+		{labelsGet.ID, "/api/v3/repos/octo-org/example/labels/x", `{"name":"x"}`, string(body)},
+		{labelsList.ID, "/api/v3/repos/octo-org/example/labels", `{}`, "[" + string(body) + "]"},
+	} {
+		red := &redact.Redactor{}
+		core := application.New(registry(t), labelsConfig(serveRoute(t, tool.path, tool.body)), resolver(red, nil), red)
+		got, err := invoke(t, core, tool.id, "repo", tool.args, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var label Label
+		if tool.id == labelsList.ID {
+			var list LabelList
+			if json.Unmarshal(got, &list) != nil || len(list.Labels) != 1 {
+				t.Fatalf("%s = %s", tool.id, got)
+			}
+			label = list.Labels[0]
+		} else if err := json.Unmarshal(got, &label); err != nil {
+			t.Fatal(err)
+		}
+		if label.Name != longText1500 || label.Color != longText1500 || label.Description != longText1500 {
+			t.Errorf("%s changed a compact member", tool.id)
+		}
+	}
+}

@@ -92,13 +92,7 @@ var taskFieldArguments = []capability.Argument{
 	{Name: "duration_unit", Description: "minute or day; together with duration"},
 }
 
-var changedTaskFields = []capability.Field{
-	{Name: "id", Description: "Task ID"},
-	{Name: "content", Description: "Task title, untrusted data"},
-	{Name: "description", Description: "Task description, untrusted data"},
-}
-
-var tasksCreate = changing(capability.EffectCreate, capability.IdempotencyNonIdempotent, descriptor("tasks",
+var tasksCreate = taskTool(changing(capability.EffectCreate, capability.IdempotencyNonIdempotent, descriptor("tasks",
 	"create", "Create a Todoist task",
 	"Create one task in a project of an explicit Todoist connection, optionally in a section or below a parent "+
 		"task of that connection; a repeated call creates a second task"+retryNote,
@@ -113,13 +107,13 @@ var tasksCreate = changing(capability.EffectCreate, capability.IdempotencyNonIde
 		{Name: "section_id", Description: "Section of a project of the connection; excludes parent_id"},
 		{Name: "parent_id", Description: "Task of the connection the new task becomes a subtask of; excludes section_id"},
 	}, taskFieldArguments...),
-	changedTaskFields,
+	taskOutputFields,
 	[]capability.Example{{
 		Description: "Create a task due tomorrow",
 		Arguments:   json.RawMessage(`{"content":"Send the invoice","project_id":"6XGgm6PHrGgMpCFX","due_string":"tomorrow"}`),
-	}}))
+	}})))
 
-var tasksUpdate = changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("tasks", "update",
+var tasksUpdate = taskTool(changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("tasks", "update",
 	"Update a Todoist task",
 	"Change the content, description, labels, priority, assignee, due date, or duration of one task of an "+
 		"explicit Todoist connection; fields left out stay unchanged. Moving, closing, and reopening have tools "+
@@ -137,13 +131,13 @@ var tasksUpdate = changing(capability.EffectUpdate, capability.IdempotencyIdempo
 		capability.Argument{Name: "clear_duration", Description: "True removes the duration"},
 		capability.Argument{Name: "unassign", Description: "True removes the responsible collaborator"},
 	),
-	changedTaskFields,
+	taskOutputFields,
 	[]capability.Example{{
 		Description: "Raise the priority and replace the labels of a task",
 		Arguments:   json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh","priority":4,"labels":["waiting"]}`),
-	}}))
+	}})))
 
-var tasksMove = changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("tasks", "move",
+var tasksMove = taskTool(changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("tasks", "move",
 	"Move a Todoist task",
 	"Move one task of an explicit Todoist connection, with its subtasks, to another project, section, or parent "+
 		"task of the same connection",
@@ -157,11 +151,11 @@ var tasksMove = changing(capability.EffectUpdate, capability.IdempotencyIdempote
 		{Name: "section_id", Description: "Section of a project of the connection to move to"},
 		{Name: "parent_id", Description: "Task of the connection to move below"},
 	},
-	changedTaskFields,
+	taskOutputFields,
 	[]capability.Example{{
 		Description: "Move a task into a section",
 		Arguments:   json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh","section_id":"6Jf8VQXxpwv56VQ7"}`),
-	}}))
+	}})))
 
 var taskIDInput = `{"type":"object","properties":{"task_id":` + idSchema + `},"required":["task_id"],` +
 	`"additionalProperties":false}`
@@ -404,7 +398,7 @@ func (c *Client) changedTask(ctx context.Context, op string, raw rawTask) (*Task
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "Todoist answered with a task outside the connection" + uncertain}
 	}
-	task := taskOf(raw, true)
+	task := taskOf(raw)
 	return &task, nil
 }
 
