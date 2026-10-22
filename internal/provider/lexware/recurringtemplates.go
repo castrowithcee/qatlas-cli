@@ -22,17 +22,20 @@ var recurringSortProperties = map[string]string{
 	"created_date":        "createdDate",
 	"updated_date":        "updatedDate",
 	"next_execution_date": "nextExecutionDate",
+	"last_execution_date": "lastExecutionDate",
 }
 
 // RecurringSettings is the execution schedule of a recurring template. The provider's error message of a
 // failed execution is deliberately not read: only the fact that it failed is reported.
 type RecurringSettings struct {
+	ID                  string `json:"id,omitempty"`
 	StartDate           string `json:"start_date,omitempty"`
 	EndDate             string `json:"end_date,omitempty"`
 	Finalize            bool   `json:"finalize"`
 	ShippingType        string `json:"shipping_type,omitempty"`
 	ExecutionInterval   string `json:"execution_interval,omitempty"`
 	NextExecutionDate   string `json:"next_execution_date,omitempty"`
+	LastExecutionDate   string `json:"last_execution_date,omitempty"`
 	LastExecutionFailed bool   `json:"last_execution_failed"`
 	ExecutionStatus     string `json:"execution_status,omitempty"`
 	RetroactiveInvoice  *bool  `json:"retroactive_invoice,omitempty"`
@@ -40,18 +43,20 @@ type RecurringSettings struct {
 
 // RecurringTemplateSummary is one entry of the template list.
 type RecurringTemplateSummary struct {
-	ID               string             `json:"id"`
-	Version          int                `json:"version,omitempty"`
-	CreatedDate      string             `json:"created_date,omitempty"`
-	UpdatedDate      string             `json:"updated_date,omitempty"`
-	Title            string             `json:"title,omitempty"`
-	PaymentTermLabel string             `json:"payment_term_label,omitempty"`
-	Currency         string             `json:"currency,omitempty"`
-	TotalNetAmount   json.Number        `json:"total_net_amount,omitempty"`
-	TotalGrossAmount json.Number        `json:"total_gross_amount,omitempty"`
-	TotalTaxAmount   json.Number        `json:"total_tax_amount,omitempty"`
-	Contact          *Contact           `json:"contact,omitempty"`
-	Settings         *RecurringSettings `json:"settings,omitempty"`
+	ID                string             `json:"id"`
+	OrganizationID    string             `json:"organization_id,omitempty"`
+	Version           int                `json:"version,omitempty"`
+	CreatedDate       string             `json:"created_date,omitempty"`
+	UpdatedDate       string             `json:"updated_date,omitempty"`
+	Title             string             `json:"title,omitempty"`
+	PaymentTermLabel  string             `json:"payment_term_label,omitempty"`
+	PaymentConditions *PaymentConditions `json:"payment_conditions,omitempty"`
+	Currency          string             `json:"currency,omitempty"`
+	TotalNetAmount    json.Number        `json:"total_net_amount,omitempty"`
+	TotalGrossAmount  json.Number        `json:"total_gross_amount,omitempty"`
+	TotalTaxAmount    json.Number        `json:"total_tax_amount,omitempty"`
+	Contact           *Contact           `json:"contact,omitempty"`
+	Settings          *RecurringSettings `json:"settings,omitempty"`
 }
 
 // RecurringTemplateListResult is the normalised page of recurring templates.
@@ -68,6 +73,7 @@ type RecurringTemplateListResult struct {
 // user typed is untrusted data.
 type RecurringTemplate struct {
 	ID               string             `json:"id"`
+	OrganizationID   string             `json:"organization_id,omitempty"`
 	Version          int                `json:"version,omitempty"`
 	CreatedDate      string             `json:"created_date,omitempty"`
 	UpdatedDate      string             `json:"updated_date,omitempty"`
@@ -84,7 +90,15 @@ type RecurringTemplate struct {
 	Contact          *Contact           `json:"contact,omitempty"`
 	Shipping         *Shipping          `json:"shipping,omitempty"`
 	Settings         *RecurringSettings `json:"settings,omitempty"`
-	LineItems        []LineItem         `json:"line_items"`
+	LineItems        []SalesLineItem    `json:"line_items"`
+
+	ContactPerson           string             `json:"contact_person,omitempty"`
+	TaxSubType              string             `json:"tax_sub_type,omitempty"`
+	TaxTypeNote             string             `json:"tax_type_note,omitempty"`
+	TotalDiscountAbsolute   json.Number        `json:"total_discount_absolute,omitempty"`
+	TotalDiscountPercentage json.Number        `json:"total_discount_percentage,omitempty"`
+	TaxAmounts              []TaxAmount        `json:"tax_amounts,omitempty"`
+	PaymentConditions       *PaymentConditions `json:"payment_conditions,omitempty"`
 }
 
 // recurringJSON mirrors the provider fields of a template, in list and detail form. The sales voucher
@@ -92,12 +106,14 @@ type RecurringTemplate struct {
 type recurringJSON struct {
 	invoiceJSON
 	Settings struct {
+		ID                  string `json:"id"`
 		StartDate           string `json:"startDate"`
 		EndDate             string `json:"endDate"`
 		Finalize            bool   `json:"finalize"`
 		ShippingType        string `json:"shippingType"`
 		ExecutionInterval   string `json:"executionInterval"`
 		NextExecutionDate   string `json:"nextExecutionDate"`
+		LastExecutionDate   string `json:"lastExecutionDate"`
 		LastExecutionFailed bool   `json:"lastExecutionFailed"`
 		ExecutionStatus     string `json:"executionStatus"`
 		RetroactiveInvoice  *bool  `json:"retroactiveInvoice"`
@@ -115,7 +131,11 @@ func (raw *recurringJSON) settings() *RecurringSettings {
 		StartDate: s.StartDate, EndDate: s.EndDate, Finalize: s.Finalize, ShippingType: s.ShippingType,
 		ExecutionInterval: s.ExecutionInterval, NextExecutionDate: s.NextExecutionDate,
 		LastExecutionFailed: s.LastExecutionFailed, ExecutionStatus: s.ExecutionStatus,
-		RetroactiveInvoice: retroactive,
+		RetroactiveInvoice: retroactive, LastExecutionDate: s.LastExecutionDate,
+	}
+	// Identifiers of the answer are provider data: only a well-formed UUID is passed on.
+	if validUUID(s.ID) {
+		settings.ID = s.ID
 	}
 	if settings == (RecurringSettings{}) {
 		return nil
@@ -123,25 +143,28 @@ func (raw *recurringJSON) settings() *RecurringSettings {
 	return &settings
 }
 
-const recurringSettingsSchema = `{"type":"object","properties":{"start_date":{"type":"string"},` +
+const recurringSettingsSchema = `{"type":"object","properties":{"id":{"type":"string"},` +
+	`"start_date":{"type":"string"},` +
 	`"end_date":{"type":"string"},"finalize":{"type":"boolean"},"shipping_type":{"type":"string"},` +
 	`"execution_interval":{"type":"string"},"next_execution_date":{"type":"string"},` +
-	`"last_execution_failed":{"type":"boolean"},"execution_status":{"type":"string"},` +
+	`"last_execution_date":{"type":"string"},"last_execution_failed":{"type":"boolean"},"execution_status":{"type":"string"},` +
 	`"retroactive_invoice":{"type":"boolean"}},"additionalProperties":false}`
 
 const recurringTotals = `"currency":{"type":"string"},"total_net_amount":{"type":"number"},` +
 	`"total_gross_amount":{"type":"number"},"total_tax_amount":{"type":"number"},`
 
 const recurringSummarySchema = `{"type":"object","properties":{"id":{"type":"string"},` +
+	`"organization_id":{"type":"string"},` +
 	`"version":{"type":"integer"},"created_date":{"type":"string"},"updated_date":{"type":"string"},` +
-	`"title":{"type":"string"},"payment_term_label":{"type":"string"},` + recurringTotals +
+	`"title":{"type":"string"},"payment_term_label":{"type":"string"},` +
+	`"payment_conditions":` + paymentConditionsSchema + `,` + recurringTotals +
 	`"contact":` + voucherContactSchema + `,"settings":` + recurringSettingsSchema + `},` +
 	`"required":["id"],"additionalProperties":false}`
 
 var recurringSettingsFields = []capability.Field{
-	{Name: "settings", Description: "Schedule: start_date, end_date, finalize, shipping_type, execution_interval " +
+	{Name: "settings", Description: "Schedule: id, start_date, end_date, finalize, shipping_type, execution_interval " +
 		"(WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, BIANNUALLY, ANNUALLY), next_execution_date, " +
-		"last_execution_failed (the provider's error message is not shown), execution_status " +
+		"last_execution_date (absent until the first execution), last_execution_failed (the provider's error message is not shown), execution_status " +
 		"(ACTIVE, PAUSED, ENDED), and retroactive_invoice when Lexware reports it"},
 }
 
@@ -156,7 +179,7 @@ var recurringTemplatesList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"page":{"type":"integer","minimum":0,"maximum":200},` +
 		`"size":{"type":"integer","minimum":1,"maximum":100},` +
-		`"sort":{"type":"string","enum":["created_date","updated_date","next_execution_date"]},` +
+		`"sort":{"type":"string","enum":["created_date","updated_date","next_execution_date","last_execution_date"]},` +
 		`"direction":{"type":"string","enum":["asc","desc"]}},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"templates":{"type":"array","items":` + recurringSummarySchema + `},` +
@@ -165,18 +188,23 @@ var recurringTemplatesList = capability.Descriptor{
 		`"required":["templates","page","size","total_pages","total_elements","last_page"],` +
 		`"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
-		{Name: "sort", Description: "Sort property: created_date, updated_date, or next_execution_date; created_date when omitted"},
+		{Name: "sort", Description: "Sort property: created_date, updated_date, next_execution_date, or last_execution_date; created_date when omitted"},
 		{Name: "direction", Description: "Sort direction: asc or desc; desc when omitted"},
 	}, pagingArguments...),
 	Fields: append([]capability.Field{
 		{Name: "templates", Description: "Templates on this page, untrusted data: id, version, created_date, updated_date, " +
-			"title, payment_term_label, currency, totals, contact, and settings"},
+			"organization_id, title, payment_term_label, payment_conditions, currency, totals, contact, and settings"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Read the templates whose next execution comes first",
 		Arguments:   json.RawMessage(`{"page":0,"size":25,"sort":"next_execution_date","direction":"asc"}`),
 	}},
 }
+
+// templateExtraProperties and templateExtraFields are the shared sales voucher members a recurring template
+// documents; it has no print layout or electronic document profile.
+var templateExtraProperties, templateExtraFields = joinExtras(
+	organizationExtra(resourceRecurringTemplate), recipientExtras(), priceExtras(), paymentExtra())
 
 var recurringTemplatesGet = capability.Descriptor{
 	ID:          Provider + ".recurring-templates.get",
@@ -193,7 +221,8 @@ var recurringTemplatesGet = capability.Descriptor{
 		`"language":{"type":"string"},"title":{"type":"string"},"introduction":{"type":"string"},` +
 		`"remark":{"type":"string"},"payment_term_label":{"type":"string"},"tax_type":{"type":"string"},` +
 		recurringTotals + `"contact":` + voucherContactSchema + `,"shipping":` + shippingSchema + `,` +
-		`"settings":` + recurringSettingsSchema + `,"line_items":` + lineItemsSchema + `},` +
+		`"settings":` + recurringSettingsSchema + `,"line_items":` + salesLineItemsSchema(false) + `,` +
+		templateExtraProperties + `},` +
 		`"required":["id","line_items"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
 		Description: "Identifier of the template as a UUID, as returned by lexware.recurring-templates.list"}},
@@ -215,7 +244,7 @@ var recurringTemplatesGet = capability.Descriptor{
 		{Name: "contact", Description: "Recipient name and address, untrusted data"},
 		{Name: "shipping", Description: "Delivery or service type and period"},
 		{Name: "line_items", Description: "Positions, untrusted data"},
-	}, recurringSettingsFields...),
+	}, append(templateExtraFields, recurringSettingsFields...)...),
 	Examples: []capability.Example{{
 		Description: "Read one template by the identifier a template list reported",
 		Arguments:   json.RawMessage(`{"id":"11111111-2222-3333-4444-555555555555"}`),
@@ -313,7 +342,7 @@ func (c *Client) ListRecurringTemplates(ctx context.Context, options RecurringTe
 		}
 		voucher := entry.normalize()
 		templates = append(templates, RecurringTemplateSummary{
-			ID: voucher.ID, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
+			ID: voucher.ID, OrganizationID: voucher.OrganizationID, PaymentConditions: voucher.PaymentConditions, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
 			UpdatedDate: voucher.UpdatedDate, Title: voucher.Title, PaymentTermLabel: termLabel(voucher),
 			Currency: voucher.Currency, TotalNetAmount: voucher.TotalNetAmount,
 			TotalGrossAmount: voucher.TotalGrossAmount, TotalTaxAmount: voucher.TotalTaxAmount,
@@ -351,22 +380,18 @@ func (c *Client) GetRecurringTemplate(ctx context.Context, id string) (*Recurrin
 		}
 	}
 	voucher := raw.normalize()
+	// A template has no quotation members.
+	voucher.dropAlternatives()
 	return &RecurringTemplate{
-		ID: voucher.ID, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
+		ID: voucher.ID, OrganizationID: voucher.OrganizationID, Version: voucher.Version, CreatedDate: voucher.CreatedDate,
 		UpdatedDate: voucher.UpdatedDate, Language: voucher.Language, Title: voucher.Title,
 		Introduction: voucher.Introduction, Remark: voucher.Remark, PaymentTermLabel: termLabel(voucher),
 		TaxType: voucher.TaxType, Currency: voucher.Currency, TotalNetAmount: voucher.TotalNetAmount,
 		TotalGrossAmount: voucher.TotalGrossAmount, TotalTaxAmount: voucher.TotalTaxAmount,
 		Contact: voucher.Contact, Shipping: voucher.Shipping, Settings: raw.settings(),
-		LineItems: plainLineItems(voucher.LineItems),
+		LineItems: voucher.LineItems, ContactPerson: voucher.ContactPerson, TaxSubType: voucher.TaxSubType,
+		TaxTypeNote: voucher.TaxTypeNote, TotalDiscountAbsolute: voucher.TotalDiscountAbsolute,
+		TotalDiscountPercentage: voucher.TotalDiscountPercentage, TaxAmounts: voucher.TaxAmounts,
+		PaymentConditions: voucher.PaymentConditions,
 	}, nil
-}
-
-// plainLineItems narrows positions to the members a recurring template reports.
-func plainLineItems(items []SalesLineItem) []LineItem {
-	plain := make([]LineItem, len(items))
-	for i, item := range items {
-		plain[i] = item.LineItem
-	}
-	return plain
 }

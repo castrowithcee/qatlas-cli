@@ -32,9 +32,11 @@ electronic document profile; a delivery note carries no prices. An invoice also 
 its claimed gross amount and the down payments it deducts, the buyer reference of an XRechnung and the recurring
 template it stems from. A quotation marks optional and alternative positions. A dunning names the invoice it
 refers to; a down payment invoice names its closing invoice once one exists. Templates for recurring invoices
-are listed page by page, sorted by one of a few fixed properties, and read by identifier, with interval, next
-execution, execution status and whether the last execution failed; the provider's error text of a failed
-execution is never shown.
+are listed page by page, sorted by one of a few fixed properties, and read by identifier. The list summarizes
+each template with its payment conditions and schedule; the detail tool also returns positions, discounts, tax
+per rate, tax conditions and the recipient's contact person, so future revenue and tax per rate can be planned.
+The schedule reports interval, next and last execution, execution status and whether the last execution failed;
+the provider's error text of a failed execution is never shown.
 
 `lexware.documents.download` writes the final document of a finalized sales voucher and
 `lexware.files.download` the original file of a bookkeeping voucher to `local_path`. Both are offered only to a
