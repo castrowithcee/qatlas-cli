@@ -3,7 +3,6 @@ package twentycrm
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
@@ -173,8 +172,8 @@ func TestCatalogWithoutTargetsHoldsEveryNonSystemObject(t *testing.T) {
 			t.Errorf("payload = %+v", field)
 		}
 	}
-	if strings.Contains(fmt.Sprintf("%+v", cat.reachable(scope{})), descriptionCanary) {
-		t.Error("a description reached the catalog")
+	if f := fields["riskScore"]; f.Description != descriptionCanary || !reflect.DeepEqual(f.OutEnum, []string{enumCanary}) {
+		t.Errorf("riskScore = %+v", f)
 	}
 }
 
