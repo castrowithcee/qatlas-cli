@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -24,6 +27,7 @@ const (
 	maxRowConditions   = 10
 	maxRowStringLength = 1024
 	maxRowKeyLength    = 128
+	maxRowSearchLength = 256
 )
 
 // rowOperators are the filter conditions of the Public API's specification.
@@ -46,7 +50,18 @@ const rowFilterDescription = "Structured filter: {type: and|or (default and), co
 	"value}]}, 1 to 10 conditions; column must be a column of the table, operator one of eq, neq, like, " +
 	"ilike, gt, gte, lt, lte, value a string, number, or boolean matching the column type"
 
-var rowFilterArgument = capability.Argument{Name: "filter", Description: rowFilterDescription}
+// rowReadFilterDescription adds what only the listing accepts: the system columns every row carries.
+const rowReadFilterDescription = "Structured filter: {type: and|or (default and), conditions: [{column, operator, " +
+	"value}]}, 1 to 10 conditions; column must be a column of the table or a system column: id (an integer) or " +
+	"createdAt or updatedAt (RFC 3339 time), which take eq, neq, gt, gte, lt, or lte only; operator one of eq, " +
+	"neq, like, ilike, gt, gte, lt, lte, value a string, number, or boolean matching the column type"
+
+var rowFilterArgument = capability.Argument{Name: "filter", Description: rowReadFilterDescription}
+
+// rowSortSchema is the order of the listing: a column of the table or a system column, and a direction.
+var rowSortSchema = `{"type":"object","properties":{"column":{"type":"string","minLength":1,"maxLength":` +
+	strconv.Itoa(maxDataColumnNameLength) + `},"direction":{"type":"string","enum":["asc","desc"]}},` +
+	`"required":["column","direction"],"additionalProperties":false}`
 
 var rowFilterRequiredArgument = capability.Argument{Name: "filter", Required: true,
 	Description: rowFilterDescription + "; required, there is no way to match all rows"}
@@ -61,7 +76,8 @@ var dataRowsList = capability.Descriptor{
 		"allow-list",
 	Tags: []string{"n8n", "datarows", "list", "automation"}, Risk: dataTableReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"data_table_id":` + targetIDSchema + `,` +
-		`"filter":` + rowFilterSchema + `,` +
+		`"filter":` + rowFilterSchema + `,"sort_by":` + rowSortSchema + `,` +
+		`"search":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxRowSearchLength) + `},` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxRowListLimit) + `}},` +
 		`"required":["data_table_id"],"additionalProperties":false}`),
@@ -70,7 +86,12 @@ var dataRowsList = capability.Descriptor{
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["rows","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{dataTableIDArgument, rowFilterArgument,
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page"},
+		{Name: "sort_by", Description: "Order of the rows: {column, direction asc|desc}; column is a column of " +
+			"the table or a system column (id, createdAt, updatedAt)"},
+		{Name: "search", Description: "Text searched in all string columns, 1 to " + strconv.Itoa(maxRowSearchLength) +
+			" characters, no control characters"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; pass the same filter, " +
+			"sort_by, and search values again"},
 		{Name: "limit", Description: "Rows per page, 1 to " + strconv.Itoa(maxRowListLimit) + "; " +
 			strconv.Itoa(defaultRowListSize) + " when omitted"}},
 	Fields: []capability.Field{
@@ -82,7 +103,11 @@ var dataRowsList = capability.Descriptor{
 	},
 	Examples: []capability.Example{{Description: "List rows whose status is active",
 		Arguments: json.RawMessage(`{"data_table_id":"abcd1234efgh5678","filter":{"conditions":` +
-			`[{"column":"status","operator":"eq","value":"active"}]}}`)}},
+			`[{"column":"status","operator":"eq","value":"active"}]}}`)},
+		{Description: "List the newest rows created since a time",
+			Arguments: json.RawMessage(`{"data_table_id":"abcd1234efgh5678","filter":{"conditions":` +
+				`[{"column":"createdAt","operator":"gte","value":"2026-01-01T00:00:00Z"}]},` +
+				`"sort_by":{"column":"createdAt","direction":"desc"}}`)}},
 }
 
 var dataRowsInsert = capability.Descriptor{
@@ -228,9 +253,16 @@ type rowFilterArguments struct {
 	Conditions []rowConditionArguments `json:"conditions"`
 }
 
+type rowSortArguments struct {
+	Column    string `json:"column"`
+	Direction string `json:"direction"`
+}
+
 type dataRowArguments struct {
 	DataTableID string              `json:"data_table_id"`
 	Filter      *rowFilterArguments `json:"filter"`
+	SortBy      *rowSortArguments   `json:"sort_by"`
+	Search      string              `json:"search"`
 	Rows        []map[string]any    `json:"rows"`
 	Data        map[string]any      `json:"data"`
 	Cursor      string              `json:"cursor"`
@@ -306,34 +338,132 @@ func checkRowFilterShape(filter *rowFilterArguments) error {
 	return nil
 }
 
-// buildRowFilter turns validated conditions into the Public API's filter object.
+// rowCondition turns one condition on a column of the table into the Public API's filter entry.
+func rowCondition(types map[string]string, c rowConditionArguments) (map[string]any, error) {
+	columnType, ok := types[c.Column]
+	if !ok {
+		return nil, invalidRequest("a column of the filter does not belong to this data table")
+	}
+	if !rowValueFits(columnType, c.Value) {
+		return nil, invalidRequest("a filter value does not match the type of its column")
+	}
+	switch c.Operator {
+	case "like", "ilike":
+		if columnType != "string" {
+			return nil, invalidRequest("like and ilike apply to string columns only")
+		}
+	case "gt", "gte", "lt", "lte":
+		if columnType != "number" && columnType != "date" {
+			return nil, invalidRequest("gt, gte, lt, and lte apply to number and date columns only")
+		}
+	}
+	return map[string]any{"columnName": c.Column, "condition": c.Operator, "value": c.Value}, nil
+}
+
+// buildRowFilter turns validated conditions into the Public API's filter object. It knows the columns of the
+// table only, so the changing tools never address a system column.
 func buildRowFilter(types map[string]string, filter *rowFilterArguments) (map[string]any, error) {
+	return buildFilter(filter, func(c rowConditionArguments) (map[string]any, error) {
+		return rowCondition(types, c)
+	})
+}
+
+// buildRowReadFilter is buildRowFilter for the listing, which also filters by the system columns.
+func buildRowReadFilter(types map[string]string, filter *rowFilterArguments) (map[string]any, error) {
+	return buildFilter(filter, func(c rowConditionArguments) (map[string]any, error) {
+		if isRowSystemColumn(c.Column) {
+			return systemRowCondition(c)
+		}
+		return rowCondition(types, c)
+	})
+}
+
+func buildFilter(filter *rowFilterArguments, condition func(rowConditionArguments) (map[string]any, error)) (map[string]any, error) {
 	kind := filter.Type
 	if kind == "" {
 		kind = "and"
 	}
 	filters := make([]map[string]any, 0, len(filter.Conditions))
 	for _, c := range filter.Conditions {
-		columnType, ok := types[c.Column]
-		if !ok {
-			return nil, invalidRequest("a column of the filter does not belong to this data table")
+		entry, err := condition(c)
+		if err != nil {
+			return nil, err
 		}
-		if !rowValueFits(columnType, c.Value) {
-			return nil, invalidRequest("a filter value does not match the type of its column")
-		}
-		switch c.Operator {
-		case "like", "ilike":
-			if columnType != "string" {
-				return nil, invalidRequest("like and ilike apply to string columns only")
-			}
-		case "gt", "gte", "lt", "lte":
-			if columnType != "number" && columnType != "date" {
-				return nil, invalidRequest("gt, gte, lt, and lte apply to number and date columns only")
-			}
-		}
-		filters = append(filters, map[string]any{"columnName": c.Column, "condition": c.Operator, "value": c.Value})
+		filters = append(filters, entry)
 	}
 	return map[string]any{"type": kind, "filters": filters}, nil
+}
+
+// rowSystemColumns are the columns n8n adds to every row. Only the listing accepts them.
+var rowSystemColumns = []string{"id", "createdAt", "updatedAt"}
+
+// rowSystemOperators are the conditions a system column takes: comparisons, no pattern matching.
+var rowSystemOperators = []string{"eq", "neq", "gt", "gte", "lt", "lte"}
+
+func isRowSystemColumn(name string) bool { return slices.Contains(rowSystemColumns, name) }
+
+// systemRowCondition checks one condition on a system column: id takes an integer, createdAt and updatedAt
+// an RFC 3339 time.
+func systemRowCondition(c rowConditionArguments) (map[string]any, error) {
+	if !slices.Contains(rowSystemOperators, c.Operator) {
+		return nil, invalidRequest("a system column takes eq, neq, gt, gte, lt, or lte only")
+	}
+	if c.Column == "id" {
+		number, ok := c.Value.(json.Number)
+		if !ok {
+			return nil, invalidRequest("id takes an integer value")
+		}
+		if _, err := strconv.ParseInt(number.String(), 10, 64); err != nil {
+			return nil, invalidRequest("id takes an integer value")
+		}
+	} else {
+		text, ok := c.Value.(string)
+		if !ok {
+			return nil, invalidRequest(c.Column + " takes an RFC 3339 time value")
+		}
+		if _, err := time.Parse(time.RFC3339, text); err != nil {
+			return nil, invalidRequest(c.Column + " takes an RFC 3339 time value")
+		}
+	}
+	return map[string]any{"columnName": c.Column, "condition": c.Operator, "value": c.Value}, nil
+}
+
+// checkRowReadFilterShape is checkRowFilterShape for the listing: system column conditions are checked too.
+func checkRowReadFilterShape(filter *rowFilterArguments) error {
+	if err := checkRowFilterShape(filter); err != nil {
+		return err
+	}
+	for _, c := range filter.Conditions {
+		if isRowSystemColumn(c.Column) {
+			if _, err := systemRowCondition(c); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// checkRowListOrder checks the listing's search text and sort direction before any request.
+func checkRowListOrder(input dataRowArguments) error {
+	if input.Search != "" {
+		if utf8.RuneCountInString(input.Search) > maxRowSearchLength {
+			return invalidRequest("search is longer than " + strconv.Itoa(maxRowSearchLength) + " characters")
+		}
+		for _, r := range input.Search {
+			if unicode.IsControl(r) {
+				return invalidRequest("search must not contain control characters")
+			}
+		}
+	}
+	if sort := input.SortBy; sort != nil {
+		if sort.Direction != "asc" && sort.Direction != "desc" {
+			return invalidRequest("sort_by direction must be asc or desc")
+		}
+		if sort.Column == "" || len(sort.Column) > maxDataColumnNameLength {
+			return invalidRequest("sort_by column must be 1 to " + strconv.Itoa(maxDataColumnNameLength) + " characters")
+		}
+	}
+	return nil
 }
 
 func rowsPath(tableID string) string {
@@ -380,8 +510,11 @@ func invokeDataRowsList(ctx context.Context, resolved *config.Resolved, secrets 
 		if input.Limit < 0 || input.Limit > maxRowListLimit {
 			return invalidRequest("limit must be 1 to " + strconv.Itoa(maxRowListLimit))
 		}
+		if err := checkRowListOrder(input); err != nil {
+			return err
+		}
 		if input.Filter != nil {
-			return checkRowFilterShape(input.Filter)
+			return checkRowReadFilterShape(input.Filter)
 		}
 		return nil
 	})
@@ -396,8 +529,17 @@ func invokeDataRowsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if input.Cursor != "" {
 		query.Set("cursor", input.Cursor)
 	}
+	if input.Search != "" {
+		query.Set("search", input.Search)
+	}
+	if sort := input.SortBy; sort != nil {
+		if _, known := columnTypes(table)[sort.Column]; !known && !isRowSystemColumn(sort.Column) {
+			return nil, invalidRequest("the sort column does not belong to this data table")
+		}
+		query.Set("sortBy", sort.Column+":"+sort.Direction)
+	}
 	if input.Filter != nil {
-		filter, err := buildRowFilter(columnTypes(table), input.Filter)
+		filter, err := buildRowReadFilter(columnTypes(table), input.Filter)
 		if err != nil {
 			return nil, err
 		}
