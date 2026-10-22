@@ -125,13 +125,13 @@ type contentTool struct {
 func contentTools() []contentTool {
 	ctx := context.Background()
 	return []contentTool{
-		{pagesList, func(c *Client) (any, error) { return rowsJSON(c.ListPages(ctx, listTarget{}, 0, 0)) }},
+		{pagesList, func(c *Client) (any, error) { return rowsJSON(c.ListPages(ctx, listTarget{}, 0, 0, listQuery{})) }},
 		{pagesGet, func(c *Client) (any, error) { return objectJSON(c.GetPage(ctx, "306")) }},
-		{booksList, func(c *Client) (any, error) { return rowsJSON(c.ListBooks(ctx, 0, 0)) }},
+		{booksList, func(c *Client) (any, error) { return rowsJSON(c.ListBooks(ctx, 0, 0, listQuery{})) }},
 		{booksGet, func(c *Client) (any, error) { return objectJSON(c.GetBook(ctx, 16)) }},
-		{chaptersList, func(c *Client) (any, error) { return rowsJSON(c.ListChapters(ctx, 0, 0, 0)) }},
+		{chaptersList, func(c *Client) (any, error) { return rowsJSON(c.ListChapters(ctx, 0, 0, 0, listQuery{})) }},
 		{chaptersGet, func(c *Client) (any, error) { return objectJSON(c.GetChapter(ctx, 1)) }},
-		{shelvesList, func(c *Client) (any, error) { return rowsJSON(c.ListShelves(ctx, 0, 0)) }},
+		{shelvesList, func(c *Client) (any, error) { return rowsJSON(c.ListShelves(ctx, 0, 0, listQuery{})) }},
 		{shelvesGet, func(c *Client) (any, error) { return objectJSON(c.GetShelf(ctx, 14)) }},
 		{imagesList, func(c *Client) (any, error) { return rowsJSON(c.ListImages(ctx, 0, "", 0, 0)) }},
 		{imagesGet, func(c *Client) (any, error) { return objectJSON(c.GetImage(ctx, 618)) }},
@@ -358,7 +358,7 @@ func TestShelfAndImageReadsShowEveryDocumentedField(t *testing.T) {
 		}
 	}
 
-	list, err := rowsJSON(c.ListShelves(context.Background(), 0, 0))
+	list, err := rowsJSON(c.ListShelves(context.Background(), 0, 0, listQuery{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +435,7 @@ func TestRowsWithoutTheNewMembersStayAsTheyWere(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[{"id":1,"book_id":2,"chapter_id":0,"name":"n","slug":"s"}],"total":1}`))
 	}))
 	defer server.Close()
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 0, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,13 +453,13 @@ func TestBookSlugFollowsTheBindingOfTheBook(t *testing.T) {
 	ctx := context.Background()
 	slugOf := func(targets ...string) (pages, chapters, chapter any) {
 		c := boundClient(t, server.URL, targets...)
-		list, err := c.ListPages(ctx, listTarget{ChapterID: 1}, 0, 0)
+		list, err := c.ListPages(ctx, listTarget{ChapterID: 1}, 0, 0, listQuery{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		pages = list.Rows[0]["book_slug"]
 		if len(c.scope.chapters) == 0 {
-			chapterList, err := c.ListChapters(ctx, 1, 0, 0)
+			chapterList, err := c.ListChapters(ctx, 1, 0, 0, listQuery{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -493,7 +493,7 @@ func TestBookSlugFollowsTheBindingOfTheBook(t *testing.T) {
 
 	// A page target reaches a page, never its book: the row keeps book_id only.
 	c := boundClient(t, server.URL, "page/1")
-	list, err := c.ListPages(ctx, listTarget{pagesOnly: true}, 0, 0)
+	list, err := c.ListPages(ctx, listTarget{pagesOnly: true}, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
