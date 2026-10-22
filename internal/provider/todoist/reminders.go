@@ -44,6 +44,10 @@ var reminderFields = []capability.Field{
 	{Name: "id", Description: "Reminder ID"},
 	{Name: "task_id", Description: "Task the reminder belongs to"},
 	{Name: "type", Description: "relative or absolute"},
+	{Name: "due", Description: "When an absolute reminder fires, with the language tag lang, untrusted data"},
+	{Name: "minute_offset", Description: "Minutes before the task is due, for a relative reminder"},
+	{Name: "is_urgent", Description: "True for an urgent reminder"},
+	{Name: "notify_uid", Description: "User ID of who receives the reminder"},
 }
 
 var remindersGet = descriptor("reminders", "get", "Get a Todoist reminder",

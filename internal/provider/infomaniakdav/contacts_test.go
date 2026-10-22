@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 )
 
 const mainPath = bookHome + "main/"
@@ -46,7 +47,7 @@ func getContactOf(args string) (any, error) {
 	return invokeContactsGet(context.Background(), resolved("addressbook/main"), resolver(nil), nil, json.RawMessage(args))
 }
 
-func TestContactsListReportsCompactSortedContacts(t *testing.T) {
+func TestContactsListReportsSortedContacts(t *testing.T) {
 	report := multistatus(
 		contactEntry(mainPath+"b.vcf", "e2", vcardOf("UID:u-b", "FN:Zed", "EMAIL;TYPE=work:zed@example.org", "NOTE:private")),
 		contactEntry(mainPath+"bad.vcf", "e3", "not a vcard"),
@@ -63,7 +64,7 @@ func TestContactsListReportsCompactSortedContacts(t *testing.T) {
 	}
 	a, b := page.Contacts[0], page.Contacts[1]
 	if a.Name != "Ada" || a.UID != "u-a" || a.Email != "ada@example.org" || a.Organization != "Analytical, Engine" ||
-		a.ETag != "e1" || a.Emails != nil || a.StructuredName != nil || b.Note != "" {
+		a.ETag != "e1" || len(a.Emails) != 2 || a.StructuredName == nil || b.Note != "private" {
 		t.Errorf("a = %+v, b = %+v", a, b)
 	}
 	last := (*calls)[len(*calls)-1]
@@ -179,5 +180,96 @@ func TestContactsErrorsCarryNoProviderText(t *testing.T) {
 	_, err := getContactOf(`{"addressbook":"main","id":"a.vcf"}`)
 	if classOf(err) != provider.ClassInvalidResponse || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("invalid card = %v", err)
+	}
+}
+
+func TestContactsListWithoutNewArgumentsKeepsBody(t *testing.T) {
+	calls := serve(t, contactsFake(t, multistatus(), nil))
+	if _, err := listContactsOf(`{"addressbook":"main"}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := lastReport(calls).body; got != dav.AddressbookQueryBody {
+		t.Errorf("body = %s", got)
+	}
+}
+
+func TestContactsListSendsFiltersEscaped(t *testing.T) {
+	calls := serve(t, contactsFake(t, multistatus(), nil))
+	args := `{"addressbook":"main","test":"allof","property_filters":[` +
+		`{"property":"FN","text":"R&D <x>","match_type":"ends-with","negate":true,"collation":"i;octet"},` +
+		`{"property":"TEL","parameter":{"name":"TYPE","text":"work"}},` +
+		`{"property":"NOTE","defined":false}]}`
+	if _, err := listContactsOf(args); err != nil {
+		t.Fatal(err)
+	}
+	body := lastReport(calls).body
+	for _, want := range []string{
+		`<card:filter test="allof">`,
+		`<card:text-match collation="i;octet" match-type="ends-with" negate-condition="yes">R&amp;D &lt;x&gt;</card:text-match>`,
+		`<card:param-filter name="TYPE"><card:text-match>work</card:text-match></card:param-filter>`,
+		`<card:prop-filter name="NOTE"><card:is-not-defined/></card:prop-filter>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %s: %s", want, body)
+		}
+	}
+}
+
+func TestContactsListFilterRefusalsBeforeAnyIO(t *testing.T) {
+	calls := serve(t, contactsFake(t, multistatus(), nil))
+	long := strings.Repeat("a", 257)
+	var nine []string
+	for i := 0; i < 9; i++ {
+		nine = append(nine, `{"property":"FN","text":"a"}`)
+	}
+	for name, filters := range map[string]string{
+		"unknown property":  `"property_filters":[{"property":"X-FOO","text":"a"}]`,
+		"unknown parameter": `"property_filters":[{"property":"TEL","parameter":{"name":"X","text":"a"}}]`,
+		"unknown collation": `"property_filters":[{"property":"FN","text":"a","collation":"i;foo"}]`,
+		"unknown match":     `"property_filters":[{"property":"FN","text":"a","match_type":"regex"}]`,
+		"text too long":     `"property_filters":[{"property":"FN","text":"` + long + `"}]`,
+		"empty text":        `"property_filters":[{"property":"FN","text":""}]`,
+		"nine entries":      `"property_filters":[` + strings.Join(nine, ",") + `]`,
+		"two conditions":    `"property_filters":[{"property":"FN","text":"a","defined":false}]`,
+		"defined true":      `"property_filters":[{"property":"FN","defined":true}]`,
+		"unknown test":      `"property_filters":[{"property":"FN","text":"a"}],"test":"none"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			// A nil secret resolver proves the check precedes any secret access.
+			_, err := invokeContactsList(context.Background(), resolved("addressbook/main"), nil, nil,
+				json.RawMessage(`{"addressbook":"main",`+filters+`}`))
+			if err == nil {
+				t.Error("want refusal")
+			}
+		})
+	}
+	if len(*calls) != 0 {
+		t.Errorf("requests = %v, want none", *calls)
+	}
+}
+
+func TestContactsListCollationRefusalIsRequestError(t *testing.T) {
+	serve(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method == "REPORT" {
+			return xmlResponse(403, bodyCanary), nil
+		}
+		return davFake(t)(r)
+	})
+	_, err := listContactsOf(`{"addressbook":"main","property_filters":[{"property":"FN","text":"a","collation":"i;octet"}]}`)
+	if classOf(err) != provider.ClassProviderError || strings.Contains(err.Error(), "canary") {
+		t.Errorf("err = %v", err)
+	}
+	_, err = listContactsOf(`{"addressbook":"main"}`)
+	if classOf(err) != provider.ClassPermission {
+		t.Errorf("without collation err = %v, want permission", err)
+	}
+}
+
+func TestContactsGetRefusesFilterArguments(t *testing.T) {
+	calls := serve(t, davFake(t))
+	_, err := invokeContactsGet(context.Background(), resolved("addressbook/main"), nil, nil,
+		json.RawMessage(`{"addressbook":"main","id":"a.vcf","test":"allof"}`))
+	if err == nil || len(*calls) != 0 {
+		t.Errorf("err = %v, calls = %v", err, *calls)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -52,29 +53,29 @@ var contactFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the contact resource, the id argument of the get tool"},
 	{Name: "uid", Description: "vCard UID, untrusted data"},
 	{Name: "name", Description: "Formatted name (FN), untrusted personal data; built from the structured name if absent"},
-	{Name: "email", Description: "First e-mail address, untrusted personal data; only the list tool reports it"},
+	{Name: "email", Description: "First e-mail address, untrusted personal data"},
 	{Name: "organization", Description: "Organization, untrusted data"},
-	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix; only the get tool reports it"},
-	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "title", Description: "Job title; only the get tool reports it"},
-	{Name: "birthday", Description: "Birthday as the card states it; only the get tool reports it"},
-	{Name: "note", Description: "Note, untrusted data; only the get tool reports it"},
-	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed; only the get tool reports them"},
-	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
+	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix"},
+	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref"},
+	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref"},
+	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref"},
+	{Name: "title", Description: "Job title"},
+	{Name: "birthday", Description: "Birthday as the card states it"},
+	{Name: "note", Description: "Note, untrusted data"},
+	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed"},
+	{Name: "truncated", Description: "Names of the members that were cut at their cap"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}, dav.ContactFullFields...)
+}, bothTools(dav.ContactFullFields)...)
 
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.list", Version: 1, Title: "List Infomaniak contacts",
 	Description: "List the contacts of one allow-listed address book, ordered by name; the result is limited " +
-		"and compact, and a card that is not a valid vCard is left out",
+		"and reports the same members as the get tool, and a card that is not a valid vCard is left out",
 	Tags: []string{"infomaniak", "dav", "contacts", "contact", "list"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["addressbook"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
+		`"required":["addressbook"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"addressbook":{"type":"string"},` +
 		`"contacts":{"type":"array","items":` + contactSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["addressbook","contacts","count"],` +
@@ -82,6 +83,10 @@ var contactsList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "addressbook", Description: "ID of an allow-listed address book, the ID of its addressbook/ID target", Required: true},
 		{Name: "limit", Description: "Maximum number of contacts, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on contact properties; each names a property and " +
+			"exactly one of text (1 to 256 bytes, optionally match_type, negate, and collation) or defined false, and " +
+			"optionally a parameter with the same condition form"},
+		{Name: "test", Description: "anyof (default) or allof: whether any or all of the property_filters must match"},
 	},
 	Fields: contactFields,
 	Examples: []capability.Example{{
@@ -129,6 +134,9 @@ type contactArguments struct {
 	Addressbook string `json:"addressbook"`
 	Limit       int    `json:"limit"`
 	ID          string `json:"id"`
+
+	PropertyFilters []dav.ContactPropertyFilter `json:"property_filters"`
+	Test            string                      `json:"test"`
 }
 
 // allowedAddressbook checks the address book argument against the allow-list before any secret or request.
@@ -171,11 +179,16 @@ func invokeContactsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if limit < 0 || limit > maxContactLimit {
 		return nil, providerError(op, "limit must be between 1 and 200")
 	}
+	filter := dav.ContactFilter{Properties: input.PropertyFilters, Test: input.Test}
+	body, err := dav.ContactQueryBody(op, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.listContacts(ctx, input.Addressbook, limit)
+	return client.listContacts(ctx, input.Addressbook, body, filter, limit)
 }
 
 func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -187,6 +200,9 @@ func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	if err := allowedAddressbook(op, resolved, input.Addressbook); err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.Test != "" {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !validCollectionID(input.ID) {
 		return nil, providerError(op, "the contact id must be one literal path segment as the list tool reports it")
@@ -211,15 +227,20 @@ func (c *Client) addressbookHome(ctx context.Context, op string) ([]string, erro
 	return singleLink(op, resources, dav.PropBookHome)
 }
 
-func (c *Client) listContacts(ctx context.Context, book string, limit int) (*ContactsPage, error) {
+func (c *Client) listContacts(ctx context.Context, book, body string, filter dav.ContactFilter, limit int) (*ContactsPage, error) {
 	const op = "list contacts"
 	home, err := c.addressbookHome(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 	base := append(append([]string{}, home...), book)
-	data, _, err := c.request(ctx, op, methodReport, base, true, "1", dav.AddressbookQueryBody, 207, maxResponseBytes)
+	data, _, err := c.request(ctx, op, methodReport, base, true, "1", body, 207, maxResponseBytes)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Infomaniak rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
 	resources, err := server.ParseMultiStatus(op, data)
@@ -237,9 +258,12 @@ func (c *Client) listContacts(ctx context.Context, book string, limit int) (*Con
 			continue
 		}
 		seen[id] = true
-		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
+		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], true)
 		if err != nil {
 			continue
+		}
+		if len(contact.Emails) > 0 {
+			contact.Email = contact.Emails[0].Value
 		}
 		contact.ID = id
 		contact.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])

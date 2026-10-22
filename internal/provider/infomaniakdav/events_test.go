@@ -72,11 +72,11 @@ func TestEventsListReportsStructuredEventsInRange(t *testing.T) {
 	}
 	a, b := page.Events[0], page.Events[1]
 	if !a.AllDay || a.Start != "2026-03-02" || a.End != "2026-03-03" || a.RRule != "FREQ=DAILY;COUNT=1000" ||
-		a.ETag != "e1" || a.UID != "u-a" || a.Organizer != nil {
+		a.ETag != "e1" || a.UID != "u-a" || a.Organizer == nil {
 		t.Errorf("a = %+v", a)
 	}
 	if b.Summary != "Later, with comma" || b.Start != "2026-03-10T09:00:00" || b.Timezone != "Europe/Zurich" ||
-		b.Status != "CONFIRMED" || b.Description != "" {
+		b.Status != "CONFIRMED" || b.Description != "not in list" {
 		t.Errorf("b = %+v", b)
 	}
 	last := (*calls)[len(*calls)-1]

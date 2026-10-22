@@ -164,9 +164,10 @@ The structure changes:
 than itself with it, so it is offered only by a connection whose `tools` list names it, whatever its
 `effects`; a connection that selects by `effects` never offers it.
 
-Every tool that returns a task returns it with the same fields, whatever the list or change. Only
-`todoist.comments.list` returns comments. A comment attachment is described by file name and type, never by its
-address. Location reminders are not read.
+Every tool that returns a task returns it with the same fields, whatever the list or change. A comment
+attachment or thumbnail address is shown only as an absolute `http` or `https` address without user information
+on a host other than `todoist.com` and its subdomains; otherwise it is left out, and a thumbnail keeps its size.
+Location reminders are not read.
 
 `todoist.tasks.list`, `tasks.filter`, `tasks.get`, `completed-tasks.list`, `tasks.create`, `tasks.update`, and
 `tasks.move` carry contract version 2, because the task no longer has a comment count.
@@ -232,6 +233,9 @@ passed to Todoist; the due window (inclusive dates compared with the date part o
 The filters name tasks, never reach: `ids`, `parent_id`, and `workspace_id` widen nothing, and every returned
 task is held to the connection's targets, so a task named in `ids` that lies outside them is dropped.
 
+`todoist.projects.list` takes `workspace_id` and `folder_id`, not with `search`; `todoist.sections.list` takes
+`workspace_id`, also with `search`, not with `project_id` or on a one-project connection. They widen nothing.
+
 A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
 `todoist.tasks.filter` as `query`, and for completed tasks by `todoist.completed-tasks.list` as `query`. Their
 results are held to the connection's projects like every other list, so an expression that names another
@@ -293,8 +297,10 @@ and keeps no local copy of the account. Tasks and sections of workspace projects
 read and changed like any other project when the connection names them; the workspace project itself is not.
 
 Todoist marks `note_count` as deprecated and always answers 0, so a task has no comment count; its comments
-come from `todoist.comments.list`. `is_deleted` is not returned: Qatlas drops deleted tasks, projects, and
-sections, so the value would always be false. The parameter `public_key` of `GET /tasks/{task_id}` and
-`GET /tasks/completed/by_completion_date` is not offered: it reads tasks of publicly shared projects of others,
-outside the connection's targets. The `public_key` of a project grants access to the publicly shared project
-without a sign-in; as an access value it is not returned.
+come from `todoist.comments.list`. `is_deleted` is not returned: Qatlas drops every deleted entry, so the value
+would always be false. Attachment addresses hosted by Todoist are not returned: its documentation does not show
+that they require a sign-in, so they count as an access value, and no Todoist tool returns one. External
+addresses appear as untrusted text and are never fetched. The parameter `public_key` of `GET /tasks/{task_id}`,
+`GET /tasks/completed/by_completion_date`, `GET /sections`, `GET /sections/{section_id}`, and `GET /comments` is
+not offered: it reads publicly shared projects of others, outside the connection's targets. A project's own
+`public_key` grants access without a sign-in; as an access value it is not returned.

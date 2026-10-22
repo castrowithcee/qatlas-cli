@@ -114,18 +114,13 @@ var scenesGet = capability.Descriptor{
 	Examples:     []capability.Example{{Description: "Read one scene", Arguments: json.RawMessage(`{"scene_id":"abc123"}`)}},
 }
 
-const elementSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},` +
-	`"text":{"type":"string"},"name":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},` +
-	`"width":{"type":"number"},"height":{"type":"number"},"version":{"type":"integer"},"frame_id":{"type":"string"},` +
-	`"container_id":{"type":"string"}},"required":["id","type"],"additionalProperties":false}`
-
 var scenesContent = capability.Descriptor{
 	ID:      Provider + ".scenes.content",
 	Version: 1,
 	Title:   "Read Excalidraw+ scene content",
-	Description: "Read the elements of one scene of an allowed collection as a compact, capped view (type, " +
-		"text, name, position, size, version); with query, only elements whose text or name contains it are returned. " +
-		"Embedded images are counted, never returned; deleted elements are skipped",
+	Description: "Read the scene header and the elements of one scene of an allowed collection with all their " +
+		"documented properties, capped; with query, only elements whose text or name contains it are returned. " +
+		"Embedded file content is never returned, only its metadata; deleted elements are skipped",
 	Tags:     []string{"excalidrawplus", "scenes", "content", "search", "whiteboard"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -138,7 +133,13 @@ var scenesContent = capability.Descriptor{
 		`"scene_version":{"type":"string"},"background":{"type":"string"},` +
 		`"element_count":{"type":"integer"},"matched":{"type":"integer"},"offset":{"type":"integer"},` +
 		`"returned":{"type":"integer"},"truncated":{"type":"boolean"},"next_offset":{"type":"integer"},` +
-		`"files_count":{"type":"integer"},"elements":{"type":"array","items":` + elementSchema + `}},` +
+		`"files_count":{"type":"integer"},"type":{"type":"string"},"version":{"type":"integer"},` +
+		`"source":{"type":"string"},"locked_multi_selections":{"type":"object","additionalProperties":{"type":"boolean"}},` +
+		`"locked_multi_selections_omitted":{"type":"boolean"},` +
+		`"files_failed_to_embed":{"type":"array","items":{"type":"string"}},` +
+		`"files_failed_to_embed_omitted":{"type":"boolean"},` +
+		`"files":{"type":"array","items":` + fileSchema + `},"files_omitted":{"type":"boolean"},` +
+		`"elements":{"type":"array","items":` + elementSchema + `}},` +
 		`"required":["scene_id","element_count","matched","offset","returned","truncated","elements"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{sceneIDArgument,
@@ -148,7 +149,7 @@ var scenesContent = capability.Descriptor{
 		{Name: "limit", Description: "Elements per answer, 1 to " + strconv.Itoa(maxElementLimit) + "; " +
 			strconv.Itoa(defaultElementLimit) + " when omitted; the answer also stops at a text budget"},
 	},
-	Fields: []capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "scene_id", Description: "The scene read"},
 		{Name: "scene_version", Description: "Opaque scene version, as Excalidraw+ reports it"},
 		{Name: "background", Description: "Canvas background color"},
@@ -158,9 +159,9 @@ var scenesContent = capability.Descriptor{
 		{Name: "returned", Description: "Elements in this answer"},
 		{Name: "truncated", Description: "True when more matching elements remain; continue at next_offset"},
 		{Name: "next_offset", Description: "Offset of the next answer, present when truncated"},
-		{Name: "files_count", Description: "Embedded files of the scene, never returned"},
-		{Name: "elements", Description: "The elements; text and name are untrusted data and capped"},
-	},
+		{Name: "files_count", Description: "Embedded files of the scene; their content is never returned"},
+		{Name: "elements", Description: "The elements; text, name, and the other texts are untrusted data and capped"},
+	}, docFields(contentSceneFields)...), docFields(contentElementFields)...),
 	Examples: []capability.Example{{Description: "Find elements mentioning a term",
 		Arguments: json.RawMessage(`{"scene_id":"abc123","query":"roadmap"}`)}},
 }
@@ -398,15 +399,22 @@ type elementJSON struct {
 	Version     int64   `json:"version"`
 	FrameID     string  `json:"frameId"`
 	ContainerID string  `json:"containerId"`
+
+	elementRaw
 }
 
 type contentJSON struct {
 	SceneVersion string `json:"sceneVersion"`
 	AppState     struct {
-		ViewBackgroundColor string `json:"viewBackgroundColor"`
+		ViewBackgroundColor   string          `json:"viewBackgroundColor"`
+		LockedMultiSelections json.RawMessage `json:"lockedMultiSelections"`
 	} `json:"appState"`
-	Elements []*elementJSON             `json:"elements"`
-	Files    map[string]json.RawMessage `json:"files"`
+	Type               json.RawMessage            `json:"type"`
+	Version            json.RawMessage            `json:"version"`
+	Source             json.RawMessage            `json:"source"`
+	FilesFailedToEmbed json.RawMessage            `json:"filesFailedToEmbed"`
+	Elements           []*elementJSON             `json:"elements"`
+	Files              map[string]json.RawMessage `json:"files"`
 }
 
 // Element is the compact, capped view of one drawing element; untrusted data.
@@ -422,6 +430,8 @@ type Element struct {
 	Version     int64   `json:"version,omitempty"`
 	FrameID     string  `json:"frame_id,omitempty"`
 	ContainerID string  `json:"container_id,omitempty"`
+
+	elementDetails
 }
 
 // SceneContent is one bounded read of a scene's elements.
@@ -437,6 +447,16 @@ type SceneContent struct {
 	NextOffset   *int      `json:"next_offset,omitempty"`
 	FilesCount   int       `json:"files_count,omitempty"`
 	Elements     []Element `json:"elements"`
+
+	Type                         string          `json:"type,omitempty"`
+	Version                      number          `json:"version,omitempty"`
+	Source                       string          `json:"source,omitempty"`
+	LockedMultiSelections        map[string]bool `json:"locked_multi_selections,omitempty"`
+	LockedMultiSelectionsOmitted bool            `json:"locked_multi_selections_omitted,omitempty"`
+	FilesFailedToEmbed           []string        `json:"files_failed_to_embed,omitempty"`
+	FilesFailedToEmbedOmitted    bool            `json:"files_failed_to_embed_omitted,omitempty"`
+	Files                        []FileMeta      `json:"files,omitempty"`
+	FilesOmitted                 bool            `json:"files_omitted,omitempty"`
 }
 
 type contentArguments struct {
@@ -480,7 +500,11 @@ func (c *Client) SceneContent(ctx context.Context, input contentArguments) (*Sce
 	needle := strings.ToLower(input.Query)
 	result := &SceneContent{SceneID: input.SceneID, SceneVersion: boundedValue(content.SceneVersion),
 		Background: boundedValue(content.AppState.ViewBackgroundColor), Offset: input.Offset,
-		FilesCount: len(content.Files), Elements: []Element{}}
+		FilesCount: len(content.Files), Elements: []Element{}, Type: textOf(content.Type),
+		Version: intOf(content.Version), Source: limitedTextOf(content.Source)}
+	result.LockedMultiSelections, result.LockedMultiSelectionsOmitted = lockedSelectionsOf(content.AppState.LockedMultiSelections)
+	result.FilesFailedToEmbed, result.FilesFailedToEmbedOmitted = failedFilesOf(content.FilesFailedToEmbed)
+	result.Files, result.FilesOmitted = filesOf(content.Files)
 	budget := 0
 	for _, element := range content.Elements {
 		if element == nil || element.Type == "" || element.IsDeleted {
@@ -498,8 +522,9 @@ func (c *Client) SceneContent(ctx context.Context, input contentArguments) (*Sce
 		view := Element{ID: boundedValue(element.ID), Type: boundedValue(element.Type),
 			Text: bounded(element.Text, maxElementText), Name: bounded(element.Name, maxElementText),
 			X: element.X, Y: element.Y, Width: element.Width, Height: element.Height,
-			Version: element.Version, FrameID: boundedValue(element.FrameID), ContainerID: boundedValue(element.ContainerID)}
-		budget += len(view.Text) + len(view.Name)
+			Version: element.Version, FrameID: boundedValue(element.FrameID), ContainerID: boundedValue(element.ContainerID),
+			elementDetails: elementDetailsOf(&element.elementRaw)}
+		budget += len(view.Text) + len(view.Name) + len(view.OriginalText) + len(view.Link)
 		if len(result.Elements) >= input.Limit || budget > maxContentTextBytes {
 			result.Truncated = true
 			next := result.Matched - 1

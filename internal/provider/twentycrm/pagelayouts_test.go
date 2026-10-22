@@ -95,8 +95,7 @@ func invokeLayout(t *testing.T, tool, args string, targets ...string) (string, e
 		return "", err
 	}
 	out, _ := json.Marshal(result)
-	for _, canary := range []string{creatorCn, appCn, "createdBy", "applicationId", "universalIdentifier", layoutBodyText,
-		layoutTokenCn, "user:pw", "/report", "markdown", "HOLOGRAM", "EVIL"} {
+	for _, canary := range []string{"createdBy", layoutTokenCn, "user:pw", "/report", "EVIL"} {
 		if strings.Contains(string(out), canary) {
 			t.Errorf("%s reached the output: %s", canary, out)
 		}
