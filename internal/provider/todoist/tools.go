@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -23,14 +26,16 @@ var readRisk = capability.Risk{
 // Input schemas shared by the tools. The backslashes are doubled because the patterns are embedded in JSON
 // schema strings.
 const (
-	idSchema      = `{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9]+$"}`
-	limitSchema   = `{"type":"integer","minimum":1,"maximum":200}`
-	cursorSchema  = `{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[A-Za-z0-9_-]+$"}`
-	searchSchema  = `{"type":"string","minLength":1,"maxLength":200,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
-	labelSchema   = `{"type":"string","minLength":1,"maxLength":100,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
-	querySchema   = `{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
-	dateSchema    = `{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}`
-	instantSchema = `{"type":"string","minLength":20,"maxLength":35,` +
+	idSchema          = `{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9]+$"}`
+	limitSchema       = `{"type":"integer","minimum":1,"maximum":200}`
+	cursorSchema      = `{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[A-Za-z0-9_-]+$"}`
+	searchSchema      = `{"type":"string","minLength":1,"maxLength":200,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
+	labelSchema       = `{"type":"string","minLength":1,"maxLength":100,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
+	querySchema       = `{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
+	languageTagSchema = `{"type":"string","minLength":2,"maxLength":35,"pattern":"^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}$"}`
+	idsSchema         = `{"type":"array","minItems":1,"maxItems":100,"uniqueItems":true,"items":` + idSchema + `}`
+	dateSchema        = `{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}`
+	instantSchema     = `{"type":"string","minLength":20,"maxLength":35,` +
 		`"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"}`
 	pageInput = `"limit":` + limitSchema + `,"cursor":` + cursorSchema
 )
@@ -219,16 +224,18 @@ var labelsList = descriptor("labels", "list", "List Todoist labels",
 
 var tasksList = taskTool(descriptor("tasks", "list", "List Todoist tasks",
 	"List one bounded batch of active tasks of the projects of an explicit Todoist connection with "+
-		"structured project, section, parent, label, and due filters; no filter expression is accepted",
+		"structured ID, project, section, parent, label, and due filters; no filter expression is accepted",
 	[]string{"tasks", "list"},
 	`{"type":"object","properties":{"project_id":`+idSchema+`,"section_id":`+idSchema+`,"parent_id":`+idSchema+`,`+
-		`"label":`+labelSchema+`,"due_from":`+dateSchema+`,"due_to":`+dateSchema+`,"without_due":{"type":"boolean"},`+
+		`"ids":`+idsSchema+`,"label":`+labelSchema+`,"due_from":`+dateSchema+`,"due_to":`+dateSchema+`,"without_due":{"type":"boolean"},`+
 		pageInput+`},"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
 	[]capability.Argument{
 		{Name: "project_id", Description: "Return only tasks of this project of the connection"},
 		{Name: "section_id", Description: "Return only tasks of this section"},
 		{Name: "parent_id", Description: "Return only the subtasks of this task"},
+		{Name: "ids", Description: "Return only these tasks, 1 to 100 distinct task IDs; tasks outside the connection " +
+			"are dropped even when named"},
 		{Name: "label", Description: "Return only tasks carrying this personal label name"},
 		{Name: "due_from", Description: "Return only tasks due on or after this date, YYYY-MM-DD"},
 		{Name: "due_to", Description: "Return only tasks due on or before this date, YYYY-MM-DD"},
@@ -250,11 +257,13 @@ var tasksFilter = taskTool(descriptor("tasks", "filter", "Filter Todoist tasks b
 	"List one bounded batch of active tasks that match a Todoist filter expression, held to the "+
 		"projects of an explicit Todoist connection; the only active-task list that accepts a filter expression",
 	[]string{"tasks", "filter", "query"},
-	`{"type":"object","properties":{"query":`+querySchema+`,`+pageInput+`},"required":["query"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"query":`+querySchema+`,"lang":`+languageTagSchema+`,`+pageInput+`},`+
+		`"required":["query"],"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
 	[]capability.Argument{
 		{Name: "query", Description: "Todoist filter expression such as \"today | overdue\"; tasks outside the " +
 			"connection's projects are never returned", Required: true},
+		{Name: "lang", Description: "IETF language tag the filter expression is written in, such as de"},
 		limitArgument, cursorArgument,
 	},
 	append([]capability.Field{
@@ -278,7 +287,8 @@ var completedList = taskTool(descriptor("completed-tasks", "list", "List complet
 		"expression; how far back Todoist answers depends on the account's plan",
 	[]string{"tasks", "completed", "list", "history", "filter"},
 	`{"type":"object","properties":{"since":`+instantSchema+`,"until":`+instantSchema+`,"project_id":`+idSchema+`,`+
-		`"section_id":`+idSchema+`,"query":`+querySchema+`,`+pageInput+`},"required":["since","until"],`+
+		`"section_id":`+idSchema+`,"parent_id":`+idSchema+`,"workspace_id":{"type":"integer","minimum":1},`+
+		`"query":`+querySchema+`,"filter_lang":`+languageTagSchema+`,`+pageInput+`},"required":["since","until"],`+
 		`"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
 	[]capability.Argument{
@@ -288,8 +298,11 @@ var completedList = taskTool(descriptor("completed-tasks", "list", "List complet
 			Required: true},
 		{Name: "project_id", Description: "Return only tasks of this project of the connection"},
 		{Name: "section_id", Description: "Return only tasks of this section"},
+		{Name: "parent_id", Description: "Return only the subtasks of this task"},
+		{Name: "workspace_id", Description: "Return only tasks of this workspace; the connection's projects still bound them"},
 		{Name: "query", Description: "Todoist filter expression such as \"@waiting\"; tasks outside the " +
 			"connection's projects are never returned"},
+		{Name: "filter_lang", Description: "IETF language tag the query is written in; only together with query"},
 		limitArgument, cursorArgument,
 	},
 	append([]capability.Field{
@@ -523,6 +536,37 @@ func checkID(name, value string) error {
 	return nil
 }
 
+// checkTaskIDs bounds the ids filter: 1 to 100 distinct Todoist IDs, or none.
+func checkTaskIDs(ids []string) error {
+	if ids == nil {
+		return nil
+	}
+	if len(ids) < 1 || len(ids) > 100 {
+		return invalidRequest("ids must name 1 to 100 task IDs")
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id == "" || !validID(id) {
+			return invalidRequest("ids contains a value that is not a Todoist ID")
+		}
+		if seen[id] {
+			return invalidRequest("ids must not repeat a task ID")
+		}
+		seen[id] = true
+	}
+	return nil
+}
+
+var langPattern = regexp.MustCompile(`^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}$`)
+
+// checkLang accepts an IETF language tag of at most 35 characters, or none.
+func checkLang(name, value string) error {
+	if value != "" && (len(value) > 35 || !langPattern.MatchString(value)) {
+		return invalidRequest(name + " must be an IETF language tag such as de or en-US")
+	}
+	return nil
+}
+
 func checkSearch(value string) error {
 	if value != "" && !validText(value, 200) {
 		return invalidRequest("search must be 1 to 200 characters without control characters or padding")
@@ -666,13 +710,14 @@ func taskSelection(bound scope, projectID, sectionID string) (url.Values, string
 }
 
 func prepareTasksList(bound scope, arguments struct {
-	ProjectID  string `json:"project_id"`
-	SectionID  string `json:"section_id"`
-	ParentID   string `json:"parent_id"`
-	Label      string `json:"label"`
-	DueFrom    string `json:"due_from"`
-	DueTo      string `json:"due_to"`
-	WithoutDue bool   `json:"without_due"`
+	ProjectID  string   `json:"project_id"`
+	SectionID  string   `json:"section_id"`
+	ParentID   string   `json:"parent_id"`
+	IDs        []string `json:"ids"`
+	Label      string   `json:"label"`
+	DueFrom    string   `json:"due_from"`
+	DueTo      string   `json:"due_to"`
+	WithoutDue bool     `json:"without_due"`
 	page
 }) (run, error) {
 	query, project, err := taskSelection(bound, arguments.ProjectID, arguments.SectionID)
@@ -697,6 +742,12 @@ func prepareTasksList(bound scope, arguments struct {
 	if window.from != "" && window.to != "" && window.from > window.to {
 		return nil, invalidRequest("due_from must not be after due_to")
 	}
+	if err := checkTaskIDs(arguments.IDs); err != nil {
+		return nil, err
+	}
+	if len(arguments.IDs) > 0 {
+		query.Set("ids", strings.Join(arguments.IDs, ","))
+	}
 	if arguments.ParentID != "" {
 		query.Set("parent_id", arguments.ParentID)
 	}
@@ -704,7 +755,7 @@ func prepareTasksList(bound scope, arguments struct {
 		query.Set("label", arguments.Label)
 	}
 	call, err := newListCall("list tasks", "/tasks", query, arguments.Limit, arguments.Cursor,
-		tasksList.ID, bound.String(), project, arguments.SectionID, arguments.ParentID, arguments.Label,
+		tasksList.ID, bound.String(), project, arguments.SectionID, arguments.ParentID, arguments.IDs, arguments.Label,
 		window.from, window.to, window.without)
 	if err != nil {
 		return nil, err
@@ -715,13 +766,21 @@ func prepareTasksList(bound scope, arguments struct {
 
 func prepareTasksFilter(bound scope, arguments struct {
 	Query string `json:"query"`
+	Lang  string `json:"lang"`
 	page
 }) (run, error) {
 	if !validText(arguments.Query, 1024) {
 		return nil, invalidRequest("query must be 1 to 1024 characters without control characters or padding")
 	}
-	call, err := newListCall("filter tasks", "/tasks/filter", url.Values{"query": {arguments.Query}},
-		arguments.Limit, arguments.Cursor, tasksFilter.ID, bound.String(), arguments.Query)
+	if err := checkLang("lang", arguments.Lang); err != nil {
+		return nil, err
+	}
+	values := url.Values{"query": {arguments.Query}}
+	if arguments.Lang != "" {
+		values.Set("lang", arguments.Lang)
+	}
+	call, err := newListCall("filter tasks", "/tasks/filter", values,
+		arguments.Limit, arguments.Cursor, tasksFilter.ID, bound.String(), arguments.Query, arguments.Lang)
 	if err != nil {
 		return nil, err
 	}
@@ -738,16 +797,42 @@ func prepareTasksGet(_ scope, arguments struct {
 }
 
 func prepareCompletedList(bound scope, arguments struct {
-	Since     string `json:"since"`
-	Until     string `json:"until"`
-	ProjectID string `json:"project_id"`
-	SectionID string `json:"section_id"`
-	Query     string `json:"query"`
+	Since       string `json:"since"`
+	Until       string `json:"until"`
+	ProjectID   string `json:"project_id"`
+	SectionID   string `json:"section_id"`
+	ParentID    string `json:"parent_id"`
+	WorkspaceID *int64 `json:"workspace_id"`
+	Query       string `json:"query"`
+	FilterLang  string `json:"filter_lang"`
 	page
 }) (run, error) {
 	query, project, err := taskSelection(bound, arguments.ProjectID, arguments.SectionID)
 	if err != nil {
 		return nil, err
+	}
+	if err := checkID("parent_id", arguments.ParentID); err != nil {
+		return nil, err
+	}
+	if arguments.ParentID != "" {
+		query.Set("parent_id", arguments.ParentID)
+	}
+	workspace := ""
+	if arguments.WorkspaceID != nil {
+		if *arguments.WorkspaceID < 1 {
+			return nil, invalidRequest("workspace_id must be a positive integer")
+		}
+		workspace = strconv.FormatInt(*arguments.WorkspaceID, 10)
+		query.Set("workspace_id", workspace)
+	}
+	if err := checkLang("filter_lang", arguments.FilterLang); err != nil {
+		return nil, err
+	}
+	if arguments.FilterLang != "" {
+		if arguments.Query == "" {
+			return nil, invalidRequest("filter_lang requires query")
+		}
+		query.Set("filter_lang", arguments.FilterLang)
 	}
 	if arguments.Query != "" {
 		if !validText(arguments.Query, 1024) {
@@ -769,8 +854,8 @@ func prepareCompletedList(bound scope, arguments struct {
 	query.Set("since", since)
 	query.Set("until", until)
 	call, err := newListCall("list completed tasks", "/tasks/completed/by_completion_date", query,
-		arguments.Limit, arguments.Cursor, completedList.ID, bound.String(), project, arguments.SectionID, since, until,
-		arguments.Query)
+		arguments.Limit, arguments.Cursor, completedList.ID, bound.String(), project, arguments.SectionID, arguments.ParentID, workspace, since, until,
+		arguments.Query, arguments.FilterLang)
 	if err != nil {
 		return nil, err
 	}

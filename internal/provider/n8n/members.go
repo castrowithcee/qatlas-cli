@@ -49,7 +49,9 @@ var memberRoleSchema = func() string {
 }()
 
 var memberSchema = `{"type":"object","properties":{` +
-	`"id":{"type":"string"},"email":{"type":"string"},"name":{"type":"string"},"role":{"type":"string"}},` +
+	`"id":{"type":"string"},"email":{"type":"string"},"name":{"type":"string"},"role":{"type":"string"},` +
+	`"first_name":{"type":"string"},"last_name":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"}},` +
 	`"required":["id","email","name","role"],"additionalProperties":false}`
 
 var memberIDArgument = capability.Argument{Name: "user_id",
@@ -79,6 +81,10 @@ var membersList = capability.Descriptor{
 		{Name: "email", Description: "Email address, personal data, untrusted"},
 		{Name: "name", Description: "First and last name, personal data, untrusted"},
 		{Name: "role", Description: "Project role as n8n reports it"},
+		{Name: "first_name", Description: "First name alone, personal data, untrusted"},
+		{Name: "last_name", Description: "Last name alone, personal data, untrusted"},
+		{Name: "created_at", Description: "When the user was created, as n8n reports it"},
+		{Name: "updated_at", Description: "When the user was last updated, as n8n reports it"},
 		{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		{Name: "has_more", Description: "True when a further page remains"},
 		{Name: "truncated", Description: "True when n8n sent more members than limit and the rest were dropped"},
@@ -146,10 +152,14 @@ var membersRemove = capability.Descriptor{
 
 // Member is the stable Qatlas view of one project member.
 type Member struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // MembersPage is one page of project members.
@@ -188,6 +198,8 @@ type memberJSON struct {
 	FirstName *string `json:"firstName"`
 	LastName  *string `json:"lastName"`
 	Role      *string `json:"role"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 type membersPageJSON struct {
@@ -272,7 +284,7 @@ func invokeMembersList(ctx context.Context, resolved *config.Resolved, secrets *
 	return page, memberError(err)
 }
 
-// ListMembers reads one page of GET /projects/{id}/users and keeps id, email, name, and role.
+// ListMembers reads one page of GET /projects/{id}/users.
 func (c *Client) ListMembers(ctx context.Context, projectID, cursor string, limit int) (*MembersPage, error) {
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != "" {
@@ -300,8 +312,16 @@ func (c *Client) ListMembers(ctx context.Context, projectID, cursor string, limi
 		if m.Role != nil {
 			role = *m.Role
 		}
-		members = append(members, Member{ID: boundedField(m.ID), Email: boundedField(m.Email),
-			Name: boundedField(strings.Join(parts, " ")), Role: boundedField(role)})
+		member := Member{ID: boundedField(m.ID), Email: boundedField(m.Email),
+			Name: boundedField(strings.Join(parts, " ")), Role: boundedField(role),
+			CreatedAt: boundedField(m.CreatedAt), UpdatedAt: boundedField(m.UpdatedAt)}
+		if m.FirstName != nil {
+			member.FirstName = boundedField(cappedText(strings.TrimSpace(*m.FirstName)))
+		}
+		if m.LastName != nil {
+			member.LastName = boundedField(cappedText(strings.TrimSpace(*m.LastName)))
+		}
+		members = append(members, member)
 	}
 	next := ""
 	if page.NextCursor != nil {

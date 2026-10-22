@@ -215,3 +215,38 @@ func TestMemberChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestMemberListReportsNamesAndTimestamps(t *testing.T) {
+	body := `{"data":[{"id":"u1","email":"a@example.org","firstName":"Ada","lastName":"Lovelace","role":"project:admin",` +
+		`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z"},` +
+		`{"id":"u2","email":"b@example.org","firstName":null,"lastName":"","role":null,"createdAt":"c","updatedAt":"u"}],` +
+		`"nextCursor":null}`
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(membersList.ID, "pdelete", fmt.Sprintf(`{"project_id":%q}`, ownProject))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	want := `{"members":[{"id":"u1","email":"a@example.org","name":"Ada Lovelace","role":"project:admin",` +
+		`"first_name":"Ada","last_name":"Lovelace","created_at":"2026-01-01T00:00:00.000Z",` +
+		`"updated_at":"2026-01-02T00:00:00.000Z"},` +
+		`{"id":"u2","email":"b@example.org","name":"","role":"","created_at":"c","updated_at":"u"}],` +
+		`"has_more":false,"count":2}`
+	assertSameJSON(t, result, want)
+}
+
+func TestMemberNamesLoseControlCharactersAndAreBounded(t *testing.T) {
+	body := fmt.Sprintf(`{"data":[{"id":"u1","email":"a@example.org","firstName":"A\u0007da","lastName":%q,`+
+		`"role":"project:admin","createdAt":"c","updatedAt":"u"}],"nextCursor":null}`, strings.Repeat("y", 600))
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(membersList.ID, "pdelete", fmt.Sprintf(`{"project_id":%q}`, ownProject))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	var page MembersPage
+	if err := json.Unmarshal([]byte(result), &page); err != nil || len(page.Members) != 1 ||
+		page.Members[0].FirstName != "A da" || len(page.Members[0].LastName) != maxMemberFieldLength {
+		t.Fatalf("page = %s, %v", result, err)
+	}
+}

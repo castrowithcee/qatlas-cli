@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -293,4 +294,96 @@ func TestProjectChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 			}
 		})
 	}
+}
+
+// assertSameJSON compares two JSON texts by value: the application core renders objects with sorted keys.
+func assertSameJSON(t *testing.T, got, want string) {
+	t.Helper()
+	var g, w any
+	if err := json.Unmarshal([]byte(got), &g); err != nil {
+		t.Fatalf("got is not JSON: %s", got)
+	}
+	if err := json.Unmarshal([]byte(want), &w); err != nil {
+		t.Fatalf("want is not JSON: %s", want)
+	}
+	if !reflect.DeepEqual(g, w) {
+		t.Fatalf("result = %s\nwant     %s", got, want)
+	}
+}
+
+func TestProjectsListReportsEveryDocumentedMember(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"data":[`+richProject+`],"nextCursor":null}`), nil
+	})
+	result, err := env.invoke(projectsList.ID, "open", `{}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	want := `{"projects":[{"id":"` + ownProject + `","name":"Marketing","type":"team",` +
+		`"created_at":"2026-01-01T00:00:00.000Z","updated_at":"2026-01-02T00:00:00.000Z",` +
+		`"icon":{"type":"emoji","value":"rocket","color":"#ff0000"},` +
+		`"description":"Workflows the marketing team owns.",` +
+		`"custom_telemetry_tags":[{"key":"team","value":"mkt"},{"key":"cost","value":"42"}],` +
+		`"creator_id":"f9a2cbb8-0b1e-4b64-9c1c-0d5f5f1f2a3b"}],"has_more":false,"count":1}`
+	assertSameJSON(t, result, want)
+}
+
+// An answer without the later members keeps the former output exactly.
+func TestProjectsListOmitsMissingAndEmptyMembers(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"data":[`+projectJSONOf(ownProject, "Own")+
+			`,{"id":"p2","name":"Two","type":"personal","icon":{"type":"","value":""},"description":"",`+
+			`"customTelemetryTags":[{"key":"","value":"x"}],"creatorId":"","createdAt":"c","updatedAt":"u"}],`+
+			`"nextCursor":null}`), nil
+	})
+	result, err := env.invoke(projectsList.ID, "open", `{}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	want := `{"projects":[{"id":"` + ownProject + `","name":"Own","type":"team",` +
+		`"created_at":"2026-01-01T00:00:00.000Z","updated_at":"2026-01-02T00:00:00.000Z"},` +
+		`{"id":"p2","name":"Two","type":"personal","created_at":"c","updated_at":"u"}],"has_more":false,"count":2}`
+	assertSameJSON(t, result, want)
+}
+
+func TestProjectForeignTextIsCleanedAndBounded(t *testing.T) {
+	long := strings.Repeat("x", 2*maxCredentialTextLength)
+	tags := make([]string, 0, maxProjectTelemetryTags+5)
+	for i := 0; i < maxProjectTelemetryTags+5; i++ {
+		tags = append(tags, fmt.Sprintf(`{"key":"k%d","value":"v"}`, i))
+	}
+	body := fmt.Sprintf(`{"data":[{"id":%q,"name":"N","type":"team","icon":{"type":"emoji","value":"a\u0007b","color":%q},`+
+		`"description":"line\nbreak\u001b[31m","customTelemetryTags":[%s],"creatorId":"c\u0000d",`+
+		`"createdAt":"c","updatedAt":"u"}],"nextCursor":null}`, ownProject, long, strings.Join(tags, ","))
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(projectsList.ID, "open", `{}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	var page ProjectsPage
+	if err := json.Unmarshal([]byte(result), &page); err != nil || len(page.Projects) != 1 {
+		t.Fatalf("page = %s, %v", result, err)
+	}
+	p := page.Projects[0]
+	if p.Icon.Value != "a b" || len(p.Icon.Color) != maxCredentialTextLength || p.Description != "line break [31m" ||
+		p.CreatorID != "c d" || len(p.CustomTelemetryTags) != maxProjectTelemetryTags {
+		t.Fatalf("project = %+v", p)
+	}
+}
+
+// The change tools keep their output when n8n answers with a complete project.
+func TestProjectChangeOutputIsUnchangedByTheWiderProjectObject(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(201, richProject), nil
+	})
+	result, err := env.confirmed(projectsCreate.ID, "pdelete-open", `{"name":"Marketing"}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	want := `{"id":"` + ownProject + `","name":"Marketing","type":"team"}`
+	assertSameJSON(t, result, want)
 }

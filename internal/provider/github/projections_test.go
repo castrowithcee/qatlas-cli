@@ -298,6 +298,7 @@ func TestProjectionSchemasAndFieldsMatchTheOutputTypes(t *testing.T) {
 		{"app", RESTApp{}, restAppProperties, restAppFields},
 		{"reactions", RESTReactions{}, restReactionsProperties, restReactionsFields},
 		{"issue comment", RESTIssueComment{}, restIssueCommentProperties, restIssueCommentFields},
+		{"pull request", RESTPullSimple{}, restPullSimpleProperties, restPullSimpleFields},
 	} {
 		schema := json.RawMessage(`{"type":"object","properties":{` + tc.properties + `},"additionalProperties":false}`)
 		if findings := checkOutput(tc.sample, schema, tc.fields, nil); len(findings) > 0 {
