@@ -114,17 +114,24 @@ documentation lists the database token for them.
 ## Searching rows
 
 `baserow.rows.search` takes `table_id` (inside the targets) and the arguments of `rows.list`, plus `search`,
-`search_mode`, `filters` (up to 10, a fixed list of types), `filter_type`, `order_by` (up to 5), and `view_id`, a view
-of this table. Filter and sort field names may not contain `__` or `,` or begin with `-` or `+`.
+`search_mode`, `filters` (up to 10), `filter_type`, `order_by` (up to 5), and `view_id`, a view of this table. A filter
+or sort entry names its field by `field` or by `field_id`, exactly one of them; the ID is translated through the
+table's schema, and an unknown ID is rejected. Resolved field names may not contain `__` or `,` or begin with `-` or
+`+`. Filter types come from a fixed list; for most of them Baserow decides whether a value is needed.
 
-There is no free filter passthrough: values travel only as URL-encoded query parameters. Filtered and sorted
-fields must exist in the table's schema and have a type from a fixed list that leaves out link, lookup, formula,
-rollup, and count fields: such a filter would show whether a value exists in another table. For the same reason
-`search` is refused on a table with such a field unless the connection targets `*`.
+There is no free filter passthrough: values travel only as URL-encoded query parameters. The API documents no format
+for filter groups; a flat tree does no more than the offered filters, so the JSON filter tree is not offered.
 
-Order of checks: the table (before the credential), argument shape and limits, including column keys (before any
-request), then one read of the table's fields, after which an unknown or unsuitable field, an unknown `include` or
-`exclude` name, or a refused search is rejected. Only then, with `view_id`, the table's view
+Lookup, formula, rollup, and count fields are filterable and sortable. A link field whose other table is outside the
+targets (or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
+sorting. Display values of linked rows outside the targets are masked; a text filter, a sort, or a full-text search on
+them would disclose them. Filters by row ID or emptiness show only what the output shows anyway. For the same reason
+`search` is refused on a table with such a link field unless the connection targets `*`; with `*`, or when the other
+table is inside the targets, nothing is refused.
+
+Order of checks: the table (before the credential), argument shape, limits, column keys, and filter types (before any
+request), then one read of the table's fields, after which an unknown or unsuitable field, a repeated field and type,
+an unknown `include` or `exclude` name, or a refused search is rejected. Only then, with `view_id`, the table's view
 list is read; a view that is not in it is rejected. The rows request follows last. The answer has the shape of
 `rows.list`, keyed by field name, link-masked and bounded the same way.
 
@@ -247,10 +254,10 @@ Deprecated members are never shown. A free value (AI prompt, field constraints) 
 left out and marked as omitted, not cut.
 
 **Limit:** lookup and formula fields can carry values of other tables, and a lookup of a table outside the
-targets is not masked; such values are passed through as Baserow reports them. Keep the token's rights and
-the connection's targets aligned, or avoid such fields in tables the connection exposes. In `rows.list`,
-`rows.get`, and `rows.search`, file fields carry file names and URLs as data; Qatlas fetches a file only with
-`files.get`, under the rules above.
+targets is not masked; such values are passed through as Baserow reports them, and a filter or sort on them discloses
+nothing beyond that. Keep the token's rights and the connection's targets aligned, or avoid such fields in tables the
+connection exposes. In `rows.list`, `rows.get`, and `rows.search`, file fields carry file names and URLs as data;
+Qatlas fetches a file only with `files.get`, under the rules above.
 
 ## Bounds
 
