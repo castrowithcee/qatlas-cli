@@ -12,11 +12,10 @@ updated: 2026-10-04
 
 # Infomaniak Calendar and Contacts
 
-Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity.
-It lists the calendars and address books the connection allows, reads the events of the allowed calendars,
-and creates, replaces, and deletes such events from structured fields. It lists and reads the contacts of the
-allowed address books and creates, replaces, and deletes such contacts from structured fields. It changes no
-collection.
+Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity. It lists
+the calendars and address books the connection allows, reads the events of the allowed calendars, and creates, replaces,
+and deletes such events from structured fields. It lists and reads the contacts of the allowed address books and
+creates, replaces, and deletes such contacts from structured fields. It changes no collection.
 
 ## Configuration
 
@@ -50,10 +49,10 @@ credentials:
 | `calendar/ID` | one calendar; repeatable, at most 100 |
 | `addressbook/ID` | one address book; repeatable, at most 100 |
 
-`ID` is the last path segment of the collection below its home set, for example `work` for
-`/calendars/AB12345/work/`. It is one literal segment of at most 128 bytes: no separator, no percent sign, no
-`.` or `..`, no control character. Matching is exact and case-sensitive; there are no wildcards. A connection with only `calendar/ID` targets is not offered the contact and
-address book tools, and one with only `addressbook/ID` targets not the calendar and event tools.
+`ID` is the last path segment of the collection below its home set, for example `work` for `/calendars/AB12345/work/`.
+It is one literal segment of at most 128 bytes: no separator, no percent sign, no `.` or `..`, no control character.
+Matching is exact and case-sensitive; there are no wildcards. A connection with only `calendar/ID` targets is not
+offered the contact and address book tools, and one with only `addressbook/ID` targets not the calendar and event tools.
 
 ```yaml
 connections:
@@ -63,11 +62,10 @@ connections:
     targets: [calendar/work, calendar/team, addressbook/default]
 ```
 
-The allow-list is required: a connection needs at least one target, and a target named twice within its kind
-is refused. Only listed collections are reported. If a connection lists only calendars,
-`infomaniak.dav.address-books.list` returns an empty set (and the other way round) without contacting
-Infomaniak or reading a secret. A listed collection the server does not show is simply absent. No error
-quotes a configured value.
+The allow-list is required: a connection needs at least one target, and a target named twice within its kind is refused.
+Only listed collections are reported. If a connection lists only calendars, `infomaniak.dav.address-books.list` returns
+an empty set (and the other way round) without contacting Infomaniak or reading a secret. A listed collection the server
+does not show is simply absent. No error quotes a configured value.
 
 ## Tools
 
@@ -86,11 +84,10 @@ quotes a configured value.
 | `infomaniak.dav.contacts.update` | update | required | replaces one contact, bound to its etag |
 | `infomaniak.dav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
 
-The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
-needs the `read` effect. The profile `events` adds `events.create` and `events.update`
-(effects `create` and `update`); it is not recommended. The profile `contacts` likewise adds
-`contacts.create` and `contacts.update` and is not recommended. `events.delete` and `contacts.delete`
-belong to no profile: a connection offers one only when its `tools` list names it.
+The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and needs the
+`read` effect. The profile `events` adds `events.create` and `events.update` (effects `create` and `update`); it is not
+recommended. The profile `contacts` likewise adds `contacts.create` and `contacts.update` and is not recommended.
+`events.delete` and `contacts.delete` belong to no profile: a connection offers one only when its `tools` list names it.
 
 Of `calendar-timezone` only the TZID is reported; the VTIMEZONE rule definition is not evaluated or passed on.
 Vendor properties such as `getctag`, `calendar-order`, and `schedule-*` are not standards and are not read.
@@ -103,16 +100,20 @@ before any secret is read or request is sent; the message does not name it.
 `infomaniak.dav.events.list` takes the required `start` and `end` as RFC 3339 times; `end` must be after `start` and at
 most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REPORT of the overlapping `VEVENT`
 components. `limit` defaults to 50, at most 200. Events are sorted by start and cut at `limit`; `truncated` flags more.
+Filters only narrow the answer; every href keeps its path binding. An unsupported collation is a request error;
+`calendars.list` names the supported ones. `limit-recurrence-set` is not offered: without `expand` the list reports only
+the main component of a series.
 
 `infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that event with a GET:
 every `VEVENT` property, its alarms, and the parameters of organizer and attendees. A list cut at its cap is flagged
 `<name>_truncated`; a raw value over its cap is omitted, not cut.
 
-A repeating event is reported once, never expanded, with its rule as `rrule`. Overrides of single occurrences are
-`overrides`, at most 50 and flagged when there are more; only an override carries `recurrence_id`. `start` and `end` are
-a date for an all-day event, a UTC time ending in `Z`, or a local time with its zone name, unresolved. The `id` is one
-literal path segment under the calendar, checked like a target ID before any request. An event href that is no direct
-child of the allowed calendar refuses the whole answer as an invalid response. The list omits invalid events.
+A repeating event is reported once with its rule as `rrule`; `expand` has the server resolve it over the range into one
+entry per occurrence with `recurrence_id`, and `limit` counts occurrences. Overrides of single occurrences are
+`overrides`, at most 50 and flagged when there are more. `start` and `end` are a date for an all-day event, a UTC time
+ending in `Z`, or a local time with its zone name, unresolved. The `id` is one literal path segment under the calendar,
+checked like a target ID before any request. An event href that is no direct child of the allowed calendar refuses the
+whole answer as an invalid response. The list omits invalid events.
 
 Addresses (`url`, attachments, `dir`, `sent_by`, `member`, `delegated_*`) are bounded, untrusted, never fetched. Not
 reported: embedded binary attachments (`ATTACH` with `VALUE=BINARY`); addresses with user information, a query, or a
@@ -294,7 +295,6 @@ follows, or executes anything derived from them.
 ## Boundary
 
 This provider lists calendars and address books, reads events and contacts, and creates, replaces, and deletes
-events of allow-listed calendars and contacts of allow-listed address books. It does not write photos or
-group cards, create, rename, share, or delete collections,
-expand recurrences, write overrides of single occurrences, or accept a free URL, method, header, or iCalendar
-body from a tool argument.
+events of allow-listed calendars and contacts of allow-listed address books. It does not write photos or group
+cards, create, rename, share, or delete collections, write overrides of single occurrences, or accept a free
+URL, method, header, or iCalendar body from a tool argument.
