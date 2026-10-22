@@ -50,11 +50,13 @@ func outputCases() []outputCase {
 			`"description":"Help","is_ephemeral":true}]`}, nil},
 		{"telegram.menu-button.get", []string{"bot"}, `{}`, map[string]string{"getChatMenuButton": `{"type":"web_app",` +
 			`"text":"Open","web_app":{"url":"https://app.example/x"}}`}, nil},
+		{"telegram.chats.get", []string{"-1001"}, `{}`,
+			map[string]string{"getChat": fullChatInfo}, []string{"guard_bot"}},
 		{"telegram.chats.administrators", []string{"-1001"}, `{}`,
 			map[string]string{"getChatAdministrators": `[{"status":"creator","user":USER}]`},
 			[]string{"administrators", "[]", "user"}},
 		{"telegram.chats.member", []string{"-1001"}, `{"user_id":7}`,
-			map[string]string{"getChatMember": `{"status":"member","user":USER}`}, []string{"user"}},
+			map[string]string{"getChatMember": `{"status":"member","tag":"vip","user":USER}`}, []string{"user"}},
 		{"telegram.updates.list", []string{"-1001"}, `{}`,
 			map[string]string{"getUpdates": `[{"update_id":1,"message":{"message_id":2,"date":3,` +
 				`"chat":{"id":-1001},"from":USER,"text":"hi"}}]`}, []string{"updates", "[]", "from"}},
