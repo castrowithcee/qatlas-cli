@@ -64,9 +64,9 @@ Gallery images and drawings belong to pages. `bookstack.images.list` takes an op
 connection with targets), an optional `type` (`gallery` or `drawio`), `limit`, and `offset`, and lists the images without any image data. The
 filters sent to BookStack are only an optimization: every row is checked again for page and type.
 
-`bookstack.images.get` takes the `id` and returns the same fields plus the `thumbs` urls and the ready-made
-`content` snippets that embed the image. Names, urls, and snippets are
-untrusted data and a url is never fetched.
+`bookstack.images.get` takes the `id` and returns the same metadata plus the `thumbs` urls and the ready-made
+`content` snippets that embed the image. Names, urls, paths, and snippets are
+untrusted data and neither a url nor a path is ever fetched.
 
 `bookstack.images.download` takes the `id` and `local_path` and writes the image data to the local file, streamed up
 to 64 MiB within 10 minutes. The answer never carries the
