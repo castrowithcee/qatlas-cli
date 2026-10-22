@@ -58,12 +58,13 @@ var commandsGet = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + scopeSchemaProps +
 		`},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"commands":{"type":"array","maxItems":100,` +
-		`"items":{"type":"object","properties":{"command":{"type":"string"},"description":{"type":"string"}},` +
+		`"items":{"type":"object","properties":{"command":{"type":"string"},"description":{"type":"string"},` +
+		`"is_ephemeral":{"type":"boolean"}},` +
 		`"required":["command","description"],"additionalProperties":false}}},"required":["commands"],` +
 		`"additionalProperties":false}`),
 	Arguments: commandScopeArguments,
 	Fields: []capability.Field{{Name: "commands",
-		Description: "Commands of the scope, at most 100, each with command and description; empty when none are set"}},
+		Description: "Commands of the scope, at most 100, each with command, description, and is_ephemeral when Telegram sent it; empty when none are set"}},
 	Examples: []capability.Example{{Description: "Read the default commands", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -117,8 +118,8 @@ var menubuttonGet = capability.Descriptor{
 	ID:      Provider + ".menu-button.get",
 	Version: 1,
 	Title:   "Get the Telegram bot menu button",
-	Description: "Read the type of the menu button of the bot, the default one or that of a bound private chat; " +
-		"a web app URL is never shown. Requires the bot target",
+	Description: "Read the menu button of the bot, the default one or that of a bound private chat; a web app URL is " +
+		"shown as text and never fetched. Requires the bot target",
 	Tags: []string{"telegram", "bot", "menubutton", "read"},
 	Risk: capability.Risk{
 		Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -128,12 +129,15 @@ var menubuttonGet = capability.Descriptor{
 	Group:    groupBot,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":128}},` +
 		`"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"type":{"type":"string"},"text":{"type":"string"}},` +
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"type":{"type":"string"},"text":{"type":"string"},` +
+		`"web_app":{"type":"object","description":"Telegram Bot API WebAppInfo of a web_app button"}},` +
 		`"required":["type"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "chat", Description: menuChatArgument}},
 	Fields: []capability.Field{
 		{Name: "type", Description: "Menu button type: commands, default, or web_app"},
 		{Name: "text", Description: "Label of a web_app button; absent for the other types"},
+		{Name: "web_app", Description: "Web App of a web_app button as an object with its url, which is untrusted text, " +
+			"at most 2048 characters; absent for the other types"},
 	},
 	Examples: []capability.Example{{Description: "Read the default menu button", Arguments: json.RawMessage(`{}`)}},
 }
@@ -172,6 +176,8 @@ type commandScope struct {
 type botCommand struct {
 	Command     string `json:"command"`
 	Description string `json:"description"`
+	// IsEphemeral is read from Telegram only; commands.set never sends it.
+	IsEphemeral *bool `json:"is_ephemeral,omitempty"`
 }
 
 type commandScopeArgs struct {
@@ -431,7 +437,8 @@ func (c *Client) GetCommands(ctx context.Context, scope commandScope, language s
 			break
 		}
 		out.Commands = append(out.Commands, botCommand{
-			Command: capText(item.Command, maxCommandNameLen), Description: capText(item.Description, maxCommandDescRunes)})
+			Command: capText(item.Command, maxCommandNameLen), Description: capText(item.Description, maxCommandDescRunes),
+			IsEphemeral: item.IsEphemeral})
 	}
 	return out, nil
 }
@@ -467,12 +474,20 @@ func (c *Client) DeleteCommands(ctx context.Context, scope commandScope, languag
 }
 
 type menuButtonOut struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type   string      `json:"type"`
+	Text   string      `json:"text,omitempty"`
+	WebApp *webAppInfo `json:"web_app,omitempty"`
 }
 
+// webAppInfo is the Bot API type WebAppInfo; its URL is shown as text and never requested.
+type webAppInfo struct {
+	URL string `json:"url"`
+}
+
+const maxWebAppURLRunes = 2048
+
 // GetMenuButton performs exactly one getChatMenuButton request; chat 0 addresses the default button. Only
-// type and text are decoded, so a web app URL is never read.
+// the web app URL is only copied into the output, never requested.
 func (c *Client) GetMenuButton(ctx context.Context, chat int64) (menuButtonOut, error) {
 	const op = "get menu button"
 	raw, err := c.call(ctx, spec{op: op, method: "getChatMenuButton", limit: defaultResponseBytes, readOnly: true},
@@ -486,7 +501,11 @@ func (c *Client) GetMenuButton(ctx context.Context, chat int64) (menuButtonOut, 
 	if json.Unmarshal(raw, &button) != nil || button.Type == "" {
 		return menuButtonOut{}, invalidResponse(op)
 	}
-	return menuButtonOut{Type: capText(button.Type, maxNameRunes), Text: capText(button.Text, maxNameRunes)}, nil
+	out := menuButtonOut{Type: capText(button.Type, maxNameRunes), Text: capText(button.Text, maxNameRunes)}
+	if button.WebApp != nil && button.WebApp.URL != "" {
+		out.WebApp = &webAppInfo{URL: capText(button.WebApp.URL, maxWebAppURLRunes)}
+	}
+	return out, nil
 }
 
 // SetMenuButton performs exactly one setChatMenuButton request; chat 0 addresses the default button.

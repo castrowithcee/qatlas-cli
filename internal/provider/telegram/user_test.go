@@ -41,6 +41,15 @@ func outputCases() []outputCase {
 	gift := `{"total_count":1,"gifts":[{"type":"regular","send_date":5,"is_saved":true,"sender_user":USER,` +
 		`"gift":{"id":"g1","star_count":50}}]}`
 	return []outputCase{
+		{"telegram.bot.get", []string{"-1001"}, `{}`, map[string]string{"getMe": `USER`}, []string{}},
+		{"telegram.webhook.get", []string{"bot"}, `{}`, map[string]string{"getWebhookInfo": `{"url":"https://hook.example/s3cret",` +
+			`"has_custom_certificate":true,"pending_update_count":2,"ip_address":"203.0.113.9","last_error_date":10,` +
+			`"last_error_message":"timeout","last_synchronization_error_date":11,"max_connections":40,` +
+			`"allowed_updates":["message","edited_message"]}`}, nil},
+		{"telegram.commands.get", []string{"bot"}, `{}`, map[string]string{"getMyCommands": `[{"command":"help",` +
+			`"description":"Help","is_ephemeral":true}]`}, nil},
+		{"telegram.menu-button.get", []string{"bot"}, `{}`, map[string]string{"getChatMenuButton": `{"type":"web_app",` +
+			`"text":"Open","web_app":{"url":"https://app.example/x"}}`}, nil},
 		{"telegram.chats.administrators", []string{"-1001"}, `{}`,
 			map[string]string{"getChatAdministrators": `[{"status":"creator","user":USER}]`},
 			[]string{"administrators", "[]", "user"}},
