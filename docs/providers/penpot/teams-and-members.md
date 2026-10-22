@@ -1,0 +1,31 @@
+---
+description: >
+  Describes the Penpot tools that list and change team members and create and delete teams: the team binding, the
+  allow-list refusal, roles, and personal data.
+type: knowledge
+edit: shared
+created: 2026-10-22
+updated: 2026-10-22
+---
+
+# Penpot: teams and members
+
+The five tools administer teams. `team_id` must be a bound team (checked before the credential is resolved and before
+any request; the refusal never names the team). **There is no wildcard target and Qatlas never adds a target**: the
+team that `teams.create` makes is outside every connection until you add `team/ID` to a connection yourself.
+
+- `members.list` answers at most 200 members; `id` is used as `member_id`. Email addresses are personal data: the tool
+  has its own sensitivity class, `penpot-members`; names and photos are not returned.
+- `members.set-role` sets `admin`, `editor`, or `viewer`. The role `owner` is not offered, so ownership cannot be
+  transferred. Penpot refuses a change of the owner and a change without admin rights.
+- `members.remove`: Penpot refuses to remove the token's own account, and an admin cannot remove the owner. The member
+  must belong to the given team; Penpot looks the ID up in that team only.
+- `teams.create` takes a `name` of 1 to 250 characters, none of `.`, `:`, `/`, which Penpot refuses. The new team is
+  owned by the token's account. Penpot limits the teams per account.
+- `teams.delete`: Penpot marks the team and its projects and files as deleted and removes them after the deletion
+  delay; only the owner may delete, and the default team is refused.
+
+Team and member changes affect the whole team, so **a connection with a project or file allow-list refuses all of
+them, and `teams.create`**; `members.list` is still allowed unless the connection is bound to files only. Changes
+follow [Changes](README.md#changes), except that an unreadable answer makes the outcome uncertain only for
+`teams.create`; list the members or teams before trying again. Emails are never part of an error message.
