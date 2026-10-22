@@ -1,6 +1,7 @@
 package bookstack
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/url"
 	"strconv"
@@ -31,9 +32,12 @@ type listField struct {
 
 // listSchema names the fields a list may be sorted and filtered by. The two lists are separate so a list whose
 // sortable and filterable fields differ needs no other form.
+// A list without Filter takes no filters argument. Default is the sort the list uses when none is given; empty
+// means +id.
 type listSchema struct {
-	Sort   []listField
-	Filter []listField
+	Sort    []listField
+	Filter  []listField
+	Default string
 }
 
 // sameFields is the schema of a list that sorts and filters by one set of fields.
@@ -66,7 +70,11 @@ func quoted(values []string) string {
 
 // properties returns the schema members of the sort and filters arguments, to be spliced into an input schema.
 func (s listSchema) properties() string {
-	return `"sort":{"type":"string","pattern":"^[+-]?(` + strings.Join(names(s.Sort), "|") + `)$"},` +
+	sort := `"sort":{"type":"string","pattern":"^[+-]?(` + strings.Join(names(s.Sort), "|") + `)$"}`
+	if len(s.Filter) == 0 {
+		return sort
+	}
+	return sort + `,` +
 		`"filters":{"type":"array","maxItems":` + strconv.Itoa(maxListFilters) +
 		`,"items":{"type":"object","properties":{"field":{"type":"string","enum":` + quoted(names(s.Filter)) +
 		`},"op":{"type":"string","enum":` + quoted(listOps) +
@@ -76,11 +84,15 @@ func (s listSchema) properties() string {
 
 // arguments returns the descriptions of the sort and filters arguments.
 func (s listSchema) arguments() []capability.Argument {
-	return []capability.Argument{
-		{Name: "sort", Description: "Field to sort by, prefixed with + (ascending, default) or -; default +id. One of: " + strings.Join(names(s.Sort), ", ")},
-		{Name: "filters", Description: "At most 10 conditions that all must hold, each {field, op, value}; op is eq (default), ne, gt, lt, gte, lte, or like (text fields: contains); " +
-			"identifiers and numbers are digits, booleans true or false (eq, ne only), times RFC 3339 or YYYY-MM-DD. Fields: " + strings.Join(names(s.Filter), ", ")},
+	args := []capability.Argument{
+		{Name: "sort", Description: "Field to sort by, prefixed with + (ascending, default) or -; default " + cmp.Or(s.Default, "+id") + ". One of: " + strings.Join(names(s.Sort), ", ")},
 	}
+	if len(s.Filter) == 0 {
+		return args
+	}
+	return append(args,
+		capability.Argument{Name: "filters", Description: "At most 10 conditions that all must hold, each {field, op, value}; op is eq (default), ne, gt, lt, gte, lte, or like (text fields: contains); " +
+			"identifiers and numbers are digits, booleans true or false (eq, ne only), times RFC 3339 or YYYY-MM-DD. Fields: " + strings.Join(names(s.Filter), ", ")})
 }
 
 // filterArg is one filter as the caller states it.
@@ -371,6 +383,38 @@ var (
 		{"updated_by", kindID}, {"owned_by", kindID},
 	}
 
+	commentListFields = []listField{
+		{"id", kindID}, {"commentable_id", kindID}, {"commentable_type", kindText}, {"parent_id", kindID},
+		{"local_id", kindID}, {"content_ref", kindText}, {"created_by", kindID}, {"updated_by", kindID},
+		{"created_at", kindTime}, {"updated_at", kindTime},
+	}
+	attachmentListFields = []listField{
+		{"id", kindID}, {"name", kindText}, {"extension", kindText}, {"uploaded_to", kindID}, {"external", kindBool},
+		{"order", kindNumber}, {"created_by", kindID}, {"updated_by", kindID}, {"created_at", kindTime},
+		{"updated_at", kindTime},
+	}
+	imageListFields = []listField{
+		{"id", kindID}, {"name", kindText}, {"url", kindText}, {"path", kindText}, {"type", kindText},
+		{"uploaded_to", kindID}, {"created_by", kindID}, {"updated_by", kindID}, {"created_at", kindTime},
+		{"updated_at", kindTime},
+	}
+	// Tags have no identifier and BookStack filters them by name and value only, which the dedicated arguments
+	// cover, so their lists take a sort and no filters.
+	tagNameSortFields = []listField{
+		{"name", kindText}, {"values", kindNumber}, {"usages", kindNumber}, {"page_count", kindNumber},
+		{"chapter_count", kindNumber}, {"book_count", kindNumber}, {"shelf_count", kindNumber},
+	}
+	tagValueSortFields = []listField{
+		{"name", kindText}, {"value", kindText}, {"usages", kindNumber}, {"page_count", kindNumber},
+		{"chapter_count", kindNumber}, {"book_count", kindNumber}, {"shelf_count", kindNumber},
+	}
+
+	commentListSchema    = sameFields(commentListFields)
+	attachmentListSchema = sameFields(attachmentListFields)
+	imageListSchema      = sameFields(imageListFields)
+	tagNameListSchema    = listSchema{Sort: tagNameSortFields, Default: "+name"}
+	tagValueListSchema   = listSchema{Sort: tagValueSortFields, Default: "+value"}
+
 	pageListSchema    = sameFields(pageListFields)
 	bookListSchema    = sameFields(bookListFields)
 	chapterListSchema = sameFields(chapterListFields)
@@ -437,6 +481,87 @@ func listedValue(l listedJSON, field string) (any, bool) {
 		return userID(l.UpdatedBy)
 	case "owned_by":
 		return userID(l.OwnedBy)
+	}
+	return nil, false
+}
+
+// commentValue reads a filter field from a raw comment row. A comment without parent has parent_id 0, as shown.
+func commentValue(m commentJSON, field string) (any, bool) {
+	switch field {
+	case "id":
+		return m.ID, true
+	case "commentable_id":
+		return m.CommentableID, true
+	case "commentable_type":
+		return m.CommentableType, true
+	case "parent_id":
+		return m.parent(), true
+	case "local_id":
+		return m.LocalID, true
+	case "content_ref":
+		return m.ContentRef, true
+	case "created_at":
+		return m.CreatedAt, true
+	case "updated_at":
+		return m.UpdatedAt, true
+	case "created_by":
+		return userID(m.CreatedBy)
+	case "updated_by":
+		return userID(m.UpdatedBy)
+	}
+	return nil, false
+}
+
+// attachmentValue reads a filter field from a raw attachment row.
+func attachmentValue(a attachmentJSON, field string) (any, bool) {
+	switch field {
+	case "id":
+		return a.ID, true
+	case "name":
+		return a.Name, true
+	case "extension":
+		return a.Extension, true
+	case "uploaded_to":
+		return a.UploadedTo, true
+	case "external":
+		return a.External, true
+	case "order":
+		return a.Order, true
+	case "created_at":
+		return a.CreatedAt, true
+	case "updated_at":
+		return a.UpdatedAt, true
+	case "created_by":
+		return userID(a.CreatedBy)
+	case "updated_by":
+		return userID(a.UpdatedBy)
+	}
+	return nil, false
+}
+
+// imageValue reads a filter field from a raw image row.
+func imageValue(m imageJSON, field string) (any, bool) {
+	switch field {
+	case "id":
+		return m.ID, true
+	case "name":
+		return m.Name, true
+	case "url":
+		return m.URL, true
+	case "path":
+		return m.Path, true
+	case "type":
+		return m.Type, true
+	case "uploaded_to":
+		return m.UploadedTo, true
+	case "created_at":
+		return m.CreatedAt, true
+	case "updated_at":
+		return m.UpdatedAt, true
+	case "created_by":
+		return userID(m.CreatedBy)
+	case "updated_by":
+		return userID(m.UpdatedBy)
 	}
 	return nil, false
 }

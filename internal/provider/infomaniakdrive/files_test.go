@@ -33,7 +33,7 @@ func TestFilesListReportsAnIncompletePageTransparently(t *testing.T) {
 	if err := json.Unmarshal([]byte(result), &page); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
-	if !page.HasMore || page.Cursor != "page2-canary" || page.Count != 1 || page.Entries[0].Type != "folder" {
+	if !page.HasMore || page.Cursor != (listFilter{}).sealCursor("page2-canary") || page.Count != 1 || page.Entries[0].Type != "folder" {
 		t.Fatalf("page = %+v, want an incomplete page with its continuation cursor", page)
 	}
 	// One extra request confirms the drive belongs to the bound account before the folder is listed.
@@ -41,7 +41,8 @@ func TestFilesListReportsAnIncompletePageTransparently(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 
-	// The reported cursor is passed straight back for the next page, unmodified.
+	// The reported cursor is passed straight back; Infomaniak receives its own cursor unmodified.
+	reported := page.Cursor
 	calls = nil
 	env = newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(r *http.Request) (*http.Response, error) {
 		if r.URL.Query().Get("cursor") != "page2-canary" {
@@ -51,7 +52,7 @@ func TestFilesListReportsAnIncompletePageTransparently(t *testing.T) {
 			fileJSONOf(childFileID, rootID, "report.pdf", "file")+`],"cursor":"","has_more":false}`), nil
 	}), nil)
 	result, err = env.invoke(filesList.ID, "drive",
-		fmt.Sprintf(`{"drive_id":%d,"cursor":"page2-canary"}`, ownDrive))
+		fmt.Sprintf(`{"drive_id":%d,"cursor":%q}`, ownDrive, reported))
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}

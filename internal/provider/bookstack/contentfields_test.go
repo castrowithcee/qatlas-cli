@@ -150,7 +150,7 @@ func contentTools() []contentTool {
 		{chaptersGet, func(c *Client) (any, error) { return objectJSON(c.GetChapter(ctx, 1)) }},
 		{shelvesList, func(c *Client) (any, error) { return rowsJSON(c.ListShelves(ctx, 0, 0, listQuery{})) }},
 		{shelvesGet, func(c *Client) (any, error) { return objectJSON(c.GetShelf(ctx, 14)) }},
-		{imagesList, func(c *Client) (any, error) { return rowsJSON(c.ListImages(ctx, 0, "", 0, 0)) }},
+		{imagesList, func(c *Client) (any, error) { return rowsJSON(c.ListImages(ctx, 0, "", 0, 0, listQuery{})) }},
 		{imagesGet, func(c *Client) (any, error) { return objectJSON(c.GetImage(ctx, 618)) }},
 	}
 }
@@ -444,7 +444,7 @@ func TestShelfAndImageReadsShowEveryDocumentedField(t *testing.T) {
 		"updated_at": "2020-04-10T13:32:04.000000Z", "created_by": id(1), "updated_by": id(2),
 	}})
 
-	images, err := rowsJSON(c.ListImages(context.Background(), 0, "", 0, 0))
+	images, err := rowsJSON(c.ListImages(context.Background(), 0, "", 0, 0, listQuery{}))
 	if err != nil {
 		t.Fatal(err)
 	}

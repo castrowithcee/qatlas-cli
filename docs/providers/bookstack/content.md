@@ -90,8 +90,9 @@ confirmation, are not part of any profile, send one request without retry, and `
 ## Tags and instance information
 
 `bookstack.tags.list` lists the tag names used on content the token can see. It takes
-`limit`, `offset`, and optional `name_contains`. `bookstack.tags.values` takes a required `name` and optional
-`value_contains`, `limit`, and `offset` and lists that name's values. The contains
+`limit`, `offset`, optional `name_contains`, and `sort`. `bookstack.tags.values` takes a required `name` and optional
+`value_contains`, `limit`, `offset`, and `sort` and lists that name's values. Tags are sorted by name (values by value) unless `sort`
+says otherwise; they take no `filters`, because BookStack filters tags by name and value only, which the contains arguments cover. The contains
 arguments (at most 255 characters, case-insensitive) are sent as a `%...%` filter in which `%`, `_`, and `\` are
 masked as literals; every returned row is checked against the filter again, because BookStack ignores filters
 it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection with

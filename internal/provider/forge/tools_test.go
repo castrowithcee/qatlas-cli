@@ -47,7 +47,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id + ".releases.delete", p.id + ".releases.delete-by-tag", p.id + ".releases.get",
 			p.id + ".releases.get-by-tag", p.id + ".releases.get-latest", p.id + ".releases.list",
 			p.id + ".releases.update", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
-			p.id + ".signing-keys.get", p.id + ".version.get"}
+			p.id + ".signing-keys.get", p.id + ".tags.create", p.id + ".tags.delete", p.id + ".tags.get",
+			p.id + ".tags.list", p.id + ".version.get"}
 		if p == forgejo {
 			want = append(want, p.id+".nodeinfo.get")
 			slices.Sort(want)

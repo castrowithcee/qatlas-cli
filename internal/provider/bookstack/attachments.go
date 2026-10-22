@@ -40,13 +40,13 @@ var (
 		Description: "List the attachments of one page: files and links, without their content. external is true for a " +
 			"link. " + attachmentNote + ". page_id is required for a connection with targets",
 		Tags: []string{"knowledge", "attachments", "bookstack"}, Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + attachmentListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(attachmentListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "page_id", Description: "Only attachments of this page; required for a connection with targets"},
 			{Name: "limit", Description: "Maximum number of attachments to return; 0 returns all"},
 			{Name: "offset", Description: "Number of attachments to skip"},
-		},
+		}, attachmentListSchema.arguments()...),
 		Fields:   attachmentFields(),
 		Examples: []capability.Example{{Description: "List the attachments of page 42", Arguments: json.RawMessage(`{"page_id":42}`)}},
 	}
@@ -110,12 +110,18 @@ func attachmentFields() []capability.Field {
 func invokeAttachmentsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var input struct {
-		PageID *int64 `json:"page_id"`
-		Limit  int    `json:"limit"`
-		Offset int    `json:"offset"`
+		PageID  *int64      `json:"page_id"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list attachments", "the validated arguments could not be read")
+	}
+	query, err := parseListQuery(attachmentListSchema, input.Sort, input.Filters)
+	if err != nil {
+		return nil, err
 	}
 	var pageID int64
 	if input.PageID != nil {
@@ -135,7 +141,7 @@ func invokeAttachmentsList(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	return client.ListAttachments(ctx, pageID, input.Limit, input.Offset)
+	return client.ListAttachments(ctx, pageID, input.Limit, input.Offset, query)
 }
 
 func invokeAttachmentsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -157,7 +163,7 @@ func invokeAttachmentsGet(ctx context.Context, resolved *config.Resolved, secret
 // ListAttachments returns the attachments of one page, or of every page for an unbound connection without
 // page_id. BookStack ignores a filter it does not know, so each row is checked here against the page; limit
 // and offset count the rows that remain.
-func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offset int) (output.Collection, error) {
+func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
 		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
@@ -168,7 +174,7 @@ func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offse
 		}
 		query.Set("filter[uploaded_to]", strconv.FormatInt(pageID, 10))
 	}
-	rows, err := scanList(ctx, c, scanSpec[attachmentJSON]{
+	spec := scanSpec[attachmentJSON]{
 		op: "list attachments", path: "/api/attachments", query: query, filtered: true, limit: limit, offset: offset,
 		narrow: "page_id", arguments: argNames(attachmentsList),
 		id:   func(a attachmentJSON) int64 { return a.ID },
@@ -181,7 +187,9 @@ func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offse
 				"created_at": a.CreatedAt, "updated_at": a.UpdatedAt,
 			}
 		},
-	})
+	}
+	spec.withListQuery(q, attachmentValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}

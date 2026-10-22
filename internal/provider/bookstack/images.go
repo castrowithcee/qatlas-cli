@@ -41,14 +41,14 @@ var (
 		Description: "List the gallery images and drawings of one page, without their data. type is gallery for an " +
 			"image and drawio for a drawing. " + imageNote + ". page_id is required for a connection with targets",
 		Tags: []string{"knowledge", "images", "bookstack"}, Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"type":{"type":"string","enum":["gallery","drawio"]},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"type":{"type":"string","enum":["gallery","drawio"]},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + imageListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(imageListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "page_id", Description: "Only images of this page; required for a connection with targets"},
 			{Name: "type", Description: "Only images of this type: gallery or drawio"},
 			{Name: "limit", Description: "Maximum number of images to return; 0 returns all"},
 			{Name: "offset", Description: "Number of images to skip"},
-		},
+		}, imageListSchema.arguments()...),
 		Fields:   append(imageFields("id and name"), imagePathField),
 		Examples: []capability.Example{{Description: "List the images of page 42", Arguments: json.RawMessage(`{"page_id":42}`)}},
 	}
@@ -150,13 +150,19 @@ func imageFieldMap(m imageJSON) map[string]any {
 func invokeImagesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var input struct {
-		PageID *int64 `json:"page_id"`
-		Type   string `json:"type"`
-		Limit  int    `json:"limit"`
-		Offset int    `json:"offset"`
+		PageID  *int64      `json:"page_id"`
+		Type    string      `json:"type"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list images", "the validated arguments could not be read")
+	}
+	query, err := parseListQuery(imageListSchema, input.Sort, input.Filters)
+	if err != nil {
+		return nil, err
 	}
 	var pageID int64
 	if input.PageID != nil {
@@ -179,7 +185,7 @@ func invokeImagesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	return client.ListImages(ctx, pageID, input.Type, input.Limit, input.Offset)
+	return client.ListImages(ctx, pageID, input.Type, input.Limit, input.Offset, query)
 }
 
 func invokeImagesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -201,7 +207,7 @@ func invokeImagesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 // ListImages returns the images of one page, or of every page for an unbound connection without page_id.
 // BookStack ignores a filter it does not know, so each row is checked here against page and type; limit and
 // offset count the rows that remain.
-func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string, limit, offset int) (output.Collection, error) {
+func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
 		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
@@ -215,7 +221,7 @@ func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string,
 	if imageType != "" {
 		query.Set("filter[type]", imageType)
 	}
-	rows, err := scanList(ctx, c, scanSpec[imageJSON]{
+	spec := scanSpec[imageJSON]{
 		op: "list images", path: "/api/image-gallery", query: query, filtered: true, limit: limit, offset: offset,
 		narrow: "page_id", arguments: argNames(imagesList),
 		id: func(m imageJSON) int64 { return m.ID },
@@ -223,7 +229,9 @@ func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string,
 			return isImageType(m.Type) && (imageType == "" || m.Type == imageType) && (pageID == 0 || m.UploadedTo == pageID)
 		},
 		row: func(m imageJSON) output.Row { return output.Row(imageFieldMap(m)) },
-	})
+	}
+	spec.withListQuery(q, imageValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}

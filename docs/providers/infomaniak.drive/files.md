@@ -33,7 +33,7 @@ was not asked for, even if Infomaniak sends it. A value a tool needs for itself 
 adds no member: `parents` for the proof of `files.stat` under a subtree binding, and `sharelink` for
 `links.list`, which reports the link as its `link` and never as `sharelink`. `highlights` is not offered: it
 belongs to the search endpoints, and these operations do not deliver it. `with` changes what an entry carries,
-never which entries a page holds, so the cursor stays Infomaniak's own.
+never which entries a page holds, so it does not change the cursor binding.
 
 - The lock token, the URL of a share link, and the URL and `uuid` of a dropbox grant access without an account.
   A connection need not name `files.list`, `files.stat`, or `trash.list` in `tools`, so these values are left
