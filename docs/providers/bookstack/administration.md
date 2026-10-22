@@ -1,0 +1,149 @@
+---
+description: >
+  Describes BookStack instance information, content permission, recycle bin, user, role, and audit log tools and their safety boundaries.
+type: knowledge
+edit: shared
+created: 2026-10-22
+updated: 2026-10-22
+---
+
+# BookStack administration
+
+Group `administration`.
+
+## Instance information
+
+`bookstack.system.get` returns the instance information without logo. It returns no
+content and therefore also works on a connection with targets.
+
+## Content permissions
+
+`bookstack.content-permissions.get` reads the permission overrides of one `page`, `chapter`, `book`, or
+`bookshelf` (`type` and `id`): the owner (`id`, `name`, `slug`), the role overrides (`role_id`, `display_name`,
+`view`, `create`, `update`, `delete`; at most 100, otherwise `truncated`), and the fallback permissions
+(`inheriting`, plus the four values when not inheriting) that apply to every role without an override. Owner and
+role names are personal data and untrusted provider content.
+
+`bookstack.content-permissions.update` changes those permissions for existing roles in one request. Every
+category is optional, but at least one is required, and BookStack applies exactly what is sent:
+
+- `owner_id`: the new owner (a positive user id).
+- `role_permissions`: replaces all role overrides. At most 100 entries with a unique positive `role_id` and all
+  of `view`, `create`, `update`, `delete`. A category that is left out stays unchanged; an empty list removes
+  all role overrides.
+- `fallback_permissions`: `inheriting`, and all four values when `inheriting` is `false` (no values when it is
+  `true`).
+
+Public access is never opened. BookStack stores the fallback as an override that applies to every role without
+an entry of its own, guests included, so Qatlas protects the guest role (the system role `public`). Before it
+changes anything it determines that role (a read of the role list, at most 100 roles, and a read of the role to
+confirm its system name and list its users), reads the current permissions of the item, and refuses locally,
+without sending the change, when
+
+- an entry for the guest role sets any value to `true`, unless the entry is identical to the guest entry that
+  already exists,
+- `role_permissions` is sent and omits an existing guest entry (also an empty list while a guest entry exists),
+- `fallback_permissions` differs from the current fallback and the resulting role overrides (the sent
+  `role_permissions`, otherwise the current ones) have no explicit guest entry with all four values `false`, or
+- `owner_id` is a user of the guest role, because ownership would pass to anonymous visitors.
+
+If the guest role cannot be determined (for example the token's user lacks the BookStack permission to manage
+user roles, no role has the system name `public`, or the confirmation differs), the change is refused as well.
+The refusals never name the other target or relay provider text. The guest lookup is made once per call and not
+cached beyond it.
+
+The tool requires confirmation and a tool allow list, is idempotent, is part of no profile, and sends exactly
+one `PUT` without retry; after a timeout or a 5xx answer the result is reported as uncertain. On a connection
+with targets the item is proven first (see [Targets](README.md#targets)).
+
+## Recycle bin
+
+`bookstack.recycle-bin.list` lists the deleted items of the instance (`limit`, `offset`). Each entry carries `id`
+(the deletion identifier) and, of the deleted item, only its basic metadata where BookStack reports it, never its
+content. Names are untrusted data.
+
+`bookstack.recycle-bin.restore` restores one deletion by `deletion_id`.
+`bookstack.recycle-bin.destroy` destroys one deletion permanently; this cannot be
+undone. BookStack requires the role permissions `settings-manage` and `restrictions-manage-all` for all three.
+The recycle bin spans the whole instance, so the tools are refused on a connection with targets. Each
+change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
+reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
+that names it and the `delete` effect.
+
+## Users, roles, and audit log
+
+These tools cover the whole instance, so they are refused on a connection with targets (before any secret is
+read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
+authentication identifiers, IP addresses). Names and texts are untrusted data.
+
+`bookstack.users.list` (`limit`, `offset`) and `bookstack.users.get` (`id`) need the role permission
+`users-manage`. BookStack does not report roles in the
+listing, so only `get` carries them. Avatar and edit addresses are never returned.
+
+`bookstack.roles.list` (`limit`, `offset`) and `bookstack.roles.get` (`id`) need `user-roles-manage`. `get` returns the
+`permissions` and the `users` of the role besides the listed fields, at most 1000 users; `truncated` is true when the
+users or permissions were cut.
+
+### Changing roles
+
+`bookstack.roles.create`, `bookstack.roles.update`, and `bookstack.roles.delete` need the role permission
+`user-roles-manage`. Role permissions can escalate up to full administrative control of the instance, so these
+tools require a tool allow list, are part of no profile, need confirmation, and are refused on a connection with
+targets. Each sends exactly one change request without retry; after a timeout, a 5xx answer, or an unreadable
+answer the result is reported as uncertain. `create` and `update` return the role like `roles.get`.
+
+- `roles.create` takes `display_name` (3 to 180 characters, required), `description` (at most 180 characters),
+  `mfa_enforced`, and `permissions`.
+- `roles.update` takes `id` and the same fields; at least one must be given and a field that is left out stays
+  unchanged. `permissions` replaces the whole list, so an empty list removes every permission.
+- `roles.delete` takes `id` and is final: the users of the role lose it, the content permissions of the role are
+  removed, and the API offers no migration of the users to another role. BookStack refuses to delete the
+  registration role; Qatlas also reads the role first and refuses every system role (a role with a system name,
+  such as `admin` or `public`) without a change.
+
+`permissions` accepts only names from a fixed list of the permissions that the role form of BookStack v26.09.1
+offers: `access-api`, `content-export`, `content-import`, `editor-change`, `receive-notifications`,
+`restrictions-manage-all`, `restrictions-manage-own`, `settings-manage`, `templates-manage`, `user-roles-manage`,
+`users-manage`, `revision-view-all`, and the content permissions `book-`, `bookshelf-`, `chapter-`, and `page-`
+(`view`, `update`, `delete`, and `create`, each with `-all` and `-own`, except that `book-` and `bookshelf-` have
+no `create-own`), and `image-`, `attachment-`, and `comment-` (`create-all`, `update-all`, `update-own`,
+`delete-all`, `delete-own`). Unknown or repeated names are refused before any secret is read or request is sent.
+
+The guest role (system role `public`, public access) is never changed. `roles.update` reads the role and
+determines the guest role (a read of the role list, at most 100 roles, and a read of that role) and refuses,
+without a change, when the role is the guest role or when the guest role cannot be determined.
+
+`external_auth_id` is not supported: Qatlas never binds a role to the groups of an external identity provider,
+so the argument does not exist and no request body contains it.
+
+### Changing and deleting users
+
+`bookstack.users.update` and `bookstack.users.delete` change or remove existing users and need the role
+permission `users-manage`. They require a tool allow list, are part of no profile, need confirmation, and are
+refused on a connection with targets (before any secret is read). Each sends exactly one change request
+without retry; after a timeout, a 5xx answer, or an unreadable answer the result is reported as uncertain. No tool
+creates or invites users or sets an e-mail address, a password, or an external authentication identifier, and no
+tool creates API tokens: these arguments do not exist, unknown arguments are refused, and no request body contains
+them.
+
+- `users.update` takes `id` and at least one of `name` (1 to 100 characters), `language` (1 to 15 letters, digits,
+  hyphens, or underscores), and `roles` (at most 100 distinct positive role identifiers). A field that is left out
+  stays unchanged; `roles` replaces all roles of the user, so an empty list removes every role. It returns the
+  user like `users.get`.
+- `users.delete` takes `id` and optionally `migrate_ownership_id`, which must differ from `id`. It is final.
+  Without `migrate_ownership_id` the content of the user stays without an owner; with it, the ownership passes to
+  that user. BookStack refuses to delete the only administrator and the guest user.
+
+Public access is protected. When `roles` is given, `users.update` determines the guest role (system role `public`;
+a read of the role list, at most 100 roles, and a read of that role, which needs `user-roles-manage` as well) and
+refuses, without a change, when the user is a guest user, when `roles` contains the guest role, or when the guest
+role cannot be determined. `users.delete` does the same check when `migrate_ownership_id` is given and refuses
+to hand the content to a guest user. Without `roles` or `migrate_ownership_id` no role is read.
+
+`bookstack.audit-log.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
+of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
+the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
+`loggable_type` (`page`, `chapter`, `book`, or `bookshelf`), `loggable_id`, and `created_after`/`created_before`
+(`YYYY-MM-DD` or RFC 3339; dates are UTC and a date alone means the start of that day). Values are checked before
+any request. BookStack ignores filters it does not know, so every returned entry is checked again against all
+filters.
