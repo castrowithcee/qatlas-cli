@@ -105,12 +105,11 @@ var gamesHighScores = capability.Descriptor{
 		gameUserSchema + `},"required":["message_id","user_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"scores":{"type":"array","items":` +
 		`{"type":"object","properties":{"position":{"type":"integer"},"score":{"type":"integer"},` +
-		`"user":{"type":"object","properties":{"id":{"type":"integer"},"is_bot":{"type":"boolean"},` +
-		`"first_name":{"type":"string"},"username":{"type":"string"}}}},"required":["position","score"]}},` +
+		`"user":` + userSchema + `},"required":["position","score"]}},` +
 		`"truncated":{"type":"boolean"}},"required":["scores"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{gameChatArgument, gameMessageArgument, gameUserArgument},
 	Fields: []capability.Field{
-		{Name: "scores", Description: "At most 50 entries with position, score, and user"},
+		{Name: "scores", Description: "At most 50 entries with position, score, and user as " + userFieldsText},
 		{Name: "truncated", Description: "True when Telegram returned more entries than are shown"},
 	},
 	Examples: []capability.Example{{

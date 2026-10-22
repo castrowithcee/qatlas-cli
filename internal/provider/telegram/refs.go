@@ -32,6 +32,10 @@ const (
 	refJoinRequestQuery
 	// refBusinessChat names a chat of one business connection; its binding is business/<id>.
 	refBusinessChat
+	// refGuestQuery names a guest query; like the other kinds it is bound to the target it came from.
+	refGuestQuery
+	// refInlineMessage names the inline message of a chosen inline result or callback.
+	refInlineMessage
 )
 
 const (
@@ -51,7 +55,7 @@ type parsedRef struct {
 	tag     []byte
 }
 
-func (k refKind) valid() bool { return k >= refFile && k <= refBusinessChat && k != refRetired }
+func (k refKind) valid() bool { return k >= refFile && k <= refInlineMessage && k != refRetired }
 
 func refKey(token string) []byte {
 	// HKDF-SHA256 with a 32-byte output cannot fail.
