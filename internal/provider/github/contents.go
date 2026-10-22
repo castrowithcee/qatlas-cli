@@ -133,6 +133,8 @@ var treesGet = capability.Descriptor{
 			"sha, and size for a blob"},
 		{Name: "truncated", Description: "True when GitHub's own tree was too large to return in full, or " +
 			"Qatlas cut it at its own bound"},
+		{Name: "ref", Description: "Branch, tag, or commit SHA the tree was read at"},
+		{Name: "recursive", Description: "True when every entry below every directory was read"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the top-level tree of the default branch",

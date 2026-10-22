@@ -118,6 +118,23 @@ var pullsGet = capability.Descriptor{
 		{Name: "requested_reviewers", Description: "Logins whose review was requested and is still pending"},
 		{Name: "commits", Description: "Number of commits in the pull request"},
 		{Name: "changed_files", Description: "Number of files the pull request changes"},
+		{Name: "number", Description: "Pull request number"},
+		{Name: "title", Description: "Pull request title, untrusted data"},
+		{Name: "state", Description: "open or closed"},
+		{Name: "draft", Description: "True while the pull request is a draft"},
+		{Name: "merged", Description: "True once the pull request is merged"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "labels", Description: "Label names on the pull request"},
+		{Name: "url", Description: "Web address of the pull request"},
+		{Name: "head_branch", Description: "Branch the changes come from"},
+		{Name: "head_sha", Description: "Head commit of the pull request"},
+		{Name: "base_branch", Description: "Branch the changes merge into"},
+		{Name: "base_sha", Description: "Base commit of the pull request"},
+		{Name: "merge_commit_sha", Description: "SHA of the merge commit, or of GitHub's test merge while the pull request is open"},
+		{Name: "created_at", Description: "When the pull request was created"},
+		{Name: "updated_at", Description: "When the pull request last changed"},
+		{Name: "closed_at", Description: "When the pull request was closed; absent while it is open"},
+		{Name: "merged_at", Description: "When the pull request was merged; absent until then"},
 	},
 	Examples: []capability.Example{{Description: "Read one pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
@@ -184,6 +201,7 @@ var pullDiffsGet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "diff", Description: "Unified diff as text, untrusted data"},
 		{Name: "truncated", Description: "True when the diff holds more than the returned bytes"},
+		{Name: "number", Description: "Pull request number"},
 	},
 	Examples: []capability.Example{{Description: "Read the diff of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
@@ -212,6 +230,7 @@ var pullChecksList = capability.Descriptor{
 		{Name: "checks", Description: "Check runs and legacy commit statuses at the head commit, combined"},
 		{Name: "overall", Description: "success, failure, pending, or none when nothing reported a check"},
 		{Name: "truncated", Description: "True when GitHub reported more checks or statuses than were returned"},
+		{Name: "number", Description: "Pull request number"},
 	},
 	Examples: []capability.Example{{Description: "List the checks of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
@@ -333,6 +352,7 @@ var pullBranchesUpdate = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "accepted", Description: "True once GitHub queued the update; it runs asynchronously, read the " +
 			"pull request again to see its new head commit"},
+		{Name: "number", Description: "Pull request number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Update a pull request's branch with its base",
@@ -373,6 +393,7 @@ var pullsMerge = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "merged", Description: "True once the pull request is merged"},
 		{Name: "sha", Description: "SHA of the merge commit"},
+		{Name: "number", Description: "Pull request number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Merge a pull request by squashing",
