@@ -175,12 +175,12 @@ func TestRepositoriesToolsSatisfyTheirContractThroughTheApplicationCore(t *testi
 		t.Fatalf("fork into an organization = %s, %v", forkedOrg, err)
 	}
 
-	// Collaborators are listed with login, type, role, and permissions, never an email address.
+	// Collaborators are listed with login, type, role, permissions, and the email address GitHub reports.
 	collaborators, err := invoke(t, core, collaboratorsList.ID, "repo", `{}`, false)
 	if err != nil || !strings.Contains(string(collaborators), `"login":"octocat"`) ||
 		!strings.Contains(string(collaborators), `"role_name":"admin"`) ||
 		!strings.Contains(string(collaborators), `"maintain":true`) ||
-		strings.Contains(string(collaborators), "email") || strings.Contains(string(collaborators), "example.invalid") {
+		!strings.Contains(string(collaborators), `"email":"octocat@example.invalid"`) {
 		t.Fatalf("collaborators = %s, %v", collaborators, err)
 	}
 
