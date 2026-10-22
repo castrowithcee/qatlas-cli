@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -61,6 +62,11 @@ var planningFields = []capability.Field{
 	{Name: "complete", Description: "True when every step succeeded"},
 	{Name: "error", Description: "What stopped an incomplete change; read the current state before repeating it"},
 }
+
+// issuePlanningFields is planningFields plus the issue member, for the tools that share planningOutput.
+var issuePlanningFields = append(slices.Clone(planningFields),
+	capability.Field{Name: "issue", Description: "The issue the item stands for: number, repository, and url; " +
+		"absent when the item holds no issue"})
 
 var issuesCreate = capability.Descriptor{
 	ID:      Provider + ".issues.create",
@@ -239,6 +245,10 @@ var commentsCreate = capability.Descriptor{
 		{Name: "id", Description: "Comment identifier"},
 		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "body", Description: "Comment body in Markdown, untrusted data"},
+		{Name: "created_at", Description: "When the comment was created"},
+		{Name: "updated_at", Description: "When the comment last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Comment on an issue",
@@ -262,7 +272,7 @@ var itemsUpdate = capability.Descriptor{
 		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 		{Name: "fields", Description: fieldsDescription, Required: true},
 	},
-	Fields: planningFields,
+	Fields: issuePlanningFields,
 	Examples: []capability.Example{{
 		Description: "Move an item to In progress and set its estimate",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA","fields":{"Status":"In progress","Estimate":3}}`),
@@ -287,7 +297,7 @@ var itemsAdd = capability.Descriptor{
 		repositoryArgument,
 		{Name: "fields", Description: fieldsDescription},
 	},
-	Fields: planningFields,
+	Fields: issuePlanningFields,
 	Examples: []capability.Example{{
 		Description: "Add an issue to the project as Todo",
 		Arguments:   json.RawMessage(`{"repository":"octo-org/example","number":42,"fields":{"Status":"Todo"}}`),
@@ -310,7 +320,9 @@ var itemsArchive = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 	},
-	Fields: []capability.Field{{Name: "archived", Description: "True once the item is archived"}},
+	Fields: []capability.Field{{Name: "archived", Description: "True once the item is archived"},
+		{Name: "item_id", Description: "Identifier of the project item"},
+	},
 	Examples: []capability.Example{{
 		Description: "Archive one item",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA"}`),
@@ -334,7 +346,7 @@ var draftsCreate = capability.Descriptor{
 		{Name: "body", Description: "Draft body in Markdown, at most 65536 characters"},
 		{Name: "fields", Description: fieldsDescription},
 	},
-	Fields: planningFields,
+	Fields: issuePlanningFields,
 	Examples: []capability.Example{{
 		Description: "Note an idea as a draft",
 		Arguments:   json.RawMessage(`{"title":"Evaluate a cache for reads","fields":{"Status":"Todo"}}`),

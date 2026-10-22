@@ -142,7 +142,9 @@ var statusDelete = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"status_update_id":{"type":"string"},` +
 		`"deleted":{"type":"boolean"}},"required":["status_update_id","deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{statusUpdateArgument},
-	Fields:    []capability.Field{{Name: "deleted", Description: "True once GitHub deleted the status update"}},
+	Fields: []capability.Field{{Name: "deleted", Description: "True once GitHub deleted the status update"},
+		{Name: "status_update_id", Description: "Identifier of the deleted status update"},
+	},
 	Examples: []capability.Example{{
 		Description: "Delete a status update",
 		Arguments:   json.RawMessage(`{"status_update_id":"PVTSU_lADOAAAAAAAAAAAAzgAAAAA"}`),

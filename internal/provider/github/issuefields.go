@@ -130,6 +130,7 @@ var issueFieldsSet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "url", Description: "Web address of the issue"},
 		{Name: "updated", Description: "Count of field values sent, which GitHub applied as a whole"},
+		{Name: "number", Description: "Issue number the field values were set on"},
 	},
 	Examples: []capability.Example{{
 		Description: "Set a text field and clear a select field",

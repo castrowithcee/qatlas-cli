@@ -91,6 +91,15 @@ var releasesGet = capability.Descriptor{
 		{Name: "body", Description: "Full release notes, untrusted data"},
 		{Name: "target_commitish", Description: "Branch or commit the release was, or will be, cut from"},
 		{Name: "assets_count", Description: "Number of assets attached to the release"},
+		{Name: "id", Description: "Release identifier"},
+		{Name: "tag", Description: "Tag the release was cut from"},
+		{Name: "name", Description: "Release name, untrusted data"},
+		{Name: "draft", Description: "True while the release is a draft"},
+		{Name: "prerelease", Description: "True for a prerelease"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "created_at", Description: "When the release was created"},
+		{Name: "published_at", Description: "When the release was published; absent for a draft"},
+		{Name: "url", Description: "Web address of the release"},
 	},
 	Examples: []capability.Example{{Description: "Read the latest release", Arguments: json.RawMessage(`{"latest":true}`)}},
 }
@@ -204,6 +213,7 @@ var releasesDelete = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "deleted", Description: "True once GitHub deleted the release"},
+		{Name: "id", Description: "Identifier of the deleted release"},
 	},
 	Examples: []capability.Example{{Description: "Delete a release", Arguments: json.RawMessage(`{"id":1}`)}},
 }
