@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -98,11 +99,11 @@ var filesList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":` + idSchema + `,"folder_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
-		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
-		`"required":["drive_id"],"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"folder_id":{"type":"integer"},` +
-		`"entries":{"type":"array","items":` + entrySchema + `},` +
+		`"entries":{"type":"array","items":` + fileEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
 		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","folder_id","entries","has_more","count"],"additionalProperties":false}`),
@@ -111,8 +112,9 @@ var filesList = capability.Descriptor{
 		{Name: "folder_id", Description: "Folder identifier below the same drive; the drive's root (1) when omitted, or the one files target of a drive bound only by files targets"},
 		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
+		fileWithArgument,
 	},
-	Fields: append(append([]capability.Field{}, entryFields...),
+	Fields: append(slices.Concat(entryFields, fileWithFields),
 		capability.Field{Name: "folder_id", Description: "Folder that was listed"},
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not the whole folder"},
@@ -132,14 +134,15 @@ var filesStat = capability.Descriptor{
 	Tags:     []string{"infomaniak", "kdrive", "files", "stat", "metadata"},
 	Risk:     filesReadRisk,
 	Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` + idSchema + `},` +
-		`"required":["drive_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(entrySchema),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` + idSchema +
+		`,` + fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(fileEntrySchema),
 	Arguments: []capability.Argument{
 		driveIDArgument,
 		{Name: "file_id", Description: "File or folder identifier below the same drive; the drive's root (1) when omitted"},
+		fileWithArgument,
 	},
-	Fields: entryFields,
+	Fields: slices.Concat(entryFields, fileWithFields),
 	Examples: []capability.Example{{Description: "Read the metadata of the root folder of one drive",
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
 }
@@ -202,7 +205,8 @@ type fileJSON struct {
 	ScanStatus     string  `json:"scan_status"`
 	Color          string  `json:"color"`
 	// Parents is every folder above the object, present only when it was asked for.
-	Parents *[]parentJSON `json:"parents"`
+	Parents *[]fileJSON `json:"parents"`
+	fileWithJSON
 }
 
 // Entry is the stable Qatlas view of one file or folder. Content is never part of it.
@@ -232,6 +236,8 @@ type Entry struct {
 	SymbolicLink   string `json:"symbolic_link,omitempty"`
 	ScanStatus     string `json:"scan_status,omitempty"`
 	Color          string `json:"color,omitempty"`
+
+	EntryWith
 }
 
 // entryOf normalises one Infomaniak file or directory resource into the stable envelope. dir/file is
@@ -312,10 +318,11 @@ type Content struct {
 }
 
 type filesListArguments struct {
-	DriveID  int64  `json:"drive_id"`
-	FolderID int64  `json:"folder_id"`
-	Cursor   string `json:"cursor"`
-	Limit    int    `json:"limit"`
+	DriveID  int64    `json:"drive_id"`
+	FolderID int64    `json:"folder_id"`
+	Cursor   string   `json:"cursor"`
+	Limit    int      `json:"limit"`
+	With     []string `json:"with"`
 }
 
 func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -323,6 +330,9 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	var input filesListArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list files", "the validated arguments could not be read")
+	}
+	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
+		return nil, err
 	}
 	if err := selectDrive(resolved, input.DriveID); err != nil {
 		return nil, err
@@ -348,7 +358,7 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 			return nil, err
 		}
 	}
-	return client.ListFolder(ctx, input.DriveID, folderID, input.Cursor, limit)
+	return client.ListFolder(ctx, input.DriveID, folderID, input.Cursor, limit, input.With)
 }
 
 // listFolder names the folder to list. Without folder_id a drive bound as a whole lists its root; a drive
@@ -373,13 +383,19 @@ func listFolder(resolved *config.Resolved, input filesListArguments) (folderID i
 }
 
 // ListFolder reads one page of the immediate children of one folder, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself.
-func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor string, limit int) (*FolderPage, error) {
+// answers: it never follows has_more itself. with loads related data per entry.
+func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor string, limit int, with []string) (*FolderPage, error) {
 	const op = "list files"
+	if err := checkValues(with, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
 	path := fmt.Sprintf("/3/drive/%d/files/%d/files", driveID, folderID)
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
+	}
+	if len(with) > 0 {
+		query.Set("with", withQuery("", with))
 	}
 	var items []fileJSON
 	var meta navigatorJSON
@@ -388,7 +404,7 @@ func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor
 	}
 	entries := make([]Entry, 0, len(items))
 	for _, item := range items {
-		entries = append(entries, entryOf(item))
+		entries = append(entries, c.entryWith(driveID, item, with))
 	}
 	return &FolderPage{DriveID: driveID, FolderID: folderID, Entries: entries, Cursor: meta.Cursor,
 		HasMore: meta.HasMore, Count: len(entries), ResponseAt: positiveTime(meta.ResponseAt)}, nil
@@ -399,11 +415,19 @@ type fileArguments struct {
 	FileID  int64 `json:"file_id"`
 }
 
+type filesStatArguments struct {
+	fileArguments
+	With []string `json:"with"`
+}
+
 func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	var input fileArguments
+	var input filesStatArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("stat file", "the validated arguments could not be read")
+	}
+	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
+		return nil, err
 	}
 	if err := selectDrive(resolved, input.DriveID); err != nil {
 		return nil, err
@@ -419,18 +443,19 @@ func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := client.verifyDriveAccount(ctx, "stat file", input.DriveID); err != nil {
 		return nil, err
 	}
-	return client.statProven(ctx, input.DriveID, fileID)
+	return client.statProven(ctx, input.DriveID, fileID, input.With)
 }
 
-// StatFile reads the metadata of exactly one file or folder.
-func (c *Client) StatFile(ctx context.Context, driveID, fileID int64) (*Entry, error) {
-	const op = "stat file"
-	path := fmt.Sprintf("/3/drive/%d/files/%d", driveID, fileID)
-	var item fileJSON
-	if err := c.do(ctx, op, path, nil, &item); err != nil {
+// StatFile reads the metadata of exactly one file or folder; with loads related data.
+func (c *Client) StatFile(ctx context.Context, driveID, fileID int64, with []string) (*Entry, error) {
+	if err := checkValues(with, fileWithValues, "with"); err != nil {
 		return nil, err
 	}
-	entry := entryOf(item)
+	item, err := c.readFile(ctx, "stat file", driveID, fileID, withQuery("", with))
+	if err != nil {
+		return nil, err
+	}
+	entry := c.entryWith(driveID, *item, with)
 	return &entry, nil
 }
 
