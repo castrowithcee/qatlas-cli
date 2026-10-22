@@ -36,17 +36,17 @@ var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
 	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList, issueConfigGet,
-	issueConfigValidate, commentsList, commentsListRepository, commentsGet, commentsCreate, commentsUpdate,
-	commentsDelete, assigneesList, assigneesCheck, issueAssigneesAdd, issueAssigneesRemove, issueAssigneesCheck,
-	labelsList, labelsGet, labelsCreate, labelsUpdate, labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate,
-	orgLabelsUpdate, orgLabelsDelete, issueLabelsList, issueLabelsAdd, issueLabelsReplace, issueLabelsRemove,
-	issueLabelsClear, milestonesList, milestonesGet, milestonesCreate, milestonesUpdate, milestonesDelete,
-	pullRequestsList, pullRequestsGet, pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged,
-	commitPullRequestsGet, pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet,
-	releasesGetLatest, releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag,
-	pullRequestsCreate, pullRequestsUpdate, pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge,
-	pullRequestsMerge, pullRequestBranchesUpdate}
+	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, tagsList, tagsGet, tagsCreate, tagsDelete,
+	issueTemplatesList, issueConfigGet, issueConfigValidate, commentsList, commentsListRepository, commentsGet,
+	commentsCreate, commentsUpdate, commentsDelete, assigneesList, assigneesCheck, issueAssigneesAdd,
+	issueAssigneesRemove, issueAssigneesCheck, labelsList, labelsGet, labelsCreate, labelsUpdate, labelsDelete,
+	orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete, issueLabelsList, issueLabelsAdd,
+	issueLabelsReplace, issueLabelsRemove, issueLabelsClear, milestonesList, milestonesGet, milestonesCreate,
+	milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet, pullRequestsGetByBranches,
+	pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet, pullRequestFilesList,
+	pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest, releasesGetByTag,
+	releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag, pullRequestsCreate, pullRequestsUpdate,
+	pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge, pullRequestsMerge, pullRequestBranchesUpdate}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

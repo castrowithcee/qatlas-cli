@@ -182,6 +182,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Milestones](milestones.md): the milestones of a repository
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Releases](releases.md): releases and their attached assets
+- [Tags](tags.md): the tags of a repository
 
 ## Not offered
 
