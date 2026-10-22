@@ -466,7 +466,7 @@ func TestSchemaDiscoveryIsBoundedByTheConnectionScope(t *testing.T) {
 		t.Fatalf("ListColumns() = %v", err)
 	}
 	if columns.Table != "id:0000" || len(columns.Columns) != 1 ||
-		columns.Columns[0] != (Column{Key: "0000", Name: "Name", Type: "text"}) {
+		encoded(columns.Columns[0]) != `{"key":"0000","name":"Name","type":"text"}` {
 		t.Fatalf("columns = %+v", columns)
 	}
 

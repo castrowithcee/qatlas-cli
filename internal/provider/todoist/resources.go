@@ -55,27 +55,49 @@ type rawDue struct {
 	String      string  `json:"string"`
 	IsRecurring bool    `json:"is_recurring"`
 	Timezone    *string `json:"timezone"`
+	Lang        *string `json:"lang"`
+}
+
+// rawDuration is the planned duration of a task.
+type rawDuration struct {
+	Amount int64  `json:"amount"`
+	Unit   string `json:"unit"`
+}
+
+// rawDeadline is the deadline of a task; Todoist answers its date and the language it was read in.
+type rawDeadline struct {
+	Date *string `json:"date"`
+	Lang *string `json:"lang"`
 }
 
 type rawTask struct {
-	ID          string   `json:"id"`
-	ProjectID   string   `json:"project_id"`
-	SectionID   *string  `json:"section_id"`
-	ParentID    *string  `json:"parent_id"`
-	Content     string   `json:"content"`
-	Description string   `json:"description"`
-	Labels      []string `json:"labels"`
-	Priority    int      `json:"priority"`
-	Due         *rawDue  `json:"due"`
-	Deadline    *struct {
-		Date *string `json:"date"`
-	} `json:"deadline"`
-	NoteCount   int     `json:"note_count"`
-	Checked     bool    `json:"checked"`
-	IsDeleted   bool    `json:"is_deleted"`
-	AddedAt     *string `json:"added_at"`
-	UpdatedAt   *string `json:"updated_at"`
-	CompletedAt *string `json:"completed_at"`
+	ID            string       `json:"id"`
+	ProjectID     string       `json:"project_id"`
+	SectionID     *string      `json:"section_id"`
+	ParentID      *string      `json:"parent_id"`
+	UserID        *string      `json:"user_id"`
+	AddedByUID    *string      `json:"added_by_uid"`
+	AssignedByUID *string      `json:"assigned_by_uid"`
+	ResponsibleID *string      `json:"responsible_uid"`
+	CompletedByID *string      `json:"completed_by_uid"`
+	Content       string       `json:"content"`
+	Description   string       `json:"description"`
+	Labels        []string     `json:"labels"`
+	Priority      int          `json:"priority"`
+	Due           *rawDue      `json:"due"`
+	Deadline      *rawDeadline `json:"deadline"`
+	Duration      *rawDuration `json:"duration"`
+	IsCollapsed   *bool        `json:"is_collapsed"`
+	Checked       *bool        `json:"checked"`
+	ChildOrder    *int64       `json:"child_order"`
+	DayOrder      *int64       `json:"day_order"`
+	OrderKey      *string      `json:"order_key"`
+	Completed     *int64       `json:"completed_count"`
+	Postponed     *int64       `json:"postponed_count"`
+	IsDeleted     bool         `json:"is_deleted"`
+	AddedAt       *string      `json:"added_at"`
+	UpdatedAt     *string      `json:"updated_at"`
+	CompletedAt   *string      `json:"completed_at"`
 }
 
 type rawComment struct {
@@ -182,25 +204,53 @@ type Due struct {
 	String      string `json:"string,omitempty"`
 	IsRecurring bool   `json:"is_recurring"`
 	Timezone    string `json:"timezone,omitempty"`
+	Lang        string `json:"lang,omitempty"`
 }
 
-// Task is the stable Qatlas view of one task. A list leaves the description out; content and description
-// are untrusted data. Priority runs from 1 (normal) to 4 (urgent).
+// Duration is the planned duration of a task: Amount whole Unit units, minute or day.
+type Duration struct {
+	Amount int64  `json:"amount"`
+	Unit   string `json:"unit"`
+}
+
+// Deadline is the deadline of a task as Todoist reads it: the date and the language it was entered in.
+type Deadline struct {
+	Date string `json:"date"`
+	Lang string `json:"lang,omitempty"`
+}
+
+// Task is the stable Qatlas view of one task; every list and every change shows the same members. Content,
+// description, order key, unit, and language tags are untrusted data. Priority runs from 1 (normal) to 4
+// (urgent). A member Todoist leaves out stays out; a counter, an order, or a flag Todoist sent as zero or
+// false stays.
 type Task struct {
-	ID           string   `json:"id"`
-	Content      string   `json:"content"`
-	ProjectID    string   `json:"project_id"`
-	SectionID    string   `json:"section_id,omitempty"`
-	ParentID     string   `json:"parent_id,omitempty"`
-	Labels       []string `json:"labels"`
-	Priority     int      `json:"priority"`
-	Due          *Due     `json:"due,omitempty"`
-	Deadline     string   `json:"deadline,omitempty"`
-	CommentCount int      `json:"comment_count"`
-	Description  string   `json:"description,omitempty"`
-	AddedAt      string   `json:"added_at,omitempty"`
-	UpdatedAt    string   `json:"updated_at,omitempty"`
-	CompletedAt  string   `json:"completed_at,omitempty"`
+	ID              string    `json:"id"`
+	Content         string    `json:"content"`
+	ProjectID       string    `json:"project_id"`
+	SectionID       string    `json:"section_id,omitempty"`
+	ParentID        string    `json:"parent_id,omitempty"`
+	Labels          []string  `json:"labels"`
+	Priority        int       `json:"priority"`
+	Due             *Due      `json:"due,omitempty"`
+	Deadline        string    `json:"deadline,omitempty"`
+	DeadlineDetails *Deadline `json:"deadline_details,omitempty"`
+	Duration        *Duration `json:"duration,omitempty"`
+	Description     string    `json:"description,omitempty"`
+	UserID          string    `json:"user_id,omitempty"`
+	AddedByUID      string    `json:"added_by_uid,omitempty"`
+	AssignedByUID   string    `json:"assigned_by_uid,omitempty"`
+	ResponsibleUID  string    `json:"responsible_uid,omitempty"`
+	CompletedByUID  string    `json:"completed_by_uid,omitempty"`
+	IsCollapsed     *bool     `json:"is_collapsed,omitempty"`
+	Checked         *bool     `json:"checked,omitempty"`
+	ChildOrder      *int64    `json:"child_order,omitempty"`
+	DayOrder        *int64    `json:"day_order,omitempty"`
+	OrderKey        string    `json:"order_key,omitempty"`
+	CompletedCount  *int64    `json:"completed_count,omitempty"`
+	PostponedCount  *int64    `json:"postponed_count,omitempty"`
+	AddedAt         string    `json:"added_at,omitempty"`
+	UpdatedAt       string    `json:"updated_at,omitempty"`
+	CompletedAt     string    `json:"completed_at,omitempty"`
 }
 
 // TaskList is one page of tasks.
@@ -292,21 +342,35 @@ func dueOf(raw *rawDue) *Due {
 	if raw == nil || raw.Date == "" {
 		return nil
 	}
-	return &Due{Date: raw.Date, String: raw.String, IsRecurring: raw.IsRecurring, Timezone: text(raw.Timezone)}
+	return &Due{Date: raw.Date, String: raw.String, IsRecurring: raw.IsRecurring, Timezone: text(raw.Timezone),
+		Lang: boundedText(text(raw.Lang), maxTagText)}
 }
 
-func taskOf(raw rawTask, full bool) Task {
+// taskOf is the one mapping of a task every task output shares. Names of other people are identifiers;
+// the texts Todoist composes itself are bounded.
+func taskOf(raw rawTask) Task {
 	task := Task{ID: raw.ID, Content: raw.Content, ProjectID: raw.ProjectID, SectionID: text(raw.SectionID),
 		ParentID: text(raw.ParentID), Labels: raw.Labels, Priority: raw.Priority, Due: dueOf(raw.Due),
-		CommentCount: raw.NoteCount, CompletedAt: text(raw.CompletedAt)}
+		Description: raw.Description, UserID: boundedText(text(raw.UserID), maxTagText),
+		AddedByUID:     boundedText(text(raw.AddedByUID), maxTagText),
+		AssignedByUID:  boundedText(text(raw.AssignedByUID), maxTagText),
+		ResponsibleUID: boundedText(text(raw.ResponsibleID), maxTagText),
+		CompletedByUID: boundedText(text(raw.CompletedByID), maxTagText),
+		IsCollapsed:    raw.IsCollapsed, Checked: raw.Checked, ChildOrder: raw.ChildOrder, DayOrder: raw.DayOrder,
+		OrderKey:       boundedText(text(raw.OrderKey), maxOrderKey),
+		CompletedCount: raw.Completed, PostponedCount: raw.Postponed,
+		AddedAt: text(raw.AddedAt), UpdatedAt: text(raw.UpdatedAt), CompletedAt: text(raw.CompletedAt)}
 	if task.Labels == nil {
 		task.Labels = []string{}
 	}
 	if raw.Deadline != nil {
 		task.Deadline = text(raw.Deadline.Date)
+		if task.Deadline != "" {
+			task.DeadlineDetails = &Deadline{Date: task.Deadline, Lang: boundedText(text(raw.Deadline.Lang), maxTagText)}
+		}
 	}
-	if full {
-		task.Description, task.AddedAt, task.UpdatedAt = raw.Description, text(raw.AddedAt), text(raw.UpdatedAt)
+	if raw.Duration != nil && (raw.Duration.Amount != 0 || raw.Duration.Unit != "") {
+		task.Duration = &Duration{Amount: raw.Duration.Amount, Unit: boundedText(raw.Duration.Unit, maxTagText)}
 	}
 	return task
 }
@@ -528,7 +592,7 @@ func (w dueWindow) admits(due *rawDue) bool {
 
 // listTasks reads one page of tasks and keeps those of the connection's projects that match the due
 // window. A short or empty page with has_more is how a filtered page looks; it never means the end.
-func (c *Client) listTasks(ctx context.Context, call listCall, window dueWindow, full bool) (*TaskList, error) {
+func (c *Client) listTasks(ctx context.Context, call listCall, window dueWindow) (*TaskList, error) {
 	entries, more, err := c.run(ctx, call)
 	if err != nil {
 		return nil, err
@@ -549,7 +613,7 @@ func (c *Client) listTasks(ctx context.Context, call listCall, window dueWindow,
 		if !ok {
 			continue
 		}
-		result.Tasks = append(result.Tasks, taskOf(raw, full))
+		result.Tasks = append(result.Tasks, taskOf(raw))
 	}
 	return result, nil
 }
@@ -581,7 +645,7 @@ func (c *Client) getTask(ctx context.Context, id string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	task := taskOf(raw, true)
+	task := taskOf(raw)
 	return &task, nil
 }
 
