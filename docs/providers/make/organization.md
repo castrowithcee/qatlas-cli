@@ -62,8 +62,15 @@ is in the `org-admin` profile.
 
 `make.organization.members` reads the organization role list once, then
 `GET /users?organizationId=&organizationRoleId=` per role (`user:read`), and returns at most 20 roles and 200 members,
-`truncated` when more may exist. Names and emails are personal data and untrusted. It is in `org-admin`; changing
-roles and removing members are not offered.
+grouped by role, `truncated` when more may exist or a team or permission list was cut. The roles read are listed
+beside the members, also those without members. Optional filters and sorting apply to every role's request; the
+output stays grouped by role. It is in `org-admin`; changing roles and removing members are not offered.
+
+Other members of the bound organization are people inside the targets, so the documented person data is
+reported and is personal and untrusted. Account security data of another person is not: Make's `tfaStatus` is
+neither reported nor offered as a filter, because another person's two-factor status is account security data.
+The avatar address is bounded text and never fetched; an address that carries user info, a fragment, or a
+token, signature, or credential-like query parameter counts as an access value and is left out.
 
 ## Financial data (read only)
 
