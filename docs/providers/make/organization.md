@@ -24,9 +24,13 @@ The four tools take no arguments and never accept a team or organization ID. The
 is the connection's own target; `make.organization.get` takes the `organizationId` from the bound team's own
 answer. A configured `organization/ID` target is checked against that answer, and a mismatch is refused as an
 invalid request that never names the other organization. `make.team.members` lists user id and role id only, without
-names or email addresses. Organization details are limited to id, zone, and
-the license object's flat scalar values (nested values are dropped, at most 64 entries). Role names are not
-resolved, because that needs the separate `user:read` scope.
+names or email addresses. Role names are not resolved, because that needs the separate `user:read` scope.
+
+`make.organization.get` applies the team boundary to what it returns: the bound team keeps its name, while other
+teams of the organization and all private spaces lie outside the targets and are reported by id alone. Make does not
+document the keys of `license`; only its flat scalar values are reported (nested values are dropped, at most 64
+entries), and an integer keeps its exact value. Lists are capped and `truncated` marks a cut. Text values are
+untrusted data.
 
 ## Teams of an organization
 
@@ -35,7 +39,11 @@ organization mode only. The `org-admin` profile (list, create, update) needs `te
 the separately offered delete. None takes an organization argument; update and delete take `team_id`, which is read
 live (`GET /teams/{teamId}`) and bound to the connection's organization through its `organizationId` before
 anything changes. A team of another organization, and a personal space, is refused as an invalid request
-without naming it, and no changing request is sent. The list leaves personal spaces out.
+without naming it, and no changing request is sent.
+
+`make.teams.list` pages by `offset` and `limit` and sets `has_more` when a page came back full, because Make reports no
+total count. It leaves personal spaces out unless `include_private_spaces` is set; those carry `type: personal`, and
+update and delete still refuse them. Make documents no values for the sort field; only the direction is offered.
 
 Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout,
 a connection reset, a 5xx, or an unreadable answer is reported as uncertain. **Deleting a team also deletes all of
