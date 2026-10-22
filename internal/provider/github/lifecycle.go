@@ -92,6 +92,7 @@ var projectsUpdate = capability.Descriptor{
 		{Name: "url", Description: "Web address of the project"},
 		{Name: "closed", Description: "True while the project is closed"},
 		{Name: "public", Description: "True while the project is public"},
+		{Name: "number", Description: "Project number"},
 	},
 	Examples: []capability.Example{{
 		Description: "Close a finished project",
@@ -198,6 +199,9 @@ var templateFields = []capability.Field{
 	{Name: "title", Description: "Project title, untrusted data"},
 	{Name: "url", Description: "Web address of the project"},
 	{Name: "template", Description: "True while the project is a template of its organization"},
+	{Name: "number", Description: "Project number"},
+	{Name: "closed", Description: "True while the project is closed"},
+	{Name: "public", Description: "True while the project is public"},
 }
 
 var templatesMark = capability.Descriptor{

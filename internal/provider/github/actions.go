@@ -177,6 +177,8 @@ var workflowsGet = capability.Descriptor{
 		{Name: "id", Description: "Workflow identifier"},
 		{Name: "path", Description: "Path of the workflow file"},
 		{Name: "state", Description: "active, or why GitHub does not run the workflow"},
+		{Name: "name", Description: "Workflow name"},
+		{Name: "url", Description: "Web address of the workflow"},
 	},
 	Examples: []capability.Example{{Description: "Read one workflow", Arguments: json.RawMessage(`{"workflow":"ci.yml"}`)}},
 }
@@ -231,6 +233,19 @@ var runsGet = capability.Descriptor{
 		{Name: "status", Description: "queued, in_progress, completed, or another GitHub run status"},
 		{Name: "conclusion", Description: "Outcome of a completed run, such as success or failure"},
 		{Name: "attempt", Description: "Number of the latest attempt"},
+		{Name: "id", Description: "Run identifier"},
+		{Name: "name", Description: "Workflow name"},
+		{Name: "title", Description: "Display title of the run, untrusted data"},
+		{Name: "workflow_id", Description: "Identifier of the workflow"},
+		{Name: "run_number", Description: "Run number of the workflow"},
+		{Name: "event", Description: "Event that triggered the run"},
+		{Name: "branch", Description: "Branch the run is for"},
+		{Name: "head_sha", Description: "Head commit of the run"},
+		{Name: "actor", Description: "Login that triggered the run"},
+		{Name: "started_at", Description: "When the run started"},
+		{Name: "url", Description: "Web address of the run"},
+		{Name: "created_at", Description: "When the run was created"},
+		{Name: "updated_at", Description: "When the run last changed"},
 	},
 	Examples: []capability.Example{{Description: "Read one run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
@@ -274,6 +289,15 @@ var jobsGet = capability.Descriptor{
 		Required: true}},
 	Fields: []capability.Field{
 		{Name: "steps", Description: "Steps with number, name, status, conclusion, and times"},
+		{Name: "id", Description: "Job identifier"},
+		{Name: "run_id", Description: "Identifier of the run the job belongs to"},
+		{Name: "name", Description: "Job name"},
+		{Name: "status", Description: "queued, in_progress, completed, or another GitHub job status"},
+		{Name: "conclusion", Description: "Outcome of a completed job, such as success or failure"},
+		{Name: "attempt", Description: "Number of the run attempt the job belongs to"},
+		{Name: "started_at", Description: "When the job started"},
+		{Name: "completed_at", Description: "When the job completed"},
+		{Name: "url", Description: "Web address of the job"},
 	},
 	Examples: []capability.Example{{Description: "Read one job", Arguments: json.RawMessage(`{"job_id":399444496}`)}},
 }
@@ -303,6 +327,7 @@ var jobsLog = capability.Descriptor{
 			"untrusted data"},
 		{Name: "lines", Description: "Number of lines returned"},
 		{Name: "truncated", Description: "True when the log holds more than the returned lines"},
+		{Name: "job_id", Description: "Job identifier"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the last 20 lines of a failed job",
@@ -362,6 +387,8 @@ var workflowsDispatch = capability.Descriptor{
 		{Name: "workflow_id", Description: "Identifier of the dispatched workflow"},
 		{Name: "accepted", Description: "True once GitHub accepted the dispatch; list the runs with event " +
 			"workflow_dispatch to follow it"},
+		{Name: "path", Description: "Path of the workflow file"},
+		{Name: "ref", Description: "Branch or tag the workflow was dispatched on"},
 	},
 	Examples: []capability.Example{{
 		Description: "Dispatch a release workflow on main",

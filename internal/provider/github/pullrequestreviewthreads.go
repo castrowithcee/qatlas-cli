@@ -63,6 +63,7 @@ var threadStateArguments = []capability.Argument{
 
 var threadStateFields = []capability.Field{
 	{Name: "is_resolved", Description: "True once the thread is resolved, false once it is open again"},
+	{Name: "thread_id", Description: "Node id of the thread"},
 }
 
 var pullRequestReviewThreadsResolve = capability.Descriptor{

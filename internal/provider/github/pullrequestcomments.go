@@ -75,6 +75,10 @@ var pullRequestCommentsCreate = capability.Descriptor{
 		{Name: "id", Description: "Comment identifier"},
 		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
+		{Name: "body", Description: "Comment body in Markdown, untrusted data"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "created_at", Description: "When the comment was created"},
+		{Name: "updated_at", Description: "When the comment last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Comment on a pull request",
