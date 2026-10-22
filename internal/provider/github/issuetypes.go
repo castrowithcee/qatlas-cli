@@ -96,11 +96,11 @@ func issueTypesPath(org target) string {
 
 // issueTypeJSON is the REST issue type shape github.issue-types.list normalises into an IssueType.
 type issueTypeJSON struct {
-	ID          int64   `json:"id"`
-	Name        string  `json:"name"`
+	ID          *int64  `json:"id"`
+	Name        *string `json:"name"`
 	Description *string `json:"description"`
 	Color       *string `json:"color"`
-	IsEnabled   bool    `json:"is_enabled"`
+	IsEnabled   *bool   `json:"is_enabled"`
 	NodeID      *string `json:"node_id"`
 	CreatedAt   *string `json:"created_at"`
 	UpdatedAt   *string `json:"updated_at"`
@@ -119,6 +119,28 @@ type IssueType struct {
 	UpdatedAt *string `json:"updated_at,omitempty"`
 }
 
+// RESTIssueType is an issue type as an issue carries it: the members of IssueType, every one passed through
+// the projection helpers and left out when GitHub leaves it out.
+type RESTIssueType struct {
+	ID          *int64  `json:"id,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Color       *string `json:"color,omitempty"`
+	IsEnabled   *bool   `json:"is_enabled,omitempty"`
+	NodeID      *string `json:"node_id,omitempty"`
+	CreatedAt   *string `json:"created_at,omitempty"`
+	UpdatedAt   *string `json:"updated_at,omitempty"`
+}
+
+func (r *issueTypeJSON) detail() *RESTIssueType {
+	if r == nil {
+		return nil
+	}
+	return &RESTIssueType{ID: r.ID, Name: shortText(r.Name), Description: bulkText(r.Description),
+		Color: shortText(r.Color), IsEnabled: r.IsEnabled, NodeID: shortText(r.NodeID),
+		CreatedAt: shortText(r.CreatedAt), UpdatedAt: shortText(r.UpdatedAt)}
+}
+
 // IssueTypeList is every issue type of an organization; GitHub's own route returns them all at once, with
 // no pagination of its own.
 type IssueTypeList struct {
@@ -133,10 +155,10 @@ func (c *Client) listIssueTypes(ctx context.Context) (*IssueTypeList, error) {
 	}
 	result := &IssueTypeList{IssueTypes: make([]IssueType, 0, len(raw))}
 	for _, item := range raw {
-		if item.ID < 1 || strings.TrimSpace(item.Name) == "" {
+		if valueOr(item.ID) < 1 || strings.TrimSpace(stringOr(item.Name)) == "" {
 			return nil, invalidEntry(op, "an issue type")
 		}
-		entry := IssueType{ID: item.ID, Name: item.Name, IsEnabled: item.IsEnabled, NodeID: nameText(item.NodeID),
+		entry := IssueType{ID: *item.ID, Name: *item.Name, IsEnabled: valueOr(item.IsEnabled), NodeID: nameText(item.NodeID),
 			CreatedAt: nameText(item.CreatedAt), UpdatedAt: nameText(item.UpdatedAt)}
 		if item.Description != nil {
 			entry.Description = *item.Description

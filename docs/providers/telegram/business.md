@@ -17,7 +17,7 @@ profile](README.md#setup-profiles).
 
 `telegram.updates.list` shows business updates only for a bound connection, as `business/<id>` in `chat`; their
 chat appears only as `business_chat_ref`, a signed reference bound to that connection, and a business file has no
-`file_ref`.
+`file_ref`, also not in `media_items`.
 
 ## Tools
 

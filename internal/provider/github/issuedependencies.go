@@ -51,20 +51,23 @@ var issueDependenciesList = capability.Descriptor{
 	Provider:    Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"blocked_by":{"type":"array","items":` + issueRefOutput + `},` +
-		`"blocking":{"type":"array","items":` + issueRefOutput + `},` +
+		`"blocked_by":{"type":"array","items":` + issueEntryOutput + `},` +
+		`"blocking":{"type":"array","items":` + issueEntryOutput + `},` +
 		`"withheld":{"type":"integer"},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["blocked_by","blocking","has_more"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "blocked_by", Description: "Issues that block this issue, untrusted data"},
-		{Name: "blocking", Description: "Issues this issue blocks, untrusted data"},
+	Fields: append(append([]capability.Field{
+		{Name: "blocked_by", Description: "Issues that block this issue, untrusted data: number, repository " +
+			"as OWNER/REPO when it differs from this issue's, title, state, and url, then the remainder of " +
+			"GitHub's issue below"},
+		{Name: "blocking", Description: "Issues this issue blocks, untrusted data, with the same members as " +
+			"blocked_by"},
 		{Name: "withheld", Description: "Count of dependencies in this batch, across both directions, whose " +
 			"repository lies outside the connection's targets, omitted when none were withheld"},
-	}, pagingFields...),
+	}, issueEntryFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the dependencies of one issue",
 		Arguments:   json.RawMessage(`{"number":42}`),
@@ -248,11 +251,11 @@ func blockingPath(repo target, number int) string {
 // IssueDependencies is both directions of one issue's dependencies, paged together: a batch ends once
 // neither direction announces a following page.
 type IssueDependencies struct {
-	BlockedBy  []SubIssueRef `json:"blocked_by"`
-	Blocking   []SubIssueRef `json:"blocking"`
-	Withheld   int           `json:"withheld,omitempty"`
-	NextCursor string        `json:"next_cursor,omitempty"`
-	HasMore    bool          `json:"has_more"`
+	BlockedBy  []IssueEntry `json:"blocked_by"`
+	Blocking   []IssueEntry `json:"blocking"`
+	Withheld   int          `json:"withheld,omitempty"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+	HasMore    bool         `json:"has_more"`
 }
 
 // listIssueDependencies reads one server page of each direction of one issue's dependencies with the same
@@ -270,29 +273,29 @@ func (c *Client) listIssueDependencies(ctx context.Context, repo target,
 	if err != nil {
 		return nil, actionsFailure(err, issueDependenciesReadPermission)
 	}
-	result := &IssueDependencies{BlockedBy: make([]SubIssueRef, 0, len(blockedByRaw)),
-		Blocking: make([]SubIssueRef, 0, len(blockingRaw))}
+	result := &IssueDependencies{BlockedBy: make([]IssueEntry, 0, len(blockedByRaw)),
+		Blocking: make([]IssueEntry, 0, len(blockingRaw))}
 	for _, item := range blockedByRaw {
 		if !a.allowed.allows(item.repoTarget(repo)) {
 			result.Withheld++
 			continue
 		}
-		ref, err := item.ref(op, repo)
+		entry, err := item.entry(op, repo, a.allowed, "")
 		if err != nil {
 			return nil, err
 		}
-		result.BlockedBy = append(result.BlockedBy, ref)
+		result.BlockedBy = append(result.BlockedBy, entry)
 	}
 	for _, item := range blockingRaw {
 		if !a.allowed.allows(item.repoTarget(repo)) {
 			result.Withheld++
 			continue
 		}
-		ref, err := item.ref(op, repo)
+		entry, err := item.entry(op, repo, a.allowed, "")
 		if err != nil {
 			return nil, err
 		}
-		result.Blocking = append(result.Blocking, ref)
+		result.Blocking = append(result.Blocking, entry)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, blockedByNext || blockingNext)
 	return result, nil

@@ -73,10 +73,12 @@ var usersPersonalChatMessages = capability.Descriptor{
 		`"messages":{"type":"array","items":{"type":"object","properties":{` +
 		`"message_id":{"type":"integer"},"date":{"type":"integer"},"text":{"type":"string"},` +
 		`"caption":{"type":"string"},"media_kind":{"type":"string"},` +
-		`"file_ref":{"type":"string"}}}}},"additionalProperties":false}`),
+		`"file_ref":{"type":"string"},` +
+		`"media_items":{"type":"array","items":{"type":"object"},"description":"Media objects of the message: the Bot API types Animation, Audio, Document, LivePhoto, PhotoSize (one entry per size), Sticker, Video, VideoNote and Voice, each with kind and its members; every file_id is a file_ref"},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}}}}},"additionalProperties":false}`),
 	Arguments: []capability.Argument{chatArgument, userIDArgument,
 		{Name: "limit", Description: "Maximum recent messages, 1 through 20; defaults to 20"}},
-	Fields: []capability.Field{{Name: "messages", Description: "Recent message text and captions from the user's personal chat"}},
+	Fields: []capability.Field{{Name: "messages", Description: "Recent message text, captions and media objects from the user's personal chat; media_items lists the media objects with their Bot API members and chat-bound signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member>, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB"}},
 }
 
 type userArgs struct {
@@ -312,6 +314,9 @@ func (c *Client) PersonalChatMessages(ctx context.Context, userID int64, _, limi
 		Caption   string `json:"caption,omitempty"`
 		MediaKind string `json:"media_kind,omitempty"`
 		FileRef   string `json:"file_ref,omitempty"`
+
+		MediaItems    []any    `json:"media_items,omitempty"`
+		OmittedFields []string `json:"omitted_fields,omitempty"`
 	}
 	out := make([]message, 0, min(len(messages), maxUserItems))
 	for _, m := range messages[:min(len(messages), maxUserItems)] {
@@ -320,8 +325,13 @@ func (c *Client) PersonalChatMessages(ctx context.Context, userID int64, _, limi
 		if file != nil {
 			ref = signRef(c.token, refFile, c.target, file.FileID)
 		}
+		refs := c.fileRefs(c.target)
+		if m.BusinessConnectionID != "" {
+			refs = nil
+		}
+		items, omitted := mediaItems(&m, refs)
 		out = append(out, message{m.MessageID, m.Date, capText(m.Text, maxMessageLength),
-			capText(m.Caption, maxCaptionRunes), kind, ref})
+			capText(m.Caption, maxCaptionRunes), kind, ref, items, omitted})
 	}
 	return struct {
 		Messages []message `json:"messages"`

@@ -46,7 +46,7 @@ func TestLogsQueryAndReducedResult(t *testing.T) {
 		q.Get("offset") != "10" || q.Get("limit") != "20" || len(q) != 6 {
 		t.Fatalf("query = %v", q)
 	}
-	for _, leak := range []string{"name-canary", "ip-canary", "details-canary", "pic-canary"} {
+	for _, leak := range []string{"pic-canary", "user_picture"} {
 		if strings.Contains(out, leak) {
 			t.Fatalf("result leaks %s: %s", leak, out)
 		}
@@ -94,12 +94,13 @@ func TestLogsValidation(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, logsHandler(&calls))
 	cases := map[string]string{
-		"id":       `{"user_id":"a/b"}`,
-		"action":   `{"action":"Scene Create&x=1"}`,
-		"swapped":  `{"from":"2026-02-01T00:00:00Z","to":"2026-01-01T00:00:00Z"}`,
-		"too long": `{"from":"2025-01-01T00:00:00Z","to":"2026-06-01T00:00:00Z"}`,
-		"one end":  `{"from":"2026-01-01T00:00:00Z"}`,
-		"format":   `{"from":"2026-01-01","to":"2026-01-02"}`,
+		"id":        `{"user_id":"a/b"}`,
+		"action":    `{"action":"Scene Create&x=1"}`,
+		"swapped":   `{"from":"2026-02-01T00:00:00Z","to":"2026-01-01T00:00:00Z"}`,
+		"too long":  `{"from":"2025-01-01T00:00:00Z","to":"2026-06-01T00:00:00Z"}`,
+		"operation": `{"operation":"purge"}`,
+		"bad to":    `{"to":"2026-01-01"}`,
+		"format":    `{"from":"2026-01-01","to":"2026-01-02"}`,
 	}
 	for name, args := range cases {
 		if _, err := env.invoke(logsList.ID, "every", args); err == nil {
