@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"unicode/utf8"
 
@@ -19,8 +20,8 @@ import (
 // mode refuses before any secret or request, and these tools refuse on a team connection the same way.
 // API (checked 2026-10-06 against developers.make.com's published API reference, section Teams, not a live
 // account):
-//   - GET /teams?organizationId=, teams:read, cols[] and pg[limit]; answering {"teams":[...]}. Personal
-//     spaces are left out (includePrivateSpaces defaults to false).
+//   - GET /teams?organizationId=, teams:read, cols[], pg[offset], pg[limit], pg[sortDir]; answering {"teams":[...]}. Personal
+//     spaces are left out unless includePrivateSpaces=true.
 //   - POST /teams, teams:write, body name (at most 128 characters), organizationId, optional operationsLimit
 //     (0 to 2,000,000,000); answering {"team":{...},"userTeamRole":{...}}.
 //   - PATCH /teams/{teamId}, teams:write, optional name and operationsLimit; answering {"team":{...}}.
@@ -45,6 +46,7 @@ var teamsCols = []string{"id", "name", "organizationId", "operationsLimit", "tra
 
 var teamViewSchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
 	`"organization_id":{"type":"integer"},"type":{"type":"string"},"is_paused":{"type":"boolean"},` +
+	`"active_scenarios":{"type":"integer"},"active_apps":{"type":"integer"},` +
 	`"operations_limit":{"type":"integer"},"transfer_limit":{"type":"integer"},` +
 	`"consumed_operations":{"type":"integer"},"consumed_transfer":{"type":"integer"}},` +
 	`"required":["id","name","organization_id"],"additionalProperties":false}`
@@ -55,6 +57,8 @@ var teamViewFields = []capability.Field{
 	{Name: "organization_id", Description: "Always the connection's bound organization"},
 	{Name: "type", Description: "Team type as Make reports it, such as standard"},
 	{Name: "is_paused", Description: "True when Make reports the team as paused"},
+	{Name: "active_scenarios", Description: "Active scenarios of the team; only in a list"},
+	{Name: "active_apps", Description: "Active apps of the team; only in a list"},
 	{Name: "operations_limit", Description: "Operations limit, as Make reports it"},
 	{Name: "transfer_limit", Description: "Data transfer limit in bytes, as Make reports it"},
 	{Name: "consumed_operations", Description: "Operations consumed in the current period"},
@@ -74,17 +78,34 @@ const teamLimitSchema = `{"type":"integer","minimum":0,"maximum":2000000000}`
 
 var teamsList = capability.Descriptor{
 	ID: Provider + ".teams.list", Version: 1, Title: "List the teams of the bound Make organization",
-	Description: "List the teams of the organization this connection is bound to, without personal spaces; " +
-		"takes no arguments. Only on an organization connection; a team connection refuses it. Needs the " +
-		"teams:read scope",
+	Description: "List the teams of the organization this connection is bound to, page by page with a numeric " +
+		"offset; personal spaces only with include_private_spaces, marked by type personal. Only on an " +
+		"organization connection; a team connection refuses it. Needs the teams:read scope",
 	Tags: []string{"make", "teams", "list", "organization", "automation"}, Risk: makeReadRisk, Provider: Provider,
-	InputSchema: json.RawMessage(emptyInput),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"offset":{"type":"integer","minimum":0},` +
+		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxTeamsListed) + `},` +
+		`"include_private_spaces":{"type":"boolean"},"sort_dir":{"type":"string","enum":["asc","desc"]}},` +
+		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"organization_id":{"type":"integer"},` +
-		`"teams":{"type":"array","items":` + teamViewSchema + `},"count":{"type":"integer"},` +
+		`"teams":{"type":"array","items":` + teamViewSchema + `},"offset":{"type":"integer"},` +
+		`"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["organization_id","teams","count","truncated"],` +
 		`"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "offset", Description: "Teams to skip before this page; 0 when omitted"},
+		{Name: "limit", Description: "Teams per page, 1 to " + strconv.Itoa(maxTeamsListed) + "; " +
+			strconv.Itoa(maxTeamsListed) + " when omitted"},
+		{Name: "include_private_spaces", Description: "When true, also list the caller's private spaces, " +
+			"which carry type personal; false when omitted"},
+		{Name: "sort_dir", Description: "Sort direction, asc or desc; Make documents no values for the sort " +
+			"field, so only the direction is offered"},
+	},
 	Fields: append(append([]capability.Field{}, teamViewFields...),
 		capability.Field{Name: "teams", Description: "Teams as Make reports them, capped"},
+		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
+		capability.Field{Name: "has_more", Description: "True when a further page likely remains; Make " +
+			"reports no total count, so this is true whenever this page was full"},
 		capability.Field{Name: "count", Description: "Teams returned, at most " + strconv.Itoa(maxTeamsListed)},
 		capability.Field{Name: "truncated", Description: "True when the page was full and more teams may exist"}),
 	Examples: []capability.Example{{Description: "List the organization's teams", Arguments: json.RawMessage(`{}`)}},
@@ -160,6 +181,8 @@ type TeamView struct {
 	OrganizationID     int64  `json:"organization_id"`
 	Type               string `json:"type,omitempty"`
 	IsPaused           bool   `json:"is_paused,omitempty"`
+	ActiveScenarios    int64  `json:"active_scenarios,omitempty"`
+	ActiveApps         int64  `json:"active_apps,omitempty"`
 	OperationsLimit    int64  `json:"operations_limit,omitempty"`
 	TransferLimit      int64  `json:"transfer_limit,omitempty"`
 	ConsumedOperations int64  `json:"consumed_operations,omitempty"`
@@ -168,7 +191,6 @@ type TeamView struct {
 
 type orgTeamJSON struct {
 	teamJSON
-	Type string `json:"type"`
 }
 
 type teamsPageJSON struct {
@@ -176,8 +198,8 @@ type teamsPageJSON struct {
 }
 
 func teamViewOf(t orgTeamJSON) TeamView {
-	return TeamView{ID: t.ID, Name: bounded(t.Name), OrganizationID: t.OrganizationID, Type: bounded(t.Type),
-		IsPaused: t.IsPaused, OperationsLimit: t.OperationsLimit, TransferLimit: t.TransferLimit,
+	return TeamView{ID: t.ID, Name: bounded(t.Name), OrganizationID: t.OrganizationID, Type: cleanText(t.Type, maxTextLength),
+		IsPaused: t.IsPaused, ActiveScenarios: t.ActiveScenarios, ActiveApps: t.ActiveApps, OperationsLimit: t.OperationsLimit, TransferLimit: t.TransferLimit,
 		ConsumedOperations: t.ConsumedOperations, ConsumedTransfer: t.ConsumedTransfer}
 }
 
@@ -193,27 +215,63 @@ func (c *Client) belongsToOrg(t orgTeamJSON) bool {
 type TeamsList struct {
 	OrganizationID int64      `json:"organization_id"`
 	Teams          []TeamView `json:"teams"`
+	Offset         int        `json:"offset"`
+	HasMore        bool       `json:"has_more"`
 	Count          int        `json:"count"`
 	Truncated      bool       `json:"truncated"`
 }
 
 func invokeTeamsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, _ json.RawMessage) (any, error) {
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "list teams"
+	var input struct {
+		Offset               *int   `json:"offset"`
+		Limit                *int   `json:"limit"`
+		IncludePrivateSpaces bool   `json:"include_private_spaces"`
+		SortDir              string `json:"sort_dir"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	offset, limit := 0, maxTeamsListed
+	if input.Offset != nil {
+		offset = *input.Offset
+	}
+	if input.Limit != nil {
+		limit = *input.Limit
+	}
+	if offset < 0 || limit < 1 || limit > maxTeamsListed {
+		return nil, invalidRequest("offset must be 0 or more and limit between 1 and " + strconv.Itoa(maxTeamsListed))
+	}
+	if input.SortDir != "" && input.SortDir != "asc" && input.SortDir != "desc" {
+		return nil, invalidRequest("sort_dir must be asc or desc")
+	}
 	client, err := openOrganization(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
 	query := client.teamsQuery()
+	// activeScenarios and activeApps are requested for the list only; the reads that bind a team for a change
+	// stay as they were.
+	query["cols[]"] = append(slices.Clone(teamsCols), "activeScenarios", "activeApps")
 	query.Set("organizationId", strconv.FormatInt(client.scope.orgID, 10))
-	query.Set("pg[limit]", strconv.Itoa(maxTeamsListed))
+	query.Set("pg[offset]", strconv.Itoa(offset))
+	query.Set("pg[limit]", strconv.Itoa(limit))
+	if input.IncludePrivateSpaces {
+		query.Set("includePrivateSpaces", "true")
+	}
+	if input.SortDir != "" {
+		query.Set("pg[sortDir]", input.SortDir)
+	}
 	var page teamsPageJSON
-	if err := client.get(ctx, "list teams", "/teams", query, &page, needTeamsRead); err != nil {
+	if err := client.get(ctx, op, "/teams", query, &page, needTeamsRead); err != nil {
 		return nil, err
 	}
+	full := len(page.Teams) >= limit
 	result := &TeamsList{OrganizationID: client.scope.orgID, Teams: make([]TeamView, 0, len(page.Teams)),
-		Truncated: len(page.Teams) >= maxTeamsListed}
+		Offset: offset, HasMore: full, Truncated: full}
 	for _, t := range page.Teams {
-		if t.ID <= 0 || !client.belongsToOrg(t) || len(result.Teams) >= maxTeamsListed {
+		if t.ID <= 0 || !client.belongsToOrg(t) || len(result.Teams) >= limit {
 			continue
 		}
 		result.Teams = append(result.Teams, teamViewOf(t))

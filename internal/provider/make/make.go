@@ -730,7 +730,7 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{teamGet.ID, teamUsage.ID, teamMembers.ID},
 		}, {
 			ID: "organization", Title: "Read the bound team's organization",
-			Description: "reads the zone and license limits of the organization the bound team belongs to; " +
+			Description: "reads the organization the bound team belongs to, with its license limits; " +
 				"changes nothing and needs the organizations:read and teams:read scopes",
 			Tools: []string{organizationGet.ID},
 		}, {
