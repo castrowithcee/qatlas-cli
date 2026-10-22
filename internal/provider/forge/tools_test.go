@@ -34,11 +34,13 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want := []string{p.id + ".accounts.me", p.id + ".issue-deadlines.set", p.id + ".issue-timeline.list",
 			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
-			p.id + ".markdown.render", p.id + ".markup.render",
-			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
+			p.id + ".labels.create", p.id + ".labels.delete", p.id + ".labels.get", p.id + ".labels.list",
+			p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render",
+			p.id + ".org-labels.create", p.id + ".org-labels.delete", p.id + ".org-labels.get",
+			p.id + ".org-labels.list", p.id + ".org-labels.update", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
 			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
-			want = slices.Insert(want, 13, p.id+".nodeinfo.get")
+			want = slices.Insert(want, 18, p.id+".nodeinfo.get")
 		}
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -88,7 +90,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
 		markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList} {
+		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, labelsList, labelsGet, labelsCreate,
+		labelsUpdate, labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
