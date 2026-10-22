@@ -19,18 +19,20 @@ import (
 
 const outsideSubtree = "the file or folder is outside the targets of this connection"
 
-// parentJSON is one folder above an object.
-type parentJSON struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	ParentID int64  `json:"parent_id"`
-}
-
 // readWithParents reads one object together with all folders above it, once.
 func (c *Client) readWithParents(ctx context.Context, op string, driveID, fileID int64) (*fileJSON, error) {
+	return c.readFile(ctx, op, driveID, fileID, "parents")
+}
+
+// readFile reads one object once, with the joined with values when there are any.
+func (c *Client) readFile(ctx context.Context, op string, driveID, fileID int64, with string) (*fileJSON, error) {
 	path := fmt.Sprintf("/3/drive/%d/files/%d", driveID, fileID)
+	var query url.Values
+	if with != "" {
+		query = url.Values{"with": {with}}
+	}
 	var item fileJSON
-	if err := c.do(ctx, op, path, url.Values{"with": {"parents"}}, &item); err != nil {
+	if err := c.do(ctx, op, path, query, &item); err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -85,20 +87,24 @@ func (c *Client) proveObjects(ctx context.Context, op string, driveID int64, ids
 }
 
 // statProven reads the metadata of one object. Where the drive is bound only as a subtree, the same read
-// carries the parents and is the proof; there is no second read.
-func (c *Client) statProven(ctx context.Context, driveID, fileID int64) (*Entry, error) {
+// carries the parents and is the proof; there is no second read. with is joined with the parents the proof
+// needs; parents appear in the entry only when with asks for them.
+func (c *Client) statProven(ctx context.Context, driveID, fileID int64, with []string) (*Entry, error) {
 	const op = "stat file"
 	if c.scope.wholeDrive(driveID) {
-		return c.StatFile(ctx, driveID, fileID)
+		return c.StatFile(ctx, driveID, fileID, with)
 	}
-	item, err := c.readWithParents(ctx, op, driveID, fileID)
+	if err := checkValues(with, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
+	item, err := c.readFile(ctx, op, driveID, fileID, withQuery("parents", with))
 	if err != nil {
 		return nil, refuseUnproven(err)
 	}
 	if !c.inSubtree(driveID, fileID, item) {
 		return nil, invalidRequest(outsideSubtree)
 	}
-	entry := entryOf(*item)
+	entry := c.entryWith(driveID, *item, with)
 	return &entry, nil
 }
 

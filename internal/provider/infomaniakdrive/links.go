@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -35,21 +37,28 @@ const (
 	linkRightSchema = `{"type":"string","enum":["inherit","password","public"]}`
 )
 
-// linkSchema is one share link as returned; the password is never part of it.
-var linkSchema = `{"type":"object","properties":{` +
-	`"file_id":{"type":"integer"},"url":{"type":"string"},"right":` + linkRightSchema + `,` +
+// linkProperties are the members of one share link as returned; the password is never part of it.
+const linkProperties = `"file_id":{"type":"integer"},"url":{"type":"string"},"right":` + linkRightSchema + `,` +
 	`"valid_until":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
 	`"access_blocked":{"type":"boolean"},"can_download":{"type":"boolean"},"can_edit":{"type":"boolean"},` +
 	`"can_comment":{"type":"boolean"},"can_see_info":{"type":"boolean"},"can_see_stats":{"type":"boolean"},` +
-	`"can_request_access":{"type":"boolean"}},"required":["file_id","right"],"additionalProperties":false}`
+	`"can_request_access":{"type":"boolean"}`
+
+var linkSchema = `{"type":"object","properties":{` + linkProperties +
+	`},"required":["file_id","right"],"additionalProperties":false}`
+
+// listedLinkSchema is a share link of links.list, which also carries what with=sharelink loads.
+var listedLinkSchema = `{"type":"object","properties":{` + linkProperties +
+	`,"created_by":{"type":"integer"},"views":{"type":"integer"}},"required":["file_id","right"],"additionalProperties":false}`
 
 var linkResultSchema = `{"type":"object","properties":{` +
 	`"drive_id":{"type":"integer"},"file_id":{"type":"integer"},` +
 	`"status":{"type":"string","enum":["done","pending"]},"link":` + linkSchema + `},` +
 	`"required":["drive_id","file_id"],"additionalProperties":false}`
 
-var linkEntrySchema = `{"type":"object","properties":{` + entryProperties + `,"link":` + linkSchema + `},` +
-	`"required":["id","name","type","parent_id"],"additionalProperties":false}`
+// linkEntrySchema is one entry of links.list: its share link is link, so it has no sharelink member.
+var linkEntrySchema = `{"type":"object","properties":{` + fileEntryProperties("sharelink") + `,"link":` +
+	listedLinkSchema + `},"required":["id","name","type","parent_id"],"additionalProperties":false}`
 
 var linkFields = []capability.Field{
 	{Name: "file_id", Description: "File or folder the link belongs to"},
@@ -123,8 +132,8 @@ var linksList = capability.Descriptor{
 	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
-		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
-		`"required":["drive_id"],"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + linkEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
@@ -134,9 +143,13 @@ var linksList = capability.Descriptor{
 		driveIDArgument,
 		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
+		{Name: "with", Description: "Related data to load per entry; each value adds the fields it documents, " +
+			"and an entry's field exists only when its value is requested; sharelink adds created_by and " +
+			"sharelink.views adds views to link"},
 	},
-	Fields: append(append([]capability.Field{}, entryFields...),
-		capability.Field{Name: "link", Description: "The share link of the entry; untrusted data, see links.get"},
+	Fields: append(slices.Concat(entryFields, fileWithFieldsWithout("sharelink")),
+		capability.Field{Name: "link", Description: "The share link of the entry; untrusted data, see links.get; " +
+			"created_by with sharelink, views with sharelink.views"},
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not every link"},
 		capability.Field{Name: "count", Description: "Number of entries on this page"},
@@ -172,8 +185,10 @@ type shareLinkJSON struct {
 	FileID       int64  `json:"file_id"`
 	Right        string `json:"right"`
 	ValidUntil   *int64 `json:"valid_until"`
+	CreatedBy    *int64 `json:"created_by"`
 	CreatedAt    *int64 `json:"created_at"`
 	UpdatedAt    *int64 `json:"updated_at"`
+	Views        *int64 `json:"views"`
 	Capabilities struct {
 		CanEdit          bool `json:"can_edit"`
 		CanSeeStats      bool `json:"can_see_stats"`
@@ -200,6 +215,9 @@ type Link struct {
 	CanSeeInfo       bool   `json:"can_see_info"`
 	CanSeeStats      bool   `json:"can_see_stats"`
 	CanRequestAccess bool   `json:"can_request_access"`
+	// CreatedBy and Views are set only by links.list, when its with values ask for them.
+	CreatedBy int64  `json:"created_by,omitempty"`
+	Views     *int64 `json:"views,omitempty"`
 }
 
 // LinkResult is the stable answer of a link read or change.
@@ -303,9 +321,10 @@ func linkPath(driveID, fileID int64) string {
 }
 
 type linksListArguments struct {
-	DriveID int64  `json:"drive_id"`
-	Cursor  string `json:"cursor"`
-	Limit   int    `json:"limit"`
+	DriveID int64    `json:"drive_id"`
+	Cursor  string   `json:"cursor"`
+	Limit   int      `json:"limit"`
+	With    []string `json:"with"`
 }
 
 func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -315,6 +334,9 @@ func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
+	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -323,14 +345,18 @@ func invokeLinksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListLinks(ctx, input.DriveID, input.Cursor, limit)
+	return client.ListLinks(ctx, input.DriveID, input.Cursor, limit, input.With)
 }
 
 // ListLinks reads one page of the files that have a share link, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself.
-func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, limit int) (*LinkPage, error) {
+// answers: it never follows has_more itself. with loads related data per entry; the link always comes with
+// sharelink and is reported as link, never as sharelink.
+func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, limit int, with []string) (*LinkPage, error) {
 	const op = "list share links"
-	query := url.Values{"limit": {strconv.Itoa(limit)}, "with": {"sharelink"}}
+	if err := checkValues(with, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
+	query := url.Values{"limit": {strconv.Itoa(limit)}, "with": {withQuery("sharelink", with)}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
@@ -342,11 +368,18 @@ func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, li
 	if err := c.doInto(ctx, op, fmt.Sprintf("/3/drive/%d/files/links", driveID), query, &items, &meta); err != nil {
 		return nil, err
 	}
+	entryWith := slices.DeleteFunc(slices.Clone(with), func(v string) bool { return strings.HasPrefix(v, "sharelink") })
 	entries := make([]LinkEntry, 0, len(items))
 	for _, item := range items {
-		entry := LinkEntry{Entry: entryOf(item.fileJSON)}
+		entry := LinkEntry{Entry: c.entryWith(driveID, item.fileJSON, entryWith)}
 		if item.Sharelink != nil && item.Sharelink.FileID == item.ID {
 			if link, ok := linkOf(*item.Sharelink); ok {
+				if slices.Contains(with, "sharelink") || slices.Contains(with, "sharelink.views") {
+					link.CreatedBy = optionalID(item.Sharelink.CreatedBy)
+				}
+				if slices.Contains(with, "sharelink.views") {
+					link.Views = valuePointer(item.Sharelink.Views)
+				}
 				entry.Link = link
 			}
 		}
