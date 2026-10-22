@@ -49,6 +49,12 @@ func outputCases() []outputCase {
 		{"telegram.updates.list", []string{"-1001"}, `{}`,
 			map[string]string{"getUpdates": `[{"update_id":1,"message":{"message_id":2,"date":3,` +
 				`"chat":{"id":-1001},"from":USER,"text":"hi"}}]`}, []string{"updates", "[]", "from"}},
+		{"telegram.updates.list", []string{"-1001"}, `{}`,
+			map[string]string{"getUpdates": `[{"update_id":1,"message":{"message_id":2,"date":3,` +
+				`"chat":{"id":-1001},` + documentedMedia + `}}]`}, nil},
+		{"telegram.users.personal-chat-messages", []string{"-1001"}, `{"user_id":7}`,
+			map[string]string{"getChatMember": memberAnswer,
+				"getUserPersonalChatMessages": `[{"message_id":1,"date":2,` + documentedMedia + `}]`}, nil},
 		{"telegram.users.personal-chat-messages", []string{"-1001"}, `{"user_id":7}`,
 			map[string]string{"getChatMember": memberAnswer,
 				"getUserPersonalChatMessages": `[{"message_id":1,"date":2,"text":"hi"}]`}, nil},

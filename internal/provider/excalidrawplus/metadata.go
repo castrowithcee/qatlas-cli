@@ -65,3 +65,30 @@ const emojiSchema = `{"type":"object","properties":{"id":{"type":"string"},"nati
 
 // number keeps an integer exactly as Excalidraw+ sent it.
 type number = json.Number
+
+// The helpers below read one member of a foreign answer on its own: an unexpected type drops that member
+// instead of failing the whole answer.
+
+func textOf(raw json.RawMessage) string {
+	var text string
+	if json.Unmarshal(raw, &text) != nil {
+		return ""
+	}
+	return cleanValue(text)
+}
+
+func flagOf(raw json.RawMessage) *bool {
+	var flag bool
+	if len(raw) == 0 || json.Unmarshal(raw, &flag) != nil || string(raw) == "null" {
+		return nil
+	}
+	return &flag
+}
+
+func idListOf(raw json.RawMessage) []string {
+	var values []string
+	if len(raw) == 0 || json.Unmarshal(raw, &values) != nil {
+		return nil
+	}
+	return idsOf(values)
+}

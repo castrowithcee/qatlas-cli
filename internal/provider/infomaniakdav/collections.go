@@ -6,6 +6,9 @@ import (
 	"encoding/xml"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -17,6 +20,10 @@ import (
 const (
 	maxNameLength        = 256
 	maxDescriptionLength = 1024
+	maxTokenLength       = 512
+	maxLabelLength       = 64
+	maxNameListed        = 32
+	maxCollationsListed  = 16
 )
 
 var readRisk = capability.Risk{
@@ -24,8 +31,19 @@ var readRisk = capability.Risk{
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: dataSensitivity,
 }
 
+const (
+	stringList = `{"type":"array","items":{"type":"string"}}`
+	formatList = `{"type":"array","items":{"type":"object","properties":{"content_type":{"type":"string"},` +
+		`"version":{"type":"string"}},"additionalProperties":false}}`
+)
+
 const collectionSchema = `{"type":"object","properties":{` +
-	`"id":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},"color":{"type":"string"}},` +
+	`"id":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},"color":{"type":"string"},` +
+	`"components":` + stringList + `,"calendar_data":` + formatList + `,"address_data":` + formatList + `,` +
+	`"max_resource_size":{"type":"integer","minimum":0},"min_date_time":{"type":"string"},` +
+	`"max_date_time":{"type":"string"},"max_instances":{"type":"integer","minimum":0},` +
+	`"max_attendees_per_instance":{"type":"integer","minimum":0},"timezone":{"type":"string"},` +
+	`"collations":` + stringList + `,"privileges":` + stringList + `,"sync_token":{"type":"string"}},` +
 	`"required":["id","name"],"additionalProperties":false}`
 
 func listDescriptor(kind, object, title, description string) capability.Descriptor {
@@ -44,6 +62,18 @@ func listDescriptor(kind, object, title, description string) capability.Descript
 			{Name: "name", Description: "Display name, untrusted data"},
 			{Name: "description", Description: "Description, untrusted data"},
 			{Name: "color", Description: "Color as a hex value, only when the provider reports a valid one"},
+			{Name: "components", Description: "Calendar: component names the calendar accepts, such as VEVENT, at most 32"},
+			{Name: "calendar_data", Description: "Calendar: supported data formats as content_type and version, at most 8"},
+			{Name: "address_data", Description: "Address book: supported data formats as content_type and version, at most 8"},
+			{Name: "max_resource_size", Description: "Largest accepted object in bytes"},
+			{Name: "min_date_time", Description: "Calendar: earliest accepted date as RFC 3339 in UTC"},
+			{Name: "max_date_time", Description: "Calendar: latest accepted date as RFC 3339 in UTC"},
+			{Name: "max_instances", Description: "Calendar: most instances of one recurring event"},
+			{Name: "max_attendees_per_instance", Description: "Calendar: most attendees of one event instance"},
+			{Name: "timezone", Description: "Calendar: TZID of the default time zone, untrusted data"},
+			{Name: "collations", Description: "Supported text collations, at most 16"},
+			{Name: "privileges", Description: "Privileges of the bound identity in the DAV: namespace, at most 32"},
+			{Name: "sync_token", Description: "Sync token of the collection, untrusted data"},
 			{Name: "count", Description: "Number of reported collections"},
 		},
 		Examples: []capability.Example{{Description: "List the allow-listed collections", Arguments: json.RawMessage(`{}`)}},
@@ -63,6 +93,25 @@ type Collection struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Color       string `json:"color,omitempty"`
+
+	Components              []string     `json:"components,omitempty"`
+	CalendarData            []DataFormat `json:"calendar_data,omitempty"`
+	AddressData             []DataFormat `json:"address_data,omitempty"`
+	MaxResourceSize         *uint64      `json:"max_resource_size,omitempty"`
+	MinDateTime             string       `json:"min_date_time,omitempty"`
+	MaxDateTime             string       `json:"max_date_time,omitempty"`
+	MaxInstances            *uint64      `json:"max_instances,omitempty"`
+	MaxAttendeesPerInstance *uint64      `json:"max_attendees_per_instance,omitempty"`
+	Timezone                string       `json:"timezone,omitempty"`
+	Collations              []string     `json:"collations,omitempty"`
+	Privileges              []string     `json:"privileges,omitempty"`
+	SyncToken               string       `json:"sync_token,omitempty"`
+}
+
+// DataFormat is one supported data format of a collection.
+type DataFormat struct {
+	ContentType string `json:"content_type,omitempty"`
+	Version     string `json:"version,omitempty"`
 }
 
 // CollectionsPage is the result of one list operation.
@@ -187,12 +236,7 @@ func (c *Client) collect(ctx context.Context, calendars bool, keep func(id strin
 			continue
 		}
 		seen[id] = true
-		page.Collections = append(page.Collections, Collection{
-			ID:          id,
-			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxNameLength),
-			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxDescriptionLength),
-			Color:       colorOf(resources[i].Text[dav.KeyColor], calendars),
-		})
+		page.Collections = append(page.Collections, collectionOf(id, &resources[i], calendars))
 	}
 	sort.Slice(page.Collections, func(i, j int) bool { return page.Collections[i].ID < page.Collections[j].ID })
 	page.Count = len(page.Collections)
@@ -217,6 +261,107 @@ var colorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$`)
 func colorOf(value string, calendars bool) string {
 	if calendars && colorPattern.MatchString(value) {
 		return value
+	}
+	return ""
+}
+
+// collectionOf builds one collection from the properties the server reported. Every property is optional:
+// one that is absent or unreadable is left out, never guessed.
+func collectionOf(id string, r *dav.Resource, calendars bool) Collection {
+	c := Collection{
+		ID:              id,
+		Name:            dav.Clean(r.Text[dav.KeyName], maxNameLength),
+		Description:     dav.Clean(r.Text[dav.KeyDescription], maxDescriptionLength),
+		Color:           colorOf(r.Text[dav.KeyColor], calendars),
+		Collations:      names(r.Collations, maxCollationsListed),
+		Privileges:      names(r.Privileges, maxNameListed),
+		MaxResourceSize: numberOf(r.Text[dav.KeyMaxSize]),
+		SyncToken:       dav.Clean(r.Text[dav.KeySyncToken], maxTokenLength),
+	}
+	if !calendars {
+		c.AddressData = formats(r.AddressData)
+		return c
+	}
+	c.Components = names(r.Components, maxNameListed)
+	c.CalendarData = formats(r.CalendarData)
+	c.MinDateTime = stampOf(r.Text[dav.KeyMinDate])
+	c.MaxDateTime = stampOf(r.Text[dav.KeyMaxDate])
+	c.MaxInstances = numberOf(r.Text[dav.KeyMaxInstances])
+	c.MaxAttendeesPerInstance = numberOf(r.Text[dav.KeyMaxAttendees])
+	c.Timezone = tzidOf(r.Text[dav.KeyTimezone])
+	return c
+}
+
+func names(values []string, limit int) []string {
+	var out []string
+	for _, value := range values {
+		if value = dav.Clean(value, maxLabelLength); value != "" && len(out) < limit {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func formats(values []dav.DataFormat) []DataFormat {
+	var out []DataFormat
+	for _, value := range values {
+		format := DataFormat{ContentType: dav.Clean(value.ContentType, maxLabelLength),
+			Version: dav.Clean(value.Version, maxLabelLength)}
+		if format != (DataFormat{}) && len(out) < 8 {
+			out = append(out, format)
+		}
+	}
+	return out
+}
+
+// numberOf accepts only plain decimal digits that fit an unsigned 64-bit integer.
+func numberOf(value string) *uint64 {
+	n, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+// stampOf rewrites the CalDAV UTC form (20060102T150405Z) to RFC 3339; anything else is dropped.
+func stampOf(value string) string {
+	t, err := time.Parse("20060102T150405Z", value)
+	if err != nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+// tzidOf returns the TZID of the first VTIMEZONE in a calendar-timezone value. The value may be cut at the
+// parser's text limit, so a TZID line counts only when a complete line follows it: a cut line never yields a
+// partial name.
+func tzidOf(value string) string {
+	value = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(value)
+	var lines []string
+	for _, line := range strings.Split(value, "\n") {
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			if len(lines) > 0 {
+				lines[len(lines)-1] += line[1:]
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+	inZone := false
+	for i, line := range lines {
+		upper := strings.ToUpper(line)
+		switch {
+		case upper == "BEGIN:VTIMEZONE":
+			inZone = true
+		case upper == "END:VTIMEZONE":
+			return ""
+		case inZone && (strings.HasPrefix(upper, "TZID:") || strings.HasPrefix(upper, "TZID;")):
+			colon := strings.Index(line, ":")
+			if i == len(lines)-1 || colon < 0 {
+				return ""
+			}
+			return dav.Clean(line[colon+1:], maxLabelLength)
+		}
 	}
 	return ""
 }

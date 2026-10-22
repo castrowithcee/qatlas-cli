@@ -58,6 +58,8 @@ var updatesList = capability.Descriptor{
 		`"text":{"type":"string"},"caption":{"type":"string"},` +
 		`"media":{"type":"object","properties":{"kind":{"type":"string"},"size":{"type":"integer"},` +
 		`"mime_type":{"type":"string"},"file_name":{"type":"string"},"file_ref":{"type":"string"}}},` +
+		`"media_items":{"type":"array","items":{"type":"object"},"description":"Media objects of the message: the Bot API types Animation, Audio, Document, LivePhoto, PhotoSize (one entry per size), Sticker, Video, VideoNote and Voice, each with kind and its members; every file_id is a file_ref"},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}},` +
 		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"},` +
 		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"},` +
 		`"business_chat_ref":{"type":"string"},"message_ids":{"type":"array","items":{"type":"integer"}},` +
@@ -70,7 +72,7 @@ var updatesList = capability.Descriptor{
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
 	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText},
+		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText + "; media_items lists the media objects of a message with their Bot API members and signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member>, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB"},
 		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or business connection or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
 	},
@@ -214,6 +216,8 @@ type updateOut struct {
 	Text             string     `json:"text,omitempty"`
 	Caption          string     `json:"caption,omitempty"`
 	Media            *mediaOut  `json:"media,omitempty"`
+	MediaItems       []any      `json:"media_items,omitempty"`
+	OmittedFields    []string   `json:"omitted_fields,omitempty"`
 	CallbackData     string     `json:"callback_data,omitempty"`
 	CallbackRef      string     `json:"callback_ref,omitempty"`
 	JoinRequestRef   string     `json:"join_request_ref,omitempty"`
@@ -231,11 +235,12 @@ type tgChat struct {
 	ID int64 `json:"id"`
 }
 
+// tgFile is the summary behind the media member: the identifier and the few members every file kind shares.
 type tgFile struct {
-	FileID   string `json:"file_id"`
-	FileSize int64  `json:"file_size"`
-	MimeType string `json:"mime_type"`
-	FileName string `json:"file_name"`
+	FileID   string
+	FileSize int64
+	MimeType string
+	FileName string
 }
 
 type tgMessage struct {
@@ -251,14 +256,15 @@ type tgMessage struct {
 	ReplyTo              *struct {
 		MessageID int64 `json:"message_id"`
 	} `json:"reply_to_message"`
-	Photo     []tgFile `json:"photo"`
-	Document  *tgFile  `json:"document"`
-	Audio     *tgFile  `json:"audio"`
-	Video     *tgFile  `json:"video"`
-	Voice     *tgFile  `json:"voice"`
-	VideoNote *tgFile  `json:"video_note"`
-	Animation *tgFile  `json:"animation"`
-	Sticker   *tgFile  `json:"sticker"`
+	Photo     []photoSize `json:"photo"`
+	Document  *document   `json:"document"`
+	Audio     *audio      `json:"audio"`
+	Video     *video      `json:"video"`
+	Voice     *voice      `json:"voice"`
+	VideoNote *videoNote  `json:"video_note"`
+	Animation *animation  `json:"animation"`
+	Sticker   *sticker    `json:"sticker"`
+	LivePhoto *livePhoto  `json:"live_photo"`
 }
 
 // tgEvent covers the chat events that carry a chat, an actor, and a date.
@@ -325,8 +331,10 @@ type candidate struct {
 	out  updateOut
 	chat int64
 	// thread is the topic of a message or of the message under a callback; a topic target binds nothing else.
-	thread     int64
-	fileID     string
+	thread int64
+	fileID string
+	// msg is the decoded message of a message update; its media objects are mapped once the binding is known.
+	msg        *tgMessage
 	callbackID string
 	joinQuery  string
 	// botOnly marks an update that belongs to no chat; only the bot target binds it.
@@ -348,21 +356,28 @@ func (m *tgMessage) media() (string, *tgFile) {
 	switch {
 	case len(m.Photo) > 0:
 		// The last PhotoSize is the largest.
-		return "photo", &m.Photo[len(m.Photo)-1]
+		p := m.Photo[len(m.Photo)-1]
+		return "photo", &tgFile{FileID: p.fileID, FileSize: p.FileSize}
 	case m.Document != nil:
-		return "document", m.Document
+		d := m.Document
+		return "document", &tgFile{d.fileID, d.FileSize, d.MimeType, d.FileName}
 	case m.Audio != nil:
-		return "audio", m.Audio
+		a := m.Audio
+		return "audio", &tgFile{a.fileID, a.FileSize, a.MimeType, a.FileName}
 	case m.Video != nil:
-		return "video", m.Video
+		v := m.Video
+		return "video", &tgFile{v.fileID, v.FileSize, v.MimeType, v.FileName}
 	case m.Voice != nil:
-		return "voice", m.Voice
+		v := m.Voice
+		return "voice", &tgFile{FileID: v.fileID, FileSize: v.FileSize, MimeType: v.MimeType}
 	case m.VideoNote != nil:
-		return "video_note", m.VideoNote
+		v := m.VideoNote
+		return "video_note", &tgFile{FileID: v.fileID, FileSize: v.FileSize}
 	case m.Animation != nil:
-		return "animation", m.Animation
+		a := m.Animation
+		return "animation", &tgFile{a.fileID, a.FileSize, a.MimeType, a.FileName}
 	case m.Sticker != nil:
-		return "sticker", m.Sticker
+		return "sticker", &tgFile{FileID: m.Sticker.fileID, FileSize: m.Sticker.FileSize}
 	}
 	return "", nil
 }
@@ -381,6 +396,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c.out.From = sender(m.From)
 		c.out.Text = capText(m.Text, maxMessageLength)
 		c.out.Caption = capText(m.Caption, maxCaptionRunes)
+		c.msg = m
 		if kind, file := m.media(); file != nil {
 			c.out.Media = &mediaOut{Kind: kind, Size: file.FileSize, MimeType: capText(file.MimeType, maxNameRunes),
 				FileName: capText(file.FileName, maxNameRunes)}
@@ -572,6 +588,9 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 		if cand.business != "" {
 			cand.out.Chat = businessBinding(cand.business)
 			cand.out.BusinessChatRef = c.businessChatRef(cand.business, cand.chat)
+			if cand.msg != nil {
+				cand.out.MediaItems, cand.out.OmittedFields = mediaItems(cand.msg, nil)
+			}
 			updates = append(updates, cand.out)
 			continue
 		}
@@ -586,6 +605,9 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 			continue
 		}
 		cand.out.Chat = binding
+		if cand.msg != nil {
+			cand.out.MediaItems, cand.out.OmittedFields = mediaItems(cand.msg, c.fileRefs(binding))
+		}
 		if cand.fileID != "" && cand.out.Media != nil {
 			cand.out.Media.FileRef = signRef(c.token, refFile, binding, cand.fileID)
 		}

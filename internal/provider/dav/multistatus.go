@@ -40,6 +40,14 @@ var (
 	elemPrivilege    = xml.Name{Space: davNS, Local: "privilege"}
 	elemCompSet      = xml.Name{Space: caldavNS, Local: "supported-calendar-component-set"}
 	elemComp         = xml.Name{Space: caldavNS, Local: "comp"}
+	elemCalFormats   = xml.Name{Space: caldavNS, Local: "supported-calendar-data"}
+	elemBookFormats  = xml.Name{Space: carddavN, Local: "supported-address-data"}
+	elemCalCollSet   = xml.Name{Space: caldavNS, Local: "supported-collation-set"}
+	elemBookCollSet  = xml.Name{Space: carddavN, Local: "supported-collation-set"}
+	elemCalColl      = xml.Name{Space: caldavNS, Local: "supported-collation"}
+	elemBookColl     = xml.Name{Space: carddavN, Local: "supported-collation"}
+	elemAddressType  = xml.Name{Space: carddavN, Local: "address-data-type"}
+	propTimezone     = xml.Name{Space: caldavNS, Local: "calendar-timezone"}
 
 	PropPrincipal    = xml.Name{Space: davNS, Local: "current-user-principal"}
 	PropCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
@@ -69,20 +77,36 @@ const (
 	KeyDeletedAt   = "deleted-at"
 	KeyCalendarURI = "calendar-uri"
 	KeyRetention   = "retention-duration"
+	// Keys of the collection properties of RFC 4791, RFC 6352, and RFC 6578.
+	KeyMaxSize      = "max-resource-size"
+	KeyMinDate      = "min-date-time"
+	KeyMaxDate      = "max-date-time"
+	KeyMaxInstances = "max-instances"
+	KeyMaxAttendees = "max-attendees-per-instance"
+	KeyTimezone     = "calendar-timezone"
+	KeySyncToken    = "sync-token"
 )
 
 var textProps = map[xml.Name]string{
-	{Space: davNS, Local: "displayname"}:                 KeyName,
-	{Space: caldavNS, Local: "calendar-description"}:     KeyDescription,
-	{Space: carddavN, Local: "addressbook-description"}:  KeyDescription,
-	{Space: appleNS, Local: "calendar-color"}:            KeyColor,
-	{Space: davNS, Local: "getetag"}:                     KeyETag,
-	{Space: caldavNS, Local: "calendar-data"}:            KeyCalendar,
-	{Space: carddavN, Local: "address-data"}:             KeyAddress,
-	{Space: davNS, Local: "getcontenttype"}:              KeyContentType,
-	{Space: ncNS, Local: "deleted-at"}:                   KeyDeletedAt,
-	{Space: ncNS, Local: "calendar-uri"}:                 KeyCalendarURI,
-	{Space: ncNS, Local: "trash-bin-retention-duration"}: KeyRetention,
+	{Space: davNS, Local: "displayname"}:                   KeyName,
+	{Space: caldavNS, Local: "calendar-description"}:       KeyDescription,
+	{Space: carddavN, Local: "addressbook-description"}:    KeyDescription,
+	{Space: appleNS, Local: "calendar-color"}:              KeyColor,
+	{Space: davNS, Local: "getetag"}:                       KeyETag,
+	{Space: caldavNS, Local: "calendar-data"}:              KeyCalendar,
+	{Space: carddavN, Local: "address-data"}:               KeyAddress,
+	{Space: davNS, Local: "getcontenttype"}:                KeyContentType,
+	{Space: ncNS, Local: "deleted-at"}:                     KeyDeletedAt,
+	{Space: ncNS, Local: "calendar-uri"}:                   KeyCalendarURI,
+	{Space: ncNS, Local: "trash-bin-retention-duration"}:   KeyRetention,
+	{Space: caldavNS, Local: "max-resource-size"}:          KeyMaxSize,
+	{Space: carddavN, Local: "max-resource-size"}:          KeyMaxSize,
+	{Space: caldavNS, Local: "min-date-time"}:              KeyMinDate,
+	{Space: caldavNS, Local: "max-date-time"}:              KeyMaxDate,
+	{Space: caldavNS, Local: "max-instances"}:              KeyMaxInstances,
+	{Space: caldavNS, Local: "max-attendees-per-instance"}: KeyMaxAttendees,
+	{Space: caldavNS, Local: "calendar-timezone"}:          KeyTimezone,
+	{Space: davNS, Local: "sync-token"}:                    KeySyncToken,
 }
 
 // Bounds of one parsed answer.
@@ -99,6 +123,9 @@ const (
 	maxFlags         = 32
 	maxSegments      = 16
 	maxSegmentLen    = 255
+	maxFormats       = 8
+	maxCollations    = 16
+	maxCollationLen  = 64
 )
 
 // Resource is one d:response reduced to what a DAV provider reads. Only successful propstat blocks
@@ -115,11 +142,18 @@ type Resource struct {
 	// Privileges are the DAV: privilege names of current-user-privilege-set; Components are the names of
 	// supported-calendar-component-set. Both are empty when the property was not asked for or not granted.
 	Privileges, Components []string
+	// CalendarData and AddressData are the formats of supported-calendar-data and supported-address-data;
+	// Collations are the names of supported-collation-set. Each is cut at its cap.
+	CalendarData, AddressData []DataFormat
+	Collations                []string
 	// Invites are the users and groups an oc:invite property lists, without the organizer; InvitesTruncated
 	// marks a list cut at the cap.
 	Invites          []Invite
 	InvitesTruncated bool
 }
+
+// DataFormat is one entry of supported-calendar-data or supported-address-data, as the server reports it.
+type DataFormat struct{ ContentType, Version string }
 
 // Invite is one recipient of an oc:invite property. Href is the principal as the server reports it and Name
 // its common name; both are untrusted. Access is "read" or "read-write" and Status "accepted", "declined",
@@ -182,6 +216,14 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 						pending.Components = append(pending.Components, attr.Value)
 					}
 				}
+			case len(stack) == 6 && pending != nil && stack[4] == elemCalFormats && element.Name == propCalendarData:
+				if len(pending.CalendarData) < maxFormats {
+					pending.CalendarData = append(pending.CalendarData, formatOf(element.Attr))
+				}
+			case len(stack) == 6 && pending != nil && stack[4] == elemBookFormats && element.Name == elemAddressType:
+				if len(pending.AddressData) < maxFormats {
+					pending.AddressData = append(pending.AddressData, formatOf(element.Attr))
+				}
 			case len(stack) == 6 && pending != nil && stack[4] == propInvite &&
 				(element.Name == elemInviteUser || element.Name == elemInviteOrg):
 				invite = nil
@@ -205,7 +247,10 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 				}
 			}
 		case xml.CharData:
-			if len(stack) > 0 && (stack[len(stack)-1] == propCalendarData || stack[len(stack)-1] == propAddressData) {
+			if len(stack) == 5 && stack[4] == propTimezone {
+				// Only the start is kept: the TZID sits at the top of the embedded object.
+				text.Write(element[:min(len(element), max(maxTextBytes-text.Len(), 0))])
+			} else if len(stack) > 0 && (stack[len(stack)-1] == propCalendarData || stack[len(stack)-1] == propAddressData) {
 				// An event or contact is never cut: one beyond its cap refuses the answer.
 				if text.Len()+len(element) > MaxEventBytes {
 					return nil, provider.InvalidResponse(op, s.Name+" returned an item larger than one read may handle")
@@ -229,6 +274,9 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 					current.Addressbook = current.Addressbook || pending.Addressbook
 					current.Privileges = append(current.Privileges, pending.Privileges...)
 					current.Components = append(current.Components, pending.Components...)
+					current.CalendarData = append(current.CalendarData, pending.CalendarData...)
+					current.AddressData = append(current.AddressData, pending.AddressData...)
+					current.Collations = append(current.Collations, pending.Collations...)
 					for key, value := range pending.Text {
 						current.Text[key] = value
 					}
@@ -257,6 +305,12 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 						return nil, provider.InvalidResponse(op, s.Name+" answered with too many locations")
 					}
 					pending.Links[name] = append(pending.Links[name], strings.TrimSpace(text.String()))
+				}
+			case len(stack) == 6 && pending != nil && (stack[4] == elemCalCollSet && element.Name == elemCalColl ||
+				stack[4] == elemBookCollSet && element.Name == elemBookColl):
+				if name := strings.TrimSpace(text.String()); len(pending.Collations) < maxCollations &&
+					name != "" && len(name) <= maxCollationLen {
+					pending.Collations = append(pending.Collations, name)
 				}
 			case len(stack) == 5 && pending != nil && stack[3] == elemProp:
 				if key, ok := textProps[element.Name]; ok {
@@ -325,4 +379,18 @@ func (s Server) Segments(op, href string) ([]string, error) {
 		segments = append(segments, decoded)
 	}
 	return segments, nil
+}
+
+// formatOf reads the content-type and version attributes of one data format entry.
+func formatOf(attrs []xml.Attr) DataFormat {
+	var format DataFormat
+	for _, attr := range attrs {
+		switch attr.Name.Local {
+		case "content-type":
+			format.ContentType = attr.Value
+		case "version":
+			format.Version = attr.Value
+		}
+	}
+	return format
 }
