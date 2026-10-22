@@ -92,3 +92,24 @@ func TestIssueTypesListReportsThePermissionItNeeds(t *testing.T) {
 		t.Errorf("%s = %v, want a permission refusal naming read:org", issueTypesList.ID, err)
 	}
 }
+
+// github.issue-types.list reports every member GitHub documents for an issue type; a type without the new
+// members keeps its earlier output exactly. The result is encoded with sorted keys.
+func TestIssueTypesListReportsEveryDocumentedMember(t *testing.T) {
+	const documented = `[{"id":410,"node_id":"IT_kwDNAd3NAZo","name":"Task","description":"A specific piece of work",` +
+		`"created_at":"2024-12-11T14:39:09Z","updated_at":"2024-12-11T14:40:00Z","color":"blue","is_enabled":true}]`
+	const want = `{"issue_types":[{"color":"blue","created_at":"2024-12-11T14:39:09Z",` +
+		`"description":"A specific piece of work","id":410,"is_enabled":true,"name":"Task",` +
+		`"node_id":"IT_kwDNAd3NAZo","updated_at":"2024-12-11T14:40:00Z"}],"owner":"orgs/octo-org"}`
+	const oldBody = `[{"id":410,"name":"Task","description":null,"color":"blue","is_enabled":true}]`
+	const oldWant = `{"issue_types":[{"color":"blue","id":410,"is_enabled":true,"name":"Task"}],"owner":"orgs/octo-org"}`
+	red := &redact.Redactor{}
+	for _, c := range []struct{ body, want string }{{documented, want}, {oldBody, oldWant}} {
+		base := serveRoute(t, "/api/v3/orgs/octo-org/issue-types", c.body)
+		core := application.New(registry(t), discoveryConfig(base), resolver(red, nil), red)
+		got, err := invoke(t, core, issueTypesList.ID, "org", `{}`, false)
+		if err != nil || string(got) != c.want {
+			t.Errorf("issue-types.list = %s, %v, want %s", got, err, c.want)
+		}
+	}
+}
