@@ -40,6 +40,9 @@ A variable is a key with a plain-text value, either bound to a project or global
   bound connection, or that is not found, before any change request; the refusal names neither the variable
   nor its project. `update` sends the variable's own project (null for a global one): a variable is never
   moved between projects.
+- **Empty values.** `list` with `state` `empty` asks n8n for variables with an empty value only; the
+  allow-list still applies to every page, and a follow-up call with a cursor must pass the same `project_id`
+  and `state`.
 - **Workflow allow-list.** A connection with a `workflow/` target refuses every variable tool locally (narrower
   reading, as for data tables).
 - **Fields.** `key` is 1 to 50 characters of letters, digits, and `_`; a new key does not start with a digit.
