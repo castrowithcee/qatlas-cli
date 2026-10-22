@@ -190,15 +190,15 @@ func (c *Client) GetWebhook(ctx context.Context) (webhookOut, error) {
 		return webhookOut{}, invalidResponse(op)
 	}
 	out := webhookOut{HasWebhook: info.URL != "", HasCustomCertificate: info.HasCustomCertificate,
-		PendingUpdateCount: info.PendingUpdateCount, IPAddress: capText(info.IPAddress, maxNameRunes),
-		LastErrorDate: info.LastErrorDate, LastErrorMessage: capText(info.LastErrorMessage, maxNameRunes),
+		PendingUpdateCount: info.PendingUpdateCount, IPAddress: cleanText(info.IPAddress, maxNameRunes),
+		LastErrorDate: info.LastErrorDate, LastErrorMessage: cleanText(info.LastErrorMessage, maxNameRunes),
 		LastSynchronizationErrorDate: info.LastSynchronizationErrorDate, MaxConnections: info.MaxConnections}
 	for _, kind := range info.AllowedUpdates {
 		if len(out.AllowedUpdates) == maxAllowedUpdates {
 			break
 		}
 		if kind != "" {
-			out.AllowedUpdates = append(out.AllowedUpdates, capText(kind, maxAllowedUpdateRunes))
+			out.AllowedUpdates = append(out.AllowedUpdates, cleanText(kind, maxAllowedUpdateRunes))
 		}
 	}
 	return out, nil

@@ -486,8 +486,8 @@ type webAppInfo struct {
 
 const maxWebAppURLRunes = 2048
 
-// GetMenuButton performs exactly one getChatMenuButton request; chat 0 addresses the default button. Only
-// the web app URL is only copied into the output, never requested.
+// GetMenuButton performs exactly one getChatMenuButton request; chat 0 addresses the default button. A web
+// app URL is only copied into the output, never requested.
 func (c *Client) GetMenuButton(ctx context.Context, chat int64) (menuButtonOut, error) {
 	const op = "get menu button"
 	raw, err := c.call(ctx, spec{op: op, method: "getChatMenuButton", limit: defaultResponseBytes, readOnly: true},
@@ -503,7 +503,7 @@ func (c *Client) GetMenuButton(ctx context.Context, chat int64) (menuButtonOut, 
 	}
 	out := menuButtonOut{Type: capText(button.Type, maxNameRunes), Text: capText(button.Text, maxNameRunes)}
 	if button.WebApp != nil && button.WebApp.URL != "" {
-		out.WebApp = &webAppInfo{URL: capText(button.WebApp.URL, maxWebAppURLRunes)}
+		out.WebApp = &webAppInfo{URL: cleanText(button.WebApp.URL, maxWebAppURLRunes)}
 	}
 	return out, nil
 }
