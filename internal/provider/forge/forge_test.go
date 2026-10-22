@@ -175,7 +175,8 @@ func testConfig(p *product) *config.Config {
 	}
 	// A connection whose tools list names issues.delete is the only one that offers it.
 	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
-		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get"}}
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get",
+			p.id + ".milestones.delete", p.id + ".milestones.get"}}
 	return cfg
 }
 
