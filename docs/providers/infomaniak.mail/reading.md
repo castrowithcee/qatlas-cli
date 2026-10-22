@@ -17,12 +17,22 @@ The read tools of [Infomaniak Mail](README.md). Reading changes nothing, see
 
 ## Listing messages
 
-`infomaniak.mail.messages.list` takes a `folder` and fixed, typed filters only. The server compares dates
-only. With a sender allow-list, the `sender` filter must name an address on it.
+`infomaniak.mail.messages.list` takes a `folder` and typed filters, all combined with AND. The server compares
+dates only. Nothing but these typed values ever reaches the SEARCH; there is no raw IMAP command. The
+descriptor lists the filters with their bounds and exclusions. With a sender allow-list, the `sender` filter
+must name an address on it. Results are the newest matches first. `matched` is the number of hits before
+`limit`, and `has_more` is true when older matches were left out.
 
-There is no free search string and no raw IMAP command: nothing but these typed values ever reaches the
-SEARCH. Results are the newest matches first. `matched` is the number of hits before `limit`, and `has_more`
-is true when older matches were left out.
+Limits of the filters:
+
+- SORT and THREAD are extensions (RFC 5256) outside RFC 3501 and are not offered; the list is sorted by UID,
+  descending.
+- STATUS is a separate command for folder counters and does not belong to the message list.
+- NEW, OLD, and RECENT are not offered: the `\Recent` flag no longer exists in IMAP4rev2 (RFC 9051).
+- NOT and OR are not offered as a free expression tree: all filters are combined with AND, and every flag
+  condition can be written in both directions with the three-valued arguments.
+- Text and header filters only narrow the server search. The sender allow-list still checks every parsed From
+  address locally, also when a `header` filter names `From`.
 
 The folder is opened with `EXAMINE`, not `SELECT`, and envelopes are fetched with one `FETCH` of `ENVELOPE`,
 `INTERNALDATE`, `FLAGS`, and `RFC822.SIZE`, so a listing never changes a message's `\Seen` flag.
