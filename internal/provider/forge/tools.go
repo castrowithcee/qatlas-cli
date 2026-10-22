@@ -32,7 +32,8 @@ type run func(ctx context.Context, c *Client) (any, error)
 var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea.minimum}
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
-	markdownRender, markupRender}
+	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
+	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -89,6 +90,12 @@ func decodeArguments(raw json.RawMessage, out any) error {
 func readRisk(sensitivity string) capability.Risk {
 	return capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 		Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: sensitivity}
+}
+
+// changeRisk is the risk of every change: it needs confirmation, and the instance is open to its users.
+func changeRisk(effect capability.Effect, idempotency capability.Idempotency, sensitivity string) capability.Risk {
+	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
+		OpenWorld: true, DataSensitivity: sensitivity}
 }
 
 func inputSchema(properties string, required ...string) json.RawMessage {

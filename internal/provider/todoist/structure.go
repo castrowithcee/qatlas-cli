@@ -62,10 +62,7 @@ var projectFieldArguments = []capability.Argument{
 	{Name: "view_style", Description: "list, board, or calendar"},
 }
 
-var projectFields = []capability.Field{
-	{Name: "id", Description: "Project ID"},
-	{Name: "name", Description: "Project name, untrusted data"},
-}
+var projectFields = projectOutputFields
 
 var structureFields = []capability.Field{
 	{Name: "id", Description: "ID of the project, section, label, or reminder the change concerned"},
@@ -141,10 +138,7 @@ var sectionIDArgument = capability.Argument{Name: "section_id",
 var sectionIDInput = `{"type":"object","properties":{"section_id":` + idSchema + `},"required":["section_id"],` +
 	`"additionalProperties":false}`
 
-var sectionFields = []capability.Field{
-	{Name: "id", Description: "Section ID"},
-	{Name: "name", Description: "Section name, untrusted data"},
-}
+var sectionFields = sectionOutputFields
 
 var sectionsCreate = changing(capability.EffectCreate, capability.IdempotencyNonIdempotent, descriptor("sections",
 	"create", "Create a Todoist section",
@@ -428,7 +422,7 @@ func (c *Client) changedProject(ctx context.Context, op string, raw rawProject, 
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "Todoist answered with a project outside the connection" + uncertain}
 	}
-	project := projectOf(raw, true)
+	project := projectOf(raw)
 	return &project, nil
 }
 
