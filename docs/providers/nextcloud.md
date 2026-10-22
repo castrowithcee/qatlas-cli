@@ -199,9 +199,10 @@ unknown recipient, so check `shares` of `calendar.calendars.list`.
 
 ## Contacts
 
-The group `contacts` (profile `contacts`) reads address books and contacts (untrusted personal data, no photos). The
-system address book needs its own `addressbook/URI` target and is never written or shared. Writing is in no profile;
-deleting and sharing need a tools list. A contact update replaces by `etag` and refuses a card it cannot write whole.
+The group `contacts` (profile `contacts`) reads address books and contacts (untrusted personal data; the get follows
+the limits of `infomaniak.dav.md`, Contacts, and never asks for photo, logo, sound, key, or agent data). The system
+address book needs its own `addressbook/URI` target and is never written or shared. Writing is in no profile;
+deleting and sharing need a tools list. A contact update replaces by `etag`, refusing a card it cannot write whole.
 A new address book needs the general `addressbook` target; changing, deleting (with all contacts), or sharing one
 needs it bound and owned. Sharing: one user or group, never link, e-mail, or team; unknown ones are ignored (`shares`).
 

@@ -129,13 +129,18 @@ to 50 and may be at most 200. Contacts are sorted by name, then id, and cut at `
 when more were found. The list is compact: `id`, `uid`, `name`, the first `email`, `organization`, and `etag`.
 A card that is not a valid vCard is left out of the list.
 
-`infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads that one
-contact with a GET. It returns `structured_name`, at most 20 `emails` and 20 `phones` with their `type`, at
-most 20 `addresses`, `organization`, `title`, `birthday`, `note`, and at most 20 `urls`. A member cut at its
-cap is named in `truncated`. A photo or other binary property is never returned. The `name` is the formatted
-name, built from the structured name when the card has none. The `id` is one literal path segment under the
-address book, checked before any request. Every contact href of an answer must be a direct child of the
-allowed address book, otherwise the whole answer is refused as an invalid response.
+`infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads it with a GET.
+It reports every vCard 3.0 property (RFC 2426) except those left out below; a list-valued member is cut at 20
+entries and named in `truncated`. The `name` is the formatted name or built from the structured one. The `id` is
+one literal path segment under the address book, checked before any request. Every contact href must be a direct
+child of the allowed address book, otherwise the whole answer is refused as an invalid response. Left out:
+
+- Embedded photo, logo, sound, and key data (`ENCODING=b`); only an `http` or `https` address with `VALUE=uri`
+  is reported. An embedded `AGENT` card is not evaluated, only an `AGENT` reference.
+- An address with user information, a query, or a fragment can carry an access token and is omitted; addresses
+  are untrusted text, never fetched. `key_uri` is reported: the address of a public key is no access value.
+- vCard 4.0 only properties (RFC 6350) and `X-` properties; CardDAV requires vCard 3.0. `PREF=n` is reported as
+  `pref`; in vCard 3.0 the preference stays in `type`.
 
 ## Writing events
 
