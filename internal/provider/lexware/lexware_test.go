@@ -469,6 +469,8 @@ func TestListInvoicesKeepsOpenAndOverdueAndDropsForeignRecords(t *testing.T) {
 			{
 				ID: invoiceID, VoucherNumber: "RE1012", VoucherStatus: "open", Overdue: false,
 				VoucherDate: "2026-05-14T00:00:00.000+02:00", DueDate: "2026-05-24T00:00:00.000+02:00",
+				CreatedDate: "2026-05-14T16:52:21.000+02:00", UpdatedDate: "2026-05-14T16:52:21.000+02:00",
+				ContactID:   "777c7793-9fbb-4ec7-9254-0619c199761e",
 				ContactName: "Musterfrau, Erika", TotalAmount: "99.8", OpenAmount: "74.8", Currency: "EUR",
 			},
 			{
