@@ -31,7 +31,8 @@ type run func(ctx context.Context, c *Client) (any, error)
 // everywhere is the since of an operation both products have at their supported minimum.
 var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea.minimum}
 
-var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, versionGet}
+var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
+	markdownRender, markupRender}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

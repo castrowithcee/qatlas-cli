@@ -137,9 +137,9 @@ func metadata(p *product) config.ProviderMetadata {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read the account and repositories", Recommended: true,
 			Description: "reads the account behind the token, lists and reads repositories, and reads the " +
-				"instance version; changes nothing",
+				"instance settings and version; changes nothing",
 			Tools: []string{p.toolID(accountsMe), p.toolID(repositoriesList), p.toolID(repositoriesGet),
-				p.toolID(versionGet)},
+				p.toolID(settingsGet), p.toolID(versionGet)},
 		}},
 	}
 }
