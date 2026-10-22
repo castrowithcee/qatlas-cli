@@ -98,7 +98,7 @@ func listFileTargets(ctx context.Context, resolved *config.Resolved, secrets *se
 		}
 		place = folderPath(folderID, item)
 	}
-	folder, err := client.ListFolder(ctx, parent.id, folderID, req.Cursor, fileTargetsPerPage)
+	folder, err := client.ListFolder(ctx, parent.id, folderID, req.Cursor, fileTargetsPerPage, nil)
 	if err != nil {
 		return config.TargetPage{}, err
 	}
@@ -283,7 +283,7 @@ func folderPath(folderID int64, item *fileJSON) string {
 	if item.ID != folderID || item.Parents == nil {
 		return ""
 	}
-	byID := make(map[int64]parentJSON, len(*item.Parents))
+	byID := make(map[int64]fileJSON, len(*item.Parents))
 	for _, p := range *item.Parents {
 		byID[p.ID] = p
 	}
