@@ -186,7 +186,11 @@ func TestImportsListAndGetShowNoPathAndReduceTheDetails(t *testing.T) {
 		}
 	}
 	wantDetails := map[string]any{"name": "Handbook", "chapters": 1, "pages": 2, "attachments": 1, "images": 0, "tags": 2,
-		"chapter_names": []string{"Ch1"}}
+		"chapter_names": []string{"Ch1"},
+		"contents": map[string]any{
+			"chapters": []map[string]any{{"name": "Ch1", "pages": []map[string]any{{"name": "P1"}}}},
+			"pages":    []map[string]any{{"name": "P2"}},
+		}}
 	// The nested image sits on a page below the root, so it is counted: one image in total.
 	wantDetails["images"] = 1
 	if !reflect.DeepEqual(details, wantDetails) {
@@ -366,5 +370,83 @@ func TestImportsDeleteSendsOneDelete(t *testing.T) {
 	}
 	if want := []string{"DELETE /api/imports/5"}; !reflect.DeepEqual(server.requests(), want) {
 		t.Errorf("requests = %v, want %v", server.requests(), want)
+	}
+}
+
+// The documented example response of an import, shortened to the members the tool reads.
+const fixtureImportRead = `{"id":25,"name":"IT Department","path":"uploads/files/imports/7YOpZ6sGIEbYdRFL.zip","size":618462,
+ "type":"book","created_by":1,"created_at":"2024-12-20T18:40:38.000000Z","updated_at":"2024-12-20T18:40:38.000000Z",
+ "details":{"id":4,"name":"IT Department","chapters":[{"id":3,"name":"Server Systems","priority":1,
+  "pages":[{"id":22,"name":"prod-aws-stonehawk","priority":0,"attachments":[],"images":[],"tags":[]}],"tags":[]}],
+ "pages":[{"id":23,"name":"Member Onboarding Guide","priority":0,"attachments":[],"images":[],"tags":[]},
+  {"id":25,"name":"IT Holiday Party Event","priority":2,"attachments":[],"images":[],"tags":[]}],"tags":[]}}`
+
+func TestImportsGetShowsTheStructureOfTheExample(t *testing.T) {
+	server := newImportServer(t, "book")
+	server.details = fixtureImportRead[strings.Index(fixtureImportRead, `"details":`)+len(`"details":`) : len(fixtureImportRead)-1]
+	object, err := writeCall(t, importsGet.ID, server.URL, `{"id":5}`, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(object)
+	if strings.Contains(string(encoded), `"path"`) || strings.Contains(string(encoded), "imports/") {
+		t.Errorf("the storage path is shown: %s", encoded)
+	}
+	top := map[string]any{}
+	for _, f := range object.(output.Object).Fields {
+		top[f.Name] = f.Value
+	}
+	topJSON, _ := json.Marshal(top)
+	var decoded any
+	_ = json.Unmarshal(topJSON, &decoded)
+	want := map[string]any{
+		"id": 4.0, "name": "IT Department", "chapters": 1.0, "pages": 3.0, "attachments": 0.0, "images": 0.0, "tags": 0.0,
+		"chapter_names": []any{"Server Systems"},
+		"contents": map[string]any{
+			"chapters": []any{map[string]any{"id": 3.0, "name": "Server Systems", "priority": 1.0,
+				"pages": []any{map[string]any{"id": 22.0, "name": "prod-aws-stonehawk", "priority": 0.0}}}},
+			"pages": []any{
+				map[string]any{"id": 23.0, "name": "Member Onboarding Guide", "priority": 0.0},
+				map[string]any{"id": 25.0, "name": "IT Holiday Party Event", "priority": 2.0},
+			},
+		},
+	}
+	got := at(t, decoded, "details")
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("details = %v, want %v", got, want)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(importsGet.OutputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if missing := keysNotDeclared(decoded, schema, "$"); len(missing) > 0 {
+		t.Errorf("not declared: %v", missing)
+	}
+	fields := map[string]bool{}
+	for _, f := range importsGet.Fields {
+		fields[f.Name] = true
+	}
+	for key := range schema["properties"].(map[string]any) {
+		if !fields[key] {
+			t.Errorf("schema member %s without field", key)
+		}
+	}
+}
+
+func TestImportContentsAreBoundedAndMarked(t *testing.T) {
+	var pages []string
+	for i := 0; i < maxImportContentEntries+10; i++ {
+		pages = append(pages, `{"id":1,"name":"p"}`)
+	}
+	got := reduceImportDetails(json.RawMessage(`{"chapters":[{"name":"c","pages":[` + strings.Join(pages, ",") + `]}]}`))
+	chapters := got["contents"].(map[string]any)["chapters"].([]map[string]any)
+	if n := len(chapters[0]["pages"].([]map[string]any)); n != maxImportContentEntries-1 {
+		t.Errorf("pages = %d", n)
+	}
+	if got["contents_truncated"] != true {
+		t.Error("the cut is not marked")
+	}
+	if small := reduceImportDetails(json.RawMessage(`{"name":"n"}`)); small["contents"] != nil || small["contents_truncated"] != nil || small["id"] != nil {
+		t.Errorf("empty structure must leave the new members out: %v", small)
 	}
 }

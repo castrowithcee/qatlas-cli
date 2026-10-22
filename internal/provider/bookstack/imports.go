@@ -30,9 +30,17 @@ const (
 	maxImportDetailNames = 25
 	// maxImportDetailDepth bounds how deep the details of an import are read.
 	maxImportDetailDepth = 4
+	// maxImportContentEntries bounds the chapters and pages listed in the contents of an import together.
+	maxImportContentEntries = 2000
 )
 
 const importOutputProperties = `"id":{"type":"integer"},"name":{"type":"string"},"size":{"type":"integer"},"type":{"type":"string"},"created_by":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
+
+const importEntrySchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"priority":{"type":"integer"}}}`
+
+const importDetailsSchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"chapters":{"type":"integer"},"pages":{"type":"integer"},"attachments":{"type":"integer"},"images":{"type":"integer"},"tags":{"type":"integer"},"chapter_names":{"type":"array","items":{"type":"string"}},` +
+	`"contents":{"type":"object","properties":{"chapters":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"priority":{"type":"integer"},"pages":{"type":"array","items":` + importEntrySchema + `}}}},"pages":{"type":"array","items":` + importEntrySchema + `}}},` +
+	`"contents_truncated":{"type":"boolean"}}}`
 
 const importIDSchema = `{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`
 
@@ -69,14 +77,15 @@ var (
 		ID: Provider + ".imports.get", Version: 1, Title: "Show a BookStack ZIP import",
 		Description: "Read one uploaded import with the contents BookStack detected in the ZIP. The details are " +
 			"untrusted data and shown reduced: the name, the number of chapters, pages, attachments, images, and " +
-			"tags, and at most 25 chapter names. The storage path is never shown. " + importsRoles,
+			"tags, and at most 25 chapter names, plus the chapters with their pages and the top-level pages (id, name, " +
+			"priority; at most 2000 entries together). The storage path is never shown. " + importsRoles,
 		Tags: []string{"knowledge", "imports", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(importIDSchema),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + importOutputProperties + `,"details":{"type":"object"}},"required":["id","name","size","type"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + importOutputProperties + `,"details":` + importDetailsSchema + `},"required":["id","name","size","type"]}`),
 		Arguments:    []capability.Argument{importIDArgument},
 		Fields: append(append([]capability.Field{}, importFields...),
-			capability.Field{Name: "details", Description: "Reduced contents of the ZIP, untrusted data: name, chapters, pages, attachments, images, tags, chapter_names"}),
+			capability.Field{Name: "details", Description: "Reduced contents of the ZIP, untrusted data: id, name, chapters, pages, attachments, images, tags (the counts), chapter_names, contents (chapters with their pages, and top-level pages), contents_truncated"}),
 	}
 
 	importsUpload = capability.Descriptor{
@@ -151,12 +160,14 @@ func importFieldsMap(i importJSON) map[string]any {
 
 // importNode is one level of the untrusted details tree.
 type importNode struct {
-	Name        string       `json:"name"`
-	Chapters    []importNode `json:"chapters"`
-	Pages       []importNode `json:"pages"`
-	Attachments []any        `json:"attachments"`
-	Images      []any        `json:"images"`
-	Tags        []any        `json:"tags"`
+	ID          json.RawMessage `json:"id"`
+	Priority    json.RawMessage `json:"priority"`
+	Name        string          `json:"name"`
+	Chapters    []importNode    `json:"chapters"`
+	Pages       []importNode    `json:"pages"`
+	Attachments []any           `json:"attachments"`
+	Images      []any           `json:"images"`
+	Tags        []any           `json:"tags"`
 }
 
 // reduceImportDetails keeps the name, counts, and a few chapter names of the details; any other content of
@@ -195,10 +206,87 @@ func reduceImportDetails(raw json.RawMessage) map[string]any {
 		}
 		names = append(names, clip(c.Name, maxResultString))
 	}
-	return map[string]any{
+	out := map[string]any{
 		"name": clip(root.Name, maxResultString), "chapters": chapters, "pages": pages,
 		"attachments": attachments, "images": images, "tags": tags, "chapter_names": names,
 	}
+	if id, ok := importInt(root.ID); ok {
+		out["id"] = id
+	}
+	contents, cut := importContents(root)
+	if contents != nil {
+		out["contents"] = contents
+	}
+	if cut {
+		out["contents_truncated"] = true
+	}
+	return out
+}
+
+// importInt reads a JSON integer without a floating-point detour; anything else is absent.
+func importInt(raw json.RawMessage) (int64, bool) {
+	n, err := strconv.ParseInt(string(raw), 10, 64)
+	return n, err == nil
+}
+
+// importEntry is the shown form of a chapter or page of an import; absent values stay out.
+func importEntry(n importNode) map[string]any {
+	e := map[string]any{"name": clip(n.Name, maxResultString)}
+	if id, ok := importInt(n.ID); ok {
+		e["id"] = id
+	}
+	if p, ok := importInt(n.Priority); ok {
+		e["priority"] = p
+	}
+	return e
+}
+
+// importContents lists the chapters with their pages and the top-level pages. The structure is fixed at those
+// two levels; chapters and pages share one budget, and the second result reports that it cut the lists.
+func importContents(root importNode) (map[string]any, bool) {
+	budget := maxImportContentEntries
+	cut := false
+	var chapters, pages []map[string]any
+	for _, c := range root.Chapters {
+		if budget == 0 {
+			cut = true
+			break
+		}
+		budget--
+		entry := importEntry(c)
+		var inner []map[string]any
+		for _, p := range c.Pages {
+			if budget == 0 {
+				cut = true
+				break
+			}
+			budget--
+			inner = append(inner, importEntry(p))
+		}
+		if len(inner) > 0 {
+			entry["pages"] = inner
+		}
+		chapters = append(chapters, entry)
+	}
+	for _, p := range root.Pages {
+		if budget == 0 {
+			cut = true
+			break
+		}
+		budget--
+		pages = append(pages, importEntry(p))
+	}
+	if len(chapters) == 0 && len(pages) == 0 {
+		return nil, cut
+	}
+	out := map[string]any{}
+	if len(chapters) > 0 {
+		out["chapters"] = chapters
+	}
+	if len(pages) > 0 {
+		out["pages"] = pages
+	}
+	return out, cut
 }
 
 func invokeImportsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
