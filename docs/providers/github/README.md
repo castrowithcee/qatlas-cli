@@ -213,8 +213,8 @@ search of [repositories](repositories.md#search), [code and commits](code.md#sea
 
 None of the seven takes a `repository`, `project`, or `owner` argument: they are narrowed by the connection's
 targets as a whole, exactly like `github.stars.list`. They page through the [cursor contract](#cursor-contract), a
-cursor bound to the tool, the forced qualifiers, and the exact `terms`, so a continuation never silently searches
-something else.
+cursor bound to the tool, the forced qualifiers, the exact `terms`, and the filters set beside them, so a
+continuation never silently searches something else.
 
 ### Target scoping
 

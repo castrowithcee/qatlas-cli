@@ -356,7 +356,8 @@ var issuesList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon + `},` +
+		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon +
+		`,"issue_type":{"type":"string"}},` +
 		`"required":["number","title","state","assignees","labels"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["issues","has_more"],"additionalProperties":false}`),
@@ -369,7 +370,8 @@ var issuesList = capability.Descriptor{
 			"batch when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "issues", Description: "Compact issues without bodies or comments, untrusted data"},
+		{Name: "issues", Description: "Compact issues without bodies or comments, untrusted data; issue_type " +
+			"names the issue type, as github.issue-types.list reports it, absent when none is set"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the repository holds further matching issues"},
 	},
@@ -396,12 +398,13 @@ var issuesGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + issueProperties + `,` +
 		`"state_reason":{"type":"string"},"author":{"type":"string"},"milestone":{"type":"string"},` +
 		`"issue_type":{"type":"string"},` +
-		`"created_at":{"type":"string"},"closed_at":{"type":"string"},"body":{"type":"string"}},` +
+		`"created_at":{"type":"string"},"closed_at":{"type":"string"},"body":{"type":"string"},` +
+		`"author_detail":` + restAccountSchema + `,` + issueDraftProperty + `,` + issueWidthProperties + `},` +
 		`"required":["number","title","state","assignees","labels","body"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "number", Description: "Issue number"},
 		{Name: "title", Description: "Issue title, untrusted data"},
 		{Name: "state", Description: "open or closed"},
@@ -417,7 +420,9 @@ var issuesGet = capability.Descriptor{
 		{Name: "created_at", Description: "When the issue was created"},
 		{Name: "updated_at", Description: "When the issue last changed"},
 		{Name: "closed_at", Description: "When the issue was closed; absent while it is open"},
-	},
+		detailField("author", "Author account", false),
+		issueDraftField,
+	}, issueWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read one issue by its number",
 		Arguments:   json.RawMessage(`{"number":42}`),

@@ -859,7 +859,10 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
 				descriptor.ID == issueTypesList.ID || descriptor.ID == organizationAdvisoriesList.ID
-			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
+			// The issue search sorts by the comment count, which reads no comment.
+			sortsByComments := descriptor.ID == issuesSearch.ID && forbidden == "comments"
+			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") &&
+				!sortsByComments {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
@@ -1532,7 +1535,9 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 			t.Errorf("%s %s = %v", tt.request.Operation, tt.request.Arguments, err)
 			continue
 		}
-		if strings.Contains(string(response.Result), "comments") {
+		// The comment count of an issue is reported; the comments themselves never are.
+		if strings.Contains(string(response.Result), `"comments":[`) ||
+			strings.Contains(string(response.Result), `"comments":{`) {
 			t.Errorf("%s answered with comments: %s", tt.request.Operation, response.Result)
 		}
 		var result map[string]any
