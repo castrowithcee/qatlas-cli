@@ -180,6 +180,11 @@ func requireVersion(ctx context.Context, p *product, resolved *config.Resolved, 
 			return err
 		}
 	}
+	return atLeast(op, p, current, needed)
+}
+
+// atLeast refuses a version below the one an operation or argument needs.
+func atLeast(op string, p *product, current, needed version) error {
 	if current.less(needed) {
 		return provider.Fail(op, "this operation is not available on this instance; it needs "+p.name+" "+
 			needed.String()+" or later")

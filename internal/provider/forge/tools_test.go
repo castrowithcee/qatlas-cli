@@ -43,9 +43,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render", p.id + ".milestones.create",
 			p.id + ".milestones.delete", p.id + ".milestones.get", p.id + ".milestones.list",
 			p.id + ".milestones.update", p.id + ".org-labels.create", p.id + ".org-labels.delete",
-			p.id + ".org-labels.get", p.id + ".org-labels.list", p.id + ".org-labels.update",
-			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get", p.id + ".signing-keys.get",
-			p.id + ".version.get"}
+			p.id + ".org-labels.get", p.id + ".org-labels.list", p.id + ".org-labels.update", p.id + ".releases.create",
+			p.id + ".releases.delete", p.id + ".releases.delete-by-tag", p.id + ".releases.get",
+			p.id + ".releases.get-by-tag", p.id + ".releases.get-latest", p.id + ".releases.list",
+			p.id + ".releases.update", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
+			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
 			want = append(want, p.id+".nodeinfo.get")
 			slices.Sort(want)
@@ -114,7 +116,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		issueLabelsAdd, issueLabelsReplace, issueLabelsRemove, issueLabelsClear, milestonesList, milestonesGet,
 		milestonesCreate, milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet,
 		pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
-		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet} {
+		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest,
+		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
