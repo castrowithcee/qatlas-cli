@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -73,8 +74,8 @@ var contactsList = capability.Descriptor{
 		"and compact, and a card that is not a valid vCard is left out",
 	Tags: []string{"infomaniak", "dav", "contacts", "contact", "list"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["addressbook"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
+		`"required":["addressbook"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"addressbook":{"type":"string"},` +
 		`"contacts":{"type":"array","items":` + contactSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["addressbook","contacts","count"],` +
@@ -82,6 +83,10 @@ var contactsList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "addressbook", Description: "ID of an allow-listed address book, the ID of its addressbook/ID target", Required: true},
 		{Name: "limit", Description: "Maximum number of contacts, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on contact properties; each names a property and " +
+			"exactly one of text (1 to 256 bytes, optionally match_type, negate, and collation) or defined false, and " +
+			"optionally a parameter with the same condition form"},
+		{Name: "test", Description: "anyof (default) or allof: whether any or all of the property_filters must match"},
 	},
 	Fields: contactFields,
 	Examples: []capability.Example{{
@@ -129,6 +134,9 @@ type contactArguments struct {
 	Addressbook string `json:"addressbook"`
 	Limit       int    `json:"limit"`
 	ID          string `json:"id"`
+
+	PropertyFilters []dav.ContactPropertyFilter `json:"property_filters"`
+	Test            string                      `json:"test"`
 }
 
 // allowedAddressbook checks the address book argument against the allow-list before any secret or request.
@@ -171,11 +179,16 @@ func invokeContactsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if limit < 0 || limit > maxContactLimit {
 		return nil, providerError(op, "limit must be between 1 and 200")
 	}
+	filter := dav.ContactFilter{Properties: input.PropertyFilters, Test: input.Test}
+	body, err := dav.ContactQueryBody(op, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.listContacts(ctx, input.Addressbook, limit)
+	return client.listContacts(ctx, input.Addressbook, body, filter, limit)
 }
 
 func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -187,6 +200,9 @@ func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	if err := allowedAddressbook(op, resolved, input.Addressbook); err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.Test != "" {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !validCollectionID(input.ID) {
 		return nil, providerError(op, "the contact id must be one literal path segment as the list tool reports it")
@@ -211,15 +227,20 @@ func (c *Client) addressbookHome(ctx context.Context, op string) ([]string, erro
 	return singleLink(op, resources, dav.PropBookHome)
 }
 
-func (c *Client) listContacts(ctx context.Context, book string, limit int) (*ContactsPage, error) {
+func (c *Client) listContacts(ctx context.Context, book, body string, filter dav.ContactFilter, limit int) (*ContactsPage, error) {
 	const op = "list contacts"
 	home, err := c.addressbookHome(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 	base := append(append([]string{}, home...), book)
-	data, _, err := c.request(ctx, op, methodReport, base, true, "1", dav.AddressbookQueryBody, 207, maxResponseBytes)
+	data, _, err := c.request(ctx, op, methodReport, base, true, "1", body, 207, maxResponseBytes)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Infomaniak rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
 	resources, err := server.ParseMultiStatus(op, data)
