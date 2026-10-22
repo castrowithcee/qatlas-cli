@@ -102,7 +102,7 @@ most 366 days later. They are converted to UTC for a CalDAV `calendar-query` REP
 components. `limit` defaults to 50, at most 200. Events are sorted by start and cut at `limit`; `truncated` flags more.
 Filters only narrow the answer; every href keeps its path binding. An unsupported collation is a request error;
 `calendars.list` names the supported ones. `limit-recurrence-set` is not offered: without `expand` the list reports only
-the main component of a series.
+the main component of a series. Each entry reports the same members as the get tool (`overrides` only without `expand`).
 
 `infomaniak.dav.events.get` takes the required `id`, the event as the list reports it, and reads that event with a GET:
 every `VEVENT` property, its alarms, and the parameters of organizer and attendees. A list cut at its cap is flagged
@@ -128,7 +128,7 @@ Both tools take `addressbook`, the ID of an `addressbook/ID` target; one outside
 `infomaniak.dav.contacts.list` sends one CardDAV `addressbook-query` REPORT from fixed fragments, never with `nresults`:
 all hits are sorted by name, then id, before the cut at `limit` (50, at most 200); `truncated` flags more. Filters only
 narrow the answer; every href keeps its path binding. An unsupported collation is a request error; `address-books.list`
-names the supported ones. The list is compact (first `email` only); an invalid vCard is left out.
+names the supported ones. Entries carry the get tool's members plus the first `email`; invalid vCards are left out.
 
 `infomaniak.dav.contacts.get` takes the required `id`, the contact as the list reports it, and reads it with a GET. It
 reports every vCard 3.0 property (RFC 2426) except those left out below; a list-valued member is cut at 20 entries and

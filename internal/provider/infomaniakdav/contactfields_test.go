@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -104,5 +105,66 @@ func TestContactsGetReportsEveryMemberInSchemaAndFields(t *testing.T) {
 	}
 	if len(*calls) == 0 {
 		t.Error("no request")
+	}
+}
+
+func TestContactsListReportsTheMembersOfGet(t *testing.T) {
+	card := richContactCard()
+	serve(t, contactsFake(t, multistatus(contactEntry(mainPath+"a.vcf", "v1", card)), func(*http.Request) (*http.Response, error) {
+		resp := xmlResponse(200, card)
+		resp.Header.Set("ETag", `"v1"`)
+		return resp, nil
+	}))
+	listed, err := listContactsOf(`{"addressbook":"main"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := getContactOf(`{"addressbook":"main","id":"a.vcf"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		Contacts []map[string]any `json:"contacts"`
+	}
+	var get struct {
+		Contact map[string]any `json:"contact"`
+	}
+	for v, dst := range map[any]any{listed: &list, got: &get} {
+		raw, _ := json.Marshal(v)
+		if err := json.Unmarshal(raw, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(list.Contacts) != 1 {
+		t.Fatalf("list = %v", list)
+	}
+	entry := list.Contacts[0]
+	if entry["email"] != "ada@example.org" {
+		t.Errorf("email = %v", entry["email"])
+	}
+	var schema struct {
+		Properties struct {
+			Contacts struct {
+				Items struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"items"`
+			} `json:"contacts"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(contactsList.OutputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]bool{}
+	for _, f := range contactsList.Fields {
+		fields[f.Name] = true
+	}
+	for key := range entry {
+		if _, ok := schema.Properties.Contacts.Items.Properties[key]; !ok || !fields[key] {
+			t.Errorf("%s missing in the list schema or fields", key)
+		}
+	}
+	delete(entry, "email")
+	if !reflect.DeepEqual(entry, get.Contact) {
+		t.Errorf("list entry = %v, get = %v", entry, get.Contact)
 	}
 }
