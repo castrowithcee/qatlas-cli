@@ -127,11 +127,45 @@ func contentServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api/shelves/14", answer(fixtureShelfRead))
 	mux.HandleFunc("/api/image-gallery", answer(fixtureImagesList))
 	mux.HandleFunc("/api/image-gallery/618", answer(fixtureImageRead))
+	mux.HandleFunc("/api/recycle-bin", answer(fixtureRecycleBin))
+	mux.HandleFunc("/api/system", answer(fixtureSystem))
+	mux.HandleFunc("/api/users", answer(fixtureUsersList))
+	mux.HandleFunc("/api/users/1", answer(fixtureUserRead))
+	mux.HandleFunc("/api/roles/26", answer(fixtureRoleRead))
+	mux.HandleFunc("/api/audit-log", answer(fixtureAuditLog))
 	mux.HandleFunc("/api/shelves/2", answer(`{"id":2,"books":[{"id":1}]}`))
 	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
 	return server
 }
+
+const (
+	fixtureRecycleBin = `{"data":[{"id":18,"deleted_by":1,"created_at":"2022-04-20T12:57:46.000000Z",
+			 "updated_at":"2022-04-20T12:58:46.000000Z","deletable_type":"page","deletable_id":2582,
+			 "deletable":{"id":2582,"book_id":25,"chapter_id":null,"name":"A Wonderful Page","slug":"a-wonderful-page",
+			  "priority":9,"created_at":"2022-02-08T00:44:45.000000Z","updated_at":"2022-04-20T12:57:46.000000Z",
+			  "created_by":1,"updated_by":1,"draft":false,"revision_count":1,"template":false,"owned_by":1,
+			  "editor":"wysiwyg","book_slug":"a-great-book",
+			  "parent":{"id":25,"name":"A Great Book","slug":"a-great-book","description":"d",
+			   "created_at":"2022-01-24T16:14:28.000000Z","updated_at":"2022-03-06T15:14:50.000000Z",
+			   "created_by":1,"updated_by":2,"owned_by":3,"type":"book"}}},
+			 {"id":19,"deleted_by":1,"created_at":"c","deletable_type":"book","deletable_id":13,
+			  "deletable":{"id":13,"name":"A Big Book!","slug":"a-big-book","description":"Big","created_at":"2021-11-08T11:26:43.000000Z",
+			  "updated_at":"2022-04-25T16:07:47.000000Z","created_by":27,"updated_by":1,"owned_by":1,"pages_count":208,"chapters_count":50}}],"total":2}`
+
+	fixtureSystem = `{"version":"v25.02.4","instance_id":"i","app_name":"A","app_logo":"https://docs.example.com/uploads/images/system/cat.png","base_url":"https://docs.example.com"}`
+
+	fixtureUsersList = `{"data":[{"id":1,"name":"Dan","slug":"dan","profile_url":"https://docs.example.com/user/dan",
+			 "edit_url":"https://docs.example.com/settings/users/1","avatar_url":"https://docs.example.com/uploads/images/user/a.jpg"}],"total":1}`
+
+	fixtureUserRead = `{"id":1,"name":"Dan","slug":"dan","edit_url":"https://docs.example.com/settings/users/1",
+			 "avatar_url":"https://docs.example.com/uploads/images/user/a.jpg","roles":[{"id":1,"display_name":"Admin"}]}`
+
+	fixtureRoleRead = `{"id":26,"display_name":"Maintainer","permissions":["book-view-all"],
+			 "users":[{"id":11,"name":"Barry Scott","slug":"barry-scott"}]}`
+
+	fixtureAuditLog = `{"data":[{"id":1,"type":"auth_login","user_id":1,"created_at":"c","user":{"id":1,"name":"Admins","slug":"admins"}}],"total":1}`
+)
 
 // contentTool is one tool of the content fields with the call that produces its result.
 type contentTool struct {
@@ -152,6 +186,14 @@ func contentTools() []contentTool {
 		{shelvesGet, func(c *Client) (any, error) { return objectJSON(c.GetShelf(ctx, 14)) }},
 		{imagesList, func(c *Client) (any, error) { return rowsJSON(c.ListImages(ctx, 0, "", 0, 0, listQuery{})) }},
 		{imagesGet, func(c *Client) (any, error) { return objectJSON(c.GetImage(ctx, 618)) }},
+		{recycleBinList, func(c *Client) (any, error) { return rowsJSON(c.ListRecycleBin(ctx, 0, 0, listQuery{})) }},
+		{systemGet, func(c *Client) (any, error) { return objectJSON(c.GetSystem(ctx)) }},
+		{usersList, func(c *Client) (any, error) { return rowsJSON(c.ListUsers(ctx, 0, 0, listQuery{})) }},
+		{usersGet, func(c *Client) (any, error) { return objectJSON(c.GetUser(ctx, 1)) }},
+		{rolesGet, func(c *Client) (any, error) { return objectJSON(c.GetRole(ctx, 26)) }},
+		{auditLogList, func(c *Client) (any, error) {
+			return rowsJSON(c.ListAuditLog(ctx, auditFilter{}, listQuery{}, 0, 0))
+		}},
 	}
 }
 
@@ -578,5 +620,116 @@ func TestNewTextMembersAreClipped(t *testing.T) {
 	}
 	if at(t, m, "tags", 0, "order") != 2.0 {
 		t.Errorf("tag order = %v", at(t, m, "tags", 0, "order"))
+	}
+}
+
+// The administration reads show the documented members; the answers are shortened example responses.
+func TestAdministrationReadsShowEveryDocumentedField(t *testing.T) {
+	server := contentServer(t)
+	c := newClient(t, server.URL, nil)
+	ctx := context.Background()
+	id := func(n int64) map[string]any { return map[string]any{"id": n} }
+
+	bin, err := c.ListRecycleBin(ctx, 0, 0, listQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPage := map[string]any{
+		"priority": int64(9), "created_at": "2022-02-08T00:44:45.000000Z", "updated_at": "2022-04-20T12:57:46.000000Z",
+		"created_by": id(1), "updated_by": id(1), "owned_by": id(1), "draft": false, "template": false,
+		"revision_count": int64(1), "editor": "wysiwyg", "book_slug": "a-great-book",
+		"parent": map[string]any{
+			"name": "A Great Book", "slug": "a-great-book", "description": "d", "created_at": "2022-01-24T16:14:28.000000Z",
+			"updated_at": "2022-03-06T15:14:50.000000Z", "created_by": id(1), "updated_by": id(2), "owned_by": id(3),
+		},
+	}
+	if !reflect.DeepEqual(bin.Rows[0]["deletable"], wantPage) || bin.Rows[0]["updated_at"] != "2022-04-20T12:58:46.000000Z" {
+		t.Errorf("recycle-bin page = %v", bin.Rows[0])
+	}
+	wantBook := map[string]any{
+		"description": "Big", "created_at": "2021-11-08T11:26:43.000000Z", "updated_at": "2022-04-25T16:07:47.000000Z",
+		"created_by": id(27), "updated_by": id(1), "owned_by": id(1),
+	}
+	if !reflect.DeepEqual(bin.Rows[1]["deletable"], wantBook) {
+		t.Errorf("recycle-bin book = %v", bin.Rows[1]["deletable"])
+	}
+	if _, ok := bin.Rows[1]["updated_at"]; ok {
+		t.Error("an entry without updated_at must not carry it")
+	}
+
+	system, err := objectJSON(c.GetSystem(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at(t, system, "app_logo") != "https://docs.example.com/uploads/images/system/cat.png" {
+		t.Errorf("system = %v", system)
+	}
+
+	users, err := c.ListUsers(ctx, 0, 0, listQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := objectJSON(c.GetUser(ctx, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for label, got := range map[string]any{"users.list": map[string]any(users.Rows[0]), "users.get": user} {
+		if at(t, got, "edit_url") != "https://docs.example.com/settings/users/1" ||
+			at(t, got, "avatar_url") != "https://docs.example.com/uploads/images/user/a.jpg" {
+			t.Errorf("%s = %v", label, got)
+		}
+	}
+
+	role, err := objectJSON(c.GetRole(ctx, 26))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]any{"id": 11.0, "name": "Barry Scott", "slug": "barry-scott"}; !reflect.DeepEqual(at(t, role, "users", 0), want) {
+		t.Errorf("roles.get users = %v", at(t, role, "users"))
+	}
+
+	audit, err := c.ListAuditLog(ctx, auditFilter{}, listQuery{}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit.Rows[0]["user_slug"] != "admins" || audit.Rows[0]["user_name"] != "Admins" {
+		t.Errorf("audit-log = %v", audit.Rows[0])
+	}
+}
+
+// Answers without the new members leave them out of the administration results.
+func TestAdministrationResultsWithoutTheNewMembersStayAsTheyWere(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/recycle-bin":
+			_, _ = w.Write([]byte(`{"data":[{"id":1,"deleted_by":2,"created_at":"c","deletable_type":"page","deletable_id":3,"deletable":{"name":"n","slug":"s"}}],"total":1}`))
+		case "/api/system":
+			_, _ = w.Write([]byte(`{"version":"v","app_name":"a","instance_id":"i","base_url":"b"}`))
+		case "/api/users":
+			_, _ = w.Write([]byte(`{"data":[{"id":1,"name":"n","slug":"s"}],"total":1}`))
+		case "/api/audit-log":
+			_, _ = w.Write([]byte(`{"data":[{"id":1,"type":"t","created_at":"c","user":{"id":1,"name":"n"}}],"total":1}`))
+		}
+	}))
+	defer server.Close()
+	c := newClient(t, server.URL, nil)
+	ctx := context.Background()
+	bin, _ := c.ListRecycleBin(ctx, 0, 0, listQuery{})
+	users, _ := c.ListUsers(ctx, 0, 0, listQuery{})
+	audit, _ := c.ListAuditLog(ctx, auditFilter{}, listQuery{}, 0, 0)
+	system, _ := c.GetSystem(ctx)
+	for label, absent := range map[string][2]any{
+		"recycle-bin": {map[string]any(bin.Rows[0]), []string{"updated_at", "deletable"}},
+		"users":       {map[string]any(users.Rows[0]), []string{"edit_url", "avatar_url"}},
+		"audit-log":   {map[string]any(audit.Rows[0]), []string{"user_slug"}},
+	} {
+		for _, key := range absent[1].([]string) {
+			if _, ok := absent[0].(map[string]any)[key]; ok {
+				t.Errorf("%s carries %s", label, key)
+			}
+		}
+	}
+	if len(system.Fields) != 4 {
+		t.Errorf("system = %v", system.Fields)
 	}
 }

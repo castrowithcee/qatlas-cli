@@ -19,7 +19,7 @@ const recycleBinInstanceWide = "recycle bin"
 const recycleBinRoles = "BookStack requires the role permissions settings-manage and restrictions-manage-all for the token's user. " +
 	"The recycle bin covers the whole instance, so a connection with targets cannot use this tool"
 
-const recycleBinListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"deleted_by":{"type":"integer"},"created_at":{"type":"string"},"deletable_type":{"type":"string"},"deletable_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"parent_type":{"type":"string"},"parent_id":{"type":"integer"},"pages_count":{"type":"integer"},"chapters_count":{"type":"integer"}},"required":["id","deleted_by","created_at","deletable_type","deletable_id"]}}`
+const recycleBinListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"deleted_by":{"type":"integer"},"created_at":{"type":"string"},"deletable_type":{"type":"string"},"deletable_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"parent_type":{"type":"string"},"parent_id":{"type":"integer"},"pages_count":{"type":"integer"},"chapters_count":{"type":"integer"},"updated_at":{},"deletable":{}},"required":["id","deleted_by","created_at","deletable_type","deletable_id"]}}`
 
 const deletionIDSchema = `{"type":"object","properties":{"deletion_id":{"type":"integer","minimum":1}},"required":["deletion_id"],"additionalProperties":false}`
 
@@ -50,6 +50,11 @@ var (
 			{Name: "parent_id", Description: "Identifier of the parent of the deleted item"},
 			{Name: "pages_count", Description: "Pages inside a deleted book or chapter"},
 			{Name: "chapters_count", Description: "Chapters inside a deleted book"},
+			{Name: "updated_at", Description: "Last change time of the recycle bin entry"},
+			{Name: "deletable", Description: "Further metadata of the deleted item as BookStack reports it, never its content, untrusted data: " +
+				"priority, created_at, updated_at, created_by, updated_by, owned_by (each as id), draft, template, " +
+				"revision_count, editor, book_slug, description, and parent with name, slug, description, created_at, " +
+				"updated_at, created_by, updated_by, owned_by"},
 		},
 		Examples: []capability.Example{{Description: "List the first 25 entries", Arguments: json.RawMessage(`{"limit":25}`)}},
 	}
@@ -86,15 +91,35 @@ type recycleBinEntryJSON struct {
 	DeletableType string `json:"deletable_type"`
 	DeletableID   int64  `json:"deletable_id"`
 	Deletable     struct {
-		Name          string `json:"name"`
-		Slug          string `json:"slug"`
-		BookID        *int64 `json:"book_id"`
-		ChapterID     *int64 `json:"chapter_id"`
-		PagesCount    *int64 `json:"pages_count"`
-		ChaptersCount *int64 `json:"chapters_count"`
+		Name          string    `json:"name"`
+		Slug          string    `json:"slug"`
+		BookID        *int64    `json:"book_id"`
+		ChapterID     *int64    `json:"chapter_id"`
+		PagesCount    *int64    `json:"pages_count"`
+		ChaptersCount *int64    `json:"chapters_count"`
+		Description   string    `json:"description"`
+		Priority      *int64    `json:"priority"`
+		CreatedAt     string    `json:"created_at"`
+		UpdatedAt     string    `json:"updated_at"`
+		CreatedBy     *userJSON `json:"created_by"`
+		UpdatedBy     *userJSON `json:"updated_by"`
+		OwnedBy       *userJSON `json:"owned_by"`
+		Draft         *bool     `json:"draft"`
+		Template      *bool     `json:"template"`
+		RevisionCount *int64    `json:"revision_count"`
+		Editor        string    `json:"editor"`
+		BookSlug      string    `json:"book_slug"`
 		Parent        *struct {
-			ID   int64  `json:"id"`
-			Type string `json:"type"`
+			ID          int64     `json:"id"`
+			Type        string    `json:"type"`
+			Name        string    `json:"name"`
+			Slug        string    `json:"slug"`
+			Description string    `json:"description"`
+			CreatedAt   string    `json:"created_at"`
+			UpdatedAt   string    `json:"updated_at"`
+			CreatedBy   *userJSON `json:"created_by"`
+			UpdatedBy   *userJSON `json:"updated_by"`
+			OwnedBy     *userJSON `json:"owned_by"`
 		} `json:"parent"`
 	} `json:"deletable"`
 }
@@ -116,7 +141,56 @@ func recycleBinRow(e recycleBinEntryJSON) output.Row {
 		row["parent_type"] = clip(d.Parent.Type, maxResultString)
 		row["parent_id"] = d.Parent.ID
 	}
+	if e.UpdatedAt != "" {
+		row["updated_at"] = clip(e.UpdatedAt, maxResultString)
+	}
+	extra := deletableDetail(d.Priority, d.RevisionCount, d.Draft, d.Template, d.CreatedAt, d.UpdatedAt, d.Description,
+		d.Editor, d.BookSlug, d.CreatedBy, d.UpdatedBy, d.OwnedBy)
+	if p := d.Parent; p != nil {
+		parent := deletableDetail(nil, nil, nil, nil, p.CreatedAt, p.UpdatedAt, p.Description, "", "",
+			p.CreatedBy, p.UpdatedBy, p.OwnedBy)
+		setText(parent, "name", p.Name)
+		setText(parent, "slug", p.Slug)
+		if len(parent) > 0 {
+			extra["parent"] = parent
+		}
+	}
+	if len(extra) > 0 {
+		row["deletable"] = extra
+	}
 	return row
+}
+
+// setText sets a clipped text member unless it is empty.
+func setText(m map[string]any, key, value string) {
+	if value != "" {
+		m[key] = clip(value, maxResultString)
+	}
+}
+
+// deletableDetail collects the metadata members of a deleted item or its parent that are present.
+func deletableDetail(priority, revisions *int64, draft, template *bool, created, updated, description, editor, bookSlug string,
+	createdBy, updatedBy, ownedBy *userJSON) map[string]any {
+	out := map[string]any{}
+	if priority != nil {
+		out["priority"] = *priority
+	}
+	if revisions != nil {
+		out["revision_count"] = *revisions
+	}
+	if draft != nil {
+		out["draft"] = *draft
+	}
+	if template != nil {
+		out["template"] = *template
+	}
+	setText(out, "created_at", created)
+	setText(out, "updated_at", updated)
+	setText(out, "description", description)
+	setText(out, "editor", editor)
+	setText(out, "book_slug", bookSlug)
+	addListUsers(out, createdBy, updatedBy, ownedBy)
+	return out
 }
 
 func invokeRecycleBinList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

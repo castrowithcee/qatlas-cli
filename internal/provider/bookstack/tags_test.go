@@ -66,7 +66,7 @@ func TestTagsAreRefusedOnABoundConnectionBeforeSecretsAndIO(t *testing.T) {
 	}
 }
 
-func TestSystemGetWorksWithTargetsAndOmitsTheLogo(t *testing.T) {
+func TestSystemGetWorksWithTargets(t *testing.T) {
 	srv, rec := tagServer(t, nil, false)
 	t.Setenv("TEST_TOKEN_ID", canaryID)
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
@@ -75,7 +75,7 @@ func TestSystemGetWorksWithTargetsAndOmitsTheLogo(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(result)
-	if strings.Contains(string(encoded), "logo") || !strings.Contains(string(encoded), `"Value":"abc"`) {
+	if !strings.Contains(string(encoded), `"app_logo","Value":"https://docs.example.com/logo.png"`) || !strings.Contains(string(encoded), `"Value":"abc"`) {
 		t.Errorf("result = %s", encoded)
 	}
 	if _, paths, _, _ := rec.snapshot(); !reflect.DeepEqual(paths, []string{"/api/system"}) {

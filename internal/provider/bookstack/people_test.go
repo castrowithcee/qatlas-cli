@@ -67,12 +67,8 @@ func TestUsersListAndGetReduceFields(t *testing.T) {
 	if _, has := list.Rows[0]["roles"]; has {
 		t.Error("list row carries roles the listing did not deliver")
 	}
-	for _, row := range list.Rows {
-		for _, banned := range []string{"avatar_url", "edit_url"} {
-			if _, has := row[banned]; has {
-				t.Errorf("row carries %s", banned)
-			}
-		}
+	if list.Rows[0]["avatar_url"] != "https://x/avatar" || list.Rows[0]["edit_url"] != "https://x/edit" {
+		t.Errorf("row = %v", list.Rows[0])
 	}
 	got, err := c.GetUser(context.Background(), 3)
 	if err != nil {
@@ -82,7 +78,7 @@ func TestUsersListAndGetReduceFields(t *testing.T) {
 	for _, f := range got.Fields {
 		names = append(names, f.Name)
 	}
-	if want := []string{"id", "name", "slug", "email", "external_auth_id", "created_at", "updated_at", "last_activity_at", "roles", "profile_url"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"id", "name", "slug", "email", "external_auth_id", "created_at", "updated_at", "last_activity_at", "roles", "profile_url", "edit_url", "avatar_url"}; !reflect.DeepEqual(names, want) {
 		t.Errorf("fields = %v", names)
 	}
 	roles := got.Fields[8].Value.([]map[string]any)

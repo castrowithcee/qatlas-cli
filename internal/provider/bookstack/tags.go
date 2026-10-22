@@ -23,7 +23,7 @@ const tagNamesOutput = `{"type":"array","items":{"type":"object","properties":{"
 
 const tagValuesOutput = `{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"usages":{"type":"integer"},"page_count":{"type":"integer"},"chapter_count":{"type":"integer"},"book_count":{"type":"integer"},"shelf_count":{"type":"integer"}},"required":["name","value","usages","page_count","chapter_count","book_count","shelf_count"]}}`
 
-const systemGetOutput = `{"type":"object","properties":{"version":{"type":"string"},"app_name":{"type":"string"},"instance_id":{"type":"string"},"base_url":{"type":"string"}},"required":["version","app_name","instance_id","base_url"]}`
+const systemGetOutput = `{"type":"object","properties":{"version":{"type":"string"},"app_name":{"type":"string"},"instance_id":{"type":"string"},"app_logo":{"type":"string"},"base_url":{"type":"string"}},"required":["version","app_name","instance_id","base_url"]}`
 
 var (
 	tagCountFields = []capability.Field{
@@ -88,6 +88,7 @@ var (
 			{Name: "app_name", Description: "Application name, untrusted data"},
 			{Name: "instance_id", Description: "Instance identifier"},
 			{Name: "base_url", Description: "Base URL of the instance"},
+			{Name: "app_logo", Description: "Address of the logo of the instance, never fetched, untrusted data"},
 		},
 		Examples: []capability.Example{{Description: "Read the instance information", Arguments: json.RawMessage(`{}`)}},
 	}
@@ -278,21 +279,26 @@ func (c *Client) scanTags(ctx context.Context, op, path, sort string, fixed url.
 	return rows, nil
 }
 
-// GetSystem returns the instance information without the logo.
+// GetSystem returns the instance information; the logo is an address and is never fetched.
 func (c *Client) GetSystem(ctx context.Context) (output.Object, error) {
 	var system struct {
 		Version    string `json:"version"`
 		AppName    string `json:"app_name"`
 		InstanceID string `json:"instance_id"`
 		BaseURL    string `json:"base_url"`
+		AppLogo    string `json:"app_logo"`
 	}
 	if err := c.get(ctx, "get system", "/api/system", nil, &system, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
-	return output.Object{Fields: []output.Field{
+	fields := []output.Field{
 		{Name: "version", Value: clip(system.Version, maxResultString)},
 		{Name: "app_name", Value: clip(system.AppName, maxResultString)},
 		{Name: "instance_id", Value: clip(system.InstanceID, maxResultString)},
 		{Name: "base_url", Value: clip(system.BaseURL, maxResultString)},
-	}}, nil
+	}
+	if system.AppLogo != "" {
+		fields = append(fields, output.Field{Name: "app_logo", Value: clip(system.AppLogo, maxResultString)})
+	}
+	return output.Object{Fields: fields}, nil
 }

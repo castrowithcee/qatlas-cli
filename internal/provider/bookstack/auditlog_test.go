@@ -44,7 +44,7 @@ func TestAuditLogReducesFieldsAndMapsFilters(t *testing.T) {
 	if len(got.Rows) != 1 || got.Rows[0]["id"] != int64(2) {
 		t.Fatalf("rows = %v, want only entry 2 (client-side check)", got.Rows)
 	}
-	want := map[string]any{"id": int64(2), "type": "page_update", "detail": "d2", "user_id": int64(5), "user_name": "Ann",
+	want := map[string]any{"id": int64(2), "type": "page_update", "detail": "d2", "user_id": int64(5), "user_name": "Ann", "user_slug": "ann",
 		"loggable_type": "page", "loggable_id": int64(9), "ip": "10.0.0.2", "created_at": "2026-10-02T10:00:00.000000Z"}
 	if !reflect.DeepEqual(map[string]any(got.Rows[0]), want) {
 		t.Errorf("row = %v", got.Rows[0])

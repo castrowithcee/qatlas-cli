@@ -43,7 +43,7 @@ var auditLogList = capability.Descriptor{
 		`"type":{"type":"string","pattern":"^[a-z0-9_]{1,64}$"},"user_id":{"type":"integer","minimum":1},` +
 		`"loggable_type":{"type":"string","enum":["page","chapter","book","bookshelf"]},"loggable_id":{"type":"integer","minimum":1},` +
 		`"created_after":{"type":"string","maxLength":40},"created_before":{"type":"string","maxLength":40},` + auditLogListSchema.properties() + `},"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"detail":{"type":"string"},"user_id":{"type":"integer"},"user_name":{"type":"string"},"loggable_type":{"type":"string"},"loggable_id":{"type":"integer"},"ip":{"type":"string"},"created_at":{"type":"string"}},"required":["id","type","created_at"]}}`),
+	OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"detail":{"type":"string"},"user_id":{"type":"integer"},"user_name":{"type":"string"},"loggable_type":{"type":"string"},"loggable_id":{"type":"integer"},"ip":{"type":"string"},"created_at":{"type":"string"},"user_slug":{}},"required":["id","type","created_at"]}}`),
 	Arguments: append([]capability.Argument{
 		{Name: "limit", Description: "Maximum number of entries to return; 0 returns all"},
 		{Name: "offset", Description: "Number of matching entries to skip"},
@@ -64,6 +64,7 @@ var auditLogList = capability.Descriptor{
 		{Name: "loggable_id", Description: "Identifier of the object the entry is about"},
 		{Name: "ip", Description: "IP address of the request, personal data"},
 		{Name: "created_at", Description: "Time of the entry"},
+		{Name: "user_slug", Description: "URL slug of the acting user, untrusted data"},
 	},
 	Examples: []capability.Example{{Description: "List the sign-in entries of a day",
 		Arguments: json.RawMessage(`{"type":"auth_login","created_after":"2026-10-01","created_before":"2026-10-02","limit":50}`)}},
@@ -80,6 +81,7 @@ type auditEntryJSON struct {
 	CreatedAt    string `json:"created_at"`
 	User         *struct {
 		Name string `json:"name"`
+		Slug string `json:"slug"`
 	} `json:"user"`
 }
 
@@ -253,6 +255,7 @@ func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, q listQue
 			}
 			if e.User != nil {
 				row["user_name"] = clip(e.User.Name, maxResultString)
+				setText(row, "user_slug", e.User.Slug)
 			}
 			if e.LoggableID != nil {
 				row["loggable_id"] = *e.LoggableID
