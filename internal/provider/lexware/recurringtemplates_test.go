@@ -24,13 +24,13 @@ func templateEntry(id string) string {
 	return `{"id":"` + id + `","organizationId":"aa93e8a8-2aa3-470b-b914-caad8a255dd8",
  "createdDate":"2026-05-14T16:52:21.000+02:00","updatedDate":"2026-05-15T10:00:00.000+02:00","version":2,
  "address":{"contactId":"777c7793-9fbb-4ec7-9254-0619c199761e","name":"Bike & Ride GmbH"},
- "title":"Wartung","paymentTermLabel":"` + bodyCanary + `",
+ "title":"Wartung","paymentConditions":{"paymentTermLabel":"` + bodyCanary + `"},
  "totalPrice":{"currency":"EUR","totalNetAmount":100,"totalGrossAmount":119,"totalTaxAmount":19},` + templateSettings + `}`
 }
 
 func templateDetail(id string) string {
 	return `{"id":"` + id + `","version":2,"language":"de","title":"Wartung","introduction":"Einleitung","remark":"Ende",
- "paymentTermLabel":"14 Tage","address":{"contactId":"777c7793-9fbb-4ec7-9254-0619c199761e","name":"Bike & Ride GmbH"},
+ "paymentConditions":{"paymentTermLabel":"14 Tage","paymentTermDuration":14},"address":{"contactId":"777c7793-9fbb-4ec7-9254-0619c199761e","name":"Bike & Ride GmbH"},
  "shippingConditions":{"shippingType":"service"},` + pricedExtra + `,` + templateSettings + `}`
 }
 
@@ -179,5 +179,32 @@ func TestRecurringTemplateToolsSatisfyTheirContractThroughTheApplicationCore(t *
 			Operation: call.tool, Connection: "lexware-primary", Arguments: json.RawMessage(call.arguments)}); err == nil {
 			t.Errorf("core accepted %s %s", call.tool, call.arguments)
 		}
+	}
+}
+
+func TestRecurringTemplatePaymentTermLabelIsReadOnlyFromPaymentConditions(t *testing.T) {
+	flat := `{"id":"` + templateID + `","version":2,"title":"Wartung","paymentTermLabel":"flat"}`
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(request.URL.Path, templateID) {
+			return jsonResponse(http.StatusOK, flat), nil
+		}
+		return jsonResponse(http.StatusOK, `{"content":[`+flat+`],"size":25}`), nil
+	})
+	c, _ := client(t)
+	got, err := c.GetRecurringTemplate(context.Background(), templateID)
+	if err != nil || got.PaymentTermLabel != "" {
+		t.Fatalf("get = %#v, %v", got, err)
+	}
+	list, err := c.ListRecurringTemplates(context.Background(), RecurringTemplateListOptions{})
+	if err != nil || len(list.Templates) != 1 || list.Templates[0].PaymentTermLabel != "" {
+		t.Fatalf("list = %#v, %v", list, err)
+	}
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusOK, `{"content":[`+templateEntry(templateID)+`],"size":25}`), nil
+	})
+	c, _ = client(t)
+	list, err = c.ListRecurringTemplates(context.Background(), RecurringTemplateListOptions{})
+	if err != nil || list.Templates[0].PaymentTermLabel != bodyCanary {
+		t.Fatalf("nested list = %#v, %v", list, err)
 	}
 }
