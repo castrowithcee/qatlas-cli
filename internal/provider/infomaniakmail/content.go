@@ -6,8 +6,10 @@ import (
 	"io"
 	"mime"
 	"mime/quotedprintable"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -30,6 +32,17 @@ const (
 	maxPartDepth      = 8
 	maxAttachmentName = 255
 	maxMediaType      = 100
+	// Bounds in bytes of the attachment members taken from the extended BODYSTRUCTURE.
+	maxDisposition    = 32
+	maxContentID      = 256
+	maxDescription    = 256
+	maxEncoding       = 32
+	maxLanguages      = 8
+	maxLanguage       = 32
+	maxLocation       = 1024
+	maxParameters     = 16
+	maxParameterKey   = 64
+	maxParameterValue = 256
 	// maxInlineBytes is the largest decoded attachment returned inline as base64; maxInlineEncoded bounds the
 	// transfer-encoded part that is read for it, which base64 and its line breaks make about a third larger.
 	maxInlineBytes   = 4 << 20
@@ -127,11 +140,95 @@ type Attachment struct {
 	Name string `json:"name,omitempty"`
 	Type string `json:"type"`
 	Size int64  `json:"size"`
+
+	// The remaining members come from the extended BODYSTRUCTURE and are untrusted text.
+	Disposition         string            `json:"disposition,omitempty"`
+	ContentID           string            `json:"content_id,omitempty"`
+	Description         string            `json:"description,omitempty"`
+	Encoding            string            `json:"encoding,omitempty"`
+	Language            []string          `json:"language,omitempty"`
+	Location            string            `json:"location,omitempty"`
+	Parameters          map[string]string `json:"parameters,omitempty"`
+	ParametersTruncated bool              `json:"parameters_truncated,omitempty"`
 }
 
 func attachmentOf(p mimePart) Attachment {
-	return Attachment{Part: p.id(), Name: nameOf(p), Type: clean(p.mediaType(), maxMediaType), Size: int64(p.single.Size)}
+	a := Attachment{Part: p.id(), Name: nameOf(p), Type: clean(p.mediaType(), maxMediaType), Size: int64(p.single.Size),
+		ContentID: cleanBytes(p.single.ID, maxContentID), Description: cleanBytes(p.single.Description, maxDescription),
+		Encoding: cleanBytes(p.single.Encoding, maxEncoding)}
+	if d := p.single.Disposition(); d != nil {
+		a.Disposition = cleanBytes(d.Value, maxDisposition)
+	}
+	if ext := p.single.Extended; ext != nil {
+		for _, language := range ext.Language {
+			if len(a.Language) >= maxLanguages {
+				break
+			}
+			if tag := cleanBytes(language, maxLanguage); tag != "" {
+				a.Language = append(a.Language, tag)
+			}
+		}
+		a.Location = locationOf(ext.Location)
+	}
+	a.Parameters, a.ParametersTruncated = parametersOf(p.single.Params)
+	return a
 }
+
+// locationOf returns Content-Location as bounded, untrusted text. It is never fetched. An address with user
+// information, a query, or a fragment can carry an access token and is left out, as is one that does not parse.
+func locationOf(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
+		strings.ContainsAny(value, "?#") {
+		return ""
+	}
+	return cleanBytes(value, maxLocation)
+}
+
+// parametersOf returns the Content-Type parameters. A set beyond the bounds is left out whole and reported,
+// never cut.
+func parametersOf(params map[string]string) (map[string]string, bool) {
+	if len(params) == 0 {
+		return nil, false
+	}
+	if len(params) > maxParameters {
+		return nil, true
+	}
+	out := make(map[string]string, len(params))
+	for key, value := range params {
+		if len(key) > maxParameterKey || len(value) > maxParameterValue {
+			return nil, true
+		}
+		out[clean(key, maxParameterKey)] = clean(value, maxParameterValue)
+	}
+	return out, false
+}
+
+// cleanBytes is clean with a bound in bytes: the cleaned text is cut at a character boundary.
+func cleanBytes(value string, max int) string {
+	value = clean(value, max)
+	for len(value) > max {
+		_, size := utf8.DecodeLastRuneInString(value)
+		value = value[:len(value)-size]
+	}
+	return value
+}
+
+// attachmentFieldsText lists the extra attachment members for the field description.
+const attachmentFieldsText = "disposition (inline or attachment, as sent), content_id, description, encoding " +
+	"(Content-Transfer-Encoding), language (at most 8 tags), location (Content-Location as text, never fetched; " +
+	"left out when it has user information, a query, or a fragment), and parameters (Content-Type parameters; " +
+	"left out with parameters_truncated true when there are more than 16 or a key exceeds 64 or a value 256 " +
+	"bytes); all of them untrusted"
+
+const attachmentExtraSchema = `"disposition":{"type":"string"},"content_id":{"type":"string"},` +
+	`"description":{"type":"string"},"encoding":{"type":"string"},` +
+	`"language":{"type":"array","items":{"type":"string"}},"location":{"type":"string"},` +
+	`"parameters":{"type":"object","additionalProperties":{"type":"string"}},` +
+	`"parameters_truncated":{"type":"boolean"}`
 
 // nameOf returns the cleaned and bounded file name, with RFC 2047 words decoded.
 func nameOf(p mimePart) string {
@@ -287,6 +384,8 @@ type loadedMessage struct {
 	flags     []imap.Flag
 	size      int64
 	structure imap.BodyStructure
+	// internalDate is zero when the server sent none.
+	internalDate time.Time
 }
 
 // examine opens the folder read-only and checks the UIDVALIDITY of the reference.
@@ -309,7 +408,7 @@ func examine(conn *session, op string, ref messageRef) error {
 func (c *Client) load(conn *session, op string, ref messageRef) (*loadedMessage, error) {
 	uid := imap.UID(ref.uid)
 	buffers, err := conn.client.Fetch(imap.UIDSetNum(uid), &imap.FetchOptions{
-		UID: true, Envelope: true, Flags: true, RFC822Size: true,
+		UID: true, Envelope: true, Flags: true, RFC822Size: true, InternalDate: true,
 		BodyStructure: &imap.FetchItemBodyStructure{Extended: true},
 	}).Collect()
 	if err != nil {
@@ -326,7 +425,7 @@ func (c *Client) load(conn *session, op string, ref messageRef) (*loadedMessage,
 			return nil, errNoSuchMessage(op)
 		}
 		return &loadedMessage{uid: uid, envelope: buffer.Envelope, flags: buffer.Flags, size: buffer.RFC822Size,
-			structure: buffer.BodyStructure}, nil
+			structure: buffer.BodyStructure, internalDate: buffer.InternalDate}, nil
 	}
 	return nil, errNoSuchMessage(op)
 }
