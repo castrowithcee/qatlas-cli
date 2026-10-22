@@ -141,6 +141,17 @@ const richProject = `{"id":"` + ownProject + `","name":"Marketing","type":"team"
 	`"creatorId":"f9a2cbb8-0b1e-4b64-9c1c-0d5f5f1f2a3b","createdAt":"2026-01-01T00:00:00.000Z",` +
 	`"updatedAt":"2026-01-02T00:00:00.000Z"}`
 
+// richExecution carries every non-deprecated member n8n documents for a listed execution; richExecutionDetail
+// adds the members only the single read documents. Sizes are integers beyond float64's exact range.
+const richExecution = `"id":1,"finished":true,"mode":"manual","retryOf":"7","retrySuccessId":"9",` +
+	`"status":"success","startedAt":"2026-01-01T00:00:00.000Z","stoppedAt":"2026-01-01T00:00:05.000Z",` +
+	`"workflowId":"` + ownWorkflow + `","waitTill":"2026-01-02T00:00:00.000Z","storedAt":"s3",` +
+	`"jsonSizeBytes":9007199254740993,"workflowVersionId":"ver-1","dataTooLargeToDisplay":true`
+
+const richExecutionDetail = `{` + richExecution + `,"createdAt":"2025-12-31T23:59:59.000Z","deletedAt":null,` +
+	`"tracingContext":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01","tracestate":"k=v"},` +
+	`"deduplicationKey":"dedup-1","binaryDataSizeBytes":9007199254740995,"usedPrivateCredentials":false}`
+
 // outputFieldCases lists the read tools whose every output member must be declared. A tool is added with an
 // answer that carries every member n8n documents for it, so a member the mapper adds without declaring it
 // fails here. minimum guards against an answer that carries too little.
@@ -154,6 +165,8 @@ var outputFieldCases = []struct {
 			`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z"}],"nextCursor":"c"}`, 11},
 	{variablesList.ID, "open", `{}`, "/variables", `{"data":[{"id":"` + ownVariable + `","key":"K","value":"v",` +
 		`"type":"string","project":` + richProject + `}],"nextCursor":"c"}`, 27},
+	{executionsList.ID, "open", `{}`, "/executions", `{"data":[{` + richExecution + `}],"nextCursor":"c"}`, 18},
+	{executionsGet.ID, "open", `{"execution_id":1}`, "/executions/1", richExecutionDetail, 21},
 }
 
 func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {

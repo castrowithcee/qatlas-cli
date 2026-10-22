@@ -92,9 +92,11 @@ passed back unchanged.
 
 `n8n.workflows.list` also accepts `active`, `name`, `tags`, and `project_id`, forwarded to n8n's own filters
 of the same kind (`project_id` must be inside this connection's project allow-list when it has one).
-`n8n.executions.list` accepts `workflow_id` and `status` the same way. Every returned page is still
-defensively re-filtered against this connection's own allow-lists after n8n answers, whether or not a
-matching filter argument was given.
+`n8n.executions.list` accepts `workflow_id`, `status`, and `project_id` the same way; with a project
+allow-list, `project_id` must be on it and `workflow_id` stays required. Its `started_after` and
+`started_before` are RFC 3339 times sent to n8n in UTC; an inverted range is refused locally. A follow-up call
+with a cursor must pass the same filter values. Every returned page is still defensively re-filtered against
+this connection's own allow-lists after n8n answers, whether or not a matching filter argument was given.
 
 ## Executions and their errors
 
@@ -105,5 +107,9 @@ names) and nothing else from that answer; every node's actual input or output, a
 attaches to an execution (`workflowData`), are read only as far as necessary to reach that one field and are
 never part of the result. That second request is capped at 16 MiB; an instance that answers larger than that
 is refused rather than parsed partially, and the execution's base status and timestamps are still returned,
-without an `error` field, since the base read already succeeded on its own. n8n's `ignoreDataSizeLimit` and
-`redactExecutionData` options are not used by this provider.
+without an `error` field, since the base read already succeeded on its own. Execution data (`data` with its
+`redactionInfo`, `customData`, `workflowData`) and n8n's `includeData`, `ignoreDataSizeLimit`, and
+`redactExecutionData` options are not offered.
+
+n8n marks an execution's `finished` as deprecated; it stays in the output unchanged for compatibility and gains
+no new meaning. `deletedAt` is always empty according to n8n's spec and is not returned.
