@@ -27,7 +27,8 @@ import (
 // pagination parameters of its own. OAuth and classic personal access tokens need the read:org scope.
 
 const issueTypeProperties = `"id":{"type":"integer"},"name":{"type":"string"},"description":{"type":"string"},` +
-	`"color":{"type":"string"},"is_enabled":{"type":"boolean"}`
+	`"color":{"type":"string"},"is_enabled":{"type":"boolean"},"node_id":{"type":"string"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 const issueTypeRequired = `"required":["id","name","is_enabled"],"additionalProperties":false`
 
 // issueTypesOwnerArgument and issueTypesOwnerField describe github.issue-types.list's own owner argument,
@@ -57,7 +58,7 @@ var issueTypesList = capability.Descriptor{
 		`"required":["issue_types"],"additionalProperties":false}`),
 	Fields: []capability.Field{
 		{Name: "issue_types", Description: "Issue types of the organization, in the order GitHub returns " +
-			"them: id, name and description (untrusted data), color, and is_enabled"},
+			"them: id, node_id, name and description (untrusted data), color, is_enabled, created_at, and updated_at"},
 	},
 	Examples: []capability.Example{{
 		Description: "List the issue types of an organization",
@@ -100,6 +101,9 @@ type issueTypeJSON struct {
 	Description *string `json:"description"`
 	Color       *string `json:"color"`
 	IsEnabled   bool    `json:"is_enabled"`
+	NodeID      *string `json:"node_id"`
+	CreatedAt   *string `json:"created_at"`
+	UpdatedAt   *string `json:"updated_at"`
 }
 
 // IssueType is one issue type of an organization.
@@ -109,6 +113,10 @@ type IssueType struct {
 	Description string `json:"description,omitempty"`
 	Color       string `json:"color,omitempty"`
 	IsEnabled   bool   `json:"is_enabled"`
+
+	NodeID    *string `json:"node_id,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
 }
 
 // IssueTypeList is every issue type of an organization; GitHub's own route returns them all at once, with
@@ -128,7 +136,8 @@ func (c *Client) listIssueTypes(ctx context.Context) (*IssueTypeList, error) {
 		if item.ID < 1 || strings.TrimSpace(item.Name) == "" {
 			return nil, invalidEntry(op, "an issue type")
 		}
-		entry := IssueType{ID: item.ID, Name: item.Name, IsEnabled: item.IsEnabled}
+		entry := IssueType{ID: item.ID, Name: item.Name, IsEnabled: item.IsEnabled, NodeID: nameText(item.NodeID),
+			CreatedAt: nameText(item.CreatedAt), UpdatedAt: nameText(item.UpdatedAt)}
 		if item.Description != nil {
 			entry.Description = *item.Description
 		}
