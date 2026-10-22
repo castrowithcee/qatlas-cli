@@ -49,9 +49,7 @@ func booleanProperties(names []string) string {
 }
 
 var memberSchema = `{"type":"object","properties":{` +
-	`"user":{"type":"object","properties":{"id":{"type":"integer"},"is_bot":{"type":"boolean"},` +
-	`"first_name":{"type":"string"},"last_name":{"type":"string"},"username":{"type":"string"}},` +
-	`"required":["id","is_bot"],"additionalProperties":false},"status":{"type":"string"},` +
+	`"user":` + userSchema + `,"status":{"type":"string"},` +
 	`"custom_title":{"type":"string"},"until_date":{"type":"integer"},"is_anonymous":{"type":"boolean"},` +
 	`"is_member":{"type":"boolean"}` + booleanProperties(memberRights) + `},` +
 	`"required":["user","status"],"additionalProperties":false}`
@@ -60,7 +58,7 @@ var permissionsSchema = `{"type":"object","properties":{` + booleanProperties(pe
 	`},"additionalProperties":false}`
 
 var memberFields = []capability.Field{
-	{Name: "user", Description: "Member identity: id, is_bot, first_name, last_name, username"},
+	{Name: "user", Description: "Member identity as " + userFieldsText},
 	{Name: "status", Description: "creator, administrator, member, restricted, left, or kicked"},
 	{Name: "custom_title", Description: "Custom administrator title"},
 	{Name: "until_date", Description: "Unix time until which a restriction or ban lasts; absent when unlimited"},
@@ -189,16 +187,7 @@ type chatOut struct {
 	LinkedChatID    int64           `json:"linked_chat_id,omitempty"`
 }
 
-type memberUserOut struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName  string `json:"last_name,omitempty"`
-	Username  string `json:"username,omitempty"`
-}
-
-// memberOut is the fixed member allow-list; Telegram fields outside it (language_code, is_premium, and the
-// like) are dropped by decoding into this struct.
+// memberOut is the fixed member allow-list; Telegram fields outside it are dropped by decoding into this struct.
 type memberOut struct {
 	User        memberUserOut `json:"user"`
 	Status      string        `json:"status"`
@@ -242,9 +231,7 @@ type memberOut struct {
 }
 
 func (m *memberOut) capped() {
-	m.User.FirstName = capText(m.User.FirstName, maxNameRunes)
-	m.User.LastName = capText(m.User.LastName, maxNameRunes)
-	m.User.Username = capText(m.User.Username, maxNameRunes)
+	m.User = cleanUser(m.User)
 	m.Status = capText(m.Status, maxNameRunes)
 	m.CustomTitle = capText(m.CustomTitle, maxNameRunes)
 }

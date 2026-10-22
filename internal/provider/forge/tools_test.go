@@ -29,13 +29,18 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
 			}
 		}
-		want := []string{p.id + ".accounts.me", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".version.get"}
+		want := []string{p.id + ".accounts.me", p.id + ".markdown.render", p.id + ".markup.render",
+			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
+			p.id + ".signing-keys.get", p.id + ".version.get"}
+		if p == forgejo {
+			want = slices.Insert(want, 3, p.id+".nodeinfo.get")
+		}
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
 		}
 		profile, ok := metadata.RecommendedProfile()
 		if !ok || !slices.Equal(profile.Tools, []string{p.id + ".accounts.me", p.id + ".repositories.list",
-			p.id + ".repositories.get", p.id + ".version.get"}) {
+			p.id + ".repositories.get", p.id + ".settings.get", p.id + ".version.get"}) {
 			t.Errorf("%s profile = %+v", p.id, profile)
 		}
 	}
@@ -69,16 +74,6 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 
 // An operation one product lacks is registered only for the other, under the same group and action.
 func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
-	only := &tool{group: "nodeinfo", action: "get", since: map[string]version{forgejo.id: forgejo.minimum},
-		describe: func(p *product) capability.Descriptor {
-			return capability.Descriptor{Title: "probe", Description: "probe", Risk: readRisk(p.id + "-instance-metadata"),
-				InputSchema: inputSchema(""), OutputSchema: json.RawMessage(`{"type":"object"}`)}
-		},
-		prepare: func(*product, allowlist, json.RawMessage) (run, error) { return nil, nil },
-	}
-	previous := tools
-	tools = append(append([]*tool(nil), tools...), only)
-	t.Cleanup(func() { tools = previous })
 	reg := registry(t)
 	if _, _, ok := reg.Lookup("forgejo.nodeinfo.get"); !ok {
 		t.Error("the Forgejo tool is missing")
@@ -86,7 +81,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	if _, _, ok := reg.Lookup("gitea.nodeinfo.get"); ok {
 		t.Error("the Forgejo tool is registered for Gitea")
 	}
-	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, versionGet} {
+	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
+		markdownRender, markupRender} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))

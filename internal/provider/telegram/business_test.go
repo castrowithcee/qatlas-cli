@@ -120,7 +120,7 @@ func TestBusinessGetOutputIsAnAllowListAndSignsTheChat(t *testing.T) {
 	}
 	encoded, _ := json.Marshal(got)
 	text := string(encoded)
-	for _, forbidden := range []string{"LASTNAME", "EXTRAFIELD", "language_code", "can_future_right", "777"} {
+	for _, forbidden := range []string{"EXTRAFIELD", "can_future_right", "777"} {
 		if strings.Contains(text, forbidden) {
 			t.Errorf("output contains %q: %s", forbidden, text)
 		}
@@ -399,7 +399,7 @@ func TestUpdatesListNeedsAChatOrBusinessTarget(t *testing.T) {
 
 func TestReferenceKindValuesAreStable(t *testing.T) {
 	for kind, want := range map[refKind]byte{refFile: 1, refCallback: 2, refRetired: 3, refInlineQuery: 4,
-		refJoinRequestQuery: 5, refBusinessChat: 6} {
+		refJoinRequestQuery: 5, refBusinessChat: 6, refGuestQuery: 7, refInlineMessage: 8} {
 		if byte(kind) != want {
 			t.Errorf("reference kind %d changed its value to %d", want, kind)
 		}

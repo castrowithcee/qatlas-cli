@@ -652,8 +652,8 @@ func TestStructuredTaskFilters(t *testing.T) {
 		var got []string
 		for _, task := range listed.Tasks {
 			got = append(got, task.ID)
-			if task.Description != "" {
-				t.Errorf("a list task carries its description: %+v", task)
+			if task.Description == "" {
+				t.Errorf("a list task lacks its description: %+v", task)
 			}
 		}
 		if !reflect.DeepEqual(got, tt.want) {

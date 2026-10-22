@@ -350,7 +350,28 @@ var commitsSearch = capability.Descriptor{
 	}},
 }
 
-const userSearchProperties = `"login":{"type":"string"},"type":{"type":"string"},"url":{"type":"string"}`
+var userSearchProperties = `"login":{"type":"string"},"type":{"type":"string"},"url":{"type":"string"},` +
+	accountPersonProperties + `,` + accountProfileProperties + `,` + searchExtrasProperties
+
+// accountSearchKeys are the filters and the switch only the account searches take, beside the terms.
+const accountSearchKeys = `"sort":{"type":"string","enum":["followers","repositories","joined"]},` +
+	`"order":{"type":"string","enum":["asc","desc"]},"text_matches":{"type":"boolean"}`
+
+var (
+	accountSearchSortValues  = []string{"followers", "repositories", "joined"}
+	accountSearchOrderValues = []string{"asc", "desc"}
+)
+
+// accountSearchArguments are the terms, the sort, the order, the text match switch, and the paging of the
+// account searches.
+var accountSearchArguments = append([]capability.Argument{searchTermsArgument,
+	{Name: "sort", Description: "followers, repositories, or joined; GitHub's best match order when omitted"},
+	{Name: "order", Description: "asc or desc; applies with sort, desc when omitted"},
+	{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
+}, pagingArguments...)
+
+var accountSearchFields = append(append(append(append([]capability.Field(nil), accountPersonFields...),
+	accountProfileFields...), searchExtrasFields...), searchCountFields...)
 
 const userSearchRequired = `"required":["login","type"],"additionalProperties":false`
 
@@ -364,19 +385,21 @@ var usersSearch = capability.Descriptor{
 	Tags:         []string{"github", "users", "search", "discovery"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+accountSearchKeys+`,`+pagingKeys, "terms"),
 	OutputSchema: searchOutput("users", userSearchProperties, userSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Arguments:    accountSearchArguments,
 	Fields: append(append([]capability.Field{
-		{Name: "users", Description: "Compact accounts: login, type (always User), and url"},
-	}, searchCountFields...), pagingFields...),
+		{Name: "users", Description: "Accounts: login, type (always User), url, and the members of GitHub's " +
+			"search result, including a person's name and email address; untrusted data"},
+	}, accountSearchFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search users by location",
 		Arguments:   json.RawMessage(`{"terms":"location:berlin","limit":10}`),
 	}},
 }
 
-const organizationSearchProperties = `"login":{"type":"string"},"url":{"type":"string"}`
+var organizationSearchProperties = `"login":{"type":"string"},"url":{"type":"string"},"type":{"type":"string"},` +
+	accountPersonProperties + `,` + accountProfileProperties + `,` + searchExtrasProperties
 
 const organizationSearchRequired = `"required":["login"],"additionalProperties":false`
 
@@ -390,12 +413,14 @@ var organizationsSearch = capability.Descriptor{
 	Tags:         []string{"github", "organizations", "search", "discovery"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+accountSearchKeys+`,`+pagingKeys, "terms"),
 	OutputSchema: searchOutput("organizations", organizationSearchProperties, organizationSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Arguments:    accountSearchArguments,
 	Fields: append(append([]capability.Field{
-		{Name: "organizations", Description: "Compact organizations: login and url"},
-	}, searchCountFields...), pagingFields...),
+		{Name: "organizations", Description: "Organizations: login, url, and the members of GitHub's search " +
+			"result; untrusted data"},
+		{Name: "type", Description: "Account type, Organization"},
+	}, accountSearchFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search organizations by name",
 		Arguments:   json.RawMessage(`{"terms":"octo in:name","limit":10}`),
@@ -410,13 +435,60 @@ type searchArguments struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
 
+	// Sort, Order, and TextMatches are the account searches' own; the others never carry them.
+	Sort        string `json:"sort"`
+	Order       string `json:"order"`
+	TextMatches bool   `json:"text_matches"`
+
 	q             string
+	sort, order   string
+	textMatches   bool
 	page, perPage int
 	binding       []byte
 }
 
 func (a *searchArguments) query() url.Values {
-	return url.Values{"q": {a.q}, "per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	values := url.Values{"q": {a.q}, "per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	if a.sort != "" {
+		values.Set("sort", a.sort)
+	}
+	if a.order != "" {
+		values.Set("order", a.order)
+	}
+	return values
+}
+
+// accountOptions validates the sort, the order, and the text match switch of an account search and
+// returns what they add to the cursor binding, nothing while none is set.
+func (a *searchArguments) accountOptions() ([]any, error) {
+	var binding []any
+	if a.Sort != "" {
+		if !containsFold(accountSearchSortValues, a.Sort) {
+			return nil, invalidRequest("sort must be followers, repositories, or joined")
+		}
+		a.sort = strings.ToLower(a.Sort)
+		binding = append(binding, "sort", a.sort)
+	}
+	if a.Order != "" {
+		if !containsFold(accountSearchOrderValues, a.Order) {
+			return nil, invalidRequest("order must be asc or desc")
+		}
+		a.order = strings.ToLower(a.Order)
+		binding = append(binding, "order", a.order)
+	}
+	if a.TextMatches {
+		a.textMatches = true
+		binding = append(binding, "text_matches")
+	}
+	return binding, nil
+}
+
+// textMatchContext asks for the text match media type when the request set text_matches.
+func (a *searchArguments) textMatchContext(ctx context.Context) context.Context {
+	if !a.textMatches {
+		return ctx
+	}
+	return context.WithValue(ctx, acceptKey{}, "application/vnd.github.text-match+json")
 }
 
 // checkSearchArguments validates the terms, refuses the ones that could escape a forced qualifier while
@@ -435,7 +507,15 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 		return err
 	}
 	a.q = strings.TrimSpace(forced + " " + a.Terms)
-	a.binding = fingerprint("search", tool, forced, a.Terms)
+	binding := []any{"search", tool, forced, a.Terms}
+	if tool == usersSearch.ID || tool == organizationsSearch.ID {
+		options, err := a.accountOptions()
+		if err != nil {
+			return err
+		}
+		binding = append(binding, options...)
+	}
+	a.binding = fingerprint(binding...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
 }
@@ -820,6 +900,34 @@ type UserSearchResult struct {
 	Login string `json:"login"`
 	Type  string `json:"type"`
 	URL   string `json:"url,omitempty"`
+	AccountPerson
+	AccountProfile
+	SearchExtras
+}
+
+// accountSearchRaw is one hit of an account search: the members the searches always answered, read as
+// before, and the ones they answer in addition.
+type accountSearchRaw struct {
+	Login   string `json:"login"`
+	Type    string `json:"type"`
+	HTMLURL string `json:"html_url"`
+	account accountRaw
+	profile profileRaw
+	extras  searchExtrasRaw
+}
+
+func (r *accountSearchRaw) UnmarshalJSON(data []byte) error {
+	type plain accountSearchRaw
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &r.profile); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &r.extras); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.account)
 }
 
 // UserSearchList is one batch of a user search.
@@ -834,15 +942,11 @@ type UserSearchList struct {
 func (c *Client) searchUsers(ctx context.Context, a *searchArguments) (*UserSearchList, error) {
 	const op = "search users"
 	var raw struct {
-		TotalCount int  `json:"total_count"`
-		Incomplete bool `json:"incomplete_results"`
-		Items      []struct {
-			Login   string `json:"login"`
-			Type    string `json:"type"`
-			HTMLURL string `json:"html_url"`
-		} `json:"items"`
+		TotalCount int                `json:"total_count"`
+		Incomplete bool               `json:"incomplete_results"`
+		Items      []accountSearchRaw `json:"items"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/users", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/users", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, userSearchPermission)
 	}
@@ -852,7 +956,9 @@ func (c *Client) searchUsers(ctx context.Context, a *searchArguments) (*UserSear
 		if !validLogin(item.Login) || item.Type == "" {
 			return nil, invalidEntry(op, "a user")
 		}
-		result.Users = append(result.Users, UserSearchResult{Login: item.Login, Type: item.Type, URL: item.HTMLURL})
+		result.Users = append(result.Users, UserSearchResult{Login: item.Login, Type: item.Type, URL: item.HTMLURL,
+			AccountPerson: item.account.person(), AccountProfile: item.profile.project(),
+			SearchExtras: item.extras.project()})
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
@@ -860,8 +966,12 @@ func (c *Client) searchUsers(ctx context.Context, a *searchArguments) (*UserSear
 
 // OrganizationSearchResult is the compact view of one organization search match.
 type OrganizationSearchResult struct {
-	Login string `json:"login"`
-	URL   string `json:"url,omitempty"`
+	Login string  `json:"login"`
+	URL   string  `json:"url,omitempty"`
+	Type  *string `json:"type,omitempty"`
+	AccountPerson
+	AccountProfile
+	SearchExtras
 }
 
 // OrganizationSearchList is one batch of an organization search.
@@ -876,14 +986,11 @@ type OrganizationSearchList struct {
 func (c *Client) searchOrganizations(ctx context.Context, a *searchArguments) (*OrganizationSearchList, error) {
 	const op = "search organizations"
 	var raw struct {
-		TotalCount int  `json:"total_count"`
-		Incomplete bool `json:"incomplete_results"`
-		Items      []struct {
-			Login   string `json:"login"`
-			HTMLURL string `json:"html_url"`
-		} `json:"items"`
+		TotalCount int                `json:"total_count"`
+		Incomplete bool               `json:"incomplete_results"`
+		Items      []accountSearchRaw `json:"items"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/users", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/users", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, organizationSearchPermission)
 	}
@@ -893,7 +1000,9 @@ func (c *Client) searchOrganizations(ctx context.Context, a *searchArguments) (*
 		if !validLogin(item.Login) {
 			return nil, invalidEntry(op, "an organization")
 		}
-		result.Organizations = append(result.Organizations, OrganizationSearchResult{Login: item.Login, URL: item.HTMLURL})
+		result.Organizations = append(result.Organizations, OrganizationSearchResult{Login: item.Login,
+			URL: item.HTMLURL, Type: shortText(&item.Type), AccountPerson: item.account.person(),
+			AccountProfile: item.profile.project(), SearchExtras: item.extras.project()})
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil

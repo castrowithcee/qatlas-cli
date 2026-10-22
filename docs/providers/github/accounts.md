@@ -38,7 +38,7 @@ under [stars](repositories.md#stars).
 | Tool | Does |
 | --- | --- |
 | `github.teams.list` | lists the teams of an organization, in batches |
-| `github.team-members.list` | lists the members of one team of an organization, in batches, by login |
+| `github.team-members.list` | lists the members of one team of an organization, in batches |
 
 Both take `owner` as `orgs/LOGIN`: the organization must be a target the connection names as an owner itself,
 exactly as `github.projects.create` requires, since a project or a repository pattern of the organization is
