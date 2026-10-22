@@ -41,11 +41,13 @@ func outputCases() []outputCase {
 	gift := `{"total_count":1,"gifts":[{"type":"regular","send_date":5,"is_saved":true,"sender_user":USER,` +
 		`"gift":{"id":"g1","star_count":50}}]}`
 	return []outputCase{
+		{"telegram.chats.get", []string{"-1001"}, `{}`,
+			map[string]string{"getChat": fullChatInfo}, []string{"guard_bot"}},
 		{"telegram.chats.administrators", []string{"-1001"}, `{}`,
 			map[string]string{"getChatAdministrators": `[{"status":"creator","user":USER}]`},
 			[]string{"administrators", "[]", "user"}},
 		{"telegram.chats.member", []string{"-1001"}, `{"user_id":7}`,
-			map[string]string{"getChatMember": `{"status":"member","user":USER}`}, []string{"user"}},
+			map[string]string{"getChatMember": `{"status":"member","tag":"vip","user":USER}`}, []string{"user"}},
 		{"telegram.updates.list", []string{"-1001"}, `{}`,
 			map[string]string{"getUpdates": `[{"update_id":1,"message":{"message_id":2,"date":3,` +
 				`"chat":{"id":-1001},"from":USER,"text":"hi"}}]`}, []string{"updates", "[]", "from"}},
