@@ -10,8 +10,6 @@ import (
 // team and the label and milestone views it holds. The repositories of head and base are shown in full only
 // when the connection's targets admit them; a fork outside the targets keeps its identifiers.
 
-var restTeamLinkKeys = []string{"url", "members_url", "repositories_url"}
-
 var restPullSimpleLinkKeys = []string{"url", "diff_url", "patch_url", "issue_url", "commits_url",
 	"review_comments_url", "review_comment_url", "comments_url", "statuses_url"}
 
@@ -19,112 +17,43 @@ var restPullSimpleLinkKeys = []string{"url", "diff_url", "patch_url", "issue_url
 var restPullRelations = []string{"comments", "commits", "statuses", "html", "issue", "review_comments",
 	"review_comment", "self"}
 
-type teamRaw struct {
-	ID                  *int64   `json:"id"`
-	NodeID              *string  `json:"node_id"`
-	Name                *string  `json:"name"`
-	Slug                *string  `json:"slug"`
-	Description         *string  `json:"description"`
-	Privacy             *string  `json:"privacy"`
-	NotificationSetting *string  `json:"notification_setting"`
-	Permission          *string  `json:"permission"`
-	LDAPDN              *string  `json:"ldap_dn"`
-	Type                *string  `json:"type"`
-	AccessSource        *string  `json:"access_source"`
-	OrganizationID      *int64   `json:"organization_id"`
-	EnterpriseID        *int64   `json:"enterprise_id"`
-	HTMLURL             *string  `json:"html_url"`
-	Parent              *teamRaw `json:"parent"`
-	Permissions         *struct {
-		Pull     *bool `json:"pull"`
-		Triage   *bool `json:"triage"`
-		Push     *bool `json:"push"`
-		Maintain *bool `json:"maintain"`
-		Admin    *bool `json:"admin"`
-	} `json:"permissions"`
-	links Links
+// pullTeamRaw is a requested team: the team members of the accounts and teams views, read as a team and
+// with its permissions and parent.
+type pullTeamRaw struct {
+	core        teamCore
+	Permissions *RESTPermissions `json:"permissions"`
+	Parent      *teamCore        `json:"parent"`
 }
 
-func (r *teamRaw) UnmarshalJSON(data []byte) (err error) {
-	type plain teamRaw
-	if err = json.Unmarshal(data, (*plain)(r)); err != nil {
+func (r *pullTeamRaw) UnmarshalJSON(data []byte) error {
+	type plain pullTeamRaw
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
 		return err
 	}
-	r.links, err = readLinks(data, restTeamLinkKeys)
-	return err
+	return json.Unmarshal(data, &r.core)
 }
 
-// RESTTeamSimple is the view of a team as the parent of another team.
-type RESTTeamSimple struct {
-	ID                  *int64  `json:"id,omitempty"`
-	NodeID              *string `json:"node_id,omitempty"`
-	Name                *string `json:"name,omitempty"`
-	Slug                *string `json:"slug,omitempty"`
-	Description         *string `json:"description,omitempty"`
-	Privacy             *string `json:"privacy,omitempty"`
-	NotificationSetting *string `json:"notification_setting,omitempty"`
-	Permission          *string `json:"permission,omitempty"`
-	LDAPDN              *string `json:"ldap_dn,omitempty"`
-	Type                *string `json:"type,omitempty"`
-	OrganizationID      *int64  `json:"organization_id,omitempty"`
-	EnterpriseID        *int64  `json:"enterprise_id,omitempty"`
-	URL                 *string `json:"url,omitempty"`
-	Links               Links   `json:"links,omitempty"`
-}
-
-// RESTTeamPermissions is what a team may do in a repository.
-type RESTTeamPermissions struct {
-	Pull     *bool `json:"pull,omitempty"`
-	Triage   *bool `json:"triage,omitempty"`
-	Push     *bool `json:"push,omitempty"`
-	Maintain *bool `json:"maintain,omitempty"`
-	Admin    *bool `json:"admin,omitempty"`
-}
-
-// RESTTeam is the view of a team.
-type RESTTeam struct {
+// RESTPullTeam is a team requested to review a pull request.
+type RESTPullTeam struct {
 	RESTTeamSimple
-	AccessSource *string              `json:"access_source,omitempty"`
-	Permissions  *RESTTeamPermissions `json:"permissions,omitempty"`
-	Parent       *RESTTeamSimple      `json:"parent,omitempty"`
+	AccessSource *string          `json:"access_source,omitempty"`
+	Permissions  *RESTPermissions `json:"permissions,omitempty"`
+	Parent       *RESTTeamSimple  `json:"parent,omitempty"`
 }
 
-func (r *teamRaw) simple() *RESTTeamSimple {
-	if r == nil {
-		return nil
-	}
-	return &RESTTeamSimple{ID: r.ID, NodeID: nameText(r.NodeID), Name: nameText(r.Name), Slug: nameText(r.Slug),
-		Description: longText(r.Description), Privacy: nameText(r.Privacy),
-		NotificationSetting: nameText(r.NotificationSetting), Permission: nameText(r.Permission),
-		LDAPDN: nameText(r.LDAPDN), Type: nameText(r.Type), OrganizationID: r.OrganizationID,
-		EnterpriseID: r.EnterpriseID, URL: address(r.HTMLURL), Links: r.links}
-}
-
-func (r *teamRaw) project() *RESTTeam {
-	if r == nil {
-		return nil
-	}
-	team := &RESTTeam{RESTTeamSimple: *r.simple(), AccessSource: nameText(r.AccessSource),
+func (r *pullTeamRaw) project() *RESTPullTeam {
+	team := &RESTPullTeam{RESTTeamSimple: *r.core.simple(), AccessSource: shortText(r.core.AccessSource),
 		Parent: r.Parent.simple()}
-	if p := r.Permissions; p != nil {
-		team.Permissions = &RESTTeamPermissions{Pull: p.Pull, Triage: p.Triage, Push: p.Push,
-			Maintain: p.Maintain, Admin: p.Admin}
+	if p := r.Permissions; p != nil && (p.Pull != nil || p.Triage != nil || p.Push != nil || p.Maintain != nil ||
+		p.Admin != nil) {
+		team.Permissions = p
 	}
 	return team
 }
 
-const restTeamSimpleProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},"name":{"type":"string"},` +
-	`"slug":{"type":"string"},"description":{"type":"string"},"privacy":{"type":"string"},` +
-	`"notification_setting":{"type":"string"},"permission":{"type":"string"},"ldap_dn":{"type":"string"},` +
-	`"type":{"type":"string"},"organization_id":{"type":"integer"},"enterprise_id":{"type":"integer"},` +
-	`"url":{"type":"string"}`
-
-var restTeamSimpleSchema = objectSchema(restTeamSimpleProperties + `,"links":` + linksSchema(restTeamLinkKeys))
-
-var restTeamSchema = objectSchema(restTeamSimpleProperties + `,"links":` + linksSchema(restTeamLinkKeys) +
-	`,"access_source":{"type":"string"},"permissions":` + objectSchema(`"pull":{"type":"boolean"},`+
-	`"triage":{"type":"boolean"},"push":{"type":"boolean"},"maintain":{"type":"boolean"},`+
-	`"admin":{"type":"boolean"}`) + `,"parent":` + restTeamSimpleSchema)
+var restPullTeamSchema = teamSimpleSchema[:len(teamSimpleSchema)-len(`},"additionalProperties":false}`)] +
+	`,"access_source":{"type":"string"},"permissions":` + teamPermissionsSchema +
+	`,"parent":` + teamSimpleSchema + `},"additionalProperties":false}`
 
 type pullRefRaw struct {
 	Label *string        `json:"label"`
@@ -175,7 +104,7 @@ type pullSimpleRaw struct {
 	Assignee           *accountRaw   `json:"assignee"`
 	Assignees          []accountRaw  `json:"assignees"`
 	RequestedReviewers []accountRaw  `json:"requested_reviewers"`
-	RequestedTeams     []teamRaw     `json:"requested_teams"`
+	RequestedTeams     []pullTeamRaw `json:"requested_teams"`
 	Head               *pullRefRaw   `json:"head"`
 	Base               *pullRefRaw   `json:"base"`
 	RelLinks           map[string]*struct {
@@ -261,7 +190,7 @@ type RESTPullSimple struct {
 	AssigneesTruncated      bool               `json:"assignees_truncated,omitempty"`
 	RequestedReviewers      []RESTAccount      `json:"requested_reviewers,omitempty"`
 	RequestedReviewersCut   bool               `json:"requested_reviewers_truncated,omitempty"`
-	RequestedTeams          []RESTTeam         `json:"requested_teams,omitempty"`
+	RequestedTeams          []RESTPullTeam     `json:"requested_teams,omitempty"`
 	RequestedTeamsTruncated bool               `json:"requested_teams_truncated,omitempty"`
 	Head                    *RESTPullRef       `json:"head,omitempty"`
 	Base                    *RESTPullRef       `json:"base,omitempty"`
@@ -348,7 +277,7 @@ var restPullSimpleProperties = `"id":{"type":"integer"},"node_id":{"type":"strin
 	`"assignees":{"type":"array","maxItems":100,"items":` + restAccountSchema + `},"assignees_truncated":{"type":"boolean"},` +
 	`"requested_reviewers":{"type":"array","maxItems":100,"items":` + restAccountSchema + `},` +
 	`"requested_reviewers_truncated":{"type":"boolean"},` +
-	`"requested_teams":{"type":"array","maxItems":100,"items":` + restTeamSchema + `},` +
+	`"requested_teams":{"type":"array","maxItems":100,"items":` + restPullTeamSchema + `},` +
 	`"requested_teams_truncated":{"type":"boolean"},"head":` + restPullRefSchema + `,"base":` + restPullRefSchema + `,` +
 	`"link_relations":{"type":"object","maxProperties":8,"additionalProperties":{"type":"string"}},` +
 	`"author_association":{"type":"string"},"auto_merge":` + objectSchema(`"enabled_by":`+restAccountSchema+`,`+
