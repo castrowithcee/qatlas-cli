@@ -105,6 +105,8 @@ carry them.
 [Books and chapters](#books-and-chapters). The comment tree is not returned. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
 
+`revision_count` and `editor` of a page can be neither filtered nor sorted, because BookStack does not offer them as listing fields.
+
 `pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and
 `markdown`. It takes optional `tags` (at most 50 entries of `name` and `value`, each at most 255 characters)
 and `priority` (0 or more, the position among the siblings). `pages.update` takes `id` and any of `name`,

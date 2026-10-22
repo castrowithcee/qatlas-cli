@@ -104,7 +104,7 @@ func fieldMap(o output.Object) map[string]any {
 func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 	rec := &recorder{}
 	c := newClient(t, booksServer(t, rec, false).URL, nil)
-	got, err := c.ListBooks(context.Background(), 2, 1)
+	got, err := c.ListBooks(context.Background(), 2, 1, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"total": 9, "data": []map[string]any{{"id": 1}, {"id": 2}}})
 	}))
 	defer stuck.Close()
-	got, err = newClient(t, stuck.URL, nil).ListBooks(context.Background(), 0, 0)
+	got, err = newClient(t, stuck.URL, nil).ListBooks(context.Background(), 0, 0, listQuery{})
 	if err != nil || len(got.Rows) != 2 || requests > 2 {
 		t.Errorf("rows = %d, requests = %d, err = %v", len(got.Rows), requests, err)
 	}
@@ -132,7 +132,7 @@ func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 func TestBooksListFiltersForeignBooks(t *testing.T) {
 	rec := &recorder{}
 	c := boundClient(t, booksServer(t, rec, false).URL, "book/7")
-	got, err := c.ListBooks(context.Background(), 0, 0)
+	got, err := c.ListBooks(context.Background(), 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestChaptersListBookRuleAndClientFilter(t *testing.T) {
 	rec := &recorder{}
 	server := booksServer(t, rec, true)
 	c := boundClient(t, server.URL, "book/7")
-	got, err := c.ListChapters(context.Background(), 0, 0, 0)
+	got, err := c.ListChapters(context.Background(), 0, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestChaptersListBookRuleAndClientFilter(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 
-	unbound, err := newClient(t, server.URL, nil).ListChapters(context.Background(), 0, 0, 0)
+	unbound, err := newClient(t, server.URL, nil).ListChapters(context.Background(), 0, 0, 0, listQuery{})
 	if err != nil || len(unbound.Rows) != 3 {
 		t.Errorf("unbound rows = %d, err = %v", len(unbound.Rows), err)
 	}

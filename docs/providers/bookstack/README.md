@@ -95,6 +95,16 @@ Tool lists and pickers show the group so that agents and people can find tools b
   see [administration](administration.md).
 - `imports`: ZIP imports, see [imports](imports.md).
 
+## Sorting and filtering lists
+
+List tools that take `sort` and `filters` pass them to BookStack as an optimization only. BookStack silently ignores a filter it does
+not know, so Qatlas checks every row against all filters and against the targets; `limit` and `offset` count the remaining rows. A filter never
+widens the target binding: when a filter uses the same key as the binding, the binding value is the one sent, and all filters are still checked.
+
+Values are checked before any request. A plain date stands for midnight UTC, and a row without the filtered value is dropped.
+Text filters are checked again in Qatlas without case distinction; a row that BookStack matches only through its database collation, for example accent-insensitive matching, is dropped.
+With a sort other than `id`, a listing that needs more than one request can skip rows or meet a row twice when rows share the sort value or change during the listing; a repeated row is dropped.
+
 ## Limits
 
 Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB, an image download 64 MiB); a larger one fails as `invalid-provider-response`. Writing

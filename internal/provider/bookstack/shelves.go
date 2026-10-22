@@ -58,12 +58,12 @@ var (
 			"targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + bookListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(shelfListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of shelves to return; 0 returns all"},
 			{Name: "offset", Description: "Number of shelves to skip"},
-		},
+		}, bookListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Shelf identifier"},
 			{Name: "name", Description: "Shelf title"},
@@ -246,10 +246,16 @@ func checkShelfID(id int64) error {
 func invokeShelvesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var in struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(bookListSchema, in.Sort, in.Filters)
+	if err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, shelvesInstanceWide); err != nil {
@@ -259,7 +265,7 @@ func invokeShelvesList(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return client.ListShelves(ctx, in.Limit, in.Offset)
+	return client.ListShelves(ctx, in.Limit, in.Offset, query)
 }
 
 func invokeShelvesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -336,8 +342,8 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 }
 
 // ListShelves returns shelves of the instance.
-func (c *Client) ListShelves(ctx context.Context, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
+func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[listedJSON]{
 		op: "list shelves", path: "/api/shelves", limit: limit, offset: offset,
 		arguments: argNames(shelvesList),
 		id:        func(s listedJSON) int64 { return s.ID },
@@ -350,7 +356,9 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int) (output.Col
 			addListUsers(row, s.CreatedBy, s.UpdatedBy, s.OwnedBy)
 			return row
 		},
-	})
+	}
+	spec.withListQuery(q, listedValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
