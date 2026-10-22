@@ -31,7 +31,7 @@ func TestIssueDependenciesToolsSatisfyTheirContractThroughTheApplicationCore(t *
 	// Issue 42 blocks issue 41, so listing 41's dependencies reports it under blocking.
 	g.blockedBy[issueKey("octo-org/example", 41)] = []int64{fakeIssueID("octo-org/example", 42)}
 	blocking, err := invoke(t, core, issueDependenciesList.ID, "repo", `{"repository":"octo-org/example","number":42}`, false)
-	if err != nil || !strings.Contains(string(blocking), `"blocking":[{"number":41`) {
+	if err != nil || !strings.Contains(string(blocking), `"blocking":[{"id":1000041,"number":41`) {
 		t.Fatalf("list blocking = %s, %v", blocking, err)
 	}
 

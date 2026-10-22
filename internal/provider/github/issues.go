@@ -58,7 +58,7 @@ const issuesQuery = `query($owner:String!,$name:String!,$first:Int!,$after:Strin
 	`repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
 	`orderBy:{field:CREATED_AT,direction:DESC},filterBy:$filter){` +
 	`pageInfo{hasNextPage endCursor} nodes{number title state updatedAt ` +
-	`assignees(first:10){nodes{login}} labels(first:20){nodes{name}}}}}}`
+	`assignees(first:10){nodes{login}} labels(first:20){nodes{name}} issueType{name}}}}}`
 
 // IssueList is the normalised batch of repository issues.
 type IssueList struct {
@@ -76,6 +76,7 @@ type IssueSummary struct {
 	Assignees []string `json:"assignees"`
 	Labels    []string `json:"labels"`
 	UpdatedAt string   `json:"updated_at,omitempty"`
+	IssueType string   `json:"issue_type,omitempty"`
 }
 
 type issuesPageJSON struct {
@@ -92,6 +93,9 @@ type issuesPageJSON struct {
 				UpdatedAt string        `json:"updatedAt"`
 				Assignees countedLogins `json:"assignees"`
 				Labels    countedLabels `json:"labels"`
+				IssueType *struct {
+					Name *string `json:"name"`
+				} `json:"issueType"`
 			} `json:"nodes"`
 		} `json:"issues"`
 	} `json:"repository"`
@@ -149,6 +153,9 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 		for _, label := range node.Labels.Nodes {
 			issue.Labels = append(issue.Labels, label.Name)
 		}
+		if node.IssueType != nil {
+			issue.IssueType = valueOr(shortText(node.IssueType.Name))
+		}
 		result.Issues = append(result.Issues, issue)
 	}
 	pageInfo := page.Repository.Issues.PageInfo
@@ -178,6 +185,11 @@ type Issue struct {
 	UpdatedAt   string   `json:"updated_at,omitempty"`
 	ClosedAt    string   `json:"closed_at,omitempty"`
 	Body        string   `json:"body"`
+
+	// AuthorDetail and IssueWidth are the remainder of GitHub's issue; the members above keep their own
+	// treatment.
+	AuthorDetail *RESTAccount `json:"author_detail,omitempty"`
+	IssueWidth
 }
 
 type restIssueJSON struct {
@@ -208,6 +220,16 @@ type restIssueJSON struct {
 	UpdatedAt   string    `json:"updated_at"`
 	ClosedAt    *string   `json:"closed_at"`
 	PullRequest *struct{} `json:"pull_request"`
+	width       issueWidthRaw
+}
+
+func (r *restIssueJSON) UnmarshalJSON(data []byte) error {
+	type plain restIssueJSON
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	r.width = readIssueWidth(data)
+	return nil
 }
 
 // GetIssue reads exactly one issue of the bound repository through the REST API, without comments. The
@@ -361,7 +383,8 @@ func issueOf(op string, raw restIssueJSON, number int, change bool) (*Issue, err
 			Message: "this number belongs to a pull request; these tools handle issues only"}
 	}
 	issue := &Issue{Number: raw.Number, Title: raw.Title, State: raw.State, Assignees: []string{}, Labels: []string{},
-		URL: raw.HTMLURL, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt}
+		URL: raw.HTMLURL, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt,
+		AuthorDetail: raw.width.User.project(), IssueWidth: raw.width.width()}
 	if raw.StateReason != nil {
 		issue.StateReason = *raw.StateReason
 	}

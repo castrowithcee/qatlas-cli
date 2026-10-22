@@ -154,13 +154,13 @@ const milestonesReadPermission = "GitHub refused this token the milestones of th
 type milestoneRaw struct {
 	ID           *int64      `json:"id"`
 	NodeID       *string     `json:"node_id"`
-	Number       int         `json:"number"`
+	Number       *int        `json:"number"`
 	State        *string     `json:"state"`
 	Title        *string     `json:"title"`
 	Description  *string     `json:"description"`
 	Creator      *accountRaw `json:"creator"`
-	OpenIssues   int         `json:"open_issues"`
-	ClosedIssues int         `json:"closed_issues"`
+	OpenIssues   *int        `json:"open_issues"`
+	ClosedIssues *int        `json:"closed_issues"`
 	CreatedAt    *string     `json:"created_at"`
 	UpdatedAt    *string     `json:"updated_at"`
 	ClosedAt     *string     `json:"closed_at"`
@@ -201,10 +201,41 @@ type Milestone struct {
 // project keeps the compact members exactly as GitHub sent them, the way the milestone decoded before the
 // remaining members were added; only the new members pass through the projection helpers.
 func (r *milestoneRaw) project() Milestone {
-	return Milestone{Number: r.Number, Title: stringOr(r.Title), Description: stringOr(r.Description),
-		State: stringOr(r.State), DueOn: stringOr(r.DueOn), OpenIssues: r.OpenIssues, ClosedIssues: r.ClosedIssues,
-		ID: r.ID, NodeID: nameText(r.NodeID), Creator: r.Creator.project(), CreatedAt: nameText(r.CreatedAt),
-		UpdatedAt: nameText(r.UpdatedAt), ClosedAt: nameText(r.ClosedAt), URL: address(r.HTMLURL), Links: r.links}
+	return Milestone{Number: valueOr(r.Number), Title: stringOr(r.Title), Description: stringOr(r.Description),
+		State: stringOr(r.State), DueOn: stringOr(r.DueOn), OpenIssues: valueOr(r.OpenIssues),
+		ClosedIssues: valueOr(r.ClosedIssues), ID: r.ID, NodeID: nameText(r.NodeID), Creator: r.Creator.project(),
+		CreatedAt: nameText(r.CreatedAt), UpdatedAt: nameText(r.UpdatedAt), ClosedAt: nameText(r.ClosedAt),
+		URL: address(r.HTMLURL), Links: r.links}
+}
+
+// RESTMilestone is a milestone as another object carries it, such as an issue: the members of Milestone,
+// every one passed through the projection helpers and left out when GitHub leaves it out.
+type RESTMilestone struct {
+	Number       *int         `json:"number,omitempty"`
+	Title        *string      `json:"title,omitempty"`
+	Description  *string      `json:"description,omitempty"`
+	State        *string      `json:"state,omitempty"`
+	DueOn        *string      `json:"due_on,omitempty"`
+	OpenIssues   *int         `json:"open_issues,omitempty"`
+	ClosedIssues *int         `json:"closed_issues,omitempty"`
+	ID           *int64       `json:"id,omitempty"`
+	NodeID       *string      `json:"node_id,omitempty"`
+	Creator      *RESTAccount `json:"creator,omitempty"`
+	CreatedAt    *string      `json:"created_at,omitempty"`
+	UpdatedAt    *string      `json:"updated_at,omitempty"`
+	ClosedAt     *string      `json:"closed_at,omitempty"`
+	URL          *string      `json:"url,omitempty"`
+	Links        Links        `json:"links,omitempty"`
+}
+
+func (r *milestoneRaw) detail() *RESTMilestone {
+	if r == nil {
+		return nil
+	}
+	return &RESTMilestone{Number: r.Number, Title: shortText(r.Title), Description: bulkText(r.Description),
+		State: shortText(r.State), DueOn: shortText(r.DueOn), OpenIssues: r.OpenIssues, ClosedIssues: r.ClosedIssues,
+		ID: r.ID, NodeID: shortText(r.NodeID), Creator: r.Creator.project(), CreatedAt: shortText(r.CreatedAt),
+		UpdatedAt: shortText(r.UpdatedAt), ClosedAt: shortText(r.ClosedAt), URL: address(r.HTMLURL), Links: r.links}
 }
 
 // MilestoneList is one batch of milestones.

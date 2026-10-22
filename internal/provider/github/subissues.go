@@ -78,6 +78,59 @@ type subIssueJSON struct {
 	Repository *struct {
 		FullName string `json:"full_name"`
 	} `json:"repository"`
+	width issueWidthRaw
+}
+
+func (raw *subIssueJSON) UnmarshalJSON(data []byte) error {
+	type plain subIssueJSON
+	if err := json.Unmarshal(data, (*plain)(raw)); err != nil {
+		return err
+	}
+	raw.width = readIssueWidth(data)
+	return nil
+}
+
+// IssueEntry is one issue the sub-issue or the issue dependency list reports: the compact reference, then
+// the remainder of GitHub's issue. RepositoryDetail stands beside Repository and, like it, only when the
+// issue lives in another repository than the one the request named.
+type IssueEntry struct {
+	SubIssueRef
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	IssueCore
+	IssueWidth
+	RepositoryDetail *RESTRepository `json:"repository_detail,omitempty"`
+}
+
+// issueEntryProperties are the schema members of IssueEntry.
+var issueEntryProperties = issueRefProperties + `,"updated_at":{"type":"string"},` + issueCoreProperties + `,` +
+	issueDraftProperty + `,` + issueWidthProperties + `,"repository_detail":` + restRepositorySchema
+
+var issueEntryOutput = `{"type":"object","properties":{` + issueEntryProperties + `},` + issueRefRequired + `}`
+
+// issueEntryFields describe the members IssueEntry adds to the compact reference.
+var issueEntryFields = append(append([]capability.Field{
+	{Name: "updated_at", Description: "When the issue last changed"},
+	repositoryDetailField,
+	issueDraftField,
+}, issueCoreFields...), issueWidthFields...)
+
+// entry normalises one REST issue answer of a list into an IssueEntry. The links leave out back, the link
+// key that names the issue the request itself named, if any.
+func (raw subIssueJSON) entry(op string, own target, allowed allowlist, back string) (IssueEntry, error) {
+	ref, err := raw.ref(op, own)
+	if err != nil {
+		return IssueEntry{}, err
+	}
+	width := &raw.width
+	entry := IssueEntry{SubIssueRef: ref, UpdatedAt: shortText(width.UpdatedAt), IssueCore: width.core(),
+		IssueWidth: width.width()}
+	if back != "" {
+		entry.Links = withoutLink(entry.Links, back)
+	}
+	if ref.Repository != "" {
+		entry.RepositoryDetail = width.Repository.project(allowed)
+	}
+	return entry, nil
 }
 
 // ref normalises one REST issue answer of the sub-issue or issue dependency routes into a SubIssueRef. own is
@@ -112,20 +165,26 @@ func (raw subIssueJSON) repoTarget(own target) target {
 // subIssueParentJSON is the parent issue the add, remove, and reprioritize routes answer with, carrying its
 // updated sub-issue count.
 type subIssueParentJSON struct {
-	Number  int `json:"number"`
-	Summary *struct {
-		Total            int `json:"total"`
-		Completed        int `json:"completed"`
-		PercentCompleted int `json:"percent_completed"`
-	} `json:"sub_issues_summary"`
+	Number  int                  `json:"number"`
+	Summary *subIssuesSummaryRaw `json:"sub_issues_summary"`
+}
+
+// subIssuesSummaryRaw is the sub-issue count GitHub reports on an issue.
+type subIssuesSummaryRaw struct {
+	Total            int `json:"total"`
+	Completed        int `json:"completed"`
+	PercentCompleted int `json:"percent_completed"`
+}
+
+func (r *subIssuesSummaryRaw) project() *SubIssuesSummary {
+	if r == nil {
+		return nil
+	}
+	return &SubIssuesSummary{Total: r.Total, Completed: r.Completed, PercentCompleted: r.PercentCompleted}
 }
 
 func (raw subIssueParentJSON) summary() *SubIssuesSummary {
-	if raw.Summary == nil {
-		return nil
-	}
-	return &SubIssuesSummary{Total: raw.Summary.Total, Completed: raw.Summary.Completed,
-		PercentCompleted: raw.Summary.PercentCompleted}
+	return raw.Summary.project()
 }
 
 var subIssuesList = capability.Descriptor{
@@ -141,17 +200,19 @@ var subIssuesList = capability.Descriptor{
 	Provider:    Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"sub_issues":{"type":"array","items":` +
-		`{"type":"object","properties":{` + issueRefProperties + `},` + issueRefRequired + `}},` +
+		`{"type":"object","properties":{` + issueEntryProperties + `},` + issueRefRequired + `}},` +
 		`"withheld":{"type":"integer"},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["sub_issues","has_more"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Parent issue number in the repository", Required: true},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "sub_issues", Description: "Sub-issues in their priority order, untrusted data"},
+	Fields: append(append([]capability.Field{
+		{Name: "sub_issues", Description: "Sub-issues in their priority order, untrusted data: number, " +
+			"repository as OWNER/REPO when it differs from the parent's, title, state, and url, then the " +
+			"remainder of GitHub's issue below; links leave out parent_issue_url, the parent the request named"},
 		{Name: "withheld", Description: "Count of sub-issues in this batch whose repository lies outside " +
 			"the connection's targets, omitted when none were withheld"},
-	}, pagingFields...),
+	}, issueEntryFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the sub-issues of one issue",
 		Arguments:   json.RawMessage(`{"number":42}`),
@@ -402,10 +463,10 @@ func subIssuePriorityPath(repo target, number int) string {
 
 // SubIssueList is one batch of sub-issues.
 type SubIssueList struct {
-	SubIssues  []SubIssueRef `json:"sub_issues"`
-	Withheld   int           `json:"withheld,omitempty"`
-	NextCursor string        `json:"next_cursor,omitempty"`
-	HasMore    bool          `json:"has_more"`
+	SubIssues  []IssueEntry `json:"sub_issues"`
+	Withheld   int          `json:"withheld,omitempty"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+	HasMore    bool         `json:"has_more"`
 }
 
 func (c *Client) listSubIssues(ctx context.Context, repo target, a *subIssuesArguments) (*SubIssueList, error) {
@@ -415,17 +476,17 @@ func (c *Client) listSubIssues(ctx context.Context, repo target, a *subIssuesArg
 	if err != nil {
 		return nil, actionsFailure(err, subIssuesReadPermission)
 	}
-	result := &SubIssueList{SubIssues: make([]SubIssueRef, 0, len(raw))}
+	result := &SubIssueList{SubIssues: make([]IssueEntry, 0, len(raw))}
 	for _, item := range raw {
 		if !a.allowed.allows(item.repoTarget(repo)) {
 			result.Withheld++
 			continue
 		}
-		ref, err := item.ref(op, repo)
+		entry, err := item.entry(op, repo, a.allowed, "parent_issue_url")
 		if err != nil {
 			return nil, err
 		}
-		result.SubIssues = append(result.SubIssues, ref)
+		result.SubIssues = append(result.SubIssues, entry)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
