@@ -74,16 +74,7 @@ const calendarSchema = `{"type":"object","properties":{"id":{"type":"string"},"n
 	`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
 	`"required":["id","name","read_only","components"],"additionalProperties":false}`
 
-const personSchema = `{"type":"object","properties":{"address":{"type":"string"},"name":{"type":"string"},` +
-	`"status":{"type":"string"}},"additionalProperties":false}`
-
-const eventSchema = `{"type":"object","properties":{` +
-	`"id":{"type":"string"},"uid":{"type":"string"},"summary":{"type":"string"},"description":{"type":"string"},` +
-	`"location":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"},"all_day":{"type":"boolean"},` +
-	`"timezone":{"type":"string"},"status":{"type":"string"},"rrule":{"type":"string"},` +
-	`"organizer":` + personSchema + `,"attendees":{"type":"array","items":` + personSchema + `},` +
-	`"attendees_truncated":{"type":"boolean"},"etag":{"type":"string"}},` +
-	`"required":["id"],"additionalProperties":false}`
+var eventSchema = dav.EventSchema
 
 const calendarArgSchema = `"calendar":{"type":"string","minLength":1,"maxLength":255}`
 
@@ -92,7 +83,7 @@ var calendarArgument = capability.Argument{
 	Description: "URI of a bound calendar, the id the calendars list reports",
 }
 
-var eventFields = []capability.Field{
+var eventFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the event resource, the id argument of the get tool"},
 	{Name: "uid", Description: "iCalendar UID, untrusted data"},
 	{Name: "summary", Description: "Title, untrusted data"},
@@ -105,11 +96,11 @@ var eventFields = []capability.Field{
 	{Name: "status", Description: "TENTATIVE, CONFIRMED, or CANCELLED when the event carries one"},
 	{Name: "rrule", Description: "Recurrence rule of a repeating event, never expanded into occurrences"},
 	{Name: "organizer", Description: "Organizer, untrusted data; only the get tool reports it"},
-	{Name: "attendees", Description: "At most 50 attendees, untrusted data; only the get tool reports them"},
+	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data; only the get tool reports them"},
 	{Name: "etag", Description: "Entity tag of the current version of the event"},
 	{Name: "count", Description: "Number of reported events"},
 	{Name: "truncated", Description: "True when more events match the range than limit allows"},
-}
+}, dav.EventFieldList()...)
 
 var calendarsList = capability.Descriptor{
 	ID: Provider + ".calendar.calendars.list", Version: 1, Title: "List Nextcloud calendars",
