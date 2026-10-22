@@ -35,6 +35,7 @@ type member struct {
 	kind    memberKind
 	only    *product
 	address bool
+	max     int // longest text kept, in bytes; zero means maxStringLength
 	sub     []member
 	note    string
 }
@@ -149,7 +150,11 @@ func (m member) read(p *product, o object) (any, bool) {
 		}
 		return out, true
 	}
-	value, ok := o.text(m.name)
+	limit := m.max
+	if limit == 0 {
+		limit = maxStringLength
+	}
+	value, ok := o.textUpTo(m.name, limit)
 	if ok && m.address && !plainAddress(value) {
 		return nil, false
 	}
