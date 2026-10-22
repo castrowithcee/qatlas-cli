@@ -24,12 +24,17 @@ of every type and status; without a type or status filter it includes all of the
 `overdue` each stand alone in their filter. Lexware lists at most 10,000 vouchers per filter, so a page beyond
 that limit is refused before any request; narrow the filter instead. It also reads the payment status of one
 voucher and one bookkeeping voucher with its positions; bookkeeping vouchers are their own data class.
-Quotations, order confirmations, credit notes, delivery notes, dunnings and down payment invoices each have
-their own detail tool by identifier, with address, positions, totals, shipping and related vouchers; a delivery
-note carries no prices. A dunning names the invoice it refers to; a down payment invoice names its closing
-invoice once one exists. Templates for recurring invoices are listed page by page, sorted by one of a few fixed
-properties, and read by identifier, with interval, next execution, execution status and whether the last
-execution failed; the provider's error text of a failed execution is never shown.
+Invoices, quotations, order confirmations, credit notes, delivery notes, dunnings and down payment invoices each
+have their own detail tool by identifier. Each returns every response member Lexware documents for its type
+except the deprecated document file reference: address with contact person, positions, totals with discounts,
+tax per rate, tax conditions, payment term and cash discount, shipping, related vouchers, print layout and
+electronic document profile; a delivery note carries no prices. An invoice also reports a closing invoice with
+its claimed gross amount and the down payments it deducts, the buyer reference of an XRechnung and the recurring
+template it stems from. A quotation marks optional and alternative positions. A dunning names the invoice it
+refers to; a down payment invoice names its closing invoice once one exists. Templates for recurring invoices
+are listed page by page, sorted by one of a few fixed properties, and read by identifier, with interval, next
+execution, execution status and whether the last execution failed; the provider's error text of a failed
+execution is never shown.
 
 `lexware.documents.download` writes the final document of a finalized sales voucher and
 `lexware.files.download` the original file of a bookkeeping voucher to `local_path`. Both are offered only to a

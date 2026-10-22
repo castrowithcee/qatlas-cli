@@ -142,66 +142,82 @@ var invoicesList = capability.Descriptor{
 	}},
 }
 
-var invoicesGet = capability.Descriptor{
-	ID:          Provider + ".invoices.get",
-	Version:     1,
-	Title:       "Get a Lexware invoice",
-	Description: "Read one outgoing invoice of an explicit Lexware Office connection by its identifier",
-	Tags:        []string{"lexware", "invoices", "get", "accounting"},
-	Risk:        lexwareReadRisk,
-	Provider:    Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","minLength":36,` +
-		`"maxLength":36,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}},` +
-		`"required":["id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"id":{"type":"string"},"voucher_number":{"type":"string"},"voucher_status":{"type":"string"},` +
-		`"overdue":{"type":"boolean"},"voucher_date":{"type":"string"},"due_date":{"type":"string"},` +
-		`"created_date":{"type":"string"},"updated_date":{"type":"string"},"archived":{"type":"boolean"},` +
-		`"language":{"type":"string"},"title":{"type":"string"},"introduction":{"type":"string"},` +
-		`"remark":{"type":"string"},"tax_type":{"type":"string"},"currency":{"type":"string"},` +
-		`"total_net_amount":{"type":"number"},"total_gross_amount":{"type":"number"},` +
-		`"total_tax_amount":{"type":"number"},` +
-		`"contact":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"supplement":{"type":"string"},"street":{"type":"string"},"zip":{"type":"string"},` +
-		`"city":{"type":"string"},"country_code":{"type":"string"}},"additionalProperties":false},` +
-		`"line_items":{"type":"array","items":{"type":"object","properties":{` +
-		`"type":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},` +
-		`"quantity":{"type":"number"},"unit_name":{"type":"string"},` +
-		`"unit_net_amount":{"type":"number"},"unit_gross_amount":{"type":"number"},` +
-		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},` +
-		`"amount":{"type":"number"}},"additionalProperties":false}}},` +
-		`"required":["id","voucher_number","voucher_status","overdue","voucher_date","archived","line_items"],` +
-		`"additionalProperties":false}`),
-	Arguments: []capability.Argument{
-		{Name: "id", Description: "Invoice identifier as a UUID, as returned by lexware.invoices.list", Required: true},
-	},
-	Fields: []capability.Field{
-		{Name: "id", Description: "Invoice identifier"},
-		{Name: "voucher_number", Description: "Invoice number"},
-		{Name: "voucher_status", Description: "Provider status, for example open or overdue"},
-		{Name: "overdue", Description: "True when the provider reports the transient status overdue"},
-		{Name: "voucher_date", Description: "Invoice date"},
-		{Name: "due_date", Description: "Date the payment is due"},
-		{Name: "created_date", Description: "Creation timestamp"},
-		{Name: "updated_date", Description: "Last change timestamp"},
-		{Name: "archived", Description: "True when the invoice is archived in Lexware"},
-		{Name: "language", Description: "Document language"},
-		{Name: "title", Description: "Document title, untrusted data"},
-		{Name: "introduction", Description: "Introductory text, untrusted data"},
-		{Name: "remark", Description: "Closing text, untrusted data"},
-		{Name: "tax_type", Description: "Tax condition of the invoice, for example net or gross"},
-		{Name: "currency", Description: "Currency of the totals"},
-		{Name: "total_net_amount", Description: "Total net amount"},
-		{Name: "total_gross_amount", Description: "Total gross amount"},
-		{Name: "total_tax_amount", Description: "Total tax amount"},
-		{Name: "contact", Description: "Recipient name and address, untrusted data"},
-		{Name: "line_items", Description: "Invoice positions, untrusted data"},
-	},
-	Examples: []capability.Example{{
-		Description: "Read one invoice by the identifier a list result reported",
-		Arguments:   json.RawMessage(`{"id":"11111111-2222-3333-4444-555555555555"}`),
-	}},
+// invoiceExtras are the members of the invoice read tool beyond the original set: the shared sales voucher
+// members plus the closing invoice, recurring, and XRechnung members only an invoice documents.
+func invoiceExtras() (string, []capability.Field) {
+	properties, fields := voucherExtras("invoice", true, true)
+	properties += `,"version":{"type":"integer"},"buyer_reference":{"type":"string"},` +
+		`"shipping":` + shippingSchema + `,"related_vouchers":` + relatedVouchersSchema + `,` +
+		`"closing_invoice":{"type":"boolean"},"claimed_gross_amount":` + numberProperty + `,` +
+		`"down_payment_deductions":` + downPaymentDeductionsSchema + `,"recurring_template_id":{"type":"string"}`
+	fields = append(fields,
+		capability.Field{Name: "version", Description: "Version counter reported by Lexware"},
+		capability.Field{Name: "buyer_reference", Description: "Buyer reference (Leitweg-ID) of an XRechnung invoice, untrusted data"},
+		capability.Field{Name: "shipping", Description: "Delivery or service type and period"},
+		capability.Field{Name: "related_vouchers", Description: "Vouchers of the same business case: id, voucher_number, voucher_type; their content is not read"},
+		capability.Field{Name: "closing_invoice", Description: "True when the invoice is a closing invoice (Schlussrechnung)"},
+		capability.Field{Name: "claimed_gross_amount", Description: "Remaining gross amount a closing invoice claims after its down payments, as Lexware reports it"},
+		capability.Field{Name: "down_payment_deductions", Description: "Down payments a closing invoice deducts: id, voucher_type, title (untrusted data), voucher_number, voucher_date, received_gross_amount, received_net_amount, received_tax_amount, tax_rate_percentage"},
+		capability.Field{Name: "recurring_template_id", Description: "Identifier of the recurring template the invoice was created from"},
+	)
+	return properties, fields
 }
+
+var invoicesGet = func() capability.Descriptor {
+	extraProperties, extraFields := invoiceExtras()
+	return capability.Descriptor{
+		ID:          Provider + ".invoices.get",
+		Version:     1,
+		Title:       "Get a Lexware invoice",
+		Description: "Read one outgoing invoice of an explicit Lexware Office connection by its identifier",
+		Tags:        []string{"lexware", "invoices", "get", "accounting"},
+		Risk:        lexwareReadRisk,
+		Provider:    Provider,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","minLength":36,` +
+			`"maxLength":36,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}},` +
+			`"required":["id"],"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
+			`"id":{"type":"string"},"voucher_number":{"type":"string"},"voucher_status":{"type":"string"},` +
+			`"overdue":{"type":"boolean"},"voucher_date":{"type":"string"},"due_date":{"type":"string"},` +
+			`"created_date":{"type":"string"},"updated_date":{"type":"string"},"archived":{"type":"boolean"},` +
+			`"language":{"type":"string"},"title":{"type":"string"},"introduction":{"type":"string"},` +
+			`"remark":{"type":"string"},"tax_type":{"type":"string"},"currency":{"type":"string"},` +
+			`"total_net_amount":{"type":"number"},"total_gross_amount":{"type":"number"},` +
+			`"total_tax_amount":{"type":"number"},"contact":` + voucherContactSchema + `,` +
+			`"line_items":` + salesLineItemsSchema(false) + `,` + extraProperties + `},` +
+			`"required":["id","voucher_number","voucher_status","overdue","voucher_date","archived","line_items"],` +
+			`"additionalProperties":false}`),
+		Arguments: []capability.Argument{
+			{Name: "id", Description: "Invoice identifier as a UUID, as returned by lexware.invoices.list", Required: true},
+		},
+		Fields: append([]capability.Field{
+			{Name: "id", Description: "Invoice identifier"},
+			{Name: "voucher_number", Description: "Invoice number"},
+			{Name: "voucher_status", Description: "Provider status, for example open or overdue"},
+			{Name: "overdue", Description: "True when the provider reports the transient status overdue"},
+			{Name: "voucher_date", Description: "Invoice date"},
+			{Name: "due_date", Description: "Date the payment is due"},
+			{Name: "created_date", Description: "Creation timestamp"},
+			{Name: "updated_date", Description: "Last change timestamp"},
+			{Name: "archived", Description: "True when the invoice is archived in Lexware"},
+			{Name: "language", Description: "Document language"},
+			{Name: "title", Description: "Document title, untrusted data"},
+			{Name: "introduction", Description: "Introductory text, untrusted data"},
+			{Name: "remark", Description: "Closing text, untrusted data"},
+			{Name: "tax_type", Description: "Tax condition of the invoice, for example net or gross"},
+			{Name: "currency", Description: "Currency of the totals"},
+			{Name: "total_net_amount", Description: "Total net amount"},
+			{Name: "total_gross_amount", Description: "Total gross amount"},
+			{Name: "total_tax_amount", Description: "Total tax amount"},
+			{Name: "contact", Description: "Recipient name and address, untrusted data"},
+			{Name: "line_items", Description: "Invoice positions, untrusted data"},
+		}, extraFields...),
+		Examples: []capability.Example{{
+			Description: "Read one invoice by the identifier a list result reported",
+			Arguments:   json.RawMessage(`{"id":"11111111-2222-3333-4444-555555555555"}`),
+		}},
+	}
+}()
 
 // invoiceWriteRisk is shared by both invoice creations: each sends one non-repeatable request to the
 // production organization.
@@ -1118,26 +1134,44 @@ var pagingFields = []capability.Field{
 
 // Invoice is the stable Qatlas view of one invoice. Everything a Lexware user typed is untrusted data.
 type Invoice struct {
-	ID               string      `json:"id"`
-	VoucherNumber    string      `json:"voucher_number"`
-	VoucherStatus    string      `json:"voucher_status"`
-	Overdue          bool        `json:"overdue"`
-	VoucherDate      string      `json:"voucher_date"`
-	DueDate          string      `json:"due_date,omitempty"`
-	CreatedDate      string      `json:"created_date,omitempty"`
-	UpdatedDate      string      `json:"updated_date,omitempty"`
-	Archived         bool        `json:"archived"`
-	Language         string      `json:"language,omitempty"`
-	Title            string      `json:"title,omitempty"`
-	Introduction     string      `json:"introduction,omitempty"`
-	Remark           string      `json:"remark,omitempty"`
-	TaxType          string      `json:"tax_type,omitempty"`
-	Currency         string      `json:"currency,omitempty"`
-	TotalNetAmount   json.Number `json:"total_net_amount,omitempty"`
-	TotalGrossAmount json.Number `json:"total_gross_amount,omitempty"`
-	TotalTaxAmount   json.Number `json:"total_tax_amount,omitempty"`
-	Contact          *Contact    `json:"contact,omitempty"`
-	LineItems        []LineItem  `json:"line_items"`
+	ID                        string                 `json:"id"`
+	OrganizationID            string                 `json:"organization_id,omitempty"`
+	VoucherNumber             string                 `json:"voucher_number"`
+	VoucherStatus             string                 `json:"voucher_status"`
+	Overdue                   bool                   `json:"overdue"`
+	VoucherDate               string                 `json:"voucher_date"`
+	DueDate                   string                 `json:"due_date,omitempty"`
+	CreatedDate               string                 `json:"created_date,omitempty"`
+	UpdatedDate               string                 `json:"updated_date,omitempty"`
+	Version                   int                    `json:"version,omitempty"`
+	Archived                  bool                   `json:"archived"`
+	Language                  string                 `json:"language,omitempty"`
+	ElectronicDocumentProfile string                 `json:"electronic_document_profile,omitempty"`
+	PrintLayoutID             string                 `json:"print_layout_id,omitempty"`
+	Title                     string                 `json:"title,omitempty"`
+	Introduction              string                 `json:"introduction,omitempty"`
+	Remark                    string                 `json:"remark,omitempty"`
+	TaxType                   string                 `json:"tax_type,omitempty"`
+	TaxSubType                string                 `json:"tax_sub_type,omitempty"`
+	TaxTypeNote               string                 `json:"tax_type_note,omitempty"`
+	Currency                  string                 `json:"currency,omitempty"`
+	TotalNetAmount            json.Number            `json:"total_net_amount,omitempty"`
+	TotalGrossAmount          json.Number            `json:"total_gross_amount,omitempty"`
+	TotalTaxAmount            json.Number            `json:"total_tax_amount,omitempty"`
+	TotalDiscountAbsolute     json.Number            `json:"total_discount_absolute,omitempty"`
+	TotalDiscountPercentage   json.Number            `json:"total_discount_percentage,omitempty"`
+	TaxAmounts                []TaxAmount            `json:"tax_amounts,omitempty"`
+	PaymentConditions         *PaymentConditions     `json:"payment_conditions,omitempty"`
+	Contact                   *Contact               `json:"contact,omitempty"`
+	ContactPerson             string                 `json:"contact_person,omitempty"`
+	BuyerReference            string                 `json:"buyer_reference,omitempty"`
+	Shipping                  *Shipping              `json:"shipping,omitempty"`
+	RelatedVouchers           []RelatedVoucher       `json:"related_vouchers,omitempty"`
+	ClosingInvoice            *bool                  `json:"closing_invoice,omitempty"`
+	ClaimedGrossAmount        json.Number            `json:"claimed_gross_amount,omitempty"`
+	DownPaymentDeductions     []DownPaymentDeduction `json:"down_payment_deductions,omitempty"`
+	RecurringTemplateID       string                 `json:"recurring_template_id,omitempty"`
+	LineItems                 []SalesLineItem        `json:"line_items"`
 }
 
 // Contact is the invoice recipient as the invoice carries it.
@@ -1184,15 +1218,35 @@ func (c *Client) GetInvoice(ctx context.Context, id string) (*Invoice, error) {
 	}
 
 	voucher := raw.normalize()
-	return &Invoice{
-		ID: voucher.ID, VoucherNumber: voucher.VoucherNumber, VoucherStatus: voucher.VoucherStatus,
-		Overdue: voucher.VoucherStatus == "overdue", VoucherDate: voucher.VoucherDate, DueDate: raw.DueDate,
-		CreatedDate: voucher.CreatedDate, UpdatedDate: voucher.UpdatedDate, Archived: voucher.Archived,
-		Language: voucher.Language, Title: voucher.Title, Introduction: voucher.Introduction,
-		Remark: voucher.Remark, TaxType: voucher.TaxType, Currency: voucher.Currency,
+	voucher.dropAlternatives()
+	invoice := &Invoice{
+		ID: voucher.ID, OrganizationID: voucher.OrganizationID, VoucherNumber: voucher.VoucherNumber,
+		VoucherStatus: voucher.VoucherStatus, Overdue: voucher.VoucherStatus == "overdue",
+		VoucherDate: voucher.VoucherDate, DueDate: raw.DueDate, CreatedDate: voucher.CreatedDate,
+		UpdatedDate: voucher.UpdatedDate, Version: voucher.Version, Archived: voucher.Archived,
+		Language: voucher.Language, ElectronicDocumentProfile: voucher.ElectronicDocumentProfile,
+		PrintLayoutID: voucher.PrintLayoutID, Title: voucher.Title, Introduction: voucher.Introduction,
+		Remark: voucher.Remark, TaxType: voucher.TaxType, TaxSubType: voucher.TaxSubType,
+		TaxTypeNote: voucher.TaxTypeNote, Currency: voucher.Currency,
 		TotalNetAmount: voucher.TotalNetAmount, TotalGrossAmount: voucher.TotalGrossAmount,
-		TotalTaxAmount: voucher.TotalTaxAmount, Contact: voucher.Contact, LineItems: voucher.LineItems,
-	}, nil
+		TotalTaxAmount: voucher.TotalTaxAmount, TotalDiscountAbsolute: voucher.TotalDiscountAbsolute,
+		TotalDiscountPercentage: voucher.TotalDiscountPercentage, TaxAmounts: voucher.TaxAmounts,
+		PaymentConditions: voucher.PaymentConditions, Contact: voucher.Contact,
+		ContactPerson: voucher.ContactPerson, BuyerReference: raw.XRechnung.BuyerReference,
+		Shipping: voucher.Shipping, RelatedVouchers: voucher.RelatedVouchers,
+		ClosingInvoice: raw.ClosingInvoice, ClaimedGrossAmount: raw.ClaimedGrossAmount,
+		LineItems: voucher.LineItems,
+	}
+	if validUUID(raw.RecurringTemplateID) {
+		invoice.RecurringTemplateID = raw.RecurringTemplateID
+	}
+	for _, deduction := range raw.DownPaymentDeductions {
+		if !validUUID(deduction.ID) {
+			deduction.ID = ""
+		}
+		invoice.DownPaymentDeductions = append(invoice.DownPaymentDeductions, DownPaymentDeduction(deduction))
+	}
+	return invoice, nil
 }
 
 type createResult struct {
@@ -1420,52 +1474,63 @@ type voucherListJSON struct {
 // order confirmations, credit notes, and delivery notes share this structure; a member a type does not
 // carry stays empty.
 type invoiceJSON struct {
-	ID               string `json:"id"`
-	CreatedDate      string `json:"createdDate"`
-	UpdatedDate      string `json:"updatedDate"`
-	Version          int    `json:"version"`
-	Language         string `json:"language"`
-	Archived         bool   `json:"archived"`
-	VoucherStatus    string `json:"voucherStatus"`
-	VoucherNumber    string `json:"voucherNumber"`
-	VoucherDate      string `json:"voucherDate"`
-	DueDate          string `json:"dueDate"`
-	ClosingInvoiceID string `json:"closingInvoiceId"`
-	ExpirationDate   string `json:"expirationDate"`
-	DeliveryTerms    string `json:"deliveryTerms"`
-	Address          struct {
-		ContactID   string `json:"contactId"`
-		Name        string `json:"name"`
-		Supplement  string `json:"supplement"`
-		Street      string `json:"street"`
-		City        string `json:"city"`
-		Zip         string `json:"zip"`
-		CountryCode string `json:"countryCode"`
+	ID                        string `json:"id"`
+	OrganizationID            string `json:"organizationId"`
+	CreatedDate               string `json:"createdDate"`
+	UpdatedDate               string `json:"updatedDate"`
+	Version                   int    `json:"version"`
+	Language                  string `json:"language"`
+	Archived                  bool   `json:"archived"`
+	VoucherStatus             string `json:"voucherStatus"`
+	VoucherNumber             string `json:"voucherNumber"`
+	VoucherDate               string `json:"voucherDate"`
+	DueDate                   string `json:"dueDate"`
+	ClosingInvoiceID          string `json:"closingInvoiceId"`
+	ExpirationDate            string `json:"expirationDate"`
+	DeliveryTerms             string `json:"deliveryTerms"`
+	ElectronicDocumentProfile string `json:"electronicDocumentProfile"`
+	PrintLayoutID             string `json:"printLayoutId"`
+	Address                   struct {
+		ContactID     string `json:"contactId"`
+		Name          string `json:"name"`
+		Supplement    string `json:"supplement"`
+		Street        string `json:"street"`
+		City          string `json:"city"`
+		Zip           string `json:"zip"`
+		CountryCode   string `json:"countryCode"`
+		ContactPerson string `json:"contactPerson"`
 	} `json:"address"`
-	LineItems []struct {
-		Type        string      `json:"type"`
-		Name        string      `json:"name"`
-		Description string      `json:"description"`
-		Quantity    json.Number `json:"quantity"`
-		UnitName    string      `json:"unitName"`
-		UnitPrice   struct {
-			Currency          string      `json:"currency"`
-			NetAmount         json.Number `json:"netAmount"`
-			GrossAmount       json.Number `json:"grossAmount"`
-			TaxRatePercentage json.Number `json:"taxRatePercentage"`
-		} `json:"unitPrice"`
-		DiscountPercentage json.Number `json:"discountPercentage"`
-		LineItemAmount     json.Number `json:"lineItemAmount"`
-	} `json:"lineItems"`
+	XRechnung struct {
+		BuyerReference string `json:"buyerReference"`
+	} `json:"xRechnung"`
+	LineItems  []lineItemJSON `json:"lineItems"`
 	TotalPrice struct {
-		Currency         string      `json:"currency"`
-		TotalNetAmount   json.Number `json:"totalNetAmount"`
-		TotalGrossAmount json.Number `json:"totalGrossAmount"`
-		TotalTaxAmount   json.Number `json:"totalTaxAmount"`
+		Currency                string      `json:"currency"`
+		TotalNetAmount          json.Number `json:"totalNetAmount"`
+		TotalGrossAmount        json.Number `json:"totalGrossAmount"`
+		TotalTaxAmount          json.Number `json:"totalTaxAmount"`
+		TotalDiscountAbsolute   json.Number `json:"totalDiscountAbsolute"`
+		TotalDiscountPercentage json.Number `json:"totalDiscountPercentage"`
 	} `json:"totalPrice"`
+	TaxAmounts []struct {
+		TaxRatePercentage json.Number `json:"taxRatePercentage"`
+		TaxAmount         json.Number `json:"taxAmount"`
+		NetAmount         json.Number `json:"netAmount"`
+	} `json:"taxAmounts"`
 	TaxConditions struct {
-		TaxType string `json:"taxType"`
+		TaxType     string `json:"taxType"`
+		TaxSubType  string `json:"taxSubType"`
+		TaxTypeNote string `json:"taxTypeNote"`
 	} `json:"taxConditions"`
+	PaymentConditions struct {
+		PaymentTermLabel         string      `json:"paymentTermLabel"`
+		PaymentTermLabelTemplate string      `json:"paymentTermLabelTemplate"`
+		PaymentTermDuration      json.Number `json:"paymentTermDuration"`
+		PaymentDiscountCondition struct {
+			DiscountPercentage json.Number `json:"discountPercentage"`
+			DiscountRange      json.Number `json:"discountRange"`
+		} `json:"paymentDiscountConditions"`
+	} `json:"paymentConditions"`
 	ShippingConditions struct {
 		ShippingType    string `json:"shippingType"`
 		ShippingDate    string `json:"shippingDate"`
@@ -1476,9 +1541,45 @@ type invoiceJSON struct {
 		VoucherNumber string `json:"voucherNumber"`
 		VoucherType   string `json:"voucherType"`
 	} `json:"relatedVouchers"`
-	Title        string `json:"title"`
-	Introduction string `json:"introduction"`
-	Remark       string `json:"remark"`
+	// Closing invoice members; only an invoice carries them.
+	ClosingInvoice        *bool       `json:"closingInvoice"`
+	ClaimedGrossAmount    json.Number `json:"claimedGrossAmount"`
+	DownPaymentDeductions []struct {
+		ID                  string      `json:"id"`
+		VoucherType         string      `json:"voucherType"`
+		Title               string      `json:"title"`
+		VoucherNumber       string      `json:"voucherNumber"`
+		VoucherDate         string      `json:"voucherDate"`
+		ReceivedGrossAmount json.Number `json:"receivedGrossAmount"`
+		ReceivedNetAmount   json.Number `json:"receivedNetAmount"`
+		ReceivedTaxAmount   json.Number `json:"receivedTaxAmount"`
+		TaxRatePercentage   json.Number `json:"taxRatePercentage"`
+	} `json:"downPaymentDeductions"`
+	RecurringTemplateID string `json:"recurringTemplateId"`
+	Title               string `json:"title"`
+	Introduction        string `json:"introduction"`
+	Remark              string `json:"remark"`
+}
+
+// lineItemJSON is one provider position. SubItems are the alternative items of a quotation position.
+type lineItemJSON struct {
+	ID          string      `json:"id"`
+	Type        string      `json:"type"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Quantity    json.Number `json:"quantity"`
+	UnitName    string      `json:"unitName"`
+	UnitPrice   struct {
+		Currency          string      `json:"currency"`
+		NetAmount         json.Number `json:"netAmount"`
+		GrossAmount       json.Number `json:"grossAmount"`
+		TaxRatePercentage json.Number `json:"taxRatePercentage"`
+	} `json:"unitPrice"`
+	DiscountPercentage json.Number    `json:"discountPercentage"`
+	LineItemAmount     json.Number    `json:"lineItemAmount"`
+	Optional           *bool          `json:"optional"`
+	Alternative        *bool          `json:"alternative"`
+	SubItems           []lineItemJSON `json:"subItems"`
 }
 
 // normalize is the shared mapper of every sales voucher type: it flattens the provider shape into the stable
@@ -1491,8 +1592,21 @@ func (raw *invoiceJSON) normalize() *SalesVoucher {
 		Archived: raw.Archived, Language: raw.Language, Title: raw.Title, Introduction: raw.Introduction,
 		Remark: raw.Remark, TaxType: raw.TaxConditions.TaxType, Currency: raw.TotalPrice.Currency,
 		TotalNetAmount: raw.TotalPrice.TotalNetAmount, TotalGrossAmount: raw.TotalPrice.TotalGrossAmount,
-		TotalTaxAmount: raw.TotalPrice.TotalTaxAmount,
-		LineItems:      make([]LineItem, 0, len(raw.LineItems)),
+		TotalTaxAmount:            raw.TotalPrice.TotalTaxAmount,
+		TotalDiscountAbsolute:     raw.TotalPrice.TotalDiscountAbsolute,
+		TotalDiscountPercentage:   raw.TotalPrice.TotalDiscountPercentage,
+		TaxSubType:                raw.TaxConditions.TaxSubType,
+		TaxTypeNote:               raw.TaxConditions.TaxTypeNote,
+		ElectronicDocumentProfile: raw.ElectronicDocumentProfile,
+		ContactPerson:             raw.Address.ContactPerson,
+		LineItems:                 make([]SalesLineItem, 0, len(raw.LineItems)),
+	}
+	// Identifiers of the answer are provider data: only a well-formed UUID is passed on.
+	if validUUID(raw.OrganizationID) {
+		voucher.OrganizationID = raw.OrganizationID
+	}
+	if validUUID(raw.PrintLayoutID) {
+		voucher.PrintLayoutID = raw.PrintLayoutID
 	}
 	contact := Contact{
 		ID: raw.Address.ContactID, Name: raw.Address.Name, Supplement: raw.Address.Supplement,
@@ -1508,15 +1622,46 @@ func (raw *invoiceJSON) normalize() *SalesVoucher {
 	for _, related := range raw.RelatedVouchers {
 		voucher.RelatedVouchers = append(voucher.RelatedVouchers, RelatedVoucher(related))
 	}
+	for _, tax := range raw.TaxAmounts {
+		voucher.TaxAmounts = append(voucher.TaxAmounts, TaxAmount(tax))
+	}
+	payment := raw.PaymentConditions
+	conditions := PaymentConditions{
+		PaymentTermLabel: payment.PaymentTermLabel, PaymentTermLabelTemplate: payment.PaymentTermLabelTemplate,
+		PaymentTermDuration: payment.PaymentTermDuration,
+	}
+	if discount := DiscountConditions(payment.PaymentDiscountCondition); discount != (DiscountConditions{}) {
+		conditions.PaymentDiscountConditions = &discount
+	}
+	if conditions != (PaymentConditions{}) {
+		voucher.PaymentConditions = &conditions
+	}
 	for _, item := range raw.LineItems {
-		voucher.LineItems = append(voucher.LineItems, LineItem{
+		voucher.LineItems = append(voucher.LineItems, item.normalize(true))
+	}
+	return voucher
+}
+
+// normalize flattens one position; withSubItems is false for a sub item, which cannot nest further.
+func (item *lineItemJSON) normalize(withSubItems bool) SalesLineItem {
+	out := SalesLineItem{
+		LineItem: LineItem{
 			Type: item.Type, Name: item.Name, Description: item.Description, Quantity: item.Quantity,
 			UnitName: item.UnitName, UnitNetAmount: item.UnitPrice.NetAmount,
 			UnitGrossAmount: item.UnitPrice.GrossAmount, TaxRatePercentage: item.UnitPrice.TaxRatePercentage,
 			DiscountPercentage: item.DiscountPercentage, Amount: item.LineItemAmount,
-		})
+		},
+		UnitCurrency: item.UnitPrice.Currency, Optional: item.Optional, Alternative: item.Alternative,
 	}
-	return voucher
+	if validUUID(item.ID) {
+		out.ID = item.ID
+	}
+	if withSubItems {
+		for i := range item.SubItems {
+			out.SubItems = append(out.SubItems, item.SubItems[i].normalize(false))
+		}
+	}
+	return out
 }
 
 // invoiceMayExist is appended to a failure of an invoice creation whose request may have reached Lexware:

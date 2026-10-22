@@ -351,6 +351,15 @@ func (c *Client) GetRecurringTemplate(ctx context.Context, id string) (*Recurrin
 		TaxType: voucher.TaxType, Currency: voucher.Currency, TotalNetAmount: voucher.TotalNetAmount,
 		TotalGrossAmount: voucher.TotalGrossAmount, TotalTaxAmount: voucher.TotalTaxAmount,
 		Contact: voucher.Contact, Shipping: voucher.Shipping, Settings: raw.settings(),
-		LineItems: voucher.LineItems,
+		LineItems: plainLineItems(voucher.LineItems),
 	}, nil
+}
+
+// plainLineItems narrows positions to the members a recurring template reports.
+func plainLineItems(items []SalesLineItem) []LineItem {
+	plain := make([]LineItem, len(items))
+	for i, item := range items {
+		plain[i] = item.LineItem
+	}
+	return plain
 }
