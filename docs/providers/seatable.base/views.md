@@ -24,6 +24,14 @@ names it. The shared rules are in [the README](README.md#shared-boundaries).
 - A view that is configured as a connection target cannot be updated or deleted, whichever way the
   selection addresses it (name or `id:`).
 - Columns are referred to by key in `views.list`. Filter terms are data from the base and untrusted.
+- `views.list` and `views.get` report the view settings SeaTable documents for their endpoint, among them
+  groupings, color rules, summaries, and the locked state. Settings such as `groupbys` or `summaries` pass
+  through as the lists and objects SeaTable returns; Qatlas does not interpret them.
+- `formula_rows` and `link_rows` can hold values of linked tables. They appear only for a wildcard
+  connection and are otherwise absent because of the table binding; their absence is not listed in
+  `omitted_fields`.
+- A view setting that exceeds the size bounds (4096 bytes serialized, 8 levels, or 1000 elements) is left out,
+  never shortened, and named in `omitted_fields`.
 - `views.create` makes an empty view; filters, sorts, and hidden columns are set afterwards with
   `views.update`.
 - `views.update` changes only the given parts. Every column is checked against the table metadata, may be

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -34,7 +35,7 @@ var eventRisk = capability.Risk{
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: eventsSensitivity,
 }
 
-var eventFields = replaceField(append([]capability.Field{
+var eventFields = bothTools(replaceField(append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the event resource, the id argument of the get tool"},
 	{Name: "uid", Description: "iCalendar UID, untrusted data"},
 	{Name: "summary", Description: "Title, untrusted data"},
@@ -52,7 +53,18 @@ var eventFields = replaceField(append([]capability.Field{
 	{Name: "count", Description: "Number of reported events"},
 	{Name: "truncated", Description: "True when more events match the range than limit allows"},
 }, dav.EventFieldList()...), capability.Field{Name: "recurrence_id",
-	Description: "Occurrence an override replaces, in the form of start; in an override of the get tool and, with expand, in every occurrence of the list tool"})
+	Description: "Occurrence an override replaces, in the form of start; in an override and, with expand, in every occurrence of the list tool"}))
+
+// bothTools drops the note that only the get tool reports a member, which the shared descriptions carry for
+// providers whose list stays compact.
+func bothTools(fields []capability.Field) []capability.Field {
+	for i := range fields {
+		for _, note := range []string{"; only the get tool reports it", "; only the get tool reports them"} {
+			fields[i].Description = strings.ReplaceAll(fields[i].Description, note, "")
+		}
+	}
+	return fields
+}
 
 // replaceField swaps the field of the same name.
 func replaceField(fields []capability.Field, field capability.Field) []capability.Field {
@@ -68,7 +80,7 @@ var eventsList = capability.Descriptor{
 	ID: Provider + ".events.list", Version: 1, Title: "List Infomaniak calendar events",
 	Description: "List the events of one allow-listed calendar that overlap a time range, ordered by start; " +
 		"a repeating event is reported once with its recurrence rule unless expand lists its occurrences; " +
-		"optional structured filters narrow the answer; the result is limited and compact",
+		"optional structured filters narrow the answer; the result is limited and reports the same members as the get tool",
 	Tags: []string{"infomaniak", "dav", "calendar", "event", "list"}, Risk: eventRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarArgSchema + `,` + rangeArgSchemas + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.EventFilterSchema() + `},` +
@@ -286,7 +298,7 @@ func (c *Client) listEvents(ctx context.Context, calendar, body string, filter d
 			continue
 		}
 		seen[id] = true
-		event, err := dav.ParseEvent(resources[i].Text[dav.KeyCalendar], false)
+		event, err := dav.ParseEvent(resources[i].Text[dav.KeyCalendar], true)
 		if err != nil {
 			continue
 		}
