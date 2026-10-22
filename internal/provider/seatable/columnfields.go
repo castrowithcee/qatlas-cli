@@ -220,13 +220,41 @@ func (c *Client) columnData(document metadataJSON, current tableJSON, column col
 	if len(data) == 0 {
 		return nil, true
 	}
+	return encodeTree(data)
+}
+
+// encodeTree renders a decoded value with control characters cleaned from every string and key.
+func encodeTree(tree any) (json.RawMessage, bool) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
-	if encoder.Encode(cleanTree(data)) != nil {
+	if encoder.Encode(cleanTree(tree)) != nil {
 		return nil, false
 	}
 	return json.RawMessage(bytes.TrimSpace(buffer.Bytes())), true
+}
+
+// boundedContainer returns a free JSON object or list within the bounds, cleaned of control characters. The
+// second result is false when the member must be left out and named; a nil result means nothing is left to
+// report.
+func boundedContainer(raw json.RawMessage) (json.RawMessage, bool) {
+	tree, ok := decodeBounded(raw)
+	if !ok {
+		return nil, false
+	}
+	switch typed := tree.(type) {
+	case map[string]any:
+		if len(typed) == 0 {
+			return nil, true
+		}
+	case []any:
+		if len(typed) == 0 {
+			return nil, true
+		}
+	default:
+		return nil, false
+	}
+	return encodeTree(tree)
 }
 
 // joinedTableReadable reports whether the data of a column may name the table it joins. Only link and
