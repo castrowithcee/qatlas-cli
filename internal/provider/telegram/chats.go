@@ -50,7 +50,7 @@ func booleanProperties(names []string) string {
 
 var memberSchema = `{"type":"object","properties":{` +
 	`"user":` + userSchema + `,"status":{"type":"string"},` +
-	`"custom_title":{"type":"string"},"until_date":{"type":"integer"},"is_anonymous":{"type":"boolean"},` +
+	`"custom_title":{"type":"string"},"tag":{"type":"string"},"until_date":{"type":"integer"},"is_anonymous":{"type":"boolean"},` +
 	`"is_member":{"type":"boolean"}` + booleanProperties(memberRights) + `},` +
 	`"required":["user","status"],"additionalProperties":false}`
 
@@ -61,6 +61,7 @@ var memberFields = []capability.Field{
 	{Name: "user", Description: "Member identity as " + userFieldsText},
 	{Name: "status", Description: "creator, administrator, member, restricted, left, or kicked"},
 	{Name: "custom_title", Description: "Custom administrator title"},
+	{Name: "tag", Description: "Tag of a regular or restricted member"},
 	{Name: "until_date", Description: "Unix time until which a restriction or ban lasts; absent when unlimited"},
 	{Name: "is_anonymous", Description: "True when the member hides their presence"},
 	{Name: "is_member", Description: "True when a restricted user is currently a member"},
@@ -71,7 +72,7 @@ var chatsGet = capability.Descriptor{
 	ID:          Provider + ".chats.get",
 	Version:     1,
 	Title:       "Get Telegram chat information",
-	Description: "Read the master data of a bound chat; the invite link and all other fields are never shown",
+	Description: "Read the master data of a bound chat (Bot API ChatFullInfo); the invite link and the content of the pinned message are never shown",
 	Tags:        []string{"telegram", "chats", "read"},
 	Risk:        readRisk(dataSensitivity),
 	Provider:    Provider,
@@ -80,10 +81,10 @@ var chatsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},` +
 		`"title":{"type":"string"},"username":{"type":"string"},"is_forum":{"type":"boolean"},` +
 		`"description":{"type":"string"},"permissions":` + permissionsSchema + `,"slow_mode_delay":{"type":"integer"},` +
-		`"pinned_message_id":{"type":"integer"},"linked_chat_id":{"type":"integer"}},` +
+		`"pinned_message_id":{"type":"integer"},"linked_chat_id":{"type":"integer"}` + chatInfoSchema + `},` +
 		`"required":["id","type"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{chatArgument},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "Telegram chat identifier"},
 		{Name: "type", Description: "private, group, supergroup, or channel"},
 		{Name: "title", Description: "Chat title"},
@@ -94,7 +95,7 @@ var chatsGet = capability.Descriptor{
 		{Name: "slow_mode_delay", Description: "Seconds between messages of one member"},
 		{Name: "pinned_message_id", Description: "Identifier of the pinned message; its content is never shown"},
 		{Name: "linked_chat_id", Description: "Identifier of the linked chat; it never becomes a target"},
-	},
+	}, chatInfoFields...),
 	Examples: []capability.Example{{Description: "Read the chat of the connection", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -102,15 +103,17 @@ var chatsAdministrators = capability.Descriptor{
 	ID:          Provider + ".chats.administrators",
 	Version:     1,
 	Title:       "List Telegram chat administrators",
-	Description: "Read the non-bot administrators and the creator of a bound chat with their rights",
+	Description: "Read the administrators and the creator of a bound chat with their rights; other bots only with return_bots",
 	Tags:        []string{"telegram", "chats", "read"},
 	Risk:        readRisk(memberDataSensitivity),
 	Provider:    Provider,
 	Group:       groupChats,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
+		`"return_bots":{"type":"boolean"}},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"administrators":{"type":"array","items":` +
 		memberSchema + `},"truncated":{"type":"boolean"}},"required":["administrators"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{chatArgument},
+	Arguments: []capability.Argument{chatArgument,
+		{Name: "return_bots", Description: "Pass true to also list the other bots that administer the chat; without it Telegram omits them"}},
 	Fields: append([]capability.Field{
 		{Name: "administrators", Description: "At most 200 administrators"},
 		{Name: "truncated", Description: "True when Telegram returned more administrators than are shown"},
@@ -185,6 +188,8 @@ type chatOut struct {
 	SlowModeDelay   int64           `json:"slow_mode_delay,omitempty"`
 	PinnedMessageID int64           `json:"pinned_message_id,omitempty"`
 	LinkedChatID    int64           `json:"linked_chat_id,omitempty"`
+
+	chatInfoOut
 }
 
 // memberOut is the fixed member allow-list; Telegram fields outside it are dropped by decoding into this struct.
@@ -192,6 +197,7 @@ type memberOut struct {
 	User        memberUserOut `json:"user"`
 	Status      string        `json:"status"`
 	CustomTitle string        `json:"custom_title,omitempty"`
+	Tag         string        `json:"tag,omitempty"`
 	UntilDate   int64         `json:"until_date,omitempty"`
 	IsAnonymous *bool         `json:"is_anonymous,omitempty"`
 	IsMember    *bool         `json:"is_member,omitempty"`
@@ -234,6 +240,7 @@ func (m *memberOut) capped() {
 	m.User = cleanUser(m.User)
 	m.Status = capText(m.Status, maxNameRunes)
 	m.CustomTitle = capText(m.CustomTitle, maxNameRunes)
+	m.Tag = cleanText(m.Tag, maxNameRunes)
 }
 
 type administratorsOut struct {
@@ -260,15 +267,18 @@ func invokeChatsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 
 func invokeChatsAdministrators(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	chat, err := chatOnlyArguments(raw, "list administrators")
+	var arguments struct {
+		Chat       string `json:"chat"`
+		ReturnBots *bool  `json:"return_bots"`
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError("list administrators", "the validated arguments could not be read")
+	}
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, chat)
-	if err != nil {
-		return nil, err
-	}
-	return client.GetChatAdministrators(ctx)
+	return client.GetChatAdministrators(ctx, arguments.ReturnBots)
 }
 
 func invokeChatsMemberCount(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -342,6 +352,8 @@ func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	out.Title = capText(out.Title, maxNameRunes)
 	out.Username = capText(out.Username, maxNameRunes)
 	out.Description = capText(out.Description, maxMessageLength)
+	// The references are bound to the chat that was asked, like those of the messages of that chat.
+	out.chatInfoOut = cleanChatInfo(out.chatInfoOut, c.fileRefs(c.target))
 	return out, nil
 }
 
@@ -355,13 +367,17 @@ func (c *Client) getChatRaw(ctx context.Context, op string) (json.RawMessage, er
 }
 
 // GetChatAdministrators reads getChatAdministrators of the selected chat.
-func (c *Client) GetChatAdministrators(ctx context.Context) (administratorsOut, error) {
+// returnBots is sent only when given; Telegram then also lists the other bots among the administrators.
+func (c *Client) GetChatAdministrators(ctx context.Context, returnBots *bool) (administratorsOut, error) {
 	const op = "list administrators"
 	if c.target == "" {
 		return administratorsOut{}, providerError(op, "no chat was selected")
 	}
 	raw, err := c.call(ctx, spec{op: op, method: "getChatAdministrators", limit: administratorsBytes, readOnly: true},
-		chatBody{ChatID: c.target})
+		struct {
+			ChatID     string `json:"chat_id"`
+			ReturnBots *bool  `json:"return_bots,omitempty"`
+		}{c.target, returnBots})
 	if err != nil {
 		return administratorsOut{}, err
 	}

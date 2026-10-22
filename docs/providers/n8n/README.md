@@ -150,7 +150,7 @@ response either, only a referenced credential's `id` and `name` per node, which 
 workflow in the n8n editor already sees, and what this provider passes on unmodified. Webhook paths and
 credentials in node parameters are withheld, see [workflows.md](workflows.md#withheld-node-parameters).
 `staticData` and `pinData`, which can hold accumulated runtime state or pinned example payloads with real
-data, are deliberately not read in this milestone.
+data, are not read.
 
 ## Errors
 
