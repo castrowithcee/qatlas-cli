@@ -1,6 +1,7 @@
 package bookstack
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/url"
@@ -39,13 +40,13 @@ var (
 			"aggregate over the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},"name_contains":{"type":"string","minLength":1,"maxLength":255}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},"name_contains":{"type":"string","minLength":1,"maxLength":255},` + tagNameListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(tagNamesOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of tag names to return; 0 returns all"},
 			{Name: "offset", Description: "Number of tag names to skip"},
 			{Name: "name_contains", Description: "Only names containing this text, case-insensitive; at most 255 characters"},
-		},
+		}, tagNameListSchema.arguments()...),
 		Fields: append([]capability.Field{
 			{Name: "name", Description: "Tag name, untrusted data"},
 			{Name: "values", Description: "Number of distinct values"},
@@ -59,14 +60,14 @@ var (
 			"the whole instance, so a connection with targets cannot use this tool",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"value_contains":{"type":"string","minLength":1,"maxLength":255},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"required":["name"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"value_contains":{"type":"string","minLength":1,"maxLength":255},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + tagValueListSchema.properties() + `},"required":["name"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(tagValuesOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "name", Description: "Exact tag name", Required: true},
 			{Name: "value_contains", Description: "Only values containing this text, case-insensitive; at most 255 characters"},
 			{Name: "limit", Description: "Maximum number of values to return; 0 returns all"},
 			{Name: "offset", Description: "Number of values to skip"},
-		},
+		}, tagValueListSchema.arguments()...),
 		Fields: append([]capability.Field{
 			{Name: "name", Description: "Tag name, untrusted data"},
 			{Name: "value", Description: "Tag value, untrusted data"},
@@ -114,8 +115,13 @@ func invokeTagsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 		Limit        int    `json:"limit"`
 		Offset       int    `json:"offset"`
 		NameContains string `json:"name_contains"`
+		Sort         string `json:"sort"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(tagNameListSchema, in.Sort, nil)
+	if err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, tagsInstanceWide); err != nil {
@@ -128,7 +134,7 @@ func invokeTagsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return client.ListTagNames(ctx, in.Limit, in.Offset, in.NameContains)
+	return client.ListTagNames(ctx, in.Limit, in.Offset, in.NameContains, query.sort)
 }
 
 func invokeTagsValues(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -138,8 +144,13 @@ func invokeTagsValues(ctx context.Context, resolved *config.Resolved, secrets *s
 		ValueContains string `json:"value_contains"`
 		Limit         int    `json:"limit"`
 		Offset        int    `json:"offset"`
+		Sort          string `json:"sort"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(tagValueListSchema, in.Sort, nil)
+	if err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, tagsInstanceWide); err != nil {
@@ -155,7 +166,7 @@ func invokeTagsValues(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	return client.ListTagValues(ctx, in.Name, in.ValueContains, in.Limit, in.Offset)
+	return client.ListTagValues(ctx, in.Name, in.ValueContains, in.Limit, in.Offset, query.sort)
 }
 
 func invokeSystemGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -171,12 +182,12 @@ func invokeSystemGet(ctx context.Context, resolved *config.Resolved, secrets *se
 }
 
 // ListTagNames returns the tag names with their counts.
-func (c *Client) ListTagNames(ctx context.Context, limit, offset int, nameContains string) (output.Collection, error) {
+func (c *Client) ListTagNames(ctx context.Context, limit, offset int, nameContains, sort string) (output.Collection, error) {
 	query := url.Values{}
 	if nameContains != "" {
 		query.Set("filter[name:like]", likeContains(nameContains))
 	}
-	rows, err := c.scanTags(ctx, "list tags", "/api/tags", "+name", query, limit, offset, argNames(tagsList),
+	rows, err := c.scanTags(ctx, "list tags", "/api/tags", cmp.Or(sort, "+name"), query, limit, offset, argNames(tagsList),
 		func(t tagCountsJSON) (string, bool) { return t.Name, containsFold(t.Name, nameContains) },
 		func(t tagCountsJSON) output.Row {
 			return output.Row{"name": clip(t.Name, maxResultString), "values": t.Values, "usages": t.Usages,
@@ -189,12 +200,12 @@ func (c *Client) ListTagNames(ctx context.Context, limit, offset int, nameContai
 }
 
 // ListTagValues returns the values of one tag name with their counts.
-func (c *Client) ListTagValues(ctx context.Context, name, valueContains string, limit, offset int) (output.Collection, error) {
+func (c *Client) ListTagValues(ctx context.Context, name, valueContains string, limit, offset int, sort string) (output.Collection, error) {
 	query := url.Values{"name": {name}}
 	if valueContains != "" {
 		query.Set("filter[value:like]", likeContains(valueContains))
 	}
-	rows, err := c.scanTags(ctx, "list tag values", "/api/tags/values-for-name", "+value", query, limit, offset, argNames(tagsValues),
+	rows, err := c.scanTags(ctx, "list tag values", "/api/tags/values-for-name", cmp.Or(sort, "+value"), query, limit, offset, argNames(tagsValues),
 		func(t tagCountsJSON) (string, bool) {
 			return t.Name + "\x00" + t.Value, t.Name == name && containsFold(t.Value, valueContains)
 		},
