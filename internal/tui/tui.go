@@ -137,6 +137,8 @@ const (
 	screenTransfer
 	// screenCommand is the command line over the screen it was opened from; see commandline.go.
 	screenCommand
+	// screenSelftest shows a selftest from its start to its result; see selftest.go.
+	screenSelftest
 )
 
 type fieldKind int
@@ -422,6 +424,10 @@ type Model struct {
 	template *templateChoice
 	// cmdline is the command line of screenCommand while it is open.
 	cmdline *commandLine
+	// selftest is how selftests run; st is the one on screen, selftestID numbers the runs. See selftest.go.
+	selftest   SelfTest
+	st         *selftestState
+	selftestID int
 	// findings is the list of screenFindings while it is open.
 	findings *findingsState
 	// rename is the prompt or dry run of screenRename while it is open.
@@ -771,6 +777,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case updateDoneMsg:
 		return m, m.updateDone(msg)
+	case selftestMsg:
+		return m, m.handleSelftest(msg)
 	case restartFailedMsg:
 		m.restartFailed(msg)
 		return m, nil
@@ -871,6 +879,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateFindings(msg)
 		case screenCommand:
 			cmd = m.updateCommandLine(msg)
+		case screenSelftest:
+			cmd = m.updateSelftest(msg)
 		case screenTransfer:
 			cmd = m.updateTransfer(msg)
 		}
@@ -1233,6 +1243,8 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenCommand:
 		m.closeCommandLine()
 		return nil
+	case screenSelftest:
+		return m.updateSelftest(tea.KeyMsg{Type: tea.KeyEsc})
 	case screenUpdate:
 		m.screen = m.updateFrom
 		return nil
@@ -1332,6 +1344,12 @@ func (m *Model) askLeave(quit bool) {
 func (m *Model) interrupt() tea.Cmd {
 	if m.screen == screenLeave {
 		m.leaveQuit = true
+		return nil
+	}
+	if m.st != nil && !m.st.done {
+		// The scratch directory is removed only when selftest.Run has returned; quit then.
+		m.endSelftest()
+		m.st.quitWhenDone = true
 		return nil
 	}
 	if m.export != nil && m.export.writing {
@@ -3509,6 +3527,8 @@ func (m *Model) editorView() string {
 		return m.helpView()
 	case screenCommand:
 		return m.commandLineView()
+	case screenSelftest:
+		return m.selftestView()
 	case screenUpdate:
 		return m.updateView() + m.notes()
 	case screenRestart:
@@ -4257,6 +4277,8 @@ func (m *Model) frame(workspace string) string {
 		title = "Help"
 	case m.screen == screenCommand:
 		title = "Commands"
+	case m.screen == screenSelftest:
+		title = "Selftest"
 	case m.screen == screenUpdate || m.screen == screenRestart:
 		title = "Update"
 	case m.wizard != nil:
@@ -5165,9 +5187,9 @@ func keyHintGroup(group string) string {
 
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
 // not look for a newer release. The restart may be nil, in which case an installed release waits for a
-// restart by hand.
+// restart by hand. The selftest says how the selftest commands run.
 func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets,
-	redactor *redact.Redactor, updater Updater, restart *Restart, in, out *os.File) error {
+	redactor *redact.Redactor, updater Updater, restart *Restart, selftest SelfTest, in, out *os.File) error {
 	// Read before anything else, so that no child of the editor inherits the handoff.
 	predecessor := takeHandoff()
 	model, err := New(svc, store, tester, secrets, redactor)
@@ -5176,6 +5198,7 @@ func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	}
 	model.updater = updater
 	model.restart = restart
+	model.selftest = selftest
 	if predecessor != nil {
 		model.adopt(predecessor)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/tui"
 )
@@ -321,7 +322,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor).
 				WithTargetSource(targetSource(opts, reg))
 			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), secrets, opts.Redactor,
-				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
+				tuiUpdater(opts, buildVersion), tuiRestart(), tuiSelfTest(buildVersion), os.Stdin, os.Stdout))
 		},
 	}
 }
@@ -398,6 +399,17 @@ func targetSecrets(opts *Options, secrets *secret.Resolver) (*secret.Resolver, e
 		return secrets, nil
 	}
 	return opts.resolver()
+}
+
+// tuiSelfTest tells the editor how its selftest commands run: with this program as the writer process, the
+// way 'qatlas selftest' starts it. A program that cannot name itself offers no selftest.
+func tuiSelfTest(buildVersion string) tui.SelfTest {
+	exe, err := os.Executable()
+	if err != nil {
+		return tui.SelfTest{}
+	}
+	return tui.SelfTest{Version: buildVersion,
+		Worker: selftest.WorkerCommand{Program: exe, Args: []string{"selftest", "worker"}}}
 }
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
