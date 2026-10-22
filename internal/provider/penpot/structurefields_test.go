@@ -2,6 +2,7 @@ package penpot
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
@@ -53,10 +54,56 @@ func fullLibrariesBody() string {
 		`"deleted-at":null,"revn":9,"vern":1,"version":67,"synced-at":"2026-09-03T08:00:00Z","is-shared":true,"is-indirect":true}]`
 }
 
+// fullThreadsBody answers get-comment-threads as Penpot 2.18.0 does: every column of the thread plus the joined
+// author, file, team, project, content, and the counters.
+func fullThreadsBody() string {
+	return `[{"id":"` + threadA + `","file-id":"` + fileA1 + `","owner-id":"` + ownerA + `","page-id":"` + pageID + `",` +
+		`"frame-id":"` + frameA + `","position":{"x":1.5,"y":2},"is-resolved":true,"seqn":3,` +
+		`"participants":["` + ownerA + `","` + profileP + `"],"mentions":["` + profileQ + `"],` +
+		`"created-at":"2026-09-03T08:00:00Z","modified-at":"2026-09-04T08:00:00Z","page-name":"Seite 1",` +
+		`"content":"Erster Text","count-comments":2,"count-unread-comments":0,"file-name":"Start\u0007seite",` +
+		`"team-id":"` + teamA + `","project-id":"` + projectA1 + `","owner-fullname":"Ada\u0007 Lovelace",` +
+		`"owner-email":"` + personal + `","owner-photo-id":"` + avatarID + `"}]`
+}
+
+// fullCommentsBody answers get-comments as Penpot 2.18.0 does: every column of the comment plus the file and
+// the author.
+func fullCommentsBody() string {
+	return `[{"id":"` + commentA + `","thread-id":"` + threadA + `","owner-id":"` + ownerA + `",` +
+		`"created-at":"2026-09-03T08:00:00Z","modified-at":"2026-09-04T08:00:00Z","content":"Erster Text",` +
+		`"mentions":["` + profileP + `","` + profileQ + `"],"file-id":"` + fileA1 + `","owner-fullname":"Ada Lovelace",` +
+		`"owner-email":"` + personal + `","owner-photo-id":"` + avatarID + `"}]`
+}
+
+// fullMembersBody answers get-team-members as Penpot 2.18.0 does: every column of the membership row plus the
+// joined profile (name and fullname both carry the full name). The team and profile identifiers of the row are
+// sent, too, and must not be repeated in the output.
+func fullMembersBody() string {
+	return `[{"team-id":"` + teamA + `","profile-id":"` + ownerA + `","id":"` + ownerA + `","email":"` + personal + `",` +
+		`"name":"Ada\u0007 Lovelace","fullname":"Ada\u0007 Lovelace","photo-id":"` + avatarID + `","is-active":true,` +
+		`"is-owner":false,"is-admin":true,"can-edit":false,` +
+		`"created-at":"2026-01-02T03:04:05.123Z","modified-at":"2026-02-03T04:05:06.789Z"}]`
+}
+
+// fullWebhooksBody answers get-webhooks as Penpot 2.18.0 does: id, uri, mtype, is_active, error_code,
+// error_count, and profile_id.
+func fullWebhooksBody() string {
+	return `[{"id":"` + hookA + `","uri":"` + hookURL + `","mtype":"application/json","is-active":false,` +
+		`"error-code":"ssl-validation-error","error-count":2,"profile-id":"` + ownerA + `"}]`
+}
+
 func structureHandler(c call) (*http.Response, error) {
 	switch c.command() {
+	case cmdThreads:
+		return jsonResponse(200, fullThreadsBody()), nil
+	case cmdComments:
+		return jsonResponse(200, fullCommentsBody()), nil
 	case cmdTeams:
 		return jsonResponse(200, fullTeamsBody()), nil
+	case cmdTeamMembers:
+		return jsonResponse(200, fullMembersBody()), nil
+	case cmdWebhooks:
+		return jsonResponse(200, fullWebhooksBody()), nil
 	case cmdProjects:
 		if c.body["team-id"] == teamA {
 			return jsonResponse(200, fullProjectsBody()), nil
@@ -67,6 +114,10 @@ func structureHandler(c call) (*http.Response, error) {
 		}
 	case cmdFileLibraries:
 		return jsonResponse(200, fullLibrariesBody()), nil
+	case cmdSummary:
+		return jsonResponse(200, summaryBody), nil
+	case cmdPage:
+		return jsonResponse(200, fullPageBody()), nil
 	}
 	return libraryHandler(200, fullLibrariesBody())(c)
 }
@@ -85,6 +136,11 @@ func structureFieldCases() []fieldCase {
 		{projectsList, "one", `{"team_id":"` + teamA + `"}`},
 		{filesList, "one", `{"project_id":"` + projectA1 + `"}`},
 		{librariesList, "one", `{` + fileArgs + `}`},
+		{commentsThreads, "one", `{` + fileArgs + `}`},
+		{commentsList, "one", `{` + fileArgs + `,"thread_id":"` + threadA + `"}`},
+		{membersList, "one", `{"team_id":"` + teamA + `"}`},
+		{webhooksList, "one", `{"team_id":"` + teamA + `"}`},
+		{filesGet, "one", `{` + fileArgs + `}`},
 	}
 }
 
@@ -94,7 +150,10 @@ func collectKeys(t *testing.T, tool, path string, value any, schema map[string]a
 	t.Helper()
 	switch v := value.(type) {
 	case map[string]any:
-		properties, _ := schema["properties"].(map[string]any)
+		properties, described := schema["properties"].(map[string]any)
+		if !described {
+			return // an open object: its members are provider data
+		}
 		for key, member := range v {
 			sub, ok := properties[key].(map[string]any)
 			if !ok {
@@ -105,7 +164,10 @@ func collectKeys(t *testing.T, tool, path string, value any, schema map[string]a
 			collectKeys(t, tool, path+"."+key, member, sub, seen)
 		}
 	case []any:
-		items, _ := schema["items"].(map[string]any)
+		items, described := schema["items"].(map[string]any)
+		if !described {
+			return // an open list
+		}
 		for _, item := range v {
 			collectKeys(t, tool, path, item, items, seen)
 		}
@@ -149,7 +211,7 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 			schemaPaths("", schema, &all)
 			sort.Strings(all)
 			for _, path := range all {
-				if !seen[path] {
+				if !seen[path] && !contains(unfilledPaths[tc.descriptor.ID], path) {
 					t.Errorf("%s: schema member %s is not filled by the fake answer", tc.descriptor.ID, path)
 				}
 			}
@@ -164,7 +226,8 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 					continue
 				}
 				names := map[string]bool{}
-				collectNames(member, names)
+				subschema, _ := schema["properties"].(map[string]any)[key].(map[string]any)
+				collectNames(member, subschema, names)
 				for name := range names {
 					if !strings.Contains(description, name) {
 						t.Errorf("%s: field %s does not describe %s", tc.descriptor.ID, key, name)
@@ -184,19 +247,30 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 }
 
 // collectNames gathers the member names of the entries of a container, at every depth.
-func collectNames(value any, out map[string]bool) {
+// It stops at an open object or list, whose members are provider data.
+func collectNames(value any, schema map[string]any, out map[string]bool) {
 	switch v := value.(type) {
 	case map[string]any:
+		properties, described := schema["properties"].(map[string]any)
+		if !described {
+			return
+		}
 		for key, member := range v {
 			out[key] = true
-			collectNames(member, out)
+			sub, _ := properties[key].(map[string]any)
+			collectNames(member, sub, out)
 		}
 	case []any:
+		items, _ := schema["items"].(map[string]any)
 		for _, item := range v {
-			collectNames(item, out)
+			collectNames(item, items, out)
 		}
 	}
 }
+
+// unfilledPaths lists the schema members a tool's fake answer cannot fill together with the others: a page
+// attribute is either returned or left out and named.
+var unfilledPaths = map[string][]string{filesGet.ID: {".page.omitted_fields"}}
 
 func decodeList(t *testing.T, result, container string) []map[string]any {
 	t.Helper()
@@ -368,5 +442,142 @@ func TestFeatureListsAndWholeNumbersAreBounded(t *testing.T) {
 	subscription := team["subscription"].(map[string]any)
 	if _, ok := subscription["seats"]; ok || len(subscription["type"].(string)) > maxStringLength {
 		t.Errorf("subscription = %#v", subscription)
+	}
+}
+
+func decodeOne(t *testing.T, result, container string) map[string]any {
+	t.Helper()
+	items := decodeList(t, result, container)
+	if len(items) != 1 {
+		t.Fatalf("%s: %s", container, result)
+	}
+	return items[0]
+}
+
+func TestCommentsReportParticipantsMentionsAndAuthors(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(commentsThreads.ID, "one", `{`+fileArgs+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"id": threadA, "file_id": fileA1, "page_id": pageID, "page_name": "Seite 1", "frame_id": frameA,
+		"owner_id": ownerA, "x": 1.5, "y": 2.0, "is_resolved": true, "comment_count": 2.0, "seqn": 3.0, "excerpt": "Erster Text",
+		"created_at": "2026-09-03T08:00:00Z", "modified_at": "2026-09-04T08:00:00Z",
+		"participants": []any{ownerA, profileP}, "mentions": []any{profileQ}, "count_unread_comments": 0.0,
+		"file_name": "Start seite", "team_id": teamA, "project_id": projectA1, "owner_fullname": "Ada  Lovelace",
+		"owner_email": personal, "owner_photo_id": avatarID}
+	if got := decodeOne(t, result, "threads"); !reflect.DeepEqual(got, want) {
+		t.Errorf("thread:\n got %v\nwant %v", got, want)
+	}
+	result, err = env.invoke(commentsList.ID, "one", `{`+fileArgs+`,"thread_id":"`+threadA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = map[string]any{"id": commentA, "thread_id": threadA, "owner_id": ownerA, "content": "Erster Text",
+		"created_at": "2026-09-03T08:00:00Z", "modified_at": "2026-09-04T08:00:00Z",
+		"mentions": []any{profileP, profileQ}, "file_id": fileA1, "owner_fullname": "Ada Lovelace",
+		"owner_email": personal, "owner_photo_id": avatarID}
+	if got := decodeOne(t, result, "comments"); !reflect.DeepEqual(got, want) {
+		t.Errorf("comment:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestCommentsWithoutNewMembersKeepTheirFormerOutput(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		switch c.command() {
+		case cmdThreads:
+			return jsonResponse(200, `[{"id":"`+threadA+`","fileId":"`+fileA1+`","ownerId":"`+ownerA+`","isResolved":false,`+
+				`"countComments":2,"content":"Erster Text","participants":[],"mentions":null}]`), nil
+		case cmdComments:
+			return jsonResponse(200, `[{"id":"`+commentA+`","threadId":"`+threadA+`","content":"Text","mentions":[]}]`), nil
+		}
+		return filesHandler(0)(c)
+	})
+	for _, tc := range []struct{ tool, arguments, want string }{
+		{commentsThreads.ID, `{` + fileArgs + `}`, `{"threads":[{"id":"` + threadA + `","file_id":"` + fileA1 + `","owner_id":"` +
+			ownerA + `","is_resolved":false,"comment_count":2,"excerpt":"Erster Text"}],"count":1,"truncated":false}`},
+		{commentsList.ID, `{` + fileArgs + `,"thread_id":"` + threadA + `"}`, `{"comments":[{"id":"` + commentA +
+			`","thread_id":"` + threadA + `","content":"Text"}],"count":1,"truncated":false}`},
+	} {
+		result, err := env.invoke(tc.tool, "one", tc.arguments)
+		var got, want any
+		if err != nil || json.Unmarshal([]byte(result), &got) != nil || json.Unmarshal([]byte(tc.want), &want) != nil ||
+			!reflect.DeepEqual(got, want) {
+			t.Errorf("%s:\n got %s\nwant %s\nerr %v", tc.tool, result, tc.want, err)
+		}
+	}
+}
+
+func TestCommentPeopleListsAreBoundedAndOutsideTargetsKeepIdentifiersOnly(t *testing.T) {
+	var ids []string
+	for i := 0; i < 120; i++ {
+		ids = append(ids, fmt.Sprintf(`"00000000-0000-0000-0001-%012d"`, i), `"not-a-uuid"`)
+	}
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		if c.command() == cmdThreads {
+			return jsonResponse(200, `[{"id":"`+threadA+`","fileId":"`+fileA1+`","teamId":"`+teamB+`","fileName":"Fremd",`+
+				`"ownerId":"`+ownerA+`","ownerFullname":"Ada","ownerEmail":"`+personal+`","ownerPhotoId":"`+avatarID+`",`+
+				`"participants":[`+strings.Join(ids, ",")+`],"countUnreadComments":4.5}]`), nil
+		}
+		return filesHandler(0)(c)
+	})
+	result, err := env.invoke(commentsThreads.ID, "one", `{`+fileArgs+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := decodeOne(t, result, "threads")
+	if n := len(got["participants"].([]any)); n != 100 {
+		t.Errorf("participants = %d", n)
+	}
+	for _, key := range []string{"file_name", "owner_fullname", "owner_email", "count_unread_comments"} {
+		if _, ok := got[key]; ok {
+			t.Errorf("%s given out: %s", key, result)
+		}
+	}
+	if got["team_id"] != teamB || got["owner_photo_id"] != avatarID || got["owner_id"] != ownerA {
+		t.Errorf("identifiers missing: %s", result)
+	}
+}
+
+func TestMembersListReportsNamesPhotoAndMembershipWithoutRepeatedIDs(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(membersList.ID, "one", `{"team_id":"`+teamA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := decodeList(t, result, "members")
+	want := map[string]any{"id": ownerA, "email": personal, "role": "admin", "is_active": true,
+		"name": "Ada  Lovelace", "fullname": "Ada  Lovelace", "photo_id": avatarID,
+		"is_owner": false, "is_admin": true, "can_edit": false,
+		"created_at": "2026-01-02T03:04:05.123Z", "modified_at": "2026-02-03T04:05:06.789Z"}
+	if len(members) != 1 || !reflect.DeepEqual(members[0], want) {
+		t.Fatalf("members = %#v\nwant    = %#v", members, want)
+	}
+	if strings.Contains(result, "profile_id") || strings.Count(result, teamA) != 1 {
+		t.Errorf("result repeats the team or profile identifier: %s", result)
+	}
+}
+
+func TestWebhooksListReportsProfileAndNeverTheURL(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(webhooksList.ID, "one", `{"team_id":"`+teamA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"id": hookA, "host": "hooks.example.com", "mtype": "application/json", "is_active": false,
+		"error_code": "ssl-validation-error", "error_count": 2.0, "profile_id": ownerA}
+	hooks := decodeList(t, result, "webhooks")
+	if len(hooks) != 1 || !reflect.DeepEqual(hooks[0], want) {
+		t.Fatalf("webhooks = %#v\nwant     = %#v", hooks, want)
+	}
+	for _, leak := range []string{"canary", "pw-", "secret-path", "https://"} {
+		if strings.Contains(result, leak) {
+			t.Errorf("result carries %q: %s", leak, result)
+		}
 	}
 }

@@ -29,21 +29,23 @@ var memberIDArgument = capability.Argument{Name: "member_id", Required: true,
 
 var membersList = capability.Descriptor{
 	ID: Provider + ".members.list", Version: 1, Title: "List Penpot team members",
-	Description: "List the members of one bound team with id, email, role, and activity; emails are personal data " +
-		"and untrusted provider data",
+	Description: "List the members of one bound team with id, email, name, photo, role, and activity; emails, names, " +
+		"and photo identifiers are personal data and untrusted provider data",
 	Tags: []string{"penpot", "members", "list", "teams", "design"}, Provider: Provider,
 	Risk: capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 		Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: membersSensitive},
 	InputSchema: schemaOf(`"team_id":`+uuidSchema, `"team_id"`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":{"type":"string"},"members":{"type":"array","items":` +
 		`{"type":"object","properties":{"id":{"type":"string"},"email":{"type":"string"},"role":{"type":"string"},` +
-		`"is_active":{"type":"boolean"}},"required":["id","role"],"additionalProperties":false}},` +
+		`"is_active":{"type":"boolean"},"name":{"type":"string"},"fullname":{"type":"string"},"photo_id":{"type":"string"},` +
+		`"is_owner":{"type":"boolean"},"is_admin":{"type":"boolean"},"can_edit":{"type":"boolean"},` +
+		`"created_at":` + timestampSchema + `,"modified_at":` + timestampSchema + `},"required":["id","role"],"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["team_id","members","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{teamIDArgument},
 	Fields: []capability.Field{
 		{Name: "team_id", Description: "Identifier of the team"},
-		{Name: "members", Description: "Members with id (used as member_id), email, role (owner, admin, editor, or viewer), and is_active"},
+		{Name: "members", Description: "Members with id (used as member_id), email, name, fullname, photo_id, role (owner, admin, editor, or viewer), is_active, the flags is_owner, is_admin, and can_edit, and created_at and modified_at of the membership"},
 		{Name: "count", Description: "Number of members in this answer"},
 		{Name: "truncated", Description: "True when the answer was cut at 200 members"},
 	},
@@ -92,12 +94,21 @@ var membersRemove = capability.Descriptor{
 		Arguments: json.RawMessage(`{"team_id":"00000000-0000-0000-0000-000000000001","member_id":"00000000-0000-0000-0000-000000000002"}`)}},
 }
 
-// Member is one member of a bound team; the name and photo of the profile are not returned.
+// Member is one member of a bound team. The team and profile identifiers of the row are not repeated: they are
+// the team_id of the answer and the id of the member.
 type Member struct {
-	ID       string `json:"id"`
-	Email    string `json:"email,omitempty"`
-	Role     string `json:"role"`
-	IsActive bool   `json:"is_active"`
+	ID         string `json:"id"`
+	Email      string `json:"email,omitempty"`
+	Role       string `json:"role"`
+	IsActive   bool   `json:"is_active"`
+	Name       string `json:"name,omitempty"`
+	Fullname   string `json:"fullname,omitempty"`
+	PhotoID    string `json:"photo_id,omitempty"`
+	IsOwner    *bool  `json:"is_owner,omitempty"`
+	IsAdmin    *bool  `json:"is_admin,omitempty"`
+	CanEdit    *bool  `json:"can_edit,omitempty"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	ModifiedAt string `json:"modified_at,omitempty"`
 }
 
 // MembersResult is the answer of members.list.
@@ -206,7 +217,9 @@ func (c *Client) teamMembers(ctx context.Context, op, teamID string) ([]Member, 
 			break
 		}
 		members = append(members, Member{ID: id, Email: entry.str("email"), Role: memberRole(entry),
-			IsActive: entry.boolean("isactive")})
+			IsActive: entry.boolean("isactive"), Name: entry.label("name"), Fullname: entry.label("fullname"),
+			PhotoID: entry.id("photoid"), IsOwner: entry.optBoolean("isowner"), IsAdmin: entry.optBoolean("isadmin"),
+			CanEdit: entry.optBoolean("canedit"), CreatedAt: entry.str("createdat"), ModifiedAt: entry.str("modifiedat")})
 	}
 	return members, truncated, nil
 }

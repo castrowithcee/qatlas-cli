@@ -1,10 +1,12 @@
 package twentycrm
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -135,8 +137,8 @@ const companyBody = `{
 }`
 
 // schemaBody is the workspace document of a compatible workspace, shortened: company, person, a custom
-// object (rocket), and a system object (workspaceMember). Descriptions carry a canary, because no
-// description may reach any output.
+// object (rocket), and a system object (workspaceMember). Descriptions carry a canary that objects.get
+// reports and that no other tool may show.
 const schemaBody = `{
   "openapi":"3.1.0",
   "paths":{
@@ -171,7 +173,7 @@ const schemaBody = `{
 
 const descriptionCanary = "description-canary-twenty-3c58"
 
-// enumCanary is an enum value of the workspace document, which no output may show.
+// enumCanary is an enum value of the workspace document, which only objects.get reports.
 const enumCanary = "ENUM_CANARY_TWENTY_8E21"
 
 // Register publishes the configuration metadata the TUI needs and exactly two read-only operations.
@@ -534,9 +536,8 @@ func TestListCompaniesUsesDeterministicDefaults(t *testing.T) {
 	}
 }
 
-// The result is the bounded stable projection: identifier, name, and primary domain. A workspace-specific
-// custom field is not adopted, and the record timestamps stay out of the list contract.
-func TestListCompaniesReportsOnlyTheStableProjection(t *testing.T) {
+// The result carries every field of the record; a workspace-specific field sits in custom_fields.
+func TestListCompaniesReportsEveryField(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
 		return jsonResponse(http.StatusOK, listBody), nil
 	})
@@ -546,25 +547,25 @@ func TestListCompaniesReportsOnlyTheStableProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCompanies() = %v", err)
 	}
-
-	total := int64(57)
-	want := &ListResult{
-		Companies: []Company{
-			{ID: companyID, Name: "Bike & Ride GmbH", Domain: "bike-ride.example"},
-			// An empty link label falls back to the link URL rather than reporting no domain.
-			{ID: otherID, Name: "Test GmbH", Domain: "https://test.example"},
-		},
-		NextCursor: "cursor-page-2", HasMore: true, TotalCount: &total,
+	if len(result.Companies) != 2 || result.NextCursor != "cursor-page-2" || !result.HasMore ||
+		result.TotalCount == nil || *result.TotalCount != 57 {
+		t.Fatalf("result = %#v", result)
 	}
-	if !reflect.DeepEqual(result, want) {
-		t.Errorf("result = %#v, want %#v", result, want)
+	first, second := result.Companies[0], result.Companies[1]
+	if first.ID != companyID || first.Name != "Bike & Ride GmbH" || first.Domain != "bike-ride.example" ||
+		first.CustomFields["riskScore"] != customCanary || first.AnnualRevenue["currency_code"] == nil ||
+		first.DomainName["primary_link_url"] != "https://bike-ride.example" {
+		t.Errorf("first = %#v", first)
 	}
-
+	// An empty link label falls back to the link URL rather than reporting no domain.
+	if second.ID != otherID || second.Domain != "https://test.example" || second.CustomFields != nil {
+		t.Errorf("second = %#v", second)
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("Marshal() = %v", err)
 	}
-	for _, forbidden := range []string{customCanary, "riskScore", "created_at", "annualRevenue", "secondaryLinks"} {
+	for _, forbidden := range []string{"annualRevenue", "secondaryLinks", "addressOld"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Errorf("the list projection carries %q: %s", forbidden, encoded)
 		}
@@ -668,16 +669,10 @@ func TestGetCompanyReadsExactlyTheRequestedCompany(t *testing.T) {
 		t.Fatalf("requests = %v, want exactly one read of the company", requests)
 	}
 
-	want := &Company{
-		ID: companyID, Name: "Bike & Ride GmbH", Domain: "bike-ride.example",
-		CreatedAt: "2026-05-14T16:52:21.000Z", UpdatedAt: "2026-06-02T08:11:03.000Z",
-	}
-	if !reflect.DeepEqual(company, want) {
-		t.Errorf("company = %#v, want %#v", company, want)
-	}
-	encoded, _ := json.Marshal(company)
-	if strings.Contains(string(encoded), customCanary) {
-		t.Errorf("the company projection carries a custom field: %s", encoded)
+	if company.ID != companyID || company.Name != "Bike & Ride GmbH" || company.Domain != "bike-ride.example" ||
+		company.CreatedAt != "2026-05-14T16:52:21.000Z" || company.UpdatedAt != "2026-06-02T08:11:03.000Z" ||
+		company.CustomFields["riskScore"] != customCanary {
+		t.Errorf("company = %#v", company)
 	}
 }
 
@@ -1058,8 +1053,8 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		!listed.HasMore {
 		t.Errorf("list result = %s", list.Result)
 	}
-	if strings.Contains(string(list.Result), customCanary) {
-		t.Errorf("the core answered with a workspace-specific field: %s", list.Result)
+	if !strings.Contains(string(list.Result), `"custom_fields":{"riskScore":"`+customCanary+`"}`) {
+		t.Errorf("the core left out the workspace-specific field: %s", list.Result)
 	}
 
 	got, err := core.Invoke(context.Background(), application.InvokeRequest{
@@ -1242,4 +1237,121 @@ func wantSensitivity(id string) string {
 		return metadataSensitivity
 	}
 	return dataSensitivity
+}
+
+func companyOutput(t *testing.T, handler capability.Handler, args, body string) map[string]any {
+	t.Helper()
+	var requests []string
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.URL.Path)
+		return jsonResponse(http.StatusOK, body), nil
+	})
+	stubLimiter(t, cloudKey)
+	raw, err := runTool(t, handler, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 1 || !strings.HasPrefix(requests[0], companiesPath) {
+		t.Fatalf("requests = %v, want exactly one company request", requests)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var out map[string]any
+	if err := decoder.Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestCompanyReadsEveryFieldWithOneRequest(t *testing.T) {
+	signedFile := signedAddress
+	body := strings.Replace(richCompany, `"employees":12`, `"employees":12,"cv":[{"fileId":"`+otherID+`","label":"cv.pdf","url":"`+signedFile+`"}],`+
+		`"avatar":"`+signedFile+`","notes":{"blocknote":"[]","markdown":"hello"},"homepage":"`+plainAddr+`"`, 1)
+	for name, test := range map[string]struct {
+		handler capability.Handler
+		args    string
+		body    string
+		pick    func(map[string]any) map[string]any
+	}{
+		"list": {invokeCompaniesList, `{}`, `{"data":{"companies":[` + body + `]},"pageInfo":{"hasNextPage":false}}`,
+			func(out map[string]any) map[string]any { return out["companies"].([]any)[0].(map[string]any) }},
+		"get": {invokeCompaniesGet, `{"id":"` + companyID + `"}`, `{"data":{"company":` + body + `}}`,
+			func(out map[string]any) map[string]any { return out }},
+	} {
+		t.Run(name, func(t *testing.T) {
+			company := test.pick(companyOutput(t, test.handler, test.args, test.body))
+			if got := company["annual_revenue"].(map[string]any)["amount_micros"]; got != json.Number("9007199254740993") {
+				t.Errorf("amount_micros = %v", got)
+			}
+			domain := company["domain_name"].(map[string]any)
+			if domain["primary_link_url"] != "https://bike.example" || domain["primary_link_label"] != "bike.example" ||
+				len(domain["secondary_links"].([]any)) != 1 || company["domain"] != "bike.example" {
+				t.Errorf("domain = %v / %v", domain, company["domain"])
+			}
+			if _, ok := company["linkedin_link"].(map[string]any)["primary_link_label"]; ok {
+				t.Error("an empty subfield was reported")
+			}
+			address := company["address"].(map[string]any)
+			if address["address_city"] != "Zuerich" || address["address_lat"] != json.Number("47.37") {
+				t.Errorf("address = %v", address)
+			}
+			if _, ok := address["address_street2"]; ok {
+				t.Error("an empty address part was reported")
+			}
+			createdBy := company["created_by"].(map[string]any)
+			if createdBy["workspace_member_id"] != memberID || createdBy["source"] != "API" {
+				t.Errorf("created_by = %v", createdBy)
+			}
+			if _, ok := company["updated_by"].(map[string]any)["workspace_member_id"]; ok {
+				t.Error("a null member was reported")
+			}
+			if company["position"] != json.Number("2") || company["account_owner_id"] != memberID {
+				t.Errorf("position/owner = %v / %v", company["position"], company["account_owner_id"])
+			}
+			custom := company["custom_fields"].(map[string]any)
+			if custom["employees"] != json.Number("12") || custom["idealCustomerProfile"] != true {
+				t.Errorf("custom_fields = %v", custom)
+			}
+			if !reflect.DeepEqual(custom["notes"], map[string]any{"markdown": "hello"}) {
+				t.Errorf("rich text = %v", custom["notes"])
+			}
+			if custom["homepage"] != plainAddr {
+				t.Errorf("homepage = %v", custom["homepage"])
+			}
+			if _, ok := custom["avatar"]; ok {
+				t.Error("a signed address was reported")
+			}
+			if file := custom["cv"].([]any)[0].(map[string]any); file["url"] != nil || file["fileId"] != otherID {
+				t.Errorf("file = %v", file)
+			}
+			for _, banned := range []string{"addressOld", "searchVector", "address_old", "deleted_at"} {
+				if _, ok := company[banned]; ok {
+					t.Errorf("%s was reported", banned)
+				}
+				if _, ok := custom[banned]; ok {
+					t.Errorf("%s was reported in custom_fields", banned)
+				}
+			}
+			if strings.Contains(fmt.Sprint(company), signedToken) {
+				t.Error("a file token was reported")
+			}
+		})
+	}
+}
+
+func TestCompanyLeavesOutAnOversizedValueAndNamesIt(t *testing.T) {
+	huge := strings.Repeat("x", maxValueString+1)
+	body := `{"data":{"company":{"id":"` + companyID + `","name":"Bike","note":"` + huge + `","fine":"ok",` +
+		`"address":{"addressCity":"` + huge + `"}}}}`
+	company := companyOutput(t, invokeCompaniesGet, `{"id":"`+companyID+`"}`, body)
+	custom := company["custom_fields"].(map[string]any)
+	if _, ok := custom["note"]; ok || custom["fine"] != "ok" {
+		t.Errorf("custom_fields = %v", custom)
+	}
+	if _, ok := company["address"]; ok {
+		t.Error("an oversized address was reported")
+	}
+	if got := fmt.Sprint(company["omitted_fields"]); got != "[address custom_fields.note]" {
+		t.Errorf("omitted_fields = %s", got)
+	}
 }

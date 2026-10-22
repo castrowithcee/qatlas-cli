@@ -31,18 +31,37 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
 			}
 		}
-		want := []string{p.id + ".accounts.me", p.id + ".issue-deadlines.set", p.id + ".issue-timeline.list",
+		want := []string{p.id + ".accounts.me", p.id + ".assignees.list", p.id + ".comments.create",
+			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".comments.list",
+			p.id + ".comments.list-repository", p.id + ".comments.update", p.id + ".issue-config.get",
+			p.id + ".issue-config.validate", p.id + ".issue-deadlines.set", p.id + ".issue-labels.add",
+			p.id + ".issue-labels.clear", p.id + ".issue-labels.list", p.id + ".issue-labels.remove",
+			p.id + ".issue-labels.replace", p.id + ".issue-templates.list", p.id + ".issue-timeline.list",
 			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
-			p.id + ".markdown.render", p.id + ".markup.render",
-			p.id + ".releases.create", p.id + ".releases.delete", p.id + ".releases.delete-by-tag",
-			p.id + ".releases.get", p.id + ".releases.get-by-tag", p.id + ".releases.get-latest",
-			p.id + ".releases.list", p.id + ".releases.update",
-			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
+			p.id + ".labels.create", p.id + ".labels.delete", p.id + ".labels.get", p.id + ".labels.list",
+			p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render", p.id + ".milestones.create",
+			p.id + ".milestones.delete", p.id + ".milestones.get", p.id + ".milestones.list",
+			p.id + ".milestones.update", p.id + ".org-labels.create", p.id + ".org-labels.delete",
+			p.id + ".org-labels.get", p.id + ".org-labels.list", p.id + ".org-labels.update", p.id + ".releases.create",
+			p.id + ".releases.delete", p.id + ".releases.delete-by-tag", p.id + ".releases.get",
+			p.id + ".releases.get-by-tag", p.id + ".releases.get-latest", p.id + ".releases.list",
+			p.id + ".releases.update", p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
 			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
-			want = slices.Insert(want, 13, p.id+".nodeinfo.get")
+			want = append(want, p.id+".nodeinfo.get")
+			slices.Sort(want)
 		}
+		if p == gitea {
+			want = append(want, p.id+".assignees.check", p.id+".issue-assignees.add", p.id+".issue-assignees.check",
+				p.id+".issue-assignees.remove")
+			slices.Sort(want)
+		}
+		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
+			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
+			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
+			p.id+".pull-requests.list-pinned")
+		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
 		}
@@ -89,14 +108,32 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	if _, _, ok := reg.Lookup("gitea.nodeinfo.get"); ok {
 		t.Error("the Forgejo tool is registered for Gitea")
 	}
-	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
-		markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, releasesList, releasesGet, releasesGetLatest,
+	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet,
+		signingKeysGet, markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate,
+		issuesClose, issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList,
+		issueConfigGet, issueConfigValidate, assigneesList, labelsList, labelsGet, labelsCreate, labelsUpdate,
+		labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete, issueLabelsList,
+		issueLabelsAdd, issueLabelsReplace, issueLabelsRemove, issueLabelsClear, milestonesList, milestonesGet,
+		milestonesCreate, milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet,
+		pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
+		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest,
 		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
 			}
+		}
+	}
+}
+
+func TestAssigneeToolsAreGiteaOnlyExceptTheList(t *testing.T) {
+	reg := registry(t)
+	for _, only := range []*tool{assigneesCheck, issueAssigneesAdd, issueAssigneesRemove, issueAssigneesCheck} {
+		if _, _, ok := reg.Lookup(forgejo.toolID(only)); ok {
+			t.Errorf("%s is registered for Forgejo", forgejo.toolID(only))
+		}
+		if _, _, ok := reg.Lookup(gitea.toolID(only)); !ok {
+			t.Errorf("%s is missing", gitea.toolID(only))
 		}
 	}
 }

@@ -94,7 +94,7 @@ func TestChatsAdministratorsCapsList(t *testing.T) {
 	}
 	body := `{"ok":true,"result":[` + strings.Join(members, ",") + `]}`
 	client, _ := multiClient(t, testToken, chatsFake(&calls, 200, body), "-1001")
-	got, err := client.GetChatAdministrators(context.Background())
+	got, err := client.GetChatAdministrators(context.Background(), nil)
 	if err != nil || len(got.Administrators) != maxAdministrators || !got.Truncated {
 		t.Fatalf("err = %v, count %d, truncated %v", err, len(got.Administrators), got.Truncated)
 	}
@@ -103,7 +103,7 @@ func TestChatsAdministratorsCapsList(t *testing.T) {
 	}
 	calls = nil
 	client, _ = multiClient(t, testToken, chatsFake(&calls, 200, `{"ok":true,"result":[]}`), "-1001")
-	got, _ = client.GetChatAdministrators(context.Background())
+	got, _ = client.GetChatAdministrators(context.Background(), nil)
 	if encoded, _ := json.Marshal(got); string(encoded) != `{"administrators":[]}` {
 		t.Errorf("output = %s", encoded)
 	}
@@ -160,7 +160,7 @@ func TestChatsToolsErrorsCarryNoTelegramText(t *testing.T) {
 		var calls []recorded
 		client, _ := multiClient(t, testToken, chatsFake(&calls, status, body), "-1001")
 		_, e1 := client.GetChat(context.Background())
-		_, e2 := client.GetChatAdministrators(context.Background())
+		_, e2 := client.GetChatAdministrators(context.Background(), nil)
 		_, e3 := client.GetChatMemberCount(context.Background())
 		_, e4 := client.GetChatMember(context.Background(), 5)
 		for _, err := range []error{e1, e2, e3, e4} {

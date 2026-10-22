@@ -16,7 +16,7 @@ const cmdOK = `{"ok":true,"result":true}`
 func TestCommandsAndMenuButtonBodiesAndPaths(t *testing.T) {
 	client, bodies, paths := capture(t, "bot", 200, cmdOK)
 	ctx := context.Background()
-	list := []botCommand{{"help", "Show help"}}
+	list := []botCommand{{Command: "help", Description: "Show help"}}
 	chatScope := commandScope{Type: "chat", ChatID: "-1001"}
 	steps := []struct {
 		run        func() error
@@ -94,12 +94,22 @@ func TestCommandsGetUsesFieldAllowListAndCaps(t *testing.T) {
 
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 
-func TestMenuButtonGetNeverShowsWebAppURL(t *testing.T) {
+func TestMenuButtonGetShowsWebAppURLCapped(t *testing.T) {
 	client, _, _ := capture(t, "bot", 200,
-		`{"ok":true,"result":{"type":"web_app","text":"Open","web_app":{"url":"https://canary.example/SECRETPATH"}}}`)
+		`{"ok":true,"result":{"type":"web_app","text":"Open","web_app":{"url":"https://example.test/app"}}}`)
 	got, err := client.GetMenuButton(context.Background(), 0)
-	if err != nil || string(mustJSON(got)) != `{"type":"web_app","text":"Open"}` {
+	if want := `{"type":"web_app","text":"Open","web_app":{"url":"https://example.test/app"}}`; err != nil || string(mustJSON(got)) != want {
 		t.Errorf("got %s, %v", mustJSON(got), err)
+	}
+	long, _, _ := capture(t, "bot", 200,
+		`{"ok":true,"result":{"type":"web_app","web_app":{"url":"`+strings.Repeat("u", 3000)+`"}}}`)
+	got, _ = long.GetMenuButton(context.Background(), 0)
+	if got.WebApp == nil || len(got.WebApp.URL) != 2048 {
+		t.Errorf("url not capped: %+v", got.WebApp)
+	}
+	plain, _, _ := capture(t, "bot", 200, `{"ok":true,"result":{"type":"commands"}}`)
+	if got, _ := plain.GetMenuButton(context.Background(), 0); string(mustJSON(got)) != `{"type":"commands"}` {
+		t.Errorf("plain = %s", mustJSON(got))
 	}
 	bad, _, _ := capture(t, "bot", 200, `{"ok":true,"result":{"text":"x"}}`)
 	if _, err := bad.GetMenuButton(context.Background(), 0); err == nil {
@@ -200,7 +210,7 @@ func TestCommandsSingleRequestAndUncertaintyAfterFailure(t *testing.T) {
 	ctx := context.Background()
 	ops := map[string]func(*Client) error{
 		"set": func(c *Client) error {
-			_, err := c.SetCommands(ctx, commandScope{Type: "default"}, "", []botCommand{{"a", "b"}})
+			_, err := c.SetCommands(ctx, commandScope{Type: "default"}, "", []botCommand{{Command: "a", Description: "b"}})
 			return err
 		},
 		"delete":  func(c *Client) error { _, err := c.DeleteCommands(ctx, commandScope{Type: "default"}, ""); return err },
@@ -272,5 +282,19 @@ func TestCommandsToolRisksGroupsAndProfiles(t *testing.T) {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}
+	}
+}
+
+func TestCommandsGetPrintsIsEphemeralOnlyWhenSent(t *testing.T) {
+	client, _, _ := capture(t, "bot", 200, `{"ok":true,"result":[{"command":"a","description":"A","is_ephemeral":true},`+
+		`{"command":"b","description":"B","is_ephemeral":false},{"command":"c","description":"C"}]}`)
+	got, err := client.GetCommands(context.Background(), commandScope{Type: "default"}, "")
+	want := `{"commands":[{"command":"a","description":"A","is_ephemeral":true},` +
+		`{"command":"b","description":"B","is_ephemeral":false},{"command":"c","description":"C"}]}`
+	if err != nil || string(mustJSON(got)) != want {
+		t.Errorf("got %s, %v", mustJSON(got), err)
+	}
+	if sent := string(mustJSON([]botCommand{{Command: "a", Description: "A"}})); strings.Contains(sent, "ephemeral") {
+		t.Errorf("set payload = %s", sent)
 	}
 }

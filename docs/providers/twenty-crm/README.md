@@ -61,14 +61,19 @@ no search, so the list is filtered locally. Qatlas resolves no URL to a target.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
 connection does not reach are left out. The catalog comes from the generated API document, which needs no
-settings right, unlike the metadata API (see [Data model](data-model.md)). Only names, types, and flags leave Qatlas.
+settings right, unlike the metadata API (see [Data model](data-model.md)). Enum values and field descriptions
+also leave Qatlas, as untrusted workspace data. Enum values appear only when every value has the form of a Twenty
+selection value (letters, digits, underscore, at most 64 characters) and the field has at most 500 values;
+otherwise `enum` is left out and named in `omitted_fields`.
 
 ## Credential and profiles
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
 connection's local selection can only narrow it, by `effects` or by a `tools` list naming exactly the tools it
-offers. The `companies.*` tools expose core company
-fields only; custom fields are written through `records.create` and `records.update`. Invocation arguments
-never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
+offers. The `companies.*` read tools report the whole company record, own fields under `custom_fields`; they
+read no workspace catalog, so a file list, rich text, or signed file address is recognized by its shape, and a
+value beyond the size limits is left out and named in `omitted_fields`. `addressOld` of a company is marked
+deprecated in Twenty and is left out. Own fields are written through `records.create` and `records.update`.
+Invocation arguments never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
 A profile is a visible starting selection, not a role: only the ticked `tools` are saved,
 and a saved connection never follows a profile.

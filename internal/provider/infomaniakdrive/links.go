@@ -48,11 +48,8 @@ var linkResultSchema = `{"type":"object","properties":{` +
 	`"status":{"type":"string","enum":["done","pending"]},"link":` + linkSchema + `},` +
 	`"required":["drive_id","file_id"],"additionalProperties":false}`
 
-var linkEntrySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string","enum":["file","folder"]},` +
-	`"mime_type":{"type":"string"},"size":{"type":"integer"},"parent_id":{"type":"integer"},` +
-	`"status":{"type":"string"},"created_at":{"type":"string"},"modified_at":{"type":"string"},` +
-	`"link":` + linkSchema + `},"required":["id","name","type","parent_id"],"additionalProperties":false}`
+var linkEntrySchema = `{"type":"object","properties":{` + entryProperties + `,"link":` + linkSchema + `},` +
+	`"required":["id","name","type","parent_id"],"additionalProperties":false}`
 
 var linkFields = []capability.Field{
 	{Name: "file_id", Description: "File or folder the link belongs to"},
@@ -130,7 +127,8 @@ var linksList = capability.Descriptor{
 		`"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + linkEntrySchema + `},` +
-		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
+		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","entries","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		driveIDArgument,
@@ -139,10 +137,10 @@ var linksList = capability.Descriptor{
 	},
 	Fields: append(append([]capability.Field{}, entryFields...),
 		capability.Field{Name: "link", Description: "The share link of the entry; untrusted data, see links.get"},
-		capability.Field{Name: "drive_id", Description: "Drive that was listed"},
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not every link"},
 		capability.Field{Name: "count", Description: "Number of entries on this page"},
+		responseAtField,
 	),
 	Examples: []capability.Example{{Description: "List the files with a share link in one drive",
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
@@ -225,6 +223,8 @@ type LinkPage struct {
 	Cursor  string      `json:"cursor,omitempty"`
 	HasMore bool        `json:"has_more"`
 	Count   int         `json:"count"`
+	// ResponseAt is the time Infomaniak generated the page.
+	ResponseAt string `json:"response_at,omitempty"`
 }
 
 func validRight(right string) bool {
@@ -353,7 +353,7 @@ func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, li
 		entries = append(entries, entry)
 	}
 	return &LinkPage{DriveID: driveID, Entries: entries, Cursor: meta.Cursor, HasMore: meta.HasMore,
-		Count: len(entries)}, nil
+		Count: len(entries), ResponseAt: positiveTime(meta.ResponseAt)}, nil
 }
 
 func invokeLinksDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

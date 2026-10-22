@@ -191,19 +191,3 @@ func atLeast(op string, p *product, current, needed version) error {
 	}
 	return nil
 }
-
-// need is requireVersion for an argument found only once the client is open: the cached version of the
-// instance, or a read of it that reuses the open token.
-func (c *Client) need(ctx context.Context, op string, needed version) error {
-	current, ok := cachedVersionOf(c.product, c.origin)
-	if !ok {
-		var err error
-		current, err = probe(ctx, c.product, c.origin, func() (string, error) {
-			return strings.TrimPrefix(c.auth, "token "), nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return atLeast(op, c.product, current, needed)
-}

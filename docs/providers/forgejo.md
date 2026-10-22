@@ -12,10 +12,10 @@ updated: 2026-10-22
 # Forgejo
 
 This provider reads the account behind an access token, the repositories, and the instance of a self-hosted Forgejo
-instance, and reads and changes its issues. It shares its code and its rules with [Gitea](gitea.md), which describes once what both have: the
-configuration, the targets, the instance-wide tools, the version check and connection test, pagination, errors,
-bounds, the excluded operations, the setup profile, and the note on public instances. This page lists only what
-differs.
+instance, and reads and changes its issues. It shares its code and its rules with [Gitea](gitea/README.md), which
+describes once what both have: the configuration, the targets, the tool groups, the version check and connection
+test, pagination, errors, bounds, the excluded operations, the setup profile, and the note on public instances. This
+page lists only what differs.
 
 ## Configuration
 
@@ -51,3 +51,5 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Issue lists and searches take `sort`, and `issues.search` takes `priority_repo_id`. `issues.update` takes
   `updated_at`, the time read before, to refuse an update after the issue changed; there is no `content_version`,
   `projects`, or `time_estimate`.
+- Pull requests: `pull-requests.list` takes `base` and `head` (from Forgejo 17) and the pull request carries `flow`;
+  Gitea has `base_branch` and `content_version` instead. See [Pull requests](gitea/pull-requests.md).

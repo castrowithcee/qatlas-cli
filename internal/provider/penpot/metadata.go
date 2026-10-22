@@ -14,6 +14,8 @@ const maxFeatures = 100
 const (
 	timestampSchema = `{"type":"string"}`
 	featuresSchema  = `{"type":"array","items":{"type":"string"},"maxItems":100}`
+	// profileIDsSchema describes a list of profile IDs.
+	profileIDsSchema = `{"type":"array","items":{"type":"string"},"maxItems":100}`
 )
 
 // label reads a string value for a field that carries a provider label rather than a name: control characters
@@ -70,6 +72,24 @@ func (o obj) stringList(key string) []string {
 			break
 		}
 		if value := (obj{"v": item}).label("v"); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+// idList reads a list of UUIDs, at most maxFeatures of them; entries that are not UUIDs are skipped.
+func (o obj) idList(key string) []string {
+	var items []json.RawMessage
+	if err := json.Unmarshal(o[key], &items); err != nil {
+		return nil
+	}
+	var out []string
+	for _, item := range items {
+		if len(out) >= maxFeatures {
+			break
+		}
+		if value := (obj{"v": item}).id("v"); value != "" {
 			out = append(out, value)
 		}
 	}

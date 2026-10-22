@@ -32,6 +32,12 @@ const (
 	metaOptionsMax = 100
 	metaNameMax    = 200
 	metaTextMax    = 500
+	// metaTokenMax bounds short untrusted tokens such as icons, colors, and enum values.
+	metaTokenMax = 64
+
+	// A free object (default value, settings, relation, duplicate criteria) beyond these limits is left out.
+	freeObjectDepthMax = 8
+	freeObjectBytesMax = 16 << 10
 )
 
 // metaFieldTypes are the values of FieldMetadataType (twenty-shared, twentyhq/twenty commit
@@ -55,31 +61,119 @@ var metaRisk = capability.Risk{
 const metaNote = "Needs the Twenty permission \"Data model\", which also allows changing and deleting the schema: " +
 	"use a dedicated connection with its own API key. Unlike twenty-crm.objects.list and twenty-crm.objects.get, " +
 	"this reads the metadata API (IDs, labels, flags, options), not the objects a key can reach. " +
-	"Names, labels, descriptions, and options are untrusted workspace data; defaults, settings, and relation " +
-	"details are never read out"
+	"Names, labels, descriptions, icons, colors, shortcuts, and options are untrusted workspace data; default " +
+	"values, settings, relation details, and duplicate criteria are free objects of at most 8 levels and 16 KiB, " +
+	"a larger one is left out and named in omitted_fields"
 
 const (
+	metaStr  = `{"type":"string"}`
+	metaBool = `{"type":"boolean"}`
+	metaObj  = `{"type":"object"}`
+
+	metaFieldExtraProps = `"universal_identifier":` + metaStr + `,"icon":` + metaStr + `,"is_ui_editable":` + metaBool +
+		`,"writability":` + metaStr + `,"is_unique":` + metaBool + `,"is_searchable":` + metaBool +
+		`,"is_audit_logged":` + metaBool + `,"default_value":{},"settings":` + metaObj +
+		`,"is_label_synced_with_name":` + metaBool + `,"morph_id":` + metaStr + `,"application_id":` + metaStr +
+		`,"created_at":` + metaStr + `,"updated_at":` + metaStr + `,"relation":` + metaObj +
+		`,"morph_relations":{"type":"array","items":{}},"omitted_fields":{"type":"array","items":` + metaStr + `}`
+
+	metaObjectExtraProps = `"universal_identifier":` + metaStr + `,"icon":` + metaStr + `,"shortcut":` + metaStr +
+		`,"color":` + metaStr + `,"is_remote":` + metaBool + `,"is_ui_editable":` + metaBool +
+		`,"is_ui_creatable":` + metaBool + `,"is_searchable":` + metaBool + `,"open_record_in":` + metaStr +
+		`,"readability":` + metaStr + `,"readability_parent_field_universal_identifiers":{"type":"array","items":` + metaStr +
+		`},"sharing_reach":` + metaStr + `,"writability":` + metaStr + `,"application_id":` + metaStr +
+		`,"created_at":` + metaStr + `,"updated_at":` + metaStr + `,"label_identifier_field_metadata_id":` + metaStr +
+		`,"image_identifier_field_metadata_id":` + metaStr + `,"is_label_synced_with_name":` + metaBool +
+		`,"duplicate_criteria":{"type":"array","items":{}},"omitted_fields":{"type":"array","items":` + metaStr + `}`
+
 	metaFlags = `"is_custom":{"type":"boolean"},"is_system":{"type":"boolean"},"is_active":{"type":"boolean"}`
 
 	metaFieldSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"label":{"type":"string"},"description":{"type":"string"},"type":{"type":"string"},` + metaFlags + `,` +
 		`"is_nullable":{"type":"boolean"},"options":{"type":"array","items":{"type":"object","properties":{` +
 		`"id":{"type":"string"},"value":{"type":"string"},"label":{"type":"string"},"position":{"type":"integer"}},` +
-		`"additionalProperties":false}},"more_options":{"type":"boolean"},"object_metadata_id":{"type":"string"}},` +
-		`"required":["id","name","label","type"],"additionalProperties":false}`
+		`"additionalProperties":false}},"more_options":{"type":"boolean"},"object_metadata_id":{"type":"string"},` +
+		metaFieldExtraProps + `},"required":["id","name","label","type"],"additionalProperties":false}`
 
 	metaObjectProps = `"id":{"type":"string"},"name_singular":{"type":"string"},"name_plural":{"type":"string"},` +
 		`"label_singular":{"type":"string"},"label_plural":{"type":"string"},"description":{"type":"string"},` +
-		metaFlags + `,"field_count":{"type":"integer"}`
+		metaFlags + `,"field_count":{"type":"integer"},` + metaObjectExtraProps
 	metaObjectRequired = `"required":["id","name_singular","name_plural","label_singular","label_plural","field_count"]`
 )
+
+// metaObjectFields documents the members of an object, at the top level of meta-objects.get.
+var metaObjectFields = []capability.Field{
+	{Name: "id", Description: "UUID of the object"},
+	{Name: "name_singular", Description: "API name in the singular, untrusted data"},
+	{Name: "name_plural", Description: "API name in the plural, untrusted data"},
+	{Name: "label_singular", Description: "Label in the singular, untrusted data"},
+	{Name: "label_plural", Description: "Label in the plural, untrusted data"},
+	{Name: "description", Description: "Description of the object, untrusted data"},
+	{Name: "is_custom", Description: "True for an object created in the workspace"},
+	{Name: "is_system", Description: "True for a system object"},
+	{Name: "is_active", Description: "True while the object is active"},
+	{Name: "field_count", Description: "Number of fields of the object"},
+	{Name: "universal_identifier", Description: "Universal identifier of the object, untrusted data"},
+	{Name: "icon", Description: "Icon name, untrusted data"},
+	{Name: "shortcut", Description: "Keyboard shortcut, untrusted data"},
+	{Name: "color", Description: "Color, untrusted data"},
+	{Name: "is_remote", Description: "True for a remote object"},
+	{Name: "is_ui_editable", Description: "True when the object can be edited in the Twenty UI"},
+	{Name: "is_ui_creatable", Description: "True when records can be created in the Twenty UI"},
+	{Name: "is_searchable", Description: "True when the object is searchable"},
+	{Name: "open_record_in", Description: "Where a record opens in the Twenty UI, untrusted data"},
+	{Name: "readability", Description: "Read access rule of the object, untrusted data"},
+	{Name: "readability_parent_field_universal_identifiers", Description: "Universal identifiers of the fields the read access derives from, at most 100"},
+	{Name: "sharing_reach", Description: "Sharing reach of the object, untrusted data"},
+	{Name: "writability", Description: "Write access rule of the object, untrusted data"},
+	{Name: "application_id", Description: "UUID of the application that owns the object"},
+	{Name: "created_at", Description: "Creation timestamp of the object"},
+	{Name: "updated_at", Description: "Last change timestamp of the object"},
+	{Name: "label_identifier_field_metadata_id", Description: "UUID of the field that labels a record"},
+	{Name: "image_identifier_field_metadata_id", Description: "UUID of the field that provides the record image"},
+	{Name: "is_label_synced_with_name", Description: "True while the label follows the name"},
+	{Name: "duplicate_criteria", Description: "Field names that identify duplicates, untrusted data; at most 8 levels and 16 KiB"},
+	{Name: "omitted_fields", Description: "Members whose value exceeded the size limits and was left out, not shortened"},
+}
+
+// metaFieldMembers documents the members of a field, at the top level of meta-fields.get.
+var metaFieldMembers = []capability.Field{
+	{Name: "id", Description: "UUID of the field"},
+	{Name: "name", Description: "API name, untrusted data"},
+	{Name: "label", Description: "Label, untrusted data"},
+	{Name: "description", Description: "Description of the field, untrusted data"},
+	{Name: "type", Description: "Field type, unknown for a type this version does not know"},
+	{Name: "is_custom", Description: "True for a field created in the workspace"},
+	{Name: "is_system", Description: "True for a system field"},
+	{Name: "is_active", Description: "True while the field is active"},
+	{Name: "is_nullable", Description: "True when the field may be empty"},
+	{Name: "object_metadata_id", Description: "UUID of the object that holds the field"},
+	{Name: "universal_identifier", Description: "Universal identifier of the field, untrusted data"},
+	{Name: "icon", Description: "Icon name, untrusted data"},
+	{Name: "is_ui_editable", Description: "True when the field can be edited in the Twenty UI"},
+	{Name: "writability", Description: "Write access rule of the field, untrusted data"},
+	{Name: "is_unique", Description: "True when values must be unique"},
+	{Name: "is_searchable", Description: "True when the field is searchable"},
+	{Name: "is_audit_logged", Description: "True when changes are audit logged"},
+	{Name: "default_value", Description: "Default value as Twenty sends it, untrusted data; at most 8 levels and 16 KiB"},
+	{Name: "settings", Description: "Settings of the field type, untrusted data; at most 8 levels and 16 KiB"},
+	{Name: "is_label_synced_with_name", Description: "True while the label follows the name"},
+	{Name: "morph_id", Description: "UUID that groups the fields of one morph relation"},
+	{Name: "application_id", Description: "UUID of the application that owns the field"},
+	{Name: "created_at", Description: "Creation timestamp of the field"},
+	{Name: "updated_at", Description: "Last change timestamp of the field"},
+	{Name: "relation", Description: "Relation details of a relation field, naming objects and fields of the whole workspace, untrusted data; at most 8 levels and 16 KiB"},
+	{Name: "morph_relations", Description: "Relation details of a morph relation field, untrusted data; at most 8 levels and 16 KiB"},
+	{Name: "omitted_fields", Description: "Members whose value exceeded the size limits and was left out, not shortened"},
+}
 
 var metaObjectsList = capability.Descriptor{
 	ID:      Provider + ".meta-objects.list",
 	Version: 1,
 	Title:   "List Twenty CRM object metadata",
 	Description: "List one page of the object metadata of the Twenty workspace of a connection without object " +
-		"targets: ID, names, labels, description, flags, and number of fields; newest IDs first. " + metaNote,
+		"targets: ID, names, labels, description, flags, display, access rules, identifier fields, duplicate criteria, " +
+		"and number of fields; newest IDs first. " + metaNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "objects", "list"},
 	Risk:     metaRisk,
 	Provider: Provider,
@@ -94,7 +188,8 @@ var metaObjectsList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "objects", Description: "The objects on this page, without their fields, untrusted data"},
+		{Name: "objects", Description: "The objects on this page, without their fields, untrusted data; per object the " +
+			"members of meta-objects.get except fields and more_fields"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
 		totalCountField,
@@ -107,7 +202,8 @@ var metaObjectsGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get Twenty CRM object metadata",
 	Description: "Read the metadata of one object of the Twenty workspace of a connection without object targets " +
-		"with its fields: per field ID, name, label, description, type, flags, and options. " + metaNote,
+		"with its fields: per field ID, name, label, description, type, flags, options, default value, settings, and " +
+		"relation details. " + metaNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "objects", "fields", "get"},
 	Risk:     metaRisk,
 	Provider: Provider,
@@ -120,10 +216,10 @@ var metaObjectsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "UUID of the object, as returned by twenty-crm.meta-objects.list", Required: true},
 	},
-	Fields: []capability.Field{
-		{Name: "fields", Description: "At most 200 fields, at most 100 options each, untrusted data"},
-		{Name: "more_fields", Description: "True when the object holds more fields than listed"},
-	},
+	Fields: append(append([]capability.Field{}, metaObjectFields...),
+		capability.Field{Name: "fields", Description: "At most 200 fields with the members of meta-fields.get except " +
+			"object_metadata_id, at most 100 options each, untrusted data"},
+		capability.Field{Name: "more_fields", Description: "True when the object holds more fields than listed"}),
 	Examples: []capability.Example{{
 		Description: "Read an object with its fields",
 		Arguments:   json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`),
@@ -135,7 +231,8 @@ var metaFieldsGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get Twenty CRM field metadata",
 	Description: "Read the metadata of one field of the Twenty workspace of a connection without object targets: " +
-		"ID, name, label, description, type, flags, options, and the ID of its object. " + metaNote,
+		"ID, name, label, description, type, flags, options, icon, access rules, default value, settings, relation " +
+		"details, and the ID of its object. " + metaNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "fields", "get"},
 	Risk:     metaRisk,
 	Provider: Provider,
@@ -145,10 +242,9 @@ var metaFieldsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "UUID of the field, as returned by twenty-crm.meta-objects.get", Required: true},
 	},
-	Fields: []capability.Field{
-		{Name: "options", Description: "At most 100 options of a select field, untrusted data"},
-		{Name: "more_options", Description: "True when the field holds more options than listed"},
-	},
+	Fields: append(append([]capability.Field{}, metaFieldMembers...),
+		capability.Field{Name: "options", Description: "At most 100 options of a select field, untrusted data"},
+		capability.Field{Name: "more_options", Description: "True when the field holds more options than listed"}),
 	Examples: []capability.Example{{
 		Description: "Read a field",
 		Arguments:   json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`),
@@ -163,7 +259,8 @@ type MetaOption struct {
 	Position *int   `json:"position,omitempty"`
 }
 
-// MetaField carries no default value, settings, or relation details. A flag Twenty does not send is absent.
+// MetaField is a field of an object. A flag Twenty does not send is absent. Free objects keep their value
+// exactly, numbers included.
 type MetaField struct {
 	ID               string       `json:"id"`
 	Name             string       `json:"name"`
@@ -177,6 +274,24 @@ type MetaField struct {
 	Options          []MetaOption `json:"options,omitempty"`
 	MoreOptions      bool         `json:"more_options,omitempty"`
 	ObjectMetadataID string       `json:"object_metadata_id,omitempty"`
+
+	UniversalIdentifier   string   `json:"universal_identifier,omitempty"`
+	Icon                  string   `json:"icon,omitempty"`
+	IsUIEditable          *bool    `json:"is_ui_editable,omitempty"`
+	Writability           string   `json:"writability,omitempty"`
+	IsUnique              *bool    `json:"is_unique,omitempty"`
+	IsSearchable          *bool    `json:"is_searchable,omitempty"`
+	IsAuditLogged         *bool    `json:"is_audit_logged,omitempty"`
+	DefaultValue          any      `json:"default_value,omitempty"`
+	Settings              any      `json:"settings,omitempty"`
+	IsLabelSyncedWithName *bool    `json:"is_label_synced_with_name,omitempty"`
+	MorphID               string   `json:"morph_id,omitempty"`
+	ApplicationID         string   `json:"application_id,omitempty"`
+	CreatedAt             string   `json:"created_at,omitempty"`
+	UpdatedAt             string   `json:"updated_at,omitempty"`
+	Relation              any      `json:"relation,omitempty"`
+	MorphRelations        any      `json:"morph_relations,omitempty"`
+	OmittedFields         []string `json:"omitted_fields,omitempty"`
 }
 
 // MetaObjectSummary is an object without its fields.
@@ -191,6 +306,28 @@ type MetaObjectSummary struct {
 	IsSystem      *bool  `json:"is_system,omitempty"`
 	IsActive      *bool  `json:"is_active,omitempty"`
 	FieldCount    int    `json:"field_count"`
+
+	UniversalIdentifier                        string   `json:"universal_identifier,omitempty"`
+	Icon                                       string   `json:"icon,omitempty"`
+	Shortcut                                   string   `json:"shortcut,omitempty"`
+	Color                                      string   `json:"color,omitempty"`
+	IsRemote                                   *bool    `json:"is_remote,omitempty"`
+	IsUIEditable                               *bool    `json:"is_ui_editable,omitempty"`
+	IsUICreatable                              *bool    `json:"is_ui_creatable,omitempty"`
+	IsSearchable                               *bool    `json:"is_searchable,omitempty"`
+	OpenRecordIn                               string   `json:"open_record_in,omitempty"`
+	Readability                                string   `json:"readability,omitempty"`
+	ReadabilityParentFieldUniversalIdentifiers []string `json:"readability_parent_field_universal_identifiers,omitempty"`
+	SharingReach                               string   `json:"sharing_reach,omitempty"`
+	Writability                                string   `json:"writability,omitempty"`
+	ApplicationID                              string   `json:"application_id,omitempty"`
+	CreatedAt                                  string   `json:"created_at,omitempty"`
+	UpdatedAt                                  string   `json:"updated_at,omitempty"`
+	LabelIdentifierFieldMetadataID             string   `json:"label_identifier_field_metadata_id,omitempty"`
+	ImageIdentifierFieldMetadataID             string   `json:"image_identifier_field_metadata_id,omitempty"`
+	IsLabelSyncedWithName                      *bool    `json:"is_label_synced_with_name,omitempty"`
+	DuplicateCriteria                          any      `json:"duplicate_criteria,omitempty"`
+	OmittedFields                              []string `json:"omitted_fields,omitempty"`
 }
 
 // MetaObjectList is one page of object metadata.
@@ -227,6 +364,23 @@ type metaFieldRecord struct {
 	IsNullable       *bool           `json:"isNullable"`
 	Options          json.RawMessage `json:"options"`
 	ObjectMetadataID *string         `json:"objectMetadataId"`
+
+	UniversalIdentifier   *string         `json:"universalIdentifier"`
+	Icon                  *string         `json:"icon"`
+	IsUIEditable          *bool           `json:"isUIEditable"`
+	Writability           *string         `json:"writability"`
+	IsUnique              *bool           `json:"isUnique"`
+	IsSearchable          *bool           `json:"isSearchable"`
+	IsAuditLogged         *bool           `json:"isAuditLogged"`
+	DefaultValue          json.RawMessage `json:"defaultValue"`
+	Settings              json.RawMessage `json:"settings"`
+	IsLabelSyncedWithName *bool           `json:"isLabelSyncedWithName"`
+	MorphID               *string         `json:"morphId"`
+	ApplicationID         *string         `json:"applicationId"`
+	CreatedAt             *string         `json:"createdAt"`
+	UpdatedAt             *string         `json:"updatedAt"`
+	Relation              json.RawMessage `json:"relation"`
+	MorphRelations        json.RawMessage `json:"morphRelations"`
 }
 
 type metaObjectRecord struct {
@@ -240,6 +394,77 @@ type metaObjectRecord struct {
 	IsSystem      *bool           `json:"isSystem"`
 	IsActive      *bool           `json:"isActive"`
 	Fields        json.RawMessage `json:"fields"`
+
+	UniversalIdentifier                        *string         `json:"universalIdentifier"`
+	Icon                                       *string         `json:"icon"`
+	Shortcut                                   *string         `json:"shortcut"`
+	Color                                      *string         `json:"color"`
+	IsRemote                                   *bool           `json:"isRemote"`
+	IsUIEditable                               *bool           `json:"isUIEditable"`
+	IsUICreatable                              *bool           `json:"isUICreatable"`
+	IsSearchable                               *bool           `json:"isSearchable"`
+	OpenRecordIn                               *string         `json:"openRecordIn"`
+	Readability                                *string         `json:"readability"`
+	ReadabilityParentFieldUniversalIdentifiers json.RawMessage `json:"readabilityParentFieldUniversalIdentifiers"`
+	SharingReach                               *string         `json:"sharingReach"`
+	Writability                                *string         `json:"writability"`
+	ApplicationID                              *string         `json:"applicationId"`
+	CreatedAt                                  *string         `json:"createdAt"`
+	UpdatedAt                                  *string         `json:"updatedAt"`
+	LabelIdentifierFieldMetadataID             *string         `json:"labelIdentifierFieldMetadataId"`
+	ImageIdentifierFieldMetadataID             *string         `json:"imageIdentifierFieldMetadataId"`
+	IsLabelSyncedWithName                      *bool           `json:"isLabelSyncedWithName"`
+	DuplicateCriteria                          json.RawMessage `json:"duplicateCriteria"`
+}
+
+// metaUUID returns a UUID Twenty sent, or "" for anything else.
+func metaUUID(value *string) string {
+	if value != nil && validUUID(*value) {
+		return *value
+	}
+	return ""
+}
+
+// freeObjects collects the names of free objects left out for their size.
+type freeObjects []string
+
+// bound decodes a free object without a float detour. A value deeper than freeObjectDepthMax or larger than
+// freeObjectBytesMax serialized is left out whole and named, never shortened; an empty value is absent.
+func (o *freeObjects) bound(name string, raw json.RawMessage) any {
+	if isNull(raw) {
+		return nil
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, raw) != nil {
+		return nil
+	}
+	value, err := decodeValue(compact.Bytes())
+	if err != nil || emptyValue(value) {
+		return nil
+	}
+	if compact.Len() > freeObjectBytesMax || valueDepth(value) > freeObjectDepthMax {
+		*o = append(*o, name)
+		return nil
+	}
+	return value
+}
+
+// valueDepth counts the levels of nested arrays and objects.
+func valueDepth(value any) int {
+	deepest := 0
+	switch v := value.(type) {
+	case []any:
+		for _, item := range v {
+			deepest = max(deepest, valueDepth(item))
+		}
+		return deepest + 1
+	case map[string]any:
+		for _, item := range v {
+			deepest = max(deepest, valueDepth(item))
+		}
+		return deepest + 1
+	}
+	return 0
 }
 
 // metaText drops invalid UTF-8, control and format characters, then caps the length.
@@ -277,9 +502,20 @@ func (r metaFieldRecord) project(op string) (MetaField, error) {
 	field := MetaField{ID: r.ID, Name: metaText(r.Name, metaNameMax), Label: metaText(r.Label, metaNameMax),
 		Description: metaText(r.Description, metaTextMax), Type: enumToken(metaFieldTypes, r.Type),
 		IsCustom: r.IsCustom, IsSystem: r.IsSystem, IsActive: r.IsActive, IsNullable: r.IsNullable}
-	if r.ObjectMetadataID != nil && validUUID(*r.ObjectMetadataID) {
-		field.ObjectMetadataID = *r.ObjectMetadataID
-	}
+	field.ObjectMetadataID = metaUUID(r.ObjectMetadataID)
+	field.UniversalIdentifier = metaText(r.UniversalIdentifier, metaTokenMax)
+	field.Icon = metaText(r.Icon, metaTokenMax)
+	field.IsUIEditable, field.IsUnique, field.IsSearchable = r.IsUIEditable, r.IsUnique, r.IsSearchable
+	field.IsAuditLogged, field.IsLabelSyncedWithName = r.IsAuditLogged, r.IsLabelSyncedWithName
+	field.Writability = metaText(r.Writability, metaTokenMax)
+	field.MorphID, field.ApplicationID = metaUUID(r.MorphID), metaUUID(r.ApplicationID)
+	field.CreatedAt, field.UpdatedAt = metaText(r.CreatedAt, metaTokenMax), metaText(r.UpdatedAt, metaTokenMax)
+	var omitted freeObjects
+	field.DefaultValue = omitted.bound("default_value", r.DefaultValue)
+	field.Settings = omitted.bound("settings", r.Settings)
+	field.Relation = omitted.bound("relation", r.Relation)
+	field.MorphRelations = omitted.bound("morph_relations", r.MorphRelations)
+	field.OmittedFields = omitted
 	options, ok := rawItems(r.Options)
 	if !ok {
 		return MetaField{}, provider.InvalidResponse(op, "Twenty returned unusable options")
@@ -310,10 +546,34 @@ func (r metaObjectRecord) summary(op string, fieldCount int) (MetaObjectSummary,
 	if !validUUID(r.ID) {
 		return MetaObjectSummary{}, provider.InvalidResponse(op, "Twenty returned an object without a usable identifier")
 	}
-	return MetaObjectSummary{ID: r.ID, NameSingular: metaText(r.NameSingular, metaNameMax),
+	summary := MetaObjectSummary{ID: r.ID, NameSingular: metaText(r.NameSingular, metaNameMax),
 		NamePlural: metaText(r.NamePlural, metaNameMax), LabelSingular: metaText(r.LabelSingular, metaNameMax),
 		LabelPlural: metaText(r.LabelPlural, metaNameMax), Description: metaText(r.Description, metaTextMax),
-		IsCustom: r.IsCustom, IsSystem: r.IsSystem, IsActive: r.IsActive, FieldCount: fieldCount}, nil
+		IsCustom: r.IsCustom, IsSystem: r.IsSystem, IsActive: r.IsActive, FieldCount: fieldCount,
+		UniversalIdentifier: metaText(r.UniversalIdentifier, metaTokenMax), Icon: metaText(r.Icon, metaTokenMax),
+		Shortcut: metaText(r.Shortcut, metaTokenMax), Color: metaText(r.Color, metaTokenMax),
+		IsRemote: r.IsRemote, IsUIEditable: r.IsUIEditable, IsUICreatable: r.IsUICreatable,
+		IsSearchable: r.IsSearchable, OpenRecordIn: metaText(r.OpenRecordIn, metaTokenMax),
+		Readability: metaText(r.Readability, metaTokenMax), SharingReach: metaText(r.SharingReach, metaTokenMax),
+		Writability: metaText(r.Writability, metaTokenMax), ApplicationID: metaUUID(r.ApplicationID),
+		CreatedAt: metaText(r.CreatedAt, metaTokenMax), UpdatedAt: metaText(r.UpdatedAt, metaTokenMax),
+		LabelIdentifierFieldMetadataID: metaUUID(r.LabelIdentifierFieldMetadataID),
+		ImageIdentifierFieldMetadataID: metaUUID(r.ImageIdentifierFieldMetadataID),
+		IsLabelSyncedWithName:          r.IsLabelSyncedWithName}
+	var omitted freeObjects
+	if ids, ok := rawItems(r.ReadabilityParentFieldUniversalIdentifiers); ok && len(ids) > maxValueItems {
+		omitted = append(omitted, "readability_parent_field_universal_identifiers")
+	} else if ok {
+		for _, item := range ids {
+			var id *string
+			if json.Unmarshal(item, &id) == nil && metaUUID(id) != "" {
+				summary.ReadabilityParentFieldUniversalIdentifiers = append(summary.ReadabilityParentFieldUniversalIdentifiers, *id)
+			}
+		}
+	}
+	summary.DuplicateCriteria = omitted.bound("duplicate_criteria", r.DuplicateCriteria)
+	summary.OmittedFields = omitted
+	return summary, nil
 }
 
 // unwrapMeta returns the entity of a get answer. The new format is the entity itself, the legacy format wraps

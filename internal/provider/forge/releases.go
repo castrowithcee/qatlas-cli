@@ -288,6 +288,15 @@ func releaseWriteSchema(p *product, creating bool) (string, []capability.Argumen
 
 var releasesList = &tool{
 	group: "releases", action: "list", since: everywhere,
+	needs: func(p *product, raw json.RawMessage) (version, bool) {
+		var arguments struct {
+			TagFilter string `json:"tag_filter"`
+		}
+		if p != gitea || decodeArguments(raw, &arguments) != nil || arguments.TagFilter == "" {
+			return version{}, false
+		}
+		return tagFilterSince, true
+	},
 	describe: func(p *product) capability.Descriptor {
 		properties := `"repository":` + repoSchema + `,"draft":{"type":"boolean"},"prerelease":{"type":"boolean"},` +
 			pagingKeys
@@ -371,11 +380,6 @@ var releasesList = &tool{
 			return nil, err
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
-			if arguments.TagFilter != "" {
-				if err := c.need(ctx, "releases list", tagFilterSince); err != nil {
-					return nil, err
-				}
-			}
 			query := page.query()
 			for key, values := range filters {
 				query[key] = values

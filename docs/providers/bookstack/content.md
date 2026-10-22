@@ -18,11 +18,14 @@ in records of at most 500, sorted by `id`. `bookstack.books.get` and `bookstack.
 All four only read. `chapters.list` takes an optional `book_id`. On a connection with targets `books.list`
 returns only the reached books (see [Targets](README.md#targets)). A listing stops as soon as the instance returns no new record.
 
-`books.get` returns `tags` (at most 50), `default_template_id` (0 when there is none), and `contents`: the
-chapters with their pages and the loose pages in book order. `chapters.get` returns the same metadata and its
-`pages`. A content tree or page list holds at most 2000 entries in total; `truncated` is then `true`. `created_by`,
-`updated_by`, and `owned_by` show `id` and `name` only. Descriptions are cut to 20000 characters and other
-strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
+`books.get` lists `contents`: the chapters with their pages and the loose pages in book order. `chapters.get`
+lists its `pages`. `default_template_id` is 0 when there is none. Tags are limited to 50. A content tree or page list holds at most 2000 entries in total;
+`truncated` is then `true`. Users are shown as BookStack delivers them: lists and the entries of `pages[]` and
+`books[]` carry only the identifier, so a user appears there with `id` only; a detail answer shows `id`, `name`,
+and `slug`. A user field a list already shows with a name (such as `owned_by` in `pages.list`) keeps it. On a
+connection with targets, `book_slug` is reported only when the book itself is bound; otherwise only `book_id` is
+reported. A book on a bound shelf counts as bound only when the call has read that shelf anyway. Descriptions
+are cut to 20000 characters and other strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
 run. `books.get` shows the `shelves` of the book only on a connection without
 targets, because shelves span the whole instance. Cover images are not passed on.
 
@@ -54,8 +57,9 @@ Shelves hold any books and span the whole instance, so the shelf tools work only
 targets; `shelves.get` also reads a bound shelf (see [Targets](README.md#targets)).
 
 `bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
-sorted by `id`. `bookstack.shelves.get` takes an `id` and returns `tags` (at most 50) and `books` (in shelf
-order, at most 2000 entries; `truncated` is then `true`). Names, descriptions, and tags are untrusted data; `description_html` must
+sorted by `id`. `bookstack.shelves.get` takes an `id` and lists `books` in shelf order (at most 2000 entries;
+`truncated` is then `true`) and at most 50 tags. Users follow the rule under
+[Books and chapters](#books-and-chapters). Names, descriptions, and tags are untrusted data; `description_html` must
 never be rendered or run.
 
 `bookstack.shelves.create` and `bookstack.shelves.update` take `name` (1 to 255 characters), at most one of
@@ -96,9 +100,9 @@ carry them.
 
 ## Pages
 
-`pages.get` returns `chapter_id` (0 when there is none), `html` (rendered), `markdown` (only for pages saved with
-the Markdown editor), `raw_html` (as stored, what the editor shows), and `tags` (at most 50). `created_by`,
-`updated_by`, and `owned_by` show `id` and `name` only. The comment tree is not returned. All content, tags, and names are untrusted data; `html` and
+`pages.get` returns `html` (rendered), `markdown` (only for pages saved with the Markdown editor), and `raw_html`
+(as stored, what the editor shows); `chapter_id` is 0 when there is none, and tags are limited to 50. Users follow the rule under
+[Books and chapters](#books-and-chapters). The comment tree is not returned. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
 
 `pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and

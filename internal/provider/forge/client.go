@@ -125,14 +125,15 @@ func (c *Client) post(ctx context.Context, op, path string, req request, answer 
 // have been applied although no confirmation arrived. A change is never repeated by Qatlas itself.
 const uncertain = "; the change may have been applied, read the current state before repeating it"
 
-// change sends exactly one mutating request of a fixed method (POST, PATCH, or DELETE) and API path, which the
+// change sends exactly one mutating request of a fixed method (POST, PUT, PATCH, or DELETE) and API path, which the
 // caller builds from constants and escaped, validated segments. body is encoded as JSON and must be built from
 // validated arguments only; nil sends none. out receives the JSON answer, nil ignores an answer such as the
 // empty one of a DELETE. The request is never retried. A failure whose outcome is open, such as a timeout, a
 // reset connection, a 5xx status, or an unreadable answer, carries the uncertain note; a refusal that proves
 // the change was not applied does not.
 func (c *Client) change(ctx context.Context, op, method, path string, body any, out any) error {
-	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodDelete {
+	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch &&
+		method != http.MethodDelete {
 		return provider.Fail(op, "the request method is not one of this provider")
 	}
 	spec := request{method: method, change: true}
@@ -153,6 +154,21 @@ func unsure(failure *provider.Error) *provider.Error {
 	return failure
 }
 
+// probe sends one GET of a fixed API path whose answer has no body and reports whether the instance answered
+// 2xx. Only 404 counts as a plain no; every other refusal stays a failure, and a 404 hides nothing beyond what
+// the caller documents.
+func (c *Client) probe(ctx context.Context, op, path string) (bool, error) {
+	status, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil,
+		request{}, nil)
+	if err == nil {
+		return true, nil
+	}
+	if status == http.StatusNotFound {
+		return false, nil
+	}
+	return false, err
+}
+
 // getText sends one GET of a fixed API path and reads the answer as text.
 func (c *Client) getText(ctx context.Context, op, path string, answer *textAnswer) error {
 	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, request{},
@@ -167,7 +183,7 @@ func send(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, 
 	return exchange(ctx, client, limiter, p, root, auth, op, path, query, request{}, out)
 }
 
-// exchange is the one place that builds and sends a request. Only GET, POST, PATCH, and DELETE exist, a body
+// exchange is the one place that builds and sends a request. Only GET, POST, PUT, PATCH, and DELETE exist, a body
 // never on GET. out is a *textAnswer for a text answer, a JSON target otherwise, and nil for an answer that is
 // not read.
 func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, p *product, root, auth, op,
@@ -180,7 +196,7 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 		method = http.MethodGet
 	}
 	switch method {
-	case http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete:
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
 	}

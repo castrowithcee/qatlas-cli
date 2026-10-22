@@ -67,7 +67,7 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 		if entry.auth != "" && entry.auth != "token "+tokenValue {
 			t.Errorf("request %s authorizes with %q", r.URL.Path, entry.auth)
 		}
-		if !slices.Contains([]string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete}, r.Method) ||
+		if !slices.Contains([]string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}, r.Method) ||
 			(r.Method == http.MethodGet && entry.body != "") {
 			t.Errorf("request %s uses %s", r.URL.Path, r.Method)
 		}
@@ -173,9 +173,10 @@ func testConfig(p *product) *config.Config {
 		cfg.Connections[name] = config.Connection{Service: "forge", Credential: "token",
 			Effects: allEffects, Targets: targets}
 	}
-	// A connection whose tools list names issues.delete is the only one that offers it.
+	// A connection whose tools list names a listed-only tool is the only one that offers it.
 	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
-		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get"}}
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get",
+			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".milestones.delete", p.id + ".milestones.get"}}
 	cfg.Connections["release-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	return cfg
