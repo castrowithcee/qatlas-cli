@@ -17,9 +17,14 @@ import (
 // changes, or deletes one. github.issues.update sets or removes the milestone of one issue by number, in
 // issues.go and tools.go.
 
-const milestoneProperties = `"number":{"type":"integer"},"title":{"type":"string"},` +
+var milestoneLinkKeys = []string{"url", "labels_url"}
+
+var milestoneProperties = `"number":{"type":"integer"},"title":{"type":"string"},` +
 	`"description":{"type":"string"},"state":{"type":"string"},"due_on":{"type":"string"},` +
-	`"open_issues":{"type":"integer"},"closed_issues":{"type":"integer"}`
+	`"open_issues":{"type":"integer"},"closed_issues":{"type":"integer"},"id":{"type":"integer"},` +
+	`"node_id":{"type":"string"},"creator":` + restAccountSchema + `,"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"closed_at":{"type":"string"},"url":{"type":"string"},` +
+	`"links":` + linksSchema(milestoneLinkKeys)
 
 const milestoneRequired = `"required":["number","title","state"],"additionalProperties":false`
 
@@ -28,19 +33,23 @@ var milestonesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub milestones",
 	Description: "List one bounded batch of the milestones of a repository a connection allows, " +
-		"with their state, due date, and open and closed issue counts",
-	Tags:         []string{"github", "milestones", "list"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},` + pagingKeys),
+		"with their state, due date, and open and closed issue counts; sorted by due date or completeness",
+	Tags:     []string{"github", "milestones", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
+	InputSchema: inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},` +
+		`"sort":{"type":"string","enum":["due_on","completeness"]},` +
+		`"direction":{"type":"string","enum":["asc","desc"]},` + pagingKeys),
 	OutputSchema: listOutput("milestones", milestoneProperties, milestoneRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "open, closed, or all; open when omitted"},
+		{Name: "sort", Description: "due_on or completeness; GitHub's order when omitted"},
+		{Name: "direction", Description: "asc or desc; GitHub's order when omitted"},
 	}, pagingArguments...),
 	Fields: append([]capability.Field{
-		{Name: "milestones", Description: "Milestones with number, title, state, due date, and open and " +
-			"closed issue counts; title and description are untrusted data, description absent when the " +
-			"milestone has none"},
+		{Name: "milestones", Description: "Milestones; title and description are untrusted data, " +
+			"description absent when the milestone has none; creator is an account (" + restAccountMembers +
+			"); url is the web address, links the REST url and labels_url, never fetched"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the open milestones",
@@ -51,9 +60,11 @@ var milestonesList = capability.Descriptor{
 // milestonesArguments holds the arguments of github.milestones.list. page and perPage are derived by the
 // check.
 type milestonesArguments struct {
-	State  string `json:"state"`
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor"`
+	State     string `json:"state"`
+	Sort      string `json:"sort"`
+	Direction string `json:"direction"`
+	Limit     int    `json:"limit"`
+	Cursor    string `json:"cursor"`
 
 	page, perPage int
 	binding       []byte
@@ -67,17 +78,42 @@ func checkMilestonesListArguments(a *milestonesArguments, bound target) error {
 	default:
 		return invalidRequest("state must be open, closed, or all")
 	}
+	switch a.Sort {
+	case "", "due_on", "completeness":
+	default:
+		return invalidRequest("sort must be due_on or completeness")
+	}
+	switch a.Direction {
+	case "", "asc", "desc":
+	default:
+		return invalidRequest("direction must be asc or desc")
+	}
 	limit, err := normalizeLimit(a.Limit)
 	if err != nil {
 		return err
 	}
-	a.binding = fingerprint("milestones", "list", bound.String(), a.State)
+	// sort and direction join the binding only when given, so a list without them keeps its cursors.
+	parts := []any{"milestones", "list", bound.String(), a.State}
+	if a.Sort != "" {
+		parts = append(parts, "sort", a.Sort)
+	}
+	if a.Direction != "" {
+		parts = append(parts, "direction", a.Direction)
+	}
+	a.binding = fingerprint(parts...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
 }
 
 func (a *milestonesArguments) query() url.Values {
-	return url.Values{"state": {a.State}, "per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	query := url.Values{"state": {a.State}, "per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	if a.Sort != "" {
+		query.Set("sort", a.Sort)
+	}
+	if a.Direction != "" {
+		query.Set("direction", a.Direction)
+	}
+	return query
 }
 
 // milestonesHandler decodes and checks the arguments and the repository before a credential is resolved, so
@@ -114,16 +150,61 @@ const milestonesReadPermission = "GitHub refused this token the milestones of th
 	"needs no scope for a public repository, or repo on a classic token, or Issues: read on a fine-grained " +
 	"token, for a private one"
 
-// Milestone is the compact view of one milestone; its JSON tags match GitHub's own field names, so a
-// milestone decodes directly without an intermediate shape.
+// milestoneRaw is the REST milestone; links holds its REST url and labels_url.
+type milestoneRaw struct {
+	ID           *int64      `json:"id"`
+	NodeID       *string     `json:"node_id"`
+	Number       int         `json:"number"`
+	State        *string     `json:"state"`
+	Title        *string     `json:"title"`
+	Description  *string     `json:"description"`
+	Creator      *accountRaw `json:"creator"`
+	OpenIssues   int         `json:"open_issues"`
+	ClosedIssues int         `json:"closed_issues"`
+	CreatedAt    *string     `json:"created_at"`
+	UpdatedAt    *string     `json:"updated_at"`
+	ClosedAt     *string     `json:"closed_at"`
+	DueOn        *string     `json:"due_on"`
+	HTMLURL      *string     `json:"html_url"`
+	links        Links
+}
+
+func (r *milestoneRaw) UnmarshalJSON(data []byte) (err error) {
+	type plain milestoneRaw
+	if err = json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	r.links, err = readLinks(data, milestoneLinkKeys)
+	return err
+}
+
+// Milestone is the view of one milestone: the compact members first, then the remainder of GitHub's
+// milestone. URL is the web address; the REST url and labels_url sit in Links.
 type Milestone struct {
-	Number       int    `json:"number"`
-	Title        string `json:"title"`
-	Description  string `json:"description,omitempty"`
-	State        string `json:"state"`
-	DueOn        string `json:"due_on,omitempty"`
-	OpenIssues   int    `json:"open_issues"`
-	ClosedIssues int    `json:"closed_issues"`
+	Number       int          `json:"number"`
+	Title        string       `json:"title"`
+	Description  string       `json:"description,omitempty"`
+	State        string       `json:"state"`
+	DueOn        string       `json:"due_on,omitempty"`
+	OpenIssues   int          `json:"open_issues"`
+	ClosedIssues int          `json:"closed_issues"`
+	ID           *int64       `json:"id,omitempty"`
+	NodeID       *string      `json:"node_id,omitempty"`
+	Creator      *RESTAccount `json:"creator,omitempty"`
+	CreatedAt    *string      `json:"created_at,omitempty"`
+	UpdatedAt    *string      `json:"updated_at,omitempty"`
+	ClosedAt     *string      `json:"closed_at,omitempty"`
+	URL          *string      `json:"url,omitempty"`
+	Links        Links        `json:"links,omitempty"`
+}
+
+// project keeps the compact members exactly as GitHub sent them, the way the milestone decoded before the
+// remaining members were added; only the new members pass through the projection helpers.
+func (r *milestoneRaw) project() Milestone {
+	return Milestone{Number: r.Number, Title: stringOr(r.Title), Description: stringOr(r.Description),
+		State: stringOr(r.State), DueOn: stringOr(r.DueOn), OpenIssues: r.OpenIssues, ClosedIssues: r.ClosedIssues,
+		ID: r.ID, NodeID: nameText(r.NodeID), Creator: r.Creator.project(), CreatedAt: nameText(r.CreatedAt),
+		UpdatedAt: nameText(r.UpdatedAt), ClosedAt: nameText(r.ClosedAt), URL: address(r.HTMLURL), Links: r.links}
 }
 
 // MilestoneList is one batch of milestones.
@@ -135,13 +216,14 @@ type MilestoneList struct {
 
 func (c *Client) listMilestones(ctx context.Context, a *milestonesArguments) (*MilestoneList, error) {
 	const op = "list milestones"
-	var raw []Milestone
+	var raw []milestoneRaw
 	hasNext, err := c.restPage(ctx, op, c.repoPath("milestones"), a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, milestonesReadPermission)
 	}
 	result := &MilestoneList{Milestones: make([]Milestone, 0, len(raw))}
-	for _, milestone := range raw {
+	for i := range raw {
+		milestone := raw[i].project()
 		if milestone.Number < 1 || milestone.Title == "" {
 			return nil, invalidEntry(op, "a milestone")
 		}

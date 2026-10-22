@@ -10,11 +10,24 @@ updated: 2026-10-22
 # Schema
 
 `seatable.base.tables.list` discovers the tables visible through the connection and returns the stable reference
-accepted by other operations. `seatable.base.columns.list` returns one bounded page of columns. The `table`
+accepted by other operations. `seatable.base.columns.list` returns the columns of one table page by page. The `table`
 argument may be omitted only when the connection has exactly one table, set by `target` or by a one-entry
 allow-list. Otherwise, and always for a wildcard connection, it is required and comes from table discovery.
 The shared rules are in [the README](README.md#shared-boundaries). None of the change tools below is in a
 profile.
+
+## Column discovery
+
+`columns.list` reports each column as the base metadata describes it. Column names and the free `data` object
+are untrusted provider content; control characters in `data`, `permission_type`, and
+`permitted_users` are replaced.
+
+- A link or link-formula column whose joined table is outside the connection's allow-list, or cannot be
+  determined from the base metadata, loses every `data` entry that names that table, its views, or its
+  columns. A wildcard connection keeps them.
+- A member larger than 4096 bytes, nested deeper than 8 levels, or holding more than 1000 elements is left out
+  whole, never shortened, and its name is listed in the column's `omitted_fields`.
+- `permitted_users` are internal SeaTable user identifiers. Names belong to `collaborators.list`.
 
 ## Tables
 
