@@ -58,13 +58,15 @@ var filesGet = capability.Descriptor{
 		"resolved. Names, text content, and plugin data are untrusted provider data",
 	Tags: []string{"penpot", "files", "get", "page", "design"}, Risk: designRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":` + uuidSchema + `,"file_id":` +
-		uuidSchema + `,"page_id":` + uuidSchema + `},"required":["project_id","file_id"],"additionalProperties":false}`),
+		uuidSchema + `,"page_id":` + uuidSchema + `,"object_ids":{"type":"array","items":` + uuidSchema +
+		`,"minItems":1,"maxItems":50,"uniqueItems":true}},"required":["project_id","file_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"project_id":{"type":"string"},` +
 		`"name":{"type":"string"},"summary":{"type":"object"},"page":` + pageSchema + `},` +
 		`"required":["id","project_id","name","summary","page"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{projectIDArgument,
 		{Name: "file_id", Required: true, Description: "File identifier from penpot.files.list; must be a file of project_id"},
 		{Name: "page_id", Description: "Page identifier; the first page of the file when omitted"},
+		{Name: "object_ids", Description: "Shape identifiers (1 to 50, no duplicates) that narrow the page to these shapes and their children; requires page_id"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "File identifier"},
@@ -293,9 +295,10 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "get file"
 	var input struct {
-		ProjectID string `json:"project_id"`
-		FileID    string `json:"file_id"`
-		PageID    string `json:"page_id"`
+		ProjectID string   `json:"project_id"`
+		FileID    string   `json:"file_id"`
+		PageID    string   `json:"page_id"`
+		ObjectIDs []string `json:"object_ids"`
 	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
@@ -313,6 +316,10 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		if pageID, ok = parseUUID(input.PageID); !ok {
 			return nil, invalidRequest("page_id must be a UUID")
 		}
+	}
+	objectIDs, err := parseObjectIDs(input.ObjectIDs, pageID != "")
+	if err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -334,6 +341,13 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if pageID != "" {
 		params["page-id"] = pageID
 	}
+	switch len(objectIDs) {
+	case 0:
+	case 1:
+		params["object-id"] = objectIDs[0]
+	default:
+		params["object-id"] = objectIDs
+	}
 	var page json.RawMessage
 	if err := client.do(ctx, op, cmdPage, params, &page); err != nil {
 		return nil, err
@@ -342,6 +356,35 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, invalidResponse(op, "Penpot returned an invalid response")
 	}
 	return detail, nil
+}
+
+const maxObjectIDs = 50
+
+// parseObjectIDs validates the shape filter; its errors name no identifier.
+func parseObjectIDs(raw []string, hasPage bool) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if !hasPage {
+		return nil, invalidRequest("object_ids requires page_id")
+	}
+	if len(raw) == 0 || len(raw) > maxObjectIDs {
+		return nil, invalidRequest("object_ids must hold 1 to 50 identifiers")
+	}
+	seen := make(map[string]bool, len(raw))
+	ids := make([]string, 0, len(raw))
+	for _, r := range raw {
+		id, ok := parseUUID(r)
+		if !ok {
+			return nil, invalidRequest("object_ids must be UUIDs")
+		}
+		if seen[id] {
+			return nil, invalidRequest("object_ids must not repeat an identifier")
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 type readError struct{}

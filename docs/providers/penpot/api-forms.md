@@ -17,9 +17,10 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
 - Backend RPC `POST /api/rpc/command/<name>` with `Authorization: Token ...` (documented). None of the read commands
   paginates; `get-page` returns the first page when `page-id` is omitted.
 - Pages (`files.clj` `get-page`, `common/types/page.cljc`, `shape.cljc`, `shape/layout.cljc`, `variant.cljc`):
-  `get-page` returns the page record with its `objects` map of shapes, minus each shape's `thumbnail`; the schemas
-  fix the page metadata and the attributes of each shape type, including the layout and variant attributes of a
-  board. With the `fdata/path-data` feature a path may arrive as binary data instead of a JSON structure. Assumed: the
+  `get-page` returns the page record with its `objects` map of shapes, minus each shape's `thumbnail`; `object-id`
+  (one UUID or a set, with `page-id` required) prunes `objects` to those shapes and their children; the schemas fix
+  the page metadata and the attributes of each shape type, including the layout and variant attributes of a board.
+  With the `fdata/path-data` feature a path may arrive as binary data instead of a JSON structure. Assumed: the
   attribute values arrive as JSON structures of the schema's shape, and such binary data as text.
 - Listings (`teams.clj`, `projects.clj`, `files.clj`, `binfile/common.clj`, `nitrate.clj`): `get-teams` returns the
   columns of the `team` table with the account's permissions; the subscription is added only with the `subscriptions`
