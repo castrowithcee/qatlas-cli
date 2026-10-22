@@ -19,10 +19,16 @@ const (
 		`<c:addressbook-home-set/></d:prop></d:propfind>`
 	CalendarsBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">` +
-		`<d:prop><d:displayname/><d:resourcetype/><c:calendar-description/><a:calendar-color/></d:prop></d:propfind>`
+		`<d:prop><d:displayname/><d:resourcetype/><c:calendar-description/><a:calendar-color/>` +
+		`<c:supported-calendar-component-set/><c:supported-calendar-data/><c:max-resource-size/>` +
+		`<c:min-date-time/><c:max-date-time/><c:max-instances/><c:max-attendees-per-instance/>` +
+		`<c:calendar-timezone/><c:supported-collation-set/><d:current-user-privilege-set/><d:sync-token/>` +
+		`</d:prop></d:propfind>`
 	AddressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:prop>` +
-		`<d:displayname/><d:resourcetype/><c:addressbook-description/></d:prop></d:propfind>`
+		`<d:displayname/><d:resourcetype/><c:addressbook-description/><c:supported-address-data/>` +
+		`<c:max-resource-size/><c:supported-collation-set/><d:current-user-privilege-set/><d:sync-token/>` +
+		`</d:prop></d:propfind>`
 	// AddressbookQueryBody asks for every card of an address book with its entity tag.
 	AddressbookQueryBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 		`<card:addressbook-query xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">` +
