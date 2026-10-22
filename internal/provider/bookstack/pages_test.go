@@ -285,7 +285,7 @@ func TestGetAndListShowThePageFields(t *testing.T) {
 		t.Error("comments must not be shown")
 	}
 
-	list, err := c.ListPages(context.Background(), listTarget{}, 10, 0)
+	list, err := c.ListPages(context.Background(), listTarget{}, 10, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -113,7 +113,7 @@ func TestListPages(t *testing.T) {
 	}))
 	defer server.Close()
 
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 10, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 10, 0, listQuery{})
 
 	if err != nil {
 		t.Fatalf("ListPages() = %v", err)
@@ -164,7 +164,7 @@ func TestListPagesPagination(t *testing.T) {
 	client := newClient(t, server.URL, nil)
 
 	t.Run("a limit is honoured across requests", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), listTarget{}, 5, 0)
+		got, err := client.ListPages(context.Background(), listTarget{}, 5, 0, listQuery{})
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -177,7 +177,7 @@ func TestListPagesPagination(t *testing.T) {
 	})
 
 	t.Run("no limit fetches everything", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), listTarget{}, 0, 0)
+		got, err := client.ListPages(context.Background(), listTarget{}, 0, 0, listQuery{})
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -187,7 +187,7 @@ func TestListPagesPagination(t *testing.T) {
 	})
 
 	t.Run("offset skips records", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), listTarget{}, 2, 4)
+		got, err := client.ListPages(context.Background(), listTarget{}, 2, 4, listQuery{})
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -210,7 +210,7 @@ func TestListPagesStopsWithoutProgress(t *testing.T) {
 	}))
 	defer server.Close()
 
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 0, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 0, 0, listQuery{})
 
 	if err != nil {
 		t.Fatalf("ListPages() = %v", err)
@@ -281,7 +281,7 @@ func TestOnlyReadRequests(t *testing.T) {
 
 	client := newClient(t, server.URL, nil)
 	ctx := context.Background()
-	if _, err := client.ListPages(ctx, listTarget{}, 1, 0); err != nil {
+	if _, err := client.ListPages(ctx, listTarget{}, 1, 0, listQuery{}); err != nil {
 		t.Fatalf("ListPages() = %v", err)
 	}
 	if _, err := client.GetPage(ctx, "1"); err != nil {
@@ -436,7 +436,7 @@ func TestRedirects(t *testing.T) {
 			defer origin.Close()
 
 			c := newClient(t, origin.URL, nil)
-			_, err := c.ListPages(context.Background(), listTarget{}, 1, 0)
+			_, err := c.ListPages(context.Background(), listTarget{}, 1, 0, listQuery{})
 			var perr *provider.Error
 			if !errors.As(err, &perr) || perr.Class != provider.ClassProviderError {
 				t.Fatalf("error = %v, want a provider error", err)
@@ -649,7 +649,7 @@ func TestConnectionsStaySeparate(t *testing.T) {
 
 	ctx := context.Background()
 	for _, c := range []*Client{reader, auditor, other} {
-		if _, err := c.ListPages(ctx, listTarget{}, 1, 0); err != nil {
+		if _, err := c.ListPages(ctx, listTarget{}, 1, 0, listQuery{}); err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
 	}
@@ -681,7 +681,7 @@ func TestNoSecretsInErrors(t *testing.T) {
 	red := &redact.Redactor{}
 	client := newClient(t, server.URL, red)
 
-	_, err := client.ListPages(context.Background(), listTarget{}, 1, 0)
+	_, err := client.ListPages(context.Background(), listTarget{}, 1, 0, listQuery{})
 
 	if err == nil {
 		t.Fatal("ListPages() = nil, want an error")
@@ -1035,7 +1035,7 @@ func TestSeveralBooksNeedABookID(t *testing.T) {
 func TestOneBoundBookIsTheDefault(t *testing.T) {
 	rec := &recorder{}
 	server := scopedServer(t, rec, false)
-	got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0)
+	got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1065,7 +1065,7 @@ func TestIgnoredFilterIsEnforcedOnTheClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := &recorder{}
 			server := scopedServer(t, rec, true)
-			got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), tt.target, tt.limit, tt.offset)
+			got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), tt.target, tt.limit, tt.offset, listQuery{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1079,7 +1079,7 @@ func TestIgnoredFilterIsEnforcedOnTheClient(t *testing.T) {
 func TestListWithoutTargetsFiltersForTheGivenBookOnly(t *testing.T) {
 	rec := &recorder{}
 	server := scopedServer(t, rec, true)
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{BookID: 9}, 0, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{BookID: 9}, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1087,7 +1087,7 @@ func TestListWithoutTargetsFiltersForTheGivenBookOnly(t *testing.T) {
 		t.Errorf("ids = %v, want %v", ids(got.Rows), want)
 	}
 	// An unbound connection reads no evidence for a chapter either.
-	if _, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0); err != nil {
+	if _, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0, listQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	_, recorded, _, _ := rec.snapshot()
@@ -1111,7 +1111,7 @@ func TestFilteredListingIsBounded(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "total": 1 << 30})
 	}))
 	defer server.Close()
-	_, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0)
+	_, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0, listQuery{})
 	var perr *provider.Error
 	if !errors.As(err, &perr) || perr.Class != provider.ClassInvalidResponse {
 		t.Fatalf("err = %v, want invalid-provider-response", err)
@@ -1126,7 +1126,7 @@ func TestChapterIsBoundThroughOneRead(t *testing.T) {
 	server := scopedServer(t, rec, false)
 	c := boundClient(t, server.URL, "book/7")
 
-	got, err := c.ListPages(context.Background(), listTarget{ChapterID: 10}, 0, 0)
+	got, err := c.ListPages(context.Background(), listTarget{ChapterID: 10}, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1140,7 +1140,7 @@ func TestChapterIsBoundThroughOneRead(t *testing.T) {
 	rec2 := &recorder{}
 	server2 := scopedServer(t, rec2, false)
 	c2 := boundClient(t, server2.URL, "book/7")
-	_, err = c2.ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0)
+	_, err = c2.ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0, listQuery{})
 	if !isInvalidRequest(err) || strings.Contains(err.Error(), "20") || strings.Contains(err.Error(), "9") {
 		t.Errorf("foreign chapter: err = %v", err)
 	}
@@ -1371,7 +1371,7 @@ func TestInstallationPathIsKept(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := newClient(t, server.URL+"/wiki/", nil).ListPages(context.Background(), listTarget{}, 1, 0); err != nil {
+	if _, err := newClient(t, server.URL+"/wiki/", nil).ListPages(context.Background(), listTarget{}, 1, 0, listQuery{}); err != nil {
 		t.Fatalf("ListPages() = %v", err)
 	}
 	if _, paths, _, _ := rec.snapshot(); len(paths) != 1 || paths[0] != "/wiki/api/pages" {

@@ -27,12 +27,12 @@ var (
 		Description: "List the books of a knowledge base; a connection with targets lists only its books and the books on its shelves",
 		Tags:        []string{"knowledge", "books", "bookstack"},
 		Risk:        bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + bookListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"owned_by":{"properties":{"id":{"type":"integer"}}}},"required":["id","name","slug","description","created_at","updated_at"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of books to return; 0 returns all"},
 			{Name: "offset", Description: "Number of books to skip"},
-		},
+		}, bookListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Book identifier"},
 			{Name: "name", Description: "Book title"},
@@ -80,13 +80,13 @@ var (
 		Description: "List chapters of a knowledge base or of one book",
 		Tags:        []string{"knowledge", "chapters", "bookstack"},
 		Risk:        bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + chapterListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"book_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"owned_by":{"properties":{"id":{"type":"integer"}}},"book_slug":{}},"required":["id","book_id","name","slug","description","created_at","updated_at"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "book_id", Description: "Only chapters of this book; required for a connection with targets other than a single book", Target: "book"},
 			{Name: "limit", Description: "Maximum number of chapters to return; 0 returns all"},
 			{Name: "offset", Description: "Number of chapters to skip"},
-		},
+		}, chapterListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Chapter identifier"},
 			{Name: "book_id", Description: "Identifier of the containing book"},
@@ -253,10 +253,16 @@ type listedJSON struct {
 func invokeBooksList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var in struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(bookListSchema, in.Sort, in.Filters)
+	if err != nil {
 		return nil, err
 	}
 	bound, err := boundScope(resolved)
@@ -270,7 +276,7 @@ func invokeBooksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListBooks(ctx, in.Limit, in.Offset)
+	return client.ListBooks(ctx, in.Limit, in.Offset, query)
 }
 
 func invokeBooksGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -298,11 +304,17 @@ func invokeBooksGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 func invokeChaptersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var in struct {
-		BookID *int64 `json:"book_id"`
-		Limit  int    `json:"limit"`
-		Offset int    `json:"offset"`
+		BookID  *int64      `json:"book_id"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(chapterListSchema, in.Sort, in.Filters)
+	if err != nil {
 		return nil, err
 	}
 	var target listTarget
@@ -323,7 +335,7 @@ func invokeChaptersList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.ListChapters(ctx, target.BookID, in.Limit, in.Offset)
+	return client.ListChapters(ctx, target.BookID, in.Limit, in.Offset, query)
 }
 
 func invokeChaptersGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -346,14 +358,14 @@ func invokeChaptersGet(ctx context.Context, resolved *config.Resolved, secrets *
 
 // ListBooks returns books. On a bound connection the rows are filtered here to the bound books and the books
 // on the bound shelves, so limit and offset count the remaining rows.
-func (c *Client) ListBooks(ctx context.Context, limit, offset int) (output.Collection, error) {
+func (c *Client) ListBooks(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && !c.scope.bookWide() {
 		return output.Collection{}, needsBook("books.list")
 	}
 	if err := c.loadShelves(ctx, 0); err != nil {
 		return output.Collection{}, err
 	}
-	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
+	spec := scanSpec[listedJSON]{
 		op: "list books", path: "/api/books", filtered: c.scope.bound(), limit: limit, offset: offset,
 		arguments: argNames(booksList),
 		id:        func(b listedJSON) int64 { return b.ID },
@@ -366,7 +378,9 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int) (output.Colle
 			addListUsers(row, b.CreatedBy, b.UpdatedBy, b.OwnedBy)
 			return row
 		},
-	})
+	}
+	spec.withListQuery(q, listedValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
@@ -375,7 +389,7 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int) (output.Colle
 
 // ListChapters returns chapters, of one book when bookID is given. A bound connection always has a book here
 // (the argument or its only book); every row is checked against that book on the client.
-func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset int) (output.Collection, error) {
+func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	bookID, err := c.scope.listBook(bookID, "chapters.list")
 	if err != nil {
 		return output.Collection{}, err
@@ -389,7 +403,7 @@ func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset i
 	if bookID != 0 {
 		query.Set("filter[book_id]", strconv.FormatInt(bookID, 10))
 	}
-	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
+	spec := scanSpec[listedJSON]{
 		op: "list chapters", path: "/api/chapters", query: query, filtered: bookID != 0,
 		limit: limit, offset: offset, narrow: "book_id", arguments: argNames(chaptersList),
 		id:   func(ch listedJSON) int64 { return ch.ID },
@@ -408,7 +422,9 @@ func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset i
 			}
 			return row
 		},
-	})
+	}
+	spec.withListQuery(q, listedValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}

@@ -6,6 +6,7 @@ package bookstack
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -90,14 +91,14 @@ var (
 		Tags:         []string{"knowledge", "pages", "bookstack"},
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + pageListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"revision_count":{},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"editor":{},"book_slug":{}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets lists its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
 			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
 			{Name: "limit", Description: "Maximum number of pages to return; 0 returns all"},
 			{Name: "offset", Description: "Number of pages to skip"},
-		},
+		}, pageListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Page identifier"},
 			{Name: "name", Description: "Page title"},
@@ -354,12 +355,18 @@ func Register(reg *capability.Registry) error {
 func invokePagesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		BookID    *int64 `json:"book_id"`
-		ChapterID *int64 `json:"chapter_id"`
-		Limit     int    `json:"limit"`
-		Offset    int    `json:"offset"`
+		BookID    *int64      `json:"book_id"`
+		ChapterID *int64      `json:"chapter_id"`
+		Limit     int         `json:"limit"`
+		Offset    int         `json:"offset"`
+		Sort      string      `json:"sort"`
+		Filters   []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(pageListSchema, arguments.Sort, arguments.Filters)
+	if err != nil {
 		return nil, err
 	}
 	var target listTarget
@@ -386,7 +393,7 @@ func invokePagesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListPages(ctx, target, arguments.Limit, arguments.Offset)
+	return client.ListPages(ctx, target, arguments.Limit, arguments.Offset, query)
 }
 
 func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -663,8 +670,9 @@ const maxScanRequests = 200
 // ListPages returns pages, honouring limit and offset. A limit of zero or less returns every page the
 // instance reports, fetched in pages of at most 500 records. With a book or chapter, or a bound connection,
 // every row is checked here against its book and chapter and foreign rows are dropped, because BookStack
-// silently ignores a filter it does not know; limit and offset then count the rows that remain.
-func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset int) (output.Collection, error) {
+// silently ignores a filter it does not know; limit and offset then count the rows that remain. The filters of q
+// work the same way and come in addition to the book and chapter.
+func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset int, q listQuery) (output.Collection, error) {
 	target, err := c.scope.listIn(target)
 	if err != nil {
 		return output.Collection{}, err
@@ -693,7 +701,7 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 	if target.pagesOnly && len(c.scope.pages) == 1 {
 		query.Set("filter[id]", strconv.FormatInt(c.scope.pages[0], 10))
 	}
-	rows, err := scanList(ctx, c, scanSpec[pageJSON]{
+	spec := scanSpec[pageJSON]{
 		op: "list pages", path: "/api/pages", query: query, filtered: filtered, limit: limit, offset: offset,
 		narrow: "book_id or chapter_id", arguments: argNames(pagesList),
 		id: func(p pageJSON) int64 { return p.ID },
@@ -703,7 +711,9 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 				!(target.pagesOnly && !c.scope.hasPage(p.ID))
 		},
 		row: c.listRow,
-	})
+	}
+	spec.withListQuery(q, pageValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
@@ -711,16 +721,17 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 }
 
 // scanSpec describes one paginated list of a fixed endpoint: which rows belong to the caller and how a row
-// is shown. query carries the fixed filters; count, offset, and sort are set by scanList.
+// is shown. query carries the fixed filters; count and offset are set by scanList. sort is "+field" or
+// "-field" and defaults to "+id".
 type scanSpec[T any] struct {
-	op, path, narrow string
-	query            url.Values
-	filtered         bool
-	limit, offset    int
-	arguments        []string
-	id               func(T) int64
-	keep             func(T) bool
-	row              func(T) output.Row
+	op, path, narrow, sort string
+	query                  url.Values
+	filtered               bool
+	limit, offset          int
+	arguments              []string
+	id                     func(T) int64
+	keep                   func(T) bool
+	row                    func(T) output.Row
 }
 
 // scanList pages through a list endpoint in records of at most 500. In filtered mode every row is checked
@@ -756,7 +767,7 @@ func scanList[T any](ctx context.Context, c *Client, spec scanSpec[T]) ([]output
 		}
 		query.Set("count", strconv.Itoa(count))
 		query.Set("offset", strconv.Itoa(serverOffset))
-		query.Set("sort", "+id")
+		query.Set("sort", cmp.Or(spec.sort, "+id"))
 
 		var page struct {
 			Data  []T `json:"data"`

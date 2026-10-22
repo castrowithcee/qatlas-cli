@@ -43,7 +43,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	orgLabelsUpdate, orgLabelsDelete, issueLabelsList, issueLabelsAdd, issueLabelsReplace, issueLabelsRemove,
 	issueLabelsClear, milestonesList, milestonesGet, milestonesCreate, milestonesUpdate, milestonesDelete,
 	pullRequestsList, pullRequestsGet, pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged,
-	commitPullRequestsGet, pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet,
+	commitPullRequestsGet, pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet,
+	releasesGetLatest, releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag,
 	pullRequestsCreate, pullRequestsUpdate, pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge,
 	pullRequestsMerge, pullRequestBranchesUpdate}
 
