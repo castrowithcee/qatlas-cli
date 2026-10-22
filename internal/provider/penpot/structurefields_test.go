@@ -114,6 +114,10 @@ func structureHandler(c call) (*http.Response, error) {
 		}
 	case cmdFileLibraries:
 		return jsonResponse(200, fullLibrariesBody()), nil
+	case cmdSummary:
+		return jsonResponse(200, summaryBody), nil
+	case cmdPage:
+		return jsonResponse(200, fullPageBody()), nil
 	}
 	return libraryHandler(200, fullLibrariesBody())(c)
 }
@@ -136,6 +140,7 @@ func structureFieldCases() []fieldCase {
 		{commentsList, "one", `{` + fileArgs + `,"thread_id":"` + threadA + `"}`},
 		{membersList, "one", `{"team_id":"` + teamA + `"}`},
 		{webhooksList, "one", `{"team_id":"` + teamA + `"}`},
+		{filesGet, "one", `{` + fileArgs + `}`},
 	}
 }
 
@@ -145,7 +150,10 @@ func collectKeys(t *testing.T, tool, path string, value any, schema map[string]a
 	t.Helper()
 	switch v := value.(type) {
 	case map[string]any:
-		properties, _ := schema["properties"].(map[string]any)
+		properties, described := schema["properties"].(map[string]any)
+		if !described {
+			return // an open object: its members are provider data
+		}
 		for key, member := range v {
 			sub, ok := properties[key].(map[string]any)
 			if !ok {
@@ -156,7 +164,10 @@ func collectKeys(t *testing.T, tool, path string, value any, schema map[string]a
 			collectKeys(t, tool, path+"."+key, member, sub, seen)
 		}
 	case []any:
-		items, _ := schema["items"].(map[string]any)
+		items, described := schema["items"].(map[string]any)
+		if !described {
+			return // an open list
+		}
 		for _, item := range v {
 			collectKeys(t, tool, path, item, items, seen)
 		}
@@ -200,7 +211,7 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 			schemaPaths("", schema, &all)
 			sort.Strings(all)
 			for _, path := range all {
-				if !seen[path] {
+				if !seen[path] && !contains(unfilledPaths[tc.descriptor.ID], path) {
 					t.Errorf("%s: schema member %s is not filled by the fake answer", tc.descriptor.ID, path)
 				}
 			}
@@ -215,7 +226,8 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 					continue
 				}
 				names := map[string]bool{}
-				collectNames(member, names)
+				subschema, _ := schema["properties"].(map[string]any)[key].(map[string]any)
+				collectNames(member, subschema, names)
 				for name := range names {
 					if !strings.Contains(description, name) {
 						t.Errorf("%s: field %s does not describe %s", tc.descriptor.ID, key, name)
@@ -235,19 +247,30 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 }
 
 // collectNames gathers the member names of the entries of a container, at every depth.
-func collectNames(value any, out map[string]bool) {
+// It stops at an open object or list, whose members are provider data.
+func collectNames(value any, schema map[string]any, out map[string]bool) {
 	switch v := value.(type) {
 	case map[string]any:
+		properties, described := schema["properties"].(map[string]any)
+		if !described {
+			return
+		}
 		for key, member := range v {
 			out[key] = true
-			collectNames(member, out)
+			sub, _ := properties[key].(map[string]any)
+			collectNames(member, sub, out)
 		}
 	case []any:
+		items, _ := schema["items"].(map[string]any)
 		for _, item := range v {
-			collectNames(item, out)
+			collectNames(item, items, out)
 		}
 	}
 }
+
+// unfilledPaths lists the schema members a tool's fake answer cannot fill together with the others: a page
+// attribute is either returned or left out and named.
+var unfilledPaths = map[string][]string{filesGet.ID: {".page.omitted_fields"}}
 
 func decodeList(t *testing.T, result, container string) []map[string]any {
 	t.Helper()
