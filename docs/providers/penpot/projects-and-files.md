@@ -14,6 +14,11 @@ Targets, binding, and the rules every change follows are in the [README](README.
 
 ## Reading
 
+The list tools describe what Penpot returns for their commands. `projects.list` also lists a deleted project that
+Penpot still lets a person restore, since Penpot 2.12; it carries `deleted_at`, and the target binding still goes
+through the project list, deleted projects included. Penpot returns only files and libraries that are not deleted
+there; the `deleted-at` field would always be empty and is not returned.
+
 `files.get` reads a file's library summary (for components, variants, colors, and typographies a `count` and up to 20
 `samples`) and one page (up to 200 shapes). `page_id` is optional; the first page of the file is read when omitted.
 It reads the project's file list and refuses a `file_id` that is not in it before the summary or page is requested.
