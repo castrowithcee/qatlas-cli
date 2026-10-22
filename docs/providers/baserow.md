@@ -113,14 +113,11 @@ documentation lists the database token for them.
 
 ## Searching rows
 
-`baserow.rows.search` takes `table_id` (inside the targets) and the arguments of `rows.list`, plus `search`,
-`search_mode`, `filters` (up to 10), `filter_type`, `order_by` (up to 5), and `view_id`, a view of this table. A filter
-or sort entry names its field by `field` or by `field_id`, exactly one of them; the ID is translated through the
-table's schema, and an unknown ID is rejected. Resolved field names may not contain `__` or `,` or begin with `-` or
-`+`. Filter types come from a fixed list; for most of them Baserow decides whether a value is needed.
-
-There is no free filter passthrough: values travel only as URL-encoded query parameters. The API documents no format
-for filter groups; a flat tree does no more than the offered filters, so the JSON filter tree is not offered.
+A filter or sort entry of `baserow.rows.search` names its field by `field` or by `field_id`, exactly one; the ID is
+translated through the table's schema, and an unknown ID is rejected. Resolved names may not contain `__` or `,` or
+begin with `-` or `+`. Filter types come from a fixed list; for most of them Baserow decides whether a value is
+needed. Values travel only as URL-encoded query parameters, never as a passthrough. The API documents no format for
+filter groups and a flat tree does no more than the offered filters, so the JSON filter tree is not offered.
 
 Lookup, formula, rollup, and count fields are filterable and sortable. A link field whose other table is outside the
 targets (or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
@@ -291,10 +288,9 @@ Checked against the official documentation (baserow.io/user-docs/database-api), 
   the address guard of `upload-via-url` come from the Baserow source (tag 2.4.0), not from a live instance; which
   token right an upload needs is not documented, and the media path is the default, not that of every installation.
 
-Taken from the Baserow list-rows API as known, not checked against the documentation: the query parameters `search`,
-`search_mode`, `filter__{field}__{type}` with `user_field_names=true`, `filter_type`, `order_by` (comma-separated,
-`-` prefix for descending), and `view_id`, the filter type names above, and `GET /api/database/views/table/{table_id}/`
-answering a list of views with `id`.
+The list-rows parameters `search`, `search_mode`, `filter__{field}__{type}` with its filter types, `filter_type`,
+`order_by`, `include`, `exclude`, and `view_id` follow the same OpenAPI schema;
+`GET /api/database/views/table/{table_id}/` answering a list of views with `id` is assumed.
 
 Assumed, not verified: `user_field_names=true` and a JSON body keyed by field name for create and update, the row
 object as the answer of create, update, and move (move's answer is not read), an empty 204 answer for delete,
