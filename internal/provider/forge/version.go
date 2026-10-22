@@ -180,9 +180,30 @@ func requireVersion(ctx context.Context, p *product, resolved *config.Resolved, 
 			return err
 		}
 	}
+	return atLeast(op, p, current, needed)
+}
+
+// atLeast refuses a version below the one an operation or argument needs.
+func atLeast(op string, p *product, current, needed version) error {
 	if current.less(needed) {
 		return provider.Fail(op, "this operation is not available on this instance; it needs "+p.name+" "+
 			needed.String()+" or later")
 	}
 	return nil
+}
+
+// need is requireVersion for an argument found only once the client is open: the cached version of the
+// instance, or a read of it that reuses the open token.
+func (c *Client) need(ctx context.Context, op string, needed version) error {
+	current, ok := cachedVersionOf(c.product, c.origin)
+	if !ok {
+		var err error
+		current, err = probe(ctx, c.product, c.origin, func() (string, error) {
+			return strings.TrimPrefix(c.auth, "token "), nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return atLeast(op, c.product, current, needed)
 }

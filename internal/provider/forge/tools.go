@@ -33,7 +33,8 @@ var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
 	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList}
+	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, releasesList, releasesGet, releasesGetLatest,
+	releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

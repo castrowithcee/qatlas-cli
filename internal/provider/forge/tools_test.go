@@ -35,6 +35,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
 			p.id + ".markdown.render", p.id + ".markup.render",
+			p.id + ".releases.create", p.id + ".releases.delete", p.id + ".releases.delete-by-tag",
+			p.id + ".releases.get", p.id + ".releases.get-by-tag", p.id + ".releases.get-latest",
+			p.id + ".releases.list", p.id + ".releases.update",
 			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
 			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
@@ -88,7 +91,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
 		markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList} {
+		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, releasesList, releasesGet, releasesGetLatest,
+		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
