@@ -31,14 +31,16 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
 			}
 		}
-		want := []string{p.id + ".accounts.me", p.id + ".issue-deadlines.set", p.id + ".issue-timeline.list",
+		want := []string{p.id + ".accounts.me", p.id + ".comments.create", p.id + ".comments.delete",
+			p.id + ".comments.get", p.id + ".comments.list", p.id + ".comments.list-repository",
+			p.id + ".comments.update", p.id + ".issue-deadlines.set", p.id + ".issue-timeline.list",
 			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
 			p.id + ".markdown.render", p.id + ".markup.render",
 			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
 			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
-			want = slices.Insert(want, 13, p.id+".nodeinfo.get")
+			want = slices.Insert(want, 19, p.id+".nodeinfo.get")
 		}
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
