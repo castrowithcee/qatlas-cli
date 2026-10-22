@@ -15,9 +15,10 @@ import (
 )
 
 // The release tools act on the releases of one repository inside the connection's targets. A release is
-// addressed by its ID or its tag name, always below the repository's own path, so the instance itself answers
-// for a release that belongs to another repository as not found. A tag name is a validated, escaped path
-// segment. A change sends exactly one request of a fixed method and path with a body of validated members.
+// addressed by its ID or its tag name, always below the repository's own path. The url of every release
+// answer must name that repository and the release's ID, and a change or deletion first reads the release to
+// check it (the evidence read). A tag name is a validated, escaped path segment.
+// A change sends exactly one request of a fixed method and path with a body of validated members.
 
 const (
 	releaseSensitivity = "-release-data"
@@ -89,7 +90,54 @@ func checkTag(name, value string, slash bool) error {
 	return nil
 }
 
-// releaseRead is what the read tools return of a release object.
+// releaseHome checks that a release object belongs to repo and to the ID it reports: its url member is the API
+// address of the release, .../repos/OWNER/REPO/releases/ID, compared by canonical path without case. A release
+// without a url, or with another one, is refused without naming it. want is the ID asked for, 0 for any.
+func releaseHome(repo target, release object, want int64) error {
+	refused := invalidArgument("the release does not belong to this repository")
+	id, hasID := release.integer("id")
+	address, hasURL := release.text("url")
+	if !hasID || !hasURL || (want != 0 && id != want) {
+		return refused
+	}
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return refused
+	}
+	parts := strings.Split(parsed.EscapedPath(), "/")
+	if len(parts) != 8 || parts[0] != "" || parts[1] != "api" || parts[2] != "v1" || parts[3] != "repos" ||
+		parts[6] != "releases" {
+		return refused
+	}
+	owner, ownerErr := url.PathUnescape(parts[4])
+	name, nameErr := url.PathUnescape(parts[5])
+	number, numberErr := strconv.ParseInt(parts[7], 10, 64)
+	if ownerErr != nil || nameErr != nil || numberErr != nil || !strings.EqualFold(owner, repo.owner) ||
+		!strings.EqualFold(name, repo.repo) || number != id {
+		return refused
+	}
+	return nil
+}
+
+// readRelease is the evidence read before a change and the whole of the single-release reads: it reads one
+// release at path and checks that it belongs to repo. want is the ID asked for, 0 when the path names a tag.
+func readRelease(ctx context.Context, c *Client, repo target, op, path string, want int64) (object, error) {
+	var release object
+	if _, err := c.get(ctx, op, path, nil, &release); err != nil {
+		return nil, err
+	}
+	if want != 0 {
+		if id, ok := release.integer("id"); !ok || id != want {
+			return nil, provider.InvalidResponse(op, c.product.name+" returned a release without its ID")
+		}
+	}
+	if err := releaseHome(repo, release, want); err != nil {
+		return nil, err
+	}
+	return release, nil
+}
+
+// releaseMembers are the members the read tools return of a release object.
 var releaseMembers = []member{
 	{name: "id", kind: kindInteger, note: "Numeric ID of the release"},
 	{name: "tag_name", kind: kindText, note: "Name of the Git tag, untrusted data"},
@@ -339,7 +387,7 @@ var releasesList = &tool{
 			}
 			releases := make([]map[string]any, 0, len(rows))
 			for _, row := range rows {
-				if row != nil {
+				if row != nil && releaseHome(repo, row, 0) == nil {
 					releases = append(releases, project(p, releaseMembers, row))
 				}
 			}
@@ -387,12 +435,9 @@ var releasesGet = &tool{
 			return nil, invalidArgument("release_id must be the ID of a release")
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
-			var release object
-			if _, err := c.get(ctx, "get release", releasePath(repo, arguments.ReleaseID), nil, &release); err != nil {
+			release, err := readRelease(ctx, c, repo, "get release", releasePath(repo, arguments.ReleaseID), arguments.ReleaseID)
+			if err != nil {
 				return nil, err
-			}
-			if id, ok := release.integer("id"); !ok || id != arguments.ReleaseID {
-				return nil, provider.InvalidResponse("get release", p.name+" returned a release without its ID")
 			}
 			return project(p, releaseMembers, release), nil
 		}, nil
@@ -429,8 +474,8 @@ var releasesGetLatest = &tool{
 			return nil, err
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
-			var release object
-			if _, err := c.get(ctx, "get latest release", releasesPath(repo)+"/latest", nil, &release); err != nil {
+			release, err := readRelease(ctx, c, repo, "get latest release", releasesPath(repo)+"/latest", 0)
+			if err != nil {
 				return nil, err
 			}
 			return project(p, releaseMembers, release), nil
@@ -471,8 +516,8 @@ var releasesGetByTag = &tool{
 			return nil, err
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
-			var release object
-			if _, err := c.get(ctx, "get release by tag", releaseTagPath(repo, arguments.Tag), nil, &release); err != nil {
+			release, err := readRelease(ctx, c, repo, "get release by tag", releaseTagPath(repo, arguments.Tag), 0)
+			if err != nil {
 				return nil, err
 			}
 			return project(p, releaseMembers, release), nil
@@ -557,6 +602,10 @@ var releasesUpdate = &tool{
 			return nil, err
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
+			if _, err := readRelease(ctx, c, repo, "update release", releasePath(repo, arguments.ReleaseID),
+				arguments.ReleaseID); err != nil {
+				return nil, err
+			}
 			var updated object
 			if err := c.change(ctx, "update release", http.MethodPatch, releasePath(repo, arguments.ReleaseID), body,
 				&updated); err != nil {
@@ -604,6 +653,10 @@ var releasesDelete = &tool{
 			return nil, invalidArgument("release_id must be the ID of a release")
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
+			if _, err := readRelease(ctx, c, repo, "delete release", releasePath(repo, arguments.ReleaseID),
+				arguments.ReleaseID); err != nil {
+				return nil, err
+			}
 			if err := c.change(ctx, "delete release", http.MethodDelete, releasePath(repo, arguments.ReleaseID), nil,
 				nil); err != nil {
 				return nil, err
@@ -650,6 +703,10 @@ var releasesDeleteByTag = &tool{
 			return nil, err
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
+			if _, err := readRelease(ctx, c, repo, "delete release by tag", releaseTagPath(repo, arguments.Tag),
+				0); err != nil {
+				return nil, err
+			}
 			if err := c.change(ctx, "delete release by tag", http.MethodDelete, releaseTagPath(repo, arguments.Tag), nil,
 				nil); err != nil {
 				return nil, err

@@ -301,11 +301,11 @@ func TestReleaseUpdatePatchesOnlyTheSetMembersByID(t *testing.T) {
 		if err != nil || result["id"] != float64(12) {
 			t.Fatalf("%s: %v, %v", p.id, result, err)
 		}
-		if len(*e.calls) != 1 || (*e.calls)[0].method != http.MethodPatch ||
-			(*e.calls)[0].path != "/api/v1/repos/acme/widget/releases/12" {
-			t.Fatalf("%s: calls = %v", p.id, methods(e))
+		if got := methods(e); !reflect.DeepEqual(got, []string{"GET /api/v1/repos/acme/widget/releases/12",
+			"PATCH /api/v1/repos/acme/widget/releases/12"}) {
+			t.Fatalf("%s: calls = %v", p.id, got)
 		}
-		if body := bodyOf(t, (*e.calls)[0]); !reflect.DeepEqual(body, map[string]any{"draft": false, "name": ""}) {
+		if body := bodyOf(t, (*e.calls)[1]); !reflect.DeepEqual(body, map[string]any{"draft": false, "name": ""}) {
 			t.Errorf("%s: body = %v", p.id, body)
 		}
 		for _, bad := range []string{`{"release_id":12}`, `{"draft":true}`, `{"release_id":12,"tag_message":"m"}`} {
@@ -313,7 +313,7 @@ func TestReleaseUpdatePatchesOnlyTheSetMembersByID(t *testing.T) {
 				t.Errorf("%s: %s accepted: %v", p.id, bad, err)
 			}
 		}
-		if len(*e.calls) != 1 {
+		if len(*e.calls) != 2 {
 			t.Errorf("%s: invalid arguments sent a request", p.id)
 		}
 	}
@@ -366,8 +366,9 @@ func TestReleaseDeleteToolsAreListedOnlyAndInNoProfile(t *testing.T) {
 		if err != nil || result["deleted"] != true || result["tag"] != "v1.2.0" {
 			t.Fatalf("%s: %v, %v", p.id, result, err)
 		}
-		if got := methods(e); !reflect.DeepEqual(got, []string{"DELETE /api/v1/repos/acme/widget/releases/12",
-			"DELETE /api/v1/repos/acme/widget/releases/tags/v1.2.0"}) || (*e.calls)[0].body != "" {
+		if got := methods(e); !reflect.DeepEqual(got, []string{"GET /api/v1/repos/acme/widget/releases/12",
+			"DELETE /api/v1/repos/acme/widget/releases/12", "GET /api/v1/repos/acme/widget/releases/tags/v1.2.0",
+			"DELETE /api/v1/repos/acme/widget/releases/tags/v1.2.0"}) || (*e.calls)[1].body != "" {
 			t.Errorf("%s calls = %v", p.id, got)
 		}
 	}
@@ -379,6 +380,68 @@ func TestReleaseChangeWithAnOpenOutcomeIsNeverRepeated(t *testing.T) {
 		_, err := e.invoke(t, releasesCreate, "repo", `{"tag_name":"v1.2.0"}`)
 		if err == nil || !strings.Contains(err.Error(), "may have been applied") || len(*e.calls) != 1 {
 			t.Errorf("%s: %v, calls %d", p.id, err, len(*e.calls))
+		}
+	}
+}
+
+// releaseWithURL is a release of acme/widget whose url member is replaced; an empty address removes it.
+func releaseWithURL(p *product, id, address string) string {
+	body := releaseFixture(p, id, "v1.2.0")
+	start := strings.Index(body, `"url":"`)
+	end := start + strings.Index(body[start+7:], `"`) + 8
+	replacement := `"url":"` + address + `"`
+	if address == "" {
+		replacement = `"x":0`
+	}
+	return body[:start] + replacement + body[end:]
+}
+
+func TestReleaseOfAnotherRepositoryOrWithoutURLIsRefusedBeforeAnyChange(t *testing.T) {
+	foreign := "https://" + apiHost + "/api/v1/repos/other/place/releases/12"
+	for _, p := range products {
+		for _, address := range []string{foreign, "", "https://" + apiHost + "/api/v1/repos/acme/widget/releases/99",
+			"https://" + apiHost + "/api/v1/repos/acme/widget/releases/12/assets", "not a url"} {
+			e := newEnvironment(t, p, func(c call) *http.Response {
+				if c.method == http.MethodGet {
+					return jsonResponse(200, releaseWithURL(p, "12", address))
+				}
+				t.Errorf("%s: change request %s %s", p.id, c.method, c.path)
+				return jsonResponse(204, "")
+			})
+			for tl, arguments := range map[*tool]string{releasesUpdate: `{"release_id":12,"draft":false}`,
+				releasesDelete: `{"release_id":12}`, releasesDeleteByTag: `{"tag":"v1.2.0"}`, releasesGet: `{"release_id":12}`,
+				releasesGetLatest: `{}`, releasesGetByTag: `{"tag":"v1.2.0"}`} {
+				connection := "repo"
+				if tl == releasesDelete || tl == releasesDeleteByTag {
+					connection = "release-delete"
+				}
+				before := len(*e.calls)
+				_, err := e.invoke(t, tl, connection, arguments)
+				if !isInvalidRequest(err) || strings.Contains(err.Error(), "place") ||
+					len(*e.calls) != before+1 || (*e.calls)[before].method != http.MethodGet {
+					t.Errorf("%s %s %q: %v, calls %v", p.id, tl.action, address, err, methods(e))
+				}
+			}
+		}
+	}
+}
+
+func TestReleaseURLComparesWithoutCase(t *testing.T) {
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response {
+			if c.method == http.MethodGet && strings.HasSuffix(c.path, "/releases") {
+				return jsonResponse(200, `[`+releaseWithURL(p, "12", "https://"+apiHost+"/api/v1/repos/ACME/Widget/releases/12")+`,`+
+					releaseWithURL(p, "13", "https://"+apiHost+"/api/v1/repos/other/place/releases/13")+`,`+
+					releaseWithURL(p, "14", "")+`]`)
+			}
+			return jsonResponse(200, releaseWithURL(p, "12", "https://"+apiHost+"/api/v1/repos/ACME/Widget/releases/12"))
+		})
+		if _, err := e.invoke(t, releasesGet, "repo", `{"release_id":12}`); err != nil {
+			t.Errorf("%s: %v", p.id, err)
+		}
+		result, err := e.invoke(t, releasesList, "repo", `{}`)
+		if rows, _ := result["releases"].([]any); err != nil || len(rows) != 1 {
+			t.Errorf("%s: rows = %v, %v; rows of other repositories or without url are dropped", p.id, result, err)
 		}
 	}
 }

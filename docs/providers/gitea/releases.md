@@ -25,10 +25,13 @@ in the repository route group. None was checked against a live instance; a missi
 Every tool takes `repository` (`OWNER/REPO`), checked against the targets before the credential is resolved and
 before any request; it may be left out only when the targets name exactly one repository.
 
-A release is addressed below the repository's own path, by `release_id` or by `tag`, never by a free path. The
-instance answers a release of another repository as not found, so no evidence read precedes a change. `releases.get`
-also refuses an answer whose `id` is not the one asked for. A repository that was renamed answers with a redirect,
-which Qatlas does not follow.
+A release is addressed below the repository's own path, by `release_id` or by `tag`, never by a free path. The `url`
+member of a release is its API address and names the repository and the ID. Every release read checks it by canonical
+path without case: a release without `url`, or whose `url` names another repository or ID, is refused as
+`invalid-request` without naming it. `releases.get` also refuses an answer whose `id` is not the one asked for.
+`releases.update`, `releases.delete`, and `releases.delete-by-tag` first read the release (GET by ID or tag) and send
+their one change only after this check passes. `releases.list` drops rows that fail it. A repository that was renamed
+answers with a redirect, which Qatlas does not follow.
 
 A `tag` is a path segment: it must be a valid Git tag name of at most 255 characters and may not contain a slash.
 A release whose tag contains a slash is reached by its ID. A tag name in the body of `releases.create` and
@@ -43,7 +46,7 @@ A release whose tag contains a slash is reached by its ID. A tag name in the bod
 - `releases.create` creates the Git tag at `target_commitish` when it does not exist, so it can add a tag to the
   repository. Gitea takes `tag_message` for an annotated tag; Forgejo takes `hide_archive_links`, which
   `releases.update` takes as well. The other product's member is refused as `invalid-request` before the secret.
-- `releases.update` changes only the members passed, by ID.
+- `releases.update` changes only the members passed, by ID, after the evidence read.
 - `releases.delete` and `releases.delete-by-tag` remove the release and its assets for good. Whether the instance keeps
   the Git tag is its decision. Both are offered only by a connection whose `tools` list names them, and are in no
   setup profile.
