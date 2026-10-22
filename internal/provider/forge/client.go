@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -94,12 +95,57 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return header, err
 }
 
-// send is the one place that builds and sends a request; an empty auth sends it without a credential. The
-// status is that of the answer, zero when none arrived.
+// request is what a call adds to a plain GET: a fixed method and, for POST, a body the handler built from
+// validated arguments. The zero value is a GET without a body.
+type request struct {
+	method      string
+	contentType string
+	body        []byte
+}
+
+// textAnswer receives a plain-text or HTML answer: data keeps at most limit bytes, and truncated reports that
+// the instance sent more.
+type textAnswer struct {
+	limit     int
+	data      []byte
+	truncated bool
+}
+
+// post sends one POST of a fixed API path with a JSON or plain-text body that the caller built from validated
+// arguments, and reads the answer as text. A POST is never retried.
+func (c *Client) post(ctx context.Context, op, path string, req request, answer *textAnswer) error {
+	req.method = http.MethodPost
+	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, req, answer)
+	return err
+}
+
+// getText sends one GET of a fixed API path and reads the answer as text.
+func (c *Client) getText(ctx context.Context, op, path string, answer *textAnswer) error {
+	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, request{},
+		answer)
+	return err
+}
+
+// send is a GET of a fixed path with a JSON answer; an empty auth sends it without a credential. The status
+// is that of the answer, zero when none arrived.
 func send(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, p *product, root, auth, op, path string,
 	query url.Values, out any) (int, http.Header, error) {
+	return exchange(ctx, client, limiter, p, root, auth, op, path, query, request{}, out)
+}
+
+// exchange is the one place that builds and sends a request. Only GET and POST exist, a body only on POST. out
+// is a *textAnswer for a text answer and a JSON target otherwise.
+func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, p *product, root, auth, op,
+	path string, query url.Values, spec request, out any) (int, http.Header, error) {
 	if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, "?#") {
 		return 0, nil, provider.Fail(op, "the request path is not one of this provider")
+	}
+	method := spec.method
+	if method == "" {
+		method = http.MethodGet
+	}
+	if (method != http.MethodGet && method != http.MethodPost) || (method == http.MethodGet && spec.body != nil) {
+		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
 	}
 	for key := range query {
 		for _, forbidden := range forbiddenQuery {
@@ -115,14 +161,26 @@ func send(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, 
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	var body io.Reader
+	if spec.body != nil {
+		body = bytes.NewReader(spec.body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return 0, nil, provider.Fail(op, "the request could not be built")
 	}
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
-	req.Header.Set("Accept", "application/json")
+	text, isText := out.(*textAnswer)
+	if isText {
+		req.Header.Set("Accept", "text/html, text/plain")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
+	if spec.body != nil {
+		req.Header.Set("Content-Type", spec.contentType)
+	}
 	req.Header.Set("User-Agent", "qatlas-cli")
 	response, err := client.Do(req)
 	if err != nil {
@@ -131,6 +189,18 @@ func send(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, 
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return response.StatusCode, nil, refusal(op, p, limiter, response)
+	}
+	if isText {
+		data, err := io.ReadAll(io.LimitReader(response.Body, int64(text.limit)+1))
+		if err != nil {
+			return response.StatusCode, nil, provider.InvalidResponse(op, "the "+p.name+" response could not be read")
+		}
+		text.truncated = len(data) > text.limit
+		if text.truncated {
+			data = data[:text.limit]
+		}
+		text.data = data
+		return response.StatusCode, response.Header, nil
 	}
 	if failure := provider.ReadJSON(op, p.name, response.Body, maxResponseBytes, out); failure != nil {
 		return response.StatusCode, nil, failure
@@ -171,6 +241,18 @@ func bounded(value string) string {
 
 // object is one provider object as raw members, read by the projections.
 type object map[string]json.RawMessage
+
+// truncateText cuts a text to at most limit bytes without splitting a character.
+func truncateText(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	value = value[:limit]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
+}
 
 func (o object) text(key string) (string, bool) {
 	var value string
