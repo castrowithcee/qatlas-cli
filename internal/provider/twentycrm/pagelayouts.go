@@ -58,11 +58,19 @@ var pageLayoutRisk = capability.Risk{
 
 const (
 	pageLayoutNote = "Only dashboard layouts are read; layouts of other types are neither listed nor readable. " +
-		"Titles are untrusted workspace data and may hold personal data. Widgets are reduced to type, title, " +
-		"position, object, and chart type; no widget content, filter, or chart data is read"
+		"Titles and widget settings are untrusted workspace data and may hold personal data. Addresses with a " +
+		"query, fragment, or credentials are removed from widget settings, and the address of an embedded page is " +
+		"never output, only its origin"
 
 	pageLayoutSummaryProps = `"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
-		`"tab_count":{"type":"number"}`
+		`"tab_count":{"type":"number"},` + pageLayoutExtraProps
+
+	pageLayoutExtraProps = `"object_metadata_id":{"type":"string"},"default_tab_id":{"type":"string"},` +
+		`"universal_identifier":{"type":"string"},"application_id":{"type":"string"},` +
+		`"is_system_side_effect":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
+
+	layoutStamps = `"universal_identifier":{"type":"string"},"application_id":{"type":"string"},` +
+		`"is_system_side_effect":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 
 	widgetPositionProps = `"layout_mode":{"type":"string"},"row":{"type":"number"},"column":{"type":"number"},` +
 		`"row_span":{"type":"number"},"column_span":{"type":"number"},"index":{"type":"number"}`
@@ -70,15 +78,17 @@ const (
 	widgetProps = `"id":{"type":"string"},"title":{"type":"string"},"type":{"type":"string"},` +
 		`"object_metadata_id":{"type":"string"},"object":{"type":"string"},` +
 		`"position":{"type":"object","properties":{` + widgetPositionProps + `},"additionalProperties":false},` +
-		`"chart_type":{"type":"string"},"iframe_origin":{"type":"string"},"is_active":{"type":"boolean"}`
+		`"chart_type":{"type":"string"},"iframe_origin":{"type":"string"},"is_active":{"type":"boolean"},` +
+		`"configuration":{"type":"object"},"conditional_display":{},"conditional_availability_expression":{},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}},` + layoutStamps
 
 	tabProps = `"id":{"type":"string"},"title":{"type":"string"},"position":{"type":"number"},"icon":{"type":"string"},` +
-		`"layout_mode":{"type":"string"},"is_active":{"type":"boolean"},` +
+		`"layout_mode":{"type":"string"},"is_active":{"type":"boolean"},` + layoutStamps + `,` +
 		`"widgets":{"type":"array","items":{"type":"object","properties":{` + widgetProps + `},` +
 		`"required":["id","title","type"],"additionalProperties":false}}`
 
 	pageLayoutSchemaProps = `"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
-		`"is_first_tab_pinned":{"type":"boolean"},` +
+		`"is_first_tab_pinned":{"type":"boolean"},` + pageLayoutExtraProps + `,` +
 		`"tabs":{"type":"array","items":{"type":"object","properties":{` + tabProps + `},` +
 		`"required":["id","title","widgets"],"additionalProperties":false}}`
 )
@@ -127,7 +137,20 @@ var pageLayoutsGet = capability.Descriptor{
 		{Name: "id", Description: "UUID of the dashboard layout, as returned by twenty-crm.page-layouts.list", Required: true},
 	},
 	Fields: []capability.Field{
+		{Name: "id", Description: "UUID of the layout"},
+		{Name: "name", Description: "Name of the layout, untrusted data"},
+		{Name: "is_first_tab_pinned", Description: "True when the first tab stays pinned"},
+		{Name: "object_metadata_id", Description: "UUID of the object the layout belongs to, if any"},
+		{Name: "default_tab_id", Description: "UUID of the tab focused on mobile and in the side panel"},
+		{Name: "universal_identifier", Description: "Identifier of the layout across workspaces"},
+		{Name: "application_id", Description: "UUID of the application that owns the layout"},
+		{Name: "is_system_side_effect", Description: "True for a layout Twenty created as a side effect"},
+		{Name: "created_at", Description: "Creation time"},
+		{Name: "updated_at", Description: "Time of the last change"},
 		{Name: "tabs", Description: "The tabs with their widgets; at most 50 tabs of at most 100 widgets each"},
+		{Name: "configuration", Description: "Widget settings as sent by Twenty, untrusted data; at most 8 levels and 16 KiB, " +
+			"otherwise left out and named in omitted_fields; identifiers in it are not resolved"},
+		{Name: "omitted_fields", Description: "Widget members left out because they exceed the limits"},
 		{Name: "iframe_origin", Description: "Of an embedded page only scheme, host, and port; never path, query, or credentials"},
 		{Name: "type", Description: "Widget type; a type unknown to Qatlas is unknown"},
 	},
@@ -143,6 +166,37 @@ type PageLayoutSummary struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
 	TabCount int    `json:"tab_count"`
+
+	layoutExtra
+	layoutStamp
+}
+
+// layoutStamp holds the members that summaries, layouts, tabs, and widgets share.
+type layoutStamp struct {
+	UniversalIdentifier string `json:"universal_identifier,omitempty"`
+	ApplicationID       string `json:"application_id,omitempty"`
+	IsSystemSideEffect  *bool  `json:"is_system_side_effect,omitempty"`
+	CreatedAt           string `json:"created_at,omitempty"`
+	UpdatedAt           string `json:"updated_at,omitempty"`
+}
+
+// layoutExtra holds the members of a dashboard layout beyond name, type, and tabs.
+type layoutExtra struct {
+	ObjectMetadataID string `json:"object_metadata_id,omitempty"`
+	DefaultTabID     string `json:"default_tab_id,omitempty"`
+}
+
+type layoutStampRecord struct {
+	UniversalIdentifier *string `json:"universalIdentifier"`
+	ApplicationID       *string `json:"applicationId"`
+	IsSystemSideEffect  *bool   `json:"isSystemSideEffect"`
+	CreatedAt           *string `json:"createdAt"`
+	UpdatedAt           *string `json:"updatedAt"`
+}
+
+func (r layoutStampRecord) stamp() layoutStamp {
+	return layoutStamp{UniversalIdentifier: uuidText(r.UniversalIdentifier), ApplicationID: uuidText(r.ApplicationID),
+		IsSystemSideEffect: r.IsSystemSideEffect, CreatedAt: timestamp(r.CreatedAt), UpdatedAt: timestamp(r.UpdatedAt)}
 }
 
 // PageLayoutList is one page of dashboard layouts.
@@ -162,7 +216,8 @@ type WidgetPosition struct {
 	Index      *float64 `json:"index,omitempty"`
 }
 
-// DashboardWidget is a widget reduced to what identifies and places it. Its configuration is not passed on.
+// DashboardWidget is a widget with its settings. Configuration and the conditions are untrusted free-form
+// data; they are bounded, and addresses that grant access are removed.
 type DashboardWidget struct {
 	ID               string          `json:"id"`
 	Title            string          `json:"title"`
@@ -173,6 +228,12 @@ type DashboardWidget struct {
 	ChartType        string          `json:"chart_type,omitempty"`
 	IframeOrigin     string          `json:"iframe_origin,omitempty"`
 	IsActive         *bool           `json:"is_active,omitempty"`
+
+	Configuration                     any      `json:"configuration,omitempty"`
+	ConditionalDisplay                any      `json:"conditional_display,omitempty"`
+	ConditionalAvailabilityExpression any      `json:"conditional_availability_expression,omitempty"`
+	OmittedFields                     []string `json:"omitted_fields,omitempty"`
+	layoutStamp
 }
 
 // DashboardTab is one tab of a dashboard layout.
@@ -184,6 +245,7 @@ type DashboardTab struct {
 	LayoutMode string            `json:"layout_mode,omitempty"`
 	IsActive   *bool             `json:"is_active,omitempty"`
 	Widgets    []DashboardWidget `json:"widgets"`
+	layoutStamp
 }
 
 // PageLayout is a dashboard layout with tabs and widgets. It carries neither creator nor application.
@@ -193,9 +255,14 @@ type PageLayout struct {
 	Type             string         `json:"type"`
 	IsFirstTabPinned *bool          `json:"is_first_tab_pinned,omitempty"`
 	Tabs             []DashboardTab `json:"tabs"`
+	layoutExtra
+	layoutStamp
 }
 
 type pageLayoutRecord struct {
+	layoutStampRecord
+	ObjectMetadataID *string         `json:"objectMetadataId"`
+	DefaultTabID     *string         `json:"defaultTabToFocusOnMobileAndSidePanelId"`
 	ID               string          `json:"id"`
 	Name             *string         `json:"name"`
 	Type             string          `json:"type"`
@@ -236,6 +303,8 @@ func iframeOrigin(raw string) string {
 	return origin
 }
 
+func (r pageLayoutRecord) stamp() layoutStamp { return r.layoutStampRecord.stamp() }
+
 func (r pageLayoutRecord) summary(op string) (PageLayoutSummary, error) {
 	if !validUUID(r.ID) {
 		return PageLayoutSummary{}, provider.InvalidResponse(op, "Twenty returned a dashboard layout without a usable identifier")
@@ -252,19 +321,23 @@ func (r pageLayoutRecord) summary(op string) (PageLayoutSummary, error) {
 		}
 	}
 	return PageLayoutSummary{ID: r.ID, Name: metaText(r.Name, metaNameMax), Type: enumToken(pageLayoutTypes, r.Type),
-		TabCount: tabs}, nil
+		TabCount: tabs, layoutStamp: r.stamp(),
+		layoutExtra: layoutExtra{ObjectMetadataID: uuidText(r.ObjectMetadataID), DefaultTabID: uuidText(r.DefaultTabID)}}, nil
 }
 
 func projectWidget(op string, item json.RawMessage, objects map[string]string) (*DashboardWidget, error) {
 	var record struct {
-		ID               string          `json:"id"`
-		Title            *string         `json:"title"`
-		Type             string          `json:"type"`
-		ObjectMetadataID *string         `json:"objectMetadataId"`
-		Position         json.RawMessage `json:"position"`
-		Configuration    json.RawMessage `json:"configuration"`
-		IsActive         *bool           `json:"isActive"`
-		DeletedAt        *string         `json:"deletedAt"`
+		ID                 string          `json:"id"`
+		Title              *string         `json:"title"`
+		Type               string          `json:"type"`
+		ObjectMetadataID   *string         `json:"objectMetadataId"`
+		Position           json.RawMessage `json:"position"`
+		Configuration      json.RawMessage `json:"configuration"`
+		ConditionalDisplay json.RawMessage `json:"conditionalDisplay"`
+		ConditionalExpr    json.RawMessage `json:"conditionalAvailabilityExpression"`
+		IsActive           *bool           `json:"isActive"`
+		layoutStampRecord
+		DeletedAt *string `json:"deletedAt"`
 	}
 	if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) {
 		return nil, provider.InvalidResponse(op, "Twenty returned an unusable dashboard widget")
@@ -294,7 +367,30 @@ func projectWidget(op string, item json.RawMessage, objects map[string]string) (
 			Index: optionalNumber(position.Index)}
 	}
 
-	// The configuration is read only for the two members named here; everything else in it is dropped.
+	widget.layoutStamp = record.stamp()
+	// The address of an embedded page can grant access without signing in; only its origin is output.
+	var dropKeys []string
+	if widget.Type == "IFRAME" {
+		dropKeys = []string{"url"}
+	}
+	for _, free := range []struct {
+		name   string
+		raw    json.RawMessage
+		target *any
+		drop   []string
+	}{
+		{"configuration", record.Configuration, &widget.Configuration, dropKeys},
+		{"conditional_display", record.ConditionalDisplay, &widget.ConditionalDisplay, nil},
+		{"conditional_availability_expression", record.ConditionalExpr, &widget.ConditionalAvailabilityExpression, nil},
+	} {
+		value, omitted := boundFreeObject(free.raw, free.drop...)
+		if omitted {
+			widget.OmittedFields = append(widget.OmittedFields, free.name)
+		}
+		*free.target = value
+	}
+
+	// The chart type and the origin come from the raw configuration, independent of the bounded copy above.
 	var configuration struct {
 		ConfigurationType string  `json:"configurationType"`
 		URL               *string `json:"url"`
@@ -315,7 +411,8 @@ func projectWidget(op string, item json.RawMessage, objects map[string]string) (
 // project builds the tabs with their widgets. Entries Twenty reports as deleted are skipped.
 func (r pageLayoutRecord) project(op string, objects map[string]string) (*PageLayout, error) {
 	layout := &PageLayout{ID: r.ID, Name: metaText(r.Name, metaNameMax), Type: enumToken(pageLayoutTypes, r.Type),
-		IsFirstTabPinned: r.IsFirstTabPinned, Tabs: []DashboardTab{}}
+		IsFirstTabPinned: r.IsFirstTabPinned, Tabs: []DashboardTab{}, layoutStamp: r.stamp(),
+		layoutExtra: layoutExtra{ObjectMetadataID: uuidText(r.ObjectMetadataID), DefaultTabID: uuidText(r.DefaultTabID)}}
 	tabs, ok := rawItems(r.Tabs)
 	if !ok || len(tabs) > dashboardTabsMax {
 		return nil, provider.InvalidResponse(op, "Twenty returned an unusable or oversized dashboard layout")
@@ -330,6 +427,7 @@ func (r pageLayoutRecord) project(op string, objects map[string]string) (*PageLa
 			IsActive   *bool           `json:"isActive"`
 			DeletedAt  *string         `json:"deletedAt"`
 			Widgets    json.RawMessage `json:"widgets"`
+			layoutStampRecord
 		}
 		if json.Unmarshal(item, &record) != nil || !validUUID(record.ID) {
 			return nil, provider.InvalidResponse(op, "Twenty returned an unusable dashboard tab")
@@ -355,6 +453,7 @@ func (r pageLayoutRecord) project(op string, objects map[string]string) (*PageLa
 				tab.Widgets = append(tab.Widgets, *widget)
 			}
 		}
+		tab.layoutStamp = record.stamp()
 		layout.Tabs = append(layout.Tabs, tab)
 	}
 	return layout, nil

@@ -233,6 +233,9 @@ passed to Todoist; the due window (inclusive dates compared with the date part o
 The filters name tasks, never reach: `ids`, `parent_id`, and `workspace_id` widen nothing, and every returned
 task is held to the connection's targets, so a task named in `ids` that lies outside them is dropped.
 
+`todoist.projects.list` takes `workspace_id` and `folder_id`, not with `search`; `todoist.sections.list` takes
+`workspace_id`, also with `search`, not with `project_id` or on a one-project connection. They widen nothing.
+
 A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
 `todoist.tasks.filter` as `query`, and for completed tasks by `todoist.completed-tasks.list` as `query`. Their
 results are held to the connection's projects like every other list, so an expression that names another

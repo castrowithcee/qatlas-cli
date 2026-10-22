@@ -175,6 +175,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 
 - [Instance-wide tools](instance.md): settings, signing keys, NodeInfo, and rendering
 - [Issues](issues.md): issues, due dates, timelines, issue templates, and the issue configuration
+- [Comments](comments.md): comments on issues and pull requests
 
 ## Not offered
 
