@@ -132,7 +132,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"comments":` + commentTreeSchema + `,"comments_truncated":{"type":"boolean"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Page identifier"},
@@ -154,6 +154,8 @@ var (
 			{Name: "created_by", Description: "Creator as id, name and slug"},
 			{Name: "updated_by", Description: "Last editor as id, name and slug"},
 			{Name: "owned_by", Description: "Owner as id, name and slug"},
+			{Name: "comments", Description: commentTreeDescription},
+			{Name: "comments_truncated", Description: "True when the comment tree or a comment text was cut"},
 		},
 		Examples: []capability.Example{{
 			Description: "Read page 42",
@@ -649,6 +651,9 @@ type pageJSON struct {
 	CreatedBy     *userJSON `json:"created_by"`
 	UpdatedBy     *userJSON `json:"updated_by"`
 	OwnedBy       *userJSON `json:"owned_by"`
+
+	// Comments is only read by a page read.
+	Comments *commentTreeJSON `json:"comments"`
 }
 
 type listJSON struct {
@@ -907,7 +912,7 @@ func pageFields(page pageJSON, detail bool) output.Object {
 	if page.RevisionCount != nil {
 		revisions = *page.RevisionCount
 	}
-	return output.Object{Fields: []output.Field{
+	fields := []output.Field{
 		{Name: "id", Value: page.ID}, {Name: "name", Value: page.Name}, {Name: "slug", Value: page.Slug},
 		{Name: "book_id", Value: page.BookID}, {Name: "chapter_id", Value: page.ChapterID},
 		{Name: "created_at", Value: page.CreatedAt}, {Name: "updated_at", Value: page.UpdatedAt},
@@ -918,7 +923,16 @@ func pageFields(page pageJSON, detail bool) output.Object {
 		{Name: "tags", Value: tags(page.Tags)},
 		{Name: "created_by", Value: user(page.CreatedBy)}, {Name: "updated_by", Value: user(page.UpdatedBy)},
 		{Name: "owned_by", Value: user(page.OwnedBy)},
-	}}
+	}
+	if detail {
+		if tree, cut := commentTree(page.Comments); tree != nil {
+			fields = append(fields, output.Field{Name: "comments", Value: tree})
+			if cut {
+				fields = append(fields, output.Field{Name: "comments_truncated", Value: true})
+			}
+		}
+	}
+	return output.Object{Fields: fields}
 }
 
 // TestConnection performs the smallest authenticated read and reports the stable outcome class.

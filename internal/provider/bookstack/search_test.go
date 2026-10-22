@@ -206,8 +206,8 @@ func TestSearchResultShapeAndCaps(t *testing.T) {
 		t.Errorf("total = %v", obj.Fields[1])
 	}
 	r := obj.Fields[0].Value.([]map[string]any)[0]
-	if len(r["tags"].([]map[string]string)) != 50 {
-		t.Errorf("tags = %d", len(r["tags"].([]map[string]string)))
+	if len(r["tags"].([]map[string]any)) != 50 {
+		t.Errorf("tags = %d", len(r["tags"].([]map[string]any)))
 	}
 	if len([]rune(r["preview_name"].(string))) != 2000 || len(r["preview_content"].(string)) != 2000 {
 		t.Errorf("previews not capped")

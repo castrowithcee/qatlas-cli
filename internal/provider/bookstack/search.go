@@ -40,8 +40,11 @@ var contentSearch = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{` +
 		`"type":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},` +
 		`"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"url":{"type":"string"},` +
-		`"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}}}},` +
-		`"preview_name":{"type":"string"},"preview_content":{"type":"string"}}}},"total":{"type":"integer"}},"required":["results","total"]}`),
+		`"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},` +
+		`"preview_name":{"type":"string"},"preview_content":{"type":"string"},"draft":{"type":"boolean"},"template":{"type":"boolean"},` +
+		`"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
+		`"book":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},` +
+		`"chapter":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}}}}},"total":{"type":"integer"}},"required":["results","total"]}`),
 	Arguments: []capability.Argument{
 		{Name: "query", Description: "Search text, 1 to 1000 characters; the BookStack search syntax is allowed", Required: true},
 		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; without book_id and chapter_id, a connection with targets searches its only book, its only chapter, or its bound pages, and needs one of them otherwise", Target: "book"},
@@ -50,7 +53,7 @@ var contentSearch = capability.Descriptor{
 		{Name: "count", Description: "Results per page, 1 to 100; 20 when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "results", Description: "Hits with type, id, name, slug, book_id, chapter_id, url, tags, preview_name, preview_content"},
+		{Name: "results", Description: "Hits with type, id, name, slug, book_id, chapter_id, url, tags (name, value, order), preview_name, preview_content, and where BookStack gives them draft, template, created_at, updated_at, book, and chapter (id, name, slug; id only on a connection with targets unless that book or chapter is bound)"},
 		{Name: "total", Description: "Number of hits as BookStack estimates it"},
 	},
 	Examples: []capability.Example{{Description: "Search pages about backups in one book", Arguments: json.RawMessage(`{"query":"backup {type:page}","book_id":7}`)}},
@@ -64,14 +67,29 @@ type searchHit struct {
 	BookID    int64  `json:"book_id"`
 	ChapterID int64  `json:"chapter_id"`
 	URL       string `json:"url"`
+	// Draft and Template only appear on pages; a pointer tells false from absent.
+	Draft     *bool   `json:"draft"`
+	Template  *bool   `json:"template"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+	Book      *hitRef `json:"book"`
+	Chapter   *hitRef `json:"chapter"`
 	Tags      []struct {
 		Name  string `json:"name"`
 		Value string `json:"value"`
+		Order *int64 `json:"order"`
 	} `json:"tags"`
 	PreviewHTML struct {
 		Name    string `json:"name"`
 		Content string `json:"content"`
 	} `json:"preview_html"`
+}
+
+// hitRef is the book or chapter a hit lies in.
+type hitRef struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 }
 
 type searchJSON struct {
@@ -170,7 +188,7 @@ func (c *Client) Search(ctx context.Context, query string, target listTarget, pa
 		if (c.scope.bound() || bookID != 0) && !c.hitAllowed(h, target, bookID) {
 			continue
 		}
-		results = append(results, hitResult(h))
+		results = append(results, c.hitResult(h))
 	}
 	return output.Object{Fields: []output.Field{{Name: "results", Value: results}, {Name: "total", Value: found.Total}}}, nil
 }
@@ -240,7 +258,7 @@ func (c *Client) searchPages(ctx context.Context, query string, page, count int)
 			added++
 			if h.Type == "page" && c.scope.hasPage(h.ID) && !found[h.ID] {
 				found[h.ID] = true
-				kept = append(kept, hitResult(h))
+				kept = append(kept, c.hitResult(h))
 			}
 		}
 		if added == 0 || server*maxSearchCount >= answer.Total {
@@ -255,21 +273,55 @@ func (c *Client) searchPages(ctx context.Context, query string, page, count int)
 	return output.Object{Fields: []output.Field{{Name: "results", Value: results}, {Name: "total", Value: len(kept)}}}, nil
 }
 
-func hitResult(h searchHit) map[string]any {
-	tags := []map[string]string{}
+func (c *Client) hitResult(h searchHit) map[string]any {
+	tags := []map[string]any{}
 	for _, t := range h.Tags {
 		if len(tags) >= maxResultTags {
 			break
 		}
-		tags = append(tags, map[string]string{"name": clip(t.Name, maxResultString), "value": clip(t.Value, maxResultString)})
+		tag := map[string]any{"name": clip(t.Name, maxResultString), "value": clip(t.Value, maxResultString)}
+		if t.Order != nil {
+			tag["order"] = *t.Order
+		}
+		tags = append(tags, tag)
 	}
-	return map[string]any{
+	out := map[string]any{
 		"type": clip(h.Type, maxResultString), "id": h.ID, "name": clip(h.Name, maxResultString),
 		"slug": clip(h.Slug, maxResultString), "book_id": h.BookID, "chapter_id": h.ChapterID,
 		"url": clip(h.URL, maxResultString), "tags": tags,
 		"preview_name":    clip(h.PreviewHTML.Name, maxPreviewChars),
 		"preview_content": clip(h.PreviewHTML.Content, maxPreviewChars),
 	}
+	if h.Draft != nil {
+		out["draft"] = *h.Draft
+	}
+	if h.Template != nil {
+		out["template"] = *h.Template
+	}
+	if h.CreatedAt != "" {
+		out["created_at"] = h.CreatedAt
+	}
+	if h.UpdatedAt != "" {
+		out["updated_at"] = h.UpdatedAt
+	}
+	// On a connection with targets, the book and the chapter of a hit are named only when they are bound
+	// themselves; a chapter inside a bound book is not enough. Any other one appears by identifier.
+	if h.Book != nil && h.Book.ID > 0 {
+		out["book"] = hitRefView(*h.Book, !c.scope.bound() || c.inBook(h.Book.ID))
+	}
+	if h.Chapter != nil && h.Chapter.ID > 0 {
+		out["chapter"] = hitRefView(*h.Chapter, !c.scope.bound() || c.scope.hasChapter(h.Chapter.ID))
+	}
+	return out
+}
+
+func hitRefView(r hitRef, named bool) map[string]any {
+	out := map[string]any{"id": r.ID}
+	if named {
+		out["name"] = clip(r.Name, maxResultString)
+		out["slug"] = clip(r.Slug, maxResultString)
+	}
+	return out
 }
 
 // clip shortens s to at most n characters without splitting one.
