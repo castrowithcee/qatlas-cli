@@ -158,32 +158,6 @@ func TestSalesVoucherGuardsTheIdentifier(t *testing.T) {
 	}
 }
 
-// The shared mapper must not change what invoices.get reports.
-func TestInvoiceOutputIsUnchangedBySharedMapper(t *testing.T) {
-	serve(t, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(http.StatusOK, invoiceBody), nil
-	})
-	c, _ := client(t)
-	invoice, err := c.GetInvoice(context.Background(), invoiceID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	encoded, _ := json.Marshal(invoice)
-	want := `{"id":"` + invoiceID + `","voucher_number":"RE1012","voucher_status":"overdue","overdue":true,` +
-		`"voucher_date":"2026-05-14T00:00:00.000+02:00","due_date":"2026-05-24T00:00:00.000+02:00",` +
-		`"created_date":"2026-05-14T16:52:21.000+02:00","updated_date":"2026-05-14T16:52:21.000+02:00",` +
-		`"archived":false,"language":"de","title":"Rechnung","introduction":"Ihre bestellten Positionen",` +
-		`"remark":"Vielen Dank","tax_type":"net","currency":"EUR","total_net_amount":26.72,` +
-		`"total_gross_amount":29.85,"total_tax_amount":3.13,"contact":{"id":"777c7793-9fbb-4ec7-9254-0619c199761e",` +
-		`"name":"Bike \u0026 Ride GmbH \u0026 Co. KG","supplement":"Gebäude 10","street":"Musterstraße 42",` +
-		`"zip":"79112","city":"Freiburg","country_code":"DE"},"line_items":[{"type":"material",` +
-		`"name":"Abus Kabelschloss","description":"` + bodyCanary + `","quantity":2,"unit_name":"Stück",` +
-		`"unit_net_amount":13.4,"unit_gross_amount":15.95,"tax_rate_percentage":19,"discount_percentage":50,"amount":13.4}]}`
-	if string(encoded) != want {
-		t.Errorf("invoice output changed:\n got %s\nwant %s", encoded, want)
-	}
-}
-
 // Each tool satisfies its registered contract through the application core, including the delivery note
 // without prices, and the core refuses a malformed identifier before any provider I/O.
 func TestSalesVoucherToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {

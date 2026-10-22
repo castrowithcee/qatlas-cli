@@ -18,6 +18,7 @@ import (
 // and unit prices stay absent instead of being invented.
 type SalesVoucher struct {
 	ID               string           `json:"id"`
+	OrganizationID   string           `json:"organization_id,omitempty"`
 	VoucherNumber    string           `json:"voucher_number,omitempty"`
 	VoucherStatus    string           `json:"voucher_status,omitempty"`
 	VoucherDate      string           `json:"voucher_date,omitempty"`
@@ -31,10 +32,13 @@ type SalesVoucher struct {
 	Version          int              `json:"version,omitempty"`
 	Archived         bool             `json:"archived"`
 	Language         string           `json:"language,omitempty"`
+	PrintLayoutID    string           `json:"print_layout_id,omitempty"`
 	Title            string           `json:"title,omitempty"`
 	Introduction     string           `json:"introduction,omitempty"`
 	Remark           string           `json:"remark,omitempty"`
 	TaxType          string           `json:"tax_type,omitempty"`
+	TaxSubType       string           `json:"tax_sub_type,omitempty"`
+	TaxTypeNote      string           `json:"tax_type_note,omitempty"`
 	Currency         string           `json:"currency,omitempty"`
 	TotalNetAmount   json.Number      `json:"total_net_amount,omitempty"`
 	TotalGrossAmount json.Number      `json:"total_gross_amount,omitempty"`
@@ -42,7 +46,66 @@ type SalesVoucher struct {
 	Contact          *Contact         `json:"contact,omitempty"`
 	Shipping         *Shipping        `json:"shipping,omitempty"`
 	RelatedVouchers  []RelatedVoucher `json:"related_vouchers,omitempty"`
-	LineItems        []LineItem       `json:"line_items"`
+	LineItems        []SalesLineItem  `json:"line_items"`
+
+	ElectronicDocumentProfile string             `json:"electronic_document_profile,omitempty"`
+	ContactPerson             string             `json:"contact_person,omitempty"`
+	TotalDiscountAbsolute     json.Number        `json:"total_discount_absolute,omitempty"`
+	TotalDiscountPercentage   json.Number        `json:"total_discount_percentage,omitempty"`
+	TaxAmounts                []TaxAmount        `json:"tax_amounts,omitempty"`
+	PaymentConditions         *PaymentConditions `json:"payment_conditions,omitempty"`
+}
+
+// SalesLineItem is a position of a sales voucher. Recurring templates keep the narrower LineItem.
+type SalesLineItem struct {
+	LineItem
+	ID           string `json:"id,omitempty"`
+	UnitCurrency string `json:"unit_currency,omitempty"`
+	// Optional and Alternative are quotation members; a false value the provider sent stays visible.
+	Optional    *bool           `json:"optional,omitempty"`
+	Alternative *bool           `json:"alternative,omitempty"`
+	SubItems    []SalesLineItem `json:"sub_items,omitempty"`
+}
+
+// TaxAmount is the tax and net amount of one tax rate.
+type TaxAmount struct {
+	TaxRatePercentage json.Number `json:"tax_rate_percentage,omitempty"`
+	TaxAmount         json.Number `json:"tax_amount,omitempty"`
+	NetAmount         json.Number `json:"net_amount,omitempty"`
+}
+
+// PaymentConditions are the payment term and cash discount of a sales voucher. The texts are untrusted data.
+type PaymentConditions struct {
+	PaymentTermLabel          string              `json:"payment_term_label,omitempty"`
+	PaymentTermLabelTemplate  string              `json:"payment_term_label_template,omitempty"`
+	PaymentTermDuration       json.Number         `json:"payment_term_duration,omitempty"`
+	PaymentDiscountConditions *DiscountConditions `json:"payment_discount_conditions,omitempty"`
+}
+
+// DiscountConditions is the cash discount (Skonto) and the days it is valid.
+type DiscountConditions struct {
+	DiscountPercentage json.Number `json:"discount_percentage,omitempty"`
+	DiscountRange      json.Number `json:"discount_range,omitempty"`
+}
+
+// DownPaymentDeduction is a down payment a closing invoice deducts. The title is untrusted data.
+type DownPaymentDeduction struct {
+	ID                  string      `json:"id,omitempty"`
+	VoucherType         string      `json:"voucher_type,omitempty"`
+	Title               string      `json:"title,omitempty"`
+	VoucherNumber       string      `json:"voucher_number,omitempty"`
+	VoucherDate         string      `json:"voucher_date,omitempty"`
+	ReceivedGrossAmount json.Number `json:"received_gross_amount,omitempty"`
+	ReceivedNetAmount   json.Number `json:"received_net_amount,omitempty"`
+	ReceivedTaxAmount   json.Number `json:"received_tax_amount,omitempty"`
+	TaxRatePercentage   json.Number `json:"tax_rate_percentage,omitempty"`
+}
+
+// dropAlternatives removes the quotation-only line item members from a voucher type that does not define them.
+func (v *SalesVoucher) dropAlternatives() {
+	for i := range v.LineItems {
+		v.LineItems[i].Optional, v.LineItems[i].Alternative, v.LineItems[i].SubItems = nil, nil, nil
+	}
 }
 
 // Shipping is the delivery or service period of a sales voucher.
@@ -67,21 +130,23 @@ type salesVoucherKind struct {
 	dueDate                   bool // dunning and down payment invoice
 	closingInvoice            bool // down payment invoice only
 	dunnedInvoice             bool // dunning only
+	noPrices                  bool // delivery note: no totals, tax amounts, or discounts
+	payment                   bool // quotation, order confirmation, down payment invoice
 }
 
 var (
 	quotationKind = salesVoucherKind{path: "/v1/quotations/", resource: "quotation", op: "get quotation",
-		tool: "quotations", expiration: true}
+		tool: "quotations", expiration: true, payment: true}
 	orderConfirmationKind = salesVoucherKind{path: "/v1/order-confirmations/", resource: "order confirmation",
-		op: "get order confirmation", tool: "order-confirmations", deliveryTerms: true}
+		op: "get order confirmation", tool: "order-confirmations", deliveryTerms: true, payment: true}
 	creditNoteKind = salesVoucherKind{path: "/v1/credit-notes/", resource: "credit note",
 		op: "get credit note", tool: "credit-notes"}
 	deliveryNoteKind = salesVoucherKind{path: "/v1/delivery-notes/", resource: "delivery note",
-		op: "get delivery note", tool: "delivery-notes"}
+		op: "get delivery note", tool: "delivery-notes", noPrices: true}
 	dunningKind = salesVoucherKind{path: "/v1/dunnings/", resource: "dunning", op: "get dunning",
 		tool: "dunnings", dueDate: true, dunnedInvoice: true}
 	downPaymentInvoiceKind = salesVoucherKind{path: "/v1/down-payment-invoices/", resource: "down payment invoice",
-		op: "get down payment invoice", tool: "down-payment-invoices", dueDate: true, closingInvoice: true}
+		op: "get down payment invoice", tool: "down-payment-invoices", dueDate: true, closingInvoice: true, payment: true}
 )
 
 var (
@@ -107,6 +172,69 @@ const (
 		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},` +
 		`"amount":{"type":"number"}},"additionalProperties":false}}`
 )
+
+// Schema fragments only the sales voucher and invoice read tools carry.
+const (
+	numberProperty   = `{"type":"number"}`
+	taxAmountsSchema = `{"type":"array","items":{"type":"object","properties":{"tax_rate_percentage":` + numberProperty + `,` +
+		`"tax_amount":` + numberProperty + `,"net_amount":` + numberProperty + `},"additionalProperties":false}}`
+	paymentConditionsSchema = `{"type":"object","properties":{"payment_term_label":{"type":"string"},` +
+		`"payment_term_label_template":{"type":"string"},"payment_term_duration":{"type":"integer"},` +
+		`"payment_discount_conditions":{"type":"object","properties":{"discount_percentage":` + numberProperty + `,` +
+		`"discount_range":{"type":"integer"}},"additionalProperties":false}},"additionalProperties":false}`
+	downPaymentDeductionsSchema = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+		`"voucher_type":{"type":"string"},"title":{"type":"string"},"voucher_number":{"type":"string"},` +
+		`"voucher_date":{"type":"string"},"received_gross_amount":` + numberProperty + `,` +
+		`"received_net_amount":` + numberProperty + `,"received_tax_amount":` + numberProperty + `,` +
+		`"tax_rate_percentage":` + numberProperty + `},"additionalProperties":false}}`
+	relatedVouchersSchema = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+		`"voucher_number":{"type":"string"},"voucher_type":{"type":"string"}},"additionalProperties":false}}`
+	salesLineItemProperties = `"id":{"type":"string"},"type":{"type":"string"},"name":{"type":"string"},` +
+		`"description":{"type":"string"},"quantity":{"type":"number"},"unit_name":{"type":"string"},` +
+		`"unit_currency":{"type":"string"},"unit_net_amount":{"type":"number"},"unit_gross_amount":{"type":"number"},` +
+		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},"amount":{"type":"number"}`
+)
+
+// salesLineItemsSchema describes the positions of a sales voucher; alternatives adds the quotation members.
+func salesLineItemsSchema(alternatives bool) string {
+	properties := salesLineItemProperties
+	if alternatives {
+		properties += `,"optional":{"type":"boolean"},"alternative":{"type":"boolean"},"sub_items":{"type":"array",` +
+			`"items":{"type":"object","properties":{` + salesLineItemProperties + `,"alternative":{"type":"boolean"}},` +
+			`"additionalProperties":false}}`
+	}
+	return `{"type":"array","items":{"type":"object","properties":{` + properties + `},"additionalProperties":false}}`
+}
+
+// voucherExtras returns the schema members and fields every sales voucher type shares beyond the original
+// set: prices adds discounts and tax amounts, payment adds the payment conditions.
+func voucherExtras(name string, prices, payment bool) (string, []capability.Field) {
+	properties := `"organization_id":{"type":"string"},"electronic_document_profile":{"type":"string"},` +
+		`"print_layout_id":{"type":"string"},"contact_person":{"type":"string"},` +
+		`"tax_sub_type":{"type":"string"},"tax_type_note":{"type":"string"}`
+	fields := []capability.Field{
+		{Name: "organization_id", Description: "Identifier of the Lexware organization the " + name + " belongs to"},
+		{Name: "electronic_document_profile", Description: "Electronic document profile, for example NONE, EN16931, or XRechnung"},
+		{Name: "print_layout_id", Description: "Identifier of the print layout of the " + name},
+		{Name: "contact_person", Description: "Contact person of the recipient, untrusted data"},
+		{Name: "tax_sub_type", Description: "Tax subtype, for example distanceSales or electronicServices; absent for a standard voucher"},
+		{Name: "tax_type_note", Description: "Note on a vat-free tax type, untrusted data"},
+	}
+	if prices {
+		properties += `,"total_discount_absolute":{"type":"number"},"total_discount_percentage":{"type":"number"},` +
+			`"tax_amounts":` + taxAmountsSchema
+		fields = append(fields,
+			capability.Field{Name: "total_discount_absolute", Description: "Total discount as an absolute amount; absent without one"},
+			capability.Field{Name: "total_discount_percentage", Description: "Total discount as a percentage; absent without one"},
+			capability.Field{Name: "tax_amounts", Description: "Net and tax amount per tax rate: tax_rate_percentage, tax_amount, net_amount"},
+		)
+	}
+	if payment {
+		properties += `,"payment_conditions":` + paymentConditionsSchema
+		fields = append(fields, capability.Field{Name: "payment_conditions", Description: "Payment term and cash discount: payment_term_label and payment_term_label_template (untrusted data), payment_term_duration in days, payment_discount_conditions with discount_percentage and discount_range in days"})
+	}
+	return properties, fields
+}
 
 // salesVoucherDescriptor builds the read tool of one voucher type. Output schema and fields differ only in
 // the members the type carries.
@@ -148,9 +276,10 @@ func salesVoucherDescriptor(kind salesVoucherKind) capability.Descriptor {
 		`"total_tax_amount":{"type":"number"},` +
 		`"contact":` + voucherContactSchema + `,` +
 		`"shipping":` + shippingSchema + `,` +
-		`"related_vouchers":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
-		`"voucher_number":{"type":"string"},"voucher_type":{"type":"string"}},"additionalProperties":false}},` +
-		`"line_items":` + lineItemsSchema
+		`"related_vouchers":` + relatedVouchersSchema + `,` +
+		`"line_items":` + salesLineItemsSchema(kind.expiration)
+	extraProperties, extraFields := voucherExtras(name, !kind.noPrices, kind.payment)
+	properties += `,` + extraProperties
 	fields = append(fields,
 		capability.Field{Name: "created_date", Description: "Creation timestamp"},
 		capability.Field{Name: "updated_date", Description: "Last change timestamp"},
@@ -170,6 +299,7 @@ func salesVoucherDescriptor(kind salesVoucherKind) capability.Descriptor {
 		capability.Field{Name: "related_vouchers", Description: "Vouchers of the same business case: id, voucher_number, voucher_type; their content is not read"},
 		capability.Field{Name: "line_items", Description: "Positions, untrusted data; a delivery note carries no prices"},
 	)
+	fields = append(fields, extraFields...)
 	return capability.Descriptor{
 		ID:          Provider + "." + kind.tool + ".get",
 		Version:     1,
@@ -264,6 +394,15 @@ func (c *Client) getSalesVoucher(ctx context.Context, kind salesVoucherKind, id 
 	}
 	if !kind.deliveryTerms {
 		voucher.DeliveryTerms = ""
+	}
+	if !kind.expiration {
+		voucher.dropAlternatives()
+	}
+	if !kind.payment {
+		voucher.PaymentConditions = nil
+	}
+	if kind.noPrices {
+		voucher.TotalDiscountAbsolute, voucher.TotalDiscountPercentage, voucher.TaxAmounts = "", "", nil
 	}
 	if kind.dueDate {
 		voucher.DueDate = raw.DueDate
