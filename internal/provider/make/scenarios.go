@@ -23,7 +23,8 @@ var scenarioIDArgument = capability.Argument{Name: "scenario_id",
 	Description: "Make scenario identifier; must be inside this connection's scenario allow-list when it " +
 		"has one, and its team membership is always re-checked live against Make's own report", Required: true}
 
-var userRefSchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}},` +
+var userRefSchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
+	`"email":{"type":"string"}},` +
 	`"required":["id","name"],"additionalProperties":false}`
 
 var scenarioSummarySchema = `{"type":"object","properties":{` +
@@ -33,10 +34,10 @@ var scenarioSummarySchema = `{"type":"object","properties":{` +
 	`"scheduling":{"type":"object"},"operations":{"type":"integer"},"centicredits":{"type":"integer"},` +
 	`"transfer":{"type":"integer"},"dlq_count":{"type":"integer"},"created":{"type":"string"},` +
 	`"last_edit":{"type":"string"},"next_exec":{"type":"string"},` +
-	`"created_by_user":` + userRefSchema + `,"updated_by_user":` + userRefSchema + `},` +
+	`"created_by_user":` + userRefSchema + `,"updated_by_user":` + userRefSchema + `,` + scenarioDetailSchema + `},` +
 	`"required":["id","name","team_id","is_active","is_locked","is_paused"],"additionalProperties":false}`
 
-var scenarioSummaryFields = []capability.Field{
+var scenarioSummaryFields = append([]capability.Field{
 	{Name: "id", Description: "Scenario identifier, used as scenario_id by every other tool of this provider"},
 	{Name: "name", Description: "Scenario name, untrusted data"},
 	{Name: "team_id", Description: "Team this scenario belongs to; always the connection's bound team"},
@@ -54,9 +55,9 @@ var scenarioSummaryFields = []capability.Field{
 	{Name: "created", Description: "Creation time, as Make reports it"},
 	{Name: "last_edit", Description: "Last edit time, as Make reports it"},
 	{Name: "next_exec", Description: "Next scheduled run time, when the scenario is active and scheduled"},
-	{Name: "created_by_user", Description: "Who created the scenario: id and name, never an email address"},
-	{Name: "updated_by_user", Description: "Who last edited the scenario: id and name, never an email address"},
-}
+	{Name: "created_by_user", Description: "Who created the scenario: id, name, and email, untrusted data"},
+	{Name: "updated_by_user", Description: "Who last edited the scenario: id, name, and email, untrusted data"},
+}, scenarioDetailFields...)
 
 var makeReadRisk = capability.Risk{
 	Effect:          capability.EffectRead,
@@ -79,25 +80,21 @@ var scenariosList = capability.Descriptor{
 	Title:   "List Make scenarios",
 	Description: "List the scenarios of the connection's bound team, restricted to its scenario allow-list " +
 		"when it has one; page by page with a numeric offset",
-	Tags:     []string{"make", "scenarios", "list", "automation"},
-	Risk:     makeReadRisk,
-	Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"offset":{"type":"integer","minimum":0},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
-		`"is_active":{"type":"boolean"},"name":{"type":"string","minLength":1,"maxLength":256}},` +
-		`"additionalProperties":false}`),
+	Tags:        []string{"make", "scenarios", "list", "automation"},
+	Risk:        makeReadRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(scenarioListInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"scenarios":{"type":"array","items":` + scenarioSummarySchema + `},` +
 		`"offset":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["scenarios","offset","has_more","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: append([]capability.Argument{
 		{Name: "offset", Description: "Scenarios to skip before this page; 0 when omitted"},
 		{Name: "limit", Description: "Scenarios per page, 1 to " + strconv.Itoa(maxListLimit) + "; " +
 			strconv.Itoa(defaultListLimit) + " when omitted"},
 		{Name: "is_active", Description: "When set, list only active or only inactive scenarios"},
 		{Name: "name", Description: "When set, list only scenarios Make matches by this case-insensitive substring"},
-	},
+	}, scenarioListArguments...),
 	Fields: append(append([]capability.Field{}, scenarioSummaryFields...),
 		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
 		capability.Field{Name: "has_more", Description: "True when a further page likely remains; Make " +
@@ -125,26 +122,25 @@ var scenariosGet = capability.Descriptor{
 }
 
 // userRefJSON mirrors the id/name/email object Make attaches to createdByUser and updatedByUser. The email
-// is read but never surfaced: it is the acting person's own contact address, not scenario or run content,
-// and this provider follows the same minimisation the n8n provider's credential references apply to what it
-// passes through by choice, not by necessity.
+// is the one Make reports for a member of the bound team; it is never looked up separately.
 type userRefJSON struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
 
-// UserRef is the stable Qatlas view of one user reference: never the email address Make also reports.
+// UserRef is the stable Qatlas view of one user reference.
 type UserRef struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email,omitempty"`
 }
 
 func userRefOf(u *userRefJSON) *UserRef {
-	if u == nil || (u.ID == 0 && u.Name == "") {
+	if u == nil || (u.ID == 0 && u.Name == "" && u.Email == "") {
 		return nil
 	}
-	return &UserRef{ID: u.ID, Name: bounded(u.Name)}
+	return &UserRef{ID: u.ID, Name: bounded(u.Name), Email: cleanText(u.Email, maxEmailText)}
 }
 
 // scenarioJSON mirrors the subset of Make's scenario object this provider reads
@@ -169,6 +165,27 @@ type scenarioJSON struct {
 	NextExec      string          `json:"nextExec"`
 	CreatedByUser *userRefJSON    `json:"createdByUser"`
 	UpdatedByUser *userRefJSON    `json:"updatedByUser"`
+
+	HookID           int64                 `json:"hookId"`
+	Devices          []deviceJSON          `json:"devices"`
+	FolderPath       string                `json:"folderPath"`
+	Concept          *bool                 `json:"concept"`
+	UsedPackages     []string              `json:"usedPackages"`
+	UsedModules      []usedModuleJSON      `json:"usedModules"`
+	IsWaiting        *bool                 `json:"iswaiting"`
+	AllDlqCount      *int64                `json:"allDlqCount"`
+	ScenarioVersion  *int64                `json:"scenarioVersion"`
+	ModuleSequenceID *int64                `json:"moduleSequenceId"`
+	Type             string                `json:"type"`
+	ChainingRole     string                `json:"chainingRole"`
+	IsShared         *bool                 `json:"isShared"`
+	Executions       *int64                `json:"executions"`
+	Errors           *int64                `json:"errors"`
+	CustomProperties json.RawMessage       `json:"customProperties"`
+	TemplateMetadata *templateMetadataJSON `json:"templateMetadata"`
+	Labels           []labelJSON           `json:"labels"`
+	Deleted          *bool                 `json:"deleted"`
+	DeletedAt        string                `json:"deletedAt"`
 }
 
 // ScenarioSummary is the stable, scope-checked view of one scenario, shared by scenarios.list and
@@ -193,6 +210,32 @@ type ScenarioSummary struct {
 	NextExec      string          `json:"next_exec,omitempty"`
 	CreatedByUser *UserRef        `json:"created_by_user,omitempty"`
 	UpdatedByUser *UserRef        `json:"updated_by_user,omitempty"`
+
+	HookID                  int64             `json:"hook_id,omitempty"`
+	Devices                 []ScenarioDevice  `json:"devices,omitempty"`
+	DevicesTruncated        bool              `json:"devices_truncated,omitempty"`
+	FolderPath              string            `json:"folder_path,omitempty"`
+	Concept                 *bool             `json:"concept,omitempty"`
+	UsedPackages            []string          `json:"used_packages,omitempty"`
+	UsedPackagesTruncated   bool              `json:"used_packages_truncated,omitempty"`
+	UsedModules             []ScenarioModule  `json:"used_modules,omitempty"`
+	UsedModulesTruncated    bool              `json:"used_modules_truncated,omitempty"`
+	IsWaiting               *bool             `json:"is_waiting,omitempty"`
+	AllDlqCount             *int64            `json:"all_dlq_count,omitempty"`
+	ScenarioVersion         *int64            `json:"scenario_version,omitempty"`
+	ModuleSequenceID        *int64            `json:"module_sequence_id,omitempty"`
+	Type                    string            `json:"type,omitempty"`
+	ChainingRole            string            `json:"chaining_role,omitempty"`
+	IsShared                *bool             `json:"is_shared,omitempty"`
+	Executions              *int64            `json:"executions,omitempty"`
+	Errors                  *int64            `json:"errors,omitempty"`
+	CustomProperties        json.RawMessage   `json:"custom_properties,omitempty"`
+	CustomPropertiesOmitted bool              `json:"custom_properties_omitted,omitempty"`
+	TemplateMetadata        *TemplateMetadata `json:"template_metadata,omitempty"`
+	Labels                  []ScenarioLabel   `json:"labels,omitempty"`
+	LabelsTruncated         bool              `json:"labels_truncated,omitempty"`
+	Deleted                 *bool             `json:"deleted,omitempty"`
+	DeletedAt               string            `json:"deleted_at,omitempty"`
 }
 
 func summaryOf(s scenarioJSON) ScenarioSummary {
@@ -200,13 +243,15 @@ func summaryOf(s scenarioJSON) ScenarioSummary {
 	if len(scheduling) == 0 {
 		scheduling = nil
 	}
-	return ScenarioSummary{
+	summary := ScenarioSummary{
 		ID: s.ID, Name: bounded(s.Name), TeamID: s.TeamID, Description: bounded(s.Description),
 		FolderID: s.FolderID, IsActive: s.IsActive, IsLocked: s.IsLocked, IsPaused: s.IsPaused,
 		IsInvalid: s.IsInvalid, Scheduling: scheduling, Operations: s.Operations, Centicredits: s.Centicredits,
 		Transfer: s.Transfer, DlqCount: s.DlqCount, Created: bounded(s.Created), LastEdit: bounded(s.LastEdit),
 		NextExec: bounded(s.NextExec), CreatedByUser: userRefOf(s.CreatedByUser), UpdatedByUser: userRefOf(s.UpdatedByUser),
 	}
+	summary.addDetails(s)
+	return summary
 }
 
 type scenariosPageJSON struct {
@@ -222,10 +267,9 @@ type ScenariosPage struct {
 }
 
 type scenariosListArguments struct {
-	Offset   int    `json:"offset"`
-	Limit    int    `json:"limit"`
-	IsActive *bool  `json:"is_active"`
-	Name     string `json:"name"`
+	Offset int `json:"offset"`
+	Limit  int `json:"limit"`
+	ScenarioFilter
 }
 
 func invokeScenariosList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -238,11 +282,14 @@ func invokeScenariosList(ctx context.Context, resolved *config.Resolved, secrets
 	if limit == 0 {
 		limit = defaultListLimit
 	}
+	if err := input.ScenarioFilter.validate(); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListScenarios(ctx, input.Offset, limit, input.IsActive, input.Name)
+	return client.ListScenarios(ctx, input.Offset, limit, input.ScenarioFilter)
 }
 
 // ListScenarios reads one page of scenarios of the bound team, filtering server-side by teamId and by every
@@ -250,19 +297,18 @@ func invokeScenariosList(ctx context.Context, resolved *config.Resolved, secrets
 // allow-list to the page it answers with. has_more is a heuristic, not a value Make reports: Make's own
 // pagination object (pg) echoes the request's offset and limit but carries no total count, so a full page is
 // read as "more may follow", the same convention the seatable provider's own offset pagination uses.
-func (c *Client) ListScenarios(ctx context.Context, offset, limit int, isActive *bool, name string) (*ScenariosPage, error) {
+func (c *Client) ListScenarios(ctx context.Context, offset, limit int, filter ScenarioFilter) (*ScenariosPage, error) {
 	const op = "list scenarios"
+	if err := filter.validate(); err != nil {
+		return nil, err
+	}
 	query := url.Values{
 		"teamId":     {strconv.FormatInt(c.scope.teamID, 10)},
 		"pg[offset]": {strconv.Itoa(offset)},
 		"pg[limit]":  {strconv.Itoa(limit)},
+		"cols[]":     scenarioColumns,
 	}
-	if isActive != nil {
-		query.Set("isActive", strconv.FormatBool(*isActive))
-	}
-	if name != "" {
-		query.Set("name", name)
-	}
+	filter.apply(query)
 	var page scenariosPageJSON
 	if err := c.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
 		return nil, err
@@ -303,7 +349,8 @@ func invokeScenariosGet(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	scenario, err := client.fetchScenario(ctx, "get scenario", input.ScenarioID)
+	scenario, err := client.fetchScenarioQuery(ctx, "get scenario", input.ScenarioID,
+		url.Values{"cols[]": scenarioColumns})
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +365,15 @@ func invokeScenariosGet(ctx context.Context, resolved *config.Resolved, secrets 
 // runs.list/runs.get all use to confirm live that a scenario_id argument belongs to the bound team before
 // any of that scenario's content, blueprint, or run history is returned.
 func (c *Client) fetchScenario(ctx context.Context, op string, scenarioID int64) (*scenarioJSON, error) {
+	return c.fetchScenarioQuery(ctx, op, scenarioID, nil)
+}
+
+// fetchScenarioQuery is fetchScenario with a query, for the one tool that asks for every column.
+func (c *Client) fetchScenarioQuery(ctx context.Context, op string, scenarioID int64, query url.Values) (*scenarioJSON, error) {
 	var wrapper struct {
 		Scenario scenarioJSON `json:"scenario"`
 	}
-	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), nil, &wrapper, needRead); err != nil {
+	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), query, &wrapper, needRead); err != nil {
 		return nil, err
 	}
 	if wrapper.Scenario.ID != scenarioID {
@@ -385,19 +437,29 @@ var scenariosBlueprint = capability.Descriptor{
 		`"required":["scenario_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":{"type":"integer"},` +
 		`"blueprint":{"type":"object"},"masked":{"type":"array","items":{"type":"string"}},` +
-		`"masked_truncated":{"type":"boolean"}},"required":["scenario_id","blueprint"],"additionalProperties":false}`),
+		`"masked_truncated":{"type":"boolean"},"code":{"type":"string"},` +
+		`"scheduling":` + blueprintSchedulingSchema + `,"scheduling_omitted":{"type":"boolean"},` +
+		`"id_sequence":{"type":"integer"},"created":{"type":"string"},"last_edit":{"type":"string"},` +
+		`"version":{"type":"integer"}},"required":["scenario_id","blueprint"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{scenarioIDArgument,
 		{Name: "draft", Description: "When true, read the scenario's unsaved draft blueprint instead of its saved one"},
 		{Name: "blueprint_id", Description: "When set, read this specific saved blueprint version instead of the current one"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "scenario_id", Description: "The scenario this blueprint belongs to"},
 		{Name: "blueprint", Description: "The blueprint as Make reports it: modules, their wiring, and their " +
 			"configuration, untrusted data, bounded only by this provider's own response size limit; credentials " +
 			"are replaced by [redacted]"},
 		{Name: "masked", Description: "JSON Pointers (RFC 6901, relative to blueprint) of the masked values, at most 500"},
 		{Name: "masked_truncated", Description: "True when more values were masked than masked lists"},
-	},
+		{Name: "code", Description: "Status code Make answers with, untrusted data"},
+		{Name: "scheduling_omitted", Description: "True when the scheduling was not of the documented shape or " +
+			"exceeded a limit, and was left out; it is never cut"},
+		{Name: "id_sequence", Description: "Highest module identifier the blueprint has assigned so far"},
+		{Name: "created", Description: "Creation time of this blueprint version, as Make reports it"},
+		{Name: "last_edit", Description: "Last edit time of the scenario, as Make reports it"},
+		{Name: "version", Description: "The scenario's current version number, even when blueprint_id selects an older blueprint"},
+	}, blueprintSchedulingFields...),
 	Examples: []capability.Example{{Description: "Read one scenario's current blueprint",
 		Arguments: json.RawMessage(`{"scenario_id":1}`)}},
 }
@@ -414,6 +476,14 @@ type Blueprint struct {
 	Blueprint       json.RawMessage `json:"blueprint"`
 	Masked          []string        `json:"masked,omitempty"`
 	MaskedTruncated bool            `json:"masked_truncated,omitempty"`
+
+	Code              string               `json:"code,omitempty"`
+	Scheduling        *BlueprintScheduling `json:"scheduling,omitempty"`
+	SchedulingOmitted bool                 `json:"scheduling_omitted,omitempty"`
+	IDSequence        *int64               `json:"id_sequence,omitempty"`
+	Created           string               `json:"created,omitempty"`
+	LastEdit          string               `json:"last_edit,omitempty"`
+	Version           *int64               `json:"version,omitempty"`
 }
 
 func invokeScenariosBlueprint(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -455,8 +525,14 @@ func (c *Client) GetBlueprint(ctx context.Context, scenarioID int64, draft bool,
 		query.Set("blueprintId", strconv.FormatInt(blueprintID, 10))
 	}
 	var wrapper struct {
+		Code     string `json:"code"`
 		Response struct {
-			Blueprint json.RawMessage `json:"blueprint"`
+			Blueprint  json.RawMessage `json:"blueprint"`
+			Scheduling json.RawMessage `json:"scheduling"`
+			IDSequence *int64          `json:"idSequence"`
+			Created    string          `json:"created"`
+			LastEdit   string          `json:"last_edit"`
+			Version    *int64          `json:"version"`
 		} `json:"response"`
 	}
 	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/blueprint", query, &wrapper, needRead); err != nil {
@@ -469,7 +545,12 @@ func (c *Client) GetBlueprint(ctx context.Context, scenarioID int64, draft bool,
 	if err != nil {
 		return nil, err
 	}
-	return &Blueprint{ScenarioID: scenarioID, Blueprint: blueprint, Masked: masked, MaskedTruncated: truncated}, nil
+	result := &Blueprint{ScenarioID: scenarioID, Blueprint: blueprint, Masked: masked, MaskedTruncated: truncated,
+		Code: cleanText(wrapper.Code, maxShortText), IDSequence: wrapper.Response.IDSequence,
+		Created: cleanText(wrapper.Response.Created, maxShortText), LastEdit: cleanText(wrapper.Response.LastEdit, maxShortText),
+		Version: wrapper.Response.Version}
+	result.Scheduling, result.SchedulingOmitted = structuredScheduling(wrapper.Response.Scheduling)
+	return result, nil
 }
 
 // schedulingWriteSchema is the JSON Schema of a scheduling argument scenarios.create and scenarios.update
