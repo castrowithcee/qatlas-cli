@@ -287,3 +287,37 @@ func TestSearchAllResolvesTheKeyOnlyAfterTheLocalChecks(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSearchAllReturnsHitDetailsAndDropsSignedAddresses(t *testing.T) {
+	const canary = "sig-canary-123"
+	node := func(object, extra string) string {
+		return `{"node":{"recordId":"` + hitOne + `","objectNameSingular":"` + object + `","label":"Ada"` + extra + `}}`
+	}
+	answer := `{"data":{"search":{"edges":[` +
+		node("person", `,"objectLabelSingular":"Pe\u0007rson","imageUrl":"https://crm.example/logo.png","tsRank":0.123456789012345678,"tsRankCD":9007199254740993`) + `,` +
+		node("person", `,"imageUrl":"https://crm.example/file/x?token=`+canary+`","tsRank":"x"`) + `,` +
+		node("person", `,"imageUrl":"https://crm.example/a.png#frag","tsRank":null`) + `,` +
+		node("person", `,"imageUrl":"ftp://crm.example/a.png"`) + `,` +
+		node("person", `,"imageUrl":"https://u@localhost/a.png"`) + `,` +
+		node("person", ``) +
+		`],"pageInfo":{"hasNextPage":false}}}}`
+	searchAllServe(t, http.StatusOK, answer)
+	result, err := runSearchAll(`{"text":"Ada"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(result)
+	if strings.Contains(string(raw), canary) {
+		t.Fatalf("token in output: %s", raw)
+	}
+	first := result.Results[0]
+	if first.ObjectLabel != "Person" || first.ImageURL != "https://crm.example/logo.png" ||
+		first.TSRank != "0.123456789012345678" || first.TSRankCD != "9007199254740993" {
+		t.Errorf("first = %+v", first)
+	}
+	for _, hit := range result.Results[1:] {
+		if hit.ImageURL != "" || hit.TSRank != "" || hit.TSRankCD != "" || hit.ObjectLabel != "" {
+			t.Errorf("hit = %+v", hit)
+		}
+	}
+}
