@@ -35,10 +35,17 @@ var driveIDArgument = capability.Argument{Name: "drive_id",
 	Description: "kDrive identifier; must be inside this connection's drive allow-list when it has one, and " +
 		"is always re-checked against the connection's bound account with one extra request", Required: true}
 
-var entrySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string","enum":["file","folder"]},` +
+// entryProperties are the members of one file or folder entry, shared by every schema that carries one.
+const entryProperties = `"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string","enum":["file","folder"]},` +
 	`"mime_type":{"type":"string"},"size":{"type":"integer"},"parent_id":{"type":"integer"},` +
-	`"status":{"type":"string"},"created_at":{"type":"string"},"modified_at":{"type":"string"}},` +
+	`"status":{"type":"string"},"created_at":{"type":"string"},"modified_at":{"type":"string"},` +
+	`"deleted_at":{"type":"string"},"visibility":{"type":"string"},"drive_id":{"type":"integer"},` +
+	`"depth":{"type":"integer"},"created_by":{"type":"integer"},"last_modified_by":{"type":"integer"},` +
+	`"deleted_by":{"type":"integer"},"added_at":{"type":"string"},"revised_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"shared_root_id":{"type":"integer"},"extension_type":{"type":"string"},` +
+	`"symbolic_link":{"type":"string"},"scan_status":{"type":"string"},"color":{"type":"string"}`
+
+var entrySchema = `{"type":"object","properties":{` + entryProperties + `},` +
 	`"required":["id","name","type","parent_id"],"additionalProperties":false}`
 
 var entryFields = []capability.Field{
@@ -51,7 +58,25 @@ var entryFields = []capability.Field{
 	{Name: "status", Description: "Infomaniak's own state of this node, for example ok, locked, or trashed"},
 	{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC, when Infomaniak reports one"},
 	{Name: "modified_at", Description: "Last content change time, normalised to RFC 3339 in UTC"},
+	{Name: "deleted_at", Description: "Time the entry was moved to the trash, RFC 3339 in UTC; only for a trashed entry"},
+	{Name: "visibility", Description: "Infomaniak's special visibility of the node, such as is_root or is_team_space; absent without one"},
+	{Name: "drive_id", Description: "Drive the entry belongs to; on a list, the drive that was listed"},
+	{Name: "depth", Description: "Path depth of the entry in its drive"},
+	{Name: "created_by", Description: "Identifier of the user who first uploaded the entry"},
+	{Name: "last_modified_by", Description: "Identifier of the user who last modified the entry"},
+	{Name: "deleted_by", Description: "Identifier of the user who trashed the entry; only for a trashed entry"},
+	{Name: "added_at", Description: "Time the entry was first uploaded, RFC 3339 in UTC"},
+	{Name: "revised_at", Description: "Time the content was last revised, RFC 3339 in UTC"},
+	{Name: "updated_at", Description: "Time the entry was last updated, RFC 3339 in UTC"},
+	{Name: "shared_root_id", Description: "Identifier of the shared root folder; only for an entry seen through a share"},
+	{Name: "extension_type", Description: "Infomaniak's file kind, such as image, pdf, or text; dir for a folder"},
+	{Name: "symbolic_link", Description: "Target of a symbolic link as Infomaniak reports it; untrusted data"},
+	{Name: "scan_status", Description: "Result of Infomaniak's malware scan, such as clean or infected"},
+	{Name: "color", Description: "Colour of a folder as Infomaniak reports it; absent for a file"},
 }
+
+var responseAtField = capability.Field{Name: "response_at",
+	Description: "Time Infomaniak generated this page, RFC 3339 in UTC"}
 
 var filesReadRisk = capability.Risk{
 	Effect:          capability.EffectRead,
@@ -78,7 +103,8 @@ var filesList = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":{"type":"integer"},"folder_id":{"type":"integer"},` +
 		`"entries":{"type":"array","items":` + entrySchema + `},` +
-		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
+		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","folder_id","entries","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		driveIDArgument,
@@ -87,11 +113,11 @@ var filesList = capability.Descriptor{
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
 	},
 	Fields: append(append([]capability.Field{}, entryFields...),
-		capability.Field{Name: "drive_id", Description: "Drive that was listed"},
 		capability.Field{Name: "folder_id", Description: "Folder that was listed"},
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not the whole folder"},
 		capability.Field{Name: "count", Description: "Number of entries on this page"},
+		responseAtField,
 	),
 	Examples: []capability.Example{{Description: "List the root folder of one drive",
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
@@ -161,6 +187,20 @@ type fileJSON struct {
 	CreatedAt      *int64  `json:"created_at"`
 	LastModifiedAt int64   `json:"last_modified_at"`
 	DeletedAt      *int64  `json:"deleted_at"`
+	Visibility     string  `json:"visibility"`
+	DriveID        int64   `json:"drive_id"`
+	Depth          *int64  `json:"depth"`
+	CreatedBy      *int64  `json:"created_by"`
+	LastModifiedBy *int64  `json:"last_modified_by"`
+	DeletedBy      *int64  `json:"deleted_by"`
+	AddedAt        *int64  `json:"added_at"`
+	RevisedAt      *int64  `json:"revised_at"`
+	UpdatedAt      *int64  `json:"updated_at"`
+	SharedRootID   *int64  `json:"shared_root_id"`
+	ExtensionType  string  `json:"extension_type"`
+	SymbolicLink   string  `json:"symbolic_link"`
+	ScanStatus     string  `json:"scan_status"`
+	Color          string  `json:"color"`
 	// Parents is every folder above the object, present only when it was asked for.
 	Parents *[]parentJSON `json:"parents"`
 }
@@ -176,6 +216,22 @@ type Entry struct {
 	Status     string `json:"status,omitempty"`
 	CreatedAt  string `json:"created_at,omitempty"`
 	ModifiedAt string `json:"modified_at,omitempty"`
+	DeletedAt  string `json:"deleted_at,omitempty"`
+
+	Visibility     string `json:"visibility,omitempty"`
+	DriveID        int64  `json:"drive_id,omitempty"`
+	Depth          *int64 `json:"depth,omitempty"`
+	CreatedBy      int64  `json:"created_by,omitempty"`
+	LastModifiedBy int64  `json:"last_modified_by,omitempty"`
+	DeletedBy      int64  `json:"deleted_by,omitempty"`
+	AddedAt        string `json:"added_at,omitempty"`
+	RevisedAt      string `json:"revised_at,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
+	SharedRootID   int64  `json:"shared_root_id,omitempty"`
+	ExtensionType  string `json:"extension_type,omitempty"`
+	SymbolicLink   string `json:"symbolic_link,omitempty"`
+	ScanStatus     string `json:"scan_status,omitempty"`
+	Color          string `json:"color,omitempty"`
 }
 
 // entryOf normalises one Infomaniak file or directory resource into the stable envelope. dir/file is
@@ -191,20 +247,47 @@ func entryOf(f fileJSON) Entry {
 	if f.Size != nil && *f.Size >= 0 {
 		entry.Size = *f.Size
 	}
-	if f.CreatedAt != nil && *f.CreatedAt > 0 {
-		entry.CreatedAt = time.Unix(*f.CreatedAt, 0).UTC().Format(time.RFC3339)
-	}
+	entry.CreatedAt = positiveTime(f.CreatedAt)
 	if f.LastModifiedAt > 0 {
 		entry.ModifiedAt = time.Unix(f.LastModifiedAt, 0).UTC().Format(time.RFC3339)
 	}
+	entry.DeletedAt = positiveTime(f.DeletedAt)
+	entry.AddedAt, entry.RevisedAt, entry.UpdatedAt = positiveTime(f.AddedAt), positiveTime(f.RevisedAt), positiveTime(f.UpdatedAt)
+	entry.Visibility = boundedText(f.Visibility, 64)
+	entry.DriveID = max(f.DriveID, 0)
+	if f.Depth != nil && *f.Depth >= 0 {
+		entry.Depth = valuePointer(f.Depth)
+	}
+	entry.CreatedBy, entry.LastModifiedBy, entry.DeletedBy = optionalID(f.CreatedBy), optionalID(f.LastModifiedBy), optionalID(f.DeletedBy)
+	entry.SharedRootID = optionalID(f.SharedRootID)
+	entry.ExtensionType, entry.ScanStatus = boundedText(f.ExtensionType, 64), boundedText(f.ScanStatus, 64)
+	entry.SymbolicLink, entry.Color = boundedText(f.SymbolicLink, 1024), boundedText(f.Color, 64)
 	return entry
+}
+
+// positiveTime renders an optional Unix-seconds timestamp as RFC 3339 UTC; absent and non-positive values
+// stay empty.
+func positiveTime(seconds *int64) string {
+	if seconds == nil || *seconds <= 0 {
+		return ""
+	}
+	return timestampOf(seconds)
+}
+
+// optionalID returns an optional identifier, or zero when it is absent or not positive.
+func optionalID(id *int64) int64 {
+	if id == nil || *id <= 0 {
+		return 0
+	}
+	return *id
 }
 
 // navigatorJSON is the cursor pagination envelope Infomaniak reports as siblings of data for a folder
 // listing.
 type navigatorJSON struct {
-	Cursor  string `json:"cursor"`
-	HasMore bool   `json:"has_more"`
+	Cursor     string `json:"cursor"`
+	HasMore    bool   `json:"has_more"`
+	ResponseAt *int64 `json:"response_at"`
 }
 
 // FolderPage is one paginated listing of the immediate children of one folder.
@@ -215,6 +298,8 @@ type FolderPage struct {
 	Cursor   string  `json:"cursor,omitempty"`
 	HasMore  bool    `json:"has_more"`
 	Count    int     `json:"count"`
+	// ResponseAt is the time Infomaniak generated the page.
+	ResponseAt string `json:"response_at,omitempty"`
 }
 
 // Content is one bounded file's content, base64-encoded.
@@ -306,7 +391,7 @@ func (c *Client) ListFolder(ctx context.Context, driveID, folderID int64, cursor
 		entries = append(entries, entryOf(item))
 	}
 	return &FolderPage{DriveID: driveID, FolderID: folderID, Entries: entries, Cursor: meta.Cursor,
-		HasMore: meta.HasMore, Count: len(entries)}, nil
+		HasMore: meta.HasMore, Count: len(entries), ResponseAt: positiveTime(meta.ResponseAt)}, nil
 }
 
 type fileArguments struct {
