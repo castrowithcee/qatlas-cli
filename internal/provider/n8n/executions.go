@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -25,12 +26,30 @@ var statusValues = []string{"canceled", "crashed", "error", "new", "running", "s
 // includeData request to learn what failed; every other status is reported from the base answer alone.
 var erroredStatuses = map[string]bool{"error": true, "crashed": true}
 
-var executionSummarySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"workflow_id":{"type":"string"},"status":{"type":"string"},` +
+// executionSummaryProperties are the members of the execution view the changing tools share; the read
+// views below add to them, the changing tools never see the additions.
+const executionSummaryProperties = `"id":{"type":"integer"},"workflow_id":{"type":"string"},"status":{"type":"string"},` +
 	`"mode":{"type":"string"},"finished":{"type":"boolean"},"started_at":{"type":"string"},` +
 	`"stopped_at":{"type":"string"},"wait_till":{"type":"string"},"retry_of":{"type":"string"},` +
-	`"retry_success_id":{"type":"string"}},` +
-	`"required":["id","workflow_id","status","mode","finished"],"additionalProperties":false}`
+	`"retry_success_id":{"type":"string"}`
+
+const executionSummaryRequired = `"required":["id","workflow_id","status","mode","finished"],"additionalProperties":false}`
+
+var executionSummarySchema = `{"type":"object","properties":{` + executionSummaryProperties + `},` + executionSummaryRequired
+
+// timestampSchema bounds an RFC 3339 time argument; its value is parsed locally before any request.
+const timestampSchema = `{"type":"string","minLength":20,"maxLength":40}`
+
+// storedAtValues mirrors the "storedAt" enum the execution schemas document; any other value is left out.
+var storedAtValues = []string{"db", "fs", "s3", "az"}
+
+// executionReadProperties are the read-only additions shared by the list entry and the detail.
+const executionReadProperties = `"stored_at":{"type":"string","enum":["db","fs","s3","az"]},` +
+	`"json_size_bytes":{"type":"integer"},"workflow_version_id":{"type":"string"},` +
+	`"data_too_large_to_display":{"type":"boolean"}`
+
+var executionListEntrySchema = `{"type":"object","properties":{` + executionSummaryProperties + `,` +
+	executionReadProperties + `},` + executionSummaryRequired
 
 var executionSummaryFields = []capability.Field{
 	{Name: "id", Description: "Execution identifier, used as execution_id by this tool"},
@@ -43,6 +62,15 @@ var executionSummaryFields = []capability.Field{
 	{Name: "wait_till", Description: "When set, the time this execution resumes; only meaningful for status waiting"},
 	{Name: "retry_of", Description: "When set, the execution this one retries"},
 	{Name: "retry_success_id", Description: "When set, the later execution that successfully retried this one"},
+}
+
+// executionReadFields describe the members the read views add to the shared execution fields.
+var executionReadFields = []capability.Field{
+	{Name: "stored_at", Description: "Where n8n stores the execution data: " + joinValues(storedAtValues) +
+		"; absent for any other value"},
+	{Name: "json_size_bytes", Description: "Size of the stored execution data in bytes; absent when n8n reports 0 (unknown)"},
+	{Name: "workflow_version_id", Description: "ID of the workflow version this execution ran, untrusted text"},
+	{Name: "data_too_large_to_display", Description: "True when n8n holds execution data above its display size limit; the data itself is never read"},
 }
 
 var executionsList = capability.Descriptor{
@@ -60,20 +88,29 @@ var executionsList = capability.Descriptor{
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
 		`"workflow_id":` + targetIDSchema + `,` +
-		`"status":{"type":"string","enum":` + enumOf(statusValues) + `}},` +
+		`"status":{"type":"string","enum":` + enumOf(statusValues) + `},` +
+		`"project_id":` + targetIDSchema + `,` +
+		`"started_after":` + timestampSchema + `,"started_before":` + timestampSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"executions":{"type":"array","items":` + executionSummarySchema + `},` +
+		`"executions":{"type":"array","items":` + executionListEntrySchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["executions","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page. " +
+			"A follow-up call must pass the same filter values (workflow_id, status, project_id, started_after, " +
+			"started_before) as the call that returned the cursor"},
 		{Name: "limit", Description: "Executions per page, 1 to 250; 100 when omitted, matching n8n's own default"},
 		{Name: "workflow_id", Description: "Restrict the list to this workflow; must be inside this connection's " +
 			"workflow allow-list when it has one, and is required when this connection also holds a project allow-list"},
 		{Name: "status", Description: "Restrict the list to this status"},
+		{Name: "project_id", Description: "Restrict the list to executions n8n attributes to this project; must be " +
+			"inside this connection's project allow-list when it has one, which still requires workflow_id"},
+		{Name: "started_after", Description: "Only executions that started after this time, RFC 3339; sent to n8n as UTC"},
+		{Name: "started_before", Description: "Only executions that started before this time, RFC 3339; sent to n8n as UTC; " +
+			"must not be earlier than started_after"},
 	},
-	Fields: append(append([]capability.Field{}, executionSummaryFields...),
+	Fields: append(append(append([]capability.Field{}, executionSummaryFields...), executionReadFields...),
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains"},
 		capability.Field{Name: "count", Description: "Number of executions reported on this page after this connection's workflow allow-list was applied"},
@@ -86,12 +123,13 @@ var executionErrorSchema = `{"type":"object","properties":{` +
 	`"message":{"type":"string"},"node_name":{"type":"string"},"node_type":{"type":"string"}},` +
 	`"required":["message"],"additionalProperties":false}`
 
-var executionDetailSchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"workflow_id":{"type":"string"},"status":{"type":"string"},` +
-	`"mode":{"type":"string"},"finished":{"type":"boolean"},"started_at":{"type":"string"},` +
-	`"stopped_at":{"type":"string"},"wait_till":{"type":"string"},"retry_of":{"type":"string"},` +
-	`"retry_success_id":{"type":"string"},"error":` + executionErrorSchema + `},` +
-	`"required":["id","workflow_id","status","mode","finished"],"additionalProperties":false}`
+var executionTracingContextSchema = `{"type":"object","properties":{"traceparent":{"type":"string"},` +
+	`"tracestate":{"type":"string"}},"additionalProperties":false}`
+
+var executionDetailSchema = `{"type":"object","properties":{` + executionSummaryProperties + `,` +
+	executionReadProperties + `,"created_at":{"type":"string"},"tracing_context":` + executionTracingContextSchema + `,` +
+	`"deduplication_key":{"type":"string"},"binary_data_size_bytes":{"type":"integer"},` +
+	`"used_private_credentials":{"type":"boolean"},"error":` + executionErrorSchema + `},` + executionSummaryRequired
 
 var executionsGet = capability.Descriptor{
 	ID:      Provider + ".executions.get",
@@ -110,7 +148,14 @@ var executionsGet = capability.Descriptor{
 			"connection's workflow allow-list when it has one, and its project membership is re-checked live " +
 			"when this connection also holds a project allow-list", Required: true},
 	},
-	Fields: append(append([]capability.Field{}, executionSummaryFields...),
+	Fields: append(append(append([]capability.Field{}, executionSummaryFields...), executionReadFields...),
+		capability.Field{Name: "created_at", Description: "When n8n created the execution record, as n8n reports it"},
+		capability.Field{Name: "tracing_context", Description: "W3C trace context propagated with the execution, untrusted text"},
+		capability.Field{Name: "traceparent", Description: "W3C traceparent of the execution, untrusted text"},
+		capability.Field{Name: "tracestate", Description: "W3C tracestate of the execution, untrusted text; absent when n8n sends none"},
+		capability.Field{Name: "deduplication_key", Description: "Key n8n uses to stop a duplicate execution from being created, untrusted text"},
+		capability.Field{Name: "binary_data_size_bytes", Description: "Size of the stored binary data in bytes; absent when n8n reports 0 (unknown)"},
+		capability.Field{Name: "used_private_credentials", Description: "Whether the execution used credentials that are not shared with the project"},
 		capability.Field{Name: "error", Description: "Present only when status is error or crashed: the " +
 			"result error's message and, when n8n names it, the failing node's name and type; never the " +
 			"execution's run data"},
@@ -131,6 +176,22 @@ type executionJSON struct {
 	WaitTill       string `json:"waitTill"`
 	RetryOf        string `json:"retryOf"`
 	RetrySuccessID string `json:"retrySuccessId"`
+}
+
+// executionReadJSON adds what the two read tools take from the same answer. It is separate from
+// executionJSON so that the answers of the changing tools are decoded exactly as before. Sizes stay raw
+// numbers until parsed as integers, and a member of an unexpected type costs only that member.
+type executionReadJSON struct {
+	executionJSON
+	CreatedAt              string          `json:"createdAt"`
+	StoredAt               string          `json:"storedAt"`
+	TracingContext         json.RawMessage `json:"tracingContext"`
+	DeduplicationKey       string          `json:"deduplicationKey"`
+	JSONSizeBytes          json.RawMessage `json:"jsonSizeBytes"`
+	BinaryDataSizeBytes    json.RawMessage `json:"binaryDataSizeBytes"`
+	WorkflowVersionID      string          `json:"workflowVersionId"`
+	UsedPrivateCredentials json.RawMessage `json:"usedPrivateCredentials"`
+	DataTooLargeToDisplay  bool            `json:"dataTooLargeToDisplay"`
 }
 
 // executionErrorJSON mirrors the one path this provider reads from an includeData=true answer: the result
@@ -171,10 +232,77 @@ type ExecutionSummary struct {
 	RetrySuccessID string `json:"retry_success_id,omitempty"`
 }
 
+// ExecutionListEntry is the listing view of one execution: the summary plus the read-only additions.
+type ExecutionListEntry struct {
+	ExecutionSummary
+	StoredAt              string `json:"stored_at,omitempty"`
+	JSONSizeBytes         int64  `json:"json_size_bytes,omitempty"`
+	WorkflowVersionID     string `json:"workflow_version_id,omitempty"`
+	DataTooLargeToDisplay bool   `json:"data_too_large_to_display,omitempty"`
+}
+
+// ExecutionTracingContext is the W3C trace context of an execution.
+type ExecutionTracingContext struct {
+	Traceparent string `json:"traceparent,omitempty"`
+	Tracestate  string `json:"tracestate,omitempty"`
+}
+
 // ExecutionDetail is the stable, scope-checked read view of one execution.
 type ExecutionDetail struct {
-	ExecutionSummary
-	Error *ExecutionError `json:"error,omitempty"`
+	ExecutionListEntry
+	CreatedAt              string                   `json:"created_at,omitempty"`
+	TracingContext         *ExecutionTracingContext `json:"tracing_context,omitempty"`
+	DeduplicationKey       string                   `json:"deduplication_key,omitempty"`
+	BinaryDataSizeBytes    int64                    `json:"binary_data_size_bytes,omitempty"`
+	UsedPrivateCredentials *bool                    `json:"used_private_credentials,omitempty"`
+	Error                  *ExecutionError          `json:"error,omitempty"`
+}
+
+// storedAtOf keeps only a value of the documented storage enum.
+func storedAtOf(value string) string {
+	for _, known := range storedAtValues {
+		if value == known {
+			return value
+		}
+	}
+	return ""
+}
+
+// byteSize reads a non-negative integer count; anything else, including 0 (unknown) and null, is absent.
+func byteSize(raw json.RawMessage) int64 {
+	n, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func executionListEntryOf(e executionReadJSON) ExecutionListEntry {
+	return ExecutionListEntry{ExecutionSummary: executionSummaryOf(e.executionJSON),
+		StoredAt: storedAtOf(e.StoredAt), JSONSizeBytes: byteSize(e.JSONSizeBytes),
+		WorkflowVersionID: cappedText(e.WorkflowVersionID), DataTooLargeToDisplay: e.DataTooLargeToDisplay}
+}
+
+func executionDetailOf(e executionReadJSON) ExecutionDetail {
+	detail := ExecutionDetail{ExecutionListEntry: executionListEntryOf(e), CreatedAt: bounded(e.CreatedAt),
+		DeduplicationKey: cappedText(e.DeduplicationKey), BinaryDataSizeBytes: byteSize(e.BinaryDataSizeBytes)}
+	var tracing struct {
+		Traceparent string `json:"traceparent"`
+		Tracestate  string `json:"tracestate"`
+	}
+	if json.Unmarshal(e.TracingContext, &tracing) == nil {
+		context := ExecutionTracingContext{Traceparent: cappedText(tracing.Traceparent),
+			Tracestate: cappedText(tracing.Tracestate)}
+		if context != (ExecutionTracingContext{}) {
+			detail.TracingContext = &context
+		}
+	}
+	switch string(e.UsedPrivateCredentials) {
+	case "true", "false":
+		used := string(e.UsedPrivateCredentials) == "true"
+		detail.UsedPrivateCredentials = &used
+	}
+	return detail
 }
 
 func executionSummaryOf(e executionJSON) ExecutionSummary {
@@ -186,16 +314,16 @@ func executionSummaryOf(e executionJSON) ExecutionSummary {
 }
 
 type executionsPageJSON struct {
-	Data       []executionJSON `json:"data"`
-	NextCursor string          `json:"nextCursor"`
+	Data       []executionReadJSON `json:"data"`
+	NextCursor string              `json:"nextCursor"`
 }
 
 // ExecutionsPage is one paginated, allow-list-filtered listing of executions.
 type ExecutionsPage struct {
-	Executions []ExecutionSummary `json:"executions"`
-	Cursor     string             `json:"cursor,omitempty"`
-	HasMore    bool               `json:"has_more"`
-	Count      int                `json:"count"`
+	Executions []ExecutionListEntry `json:"executions"`
+	Cursor     string               `json:"cursor,omitempty"`
+	HasMore    bool                 `json:"has_more"`
+	Count      int                  `json:"count"`
 }
 
 type executionsListArguments struct {
@@ -203,6 +331,36 @@ type executionsListArguments struct {
 	Limit      int    `json:"limit"`
 	WorkflowID string `json:"workflow_id"`
 	Status     string `json:"status"`
+	ProjectID  string `json:"project_id"`
+	// StartedAfter and StartedBefore are RFC 3339 times.
+	StartedAfter  string `json:"started_after"`
+	StartedBefore string `json:"started_before"`
+}
+
+// executionFilter carries the validated optional filters of executions.list.
+type executionFilter struct {
+	WorkflowID, Status, ProjectID string
+	StartedAfter, StartedBefore   time.Time
+}
+
+// parseExecutionTimes reads the two time filters as RFC 3339 and refuses an inverted range.
+func parseExecutionTimes(after, before string) (time.Time, time.Time, error) {
+	var from, to time.Time
+	var err error
+	if after != "" {
+		if from, err = time.Parse(time.RFC3339, after); err != nil {
+			return from, to, invalidRequest("started_after must be an RFC 3339 time")
+		}
+	}
+	if before != "" {
+		if to, err = time.Parse(time.RFC3339, before); err != nil {
+			return from, to, invalidRequest("started_before must be an RFC 3339 time")
+		}
+	}
+	if !from.IsZero() && !to.IsZero() && from.After(to) {
+		return from, to, invalidRequest("started_after must not be later than started_before")
+	}
+	return from, to, nil
 }
 
 func invokeExecutionsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -225,6 +383,15 @@ func invokeExecutionsList(ctx context.Context, resolved *config.Resolved, secret
 			return nil, err
 		}
 	}
+	if input.ProjectID != "" {
+		if err := selectProjectFilter(resolved, input.ProjectID); err != nil {
+			return nil, err
+		}
+	}
+	startedAfter, startedBefore, err := parseExecutionTimes(input.StartedAfter, input.StartedBefore)
+	if err != nil {
+		return nil, err
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -242,30 +409,41 @@ func invokeExecutionsList(ctx context.Context, resolved *config.Resolved, secret
 			return nil, err
 		}
 	}
-	return client.ListExecutions(ctx, input.Cursor, limit, input.WorkflowID, input.Status)
+	return client.ListExecutions(ctx, input.Cursor, limit, executionFilter{WorkflowID: input.WorkflowID,
+		Status: input.Status, ProjectID: input.ProjectID, StartedAfter: startedAfter, StartedBefore: startedBefore})
 }
 
 // ListExecutions reads one page of executions, filtering server-side by every argument n8n's own "GET
 // /executions" accepts, and defensively re-checking this connection's workflow allow-list against the
 // workflowId of every returned row: the server-side filter is a courtesy, not the boundary.
-func (c *Client) ListExecutions(ctx context.Context, cursor string, limit int, workflowID,
-	status string) (*ExecutionsPage, error) {
+func (c *Client) ListExecutions(ctx context.Context, cursor string, limit int,
+	filter executionFilter) (*ExecutionsPage, error) {
 	const op = "list executions"
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
+	workflowID := filter.WorkflowID
 	if workflowID != "" {
 		query.Set("workflowId", workflowID)
 	}
-	if status != "" {
-		query.Set("status", status)
+	if filter.Status != "" {
+		query.Set("status", filter.Status)
+	}
+	if filter.ProjectID != "" {
+		query.Set("projectId", filter.ProjectID)
+	}
+	if !filter.StartedAfter.IsZero() {
+		query.Set("startedAfter", filter.StartedAfter.UTC().Format(time.RFC3339Nano))
+	}
+	if !filter.StartedBefore.IsZero() {
+		query.Set("startedBefore", filter.StartedBefore.UTC().Format(time.RFC3339Nano))
 	}
 	var page executionsPageJSON
 	if err := c.get(ctx, op, "/executions", query, &page, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	summaries := make([]ExecutionSummary, 0, len(page.Data))
+	summaries := make([]ExecutionListEntry, 0, len(page.Data))
 	for _, e := range page.Data {
 		if !c.scope.allowsWorkflow(e.WorkflowID) {
 			continue
@@ -273,7 +451,7 @@ func (c *Client) ListExecutions(ctx context.Context, cursor string, limit int, w
 		if workflowID != "" && e.WorkflowID != workflowID {
 			continue
 		}
-		summaries = append(summaries, executionSummaryOf(e))
+		summaries = append(summaries, executionListEntryOf(e))
 	}
 	return &ExecutionsPage{
 		Executions: summaries, Cursor: page.NextCursor, HasMore: page.NextCursor != "", Count: len(summaries),
@@ -307,17 +485,17 @@ func invokeExecutionsGet(ctx context.Context, resolved *config.Resolved, secrets
 // from its answer; the rest, in particular every node's actual run data, is discarded, see the package doc.
 func (c *Client) GetExecution(ctx context.Context, executionID int64) (*ExecutionDetail, error) {
 	const op = "get execution"
-	var raw executionJSON
+	var raw executionReadJSON
 	if err := c.get(ctx, op, "/executions/"+strconv.FormatInt(executionID, 10), nil, &raw, maxResponseBytes); err != nil {
 		return nil, err
 	}
 	if raw.ID != executionID {
 		return nil, invalidResponse(op, "n8n answered with an execution other than the one requested")
 	}
-	if err := c.checkExecutionScope(ctx, op, raw); err != nil {
+	if err := c.checkExecutionScope(ctx, op, raw.executionJSON); err != nil {
 		return nil, err
 	}
-	detail := ExecutionDetail{ExecutionSummary: executionSummaryOf(raw)}
+	detail := executionDetailOf(raw)
 	if erroredStatuses[raw.Status] {
 		execErr, err := c.fetchExecutionError(ctx, executionID)
 		if err != nil {
