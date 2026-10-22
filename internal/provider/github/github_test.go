@@ -861,7 +861,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 				descriptor.ID == issueTypesList.ID || descriptor.ID == organizationAdvisoriesList.ID
 			// The issue search sorts by the comment count, which reads no comment.
 			sortsByComments := descriptor.ID == issuesSearch.ID && forbidden == "comments"
-			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") &&
+			if strings.Contains(ownerFiltersStripped(descriptor), forbidden) && !(owners && forbidden == "owner") &&
 				!sortsByComments {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
@@ -1814,4 +1814,14 @@ func coreConfig(base string) *config.Config {
 			"repo":     {Service: "gh", Credential: "gh-reader", Target: repoTarget},
 		},
 	}
+}
+
+// ownerFiltersStripped is the input schema of a descriptor without the secret scanning filter values that
+// name a secret's owner, so a guard against an owner argument still catches a real one there.
+func ownerFiltersStripped(descriptor capability.Descriptor) string {
+	schema := string(descriptor.InputSchema)
+	if descriptor.ID == secretScanningAlertsList.ID {
+		schema = strings.NewReplacer("owner_email_hash", "", "owner-email", "", "owner-id", "", "owner-name", "").Replace(schema)
+	}
+	return schema
 }

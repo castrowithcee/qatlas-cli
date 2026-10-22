@@ -13,7 +13,9 @@ updated: 2026-10-22
 # Gitea
 
 This provider reads the account behind an access token, the repositories of a self-hosted Gitea instance, and the
-instance itself: its settings, version, signing key, and server-side rendering of Markdown. It changes nothing.
+instance itself: its settings, version, signing key, and server-side rendering of Markdown. It also reads and
+changes the issues of the bound repositories. A connection offers reads by default; a change needs the matching
+effect on the connection and a confirmation.
 
 Forgejo runs on the same code and the same rules. Everything below holds for both providers unless a line says
 otherwise; [Forgejo](forgejo.md) lists only what differs. Where this page says "the instance", it means the Gitea or
@@ -53,8 +55,8 @@ connections:
 ### Token scopes
 
 Gitea and Forgejo scope a token by category, `read:` or `write:`: `activitypub`, `admin`, `issue`, `misc`,
-`notification`, `organization`, `package`, `repository`, and `user`. The tools here read only. The scope of a tool
-group follows from the route group the API serves it in; none was checked against a live instance, and a missing
+`notification`, `organization`, `package`, `repository`, and `user`. A read needs the `read:` scope of its category,
+a change the `write:` scope. The scope of a tool group follows from the route group the API serves it in; none was checked against a live instance, and a missing
 scope shows as `not-found` (see Errors).
 
 | Tools | Scope |
@@ -62,8 +64,12 @@ scope shows as `not-found` (see Errors).
 | `accounts.me` | `read:user` |
 | `repositories.get` | `read:repository` |
 | `repositories.list` | `read:repository`; the token's own repositories and a user's also `read:user`, an organization's also `read:organization` |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | presumably `read:repository` |
 | `settings.get`, `signing-keys.get`, `markdown.render`, `markup.render`, `nodeinfo.get` | presumably `read:misc` |
 | `version.get` | none |
+| `issues.list`, `issues.get`, `issue-timeline.list` | `read:issue` |
+| `issues.search` | presumably `read:issue`, and possibly `read:repository` |
+| `issues.create`, `issues.update`, `issues.close`, `issues.reopen`, `issues.delete`, `issue-deadlines.set` | `write:issue`; a change also reads the issue first, which needs `read:issue` |
 | target selection | `read:user` for the account, `read:organization` for its organizations |
 
 A token with these scopes is the upper bound; the targets narrow a connection further, never the token.
@@ -159,14 +165,17 @@ wrappers, and commit lists add `X-HasMore`, `X-Page`, `X-PageCount`, and `X-PerP
 | `provider-error` | a redirect (not followed), another status, a product or version mismatch, or a refused render |
 | `invalid-provider-response` | an answer that is not readable within the bounds |
 
-Error bodies of the instance are untrusted data and never reach a message. Neither product documents an API
+A change is sent once and never repeated. When its outcome is open (a timeout, a reset connection, a 5xx status, or
+an answer that cannot be read), the message says that the change may have been applied and that the current state
+has to be read before repeating it. Error bodies of the instance are untrusted data and never reach a message. Neither product documents an API
 limit, but public instances limit by policy; Codeberg was seen announcing 2000 requests per 600 seconds. Qatlas
 spaces the requests of one token by half a second and the anonymous probes per instance.
 
 ## Bounds
 
 Every value of an answer is untrusted data. Responses are read up to 4 MiB, strings are cut at 2048 bytes, lists
-inside an object at 100 entries, and free-form metadata at four levels. A rendered text is accepted up to 256 KiB
+inside an object at 100 entries, and free-form metadata at four levels. The body of an issue and the text of a
+timeline event are cut at 64 KiB. A rendered text is accepted up to 256 KiB
 and returns at most 1 MiB of HTML, with `truncated` set when it was cut; the HTML is never executed or followed.
 
 Tools return every documented member of their endpoint, except:
@@ -188,9 +197,46 @@ Members only one product documents appear only there; the descriptor of each too
 | `repositories.list`, `repositories.get` | read | both |
 | `settings.get`, `version.get`, `signing-keys.get` | read | both |
 | `markdown.render`, `markup.render` | read | both |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | read | both |
 | `nodeinfo.get` | read | Forgejo |
+| `issues.list`, `issues.search`, `issues.get`, `issue-timeline.list` | read | both |
+| `issues.create` | create | both |
+| `issues.update`, `issues.close`, `issues.reopen`, `issue-deadlines.set` | update | both |
+| `issues.delete` | delete, listed only | both |
 
-Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. A connection offers reads by default.
+Tool IDs carry the provider as prefix, such as `gitea.repositories.get`.
+
+## Issues
+
+Every issue tool takes `repository` (`OWNER/REPO`, checked against the targets like any repository argument) and,
+for one issue, its `number`. Issues and pull requests share one index space.
+
+- `issues.get`, `issues.update`, `issues.close`, `issues.reopen`, `issues.delete`, and `issue-deadlines.set` first
+  read the issue. A pull request is refused as `invalid-request` with a pointer to the pull-request tools, before
+  anything is changed, and so is an answer whose canonical repository lies outside the targets. `issues.list` and
+  `issues.search` ask for issues only. `issue-timeline.list` also reads the timeline of a pull request.
+- `issues.search` reads across repositories; every row is checked against the targets by the repository it reports,
+  and a row without one is dropped, so a batch may hold fewer issues than the instance sent. `owner` must lie inside
+  the targets. The server-side filters are only an optimization.
+- Assignees are the `assignees` member of `issues.create` and `issues.update`; on an update the list replaces the
+  current assignees and an empty list removes them. The user objects of authors and assignees are personal data.
+- `issues.update` never changes the state and not the due date; `issues.close` and `issues.reopen` set the state,
+  `issue-deadlines.set` sets the due date or, with an empty `due_date`, removes it. An issue that already has the
+  requested state is returned with `changed` false and nothing is sent.
+- `issues.delete` removes the issue and its comments for good. It is offered only by a connection whose `tools` list
+  names it and is in no setup profile.
+- The timeline shows another issue, pull request, or comment an event refers to by identifiers only, because it may
+  lie outside the targets.
+- Not offered: the deprecated `assignee` of create and update, and the due-date members of both, which
+  `issue-deadlines.set` covers. A label is set on creation only, by its numeric ID; the update API has no label member.
+
+## Issue templates and configuration
+
+`issue-templates.list`, `issue-config.get`, and `issue-config.validate` read the issue templates, the issue
+configuration file, and the instance's validation of it for one repository (`repository` as `OWNER/REPO`, checked
+against the targets). Template and link texts, form attributes, and validation messages come from repository files
+and are untrusted data. `assignees` of a template is a Gitea member. The template list is cut at 100 entries with
+`truncated` set.
 
 ## Not offered
 
@@ -217,4 +263,7 @@ restrict agent use and traffic; check their terms before pointing a connection a
 - The render modes are `markdown`, `comment`, `wiki`, and `file`, and the repository reference is the URL path
   `/OWNER/REPO`. The `Wiki` flag is deprecated and not offered; `mode` `wiki` replaces it, and there is no
   `branch_path`.
-- Gitea has no `nodeinfo.get` and no `order_by`.
+- Gitea has no `nodeinfo.get`, no `order_by`, and no `sort` on issue lists and searches.
+- An issue carries `content_version`, `time_estimate` (read only), and `projects`. `issues.update` takes
+  `content_version`, the version read before, to refuse an update after the title or body changed, and `projects`,
+  which replaces the projects; `issues.create` takes `projects`. `issues.search` takes `created_by`.

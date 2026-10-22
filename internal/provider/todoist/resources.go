@@ -22,7 +22,7 @@ type rawProject struct {
 	Description string  `json:"description"`
 	IsFavorite  bool    `json:"is_favorite"`
 	IsShared    bool    `json:"is_shared"`
-	IsArchived  bool    `json:"is_archived"`
+	IsArchived  *bool   `json:"is_archived"`
 	IsDeleted   bool    `json:"is_deleted"`
 	IsInbox     bool    `json:"inbox_project"`
 	// WorkspaceID is set only on a project of a Todoist workspace, never on a personal one.
@@ -30,7 +30,35 @@ type rawProject struct {
 	ViewStyle   string          `json:"view_style"`
 	CreatedAt   *string         `json:"created_at"`
 	UpdatedAt   *string         `json:"updated_at"`
+
+	CanAssignTasks  *bool   `json:"can_assign_tasks"`
+	CanComment      *bool   `json:"can_comment"`
+	ChildOrder      *int64  `json:"child_order"`
+	OrderKey        *string `json:"order_key"`
+	IsCollapsed     *bool   `json:"is_collapsed"`
+	Icon            *string `json:"icon"`
+	CreatorUID      *string `json:"creator_uid"`
+	IsFrozen        *bool   `json:"is_frozen"`
+	DefaultOrder    *int64  `json:"default_order"`
+	DefaultOrderKey *string `json:"default_order_key"`
+	Access          *struct {
+		Visibility    *string `json:"visibility"`
+		Configuration *struct {
+			HideCollaboratorDetails *bool `json:"hide_collaborator_details"`
+			DisableDuplication      *bool `json:"disable_duplication"`
+		} `json:"configuration"`
+	} `json:"access"`
+	Role                                *string         `json:"role"`
+	FolderID                            json.RawMessage `json:"folder_id"`
+	IsInviteOnly                        *bool           `json:"is_invite_only"`
+	Status                              *string         `json:"status"`
+	IsLinkSharingEnabled                *bool           `json:"is_link_sharing_enabled"`
+	CollaboratorRoleDefault             *string         `json:"collaborator_role_default"`
+	IsPendingDefaultCollaboratorInvites *bool           `json:"is_pending_default_collaborator_invites"`
+	IsProjectInsightsEnabled            *bool           `json:"is_project_insights_enabled"`
 }
+
+func (r rawProject) archived() bool { return r.IsArchived != nil && *r.IsArchived }
 
 type rawSection struct {
 	ID          string  `json:"id"`
@@ -38,9 +66,17 @@ type rawSection struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description"`
 	Order       int     `json:"section_order"`
-	IsArchived  bool    `json:"is_archived"`
+	IsArchived  *bool   `json:"is_archived"`
 	IsDeleted   bool    `json:"is_deleted"`
+	UserID      *string `json:"user_id"`
+	AddedAt     *string `json:"added_at"`
+	UpdatedAt   *string `json:"updated_at"`
+	ArchivedAt  *string `json:"archived_at"`
+	IsCollapsed *bool   `json:"is_collapsed"`
+	OrderKey    *string `json:"order_key"`
 }
+
+func (r rawSection) archived() bool { return r.IsArchived != nil && *r.IsArchived }
 
 type rawLabel struct {
 	ID         string `json:"id"`
@@ -101,42 +137,43 @@ type rawTask struct {
 }
 
 type rawComment struct {
-	ID         string  `json:"id"`
-	TaskID     string  `json:"task_id"`
-	ItemID     string  `json:"item_id"`
-	ProjectID  string  `json:"project_id"`
-	Content    string  `json:"content"`
-	PostedAt   *string `json:"posted_at"`
-	PostedUID  *string `json:"posted_uid"`
-	IsDeleted  bool    `json:"is_deleted"`
-	Attachment *struct {
-		FileName     string `json:"file_name"`
-		FileType     string `json:"file_type"`
-		ResourceType string `json:"resource_type"`
-	} `json:"file_attachment"`
+	ID         string         `json:"id"`
+	TaskID     string         `json:"task_id"`
+	ItemID     string         `json:"item_id"`
+	ProjectID  string         `json:"project_id"`
+	Content    string         `json:"content"`
+	PostedAt   *string        `json:"posted_at"`
+	PostedUID  *string        `json:"posted_uid"`
+	IsDeleted  bool           `json:"is_deleted"`
+	Attachment *rawAttachment `json:"file_attachment"`
+
+	UIDsToNotify []json.RawMessage            `json:"uids_to_notify"`
+	Reactions    map[string][]json.RawMessage `json:"reactions"`
 }
 
 type rawReminder struct {
-	ID           string  `json:"id"`
-	TaskID       string  `json:"task_id"`
-	ItemID       string  `json:"item_id"`
-	Type         string  `json:"type"`
-	Due          *rawDue `json:"due"`
-	MinuteOffset *int    `json:"minute_offset"`
-	IsUrgent     bool    `json:"is_urgent"`
-	IsDeleted    bool    `json:"is_deleted"`
+	ID           string          `json:"id"`
+	TaskID       string          `json:"task_id"`
+	ItemID       string          `json:"item_id"`
+	Type         string          `json:"type"`
+	Due          *rawDue         `json:"due"`
+	MinuteOffset *int            `json:"minute_offset"`
+	IsUrgent     bool            `json:"is_urgent"`
+	IsDeleted    bool            `json:"is_deleted"`
+	NotifyUID    json.RawMessage `json:"notify_uid"`
 }
 
 type rawFilter struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Query       string `json:"query"`
-	Description string `json:"description"`
-	Color       string `json:"color"`
-	Order       int    `json:"item_order"`
-	IsFavorite  bool   `json:"is_favorite"`
-	IsFrozen    bool   `json:"is_frozen"`
-	IsDeleted   bool   `json:"is_deleted"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Query       string  `json:"query"`
+	Description string  `json:"description"`
+	Color       string  `json:"color"`
+	Order       int     `json:"item_order"`
+	IsFavorite  bool    `json:"is_favorite"`
+	IsFrozen    bool    `json:"is_frozen"`
+	IsDeleted   bool    `json:"is_deleted"`
+	OrderKey    *string `json:"order_key"`
 }
 
 // Continuation is the cursor contract every list shares: has_more is true whenever Todoist announced a
@@ -160,6 +197,41 @@ type Project struct {
 	IsArchived  bool   `json:"is_archived,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
+
+	CanAssignTasks  *bool          `json:"can_assign_tasks,omitempty"`
+	CanComment      *bool          `json:"can_comment,omitempty"`
+	ChildOrder      *int64         `json:"child_order,omitempty"`
+	OrderKey        string         `json:"order_key,omitempty"`
+	IsCollapsed     *bool          `json:"is_collapsed,omitempty"`
+	Icon            string         `json:"icon,omitempty"`
+	CreatorUID      string         `json:"creator_uid,omitempty"`
+	IsFrozen        *bool          `json:"is_frozen,omitempty"`
+	DefaultOrder    *int64         `json:"default_order,omitempty"`
+	DefaultOrderKey string         `json:"default_order_key,omitempty"`
+	Access          *ProjectAccess `json:"access,omitempty"`
+	Role            string         `json:"role,omitempty"`
+
+	// The members below belong to workspace projects only.
+	WorkspaceID                         string `json:"workspace_id,omitempty"`
+	FolderID                            string `json:"folder_id,omitempty"`
+	IsInviteOnly                        *bool  `json:"is_invite_only,omitempty"`
+	Status                              string `json:"status,omitempty"`
+	IsLinkSharingEnabled                *bool  `json:"is_link_sharing_enabled,omitempty"`
+	CollaboratorRoleDefault             string `json:"collaborator_role_default,omitempty"`
+	IsPendingDefaultCollaboratorInvites *bool  `json:"is_pending_default_collaborator_invites,omitempty"`
+	IsProjectInsightsEnabled            *bool  `json:"is_project_insights_enabled,omitempty"`
+}
+
+// ProjectAccess tells who can see a project. Its settings exist for a public project only.
+type ProjectAccess struct {
+	Visibility    string               `json:"visibility,omitempty"`
+	Configuration *ProjectAccessConfig `json:"configuration,omitempty"`
+}
+
+// ProjectAccessConfig holds the settings of a publicly shared project.
+type ProjectAccessConfig struct {
+	HideCollaboratorDetails *bool `json:"hide_collaborator_details,omitempty"`
+	DisableDuplication      *bool `json:"disable_duplication,omitempty"`
 }
 
 // ProjectList is one page of projects.
@@ -175,6 +247,13 @@ type Section struct {
 	Name        string `json:"name"`
 	Order       int    `json:"order"`
 	Description string `json:"description,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	AddedAt     string `json:"added_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	ArchivedAt  string `json:"archived_at,omitempty"`
+	IsArchived  *bool  `json:"is_archived,omitempty"`
+	IsCollapsed *bool  `json:"is_collapsed,omitempty"`
+	OrderKey    string `json:"order_key,omitempty"`
 }
 
 // SectionList is one page of sections.
@@ -259,21 +338,35 @@ type TaskList struct {
 	Continuation
 }
 
-// Comment is the stable Qatlas view of one task or project comment. Content and the attachment name are
-// untrusted data; an attachment is described, never fetched.
+// Comment is the stable Qatlas view of one task or project comment. Content, the emoji, and the attachment
+// are untrusted data; an attachment is described and its address shown only under shownAddress, never fetched.
 type Comment struct {
-	ID         string      `json:"id"`
-	Content    string      `json:"content"`
-	PostedAt   string      `json:"posted_at,omitempty"`
-	PostedBy   string      `json:"posted_by,omitempty"`
-	Attachment *Attachment `json:"attachment,omitempty"`
+	ID                    string              `json:"id"`
+	Content               string              `json:"content"`
+	PostedAt              string              `json:"posted_at,omitempty"`
+	PostedBy              string              `json:"posted_by,omitempty"`
+	Attachment            *Attachment         `json:"attachment,omitempty"`
+	UIDsToNotify          []string            `json:"uids_to_notify,omitempty"`
+	UIDsToNotifyTruncated bool                `json:"uids_to_notify_truncated,omitempty"`
+	Reactions             map[string][]string `json:"reactions,omitempty"`
+	ReactionsTruncated    bool                `json:"reactions_truncated,omitempty"`
 }
 
-// Attachment describes the file of a comment without its address.
+// Attachment describes the file of a comment. Its addresses appear only when shownAddress allows them.
 type Attachment struct {
-	FileName     string `json:"file_name,omitempty"`
-	FileType     string `json:"file_type,omitempty"`
-	ResourceType string `json:"resource_type,omitempty"`
+	FileName     string     `json:"file_name,omitempty"`
+	FileType     string     `json:"file_type,omitempty"`
+	ResourceType string     `json:"resource_type,omitempty"`
+	FileSize     *int64     `json:"file_size,omitempty"`
+	UploadState  string     `json:"upload_state,omitempty"`
+	FileURL      string     `json:"file_url,omitempty"`
+	Image        string     `json:"image,omitempty"`
+	ImageWidth   *int64     `json:"image_width,omitempty"`
+	ImageHeight  *int64     `json:"image_height,omitempty"`
+	FileDuration *int64     `json:"file_duration,omitempty"`
+	TnS          *Thumbnail `json:"tn_s,omitempty"`
+	TnM          *Thumbnail `json:"tn_m,omitempty"`
+	TnL          *Thumbnail `json:"tn_l,omitempty"`
 }
 
 // CommentList is one page of comments of one task or one project.
@@ -290,6 +383,7 @@ type Reminder struct {
 	Due          *Due   `json:"due,omitempty"`
 	MinuteOffset *int   `json:"minute_offset,omitempty"`
 	IsUrgent     bool   `json:"is_urgent"`
+	NotifyUID    string `json:"notify_uid,omitempty"`
 }
 
 // ReminderList is one page of reminders.
@@ -309,6 +403,7 @@ type Filter struct {
 	Order       int    `json:"order"`
 	IsFavorite  bool   `json:"is_favorite"`
 	IsFrozen    bool   `json:"is_frozen"`
+	OrderKey    string `json:"order_key,omitempty"`
 }
 
 // FilterList is every saved filter of the account. The Sync endpoint answers them at once.
@@ -323,19 +418,58 @@ func text(value *string) string {
 	return *value
 }
 
-func projectOf(raw rawProject, full bool) Project {
+// idText reads an identifier Todoist sends as a string, or as a number, without a detour through a float.
+func idText(raw json.RawMessage) string {
+	var id string
+	if json.Unmarshal(raw, &id) == nil {
+		return boundedText(id, maxTagText)
+	}
+	var number json.Number
+	if json.Unmarshal(raw, &number) == nil {
+		return boundedText(number.String(), maxTagText)
+	}
+	return ""
+}
+
+// projectOf is the one mapping of a project every project output shares, a personal and a workspace one
+// alike. Texts Todoist composes itself and identifiers of other people are bounded.
+func projectOf(raw rawProject) Project {
 	project := Project{ID: raw.ID, Name: raw.Name, ParentID: text(raw.ParentID), Color: raw.Color,
-		IsFavorite: raw.IsFavorite, IsShared: raw.IsShared, IsInbox: raw.IsInbox, ViewStyle: raw.ViewStyle}
-	if full {
-		project.Description, project.IsArchived = raw.Description, raw.IsArchived
-		project.CreatedAt, project.UpdatedAt = text(raw.CreatedAt), text(raw.UpdatedAt)
+		IsFavorite: raw.IsFavorite, IsShared: raw.IsShared, IsInbox: raw.IsInbox, ViewStyle: raw.ViewStyle,
+		Description: raw.Description, IsArchived: raw.archived(),
+		CreatedAt: text(raw.CreatedAt), UpdatedAt: text(raw.UpdatedAt),
+		CanAssignTasks: raw.CanAssignTasks, CanComment: raw.CanComment, ChildOrder: raw.ChildOrder,
+		OrderKey: boundedText(text(raw.OrderKey), maxOrderKey), IsCollapsed: raw.IsCollapsed,
+		Icon: boundedText(text(raw.Icon), maxTagText), CreatorUID: boundedText(text(raw.CreatorUID), maxTagText),
+		IsFrozen: raw.IsFrozen, DefaultOrder: raw.DefaultOrder,
+		DefaultOrderKey: boundedText(text(raw.DefaultOrderKey), maxOrderKey),
+		Role:            boundedText(text(raw.Role), maxTagText),
+		WorkspaceID:     idText(raw.WorkspaceID), FolderID: idText(raw.FolderID), IsInviteOnly: raw.IsInviteOnly,
+		Status: boundedText(text(raw.Status), maxTagText), IsLinkSharingEnabled: raw.IsLinkSharingEnabled,
+		CollaboratorRoleDefault:             boundedText(text(raw.CollaboratorRoleDefault), maxTagText),
+		IsPendingDefaultCollaboratorInvites: raw.IsPendingDefaultCollaboratorInvites,
+		IsProjectInsightsEnabled:            raw.IsProjectInsightsEnabled}
+	if access := raw.Access; access != nil {
+		out := ProjectAccess{Visibility: boundedText(text(access.Visibility), maxTagText)}
+		if config := access.Configuration; config != nil &&
+			(config.HideCollaboratorDetails != nil || config.DisableDuplication != nil) {
+			out.Configuration = &ProjectAccessConfig{HideCollaboratorDetails: config.HideCollaboratorDetails,
+				DisableDuplication: config.DisableDuplication}
+		}
+		if out.Visibility != "" || out.Configuration != nil {
+			project.Access = &out
+		}
 	}
 	return project
 }
 
 func sectionOf(raw rawSection) Section {
-	return Section{ID: raw.ID, ProjectID: raw.ProjectID, Name: raw.Name, Order: raw.Order,
-		Description: text(raw.Description)}
+	section := Section{ID: raw.ID, ProjectID: raw.ProjectID, Name: raw.Name, Order: raw.Order,
+		Description: text(raw.Description), UserID: boundedText(text(raw.UserID), maxTagText),
+		AddedAt: text(raw.AddedAt), UpdatedAt: text(raw.UpdatedAt), ArchivedAt: text(raw.ArchivedAt),
+		IsArchived: raw.IsArchived, IsCollapsed: raw.IsCollapsed,
+		OrderKey: boundedText(text(raw.OrderKey), maxOrderKey)}
+	return section
 }
 
 func dueOf(raw *rawDue) *Due {
@@ -449,7 +583,7 @@ func (c *Client) listProjects(ctx context.Context, call listCall) (*ProjectList,
 			return nil, err
 		}
 		if ok {
-			result.Projects = append(result.Projects, projectOf(raw, false))
+			result.Projects = append(result.Projects, projectOf(raw))
 		}
 	}
 	return result, nil
@@ -460,7 +594,7 @@ func (c *Client) getProject(ctx context.Context, id string) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	project := projectOf(raw, true)
+	project := projectOf(raw)
 	return &project, nil
 }
 
@@ -685,9 +819,10 @@ func (c *Client) listComments(ctx context.Context, call listCall, taskID, projec
 func commentOf(raw rawComment) Comment {
 	comment := Comment{ID: raw.ID, Content: raw.Content, PostedAt: text(raw.PostedAt), PostedBy: text(raw.PostedUID)}
 	if raw.Attachment != nil {
-		comment.Attachment = &Attachment{FileName: raw.Attachment.FileName, FileType: raw.Attachment.FileType,
-			ResourceType: raw.Attachment.ResourceType}
+		comment.Attachment = attachmentOf(raw.Attachment)
 	}
+	comment.UIDsToNotify, comment.UIDsToNotifyTruncated = notifiedOf(raw.UIDsToNotify)
+	comment.Reactions, comment.ReactionsTruncated = reactionsOf(raw.Reactions)
 	return comment
 }
 
@@ -731,7 +866,7 @@ func (c *Client) listReminders(ctx context.Context, call listCall, taskID string
 
 func reminderOf(raw rawReminder, taskID string) Reminder {
 	return Reminder{ID: raw.ID, TaskID: taskID, Type: raw.Type, Due: dueOf(raw.Due), MinuteOffset: raw.MinuteOffset,
-		IsUrgent: raw.IsUrgent}
+		IsUrgent: raw.IsUrgent, NotifyUID: idText(raw.NotifyUID)}
 }
 
 // listFilters reads the saved filters of the account through one read-only Sync request, the only route
@@ -758,7 +893,7 @@ func (c *Client) listFilters(ctx context.Context) (*FilterList, error) {
 		}
 		result.Filters = append(result.Filters, Filter{ID: raw.ID, Name: raw.Name, Query: raw.Query,
 			Description: raw.Description, Color: raw.Color, Order: raw.Order, IsFavorite: raw.IsFavorite,
-			IsFrozen: raw.IsFrozen})
+			IsFrozen: raw.IsFrozen, OrderKey: boundedText(text(raw.OrderKey), maxOrderKey)})
 	}
 	sort.SliceStable(result.Filters, func(i, j int) bool { return result.Filters[i].Order < result.Filters[j].Order })
 	return result, nil

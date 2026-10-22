@@ -46,13 +46,22 @@ const (
 		`"required":["column"],"additionalProperties":false}}`
 	viewHiddenSchema = `{"type":"array","maxItems":100,"items":` + viewColSchema + `}`
 
+	// viewFreeMembers are the members that pass through as provider data, a list or an object each.
+	viewFreeMembers = `"rows":{"type":["array","object"]},"formula_rows":{"type":["array","object"]},` +
+		`"link_rows":{"type":["array","object"]},"summaries":{"type":["array","object"]},` +
+		`"groupbys":{"type":["array","object"]},"group_rows":{"type":["array","object"]},` +
+		`"groups":{"type":["array","object"]},"colorbys":{"type":["array","object"]},` +
+		`"colors":{"type":["array","object"]},`
+
 	viewObjectSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"type":{"type":"string"},"filter_conjunction":{"type":"string"},` +
 		`"filters":{"type":"array","items":{"type":"object","properties":{"column":{"type":"string"},` +
 		`"predicate":{"type":"string"},"term":{}},"required":["column"],"additionalProperties":false}},` +
 		`"sorts":{"type":"array","items":{"type":"object","properties":{"column":{"type":"string"},` +
 		`"direction":{"type":"string"}},"required":["column"],"additionalProperties":false}},` +
-		`"hidden_columns":{"type":"array","items":{"type":"string"}}},"required":["name"],"additionalProperties":false}`
+		`"hidden_columns":{"type":"array","items":{"type":"string"}},"is_locked":{"type":"boolean"},` +
+		viewFreeMembers + `"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
+		`"required":["name"],"additionalProperties":false}`
 )
 
 var viewsRisk = capability.Risk{
@@ -78,7 +87,9 @@ var viewsList = capability.Descriptor{
 	Arguments: []capability.Argument{viewTableArg},
 	Fields: []capability.Field{
 		{Name: "table", Description: "The selected table reference"},
-		{Name: "views", Description: "The views with identifier, name, type, filters, sorts and hidden column keys, untrusted data"},
+		{Name: "views", Description: "The views with id, name, type, is_locked, filters, sorts, hidden column keys, " +
+			"filter_conjunction, rows, formula_rows, summaries, groupbys, group_rows, groups and omitted_fields, untrusted data; " +
+			"formula_rows appears only for a wildcard connection"},
 		{Name: "truncated", Description: "True when the table holds more views than one answer carries"},
 	},
 	Examples: []capability.Example{{Description: "List the views of the only configured table", Arguments: json.RawMessage(`{}`)}},
@@ -95,7 +106,9 @@ var viewsGet = capability.Descriptor{
 	Arguments: []capability.Argument{viewTableArg, viewRefArg},
 	Fields: []capability.Field{
 		{Name: "table", Description: "The selected table reference"},
-		{Name: "view", Description: "The view with identifier, name, type, filters, sorts and hidden column keys, untrusted data"},
+		{Name: "view", Description: "The view with id, name, type, is_locked, filters, sorts, hidden column keys, " +
+			"filter_conjunction, groupbys, group_rows, groups, colorbys, rows, formula_rows, link_rows, summaries, colors and " +
+			"omitted_fields, untrusted data; formula_rows and link_rows appear only for a wildcard connection"},
 	},
 	Examples: []capability.Example{{Description: "Read one view by name", Arguments: json.RawMessage(`{"view":"Aktive"}`)}},
 }
@@ -336,13 +349,24 @@ func (s *viewScope) query() url.Values { return url.Values{"table_name": {s.tabl
 
 // View is one view of a table. Filter terms and names are untrusted provider content.
 type View struct {
-	ID                string       `json:"id,omitempty"`
-	Name              string       `json:"name"`
-	Type              string       `json:"type,omitempty"`
-	FilterConjunction string       `json:"filter_conjunction,omitempty"`
-	Filters           []ViewFilter `json:"filters,omitempty"`
-	Sorts             []ViewSort   `json:"sorts,omitempty"`
-	HiddenColumns     []string     `json:"hidden_columns,omitempty"`
+	ID                string          `json:"id,omitempty"`
+	Name              string          `json:"name"`
+	Type              string          `json:"type,omitempty"`
+	FilterConjunction string          `json:"filter_conjunction,omitempty"`
+	Filters           []ViewFilter    `json:"filters,omitempty"`
+	Sorts             []ViewSort      `json:"sorts,omitempty"`
+	HiddenColumns     []string        `json:"hidden_columns,omitempty"`
+	IsLocked          *bool           `json:"is_locked,omitempty"`
+	Rows              json.RawMessage `json:"rows,omitempty"`
+	FormulaRows       json.RawMessage `json:"formula_rows,omitempty"`
+	LinkRows          json.RawMessage `json:"link_rows,omitempty"`
+	Summaries         json.RawMessage `json:"summaries,omitempty"`
+	Groupbys          json.RawMessage `json:"groupbys,omitempty"`
+	GroupRows         json.RawMessage `json:"group_rows,omitempty"`
+	Groups            json.RawMessage `json:"groups,omitempty"`
+	Colorbys          json.RawMessage `json:"colorbys,omitempty"`
+	Colors            json.RawMessage `json:"colors,omitempty"`
+	OmittedFields     []string        `json:"omitted_fields,omitempty"`
 }
 
 // ViewFilter is one filter of a view, its column named by key.
@@ -379,6 +403,16 @@ type viewWire struct {
 	Filters           json.RawMessage `json:"filters"`
 	Sorts             json.RawMessage `json:"sorts"`
 	HiddenColumns     json.RawMessage `json:"hidden_columns"`
+	IsLocked          json.RawMessage `json:"is_locked"`
+	Rows              json.RawMessage `json:"rows"`
+	FormulaRows       json.RawMessage `json:"formula_rows"`
+	LinkRows          json.RawMessage `json:"link_rows"`
+	Summaries         json.RawMessage `json:"summaries"`
+	Groupbys          json.RawMessage `json:"groupbys"`
+	GroupRows         json.RawMessage `json:"group_rows"`
+	Groups            json.RawMessage `json:"groups"`
+	Colorbys          json.RawMessage `json:"colorbys"`
+	Colors            json.RawMessage `json:"colors"`
 }
 
 func shortText(value string) string {
@@ -388,8 +422,10 @@ func shortText(value string) string {
 	return value
 }
 
-// normalizeView keeps the fields of the stable envelope within their bounds and drops everything else.
-func normalizeView(op string, wire viewWire) (View, error) {
+// normalizeView keeps the fields of the stable envelope within their bounds and drops everything else. The
+// free members pass through unchanged but bounded; one beyond the bounds is left out and named. The members
+// that may hold values of linked tables, formula_rows and link_rows, appear only for a wildcard connection.
+func normalizeView(op string, wire viewWire, wildcard bool) (View, error) {
 	if wire.Name == "" || len(wire.Name) > maxViewText {
 		return View{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "SeaTable returned a view without a usable name"}
@@ -443,6 +479,40 @@ func normalizeView(op string, wire viewWire) (View, error) {
 			view.HiddenColumns = append(view.HiddenColumns, shortText(key))
 		}
 	}
+	if present(wire.IsLocked) {
+		var locked bool
+		if json.Unmarshal(wire.IsLocked, &locked) != nil {
+			view.OmittedFields = append(view.OmittedFields, "is_locked")
+		} else {
+			view.IsLocked = &locked
+		}
+	}
+	for _, member := range []struct {
+		name   string
+		raw    json.RawMessage
+		into   *json.RawMessage
+		linked bool
+	}{
+		{"groupbys", wire.Groupbys, &view.Groupbys, false},
+		{"group_rows", wire.GroupRows, &view.GroupRows, false},
+		{"groups", wire.Groups, &view.Groups, false},
+		{"colorbys", wire.Colorbys, &view.Colorbys, false},
+		{"rows", wire.Rows, &view.Rows, false},
+		{"formula_rows", wire.FormulaRows, &view.FormulaRows, true},
+		{"link_rows", wire.LinkRows, &view.LinkRows, true},
+		{"summaries", wire.Summaries, &view.Summaries, false},
+		{"colors", wire.Colors, &view.Colors, false},
+	} {
+		if !present(member.raw) || (member.linked && !wildcard) {
+			continue
+		}
+		value, ok := boundedContainer(member.raw)
+		if !ok {
+			view.OmittedFields = append(view.OmittedFields, member.name)
+			continue
+		}
+		*member.into = value
+	}
 	return view, nil
 }
 
@@ -469,7 +539,7 @@ func (c *Client) ListViews(ctx context.Context, input ViewInput) (*ViewsResult, 
 			result.Truncated = true
 			break
 		}
-		view, err := normalizeView(op, wire)
+		view, err := normalizeView(op, wire, c.scope.wildcard)
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +582,7 @@ func (c *Client) GetView(ctx context.Context, input ViewInput) (*ViewResult, err
 	if wire.ID == "" {
 		wire.ID = id
 	}
-	view, err := normalizeView(op, wire)
+	view, err := normalizeView(op, wire, c.scope.wildcard)
 	if err != nil {
 		return nil, err
 	}

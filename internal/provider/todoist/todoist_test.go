@@ -119,7 +119,7 @@ func (f *fakeTodoist) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/comments":
 		page("results", `{"id":"noteOne","item_id":"taskDue","content":"Looks good","posted_at":"2026-09-20T10:00:00Z",`+
 			`"posted_uid":"1234567","file_attachment":{"file_name":"plan.pdf","file_type":"application/pdf",`+
-			`"file_url":"https://files.example.invalid/secret-link","resource_type":"file"},"is_deleted":false}`,
+			`"file_url":"https://files.todoist.com/secret-link","resource_type":"file"},"is_deleted":false}`,
 			`{"id":"noteStray","item_id":"taskForeign","content":"`+foreignCanary+`","is_deleted":false}`)
 	case path == "/reminders":
 		page("results", `{"id":"remOne","item_id":"taskDue","notify_uid":"1","type":"relative","minute_offset":30,`+
@@ -673,7 +673,7 @@ func TestStructuredTaskFilters(t *testing.T) {
 	}
 	result, err = env.invoke("todoist.comments.list", "one", `{"task_id":"taskDue"}`)
 	if err != nil || strings.Contains(result, "secret-link") || !strings.Contains(result, `"file_name":"plan.pdf"`) {
-		t.Errorf("comments = %s, %v; want attachments described without their address", result, err)
+		t.Errorf("comments = %s, %v; want a Todoist-hosted attachment address left out", result, err)
 	}
 }
 

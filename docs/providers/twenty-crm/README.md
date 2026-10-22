@@ -67,8 +67,10 @@ settings right, unlike the metadata API (see [Data model](data-model.md)). Only 
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
 connection's local selection can only narrow it, by `effects` or by a `tools` list naming exactly the tools it
-offers. The `companies.*` tools expose core company
-fields only; custom fields are written through `records.create` and `records.update`. Invocation arguments
-never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
+offers. The `companies.*` read tools report the whole company record, own fields under `custom_fields`; they
+read no workspace catalog, so a file list, rich text, or signed file address is recognized by its shape, and a
+value beyond the size limits is left out and named in `omitted_fields`. `addressOld` of a company is marked
+deprecated in Twenty and is left out. Own fields are written through `records.create` and `records.update`.
+Invocation arguments never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
 A profile is a visible starting selection, not a role: only the ticked `tools` are saved,
 and a saved connection never follows a profile.

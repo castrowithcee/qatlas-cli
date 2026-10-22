@@ -22,6 +22,19 @@ type outputCase struct {
 	total bool
 }
 
+// richCompany is a company record in the shape of the Twenty company object with a custom field.
+const richCompany = `{"id":"` + companyID + `","name":"Bike","domainName":{"primaryLinkUrl":"https://bike.example",` +
+	`"primaryLinkLabel":"bike.example","secondaryLinks":[{"url":"https://shop.example","label":"Shop"}]},` +
+	`"linkedinLink":{"primaryLinkUrl":"https://linkedin.example/bike","primaryLinkLabel":"","secondaryLinks":[]},` +
+	`"annualRevenue":{"amountMicros":9007199254740993,"currencyCode":"CHF"},` +
+	`"address":{"addressStreet1":"Hauptstrasse 1","addressStreet2":"","addressCity":"Zuerich","addressPostcode":"8000",` +
+	`"addressState":"","addressCountry":"CH","addressLat":47.37,"addressLng":8.54},"addressOld":"alt",` +
+	`"position":2,"searchVector":"'bike':1","deletedAt":null,` +
+	`"createdBy":{"source":"API","workspaceMemberId":"` + memberID + `","name":"Ada","context":{}},` +
+	`"updatedBy":{"source":"MANUAL","workspaceMemberId":null,"name":"Bob","context":{}},` +
+	`"accountOwnerId":"` + memberID + `","employees":12,"idealCustomerProfile":true,"xLink":{"primaryLinkUrl":"https://x.example"},` +
+	`"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-02T00:00:00.000Z"}`
+
 const outputPageInfo = `"pageInfo":{"hasNextPage":true,"endCursor":"cursorABC"}`
 
 func outputCases() []outputCase {
@@ -41,9 +54,11 @@ func outputCases() []outputCase {
 				`"pageInfo":{"hasNextPage":true,"endCursor":"c3VjaA=="}}}}`
 		}, false},
 		{companiesList, invokeCompaniesList, `{}`, func(tail string) string {
-			return `{"data":{"companies":[{"id":"` + companyID + `","name":"Bike","domainName":{"primaryLinkUrl":"bike.example"}}]}` +
-				tail + `,` + outputPageInfo + `}`
+			return `{"data":{"companies":[` + richCompany + `]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
+		{companiesGet, invokeCompaniesGet, `{"id":"` + companyID + `"}`, func(tail string) string {
+			return `{"data":{"company":` + richCompany + `}}`
+		}, false},
 		{workflowsList, invokeWorkflowsList, `{}`, func(tail string) string {
 			return `{"data":{"workflows":[{"id":"` + wfID + `","name":"Onboarding","statuses":["ACTIVE"],` +
 				`"lastPublishedVersionId":"` + wfVersion + `","createdAt":"2026-01-01T00:00:00.000Z",` +
