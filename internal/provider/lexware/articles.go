@@ -27,7 +27,8 @@ var articlesReadRisk = capability.Risk{
 	DataSensitivity: articleSensitivity,
 }
 
-const articleSchema = `{"type":"object","properties":{"id":{"type":"string"},"version":{"type":"integer"},` +
+const articleSchema = `{"type":"object","properties":{"id":{"type":"string"},"organization_id":{"type":"string"},` +
+	`"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"},` +
 	`"archived":{"type":"boolean"},"title":{"type":"string"},"description":{"type":"string"},` +
 	`"type":{"type":"string"},"article_number":{"type":"string"},"gtin":{"type":"string"},` +
 	`"note":{"type":"string"},"unit_name":{"type":"string"},` +
@@ -37,6 +38,9 @@ const articleSchema = `{"type":"object","properties":{"id":{"type":"string"},"ve
 
 var articleFields = []capability.Field{
 	{Name: "id", Description: "Article identifier"},
+	{Name: "organization_id", Description: "Identifier of the Lexware organization the article belongs to (untrusted data)"},
+	{Name: "created_date", Description: "Creation timestamp reported by Lexware"},
+	{Name: "updated_date", Description: "Last change timestamp reported by Lexware"},
 	{Name: "version", Description: "Version counter reported by Lexware"},
 	{Name: "archived", Description: "True when the article is archived in Lexware"},
 	{Name: "title", Description: "Article title, untrusted data"},
@@ -192,17 +196,20 @@ type ArticleListResult struct {
 // ArticleRecord is the stable Qatlas view of one article. Free texts are untrusted data; an amount keeps
 // the provider's exact digits.
 type ArticleRecord struct {
-	ID            string        `json:"id"`
-	Version       int           `json:"version,omitempty"`
-	Archived      bool          `json:"archived"`
-	Title         string        `json:"title,omitempty"`
-	Description   string        `json:"description,omitempty"`
-	Type          string        `json:"type,omitempty"`
-	ArticleNumber string        `json:"article_number,omitempty"`
-	GTIN          string        `json:"gtin,omitempty"`
-	Note          string        `json:"note,omitempty"`
-	UnitName      string        `json:"unit_name,omitempty"`
-	Price         *ArticlePrice `json:"price,omitempty"`
+	ID             string        `json:"id"`
+	OrganizationID string        `json:"organization_id,omitempty"`
+	CreatedDate    string        `json:"created_date,omitempty"`
+	UpdatedDate    string        `json:"updated_date,omitempty"`
+	Version        int           `json:"version,omitempty"`
+	Archived       bool          `json:"archived"`
+	Title          string        `json:"title,omitempty"`
+	Description    string        `json:"description,omitempty"`
+	Type           string        `json:"type,omitempty"`
+	ArticleNumber  string        `json:"article_number,omitempty"`
+	GTIN           string        `json:"gtin,omitempty"`
+	Note           string        `json:"note,omitempty"`
+	UnitName       string        `json:"unit_name,omitempty"`
+	Price          *ArticlePrice `json:"price,omitempty"`
 }
 
 // ArticlePrice is the unit price of an article.
@@ -215,17 +222,20 @@ type ArticlePrice struct {
 
 // articleJSON mirrors the provider fields the article operations read.
 type articleJSON struct {
-	ID            string `json:"id"`
-	Version       int    `json:"version"`
-	Archived      bool   `json:"archived"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	Type          string `json:"type"`
-	ArticleNumber string `json:"articleNumber"`
-	GTIN          string `json:"gtin"`
-	Note          string `json:"note"`
-	UnitName      string `json:"unitName"`
-	Price         struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	CreatedDate    string `json:"createdDate"`
+	UpdatedDate    string `json:"updatedDate"`
+	Version        int    `json:"version"`
+	Archived       bool   `json:"archived"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Type           string `json:"type"`
+	ArticleNumber  string `json:"articleNumber"`
+	GTIN           string `json:"gtin"`
+	Note           string `json:"note"`
+	UnitName       string `json:"unitName"`
+	Price          struct {
 		NetPrice     json.Number `json:"netPrice"`
 		GrossPrice   json.Number `json:"grossPrice"`
 		LeadingPrice string      `json:"leadingPrice"`
@@ -235,7 +245,8 @@ type articleJSON struct {
 
 func (raw articleJSON) record() ArticleRecord {
 	record := ArticleRecord{
-		ID: raw.ID, Version: raw.Version, Archived: raw.Archived, Title: raw.Title,
+		ID: raw.ID, OrganizationID: wellFormedUUID(raw.OrganizationID), CreatedDate: raw.CreatedDate,
+		UpdatedDate: raw.UpdatedDate, Version: raw.Version, Archived: raw.Archived, Title: raw.Title,
 		Description: raw.Description, Type: raw.Type, ArticleNumber: raw.ArticleNumber, GTIN: raw.GTIN,
 		Note: raw.Note, UnitName: raw.UnitName,
 	}

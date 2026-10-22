@@ -28,11 +28,11 @@ var vouchersGet = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},` +
 		`"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"id":{"type":"string"},"type":{"type":"string"},"voucher_status":{"type":"string"},` +
+		`"id":{"type":"string"},"organization_id":{"type":"string"},"type":{"type":"string"},"voucher_status":{"type":"string"},` +
 		`"voucher_number":{"type":"string"},"voucher_date":{"type":"string"},"shipping_date":{"type":"string"},` +
 		`"due_date":{"type":"string"},"total_gross_amount":{"type":"number"},"total_tax_amount":{"type":"number"},` +
 		`"tax_type":{"type":"string"},"use_collective_contact":{"type":"boolean"},"contact_id":{"type":"string"},` +
-		`"remark":{"type":"string"},"voucher_items":{"type":"array","items":{"type":"object","properties":{` +
+		`"contact_name":{"type":"string"},"remark":{"type":"string"},"voucher_items":{"type":"array","items":{"type":"object","properties":{` +
 		`"amount":{"type":"number"},"tax_amount":{"type":"number"},"tax_rate_percent":{"type":"number"},` +
 		`"category_id":{"type":"string"}},"additionalProperties":false}},` +
 		`"files":{"type":"array","items":{"type":"string"}},"created_date":{"type":"string"},` +
@@ -43,6 +43,7 @@ var vouchersGet = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Voucher identifier"},
+		{Name: "organization_id", Description: "Identifier of the Lexware organization the voucher belongs to (untrusted data)"},
 		{Name: "type", Description: "Voucher type, for example salesinvoice or purchaseinvoice"},
 		{Name: "voucher_status", Description: "Provider status of the voucher"},
 		{Name: "voucher_number", Description: "Voucher number"},
@@ -54,6 +55,7 @@ var vouchersGet = capability.Descriptor{
 		{Name: "tax_type", Description: "Tax condition of the voucher, for example net or gross"},
 		{Name: "use_collective_contact", Description: "True when the voucher is booked to a collective contact"},
 		{Name: "contact_id", Description: "Identifier of the contact the voucher belongs to"},
+		{Name: "contact_name", Description: "Name of the recipient or invoicing party, untrusted personal data; with use_collective_contact it is the only contact assignment"},
 		{Name: "remark", Description: "Free-text remark, untrusted data"},
 		{Name: "voucher_items", Description: "Positions: amount, tax_amount, tax_rate_percent, category_id"},
 		{Name: "files", Description: "Identifiers of the files attached to the voucher; their content is not read"},
@@ -89,6 +91,7 @@ func invokeVouchersGet(ctx context.Context, resolved *config.Resolved, secrets *
 // the remark is untrusted data.
 type Voucher struct {
 	ID                   string        `json:"id"`
+	OrganizationID       string        `json:"organization_id,omitempty"`
 	Type                 string        `json:"type,omitempty"`
 	VoucherStatus        string        `json:"voucher_status,omitempty"`
 	VoucherNumber        string        `json:"voucher_number,omitempty"`
@@ -100,6 +103,7 @@ type Voucher struct {
 	TaxType              string        `json:"tax_type,omitempty"`
 	UseCollectiveContact bool          `json:"use_collective_contact,omitempty"`
 	ContactID            string        `json:"contact_id,omitempty"`
+	ContactName          string        `json:"contact_name,omitempty"`
 	Remark               string        `json:"remark,omitempty"`
 	VoucherItems         []VoucherItem `json:"voucher_items"`
 	Files                []string      `json:"files"`
@@ -124,6 +128,7 @@ func (c *Client) GetVoucher(ctx context.Context, id string) (*Voucher, error) {
 	}
 	var raw struct {
 		ID                   string      `json:"id"`
+		OrganizationID       string      `json:"organizationId"`
 		Type                 string      `json:"type"`
 		VoucherStatus        string      `json:"voucherStatus"`
 		VoucherNumber        string      `json:"voucherNumber"`
@@ -135,6 +140,7 @@ func (c *Client) GetVoucher(ctx context.Context, id string) (*Voucher, error) {
 		TaxType              string      `json:"taxType"`
 		UseCollectiveContact bool        `json:"useCollectiveContact"`
 		ContactID            string      `json:"contactId"`
+		ContactName          string      `json:"contactName"`
 		Remark               string      `json:"remark"`
 		VoucherItems         []struct {
 			Amount         json.Number `json:"amount"`
@@ -165,10 +171,10 @@ func (c *Client) GetVoucher(ctx context.Context, id string) (*Voucher, error) {
 		files = []string{}
 	}
 	return &Voucher{
-		ID: raw.ID, Type: raw.Type, VoucherStatus: raw.VoucherStatus, VoucherNumber: raw.VoucherNumber,
+		ID: raw.ID, OrganizationID: wellFormedUUID(raw.OrganizationID), Type: raw.Type, VoucherStatus: raw.VoucherStatus, VoucherNumber: raw.VoucherNumber,
 		VoucherDate: raw.VoucherDate, ShippingDate: raw.ShippingDate, DueDate: raw.DueDate,
 		TotalGrossAmount: raw.TotalGrossAmount, TotalTaxAmount: raw.TotalTaxAmount, TaxType: raw.TaxType,
-		UseCollectiveContact: raw.UseCollectiveContact, ContactID: raw.ContactID, Remark: raw.Remark,
+		UseCollectiveContact: raw.UseCollectiveContact, ContactID: raw.ContactID, ContactName: raw.ContactName, Remark: raw.Remark,
 		VoucherItems: items, Files: files, CreatedDate: raw.CreatedDate, UpdatedDate: raw.UpdatedDate,
 		Version: raw.Version,
 	}, nil

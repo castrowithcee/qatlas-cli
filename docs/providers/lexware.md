@@ -14,8 +14,10 @@ updated: 2026-10-22
 # Lexware Office
 
 A connection selects the organization associated with one API key at the fixed Lexware gateway. It lists open
-and overdue outgoing invoices and reads invoice details (`read`). It also finds customers, vendors and
-articles and reads their details (`read`), for example to reference a `contact_id` in an invoice. The `name`
+and overdue outgoing invoices and reads invoice details (`read`). The invoice list filters by contact, invoice
+date, creation date, change date and invoice number; voucher type, status and archived flag are fixed, so it
+never lists other vouchers. Paged lists return at most 100 entries per page. It also finds customers, vendors
+and articles and reads their details (`read`), for example to reference a `contact_id` in an invoice. The `name`
 and `email` filters of the contact list need at least 3 characters and match a literal part of the value:
 Lexware's placeholders `_` and `%` are escaped. Contacts are personal data. The voucher list searches vouchers
 of every type and status; without a type or status filter it includes all of them. `any` and the status

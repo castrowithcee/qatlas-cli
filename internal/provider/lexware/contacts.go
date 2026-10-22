@@ -40,8 +40,8 @@ const (
 	addressSchema = `{"type":"object","properties":{"supplement":{"type":"string"},"street":{"type":"string"},` +
 		`"zip":{"type":"string"},"city":{"type":"string"},"country_code":{"type":"string"}},"additionalProperties":false}`
 	roleSchema    = `{"type":"object","properties":{"number":{"type":"integer"}},"additionalProperties":false}`
-	contactSchema = `{"type":"object","properties":{"id":{"type":"string"},"version":{"type":"integer"},` +
-		`"archived":{"type":"boolean"},` +
+	contactSchema = `{"type":"object","properties":{"id":{"type":"string"},"organization_id":{"type":"string"},` +
+		`"version":{"type":"integer"},"archived":{"type":"boolean"},` +
 		`"roles":{"type":"object","properties":{"customer":` + roleSchema + `,"vendor":` + roleSchema + `},"additionalProperties":false},` +
 		`"company":{"type":"object","properties":{"name":{"type":"string"},"tax_number":{"type":"string"},` +
 		`"vat_registration_id":{"type":"string"},"allow_tax_free_invoices":{"type":"boolean"},` +
@@ -56,11 +56,14 @@ const (
 		`"address":{"type":"string"}},"required":["kind","address"],"additionalProperties":false}},` +
 		`"phone_numbers":{"type":"array","items":{"type":"object","properties":{"kind":{"type":"string"},` +
 		`"number":{"type":"string"}},"required":["kind","number"],"additionalProperties":false}},` +
+		`"x_rechnung":{"type":"object","properties":{"buyer_reference":{"type":"string"},` +
+		`"vendor_number_at_customer":{"type":"string"}},"additionalProperties":false},` +
 		`"note":{"type":"string"}},"required":["id","archived"],"additionalProperties":false}`
 )
 
 var contactFields = []capability.Field{
 	{Name: "id", Description: "Contact identifier, usable as contact_id when creating an invoice"},
+	{Name: "organization_id", Description: "Identifier of the Lexware organization the contact belongs to (untrusted data)"},
 	{Name: "version", Description: "Version counter reported by Lexware"},
 	{Name: "archived", Description: "True when the contact is archived in Lexware"},
 	{Name: "roles", Description: "Customer and vendor role with their numbers; a missing role means the contact does not hold it"},
@@ -69,6 +72,7 @@ var contactFields = []capability.Field{
 	{Name: "addresses", Description: "Billing and shipping addresses, untrusted personal data"},
 	{Name: "email_addresses", Description: "E-mail addresses with their kind (business, office, private, other), untrusted personal data"},
 	{Name: "phone_numbers", Description: "Phone numbers with their kind (business, office, mobile, private, fax, other), untrusted personal data"},
+	{Name: "x_rechnung", Description: "XRechnung data: buyer_reference (Leitweg-ID) and vendor_number_at_customer, untrusted data"},
 	{Name: "note", Description: "Free-text note on the contact, untrusted data"},
 }
 
@@ -238,16 +242,25 @@ type ContactListResult struct {
 // ContactRecord is the stable Qatlas view of one contact. Everything a Lexware user typed is untrusted
 // personal data.
 type ContactRecord struct {
-	ID             string          `json:"id"`
-	Version        int             `json:"version,omitempty"`
-	Archived       bool            `json:"archived"`
-	Roles          *ContactRoles   `json:"roles,omitempty"`
-	Company        *ContactCompany `json:"company,omitempty"`
-	Person         *ContactPerson  `json:"person,omitempty"`
-	Addresses      *ContactAddrs   `json:"addresses,omitempty"`
-	EmailAddresses []ContactEmail  `json:"email_addresses,omitempty"`
-	PhoneNumbers   []ContactPhone  `json:"phone_numbers,omitempty"`
-	Note           string          `json:"note,omitempty"`
+	ID             string            `json:"id"`
+	OrganizationID string            `json:"organization_id,omitempty"`
+	Version        int               `json:"version,omitempty"`
+	Archived       bool              `json:"archived"`
+	Roles          *ContactRoles     `json:"roles,omitempty"`
+	Company        *ContactCompany   `json:"company,omitempty"`
+	Person         *ContactPerson    `json:"person,omitempty"`
+	Addresses      *ContactAddrs     `json:"addresses,omitempty"`
+	EmailAddresses []ContactEmail    `json:"email_addresses,omitempty"`
+	PhoneNumbers   []ContactPhone    `json:"phone_numbers,omitempty"`
+	XRechnung      *ContactXRechnung `json:"x_rechnung,omitempty"`
+	Note           string            `json:"note,omitempty"`
+}
+
+// ContactXRechnung carries the e-invoicing references a contact holds; both are free texts typed by a
+// Lexware user.
+type ContactXRechnung struct {
+	BuyerReference         string `json:"buyer_reference,omitempty"`
+	VendorNumberAtCustomer string `json:"vendor_number_at_customer,omitempty"`
 }
 
 // ContactRoles holds a role only when the contact has it.
@@ -309,8 +322,13 @@ type ContactPhone struct {
 
 // contactJSON mirrors the provider fields the contact operations read.
 type contactJSON struct {
-	ID      string `json:"id"`
-	Version int    `json:"version"`
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	XRechnung      struct {
+		BuyerReference         string `json:"buyerReference"`
+		VendorNumberAtCustomer string `json:"vendorNumberAtCustomer"`
+	} `json:"xRechnung"`
+	Version int `json:"version"`
 	Roles   struct {
 		Customer *struct {
 			Number int `json:"number"`
@@ -364,7 +382,11 @@ var (
 )
 
 func (raw contactJSON) record() ContactRecord {
-	record := ContactRecord{ID: raw.ID, Version: raw.Version, Archived: raw.Archived, Note: raw.Note}
+	record := ContactRecord{ID: raw.ID, OrganizationID: wellFormedUUID(raw.OrganizationID), Version: raw.Version,
+		Archived: raw.Archived, Note: raw.Note}
+	if x := ContactXRechnung(raw.XRechnung); x != (ContactXRechnung{}) {
+		record.XRechnung = &x
+	}
 	var roles ContactRoles
 	if raw.Roles.Customer != nil {
 		roles.Customer = &ContactRole{Number: raw.Roles.Customer.Number}
