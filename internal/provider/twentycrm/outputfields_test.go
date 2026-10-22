@@ -35,6 +35,11 @@ func outputCases() []outputCase {
 				return `{"data":{"people":[{"id":"` + personID + `","city":"Berlin","createdAt":"2026-01-01T00:00:00.000Z",` +
 					`"updatedAt":"2026-01-02T00:00:00.000Z"}]}` + tail + `,` + outputPageInfo + `}`
 			}, true},
+		{recordsSearchAll, invokeRecordsSearchAll, `{"text":"Ada","objects":["person"]}`, func(tail string) string {
+			return `{"data":{"search":{"edges":[{"node":{"recordId":"` + hitOne + `","objectNameSingular":"person",` +
+				`"objectLabelSingular":"Person","label":"Ada","imageUrl":"https://img.example/a.png","tsRank":0.1,"tsRankCD":0.2}}],` +
+				`"pageInfo":{"hasNextPage":true,"endCursor":"c3VjaA=="}}}}`
+		}, false},
 		{companiesList, invokeCompaniesList, `{}`, func(tail string) string {
 			return `{"data":{"companies":[{"id":"` + companyID + `","name":"Bike","domainName":{"primaryLinkUrl":"bike.example"}}]}` +
 				tail + `,` + outputPageInfo + `}`

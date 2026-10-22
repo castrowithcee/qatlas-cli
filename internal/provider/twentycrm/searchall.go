@@ -3,6 +3,8 @@ package twentycrm
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,15 +25,16 @@ const (
 	searchAllLabelMax       = 200
 	searchAllTextMax        = 64
 	searchAllObjectsMax     = 100
+	searchAllImageURLMax    = 2048
 )
 
 // searchAllDocument is the only document of records.search-all. The search term, page size, cursor, and
-// object names travel as variables; the document selects neither image URLs nor rank values.
+// object names travel as variables; the same document selects the image address and rank values.
 var searchAllDocument = graphqlDocument{path: graphqlPath, text: `query Search($searchInput: String!, ` +
 	`$limit: Int!, $after: String, $includedObjectNameSingulars: [String!]) { ` +
 	`search(searchInput: $searchInput, limit: $limit, after: $after, ` +
 	`includedObjectNameSingulars: $includedObjectNameSingulars) { ` +
-	`edges { node { recordId objectNameSingular label } } pageInfo { hasNextPage endCursor } } }`}
+	`edges { node { recordId objectNameSingular objectLabelSingular label imageUrl tsRank tsRankCD } } pageInfo { hasNextPage endCursor } } }`}
 
 var recordsSearchAll = capability.Descriptor{
 	ID:      Provider + ".records.search-all",
@@ -52,7 +55,8 @@ var recordsSearchAll = capability.Descriptor{
 		`,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["text"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"results":{"type":"array","items":{` +
 		`"type":"object","properties":{"object":{"type":"string"},"id":{"type":"string"},` +
-		`"label":{"type":"string"}},"required":["object","id","label"],"additionalProperties":false}},` +
+		`"object_label":{"type":"string"},"label":{"type":"string"},"image_url":{"type":"string"},` +
+		`"ts_rank":{"type":"number"},"ts_rank_cd":{"type":"number"}},"required":["object","id","label"],"additionalProperties":false}},` +
 		`"omitted":{"type":"integer"},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["results","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -62,7 +66,7 @@ var recordsSearchAll = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same text and objects; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "results", Description: "Hits with object, id, and label (display name), untrusted data"},
+		{Name: "results", Description: "Hits with object, id, label (display name), and when present object_label, image_url (an address, never fetched), ts_rank, and ts_rank_cd, untrusted data"},
 		{Name: "omitted", Description: "Count of hits of unreachable objects that were left out, when any"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the search holds a following page"},
@@ -75,9 +79,13 @@ var recordsSearchAll = capability.Descriptor{
 
 // SearchHit is one hit of the cross-object search.
 type SearchHit struct {
-	Object string `json:"object"`
-	ID     string `json:"id"`
-	Label  string `json:"label"`
+	Object      string      `json:"object"`
+	ID          string      `json:"id"`
+	ObjectLabel string      `json:"object_label,omitempty"`
+	Label       string      `json:"label"`
+	ImageURL    string      `json:"image_url,omitempty"`
+	TSRank      json.Number `json:"ts_rank,omitempty"`
+	TSRankCD    json.Number `json:"ts_rank_cd,omitempty"`
 }
 
 // SearchAllResult is one page of hits.
@@ -204,9 +212,13 @@ func (c *Client) SearchAll(ctx context.Context, query *searchAllQuery) (*SearchA
 		Search *struct {
 			Edges []struct {
 				Node struct {
-					RecordID           string `json:"recordId"`
-					ObjectNameSingular string `json:"objectNameSingular"`
-					Label              string `json:"label"`
+					RecordID           string          `json:"recordId"`
+					ObjectNameSingular string          `json:"objectNameSingular"`
+					ObjectLabel        *string         `json:"objectLabelSingular"`
+					Label              string          `json:"label"`
+					ImageURL           *string         `json:"imageUrl"`
+					TSRank             json.RawMessage `json:"tsRank"`
+					TSRankCD           json.RawMessage `json:"tsRankCD"`
 				} `json:"node"`
 			} `json:"edges"`
 			PageInfo struct {
@@ -233,7 +245,8 @@ func (c *Client) SearchAll(ctx context.Context, query *searchAllQuery) (*SearchA
 			return nil, provider.InvalidResponse(op, "Twenty returned a hit without a usable identifier")
 		}
 		result.Results = append(result.Results, SearchHit{Object: node.ObjectNameSingular, ID: node.RecordID,
-			Label: capLabel(node.Label)})
+			ObjectLabel: cleanText(node.ObjectLabel, searchAllLabelMax), Label: capLabel(node.Label),
+			ImageURL: plainImageURL(node.ImageURL), TSRank: rankNumber(node.TSRank), TSRankCD: rankNumber(node.TSRankCD)})
 	}
 	if page.PageInfo.HasNextPage {
 		end := ""
@@ -254,4 +267,37 @@ func capLabel(label string) string {
 		return label
 	}
 	return string([]rune(label)[:searchAllLabelMax])
+}
+
+// plainImageURL returns an http or https address without userinfo, query, or fragment, or "". Twenty signs
+// image addresses of stored files with a token in the query, which grants access without sign-in, so any
+// address with a query or fragment is dropped whole. The address is never fetched.
+func plainImageURL(raw *string) string {
+	if raw == nil || *raw == "" || len(*raw) > searchAllImageURLMax {
+		return ""
+	}
+	parsed, err := url.Parse(*raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
+		strings.Contains(*raw, "#") || strings.Contains(*raw, "?") {
+		return ""
+	}
+	for _, r := range *raw {
+		if r <= ' ' || r == 0x7f || r > 0x7e {
+			return ""
+		}
+	}
+	return *raw
+}
+
+// rankNumber passes a JSON number on as written, without a float round trip; anything else is left out.
+func rankNumber(raw json.RawMessage) json.Number {
+	var number json.Number
+	if len(raw) == 0 || raw[0] == '"' || json.Unmarshal(raw, &number) != nil {
+		return ""
+	}
+	if value, err := number.Float64(); err != nil || math.IsInf(value, 0) || math.IsNaN(value) {
+		return ""
+	}
+	return number
 }
