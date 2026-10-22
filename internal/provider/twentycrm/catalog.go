@@ -12,14 +12,19 @@ import (
 
 // The workspace catalog is the internal projection of the generated workspace document: which objects the
 // workspace has, under which REST plural, and with which fields. It is built from one read of the document
-// and is the only way an object name becomes a REST path. The document itself and every description in it
-// are provider data and never leave this file; only names, JSON types, and flags are taken, each bounded.
+// and is the only way an object name becomes a REST path. The document is provider data and never leaves
+// this file as a whole; only names, JSON types, flags, plain enum values, and cleaned, capped descriptions
+// are taken, each bounded.
 const (
 	maxCatalogObjects = 512
 	maxObjectFields   = 512
 	maxSubfields      = 64
 	// Bounds of the enum values taken from the document, which exist only to validate a filter value.
 	maxEnumValues = 100
+	// maxOutputEnumValues bounds the enum values an object description reports. It is larger than
+	// maxEnumValues: a field with more values than a filter is validated against is still described.
+	maxOutputEnumValues = 500
+	maxDescriptionRunes = 1000
 )
 
 var (
@@ -50,7 +55,7 @@ type catalogObject struct {
 // every field that points to another schema, even when that object is not in the catalog. InResponse is set
 // for a field of the SINGULARForResponse schema, the shape of a record read. Enumerated is set when the
 // document lists enum values (a selection field), Enum holds them when they are few and plain enough to
-// validate a filter value against. Enum never leaves the provider: no output shows it.
+// validate a filter value against. OutEnum is the separate, wider list that objects.get reports.
 type catalogField struct {
 	Name       string
 	Type       string
@@ -66,6 +71,11 @@ type catalogField struct {
 	Files      bool
 	Enumerated bool
 	Enum       []string
+	// Description is the cleaned, capped description of the document. OutEnum holds the enum values an object
+	// description reports; OutEnumOmitted is set when the document lists values that are not reported.
+	Description    string
+	OutEnum        []string
+	OutEnumOmitted bool
 	// CreateShape and UpdateShape are the value shapes of the field in the create schema (SINGULAR) and the
 	// update schema (SINGULARForUpdate); nil when that schema does not hold the field. Only record writes use
 	// them. Creatable is set when the create schema holds the field, Writable when the update schema does.
@@ -74,8 +84,11 @@ type catalogField struct {
 }
 
 type catalogSubfield struct {
-	Name string
-	Type string
+	Name           string
+	Type           string
+	Description    string
+	OutEnum        []string
+	OutEnumOmitted bool
 }
 
 // workspaceCatalog reads the workspace document at most once per client and returns its catalog.
@@ -115,6 +128,8 @@ type propJSON struct {
 	Format string          `json:"format"`
 	Ref    string          `json:"$ref"`
 	Enum   json.RawMessage `json:"enum"`
+	// Description is untrusted text of the workspace.
+	Description string `json:"description"`
 	// OneOf holds the reference of a many-to-one relation property, which the generated response schema
 	// writes as {"type":"object","oneOf":[{"$ref":...}]}.
 	OneOf []struct {
@@ -137,6 +152,9 @@ func (p propJSON) fill(earlier propJSON) propJSON {
 	}
 	if len(earlier.Enum) > 0 {
 		p.Enum = earlier.Enum
+	}
+	if earlier.Description != "" {
+		p.Description = earlier.Description
 	}
 	if len(earlier.OneOf) > 0 {
 		p.OneOf = earlier.OneOf
@@ -241,6 +259,8 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		}
 		field.Enumerated = len(prop.Enum) > 0
 		field.Enum = enumValues(prop.Enum)
+		field.Description = cleanText(&prop.Description, maxDescriptionRunes)
+		field.OutEnum, field.OutEnumOmitted = outputEnumValues(prop)
 		ref := prop.Ref
 		if ref == "" && len(prop.OneOf) > 0 {
 			ref = prop.OneOf[0].Ref
@@ -266,7 +286,11 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 			subs = subs[:maxSubfields]
 		}
 		for _, sub := range subs {
-			field.Subfields = append(field.Subfields, catalogSubfield{Name: sub, Type: jsonType(prop.Properties[sub].Type)})
+			subProp := prop.Properties[sub]
+			subfield := catalogSubfield{Name: sub, Type: jsonType(subProp.Type),
+				Description: cleanText(&subProp.Description, maxDescriptionRunes)}
+			subfield.OutEnum, subfield.OutEnumOmitted = outputEnumValues(subProp)
+			field.Subfields = append(field.Subfields, subfield)
 		}
 		if field.Type == "" && field.Relation != "" {
 			field.Type = "object"
@@ -426,4 +450,25 @@ func (cat *catalog) resolve(bound scope, name string) (*catalogObject, error) {
 			Message: "this Twenty workspace does not hold this object"}
 	}
 	return object, nil
+}
+
+// outputEnumValues reads the enum values an object description reports. A list that is too long, holds a
+// value outside the plain identifier alphabet, or is not a list of strings is omitted, not shortened.
+func outputEnumValues(prop propJSON) (values []string, omitted bool) {
+	raw := prop.Enum
+	if len(raw) == 0 && prop.Items != nil {
+		raw = prop.Items.Enum // a multi-selection field lists its values on the elements
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, false
+	}
+	if json.Unmarshal(raw, &values) != nil || len(values) > maxOutputEnumValues {
+		return nil, true
+	}
+	for _, value := range values {
+		if !enumValuePattern.MatchString(value) {
+			return nil, true
+		}
+	}
+	return values, false
 }

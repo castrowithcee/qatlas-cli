@@ -6,21 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
-
-// trashEntrySchema is an entry plus the time it was moved to the trash.
-var trashEntrySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string","enum":["file","folder"]},` +
-	`"mime_type":{"type":"string"},"size":{"type":"integer"},"parent_id":{"type":"integer"},` +
-	`"status":{"type":"string"},"created_at":{"type":"string"},"modified_at":{"type":"string"},` +
-	`"deleted_at":{"type":"string"}},"required":["id","name","type","parent_id"],"additionalProperties":false}`
 
 var trashListDescriptor = capability.Descriptor{
 	ID:      Provider + ".trash.list",
@@ -33,23 +26,23 @@ var trashListDescriptor = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
-		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
-		`"required":["drive_id"],"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		listFilterInput(trashOrderByValues, false) + `,` + fileWithInput + `},"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + trashEntrySchema + `},` +
-		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"drive_id":{"type":"integer"},"entries":{"type":"array","items":` + fileEntrySchema + `},` +
+		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"},` +
+		`"response_at":{"type":"string"}},` +
 		`"required":["drive_id","entries","has_more","count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		driveIDArgument,
-		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page; omitted for the first page"},
+		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page, valid only with the same filter and sort arguments; omitted for the first page"},
 		{Name: "limit", Description: "Entries per page, 5 to 1000; 10 when omitted"},
-	},
-	Fields: append(append([]capability.Field{}, entryFields...),
-		capability.Field{Name: "deleted_at", Description: "Time the entry was moved to the trash, RFC 3339 in UTC; untrusted data"},
-		capability.Field{Name: "drive_id", Description: "Drive whose trash was listed"},
+	}, listFilterArguments(false), []capability.Argument{fileWithArgument}),
+	Fields: append(slices.Concat(entryFields, fileWithFields),
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains, so this page is not the whole trash"},
 		capability.Field{Name: "count", Description: "Number of entries on this page"},
+		responseAtField,
 	),
 	Examples: []capability.Example{{Description: "List the trash of one drive",
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
@@ -156,25 +149,23 @@ var trashEmpty = capability.Descriptor{
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
 }
 
-// TrashEntry is the stable Qatlas view of one trash entry.
-type TrashEntry struct {
-	Entry
-	DeletedAt string `json:"deleted_at,omitempty"`
-}
-
 // TrashPage is one paginated listing of the top level of a drive's trash.
 type TrashPage struct {
-	DriveID int64        `json:"drive_id"`
-	Entries []TrashEntry `json:"entries"`
-	Cursor  string       `json:"cursor,omitempty"`
-	HasMore bool         `json:"has_more"`
-	Count   int          `json:"count"`
+	DriveID int64   `json:"drive_id"`
+	Entries []Entry `json:"entries"`
+	Cursor  string  `json:"cursor,omitempty"`
+	HasMore bool    `json:"has_more"`
+	Count   int     `json:"count"`
+	// ResponseAt is the time Infomaniak generated the page.
+	ResponseAt string `json:"response_at,omitempty"`
 }
 
 type trashListArguments struct {
-	DriveID int64  `json:"drive_id"`
-	Cursor  string `json:"cursor"`
-	Limit   int    `json:"limit"`
+	DriveID int64    `json:"drive_id"`
+	Cursor  string   `json:"cursor"`
+	Limit   int      `json:"limit"`
+	With    []string `json:"with"`
+	listFilter
 }
 
 func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -184,6 +175,16 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
+	if err := checkValues(input.With, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
+	if err := input.validate(trashOrderByValues, false); err != nil {
+		return nil, err
+	}
+	cursor, err := input.openCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -192,32 +193,46 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListTrash(ctx, input.DriveID, input.Cursor, limit)
+	page, err := client.listTrash(ctx, input.DriveID, cursor, limit, input.With, input.listFilter)
+	if err != nil {
+		return nil, err
+	}
+	page.Cursor = input.sealCursor(page.Cursor)
+	return page, nil
 }
 
-// ListTrash reads one page of the top level of a drive's trash, cursor-paginated exactly as Infomaniak
-// answers: it never follows has_more itself.
-func (c *Client) ListTrash(ctx context.Context, driveID int64, cursor string, limit int) (*TrashPage, error) {
+// ListTrash reads one unfiltered page of the top level of a drive's trash, cursor-paginated exactly as
+// Infomaniak answers: it never follows has_more itself, and the cursor stays Infomaniak's own. with loads
+// related data per entry.
+func (c *Client) ListTrash(ctx context.Context, driveID int64, cursor string, limit int, with []string) (*TrashPage, error) {
+	return c.listTrash(ctx, driveID, cursor, limit, with, listFilter{})
+}
+
+func (c *Client) listTrash(ctx context.Context, driveID int64, cursor string, limit int, with []string,
+	filter listFilter) (*TrashPage, error) {
 	const op = "list trash"
+	if err := checkValues(with, fileWithValues, "with"); err != nil {
+		return nil, err
+	}
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
+	}
+	filter.apply(query)
+	if len(with) > 0 {
+		query.Set("with", withQuery("", with))
 	}
 	var items []fileJSON
 	var meta navigatorJSON
 	if err := c.doInto(ctx, op, fmt.Sprintf("/3/drive/%d/trash", driveID), query, &items, &meta); err != nil {
 		return nil, err
 	}
-	entries := make([]TrashEntry, 0, len(items))
+	entries := make([]Entry, 0, len(items))
 	for _, item := range items {
-		entry := TrashEntry{Entry: entryOf(item)}
-		if item.DeletedAt != nil && *item.DeletedAt > 0 {
-			entry.DeletedAt = time.Unix(*item.DeletedAt, 0).UTC().Format(time.RFC3339)
-		}
-		entries = append(entries, entry)
+		entries = append(entries, c.entryWith(driveID, item, with))
 	}
 	return &TrashPage{DriveID: driveID, Entries: entries, Cursor: meta.Cursor, HasMore: meta.HasMore,
-		Count: len(entries)}, nil
+		Count: len(entries), ResponseAt: positiveTime(meta.ResponseAt)}, nil
 }
 
 // invokeTrashFile runs the checks every trash change on one entry shares, then sends it once.

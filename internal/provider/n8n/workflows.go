@@ -37,14 +37,16 @@ var credentialRefSchema = `{"type":"object","properties":{"id":{"type":"string"}
 // workflow's own logic, already bounded by the overall response size limit, and credentials never carries
 // more than the id/name pair n8n's own API reports, see the package doc. Parameters always pass
 // maskParameters first.
-var nodeSchema = `{"type":"object","properties":{` +
-	`"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
+var nodeSchema = `{"type":"object","properties":{` + nodeProperties + `},` +
+	`"required":["id","name","type","disabled"],"additionalProperties":false}`
+
+// nodeProperties are the members of a node every workflow tool reports; the read tools add more.
+var nodeProperties = `"id":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},` +
 	`"type_version":{"type":"number"},"position":{"type":"array","items":{"type":"number"}},` +
 	`"disabled":{"type":"boolean"},"parameters":{"type":"object"},` +
 	`"withheld_parameters":{"type":"array","maxItems":` + strconv.Itoa(maxWithheldPointers) +
 	`,"items":{"type":"string"}},"parameters_withheld":{"type":"boolean"},` +
-	`"credentials":{"type":"object","additionalProperties":` + credentialRefSchema + `}},` +
-	`"required":["id","name","type","disabled"],"additionalProperties":false}`
+	`"credentials":{"type":"object","additionalProperties":` + credentialRefSchema + `}`
 
 var workflowSummarySchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"name":{"type":"string"},"active":{"type":"boolean"},` +
@@ -81,8 +83,8 @@ var workflowsList = capability.Descriptor{
 	ID:      Provider + ".workflows.list",
 	Version: 1,
 	Title:   "List n8n workflows",
-	Description: "List the workflows of the bound n8n instance, restricted to its project and workflow " +
-		"allow-lists when it has them; page by page with an opaque cursor",
+	Description: "List the workflows of the bound n8n instance in full, as workflows.get reports each one, " +
+		"restricted to its project and workflow allow-lists when it has them; page by page with an opaque cursor",
 	Tags:     []string{"n8n", "workflows", "list", "automation"},
 	Risk:     n8nReadRisk,
 	Provider: Provider,
@@ -94,7 +96,7 @@ var workflowsList = capability.Descriptor{
 		`"project_id":` + targetIDSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"workflows":{"type":"array","items":` + workflowSummarySchema + `},` +
+		`"workflows":{"type":"array","items":` + workflowReadSchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["workflows","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -106,7 +108,7 @@ var workflowsList = capability.Descriptor{
 		{Name: "project_id", Description: "When set, list only this project's workflows; must be inside " +
 			"this connection's project allow-list when it has one"},
 	},
-	Fields: append(append([]capability.Field{}, workflowSummaryFields...),
+	Fields: append(append([]capability.Field{}, workflowReadFields...),
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains"},
 		capability.Field{Name: "count", Description: "Number of workflows reported on this page after this connection's allow-lists were applied"},
@@ -129,7 +131,8 @@ var workflowsGet = capability.Descriptor{
 	ID:      Provider + ".workflows.get",
 	Version: 2,
 	Title:   "Get an n8n workflow",
-	Description: "Read one workflow of the bound n8n instance, including its nodes and their connections; " +
+	Description: "Read one workflow of the bound n8n instance in full, including its nodes, their connections, " +
+		"settings, shares, and active version; " +
 		"never a credential's value, only the id and name n8n itself attaches to a node. Webhook ids, the " +
 		"paths of webhook, form, and MCP trigger nodes, and credentials recognised in node parameters are " +
 		"withheld",
@@ -138,9 +141,9 @@ var workflowsGet = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":` + targetIDSchema + `},` +
 		`"required":["workflow_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(workflowDetailSchema),
+	OutputSchema: json.RawMessage(workflowReadSchema),
 	Arguments:    []capability.Argument{workflowIDArgument},
-	Fields:       workflowDetailFields,
+	Fields:       workflowReadFields,
 	Examples:     []capability.Example{{Description: "Read one workflow", Arguments: json.RawMessage(`{"workflow_id":"1"}`)}},
 }
 
@@ -162,8 +165,10 @@ var workflowDetailFields = append(append([]capability.Field{}, workflowSummaryFi
 // tagJSON, credentialRefJSON, nodeJSON, sharedJSON, and workflowJSON mirror the subset of n8n's
 // workflowPublicDto this provider reads (packages/cli/src/public-api/v1/shared/spec/schemas).
 type tagJSON struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type credentialRefJSON struct {
@@ -182,14 +187,31 @@ type nodeJSON struct {
 	Credentials map[string]credentialRefJSON `json:"credentials"`
 	// WebhookID is part of a trigger's URL; it is read only for workflows.update to send back, never output.
 	WebhookID string `json:"webhookId"`
+	// The members below are read-only attributes of workflows.get and workflows.list. continueOnFail is
+	// deprecated in n8n in favour of onError and deliberately not read.
+	NotesInFlow         *bool                  `json:"notesInFlow"`
+	Notes               string                 `json:"notes"`
+	ExecuteOnce         *bool                  `json:"executeOnce"`
+	AlwaysOutputData    *bool                  `json:"alwaysOutputData"`
+	RetryOnFail         *bool                  `json:"retryOnFail"`
+	MaxTries            json.Number            `json:"maxTries"`
+	WaitBetweenTries    json.Number            `json:"waitBetweenTries"`
+	OnError             string                 `json:"onError"`
+	CustomTelemetryTags *nodeTelemetryTagsJSON `json:"customTelemetryTags"`
+	CreatedAt           string                 `json:"createdAt"`
+	UpdatedAt           string                 `json:"updatedAt"`
 }
 
 // sharedJSON is one entry of a workflow's "shared" array: which project it is shared into, and with which
 // role. The role is read but not surfaced; membership alone decides the project allow-list check, see
 // (*Client).verifyWorkflowScope.
 type sharedJSON struct {
-	Role      string `json:"role"`
-	ProjectID string `json:"projectId"`
+	Role       string       `json:"role"`
+	WorkflowID string       `json:"workflowId"`
+	ProjectID  string       `json:"projectId"`
+	CreatedAt  string       `json:"createdAt"`
+	UpdatedAt  string       `json:"updatedAt"`
+	Project    *projectJSON `json:"project"`
 }
 
 type workflowJSON struct {
@@ -204,6 +226,18 @@ type workflowJSON struct {
 	Nodes        []nodeJSON      `json:"nodes"`
 	Connections  json.RawMessage `json:"connections"`
 	Shared       []sharedJSON    `json:"shared"`
+
+	// Read-only members of workflows.get and workflows.list. staticData and pinData are deliberately not
+	// read: they hold accumulated runtime state and pinned sample data with real content.
+	Description      string                `json:"description"`
+	ActiveVersionID  string                `json:"activeVersionId"`
+	VersionID        string                `json:"versionId"`
+	VersionCounter   json.Number           `json:"versionCounter"`
+	SourceWorkflowID string                `json:"sourceWorkflowId"`
+	NodeGroups       []nodeGroupJSON       `json:"nodeGroups"`
+	Settings         *workflowSettingsJSON `json:"settings"`
+	Meta             *workflowMetaJSON     `json:"meta"`
+	ActiveVersion    *activeVersionJSON    `json:"activeVersion"`
 }
 
 // projectIDs collects the distinct, non-empty project IDs a workflow reports through "shared". An instance
@@ -324,10 +358,10 @@ type workflowsPageJSON struct {
 
 // WorkflowsPage is one paginated, allow-list-filtered listing of workflows.
 type WorkflowsPage struct {
-	Workflows []WorkflowSummary `json:"workflows"`
-	Cursor    string            `json:"cursor,omitempty"`
-	HasMore   bool              `json:"has_more"`
-	Count     int               `json:"count"`
+	Workflows []WorkflowRead `json:"workflows"`
+	Cursor    string         `json:"cursor,omitempty"`
+	HasMore   bool           `json:"has_more"`
+	Count     int            `json:"count"`
 }
 
 type workflowsListArguments struct {
@@ -389,12 +423,12 @@ func (c *Client) ListWorkflows(ctx context.Context, cursor string, limit int, ac
 	if err := c.get(ctx, op, "/workflows", query, &page, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	summaries := make([]WorkflowSummary, 0, len(page.Data))
+	summaries := make([]WorkflowRead, 0, len(page.Data))
 	for _, w := range page.Data {
 		if !c.scope.allowsWorkflow(w.ID) || !c.scope.allowsAnyProject(w.projectIDs()) {
 			continue
 		}
-		summaries = append(summaries, summaryOf(w))
+		summaries = append(summaries, readOf(w, c.scope))
 	}
 	return &WorkflowsPage{
 		Workflows: summaries, Cursor: page.NextCursor, HasMore: page.NextCursor != "", Count: len(summaries),
@@ -425,7 +459,7 @@ func invokeWorkflowsGet(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := client.verifyWorkflowScope(workflow); err != nil {
 		return nil, err
 	}
-	detail := detailOf(*workflow)
+	detail := readOf(*workflow, client.scope)
 	return &detail, nil
 }
 
@@ -498,8 +532,10 @@ var nodeCredentialsSchema = `{"type":"object","additionalProperties":` + credent
 // workflows.update. It mirrors the fields workflows.get already exposes for a node (id, name, type,
 // type_version, position, disabled, parameters, credentials): n8n's own create/update schemas additionally
 // accept execution-behaviour fields such as notes, onError, retryOnFail, maxTries, and webhookId.
+// The execution attributes workflows.get reports (readOnlyNodeProperties) are accepted so a read node can be
+// sent back unchanged, but not written: they are never sent to n8n, so a full update does not keep them.
 // qatlas-dev: this is a deliberate simplification, not a spec limit; extend nodeWriteSchema and nodeInput
-// together, in step, if a caller needs one of those fields. webhookId is never taken from a caller:
+// together, in step, if a caller needs to write one of those fields. webhookId is never taken from a caller:
 // workflows.update sends back the one it read, see restoreWithheld. withheld_parameters and
 // parameters_withheld are accepted so a read node can be sent back unchanged; the former is informational.
 var nodeWriteSchema = `{"type":"object","properties":{` +
@@ -511,8 +547,19 @@ var nodeWriteSchema = `{"type":"object","properties":{` +
 	`"disabled":{"type":"boolean"},"parameters":{"type":"object"},` +
 	`"withheld_parameters":{"type":"array","maxItems":` + strconv.Itoa(maxWithheldPointers) +
 	`,"items":{"type":"string","maxLength":4096}},"parameters_withheld":{"type":"boolean"},` +
-	`"credentials":` + nodeCredentialsSchema + `},` +
+	`"credentials":` + nodeCredentialsSchema + `,` + readOnlyNodeProperties + `},` +
 	`"required":["id","name","type"],"additionalProperties":false}`
+
+// readOnlyNodeProperties are the node attributes workflows.get reports beyond the written ones, in the form
+// it reports them. They are accepted and ignored.
+var readOnlyNodeProperties = `"notes_in_flow":{"type":"boolean"},` +
+	`"notes":{"type":"string","maxLength":` + strconv.Itoa(maxLongTextLength) + `},` +
+	`"execute_once":{"type":"boolean"},"always_output_data":{"type":"boolean"},"retry_on_fail":{"type":"boolean"},` +
+	`"max_tries":{"type":"number"},"wait_between_tries":{"type":"number"},` +
+	`"on_error":{"type":"string","maxLength":` + strconv.Itoa(maxCredentialTextLength) + `},` +
+	`"custom_telemetry_tags":{"type":"object","properties":{"tag":` + telemetryTagsSchema + `},` +
+	`"additionalProperties":false},` +
+	`"created_at":{"type":"string","maxLength":64},"updated_at":{"type":"string","maxLength":64}`
 
 // nodeInput is one node argument of workflows.create or workflows.update, in this provider's own snake_case
 // input shape; wire converts it to the camelCase shape n8n's own API reads.
@@ -529,6 +576,7 @@ type nodeInput struct {
 	ParametersWithheld bool `json:"parameters_withheld"`
 	// WebhookID is set only by restoreWithheld, never from an argument.
 	WebhookID string `json:"-"`
+	// The attributes of readOnlyNodeProperties are accepted by the schema and not decoded: wire never sends them.
 }
 
 // wire converts one node argument to the shape n8n's createWorkflow and updateWorkflow requests read. It
@@ -559,10 +607,11 @@ func (n nodeInput) wire() map[string]any {
 
 // settingsWriteSchema is the JSON Schema of the workflow settings this provider offers, the subset of
 // n8n's own settings object (createWorkflow.generated.yml) a caller may reasonably set programmatically. It
-// excludes binaryMode and credentialResolverId, which that same spec documents as derived, internal
-// settings whose value is ignored on a create or an update, and it excludes customTelemetryTags and the
-// top-level nodeGroups, which are canvas and telemetry decoration with no execution effect.
-// qatlas-dev: extend settingsWriteSchema and settingsInput together, in step, if a caller needs one of those.
+// binary_mode, credential_resolver_id, and custom_telemetry_tags, which workflows.get reports, are accepted
+// so a read settings object can be sent back unchanged, but never sent: n8n documents the first two as
+// derived, internal settings whose value is ignored on a create or an update, and the tags are telemetry
+// decoration with no execution effect. The top-level nodeGroups are not offered either.
+// qatlas-dev: extend settingsWriteSchema and settingsInput together, in step, if a caller needs to write one.
 var settingsWriteSchema = `{"type":"object","properties":{` +
 	`"save_execution_progress":{"type":"boolean"},"save_manual_executions":{"type":"boolean"},` +
 	`"save_data_error_execution":{"type":"string","enum":["all","none"]},` +
@@ -575,7 +624,10 @@ var settingsWriteSchema = `{"type":"object","properties":{` +
 	`"time_saved_mode":{"type":"string","enum":["fixed","dynamic"]},` +
 	`"time_saved_per_execution":{"type":"number"},` +
 	`"redaction_policy":{"type":"string","enum":["none","non-manual","manual-only","all"]},` +
-	`"available_in_mcp":{"type":"boolean"}},"additionalProperties":false}`
+	`"available_in_mcp":{"type":"boolean"},` +
+	`"binary_mode":{"type":"string","maxLength":` + strconv.Itoa(maxCredentialTextLength) + `},` +
+	`"credential_resolver_id":{"type":"string","maxLength":` + strconv.Itoa(maxCredentialTextLength) + `},` +
+	`"custom_telemetry_tags":` + telemetryTagsSchema + `},"additionalProperties":false}`
 
 // settingsInput is the settings argument of workflows.create or workflows.update, in this provider's own
 // snake_case input shape. Every value is optional; wire sends only the ones a caller actually set, and n8n
@@ -660,7 +712,9 @@ func workflowWriteArguments(withheld string) []capability.Argument {
 		{Name: "name", Description: "Workflow name, 1 to 128 characters", Required: true},
 		{Name: "nodes", Description: "Every node of the workflow, replacing whatever it held before; the id, " +
 			"name, and type n8n itself validates are required, and a credential reference carries only the id " +
-			"and name n8n itself resolves. " + withheld, Required: true},
+			"and name n8n itself resolves. The execution attributes workflows.get reports for a node (notes, " +
+			"on_error, retry_on_fail, and the like) are accepted so a read node can be sent back unchanged, " +
+			"but they are not written: a full update does not keep them. " + withheld, Required: true},
 		{Name: "connections", Description: "How the nodes are wired together, keyed by source node name, " +
 			"replacing whatever the workflow held before", Required: true},
 		{Name: "settings", Description: "Execution and behaviour settings of the workflow, replacing whatever " +

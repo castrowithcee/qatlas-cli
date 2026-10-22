@@ -359,7 +359,7 @@ func TestLinksListPaginatesAndBoundsStrings(t *testing.T) {
 			item(10, "c.txt", `,"sharelink":`+linkJSONOf(10, "public", "http://plain.example/x"))+`,`+
 			item(11, "d.txt", "")+`],"cursor":"next-page","has_more":true}`), nil
 	}), nil)
-	result, err := env.invoke(linksList.ID, "links", fmt.Sprintf(`{"drive_id":%d,"cursor":"abc","limit":20}`, ownDrive))
+	result, err := env.invoke(linksList.ID, "links", fmt.Sprintf(`{"drive_id":%d,"cursor":%q,"limit":20}`, ownDrive, (listFilter{}).sealCursor("abc")))
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
@@ -370,7 +370,7 @@ func TestLinksListPaginatesAndBoundsStrings(t *testing.T) {
 	}
 	var page LinkPage
 	if err := json.Unmarshal([]byte(result), &page); err != nil || page.Count != 4 || !page.HasMore ||
-		page.Cursor != "next-page" || len(page.Entries[0].Name) >= len(long) || page.Entries[0].Link == nil ||
+		page.Cursor != (listFilter{}).sealCursor("next-page") || len(page.Entries[0].Name) >= len(long) || page.Entries[0].Link == nil ||
 		page.Entries[0].Link.URL != linkURL || page.Entries[1].Link != nil || page.Entries[2].Link == nil ||
 		page.Entries[2].Link.URL != "" || page.Entries[3].Link != nil {
 		t.Fatalf("page = %s, %v", result, err)

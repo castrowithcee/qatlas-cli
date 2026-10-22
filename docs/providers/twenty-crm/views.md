@@ -11,9 +11,13 @@ updated: 2026-10-22
 
 ## Views
 
-`views.list` and `views.get` (`read`) are workspace-wide and read a view's columns, filters, filter groups,
-sorts, and groups. Only views visible to the whole workspace are read; `get` answers a personal or widget view
-like an unknown one. Filter and group values are untrusted workspace data of their own data class.
+`views.list` and `views.get` (`read`) are workspace-wide. Personal and widget views stay invisible and `get`
+answers them like an unknown view, so the local filtering of a page rules out a `total_count`. Filter and group
+values are untrusted workspace data of their own data class.
+
+`createdByUserWorkspaceId` of a view names the instance-wide user account behind a member, which no tool
+addresses, so it is not output. Deprecated fields (`openRecordIn` of the view, `isOverridden`) are not output
+either.
 
 `views.create`, `update`, `delete`, `view-fields.*`, `view-sorts.*`, `view-filters.*`, `view-groups.update`, and
 `delete` are confirmed, need a `tools` entry and the Twenty right "Views" (also for other users' personal views;

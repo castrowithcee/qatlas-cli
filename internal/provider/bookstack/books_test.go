@@ -104,7 +104,7 @@ func fieldMap(o output.Object) map[string]any {
 func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 	rec := &recorder{}
 	c := newClient(t, booksServer(t, rec, false).URL, nil)
-	got, err := c.ListBooks(context.Background(), 2, 1)
+	got, err := c.ListBooks(context.Background(), 2, 1, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"total": 9, "data": []map[string]any{{"id": 1}, {"id": 2}}})
 	}))
 	defer stuck.Close()
-	got, err = newClient(t, stuck.URL, nil).ListBooks(context.Background(), 0, 0)
+	got, err = newClient(t, stuck.URL, nil).ListBooks(context.Background(), 0, 0, listQuery{})
 	if err != nil || len(got.Rows) != 2 || requests > 2 {
 		t.Errorf("rows = %d, requests = %d, err = %v", len(got.Rows), requests, err)
 	}
@@ -132,7 +132,7 @@ func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 func TestBooksListFiltersForeignBooks(t *testing.T) {
 	rec := &recorder{}
 	c := boundClient(t, booksServer(t, rec, false).URL, "book/7")
-	got, err := c.ListBooks(context.Background(), 0, 0)
+	got, err := c.ListBooks(context.Background(), 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestBooksGetTreeUsersAndShelves(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := fieldMap(got)
-	if !reflect.DeepEqual(m["created_by"], map[string]any{"id": int64(3), "name": "Editor"}) {
+	if !reflect.DeepEqual(m["created_by"], map[string]any{"id": int64(3), "name": "Editor", "slug": "editor"}) {
 		t.Errorf("created_by = %v", m["created_by"])
 	}
 	if _, ok := m["shelves"]; !ok {
@@ -244,7 +244,7 @@ func TestChaptersGetIsOneRequestAndRefusesForeign(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := fieldMap(got)
-	if m["book_slug"] != "own" || !reflect.DeepEqual(m["owned_by"], map[string]any{"id": int64(3), "name": "Editor"}) {
+	if m["book_slug"] != "own" || !reflect.DeepEqual(m["owned_by"], map[string]any{"id": int64(3), "name": "Editor", "slug": "editor"}) {
 		t.Errorf("chapter = %v", m)
 	}
 	if _, paths, _, _ := rec.snapshot(); !reflect.DeepEqual(paths, []string{"/api/chapters/10"}) {
@@ -266,7 +266,7 @@ func TestChaptersListBookRuleAndClientFilter(t *testing.T) {
 	rec := &recorder{}
 	server := booksServer(t, rec, true)
 	c := boundClient(t, server.URL, "book/7")
-	got, err := c.ListChapters(context.Background(), 0, 0, 0)
+	got, err := c.ListChapters(context.Background(), 0, 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestChaptersListBookRuleAndClientFilter(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 
-	unbound, err := newClient(t, server.URL, nil).ListChapters(context.Background(), 0, 0, 0)
+	unbound, err := newClient(t, server.URL, nil).ListChapters(context.Background(), 0, 0, 0, listQuery{})
 	if err != nil || len(unbound.Rows) != 3 {
 		t.Errorf("unbound rows = %d, err = %v", len(unbound.Rows), err)
 	}
@@ -319,4 +319,42 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}
 	}
+}
+
+// rowsJSON and objectJSON render a result as the application core normalizes it: a row holds every column,
+// an absent one as null, and numbers are plain JSON numbers.
+func rowsJSON(c output.Collection, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]any, len(c.Rows))
+	for i, row := range c.Rows {
+		object := map[string]any{}
+		for _, column := range c.Columns {
+			object[column] = row[column]
+		}
+		rows[i] = object
+	}
+	return reencode(rows)
+}
+
+func objectJSON(o output.Object, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	object := map[string]any{}
+	for _, f := range o.Fields {
+		object[f.Name] = f.Value
+	}
+	return reencode(object)
+}
+
+func reencode(value any) (any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var out any
+	err = json.Unmarshal(encoded, &out)
+	return out, err
 }

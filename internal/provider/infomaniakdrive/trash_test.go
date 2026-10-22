@@ -242,7 +242,7 @@ func TestTrashListPaginatesAndBoundsStrings(t *testing.T) {
 			trashItem(8, "b.txt", 0)+`],"cursor":"next-page","has_more":true}`), nil
 	}), nil)
 	result, err := env.invoke(trashListDescriptor.ID, "drive",
-		fmt.Sprintf(`{"drive_id":%d,"cursor":"abc","limit":20}`, ownDrive))
+		fmt.Sprintf(`{"drive_id":%d,"cursor":%q,"limit":20}`, ownDrive, (listFilter{}).sealCursor("abc")))
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
@@ -252,7 +252,7 @@ func TestTrashListPaginatesAndBoundsStrings(t *testing.T) {
 	}
 	var page TrashPage
 	if err := json.Unmarshal([]byte(result), &page); err != nil || page.Count != 2 || !page.HasMore ||
-		page.Cursor != "next-page" || page.Entries[0].DeletedAt != "2025-01-03T00:00:00Z" ||
+		page.Cursor != (listFilter{}).sealCursor("next-page") || page.Entries[0].DeletedAt != "2025-01-03T00:00:00Z" ||
 		page.Entries[1].DeletedAt != "" || len(page.Entries[0].Name) >= len(long) {
 		t.Fatalf("page = %s, %v", result, err)
 	}

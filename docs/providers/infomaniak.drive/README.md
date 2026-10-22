@@ -169,14 +169,30 @@ dropbox, and access).
 `infomaniak.drive.files.list`, `infomaniak.drive.trash.list`, and `infomaniak.drive.links.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
 `has_more` and a `cursor` for the next page whenever Infomaniak announced one. Each call reads exactly one
 Infomaniak page; Qatlas never follows `has_more` on its own, and a complete-looking page can still have
-`has_more` true. The cursor is Infomaniak's own opaque value, passed back unchanged; Qatlas adds no binding
-of its own.
+`has_more` true. The cursor wraps Infomaniak's own value, which goes to Infomaniak unchanged, together with a
+fingerprint of the `type`, `order_by`, `order`, `order_for`, and `right` arguments; `limit` and `with` are not
+part of it. A cursor is valid only with the same filter and sort arguments as the page that returned it. A cursor
+from other arguments, an unreadable one, or a bare Infomaniak cursor is refused before any request, and the first
+page must be read again.
 
 `infomaniak.drive.drives.list` takes `page` (default 1) and reports the account's own `page`, `pages`, and
 `total` transparently, exactly as Infomaniak answers them for the bound account. `drives` and `count` are
 filtered to the drives of the connection's targets afterwards, so `count` can be lower than what an incomplete page
 alone would suggest, and a further page of the account may still hold a bound drive that this page
-did not.
+did not. Its filters (`in_maintenance`, `maintenance_reasons`, `tags`) are sent to Infomaniak and narrow the
+account's page only; they never widen the targets, which are still applied to every row. The page size is
+fixed at 100 and the account is the connection's binding, so neither is an argument.
+
+Drive members that Infomaniak documents as `with` values come only through `with`; a member is dropped when
+its value was not asked for, even if Infomaniak sends it. `with` offers the documented values that load a
+member of the drive: `limits` and `account.has_customization_url` are not offered because the specification
+documents no response member for them, and `total` is not offered because it loads no member. The ownership
+check and the target picker never send `with` or a filter.
+
+Lists in a drive are cut at 100 entries, user and team identifiers at 1000 per group, and a cut list sets
+its `<name>_truncated` flag, so a long list is never mistaken for a complete one. Price amounts keep
+Infomaniak's exact decimal text. The sanitizer and summary figures of a rewind are passed on as bounded free
+objects: one beyond the bounds (depth, member count, text length) is left out whole and flagged, never cut.
 
 ## Content and size limits
 
@@ -230,6 +246,12 @@ restricted drives than a Business kSuite account, which shows up only as fewer o
 `infomaniak.drive.drives.list`, never as a different error class.
 
 ## Boundary
+
+Under a drive bound only by `files` targets, a rewind, of the drive or of a folder, reports `directory_id` but
+not the `directory`, `directory_name`, or `rewind_name`, because they can name a folder outside the targets.
+
+Values that grant access without an account are left out of the file, trash, and link listings, except the
+`url` of the `link` of `links.list`; see [Related data](files.md#related-data).
 
 This provider covers kDrive alone. Infomaniak Mail, CalDAV/CardDAV, and kChat are separate Infomaniak products
 with their own authentication: Mail is read over IMAP with mailbox credentials, CalDAV/CardDAV over WebDAV

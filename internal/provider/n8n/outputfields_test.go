@@ -175,6 +175,8 @@ var outputFieldCases = []struct {
 	{variablesList.ID, "open", `{}`, "/variables", `{"data":[{"id":"` + ownVariable + `","key":"K","value":"v",` +
 		`"type":"string","project":` + richProject + `}],"nextCursor":"c"}`, 27},
 	{executionsList.ID, "open", `{}`, "/executions", `{"data":[{` + richExecution + `}],"nextCursor":"c"}`, 18},
+	{workflowsList.ID, "open", `{}`, "/workflows", `{"data":[` + richWorkflow() + `],"nextCursor":"c"}`, 100},
+	{workflowsGet.ID, "open", `{"workflow_id":"` + ownWorkflow + `"}`, "/workflows/" + ownWorkflow, richWorkflow(), 100},
 	{executionsGet.ID, "open", `{"execution_id":1}`, "/executions/1", richExecutionDetail, 21},
 	{dataTablesList.ID, "open", `{}`, "/data-tables", `{"data":[` + richDataTable + `],"nextCursor":"c"}`, 19},
 	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},

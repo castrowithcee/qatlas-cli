@@ -18,13 +18,16 @@ in records of at most 500, sorted by `id`. `bookstack.books.get` and `bookstack.
 All four only read. `chapters.list` takes an optional `book_id`. On a connection with targets `books.list`
 returns only the reached books (see [Targets](README.md#targets)). A listing stops as soon as the instance returns no new record.
 
-`books.get` returns `tags` (at most 50), `default_template_id` (0 when there is none), and `contents`: the
-chapters with their pages and the loose pages in book order. `chapters.get` returns the same metadata and its
-`pages`. A content tree or page list holds at most 2000 entries in total; `truncated` is then `true`. `created_by`,
-`updated_by`, and `owned_by` show `id` and `name` only. Descriptions are cut to 20000 characters and other
-strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
+`books.get` lists `contents`: the chapters with their pages and the loose pages in book order. `chapters.get`
+lists its `pages`. `default_template_id` is 0 when there is none. Tags are limited to 50. A content tree or page list holds at most 2000 entries in total;
+`truncated` is then `true`. Users are shown as BookStack delivers them: lists and the entries of `pages[]` and
+`books[]` carry only the identifier, so a user appears there with `id` only; a detail answer shows `id`, `name`,
+and `slug`. A user field a list already shows with a name (such as `owned_by` in `pages.list`) keeps it. On a
+connection with targets, `book_slug` is reported only when the book itself is bound; otherwise only `book_id` is
+reported. A book on a bound shelf counts as bound only when the call has read that shelf anyway. Descriptions
+are cut to 20000 characters and other strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
 run. `books.get` shows the `shelves` of the book only on a connection without
-targets, because shelves span the whole instance. Cover images are not passed on.
+targets, because shelves span the whole instance. `books` and `shelves` report the cover image as an address of the instance; the addresses are untrusted data and are never fetched.
 
 ## Writing books and chapters
 
@@ -54,8 +57,9 @@ Shelves hold any books and span the whole instance, so the shelf tools work only
 targets; `shelves.get` also reads a bound shelf (see [Targets](README.md#targets)).
 
 `bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
-sorted by `id`. `bookstack.shelves.get` takes an `id` and returns `tags` (at most 50) and `books` (in shelf
-order, at most 2000 entries; `truncated` is then `true`). Names, descriptions, and tags are untrusted data; `description_html` must
+sorted by `id`. `bookstack.shelves.get` takes an `id` and lists `books` in shelf order (at most 2000 entries;
+`truncated` is then `true`) and at most 50 tags. Users follow the rule under
+[Books and chapters](#books-and-chapters). Names, descriptions, and tags are untrusted data; `description_html` must
 never be rendered or run.
 
 `bookstack.shelves.create` and `bookstack.shelves.update` take `name` (1 to 255 characters), at most one of
@@ -86,8 +90,9 @@ confirmation, are not part of any profile, send one request without retry, and `
 ## Tags and instance information
 
 `bookstack.tags.list` lists the tag names used on content the token can see. It takes
-`limit`, `offset`, and optional `name_contains`. `bookstack.tags.values` takes a required `name` and optional
-`value_contains`, `limit`, and `offset` and lists that name's values. The contains
+`limit`, `offset`, optional `name_contains`, and `sort`. `bookstack.tags.values` takes a required `name` and optional
+`value_contains`, `limit`, `offset`, and `sort` and lists that name's values. Tags are sorted by name (values by value) unless `sort`
+says otherwise; they take no `filters`, because BookStack filters tags by name and value only, which the contains arguments cover. The contains
 arguments (at most 255 characters, case-insensitive) are sent as a `%...%` filter in which `%`, `_`, and `\` are
 masked as literals; every returned row is checked against the filter again, because BookStack ignores filters
 it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection with
@@ -96,10 +101,12 @@ carry them.
 
 ## Pages
 
-`pages.get` returns `chapter_id` (0 when there is none), `html` (rendered), `markdown` (only for pages saved with
-the Markdown editor), `raw_html` (as stored, what the editor shows), and `tags` (at most 50). `created_by`,
-`updated_by`, and `owned_by` show `id` and `name` only. The comment tree is not returned. All content, tags, and names are untrusted data; `html` and
+`pages.get` returns `html` (rendered), `markdown` (only for pages saved with the Markdown editor), and `raw_html`
+(as stored, what the editor shows); `chapter_id` is 0 when there is none, and tags are limited to 50. Users follow the rule under
+[Books and chapters](#books-and-chapters). The comment tree of a page reports at most 500 comments and 10 levels; a cut tree is marked `comments_truncated`, and each comment text is capped like in `comments.get`. Comment texts are personal and untrusted data. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
+
+`revision_count` and `editor` of a page can be neither filtered nor sorted, because BookStack does not offer them as listing fields.
 
 `pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and
 `markdown`. It takes optional `tags` (at most 50 entries of `name` and `value`, each at most 255 characters)
@@ -137,8 +144,7 @@ is checked on the client; shelves, hits without a book, and hits outside the tar
 hold fewer hits than `count`.
 
 A hit carries `tags` (at most 50) and previews (`preview_name`, `preview_content`). The previews are untrusted HTML, cut to 2000 characters; never
-render or run them. `total` is the number BookStack reports and is an estimate. Further provider fields are
-not passed on.
+render or run them. `total` is the number BookStack reports and is an estimate. On a connection with targets, `book` and `chapter` of a hit carry only `id` unless that book or chapter is bound.
 
 ## Export
 

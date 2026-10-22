@@ -23,6 +23,14 @@ itself; see below. That confirmation is required on every call regardless of the
 up with: the terminal editor starts a new connection on the setup profile `read`, which offers only the four
 read tools; `manage` additionally offers the six change tools.
 
+## Reading workflows
+
+`n8n.workflows.list` is no summary: each listed workflow carries what `n8n.workflows.get` reports, as far as
+n8n sends it in its list. The withheld node parameters below apply to every node of both, including those of
+the active version. `continueOnFail` of a node is deprecated in n8n and not returned; `onError` carries the same
+information. The project of a share outside the connection's project allow-list is reported by its identifier
+only.
+
 ## Changes and their retry contract
 
 Every change tool of every group needs its own confirmation and sends exactly one request that can change
@@ -44,11 +52,14 @@ same shape a workflow read already reports; this provider never accepts anything
 (`save_execution_progress`, `save_manual_executions`, `save_data_error_execution`,
 `save_data_success_execution`, `execution_timeout`, `error_workflow`, `timezone`, `execution_order`,
 `caller_policy`, `caller_ids`, `time_saved_mode`, `time_saved_per_execution`, `redaction_policy`,
-`available_in_mcp`); it deliberately excludes `binaryMode` and `credentialResolverId`, which n8n's own spec
-documents as derived, internal settings whose value is ignored on write, and `customTelemetryTags` and the
+`available_in_mcp`); it never writes `binaryMode` and `credentialResolverId`, which n8n's own spec
+documents as derived, internal settings whose value is ignored on write, nor `customTelemetryTags` and the
 top-level `nodeGroups`, which are canvas and telemetry decoration with no execution effect. A node likewise
-accepts none of the execution-behaviour fields n8n's own create/update schemas additionally accept, such as
-`notes`, `onError`, `retryOnFail`, and `maxTries`; a node's `webhookId` is never taken from a caller. `error_workflow` is passed
+writes none of the execution-behaviour fields n8n's own create/update schemas additionally accept, such as
+`notes`, `onError`, `retryOnFail`, and `maxTries`; a node's `webhookId` is never taken from a caller. The
+settings and node attributes a workflow read reports but this provider does not write are accepted, so a read
+workflow can be sent back unchanged, and dropped: a full update does not keep them. A save setting a read
+reports as `DEFAULT` is refused on write. `error_workflow` is passed
 through as an opaque workflow ID and is not checked against this connection's own allow-lists: n8n enforces
 its own access to that workflow when the error trigger it names would actually run.
 

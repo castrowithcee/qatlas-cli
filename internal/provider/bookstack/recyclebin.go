@@ -30,12 +30,12 @@ var (
 			recycleBinRoles,
 		Tags: []string{"administration", "recyclebin", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + recycleBinListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(recycleBinListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of entries to return; 0 returns all"},
 			{Name: "offset", Description: "Number of entries to skip"},
-		},
+		}, recycleBinListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Deletion identifier for restore and destroy"},
 			{Name: "deleted_by", Description: "Identifier of the user who deleted the item"},
@@ -82,6 +82,7 @@ type recycleBinEntryJSON struct {
 	ID            int64  `json:"id"`
 	DeletedBy     int64  `json:"deleted_by"`
 	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 	DeletableType string `json:"deletable_type"`
 	DeletableID   int64  `json:"deletable_id"`
 	Deletable     struct {
@@ -120,32 +121,35 @@ func recycleBinRow(e recycleBinEntryJSON) output.Row {
 
 func invokeRecycleBinList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	var in struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
-	}
+	var in pagingInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, recycleBinInstanceWide); err != nil {
 		return nil, err
 	}
+	query, err := parseListQuery(recycleBinListSchema, in.Sort, in.Filters)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListRecycleBin(ctx, in.Limit, in.Offset)
+	return client.ListRecycleBin(ctx, in.Limit, in.Offset, query)
 }
 
 // ListRecycleBin returns the reduced entries of the recycle bin.
-func (c *Client) ListRecycleBin(ctx context.Context, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[recycleBinEntryJSON]{
+func (c *Client) ListRecycleBin(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[recycleBinEntryJSON]{
 		op: "list recycle bin", path: "/api/recycle-bin", limit: limit, offset: offset,
 		arguments: argNames(recycleBinList),
 		id:        func(e recycleBinEntryJSON) int64 { return e.ID },
 		keep:      func(recycleBinEntryJSON) bool { return true },
 		row:       recycleBinRow,
-	})
+	}
+	spec.withListQuery(q, recycleBinValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}

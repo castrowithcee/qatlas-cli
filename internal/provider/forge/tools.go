@@ -24,6 +24,14 @@ type tool struct {
 	since    map[string]version
 	describe func(p *product) capability.Descriptor
 	prepare  func(p *product, allowed allowlist, raw json.RawMessage) (run, error)
+	// needs names a newer version that arguments of the call require, for an argument only later versions of a
+	// product know; nil when the arguments never change the version.
+	needs func(p *product, raw json.RawMessage) (version, bool)
+	// local replaces prepare for a tool that reads or writes a local file: it also opens that file inside the
+	// directories the connection releases, before the token is resolved, and returns what releases the file
+	// once the operation is over.
+	local func(ctx context.Context, p *product, allowed allowlist, resolved *config.Resolved,
+		raw json.RawMessage) (run, func(), error)
 }
 
 type run func(ctx context.Context, c *Client) (any, error)
@@ -33,8 +41,19 @@ var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
 	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList, issueConfigGet,
-	issueConfigValidate}
+	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, tagsList, tagsGet, tagsCreate, tagsDelete,
+	issueTemplatesList, issueConfigGet, issueConfigValidate, commentsList, commentsListRepository, commentsGet,
+	commentsCreate, commentsUpdate, commentsDelete, assigneesList, assigneesCheck, issueAssigneesAdd,
+	issueAssigneesRemove, issueAssigneesCheck, labelsList, labelsGet, labelsCreate, labelsUpdate, labelsDelete,
+	orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete, issueLabelsList, issueLabelsAdd,
+	issueLabelsReplace, issueLabelsRemove, issueLabelsClear, milestonesList, milestonesGet, milestonesCreate,
+	milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet, pullRequestsGetByBranches,
+	pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet, pullRequestFilesList,
+	pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest, releasesGetByTag,
+	releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag, pullRequestsCreate, pullRequestsUpdate,
+	pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge, pullRequestsMerge, pullRequestBranchesUpdate,
+	releaseAssetsList, releaseAssetsGet, releaseAssetsDownload, releaseAssetsUpload, releaseAssetsUpdate,
+	releaseAssetsDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -44,9 +63,9 @@ func (t *tool) descriptor(p *product) capability.Descriptor {
 	return d
 }
 
-// handler runs one operation in a fixed order: targets and arguments, then the version the operation needs,
-// then the token, then the operation's own requests. A refusal of the first two never resolves the token, and
-// a target refusal never sends a request.
+// handler runs one operation in a fixed order: targets and arguments, then a local file, then the version the
+// operation needs, then the token, then the operation's own requests. A refusal of the first three never
+// resolves the token, and a target refusal never sends a request.
 func (t *tool) handler(p *product) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 		raw json.RawMessage) (any, error) {
@@ -60,11 +79,24 @@ func (t *tool) handler(p *product) capability.Handler {
 		if err != nil {
 			return nil, err
 		}
-		operation, err := t.prepare(p, allowed, raw)
-		if err != nil {
+		var operation run
+		if t.local != nil {
+			prepared, release, err := t.local(ctx, p, allowed, resolved, raw)
+			if err != nil {
+				return nil, err
+			}
+			defer release()
+			operation = prepared
+		} else if operation, err = t.prepare(p, allowed, raw); err != nil {
 			return nil, err
 		}
-		if needed := t.since[p.id]; p.minimum.less(needed) {
+		needed := t.since[p.id]
+		if t.needs != nil {
+			if extra, ok := t.needs(p, raw); ok && needed.less(extra) {
+				needed = extra
+			}
+		}
+		if p.minimum.less(needed) {
 			if err := requireVersion(ctx, p, resolved, secrets, red, t.group+" "+t.action, needed); err != nil {
 				return nil, err
 			}

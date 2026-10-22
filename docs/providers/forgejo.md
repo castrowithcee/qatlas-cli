@@ -51,3 +51,8 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Issue lists and searches take `sort`, and `issues.search` takes `priority_repo_id`. `issues.update` takes
   `updated_at`, the time read before, to refuse an update after the issue changed; there is no `content_version`,
   `projects`, or `time_estimate`.
+- Pull requests: `pull-requests.list` takes `base` and `head` (from Forgejo 17) and the pull request carries `flow`;
+  Gitea has `base_branch` and `content_version` instead. See [Pull requests](gitea/pull-requests.md).
+- A release asset may be a link to an external address (`type` `external`). Qatlas never creates one (`external_url`
+  is not offered), never changes its address, and `release-assets.download` refuses it. See
+  [Releases](gitea/releases.md).

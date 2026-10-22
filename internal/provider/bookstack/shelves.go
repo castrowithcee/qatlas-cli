@@ -21,9 +21,14 @@ const (
 	shelvesInstanceWide = "shelves"
 )
 
-const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","slug","description","created_at","updated_at"]}}`
+// listUserSchema is untyped: a list renders an absent column as null, which a typed schema member refuses.
+const listUserSchema = `{"properties":{"id":{"type":"integer"}}}`
 
-const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array"},"truncated":{"type":"boolean"}},"required":["id","name","slug","books","truncated"]}`
+const bookUserSchema = `{"type":"object","properties":{"id":{"type":"integer"}}}`
+
+const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + listUserSchema + `,"updated_by":` + listUserSchema + `,"owned_by":` + listUserSchema + `,"cover":{}},"required":["id","name","slug","description","created_at","updated_at"]}}`
+
+const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + bookUserSchema + `,"updated_by":` + bookUserSchema + `,"owned_by":` + bookUserSchema + `}}},"truncated":{"type":"boolean"},"cover":` + coverDetailSchema + `},"required":["id","name","slug","books","truncated"]}`
 
 const shelfWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"}},"required":["id","name","slug"]}`
 
@@ -53,12 +58,12 @@ var (
 			"targets cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + bookListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(shelfListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of shelves to return; 0 returns all"},
 			{Name: "offset", Description: "Number of shelves to skip"},
-		},
+		}, bookListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Shelf identifier"},
 			{Name: "name", Description: "Shelf title"},
@@ -66,6 +71,10 @@ var (
 			{Name: "description", Description: "Plain description, untrusted data"},
 			{Name: "created_at", Description: "Creation timestamp"},
 			{Name: "updated_at", Description: "Last change timestamp"},
+			{Name: "created_by", Description: "Creator as id only"},
+			{Name: "updated_by", Description: "Last editor as id only"},
+			{Name: "owned_by", Description: "Owner as id only"},
+			{Name: "cover", Description: coverListDescription},
 		},
 		Examples: []capability.Example{{Description: "List the first 25 shelves", Arguments: json.RawMessage(`{"limit":25,"offset":0}`)}},
 	}
@@ -79,9 +88,10 @@ var (
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(shelfGetOutput),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Shelf identifier", Required: true}},
-		Fields: append(append([]capability.Field{}, shelfMetadataFields...),
-			capability.Field{Name: "books", Description: "Books on the shelf in shelf order with id, name, and slug"},
-			capability.Field{Name: "truncated", Description: "True when the book list was cut at 2000 entries"}),
+		Fields: append(shelfGetFields(),
+			capability.Field{Name: "books", Description: "Books on the shelf in shelf order; each also with description (untrusted data), timestamps, and creator, last editor, and owner as id only"},
+			capability.Field{Name: "truncated", Description: "True when the book list was cut at 2000 entries"},
+			capability.Field{Name: "cover", Description: coverDetailDescription}),
 		Examples: []capability.Example{{Description: "Read shelf 3", Arguments: json.RawMessage(`{"id":3}`)}},
 	}
 
@@ -126,23 +136,51 @@ var (
 	}
 )
 
+// shelfGetFields is shelfMetadataFields as a read shows them: users with their slug and tags with their position.
+func shelfGetFields() []capability.Field {
+	fields := append([]capability.Field{}, shelfMetadataFields...)
+	for i, f := range fields {
+		switch f.Name {
+		case "created_by":
+			fields[i].Description = "Creator with id, name, and slug"
+		case "updated_by":
+			fields[i].Description = "Last editor with id, name, and slug"
+		case "owned_by":
+			fields[i].Description = "Owner with id, name, and slug"
+		case "tags":
+			fields[i].Description = "At most 50 entries with name, value, and order"
+		}
+	}
+	return fields
+}
+
 type shelfJSON struct {
-	ID              int64     `json:"id"`
-	Name            string    `json:"name"`
-	Slug            string    `json:"slug"`
-	Description     string    `json:"description"`
-	DescriptionHTML string    `json:"description_html"`
-	CreatedAt       string    `json:"created_at"`
-	UpdatedAt       string    `json:"updated_at"`
-	CreatedBy       *userJSON `json:"created_by"`
-	UpdatedBy       *userJSON `json:"updated_by"`
-	OwnedBy         *userJSON `json:"owned_by"`
-	Tags            []tagJSON `json:"tags"`
-	Books           []struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
-		Slug string `json:"slug"`
-	} `json:"books"`
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	Slug            string          `json:"slug"`
+	Description     string          `json:"description"`
+	DescriptionHTML string          `json:"description_html"`
+	CreatedAt       string          `json:"created_at"`
+	UpdatedAt       string          `json:"updated_at"`
+	CreatedBy       *userJSON       `json:"created_by"`
+	UpdatedBy       *userJSON       `json:"updated_by"`
+	OwnedBy         *userJSON       `json:"owned_by"`
+	Tags            []tagJSON       `json:"tags"`
+	Books           []shelfBookJSON `json:"books"`
+	Cover           *coverJSON      `json:"cover"`
+}
+
+// shelfBookJSON is a book of a shelf read; BookStack gives its users as identifiers only.
+type shelfBookJSON struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description"`
+	CreatedAt   string    `json:"created_at"`
+	UpdatedAt   string    `json:"updated_at"`
+	CreatedBy   *userJSON `json:"created_by"`
+	UpdatedBy   *userJSON `json:"updated_by"`
+	OwnedBy     *userJSON `json:"owned_by"`
 }
 
 // shelfMutation is the request body of a shelf write and, decoded from the arguments, its input. Books keeps
@@ -211,10 +249,16 @@ func checkShelfID(id int64) error {
 func invokeShelvesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var in struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	query, err := parseListQuery(bookListSchema, in.Sort, in.Filters)
+	if err != nil {
 		return nil, err
 	}
 	if err := requireInstanceScope(resolved, shelvesInstanceWide); err != nil {
@@ -224,7 +268,7 @@ func invokeShelvesList(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return client.ListShelves(ctx, in.Limit, in.Offset)
+	return client.ListShelves(ctx, in.Limit, in.Offset, query)
 }
 
 func invokeShelvesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -301,19 +345,24 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 }
 
 // ListShelves returns shelves of the instance.
-func (c *Client) ListShelves(ctx context.Context, limit, offset int) (output.Collection, error) {
-	rows, err := scanList(ctx, c, scanSpec[listedJSON]{
+func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	spec := scanSpec[listedJSON]{
 		op: "list shelves", path: "/api/shelves", limit: limit, offset: offset,
 		arguments: argNames(shelvesList),
 		id:        func(s listedJSON) int64 { return s.ID },
 		keep:      func(listedJSON) bool { return true },
 		row: func(s listedJSON) output.Row {
-			return output.Row{
+			row := output.Row{
 				"id": s.ID, "name": clip(s.Name, maxResultString), "slug": clip(s.Slug, maxResultString),
 				"description": clip(s.Description, maxDescriptionChars), "created_at": s.CreatedAt, "updated_at": s.UpdatedAt,
 			}
+			addListUsers(row, s.CreatedBy, s.UpdatedBy, s.OwnedBy)
+			addListCover(row, s.Cover)
+			return row
 		},
-	})
+	}
+	spec.withListQuery(q, listedValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
@@ -335,10 +384,36 @@ func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) 
 		if len(books) >= maxTreeEntries {
 			break
 		}
-		books = append(books, map[string]any{"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString)})
+		item := map[string]any{"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString)}
+		if b.Description != "" {
+			item["description"] = clip(b.Description, maxDescriptionChars)
+		}
+		if b.CreatedAt != "" {
+			item["created_at"] = b.CreatedAt
+		}
+		if b.UpdatedAt != "" {
+			item["updated_at"] = b.UpdatedAt
+		}
+		addListUsers(item, b.CreatedBy, b.UpdatedBy, b.OwnedBy)
+		books = append(books, item)
 	}
 	fields := shelfWriteObject(shelf).Fields
+	for i, f := range fields {
+		switch f.Name {
+		case "created_by":
+			fields[i].Value = userDetail(shelf.CreatedBy)
+		case "updated_by":
+			fields[i].Value = userDetail(shelf.UpdatedBy)
+		case "owned_by":
+			fields[i].Value = userDetail(shelf.OwnedBy)
+		case "tags":
+			fields[i].Value = orderedTags(shelf.Tags)
+		}
+	}
 	fields = append(fields, output.Field{Name: "books", Value: books}, output.Field{Name: "truncated", Value: truncated})
+	if cover := coverDetail(shelf.Cover); cover != nil {
+		fields = append(fields, output.Field{Name: "cover", Value: cover})
+	}
 	return output.Object{Fields: fields}, nil
 }
 

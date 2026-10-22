@@ -60,7 +60,7 @@ func TestUsersListAndGetReduceFields(t *testing.T) {
 	}))
 	defer server.Close()
 	c := newClient(t, server.URL, nil)
-	list, err := c.ListUsers(context.Background(), 0, 0)
+	list, err := c.ListUsers(context.Background(), 0, 0, listQuery{})
 	if err != nil || len(list.Rows) != 1 {
 		t.Fatalf("list = %v, %v", list, err)
 	}
@@ -112,7 +112,7 @@ func TestRolesListAndGetReduceAndCapMembers(t *testing.T) {
 	}))
 	defer server.Close()
 	c := newClient(t, server.URL, nil)
-	list, err := c.ListRoles(context.Background(), 0, 0)
+	list, err := c.ListRoles(context.Background(), 0, 0, listQuery{})
 	if err != nil || len(list.Rows) != 1 || list.Rows[0]["users_count"] != int64(4) || list.Rows[0]["mfa_enforced"] != true {
 		t.Fatalf("list = %v, %v", list, err)
 	}

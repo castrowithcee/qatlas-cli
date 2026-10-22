@@ -1,9 +1,10 @@
 ---
 description: >
   Describes the Infomaniak kDrive file tools: the default and root identifiers of the file reads, the zip archive of
-  a folder, the confirmed folder creation, rename, move, and copy with their identifier, name, and conflict rules, the
-  one-shot change contract with its status and cancel handle, the file upload and replacement, and the download to a
-  local path.
+  a folder, the related data the file, trash, and link listings load through with, with their subtree, access
+  value, and list limits, the confirmed folder creation, rename, move, and copy with their identifier, name, and
+  conflict rules, the one-shot change contract with its status and cancel handle, the file upload and replacement,
+  and the download to a local path.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -21,6 +22,30 @@ binding defaults as described under [Scope](README.md#scope). `infomaniak.drive.
 requires an explicit `file_id`: reading content is never defaulted to the root. A folder identifier passed to
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
+
+`depth` is not offered as an argument of `files.list`: the tool lists the immediate children of one folder.
+
+## Related data
+
+`files.list`, `files.stat`, `trash.list`, and `links.list` take `with`, the values Infomaniak documents for
+these operations. A member documented as a `with` value comes only through `with`: it is dropped when its value
+was not asked for, even if Infomaniak sends it. A value a tool needs for itself is joined into the request but
+adds no member: `parents` for the proof of `files.stat` under a subtree binding, and `sharelink` for
+`links.list`, which reports the link as its `link` and never as `sharelink`. `highlights` is not offered: it
+belongs to the search endpoints, and these operations do not deliver it. `with` changes what an entry carries,
+never which entries a page holds, so it does not change the cursor binding.
+
+- The lock token, the URL of a share link, and the URL and `uuid` of a dropbox grant access without an account.
+  A connection need not name `files.list`, `files.stat`, or `trash.list` in `tools`, so these values are left
+  out of all four tools; `links.list`, which must be named, keeps only the `url` of its `link`. `links.get` and
+  `dropbox.get` are the tools that return a link or a dropbox in full.
+- Under a drive bound only by `files` targets, `files.list` and `files.stat` leave out the `path` of an entry and
+  of its parents and the `path` of an external import, and report a rewind as [Boundary](README.md#boundary)
+  describes. `parents` keeps only the targets and the folders below them, followed through `parent_id`, because
+  every other parent names a folder outside the targets. `trash.list` and `links.list` need the whole drive (see
+  [Scope](README.md#scope)), so their entries are never limited this way.
+- Lists are cut at 100 entries, `parents` at 64 folders, and user and team identifiers at 1000; a cut list sets
+  its `<name>_truncated` flag, so it is never mistaken for a complete one.
 
 ## Changes
 

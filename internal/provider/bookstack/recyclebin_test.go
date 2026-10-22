@@ -56,7 +56,7 @@ func TestRecycleBinListReducesFields(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[` + recycleBinEntry + `],"total":1}`))
 	}))
 	defer server.Close()
-	got, err := newClient(t, server.URL, nil).ListRecycleBin(context.Background(), 0, 0)
+	got, err := newClient(t, server.URL, nil).ListRecycleBin(context.Background(), 0, 0, listQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
