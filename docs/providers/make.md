@@ -473,7 +473,7 @@ lists, and any other field are dropped; strings are capped at 256 characters. Ma
 documented field by field beyond property names, which is why an allow-list decides, not a deny-list.
 `make.connections.editable-schema` reads `GET /connections/{id}/editable-data-schema`, which Make documents as
 `editableParameters`, an array of strings; only those names are returned (at most 64, 128 characters each),
-never a value or default. Updating a connection's data is not offered.
+never a value or default.
 
 `make.connections.test` is an `execute` with an outside effect: Make uses the stored credential against the
 third-party service (`POST /connections/{id}/test`, `connections:write`, answer `{"verified":boolean}`). It is
@@ -732,8 +732,8 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, replace or update a single data store record, delete all records of a store, manage keys or organizations (it only reads the bound team
-and its organization; in organization mode it lists, creates, updates, and, through a tools list, deletes teams of the bound organization, and nothing else; changing an organization, inviting or removing members, and organization variables are not offered), or read or change organization variables; those are out of scope. It lists, creates, updates, and (through a tools list) deletes the custom variables of the bound team, never a system variable. For connections it
+call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, delete all records of a store, manage keys, create or delete an organization, or invite or remove members; those are out of scope. It lists, reads, pings, renames, enables, and disables hooks of the bound team and (through a tools list) deletes a hook or named queue items.
+In team mode it reads the bound team and its organization; in organization mode it lists, creates, updates, and (through a tools list) deletes teams of the bound organization and changes the organization's name, country, and time zone. It lists, creates, updates, and (through a tools list) deletes the custom variables of the bound team or, in organization mode, of the bound organization, never a system variable. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
 released forward credential, and lists and sets the roles of users on its access list; it does not authorize
@@ -741,4 +741,4 @@ an OAuth connection, create a locked connection, accept a secret as an argument,
 members, or lock or unlock a connection. For
 credential requests it creates, lists, reads, and (through a tools list) deletes them; it does not decline,
 reauthorize, or reset a request's credentials, list app modules, or read request details with their credential
-states. It invites no new user: only members of the bound team can be the provider. For data stores it lists, reads, creates, updates, and (through a tools list) deletes a store of the bound team and lists and reads data structures; it lists, creates, and (through a tools list) deletes explicitly named records of a store, never deletes several stores at once, and never creates, changes, or deletes a data structure.
+states. It invites no new user: only members of the bound team can be the provider. For data stores it lists, reads, creates, updates, and (through a tools list) deletes a store of the bound team and lists and reads data structures; it lists, creates, replaces, updates, and (through a tools list) deletes explicitly named records of a store, never deletes several stores at once, and never creates, changes, or deletes a data structure.
