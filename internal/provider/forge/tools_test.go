@@ -60,7 +60,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
-			p.id+".pull-requests.list-pinned")
+			p.id+".pull-requests.list-pinned", p.id+".pull-request-branches.update",
+			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
+			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -117,7 +119,9 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		milestonesCreate, milestonesUpdate, milestonesDelete, pullRequestsList, pullRequestsGet,
 		pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
 		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet, releasesList, releasesGet, releasesGetLatest,
-		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag} {
+		releasesGetByTag, releasesCreate, releasesUpdate, releasesDelete, releasesDeleteByTag, pullRequestsCreate,
+		pullRequestsUpdate, pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge, pullRequestsMerge,
+		pullRequestBranchesUpdate} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
