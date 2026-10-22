@@ -225,20 +225,22 @@ connection, the confirmation, the result, and the time, never its arguments, the
 
 ## Filters
 
-`todoist.tasks.list` accepts structured filters only: `project_id`, `section_id`, `parent_id`, and `label`
-are passed to Todoist, and the due window `due_from` and `due_to` (inclusive `YYYY-MM-DD` dates compared with
-the date part of a task's due date) or `without_due` is applied by Qatlas. A task without a due date never
-matches a due window.
+`todoist.tasks.list` accepts structured filters only. The ID, project, section, parent, and label filters are
+passed to Todoist; the due window (inclusive dates compared with the date part of a task's due date) or
+`without_due` is applied by Qatlas. A task without a due date never matches a due window.
+
+The filters name tasks, never reach: `ids`, `parent_id`, and `workspace_id` widen nothing, and every returned
+task is held to the connection's targets, so a task named in `ids` that lies outside them is dropped.
 
 A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
-`todoist.tasks.filter` as `query` (at most 1024 characters, no control characters), and for completed tasks
-by `todoist.completed-tasks.list` as `query`. Their results are held to the connection's projects like every
-other list, so an expression that names another project returns nothing of it.
+`todoist.tasks.filter` as `query`, and for completed tasks by `todoist.completed-tasks.list` as `query`. Their
+results are held to the connection's projects like every other list, so an expression that names another
+project returns nothing of it. The language of an expression is named by `lang` or, for completed tasks, by
+`filter_lang`, which is refused without `query`.
 
 `todoist.completed-tasks.list` reads the tasks completed from `since` (inclusive) until `until` (exclusive),
-both RFC 3339 and at most three months apart, optionally narrowed by `project_id`, `section_id`, and a
-`query` that Todoist supports for completed tasks. The narrowing is passed to Todoist on every page, and the
-cursor is bound to it.
+both RFC 3339 and at most three months apart. Its narrowing is passed to Todoist on every page, and the cursor
+is bound to it.
 
 ## Cursor contract
 
@@ -292,4 +294,6 @@ read and changed like any other project when the connection names them; the work
 
 Todoist marks `note_count` as deprecated and always answers 0, so a task has no comment count; its comments
 come from `todoist.comments.list`. `is_deleted` is not returned: Qatlas drops deleted tasks, so the value
-would always be false.
+would always be false. The parameter `public_key` of `GET /tasks/{task_id}` and
+`GET /tasks/completed/by_completion_date` is not offered: it reads tasks of publicly shared projects of others,
+outside the connection's targets.

@@ -26,6 +26,8 @@ Relation, array, and rich-text fields cannot be sorted by.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
+- `views.list` and `page-layouts.list` report no `total_count`, because Qatlas filters those lists locally by
+  visibility and type.
 - Record values are untrusted workspace content, often personal data. They appear only in a result, never in
   errors, logs, or audit entries, and carry their own data class.
 
