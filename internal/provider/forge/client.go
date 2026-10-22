@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -102,7 +104,10 @@ type request struct {
 	method      string
 	contentType string
 	body        []byte
-	change      bool
+	// stream is a body of exactly length bytes that is sent as it is read, instead of body.
+	stream io.Reader
+	length int64
+	change bool
 }
 
 // textAnswer receives a plain-text or HTML answer: data keeps at most limit bytes, and truncated reports that
@@ -154,6 +159,89 @@ func (c *Client) changeQuery(ctx context.Context, op, method, path string, query
 	}
 	status, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, query, spec, out)
 	return status, err
+}
+
+// transferTimeout bounds the whole transfer of one file upload or download, which the request timeout would
+// cut off.
+const transferTimeout = time.Hour
+
+// sendFile sends exactly one multipart POST of a fixed API path that carries file in the form member field
+// under fileName, streamed as it is read, size bytes long. The body is framed by hand, so its length is known
+// and the file is never held in memory. It is a change like change: never retried, and a failure whose
+// outcome is open carries the uncertain note.
+func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values, field, fileName string,
+	file io.Reader, size int64, out any) error {
+	var head bytes.Buffer
+	form := multipart.NewWriter(&head)
+	if _, err := form.CreateFormFile(field, fileName); err != nil {
+		return provider.Fail(op, "the request could not be built")
+	}
+	tail := "\r\n--" + form.Boundary() + "--\r\n"
+	spec := request{method: http.MethodPost, contentType: form.FormDataContentType(), change: true,
+		stream: io.MultiReader(bytes.NewReader(head.Bytes()), io.LimitReader(file, size), strings.NewReader(tail)),
+		length: int64(head.Len()) + size + int64(len(tail))}
+	long := *c.http
+	long.Timeout = transferTimeout
+	_, _, err := exchange(ctx, &long, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, query, spec, out)
+	return err
+}
+
+// fetchFile sends one GET of a fixed path of the instance's own origin outside the API, built by the caller
+// from constants and validated segments, and streams the answer of exactly size bytes into to. The token goes
+// to that origin only. A redirect is refused, never followed: the instance answers with one when it serves
+// the file from another address.
+func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#") {
+		return provider.Fail(op, "the request path is not one of this provider")
+	}
+	if err := c.limiter.Wait(ctx); err != nil {
+		return provider.Waited(op, c.product.name, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin+path, nil)
+	if err != nil {
+		return provider.Fail(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("User-Agent", "qatlas-cli")
+	long := *c.http
+	long.Timeout = transferTimeout
+	response, err := long.Do(req)
+	if err != nil {
+		return provider.Transport(op, c.product.name, err)
+	}
+	defer response.Body.Close()
+	switch {
+	case response.StatusCode >= 300 && response.StatusCode < 400:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
+			" serves this file from another address, such as external storage; Qatlas does not follow it"}
+	case response.StatusCode != http.StatusOK:
+		return refusal(op, c.product, c.limiter, response)
+	case response.ContentLength >= 0 && response.ContentLength != size:
+		return provider.InvalidResponse(op, c.product.name+" announced another size than the asset has")
+	}
+	body := &trackedReader{Reader: response.Body}
+	if _, err := to.ReadFrom(body); err != nil {
+		if body.err != nil {
+			return provider.Transport(op, c.product.name, body.err)
+		}
+		return err
+	}
+	return nil
+}
+
+// trackedReader remembers a failure of the source, so it can be told from a failure of the local file.
+type trackedReader struct {
+	io.Reader
+	err error
+}
+
+func (t *trackedReader) Read(p []byte) (int, error) {
+	n, err := t.Reader.Read(p)
+	if err != nil && err != io.EOF {
+		t.err = err
+	}
+	return n, err
 }
 
 // unsure marks the failure of a change whose outcome is open.
@@ -208,7 +296,8 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	default:
 		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
 	}
-	if method == http.MethodGet && spec.body != nil {
+	hasBody := spec.body != nil || spec.stream != nil
+	if method == http.MethodGet && hasBody {
 		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
 	}
 	for key := range query {
@@ -226,12 +315,18 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 		target += "?" + query.Encode()
 	}
 	var body io.Reader
-	if spec.body != nil {
+	switch {
+	case spec.stream != nil:
+		body = spec.stream
+	case spec.body != nil:
 		body = bytes.NewReader(spec.body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return 0, nil, provider.Fail(op, "the request could not be built")
+	}
+	if spec.stream != nil {
+		req.ContentLength = spec.length
 	}
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
@@ -242,7 +337,7 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	} else {
 		req.Header.Set("Accept", "application/json")
 	}
-	if spec.body != nil {
+	if hasBody {
 		req.Header.Set("Content-Type", spec.contentType)
 	}
 	req.Header.Set("User-Agent", "qatlas-cli")
