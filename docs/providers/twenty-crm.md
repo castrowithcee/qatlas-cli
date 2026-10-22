@@ -63,6 +63,8 @@ Relation, array, and rich-text fields cannot be sorted by.
 - Qatlas always reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an
   embedded record, and a relation to an object the connection cannot reach stays an identifier. Rich text
   appears only as `markdown`.
+- Twenty signs file addresses with a token that serves the content without sign-in, so record values never
+  show a file address; read a file through `twenty-crm.attachments.*`, which never output the token.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
