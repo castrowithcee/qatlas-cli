@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -20,12 +21,28 @@ const (
 	maxCellString = 2048
 	maxCellItems  = 100
 	maxCellDepth  = 6
+	// maxColumnKeys bounds one include or exclude list.
+	maxColumnKeys = 100
 )
 
 var rowsRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: rowsSensitive}
 
 const rowSchema = `{"type":"object","properties":{"id":{"type":"integer"},"order":{"type":"string"},` +
+	`"fields":{"type":"object"}},"required":["id","fields"],"additionalProperties":false}`
+
+// columnKeysSchema is the schema of an include or exclude list: column keys as the answer names them.
+var columnKeysSchema = `{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(maxColumnKeys) +
+	`,"items":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxStringLength) + `}}`
+
+var includeDescription = "Only these columns, 1 to " + strconv.Itoa(maxColumnKeys) + " keys as the answer names them " +
+	"(field names, or field_ID with user_field_names false); names with a comma or __ or a leading - or + cannot be selected"
+var excludeDescription = "All columns except these, same keys and limits as include; may be combined with include"
+
+// getRowSchema is rowSchema plus the optional metadata object of rows.get.
+const getRowSchema = `{"type":"object","properties":{"id":{"type":"integer"},"order":{"type":"string"},` +
+	`"metadata":{"type":"object","properties":{"row_comment_count":{"type":"integer"},` +
+	`"row_comments_notification_mode":{"type":"string"}},"additionalProperties":false},` +
 	`"fields":{"type":"object"}},"required":["id","fields"],"additionalProperties":false}`
 
 const linkNote = "Link fields into tables outside the connection's targets give only row ids, no display values; " +
@@ -38,7 +55,8 @@ var rowsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `,` +
 		`"page":{"type":"integer","minimum":1},` +
 		`"size":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxSize) + `},` +
-		`"user_field_names":{"type":"boolean"}},"required":["table_id"],"additionalProperties":false}`),
+		`"user_field_names":{"type":"boolean"},"include":` + columnKeysSchema + `,"exclude":` + columnKeysSchema + `},` +
+		`"required":["table_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"rows":{"type":"array","items":` + rowSchema + `},` +
 		`"count":{"type":"integer"},"page":{"type":"integer"},"size":{"type":"integer"},` +
 		`"has_more":{"type":"boolean"}},"required":["rows","count","page","size","has_more"],` +
@@ -48,6 +66,8 @@ var rowsList = capability.Descriptor{
 		{Name: "size", Description: "Rows per page, 1 to " + strconv.Itoa(maxSize) + "; " +
 			strconv.Itoa(defaultSize) + " when omitted"},
 		{Name: "user_field_names", Description: "Key values by field name when true (default) or by field_ID when false"},
+		{Name: "include", Description: includeDescription},
+		{Name: "exclude", Description: excludeDescription},
 	},
 	Fields: []capability.Field{
 		{Name: "rows", Description: "Rows with id, order, and fields (the cell values)"},
@@ -64,15 +84,19 @@ var rowsGet = capability.Descriptor{
 	Description: "Read one row of a table. " + linkNote,
 	Tags:        []string{"baserow", "rows", "get", "records"}, Risk: rowsRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `,"row_id":` + idSchema + `,` +
-		`"user_field_names":{"type":"boolean"}},"required":["table_id","row_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(rowSchema),
+		`"user_field_names":{"type":"boolean"},"include_metadata":{"type":"boolean"},` +
+		`"view_id":` + idSchema + `},"required":["table_id","row_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(getRowSchema),
 	Arguments: []capability.Argument{tableIDArgument,
 		{Name: "row_id", Required: true, Description: "Row identifier from baserow.rows.list"},
 		{Name: "user_field_names", Description: "Key values by field name when true (default) or by field_ID when false"},
+		{Name: "include_metadata", Description: "Also return the row's metadata (comment count and notification mode)"},
+		{Name: "view_id", Description: "A view of this table in whose context the row is read"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Row identifier"},
 		{Name: "order", Description: "Row order as Baserow reports it"},
+		{Name: "metadata", Description: "Row metadata with row_comment_count and row_comments_notification_mode; only with include_metadata"},
 		{Name: "fields", Description: "Cell values"},
 	},
 	Examples: []capability.Example{{Description: "Read one row", Arguments: json.RawMessage(`{"table_id":1,"row_id":1}`)}},
@@ -80,9 +104,11 @@ var rowsGet = capability.Descriptor{
 
 // Row is the stable view of one row: its identifier, order, and cell values.
 type Row struct {
-	ID     int64          `json:"id"`
-	Order  string         `json:"order,omitempty"`
-	Fields map[string]any `json:"fields"`
+	ID    int64  `json:"id"`
+	Order string `json:"order,omitempty"`
+	// Metadata is set only by rows.get when requested.
+	Metadata map[string]any `json:"metadata,omitempty"`
+	Fields   map[string]any `json:"fields"`
 }
 
 // RowsPage is one page of rows.
@@ -95,11 +121,48 @@ type RowsPage struct {
 }
 
 type rowsArguments struct {
-	TableID        int64 `json:"table_id"`
-	RowID          int64 `json:"row_id"`
-	Page           int   `json:"page"`
-	Size           int   `json:"size"`
-	UserFieldNames *bool `json:"user_field_names"`
+	TableID         int64    `json:"table_id"`
+	RowID           int64    `json:"row_id"`
+	Page            int      `json:"page"`
+	Size            int      `json:"size"`
+	UserFieldNames  *bool    `json:"user_field_names"`
+	Include         []string `json:"include"`
+	Exclude         []string `json:"exclude"`
+	IncludeMetadata bool     `json:"include_metadata"`
+	ViewID          int64    `json:"view_id"`
+}
+
+// validateColumnKeys checks an include or exclude list before any request. The keys are sent comma-separated
+// unquoted, so a key that Baserow's parameter syntax would read differently cannot be selected.
+func validateColumnKeys(name string, keys []string) error {
+	if keys == nil {
+		return nil
+	}
+	if len(keys) < 1 || len(keys) > maxColumnKeys {
+		return invalidRequest(name + " needs 1 to " + strconv.Itoa(maxColumnKeys) + " column keys")
+	}
+	for _, key := range keys {
+		if !usableFieldName(key) {
+			return invalidRequest("a column key in " + name + " cannot be used")
+		}
+	}
+	return nil
+}
+
+func (a rowsArguments) validateColumns() error {
+	if err := validateColumnKeys("include", a.Include); err != nil {
+		return err
+	}
+	return validateColumnKeys("exclude", a.Exclude)
+}
+
+func setColumnKeys(query url.Values, include, exclude []string) {
+	if len(include) > 0 {
+		query.Set("include", strings.Join(include, ","))
+	}
+	if len(exclude) > 0 {
+		query.Set("exclude", strings.Join(exclude, ","))
+	}
 }
 
 func (a rowsArguments) byName() bool { return a.UserFieldNames == nil || *a.UserFieldNames }
@@ -123,6 +186,9 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if input.Page < 1 || input.Size < 1 || input.Size > maxSize {
 		return nil, invalidRequest("page must be 1 or more and size between 1 and " + strconv.Itoa(maxSize))
 	}
+	if err := input.validateColumns(); err != nil {
+		return nil, err
+	}
 	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
@@ -134,6 +200,7 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	}
 	query := url.Values{"page": {strconv.Itoa(input.Page)}, "size": {strconv.Itoa(input.Size)},
 		"user_field_names": {strconv.FormatBool(input.byName())}}
+	setColumnKeys(query, input.Include, input.Exclude)
 	path := "/api/database/rows/table/" + tablePath(input.TableID)
 	if err := client.get(ctx, op, path, query, &page); err != nil {
 		return nil, err
@@ -172,12 +239,26 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if input.RowID <= 0 {
 		return nil, invalidRequest("row_id must be a positive integer")
 	}
+	if input.ViewID < 0 || len(strconv.FormatInt(input.ViewID, 10)) > maxIDDigits {
+		return nil, invalidRequest("view_id must be a positive integer")
+	}
 	client, err := openTable(ctx, resolved, secrets, red, op, input.TableID)
 	if err != nil {
 		return nil, err
 	}
+	if input.ViewID > 0 {
+		if err := client.checkView(ctx, op, input.TableID, input.ViewID); err != nil {
+			return nil, err
+		}
+	}
 	var entry json.RawMessage
 	query := url.Values{"user_field_names": {strconv.FormatBool(input.byName())}}
+	if input.IncludeMetadata {
+		query.Set("include", "metadata")
+	}
+	if input.ViewID > 0 {
+		query.Set("view", strconv.FormatInt(input.ViewID, 10))
+	}
 	path := "/api/database/rows/table/" + tablePath(input.TableID) + strconv.FormatInt(input.RowID, 10) + "/"
 	if err := client.get(ctx, op, path, query, &entry); err != nil {
 		return nil, err
@@ -185,6 +266,9 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	row, err := decodeRow(op, entry)
 	if err != nil {
 		return nil, err
+	}
+	if input.IncludeMetadata {
+		row.Metadata = takeMetadata(row.Fields)
 	}
 	rows := []Row{row}
 	if err := client.maskLinks(ctx, op, input.TableID, input.byName(), rows); err != nil {
@@ -224,6 +308,26 @@ func decodeRow(op string, raw json.RawMessage) (Row, error) {
 		row.Fields[key] = cell
 	}
 	return row, nil
+}
+
+// takeMetadata removes the metadata member from the cells and returns its two documented members. Anything
+// else in it is dropped.
+func takeMetadata(cells map[string]any) map[string]any {
+	object, _ := cells["metadata"].(map[string]any)
+	delete(cells, "metadata")
+	out := map[string]any{}
+	if count, ok := object["row_comment_count"].(json.Number); ok {
+		if n, err := count.Int64(); err == nil && n >= 0 {
+			out["row_comment_count"] = count
+		}
+	}
+	if mode, ok := object["row_comments_notification_mode"].(string); ok && mode != "" {
+		out["row_comments_notification_mode"] = cleanText(&mode, maxStringLength)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // maskLinks reduces every link entry that points into a table outside the allow-list to its row identifier,
