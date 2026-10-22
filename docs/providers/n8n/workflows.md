@@ -47,11 +47,25 @@ same shape a workflow read already reports; this provider never accepts anything
 `available_in_mcp`); it deliberately excludes `binaryMode` and `credentialResolverId`, which n8n's own spec
 documents as derived, internal settings whose value is ignored on write, and `customTelemetryTags` and the
 top-level `nodeGroups`, which are canvas and telemetry decoration with no execution effect. A node likewise
-only accepts `id`, `name`, `type`, `type_version`, `position`, `disabled`, `parameters`, and `credentials`;
-n8n's own create/update schemas additionally accept execution-behaviour fields such as `notes`, `onError`,
-`retryOnFail`, `maxTries`, and `webhookId`, which this milestone does not offer. `error_workflow` is passed
+accepts none of the execution-behaviour fields n8n's own create/update schemas additionally accept, such as
+`notes`, `onError`, `retryOnFail`, and `maxTries`; a node's `webhookId` is never taken from a caller. `error_workflow` is passed
 through as an opaque workflow ID and is not checked against this connection's own allow-lists: n8n enforces
 its own access to that workflow when the error trigger it names would actually run.
+
+### Withheld node parameters
+
+No tool returns a node's webhook id or the path of a webhook, form trigger, or MCP trigger node: together they
+form the URL that starts a workflow without authentication.
+
+Qatlas replaces credentials in node parameters by fixed rules with `__qatlas_withheld__`. Code nodes and other
+free text are not searched; credentials belong in n8n credentials, whose values no API returns.
+
+`workflows.update` restores withheld values and the webhook id from the read that precedes its PUT; it refuses
+a placeholder it cannot match to that read, and a change that would no longer withhold a restored value.
+`workflows.create` refuses every placeholder.
+
+`n8n.workflows.get`, `create`, `update`, `activate`, and `deactivate` are at version 2: webhook
+paths and recognised credentials in `parameters` appear as `__qatlas_withheld__` and webhook ids are left out.
 
 ### `workflows.create` under a project or workflow restriction
 
