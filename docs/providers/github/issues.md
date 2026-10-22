@@ -90,7 +90,7 @@ a name with a space or another special character still reaches the right label.
 | `github.labels.update` | changes a label's name, color, or description; at least one of them is required |
 | `github.labels.delete` | deletes one label permanently; offered only where a connection's `tools` list names it |
 
-`github.labels.list` is paged the same way [branches and tags](../github.md#repository-contents-tree-blame-commits-branches-and-tags)
+`github.labels.list` is paged the same way [branches and tags](code.md#repository-contents-tree-blame-commits-branches-and-tags)
 are, by GitHub's `Link` response header; see the [cursor contract](README.md#cursor-contract).
 
 `github.labels.create` refuses a name the repository already holds as an `invalid-request` that names the

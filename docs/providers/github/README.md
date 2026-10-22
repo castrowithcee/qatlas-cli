@@ -16,9 +16,10 @@ offers only what its `effects` or `tools` select; the [setup profiles](profiles.
 the terminal editor, and a tool marked listed only is offered only when a `tools` list names it.
 
 The tools are sorted into groups; each group has a page: [issues](issues.md), [pull requests](pull-requests.md),
-[projects](projects.md), and [Actions](actions.md). The remaining groups (code, repositories, releases,
-security, discussions, gists, notifications, and accounts) are described in
-[the rest of the provider documentation](../github.md).
+[projects](projects.md), [Actions](actions.md), [code](code.md), [repositories](repositories.md),
+[releases](releases.md), [security](security.md), [discussions](discussions.md), [gists](gists.md),
+[notifications](notifications.md), and [accounts](accounts.md). The [setup profiles](profiles.md) have their own
+page.
 
 ## Configuration
 
@@ -40,7 +41,7 @@ and projects for a fine-grained token. User-owned projects need a classic token.
 their own requirements, listed under [GitHub Actions](actions.md#github-actions), and so have the tools of
 [workflow maintenance and Actions administration](actions.md#workflow-maintenance-and-actions-administration), of
 [pull requests](pull-requests.md#tokens-for-pull-requests), and of
-[account, organization teams, and stars](../github.md#discovery-account-organization-teams-and-stars). A successful `qatlas connection test` shows only that the token
+[accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars). A successful `qatlas connection test` shows only that the token
 can read the first project or repository the
 connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
 scope again on each call, so a passing test does not authorize every tool.
@@ -157,7 +158,7 @@ their own permission messages, listed under [Tokens for Actions](actions.md#toke
 ## Owner lists
 
 `github.projects.list` ([projects](projects.md#owners)) and `github.repositories.list`
-([repositories](../github.md#owners-repositories)) find a project number or a repository name without knowing it
+([repositories](repositories.md#owners-repositories)) find a project number or a repository name without knowing it
 in advance. The `project` and `repository` values they report are the values the other tools take as arguments.
 A connection without targets lists everything of the owner that its token can see. A connection with targets
 lists the projects or repositories of an owner only when its targets name that owner, name a project or
@@ -207,7 +208,8 @@ GitHub Enterprise Server its own host.
 with `terms`: search terms and GitHub qualifiers, such as `language:go` or `is:merged`, never a `query` argument or
 a route of an agent's own. [Issue search](issues.md#issue-search) and
 [pull request search](pull-requests.md#pull-request-search) are described with their groups, the others under
-[search](../github.md#search-repositories-code-commits-users-and-organizations).
+search of [repositories](repositories.md#search), [code and commits](code.md#search), and
+[users and organizations](accounts.md#search).
 
 None of the seven takes a `repository`, `project`, or `owner` argument: they are narrowed by the connection's
 targets as a whole, exactly like `github.stars.list`. They page through the [cursor contract](#cursor-contract), a

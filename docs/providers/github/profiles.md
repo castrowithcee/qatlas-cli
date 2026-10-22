@@ -28,14 +28,14 @@ profiles `actions-observer` and `actions-operator` are described under [GitHub A
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
 [Pull requests](pull-requests.md#pull-requests), the not-recommended profile `pull-request-reviews` under
 [Pull request reviews and comments](pull-requests.md#pull-request-reviews-and-comments), the not-recommended profile
-`releases` under [Releases](../github.md#releases), the not-recommended profiles `discovery` and `stars` under
-[account, organization teams, and stars](../github.md#discovery-account-organization-teams-and-stars), and the
+`releases` under [Releases](releases.md#releases), the not-recommended profiles `discovery` and `stars` under
+[accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars), and the
 not-recommended profile `repository-reader` under
-[repository contents, tree, blame, commits, branches, and tags](../github.md#repository-contents-tree-blame-commits-branches-and-tags),
+[repository contents, tree, blame, commits, branches, and tags](code.md#repository-contents-tree-blame-commits-branches-and-tags),
 and the not-recommended profile `repository-admin-reader` under
-[repository lifecycle and collaborators](../github.md#repository-lifecycle-and-collaborators), which also lists the
-rulesets under [Rulesets](../github.md#rulesets-repository-and-organization-governance) and the custom property values or
-schema under [Custom properties](../github.md#custom-properties). The not-recommended profile `issue-maintainer` lists and
+[repository lifecycle and collaborators](repositories.md#repository-lifecycle-and-collaborators), which also lists the
+rulesets under [Rulesets](repositories.md#rulesets-repository-and-organization-governance) and the custom property values or
+schema under [Custom properties](repositories.md#custom-properties). The not-recommended profile `issue-maintainer` lists and
 reads the labels of a repository, creates and updates them, under [Labels](issues.md#labels), lists the milestones
 under [Milestones](issues.md#milestones), updates issue comments under [Changes](issues.md#changes), reacts to issues,
 comments, and pull request line comments under [Reactions](issues.md#reactions), lists, adds, removes, and
@@ -44,15 +44,15 @@ under [Issue dependencies](issues.md#issue-dependencies), and lists issue types,
 field values under [Issue types](issues.md#issue-types) and [Issue fields](issues.md#issue-fields); deleting a label or a
 comment stays unticked, since each is offered only where a connection's `tools` list names it. The
 not-recommended profile `discussions` reads discussion categories, discussions, and discussion comments, starts
-discussions, and comments, replies, and edits comments under [Discussions](../github.md#discussions); deleting a
+discussions, and comments, replies, and edits comments under [Discussions](discussions.md#discussions); deleting a
 discussion comment stays unticked, since it is offered only where a connection's `tools` list names it. The
 not-recommended profile `notifications` lists and reads notifications, marks a thread read or done, and sets
-thread and repository subscriptions under [Notifications](../github.md#notifications); marking everything read stays
+thread and repository subscriptions under [Notifications](notifications.md#notifications); marking everything read stays
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended
-profile `gists` lists and reads gists and creates and updates them under [Gists](../github.md#gists); deleting a gist stays
+profile `gists` lists and reads gists and creates and updates them under [Gists](gists.md#gists); deleting a gist stays
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended profile
 `security` lists and reads the code scanning, Dependabot, and secret scanning alerts of a repository, the global
-and repository security advisories, and code quality findings under [Security alerts](../github.md#security-alerts) and
+and repository security advisories, and code quality findings under [Security alerts](security.md#security-alerts) and
 changes nothing. The not-recommended profile `copilot` assigns Copilot to an issue and requests a Copilot review
 of a pull request under [Copilot assignments](issues.md#copilot-assignments) and [Copilot reviews](pull-requests.md#copilot-reviews); every change needs its own confirmation. A
 profile is a
