@@ -129,7 +129,7 @@ func TestUsersListPaginatesAndBounds(t *testing.T) {
 	if len(page.Users[1].Name) != 800 || len(page.Users[1].Teams["g"][0]) != maxTeamText {
 		t.Fatalf("strings not bounded: %d %d", len(page.Users[1].Name), len(page.Users[1].Teams["g"][0]))
 	}
-	if strings.Contains(out, "picture") || strings.Contains(out, "preferences") || strings.Contains(out, "bad id") {
+	if strings.Contains(out, "picture") || strings.Contains(out, "bad id") {
 		t.Fatalf("unneeded fields passed on: %s", out)
 	}
 	if len(calls) != 1 || calls[0].method != http.MethodGet || calls[0].path != apiPath+"/workspaces/users" ||

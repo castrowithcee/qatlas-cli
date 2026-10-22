@@ -321,7 +321,7 @@ type labelRaw struct {
 	Name        *string     `json:"name"`
 	Description *string     `json:"description"`
 	Color       *string     `json:"color"`
-	Default     bool        `json:"default"`
+	Default     *bool       `json:"default"`
 	ArchivedAt  *string     `json:"archived_at"`
 	ArchivedBy  *accountRaw `json:"archived_by"`
 	links       Links
@@ -354,7 +354,27 @@ type Label struct {
 // remaining members were added; only the new members pass through the projection helpers.
 func (r *labelRaw) project() Label {
 	return Label{Name: stringOr(r.Name), Color: stringOr(r.Color), Description: stringOr(r.Description),
-		Default: r.Default, ID: r.ID, NodeID: nameText(r.NodeID), ArchivedAt: nameText(r.ArchivedAt),
+		Default: valueOr(r.Default), ID: r.ID, NodeID: nameText(r.NodeID), ArchivedAt: nameText(r.ArchivedAt),
+		ArchivedBy: r.ArchivedBy.project(), Links: r.links}
+}
+
+// RESTLabel is a label as another object carries it, such as an issue: the members of Label, every one
+// passed through the projection helpers and left out when GitHub leaves it out.
+type RESTLabel struct {
+	Name        *string      `json:"name,omitempty"`
+	Color       *string      `json:"color,omitempty"`
+	Description *string      `json:"description,omitempty"`
+	Default     *bool        `json:"default,omitempty"`
+	ID          *int64       `json:"id,omitempty"`
+	NodeID      *string      `json:"node_id,omitempty"`
+	ArchivedAt  *string      `json:"archived_at,omitempty"`
+	ArchivedBy  *RESTAccount `json:"archived_by,omitempty"`
+	Links       Links        `json:"links,omitempty"`
+}
+
+func (r *labelRaw) detail() RESTLabel {
+	return RESTLabel{Name: shortText(r.Name), Color: shortText(r.Color), Description: bulkText(r.Description),
+		Default: r.Default, ID: r.ID, NodeID: shortText(r.NodeID), ArchivedAt: shortText(r.ArchivedAt),
 		ArchivedBy: r.ArchivedBy.project(), Links: r.links}
 }
 

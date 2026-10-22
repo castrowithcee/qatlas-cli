@@ -48,15 +48,36 @@ var peopleReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency:
 
 const (
 	workspaceWide = "Workspace-wide: only a connection with the * target offers it"
-	peopleNote    = "Names, e-mail addresses, and teams are personal data and untrusted provider data"
+	peopleNote    = "Names, e-mail addresses, settings, and teams are personal data and untrusted provider data"
 	changeNote    = "the change is sent once and never repeated; after a timeout or a server error it may have taken effect"
 )
 
 const userSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 	`"email":{"type":"string"},"role":{"type":"string"},` +
 	`"teams":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}},` +
-	`"created":{"type":"string"},"last_active":{"type":"string"}},` +
+	`"created":{"type":"string"},"last_active":{"type":"string"},` +
+	`"is_initialized":{"type":"boolean"},"uid":{"type":"string"},"updated":{"type":"string"},` +
+	`"subscription_status":{"type":"string"},"last_active_refreshed_at":{"type":"string"},` +
+	`"library_version":{"type":"integer"},"preferences":` + preferencesSchema + `,` +
+	`"rate_limits":` + rateLimitsSchema + `,` +
+	`"last_visited_scenes":{"type":"array","items":{"type":"string"}},` +
+	`"last_edited_scenes":{"type":"array","items":{"type":"string"}}},` +
 	`"required":["id"],"additionalProperties":false}`
+
+const preferencesSchema = `{"type":"object","properties":{"oss_auto_redirect":{"type":"boolean"},` +
+	`"scene_order":{"type":"string"},"initial_redirect":{"type":"string"},` +
+	`"hide_deprecated_fonts":{"type":"boolean"},` +
+	`"enable_auto_scene_naming_for_private_collections":{"type":"boolean"},` +
+	`"block_comment_email_notifications":{"type":"boolean"},"push_to_talk_enabled":{"type":"boolean"},` +
+	`"theme":{"type":"string"},"locale":{"type":"string"},"locale_suggestion_dismissed":{"type":"boolean"}},` +
+	`"additionalProperties":false}`
+
+const rateUseSchema = `{"type":"object","additionalProperties":{"type":"object","properties":{` +
+	`"last_used":{"type":"integer"},"first_used":{"type":"integer"},"count":{"type":"integer"}},` +
+	`"additionalProperties":false}}`
+
+const rateLimitsSchema = `{"type":"object","properties":{"text_to_diagram":` + rateUseSchema +
+	`,"diagram_to_code":` + rateUseSchema + `,"name_scene":` + rateUseSchema + `},"additionalProperties":false}`
 
 var userFields = []capability.Field{
 	{Name: "id", Description: "User identifier, usable as user_id"},
@@ -67,6 +88,18 @@ var userFields = []capability.Field{
 		"entries, capped; the meaning of the group keys is not documented"},
 	{Name: "created", Description: "Creation time, as Excalidraw+ reports it"},
 	{Name: "last_active", Description: "Last activity time, as Excalidraw+ reports it"},
+	{Name: "is_initialized", Description: "Whether the user finished the account setup"},
+	{Name: "uid", Description: "Provider-side user identifier, untrusted data"},
+	{Name: "updated", Description: "Last update time of the user, as Excalidraw+ reports it"},
+	{Name: "subscription_status", Description: "Subscription status as Excalidraw+ reports it, untrusted data"},
+	{Name: "last_active_refreshed_at", Description: "Time the last activity was refreshed, as Excalidraw+ reports it"},
+	{Name: "library_version", Description: "Version counter of the user's library"},
+	{Name: "preferences", Description: "The user's settings, including comment e-mail notification blocking; " +
+		"personal data, free texts are untrusted"},
+	{Name: "rate_limits", Description: "AI usage per group (text_to_diagram, diagram_to_code, name_scene): " +
+		"keys with last_used, first_used, and count as Excalidraw+ reports them; capped, keys untrusted"},
+	{Name: "last_visited_scenes", Description: "Scene identifiers the user visited last, capped; identifiers only"},
+	{Name: "last_edited_scenes", Description: "Scene identifiers the user edited last, capped; identifiers only"},
 }
 
 const roleSchema = `{"type":"string","enum":["member","admin"]}`
@@ -78,7 +111,7 @@ var usersList = capability.Descriptor{
 	ID:      Provider + ".users.list",
 	Version: 1,
 	Title:   "List Excalidraw+ workspace users",
-	Description: "List the users of the workspace with name, e-mail address, role, and teams, page by page with a " +
+	Description: "List the users of the workspace with name, e-mail address, role, teams, settings, AI usage, and recent scenes, page by page with a " +
 		"numeric offset. " + workspaceWide + ". " + peopleNote,
 	Tags:     []string{"excalidrawplus", "users", "list", "whiteboard"},
 	Risk:     peopleReadRisk,
@@ -99,7 +132,7 @@ var usersGet = capability.Descriptor{
 	ID:      Provider + ".users.get",
 	Version: 1,
 	Title:   "Get an Excalidraw+ workspace user",
-	Description: "Read one workspace user by identifier: name, e-mail address, role, and teams. " + workspaceWide +
+	Description: "Read one workspace user by identifier: name, e-mail address, role, teams, settings, AI usage, and recent scenes. " + workspaceWide +
 		". " + peopleNote,
 	Tags:     []string{"excalidrawplus", "users", "get", "whiteboard"},
 	Risk:     peopleReadRisk,
@@ -194,6 +227,18 @@ type userJSON struct {
 	Created       string          `json:"created"`
 	LastActive    string          `json:"lastActive"`
 	WorkspaceTeam json.RawMessage `json:"workspaceTeams"`
+
+	// Later members are read member by member (see textOf) so one unexpected type drops only that member.
+	IsInitialized         json.RawMessage `json:"isInitialized"`
+	UID                   json.RawMessage `json:"uid"`
+	Updated               json.RawMessage `json:"updated"`
+	SubscriptionStatus    json.RawMessage `json:"subscriptionStatus"`
+	LastActiveRefreshedAt json.RawMessage `json:"lastActiveRefreshedAt"`
+	LibraryVersion        json.RawMessage `json:"libraryVersion"`
+	Preferences           json.RawMessage `json:"preferences"`
+	RateLimits            json.RawMessage `json:"rateLimits"`
+	LastVisitedScenes     json.RawMessage `json:"lastVisitedScenes"`
+	LastEditedScenes      json.RawMessage `json:"lastEditedScenes"`
 }
 
 type usersPageJSON struct {
@@ -201,8 +246,7 @@ type usersPageJSON struct {
 	Data []userJSON `json:"data"`
 }
 
-// User is the stable view of one workspace user. Picture, preferences, scene history, and rate limits are not
-// passed on.
+// User is the stable view of one workspace user. The picture address is not passed on.
 type User struct {
 	ID         string              `json:"id"`
 	Name       string              `json:"name,omitempty"`
@@ -211,6 +255,112 @@ type User struct {
 	Teams      map[string][]string `json:"teams,omitempty"`
 	Created    string              `json:"created,omitempty"`
 	LastActive string              `json:"last_active,omitempty"`
+
+	IsInitialized         *bool                           `json:"is_initialized,omitempty"`
+	UID                   string                          `json:"uid,omitempty"`
+	Updated               string                          `json:"updated,omitempty"`
+	SubscriptionStatus    string                          `json:"subscription_status,omitempty"`
+	LastActiveRefreshedAt string                          `json:"last_active_refreshed_at,omitempty"`
+	LibraryVersion        json.Number                     `json:"library_version,omitempty"`
+	Preferences           *Preferences                    `json:"preferences,omitempty"`
+	RateLimits            map[string]map[string]RateUsage `json:"rate_limits,omitempty"`
+	LastVisitedScenes     []string                        `json:"last_visited_scenes,omitempty"`
+	LastEditedScenes      []string                        `json:"last_edited_scenes,omitempty"`
+}
+
+// Preferences are the settings of a user.
+type Preferences struct {
+	OSSAutoRedirect                            *bool  `json:"oss_auto_redirect,omitempty"`
+	SceneOrder                                 string `json:"scene_order,omitempty"`
+	InitialRedirect                            string `json:"initial_redirect,omitempty"`
+	HideDeprecatedFonts                        *bool  `json:"hide_deprecated_fonts,omitempty"`
+	EnableAutoSceneNamingForPrivateCollections *bool  `json:"enable_auto_scene_naming_for_private_collections,omitempty"`
+	BlockCommentEmailNotifications             *bool  `json:"block_comment_email_notifications,omitempty"`
+	PushToTalkEnabled                          *bool  `json:"push_to_talk_enabled,omitempty"`
+	Theme                                      string `json:"theme,omitempty"`
+	Locale                                     string `json:"locale,omitempty"`
+	LocaleSuggestionDismissed                  *bool  `json:"locale_suggestion_dismissed,omitempty"`
+}
+
+// RateUsage is the usage record of one rate-limit key.
+type RateUsage struct {
+	LastUsed  json.Number `json:"last_used,omitempty"`
+	FirstUsed json.Number `json:"first_used,omitempty"`
+	Count     json.Number `json:"count,omitempty"`
+}
+
+// maxRateKeys caps the keys of one rate-limit group.
+const maxRateKeys = 50
+
+func preferencesOf(raw json.RawMessage) *Preferences {
+	var in struct {
+		OSSAutoRedirect                            json.RawMessage `json:"ossAutoRedirect"`
+		SceneOrder                                 json.RawMessage `json:"sceneOrder"`
+		InitialRedirect                            json.RawMessage `json:"initialRedirect"`
+		HideDeprecatedFonts                        json.RawMessage `json:"hideDeprecatedFonts"`
+		EnableAutoSceneNamingForPrivateCollections json.RawMessage `json:"enableAutoSceneNamingForPrivateCollections"`
+		BlockCommentEmailNotifications             json.RawMessage `json:"blockCommentEmailNotifications"`
+		PushToTalkEnabled                          json.RawMessage `json:"pushToTalkEnabled"`
+		Theme                                      json.RawMessage `json:"theme"`
+		Locale                                     json.RawMessage `json:"locale"`
+		LocaleSuggestionDismissed                  json.RawMessage `json:"localeSuggestionDismissed"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &in) != nil {
+		return nil
+	}
+	out := Preferences{OSSAutoRedirect: flagOf(in.OSSAutoRedirect), SceneOrder: textOf(in.SceneOrder),
+		InitialRedirect: textOf(in.InitialRedirect), HideDeprecatedFonts: flagOf(in.HideDeprecatedFonts),
+		EnableAutoSceneNamingForPrivateCollections: flagOf(in.EnableAutoSceneNamingForPrivateCollections),
+		BlockCommentEmailNotifications:             flagOf(in.BlockCommentEmailNotifications),
+		PushToTalkEnabled:                          flagOf(in.PushToTalkEnabled), Theme: textOf(in.Theme),
+		Locale: textOf(in.Locale), LocaleSuggestionDismissed: flagOf(in.LocaleSuggestionDismissed)}
+	if out == (Preferences{}) {
+		return nil
+	}
+	return &out
+}
+
+// rateLimitsOf reads the three documented groups; each keeps at most maxRateKeys keys, taken in sorted order.
+func rateLimitsOf(raw json.RawMessage) map[string]map[string]RateUsage {
+	var in map[string]json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &in) != nil {
+		return nil
+	}
+	out := map[string]map[string]RateUsage{}
+	for _, group := range []struct{ from, to string }{{"textToDiagram", "text_to_diagram"},
+		{"diagramToCode", "diagram_to_code"}, {"nameScene", "name_scene"}} {
+		var keys map[string]struct {
+			LastUsed  json.RawMessage `json:"lastUsed"`
+			FirstUsed json.RawMessage `json:"firstUsed"`
+			Count     json.RawMessage `json:"count"`
+		}
+		if json.Unmarshal(in[group.from], &keys) != nil {
+			continue
+		}
+		names := make([]string, 0, len(keys))
+		for name := range keys {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		usages := map[string]RateUsage{}
+		for _, name := range names {
+			key := bounded(cleanValue(name), maxTeamText)
+			use := keys[name]
+			usage := RateUsage{LastUsed: logStatus(use.LastUsed), FirstUsed: logStatus(use.FirstUsed),
+				Count: logStatus(use.Count)}
+			if key == "" || len(usages) >= maxRateKeys || usage == (RateUsage{}) {
+				continue
+			}
+			usages[key] = usage
+		}
+		if len(usages) > 0 {
+			out[group.to] = usages
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // UsersPage is one offset-paginated listing of users.
@@ -256,7 +406,12 @@ func teamsOf(raw json.RawMessage) map[string][]string {
 func userOf(item userJSON) User {
 	return User{ID: item.ID, Name: bounded(item.Name, maxDisplayName*4), Email: bounded(item.Email, maxEmailLength),
 		Role: bounded(item.Role, maxRoleText), Teams: teamsOf(item.WorkspaceTeam),
-		Created: boundedValue(item.Created), LastActive: boundedValue(item.LastActive)}
+		Created: boundedValue(item.Created), LastActive: boundedValue(item.LastActive),
+		IsInitialized: flagOf(item.IsInitialized), UID: textOf(item.UID), Updated: textOf(item.Updated),
+		SubscriptionStatus: textOf(item.SubscriptionStatus), LastActiveRefreshedAt: textOf(item.LastActiveRefreshedAt),
+		LibraryVersion: logStatus(item.LibraryVersion), Preferences: preferencesOf(item.Preferences),
+		RateLimits: rateLimitsOf(item.RateLimits), LastVisitedScenes: idListOf(item.LastVisitedScenes),
+		LastEditedScenes: idListOf(item.LastEditedScenes)}
 }
 
 func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

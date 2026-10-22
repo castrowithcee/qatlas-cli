@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Telegram provider: targets, chat binding, topic binding, link resolution, local files, signed references, credential, connection effects, setup profiles, and the tool group pages.
+  Describes the Telegram provider: targets, chat binding, topic binding, link resolution, local files, signed references, nested types, credential, connection effects, setup profiles, and the tool group pages.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -85,10 +85,19 @@ name stay local.
 
 ## Signed references
 
-Identifiers that belong to no chat (a file, a callback query, an inline query, an inline message, a join request
+A file appears only as a signed `file_ref`, never as Telegram's `file_id` or `file_path`, also inside nested
+types. Identifiers that belong to no chat (a callback query, an inline query, an inline message, a join request
 query, a guest query) are returned only as signed references, never as Telegram's raw identifier. A reference is
 bound to its target and the bot token, so rotating the token invalidates earlier ones; it is signed, not secret. A
 tool that accepts one checks format and target before the credential is read and the signature before any request.
+
+## Nested types
+
+Telegram types nested in an output, such as users and media objects, carry their documented members. An invite
+link is dropped from every nested type; only the [invite link tools](invite-links.md) return one. Telegram
+Passport data is encrypted identity data and is always dropped. A nested object beyond the depth, list, or size
+bound that the tool describes is left out, not shortened, and named in `omitted_fields` of the entry that contains
+it.
 
 ## Setup profiles
 

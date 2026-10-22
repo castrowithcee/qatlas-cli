@@ -38,7 +38,10 @@ var logsRisk = capability.Risk{
 
 const logSchema = `{"type":"object","properties":{"id":{"type":"string"},"action":{"type":"string"},` +
 	`"operation":{"type":"string"},"created_at":{"type":"string"},"user_id":{"type":"string"},` +
-	`"user_email":{"type":"string"},"status":{"type":"integer"}},"required":["id","action"],` +
+	`"user_email":{"type":"string"},"status":{"type":"integer"},"details":{},"details_omitted":{"type":"boolean"},` +
+	`"ip_address":{"type":"string"},"workspace_id":{"type":"string"},"app_source":{"type":"string"},` +
+	`"source_type":{"type":"string"},"source_id":{"type":"string"},"user_full_name":{"type":"string"}},` +
+	`"required":["id","action"],` +
 	`"additionalProperties":false}`
 
 var logFields = []capability.Field{
@@ -49,6 +52,19 @@ var logFields = []capability.Field{
 	{Name: "user_id", Description: "Acting user's identifier, untrusted data; personal data"},
 	{Name: "user_email", Description: "Acting user's email address, untrusted data; personal data"},
 	{Name: "status", Description: "Outcome code recorded as an integer, untrusted data"},
+	{Name: "details", Description: "Free text or object of the entry, untrusted data; an object beyond the " +
+		"depth, size, or length limits is left out and marked by details_omitted"},
+	{Name: "details_omitted", Description: "True when the details were left out because they exceed the limits"},
+	{Name: "ip_address", Description: "Address the action came from, untrusted data; personal data"},
+	{Name: "workspace_id", Description: "Workspace identifier, untrusted data"},
+	{Name: "app_source", Description: "Application the action came from, untrusted data"},
+	{Name: "source_type", Description: "Kind of the acting source, untrusted data"},
+	{Name: "source_id", Description: "Identifier of the acting source, untrusted data"},
+	{Name: "user_full_name", Description: "Acting user's full name, untrusted data; personal data"},
+	{Name: "total_count", Description: "Number of entries matching the filters, as Excalidraw+ reports it"},
+	{Name: "total_pages", Description: "Number of pages as Excalidraw+ counts them"},
+	{Name: "current_page", Description: "Page number as Excalidraw+ counts it"},
+	{Name: "available_actions", Description: "Action values Excalidraw+ reports as available, capped, untrusted data"},
 }
 
 var logsList = capability.Descriptor{
@@ -56,25 +72,30 @@ var logsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List Excalidraw+ activity log",
 	Description: "Read the workspace activity log, optionally of one user or action and of a time range of at " +
-		"most 366 days; only for a connection with the * wildcard target. Entries are personal data; IP " +
-		"addresses, user agents, details, and pictures are not returned; page by page with a numeric offset",
+		"most 366 days; only for a connection with the * wildcard target. Entries are personal data, including IP " +
+		"addresses; pictures are not returned; page by page with a numeric offset",
 	Tags:     []string{"excalidrawplus", "logs", "activity", "audit", "list"},
 	Risk:     logsRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"user_id":` + idSchema + `,` +
 		`"action":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9][a-z0-9:_.-]*$"},` +
+		`"operation":{"type":"string","enum":["create","read","update","delete"]},` +
 		`"from":{"type":"string","format":"date-time"},"to":{"type":"string","format":"date-time"},` +
 		pageSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"logs":{"type":"array","items":` + logSchema + `},` +
 		`"offset":{"type":"integer"},"limit":{"type":"integer"},"has_next_page":{"type":"boolean"},` +
-		`"next_offset":{"type":"integer"},"count":{"type":"integer"}},` +
+		`"next_offset":{"type":"integer"},"count":{"type":"integer"},"total_count":{"type":"integer"},` +
+		`"total_pages":{"type":"integer"},"current_page":{"type":"integer"},` +
+		`"available_actions":{"type":"array","items":{"type":"string"}}},` +
 		`"required":["logs","offset","limit","has_next_page","count"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
 		{Name: "user_id", Description: "Only entries of this user identifier"},
 		{Name: "action", Description: "Only entries of this action, a lowercase identifier such as scene:create"},
-		{Name: "from", Description: "Start of the time range, RFC 3339; required together with to"},
-		{Name: "to", Description: "End of the time range, RFC 3339, not before from and at most 366 days after it"},
+		{Name: "operation", Description: "Only entries of this operation: create, read, update, or delete"},
+		{Name: "from", Description: "Start of the time range, RFC 3339; usable alone"},
+		{Name: "to", Description: "End of the time range, RFC 3339; usable alone. With both, from is not after " +
+			"to and the range is at most 366 days"},
 	}, pageArguments...),
 	Fields: append(append([]capability.Field{}, logFields...), pageFields...),
 	Examples: []capability.Example{{Description: "Entries of one user in January",
@@ -89,11 +110,24 @@ type logJSON struct {
 	UserID    string          `json:"user_id"`
 	UserEmail string          `json:"user_email"`
 	Status    json.RawMessage `json:"status"`
+
+	// Later members are read member by member so one unexpected type drops only that member.
+	Details     json.RawMessage `json:"details"`
+	IPAddress   json.RawMessage `json:"ip_address"`
+	WorkspaceID json.RawMessage `json:"workspace_id"`
+	AppSource   json.RawMessage `json:"app_source"`
+	SourceType  json.RawMessage `json:"source_type"`
+	SourceID    json.RawMessage `json:"source_id"`
+	UserName    json.RawMessage `json:"user_full_name"`
 }
 
 type logsPageJSON struct {
-	Logs    []logJSON `json:"logs"`
-	HasMore bool      `json:"hasMore"`
+	Logs             []logJSON       `json:"logs"`
+	HasMore          bool            `json:"hasMore"`
+	TotalCount       json.RawMessage `json:"totalCount"`
+	TotalPages       json.RawMessage `json:"totalPages"`
+	CurrentPage      json.RawMessage `json:"currentPage"`
+	AvailableActions json.RawMessage `json:"availableActions"`
 }
 
 // LogEntry is the reduced view of one activity log entry; untrusted personal data.
@@ -105,6 +139,15 @@ type LogEntry struct {
 	UserID    string      `json:"user_id,omitempty"`
 	UserEmail string      `json:"user_email,omitempty"`
 	Status    json.Number `json:"status,omitempty"`
+
+	Details        any    `json:"details,omitempty"`
+	DetailsOmitted bool   `json:"details_omitted,omitempty"`
+	IPAddress      string `json:"ip_address,omitempty"`
+	WorkspaceID    string `json:"workspace_id,omitempty"`
+	AppSource      string `json:"app_source,omitempty"`
+	SourceType     string `json:"source_type,omitempty"`
+	SourceID       string `json:"source_id,omitempty"`
+	UserFullName   string `json:"user_full_name,omitempty"`
 }
 
 // LogsPage is one offset-paginated listing of log entries.
@@ -115,14 +158,20 @@ type LogsPage struct {
 	HasNextPage bool       `json:"has_next_page"`
 	NextOffset  *int       `json:"next_offset,omitempty"`
 	Count       int        `json:"count"`
+
+	TotalCount       json.Number `json:"total_count,omitempty"`
+	TotalPages       json.Number `json:"total_pages,omitempty"`
+	CurrentPage      json.Number `json:"current_page,omitempty"`
+	AvailableActions []string    `json:"available_actions,omitempty"`
 }
 
 type logsArguments struct {
 	pageArgs
-	UserID string `json:"user_id"`
-	Action string `json:"action"`
-	From   string `json:"from"`
-	To     string `json:"to"`
+	UserID    string `json:"user_id"`
+	Action    string `json:"action"`
+	Operation string `json:"operation"`
+	From      string `json:"from"`
+	To        string `json:"to"`
 }
 
 // validate checks every filter locally and returns the normalized time range (UTC, RFC 3339).
@@ -133,30 +182,42 @@ func (a logsArguments) validate() (from, to string, err error) {
 	if a.Action != "" && !actionPattern.MatchString(a.Action) {
 		return "", "", invalidRequest("action is not a valid action identifier")
 	}
+	if a.Operation != "" && !validOperation(a.Operation) {
+		return "", "", invalidRequest("operation must be create, read, update, or delete")
+	}
 	if a.Offset < 0 || a.Offset > maxOffset || a.Limit < 0 || a.Limit > maxListLimit {
 		return "", "", invalidRequest("offset or limit is outside the allowed range")
 	}
-	if a.From == "" && a.To == "" {
-		return "", "", nil
+	var start, end time.Time
+	if a.From != "" {
+		if start, err = time.Parse(time.RFC3339, a.From); err != nil {
+			return "", "", invalidRequest("from is not an RFC 3339 time")
+		}
+		from = start.UTC().Format(time.RFC3339)
 	}
-	if a.From == "" || a.To == "" {
-		return "", "", invalidRequest("from and to must be given together")
+	if a.To != "" {
+		if end, err = time.Parse(time.RFC3339, a.To); err != nil {
+			return "", "", invalidRequest("to is not an RFC 3339 time")
+		}
+		to = end.UTC().Format(time.RFC3339)
 	}
-	start, err := time.Parse(time.RFC3339, a.From)
-	if err != nil {
-		return "", "", invalidRequest("from is not an RFC 3339 time")
+	if a.From != "" && a.To != "" {
+		if end.Before(start) {
+			return "", "", invalidRequest("from must not be after to")
+		}
+		if end.Sub(start) > maxLogSpan {
+			return "", "", invalidRequest("the time range exceeds 366 days")
+		}
 	}
-	end, err := time.Parse(time.RFC3339, a.To)
-	if err != nil {
-		return "", "", invalidRequest("to is not an RFC 3339 time")
+	return from, to, nil
+}
+
+func validOperation(operation string) bool {
+	switch operation {
+	case "create", "read", "update", "delete":
+		return true
 	}
-	if end.Before(start) {
-		return "", "", invalidRequest("from must not be after to")
-	}
-	if end.Sub(start) > maxLogSpan {
-		return "", "", invalidRequest("the time range exceeds 366 days")
-	}
-	return start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), nil
+	return false
 }
 
 func invokeLogsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -196,6 +257,10 @@ func (c *Client) ListLogs(ctx context.Context, input logsArguments, from, to str
 	}
 	setIf(query, "user", input.UserID)
 	setIf(query, "action", input.Action)
+	if !validOperation(input.Operation) && input.Operation != "" {
+		return nil, invalidRequest("operation must be create, read, update, or delete")
+	}
+	setIf(query, "operation", input.Operation)
 	setIf(query, "dateFrom", from)
 	setIf(query, "dateTo", to)
 	var page logsPageJSON
@@ -219,8 +284,23 @@ func (c *Client) ListLogs(ctx context.Context, input logsArguments, from, to str
 			Action: bounded(item.Action, maxLogText), Operation: bounded(item.Operation, maxLogText),
 			CreatedAt: bounded(item.CreatedAt, maxLogText), UserID: bounded(item.UserID, maxLogText),
 			UserEmail: bounded(item.UserEmail, maxLogText), Status: logStatus(item.Status)})
+		entry := &result.Logs[len(result.Logs)-1]
+		entry.Details, entry.DetailsOmitted = detailsOf(item.Details)
+		entry.IPAddress, entry.WorkspaceID = logText(item.IPAddress), logText(item.WorkspaceID)
+		entry.AppSource, entry.SourceType = logText(item.AppSource), logText(item.SourceType)
+		entry.SourceID, entry.UserFullName = logText(item.SourceID), logText(item.UserName)
 	}
 	result.Count = len(result.Logs)
+	result.TotalCount, result.TotalPages = logStatus(page.TotalCount), logStatus(page.TotalPages)
+	result.CurrentPage = logStatus(page.CurrentPage)
+	var actions []string
+	if json.Unmarshal(page.AvailableActions, &actions) == nil {
+		for _, action := range actions {
+			if value := bounded(cleanValue(action), maxLogText); value != "" && len(result.AvailableActions) < maxAvailableActions {
+				result.AvailableActions = append(result.AvailableActions, value)
+			}
+		}
+	}
 	return result, nil
 }
 
@@ -248,4 +328,81 @@ func logStatus(raw json.RawMessage) json.Number {
 		}
 	}
 	return json.Number(sign + text)
+}
+
+const (
+	// maxAvailableActions caps the action values reported in the page head.
+	maxAvailableActions = 100
+	// Limits for the free details of one entry. A structure beyond them is left out, not shortened.
+	maxDetailsText  = 2048
+	maxDetailsDepth = 4
+	maxDetailsNodes = 100
+)
+
+func logText(raw json.RawMessage) string { return bounded(textOf(raw), maxLogText) }
+
+// detailsOf passes text on bounded and a structure only whole: when it exceeds the depth, node, or length
+// limits it is left out and reported as omitted.
+func detailsOf(raw json.RawMessage) (value any, omitted bool) {
+	text := strings.TrimSpace(string(raw))
+	if text == "" || text == "null" {
+		return nil, false
+	}
+	if text[0] == '"' {
+		if details := bounded(textOf(raw), maxDetailsText); details != "" {
+			return details, false
+		}
+		return nil, false
+	}
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+	var decoded any
+	if decoder.Decode(&decoded) != nil {
+		return nil, false
+	}
+	nodes := 0
+	cleaned, ok := cleanDetails(decoded, 1, &nodes)
+	if !ok {
+		return nil, true
+	}
+	return cleaned, false
+}
+
+func cleanDetails(value any, depth int, nodes *int) (any, bool) {
+	*nodes++
+	if depth > maxDetailsDepth || *nodes > maxDetailsNodes {
+		return nil, false
+	}
+	switch v := value.(type) {
+	case string:
+		if len(v) > maxLogText {
+			return nil, false
+		}
+		return cleanValue(v), true
+	case []any:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			cleaned, ok := cleanDetails(item, depth+1, nodes)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, cleaned)
+		}
+		return out, true
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			if len(key) > maxLogText {
+				return nil, false
+			}
+			cleaned, ok := cleanDetails(item, depth+1, nodes)
+			if !ok {
+				return nil, false
+			}
+			out[cleanValue(key)] = cleaned
+		}
+		return out, true
+	default:
+		return v, true
+	}
 }

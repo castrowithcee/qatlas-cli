@@ -9,6 +9,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -212,8 +213,16 @@ var searchCountFields = []capability.Field{
 
 // searchOutput is the schema of one paged, counted search batch.
 func searchOutput(key, properties, required string) json.RawMessage {
+	return searchOutputWith(key, properties, required, "")
+}
+
+// searchOutputWith is searchOutput with further top-level members of one search's own.
+func searchOutputWith(key, properties, required, extra string) json.RawMessage {
+	if extra != "" {
+		extra += ","
+	}
 	return json.RawMessage(`{"type":"object","properties":{"` + key + `":{"type":"array","items":{"type":"object",` +
-		`"properties":{` + properties + `},` + required + `}},"total_count":{"type":"integer"},` +
+		`"properties":{` + properties + `},` + required + `}},` + extra + `"total_count":{"type":"integer"},` +
 		`"incomplete_results":{"type":"boolean"},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["` + key + `","total_count","incomplete_results","has_more"],"additionalProperties":false}`)
 }
@@ -279,22 +288,67 @@ const issueSearchProperties = `"number":{"type":"integer"},"title":{"type":"stri
 
 const issueSearchRequired = `"required":["number","title","repository","state","labels","assignees"],"additionalProperties":false`
 
+// issueSearchSortValues are the orders GitHub documents for the issue search.
+var issueSearchSortValues = []string{"comments", "reactions", "reactions-+1", "reactions--1", "reactions-smile",
+	"reactions-thinking_face", "reactions-heart", "reactions-tada", "interactions", "created", "updated"}
+
+var issueSearchTypeValues = []string{"semantic", "hybrid"}
+
+// issueSearchKeys are the filters and the switches only the issue search takes, beside the terms.
+var issueSearchKeys = `"sort":{"type":"string","enum":["` + strings.Join(issueSearchSortValues, `","`) + `"]},` +
+	`"order":{"type":"string","enum":["asc","desc"]},"advanced_search":{"type":"boolean"},` +
+	`"search_type":{"type":"string","enum":["` + strings.Join(issueSearchTypeValues, `","`) + `"]},` +
+	`"text_matches":{"type":"boolean"}`
+
+// issueSearchItemProperties are the members of one issue search match: the compact view the pull request
+// search shares, then the remainder of GitHub's issue and the search members.
+var issueSearchItemProperties = issueSearchProperties + `,` + issueCoreProperties + `,` + issueWidthProperties +
+	`,"repository_detail":` + restRepositorySchema + `,"score":{"type":"number"},` +
+	`"text_matches":{"type":"array","maxItems":100,"items":` + textMatchSchema + `},` +
+	`"text_matches_truncated":{"type":"boolean"}`
+
+const issueSearchExtraProperties = `"search_type":{"type":"string"},` +
+	`"lexical_fallback_reason":{"type":"array","maxItems":100,"items":{"type":"string"}},` +
+	`"lexical_fallback_reason_truncated":{"type":"boolean"}`
+
 var issuesSearch = capability.Descriptor{
 	ID:      Provider + ".issues.search",
 	Version: 1,
 	Title:   "Search GitHub issues",
 	Description: "Search issues, never pull requests, GitHub's index covers with terms and qualifiers, " +
-		"narrowed to the repositories and the owners a connection's targets allow when it names any, without bodies",
-	Tags:         []string{"github", "issues", "search", "discovery"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema: searchOutput("issues", issueSearchProperties, issueSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
-	Fields: append(append([]capability.Field{
-		{Name: "issues", Description: "Compact issues across repositories: number, title (untrusted data), " +
-			"repository as OWNER/REPO, state, labels, assignees, and updated_at"},
-	}, searchCountFields...), pagingFields...),
+		"narrowed to the repositories and the owners a connection's targets allow when it names any",
+	Tags:        []string{"github", "issues", "search", "discovery"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"terms":`+termsSchema+`,`+issueSearchKeys+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutputWith("issues", issueSearchItemProperties, issueSearchRequired,
+		issueSearchExtraProperties),
+	Arguments: append([]capability.Argument{searchTermsArgument,
+		{Name: "sort", Description: strings.Join(issueSearchSortValues, ", ") + "; GitHub's best match order " +
+			"when omitted"},
+		{Name: "order", Description: "asc or desc; applies with sort, desc when omitted"},
+		{Name: "advanced_search", Description: "true or false sends GitHub's advanced_search switch as given; " +
+			"GitHub's default when omitted"},
+		{Name: "search_type", Description: "semantic or hybrid; GitHub's lexical search when omitted; GitHub " +
+			"limits both to 10 requests a minute"},
+		{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
+	}, pagingArguments...),
+	Fields: append(append(append(append([]capability.Field{
+		{Name: "issues", Description: "Issues across repositories: number, title (untrusted data), " +
+			"repository as OWNER/REPO, state, labels, assignees, updated_at, and url, then the remainder of " +
+			"GitHub's issue below"},
+		{Name: "search_type", Description: "Kind of search GitHub performed: lexical, semantic, or hybrid"},
+		{Name: "lexical_fallback_reason", Description: "Why a semantic or hybrid search fell back to lexical " +
+			"search, at most 100 reasons"},
+		{Name: "lexical_fallback_reason_truncated", Description: "True when GitHub gave more reasons than shown"},
+		repositoryDetailField,
+		{Name: "score", Description: "Relevance score GitHub gave the match"},
+		{Name: "text_matches", Description: "Where the terms matched, only when text_matches is set, at most 100: " +
+			"object_type, property, fragment (cut at 1000 characters, fragment_truncated says so), matches (text " +
+			"and indices), and links with the object_url; untrusted data, never fetched"},
+		{Name: "text_matches_truncated", Description: "True when more text matches followed than shown"},
+		issueDraftField,
+	}, issueCoreFields...), issueWidthFields...), searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search open issues labeled bug",
 		Arguments:   json.RawMessage(`{"terms":"is:open label:bug","limit":10}`),
@@ -435,16 +489,21 @@ type searchArguments struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
 
-	// Sort, Order, and TextMatches are the account searches' own; the others never carry them.
-	Sort        string `json:"sort"`
-	Order       string `json:"order"`
-	TextMatches bool   `json:"text_matches"`
+	// Sort, Order, and TextMatches are the account and the issue searches' own, AdvancedSearch and
+	// SearchType the issue search's; the others never carry them.
+	Sort           string `json:"sort"`
+	Order          string `json:"order"`
+	TextMatches    bool   `json:"text_matches"`
+	AdvancedSearch *bool  `json:"advanced_search"`
+	SearchType     string `json:"search_type"`
 
-	q             string
-	sort, order   string
-	textMatches   bool
-	page, perPage int
-	binding       []byte
+	q                          string
+	sort, order                string
+	textMatches                bool
+	advancedSearch, searchType string
+	page, perPage              int
+	binding                    []byte
+	allowed                    allowlist
 }
 
 func (a *searchArguments) query() url.Values {
@@ -455,16 +514,50 @@ func (a *searchArguments) query() url.Values {
 	if a.order != "" {
 		values.Set("order", a.order)
 	}
+	if a.advancedSearch != "" {
+		values.Set("advanced_search", a.advancedSearch)
+	}
+	if a.searchType != "" {
+		values.Set("search_type", a.searchType)
+	}
 	return values
 }
 
 // accountOptions validates the sort, the order, and the text match switch of an account search and
 // returns what they add to the cursor binding, nothing while none is set.
 func (a *searchArguments) accountOptions() ([]any, error) {
+	return a.sortedOptions(accountSearchSortValues, "sort must be followers, repositories, or joined")
+}
+
+// issueOptions validates the filters and the switches of the issue search and returns what they add to the
+// cursor binding, nothing while none is set.
+func (a *searchArguments) issueOptions() ([]any, error) {
+	binding, err := a.sortedOptions(issueSearchSortValues, "sort must be one of "+
+		strings.Join(issueSearchSortValues, ", "))
+	if err != nil {
+		return nil, err
+	}
+	if a.AdvancedSearch != nil {
+		a.advancedSearch = strconv.FormatBool(*a.AdvancedSearch)
+		binding = append(binding, "advanced_search", a.advancedSearch)
+	}
+	if a.SearchType != "" {
+		if !containsFold(issueSearchTypeValues, a.SearchType) {
+			return nil, invalidRequest("search_type must be semantic or hybrid")
+		}
+		a.searchType = strings.ToLower(a.SearchType)
+		binding = append(binding, "search_type", a.searchType)
+	}
+	return binding, nil
+}
+
+// sortedOptions validates the sort against values, the order, and the text match switch and returns what
+// they add to the cursor binding, nothing while none is set.
+func (a *searchArguments) sortedOptions(values []string, sortMessage string) ([]any, error) {
 	var binding []any
 	if a.Sort != "" {
-		if !containsFold(accountSearchSortValues, a.Sort) {
-			return nil, invalidRequest("sort must be followers, repositories, or joined")
+		if !containsFold(values, a.Sort) {
+			return nil, invalidRequest(sortMessage)
 		}
 		a.sort = strings.ToLower(a.Sort)
 		binding = append(binding, "sort", a.sort)
@@ -508,13 +601,17 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 	}
 	a.q = strings.TrimSpace(forced + " " + a.Terms)
 	binding := []any{"search", tool, forced, a.Terms}
-	if tool == usersSearch.ID || tool == organizationsSearch.ID {
-		options, err := a.accountOptions()
-		if err != nil {
-			return err
-		}
-		binding = append(binding, options...)
+	var options []any
+	switch tool {
+	case usersSearch.ID, organizationsSearch.ID:
+		options, err = a.accountOptions()
+	case issuesSearch.ID:
+		options, err = a.issueOptions()
 	}
+	if err != nil {
+		return err
+	}
+	binding = append(binding, options...)
 	a.binding = fingerprint(binding...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
@@ -545,6 +642,7 @@ func searchHandler(tool string, scopeOf func(allowlist) (string, error),
 		if err := checkSearchArguments(tool, forced, len(allowed) > 0, &arguments); err != nil {
 			return nil, err
 		}
+		arguments.allowed = allowed
 		client, err := Open(ctx, resolved, secrets, red)
 		if err != nil {
 			return nil, err
@@ -718,6 +816,16 @@ type issueSearchItemJSON struct {
 		Login string `json:"login"`
 	} `json:"assignees"`
 	RepositoryURL string `json:"repository_url"`
+	width         issueWidthRaw
+}
+
+func (item *issueSearchItemJSON) UnmarshalJSON(data []byte) error {
+	type plain issueSearchItemJSON
+	if err := json.Unmarshal(data, (*plain)(item)); err != nil {
+		return err
+	}
+	item.width = readIssueWidth(data)
+	return nil
 }
 
 // repository reads the owner/name the search item's repository_url names, which is
@@ -743,7 +851,8 @@ func (item issueSearchItemJSON) assignees() []string {
 	return assignees
 }
 
-// IssueSearchResult is the compact view of one issue search match, without its body.
+// IssueSearchResult is one issue search match: the compact view, then the remainder of GitHub's issue and
+// the search members.
 type IssueSearchResult struct {
 	Number     int      `json:"number"`
 	Title      string   `json:"title"`
@@ -753,38 +862,70 @@ type IssueSearchResult struct {
 	Assignees  []string `json:"assignees"`
 	UpdatedAt  string   `json:"updated_at,omitempty"`
 	URL        string   `json:"url,omitempty"`
+
+	IssueCore
+	IssueWidth
+	RepositoryDetail     *RESTRepository `json:"repository_detail,omitempty"`
+	Score                *json.Number    `json:"score,omitempty"`
+	TextMatches          []RESTTextMatch `json:"text_matches,omitempty"`
+	TextMatchesTruncated bool            `json:"text_matches_truncated,omitempty"`
 }
 
 // IssueSearchList is one batch of an issue search.
 type IssueSearchList struct {
-	Issues            []IssueSearchResult `json:"issues"`
-	TotalCount        int                 `json:"total_count"`
-	IncompleteResults bool                `json:"incomplete_results"`
-	NextCursor        string              `json:"next_cursor,omitempty"`
-	HasMore           bool                `json:"has_more"`
+	Issues                         []IssueSearchResult `json:"issues"`
+	SearchType                     *string             `json:"search_type,omitempty"`
+	LexicalFallbackReason          []string            `json:"lexical_fallback_reason,omitempty"`
+	LexicalFallbackReasonTruncated bool                `json:"lexical_fallback_reason_truncated,omitempty"`
+	TotalCount                     int                 `json:"total_count"`
+	IncompleteResults              bool                `json:"incomplete_results"`
+	NextCursor                     string              `json:"next_cursor,omitempty"`
+	HasMore                        bool                `json:"has_more"`
 }
 
 func (c *Client) searchIssues(ctx context.Context, a *searchArguments) (*IssueSearchList, error) {
 	const op = "search issues"
 	var raw struct {
-		TotalCount int                   `json:"total_count"`
-		Incomplete bool                  `json:"incomplete_results"`
-		Items      []issueSearchItemJSON `json:"items"`
+		TotalCount            int                   `json:"total_count"`
+		Incomplete            bool                  `json:"incomplete_results"`
+		Items                 []issueSearchItemJSON `json:"items"`
+		SearchType            *string               `json:"search_type"`
+		LexicalFallbackReason []*string             `json:"lexical_fallback_reason"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/issues", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/issues", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, issueSearchPermission)
 	}
 	result := &IssueSearchList{Issues: make([]IssueSearchResult, 0, len(raw.Items)), TotalCount: raw.TotalCount,
-		IncompleteResults: raw.Incomplete}
+		IncompleteResults: raw.Incomplete, SearchType: shortText(raw.SearchType)}
+	var reasons []string
+	for _, reason := range raw.LexicalFallbackReason {
+		if text := shortText(reason); text != nil {
+			reasons = append(reasons, *text)
+		}
+	}
+	result.LexicalFallbackReason, result.LexicalFallbackReasonTruncated = capped(reasons)
 	for _, item := range raw.Items {
 		repository, ok := item.repository()
 		if item.Number < 1 || !ok {
 			return nil, invalidEntry(op, "an issue")
 		}
-		result.Issues = append(result.Issues, IssueSearchResult{Number: item.Number, Title: item.Title,
-			Repository: repository, State: item.State, Labels: item.labels(), Assignees: item.assignees(),
-			UpdatedAt: item.UpdatedAt, URL: item.HTMLURL})
+		// The forced qualifiers bound the search. advanced_search and search_type change how GitHub reads the
+		// query, so with either set every match is checked against the targets as well, and an answer
+		// outside them is refused rather than shown.
+		owner, name, _ := strings.Cut(repository, "/")
+		if (a.advancedSearch != "" || a.searchType != "") && len(a.allowed) > 0 &&
+			!a.allowed.admitsRepository(target{kind: kindRepository, owner: owner, repo: name}) {
+			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "GitHub answered with an issue outside the connection's targets"}
+		}
+		width := &item.width
+		match := IssueSearchResult{Number: item.Number, Title: item.Title, Repository: repository, State: item.State,
+			Labels: item.labels(), Assignees: item.assignees(), UpdatedAt: item.UpdatedAt, URL: item.HTMLURL,
+			IssueCore: width.core(), IssueWidth: width.width(), RepositoryDetail: width.Repository.project(a.allowed),
+			Score: width.Score}
+		match.TextMatches, match.TextMatchesTruncated = projectTextMatches(width.TextMatches)
+		result.Issues = append(result.Issues, match)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil

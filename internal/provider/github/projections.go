@@ -142,6 +142,15 @@ func capped[T any](items []T) ([]T, bool) {
 	return items[:projectionListLimit], true
 }
 
+// valueOr returns the value p points to, or the zero value for nil.
+func valueOr[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
 // ---- Account (simple-user; the fields an enterprise shares with it)
 
 var restAccountLinkKeys = []string{"url", "followers_url", "following_url", "gists_url", "starred_url",

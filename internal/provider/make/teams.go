@@ -71,9 +71,10 @@ var teamGet = capability.Descriptor{
 
 var teamUsage = capability.Descriptor{
 	ID: Provider + ".team.usage", Version: 1, Title: "Get the bound Make team's usage",
-	Description: "Read the bound team's daily usage records (Make documents the last 30 days); takes no arguments",
-	Tags:        []string{"make", "team", "usage", "automation"}, Risk: makeReadRisk, Provider: Provider,
-	InputSchema: json.RawMessage(emptyInput),
+	Description: "Read the bound team's daily usage records (Make documents the last 30 days), by default cut " +
+		"at midnight in the caller's timezone",
+	Tags: []string{"make", "team", "usage", "automation"}, Risk: makeReadRisk, Provider: Provider,
+	InputSchema: json.RawMessage(usageInputSchema), Arguments: usageArguments,
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":{"type":"integer"},` +
 		`"days":{"type":"array","items":{"type":"object","properties":{"date":{"type":"string"},` +
 		`"operations":{"type":"integer"},"data_transfer":{"type":"integer"},"centicredits":{"type":"integer"}},` +
@@ -81,7 +82,10 @@ var teamUsage = capability.Descriptor{
 		`"required":["team_id","days","count"],"additionalProperties":false}`),
 	Fields: []capability.Field{
 		{Name: "team_id", Description: "The connection's bound team"},
-		{Name: "days", Description: "Daily records: date, operations, data_transfer in bytes, centicredits"},
+		{Name: "date", Description: "Day of a daily record, as Make reports it, untrusted"},
+		{Name: "operations", Description: "Operations of that day"},
+		{Name: "data_transfer", Description: "Data transferred that day, in bytes"},
+		{Name: "centicredits", Description: "Credits consumed that day, in hundredths"},
 		{Name: "count", Description: "Number of daily records returned, at most " + strconv.Itoa(maxUsageDays)},
 	},
 	Examples: []capability.Example{{Description: "Read the bound team's usage", Arguments: json.RawMessage(`{}`)}},
@@ -246,7 +250,12 @@ type TeamUsage struct {
 }
 
 func invokeTeamUsage(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, _ json.RawMessage) (any, error) {
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "get team usage"
+	query, err := usageQuery(op, raw)
+	if err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -260,7 +269,7 @@ func invokeTeamUsage(ctx context.Context, resolved *config.Resolved, secrets *se
 		} `json:"data"`
 	}
 	path := "/teams/" + strconv.FormatInt(client.scope.teamID, 10) + "/usage"
-	if err := client.get(ctx, "get team usage", path, nil, &page, needTeamsRead); err != nil {
+	if err := client.get(ctx, op, path, query, &page, needTeamsRead); err != nil {
 		return nil, err
 	}
 	days := make([]UsageDay, 0, len(page.Data))

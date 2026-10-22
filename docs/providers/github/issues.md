@@ -20,6 +20,12 @@ The issue tools of the [GitHub provider](README.md). Every tool takes `repositor
 derivable from the repository and the number. `github.comments.list` reads the comments of one issue, oldest
 first, and is the only tool that returns comments.
 
+`github.issues.get`, the issue changes, `github.issues.search`, `github.sub-issues.list`, and
+`github.issue-dependencies.list` answer GitHub's issue in full. The issue tools refuse pull requests, so an
+issue answer never carries the pull request member; the rendered body variants `body_html` and `body_text` are
+left out, since the body itself is answered. An issue's repository object is answered only where the call does
+not fix the repository, and a sub-issue leaves out the address of its parent, the issue the call named.
+
 ## Changes
 
 | Tool | Does |
@@ -72,7 +78,9 @@ removes a comment permanently and is offered only where a connection's `tools` l
 ## Issue search
 
 `github.issues.search` searches issues, never pull requests: it forces `is:issue` ahead of `terms`, next to the
-target qualifiers described under [Search](README.md#search).
+target qualifiers described under [Search](README.md#search). Its filters are arguments of their own, never
+part of `terms`. With `advanced_search` or `search_type` set, GitHub reads the query differently, so every match
+is also checked against the connection's targets, and an answer outside them is refused as an invalid response.
 
 ## Labels
 
@@ -127,21 +135,13 @@ removes the relationship between the two named issues and deletes neither. A sub
 repository must lie inside the connection's targets as well, checked before any credential is resolved, since
 GitHub allows a sub-issue relationship to cross repositories and organizations.
 
-| Tool | Does |
-| --- | --- |
-| `github.sub-issues.list` | lists one bounded batch of the sub-issues of one issue |
-| `github.sub-issues.add` | adds one issue as a sub-issue of another |
-| `github.sub-issues.remove` | detaches one sub-issue from its parent |
-| `github.sub-issues.reprioritize` | moves a sub-issue just after or just before a sibling |
-
 `github.sub-issues.list` pages the same way [labels](#labels) do. When the connection's targets name any, a
-sub-issue whose repository they do not cover is left out and counted in `withheld` instead, so a title or a
-state of an out-of-scope issue is never reported; the bound repository's own sub-issues are always shown.
-Without targets, nothing is withheld. `github.sub-issues.add`, `.remove`, and `.reprioritize` resolve the issue
-numbers they are given into the internal issue identifiers the REST routes need, in the same request budget as
-the change. `github.sub-issues.reprioritize` takes exactly one of `after_number` or `before_number`, looked up
-in the same repository as `sub_issue_number`; this is narrower than GitHub's own cross-repository reordering,
-which Qatlas does not offer a way to name.
+sub-issue whose repository they do not cover is left out and counted in `withheld` instead, so nothing of an
+out-of-scope issue is reported; the bound repository's own sub-issues are always shown. `github.sub-issues.add`,
+`.remove`, and `.reprioritize` resolve the issue numbers they are given into the internal issue identifiers the
+REST routes need, in the same request budget as the change. `github.sub-issues.reprioritize` takes exactly one
+of `after_number` or `before_number`, looked up in the same repository as `sub_issue_number`; this is narrower
+than GitHub's own cross-repository reordering, which Qatlas does not offer a way to name.
 
 Reading the sub-issues of an issue needs the same token as reading [labels](#labels); adding, removing, or
 reprioritizing needs Issues: read and write instead, of every repository a sub-issue names.
@@ -168,11 +168,10 @@ connection's targets as well, checked before any credential is resolved.
 | `github.issue-dependencies.remove` | detaches one blocked-by relationship |
 
 `github.issue-dependencies.list` pages both directions together with the same page and page size, so a single
-cursor advances both, which is narrower than paging each direction on its own. When the connection's targets
-name any, a dependency whose repository they do not cover is left out of both arrays and counted, across both
-directions, in `withheld` instead; the bound repository's own dependencies are always shown. Without targets,
-nothing is withheld. `github.issue-dependencies.add` and `.remove` resolve the blocking issue's number into its
-internal identifier the way the sub-issue tools do.
+cursor advances both, which is narrower than paging each direction on its own. It withholds a dependency outside
+the targets the way `github.sub-issues.list` withholds a sub-issue, counted across both directions.
+`github.issue-dependencies.add` and `.remove` resolve the blocking issue's number into its internal identifier
+the way the sub-issue tools do.
 
 Reading the dependencies of an issue needs the same token as reading [labels](#labels); adding or removing
 needs Issues: read and write instead, of every repository a dependency names.
@@ -188,14 +187,14 @@ organization as a whole, never to one repository or one user, so the tool takes 
 `orgs/LOGIN`) checked the same broad way `github.repositories.list` checks its own owner argument: an explicit
 owner target, a repository target of that organization, or a connection without targets allow the call; a
 connection whose targets name only a project, or only a different organization, refuses it as an invalid
-request before any credential is resolved. `github.issues.update` sets an issue's type with its optional `type`
-argument, or removes it with `""`. GitHub silently drops a type change from a token without push access to the
-repository rather than refusing it, and reports the resulting type back as `issue_type` on every issue tool
-that reads or changes one.
+request before any credential is resolved.
 
-| Tool | Does |
-| --- | --- |
-| `github.issue-types.list` | lists the issue types an organization declares |
+`github.issues.list`, `github.issues.get`, `github.issues.search`, the issue changes, `github.sub-issues.list`,
+and `github.issue-dependencies.list` name an issue's type as `issue_type`, by the name `github.issue-types.list`
+reports; every tool that answers GitHub's issue in full carries the type object beside it as
+`issue_type_detail`. `github.issues.update` sets an issue's type with its optional `type` argument, or removes it
+with `""`. GitHub silently drops a type change from a token without push access to the repository rather than
+refusing it, so the answer shows the type GitHub kept.
 
 Defining, enabling, or disabling an organization's issue types (`POST`/`PUT`/`DELETE
 /orgs/{org}/issue-types`) is organization administration, out of this provider's scope; it is not offered.
@@ -211,8 +210,7 @@ Source: the official REST documentation and the OpenAPI description that backs i
 a stable, generally available REST endpoint, not a preview feature, returning every issue type as a plain
 array with no pagination parameters of its own; "Update an issue" (`PATCH /repos/{owner}/{repo}/issues/{issue_number}`)
 documents its `type` request body property as `null`, a plain type-name string, or an object with metadata Qatlas
-does not send (see [Issue fields](#issue-fields)), and returns the resulting `type` as a full object, of which
-Qatlas keeps only the name.
+does not send (see [Issue fields](#issue-fields)), and returns the resulting `type` as a full object.
 
 ## Issue fields
 
