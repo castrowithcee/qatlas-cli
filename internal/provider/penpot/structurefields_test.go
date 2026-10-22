@@ -2,6 +2,7 @@ package penpot
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
@@ -53,8 +54,33 @@ func fullLibrariesBody() string {
 		`"deleted-at":null,"revn":9,"vern":1,"version":67,"synced-at":"2026-09-03T08:00:00Z","is-shared":true,"is-indirect":true}]`
 }
 
+// fullThreadsBody answers get-comment-threads as Penpot 2.18.0 does: every column of the thread plus the joined
+// author, file, team, project, content, and the counters.
+func fullThreadsBody() string {
+	return `[{"id":"` + threadA + `","file-id":"` + fileA1 + `","owner-id":"` + ownerA + `","page-id":"` + pageID + `",` +
+		`"frame-id":"` + frameA + `","position":{"x":1.5,"y":2},"is-resolved":true,"seqn":3,` +
+		`"participants":["` + ownerA + `","` + profileP + `"],"mentions":["` + profileQ + `"],` +
+		`"created-at":"2026-09-03T08:00:00Z","modified-at":"2026-09-04T08:00:00Z","page-name":"Seite 1",` +
+		`"content":"Erster Text","count-comments":2,"count-unread-comments":0,"file-name":"Start\u0007seite",` +
+		`"team-id":"` + teamA + `","project-id":"` + projectA1 + `","owner-fullname":"Ada\u0007 Lovelace",` +
+		`"owner-email":"` + personal + `","owner-photo-id":"` + avatarID + `"}]`
+}
+
+// fullCommentsBody answers get-comments as Penpot 2.18.0 does: every column of the comment plus the file and
+// the author.
+func fullCommentsBody() string {
+	return `[{"id":"` + commentA + `","thread-id":"` + threadA + `","owner-id":"` + ownerA + `",` +
+		`"created-at":"2026-09-03T08:00:00Z","modified-at":"2026-09-04T08:00:00Z","content":"Erster Text",` +
+		`"mentions":["` + profileP + `","` + profileQ + `"],"file-id":"` + fileA1 + `","owner-fullname":"Ada Lovelace",` +
+		`"owner-email":"` + personal + `","owner-photo-id":"` + avatarID + `"}]`
+}
+
 func structureHandler(c call) (*http.Response, error) {
 	switch c.command() {
+	case cmdThreads:
+		return jsonResponse(200, fullThreadsBody()), nil
+	case cmdComments:
+		return jsonResponse(200, fullCommentsBody()), nil
 	case cmdTeams:
 		return jsonResponse(200, fullTeamsBody()), nil
 	case cmdProjects:
@@ -85,6 +111,8 @@ func structureFieldCases() []fieldCase {
 		{projectsList, "one", `{"team_id":"` + teamA + `"}`},
 		{filesList, "one", `{"project_id":"` + projectA1 + `"}`},
 		{librariesList, "one", `{` + fileArgs + `}`},
+		{commentsThreads, "one", `{` + fileArgs + `}`},
+		{commentsList, "one", `{` + fileArgs + `,"thread_id":"` + threadA + `"}`},
 	}
 }
 
@@ -368,5 +396,102 @@ func TestFeatureListsAndWholeNumbersAreBounded(t *testing.T) {
 	subscription := team["subscription"].(map[string]any)
 	if _, ok := subscription["seats"]; ok || len(subscription["type"].(string)) > maxStringLength {
 		t.Errorf("subscription = %#v", subscription)
+	}
+}
+
+func decodeOne(t *testing.T, result, container string) map[string]any {
+	t.Helper()
+	items := decodeList(t, result, container)
+	if len(items) != 1 {
+		t.Fatalf("%s: %s", container, result)
+	}
+	return items[0]
+}
+
+func TestCommentsReportParticipantsMentionsAndAuthors(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(commentsThreads.ID, "one", `{`+fileArgs+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"id": threadA, "file_id": fileA1, "page_id": pageID, "page_name": "Seite 1", "frame_id": frameA,
+		"owner_id": ownerA, "x": 1.5, "y": 2.0, "is_resolved": true, "comment_count": 2.0, "seqn": 3.0, "excerpt": "Erster Text",
+		"created_at": "2026-09-03T08:00:00Z", "modified_at": "2026-09-04T08:00:00Z",
+		"participants": []any{ownerA, profileP}, "mentions": []any{profileQ}, "count_unread_comments": 0.0,
+		"file_name": "Start seite", "team_id": teamA, "project_id": projectA1, "owner_fullname": "Ada  Lovelace",
+		"owner_email": personal, "owner_photo_id": avatarID}
+	if got := decodeOne(t, result, "threads"); !reflect.DeepEqual(got, want) {
+		t.Errorf("thread:\n got %v\nwant %v", got, want)
+	}
+	result, err = env.invoke(commentsList.ID, "one", `{`+fileArgs+`,"thread_id":"`+threadA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = map[string]any{"id": commentA, "thread_id": threadA, "owner_id": ownerA, "content": "Erster Text",
+		"created_at": "2026-09-03T08:00:00Z", "modified_at": "2026-09-04T08:00:00Z",
+		"mentions": []any{profileP, profileQ}, "file_id": fileA1, "owner_fullname": "Ada Lovelace",
+		"owner_email": personal, "owner_photo_id": avatarID}
+	if got := decodeOne(t, result, "comments"); !reflect.DeepEqual(got, want) {
+		t.Errorf("comment:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestCommentsWithoutNewMembersKeepTheirFormerOutput(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		switch c.command() {
+		case cmdThreads:
+			return jsonResponse(200, `[{"id":"`+threadA+`","fileId":"`+fileA1+`","ownerId":"`+ownerA+`","isResolved":false,`+
+				`"countComments":2,"content":"Erster Text","participants":[],"mentions":null}]`), nil
+		case cmdComments:
+			return jsonResponse(200, `[{"id":"`+commentA+`","threadId":"`+threadA+`","content":"Text","mentions":[]}]`), nil
+		}
+		return filesHandler(0)(c)
+	})
+	for _, tc := range []struct{ tool, arguments, want string }{
+		{commentsThreads.ID, `{` + fileArgs + `}`, `{"threads":[{"id":"` + threadA + `","file_id":"` + fileA1 + `","owner_id":"` +
+			ownerA + `","is_resolved":false,"comment_count":2,"excerpt":"Erster Text"}],"count":1,"truncated":false}`},
+		{commentsList.ID, `{` + fileArgs + `,"thread_id":"` + threadA + `"}`, `{"comments":[{"id":"` + commentA +
+			`","thread_id":"` + threadA + `","content":"Text"}],"count":1,"truncated":false}`},
+	} {
+		result, err := env.invoke(tc.tool, "one", tc.arguments)
+		var got, want any
+		if err != nil || json.Unmarshal([]byte(result), &got) != nil || json.Unmarshal([]byte(tc.want), &want) != nil ||
+			!reflect.DeepEqual(got, want) {
+			t.Errorf("%s:\n got %s\nwant %s\nerr %v", tc.tool, result, tc.want, err)
+		}
+	}
+}
+
+func TestCommentPeopleListsAreBoundedAndOutsideTargetsKeepIdentifiersOnly(t *testing.T) {
+	var ids []string
+	for i := 0; i < 120; i++ {
+		ids = append(ids, fmt.Sprintf(`"00000000-0000-0000-0001-%012d"`, i), `"not-a-uuid"`)
+	}
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		if c.command() == cmdThreads {
+			return jsonResponse(200, `[{"id":"`+threadA+`","fileId":"`+fileA1+`","teamId":"`+teamB+`","fileName":"Fremd",`+
+				`"ownerId":"`+ownerA+`","ownerFullname":"Ada","ownerEmail":"`+personal+`","ownerPhotoId":"`+avatarID+`",`+
+				`"participants":[`+strings.Join(ids, ",")+`],"countUnreadComments":4.5}]`), nil
+		}
+		return filesHandler(0)(c)
+	})
+	result, err := env.invoke(commentsThreads.ID, "one", `{`+fileArgs+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := decodeOne(t, result, "threads")
+	if n := len(got["participants"].([]any)); n != 100 {
+		t.Errorf("participants = %d", n)
+	}
+	for _, key := range []string{"file_name", "owner_fullname", "owner_email", "count_unread_comments"} {
+		if _, ok := got[key]; ok {
+			t.Errorf("%s given out: %s", key, result)
+		}
+	}
+	if got["team_id"] != teamB || got["owner_photo_id"] != avatarID || got["owner_id"] != ownerA {
+		t.Errorf("identifiers missing: %s", result)
 	}
 }

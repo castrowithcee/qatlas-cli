@@ -137,42 +137,43 @@ type rawTask struct {
 }
 
 type rawComment struct {
-	ID         string  `json:"id"`
-	TaskID     string  `json:"task_id"`
-	ItemID     string  `json:"item_id"`
-	ProjectID  string  `json:"project_id"`
-	Content    string  `json:"content"`
-	PostedAt   *string `json:"posted_at"`
-	PostedUID  *string `json:"posted_uid"`
-	IsDeleted  bool    `json:"is_deleted"`
-	Attachment *struct {
-		FileName     string `json:"file_name"`
-		FileType     string `json:"file_type"`
-		ResourceType string `json:"resource_type"`
-	} `json:"file_attachment"`
+	ID         string         `json:"id"`
+	TaskID     string         `json:"task_id"`
+	ItemID     string         `json:"item_id"`
+	ProjectID  string         `json:"project_id"`
+	Content    string         `json:"content"`
+	PostedAt   *string        `json:"posted_at"`
+	PostedUID  *string        `json:"posted_uid"`
+	IsDeleted  bool           `json:"is_deleted"`
+	Attachment *rawAttachment `json:"file_attachment"`
+
+	UIDsToNotify []json.RawMessage            `json:"uids_to_notify"`
+	Reactions    map[string][]json.RawMessage `json:"reactions"`
 }
 
 type rawReminder struct {
-	ID           string  `json:"id"`
-	TaskID       string  `json:"task_id"`
-	ItemID       string  `json:"item_id"`
-	Type         string  `json:"type"`
-	Due          *rawDue `json:"due"`
-	MinuteOffset *int    `json:"minute_offset"`
-	IsUrgent     bool    `json:"is_urgent"`
-	IsDeleted    bool    `json:"is_deleted"`
+	ID           string          `json:"id"`
+	TaskID       string          `json:"task_id"`
+	ItemID       string          `json:"item_id"`
+	Type         string          `json:"type"`
+	Due          *rawDue         `json:"due"`
+	MinuteOffset *int            `json:"minute_offset"`
+	IsUrgent     bool            `json:"is_urgent"`
+	IsDeleted    bool            `json:"is_deleted"`
+	NotifyUID    json.RawMessage `json:"notify_uid"`
 }
 
 type rawFilter struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Query       string `json:"query"`
-	Description string `json:"description"`
-	Color       string `json:"color"`
-	Order       int    `json:"item_order"`
-	IsFavorite  bool   `json:"is_favorite"`
-	IsFrozen    bool   `json:"is_frozen"`
-	IsDeleted   bool   `json:"is_deleted"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Query       string  `json:"query"`
+	Description string  `json:"description"`
+	Color       string  `json:"color"`
+	Order       int     `json:"item_order"`
+	IsFavorite  bool    `json:"is_favorite"`
+	IsFrozen    bool    `json:"is_frozen"`
+	IsDeleted   bool    `json:"is_deleted"`
+	OrderKey    *string `json:"order_key"`
 }
 
 // Continuation is the cursor contract every list shares: has_more is true whenever Todoist announced a
@@ -337,21 +338,35 @@ type TaskList struct {
 	Continuation
 }
 
-// Comment is the stable Qatlas view of one task or project comment. Content and the attachment name are
-// untrusted data; an attachment is described, never fetched.
+// Comment is the stable Qatlas view of one task or project comment. Content, the emoji, and the attachment
+// are untrusted data; an attachment is described and its address shown only under shownAddress, never fetched.
 type Comment struct {
-	ID         string      `json:"id"`
-	Content    string      `json:"content"`
-	PostedAt   string      `json:"posted_at,omitempty"`
-	PostedBy   string      `json:"posted_by,omitempty"`
-	Attachment *Attachment `json:"attachment,omitempty"`
+	ID                    string              `json:"id"`
+	Content               string              `json:"content"`
+	PostedAt              string              `json:"posted_at,omitempty"`
+	PostedBy              string              `json:"posted_by,omitempty"`
+	Attachment            *Attachment         `json:"attachment,omitempty"`
+	UIDsToNotify          []string            `json:"uids_to_notify,omitempty"`
+	UIDsToNotifyTruncated bool                `json:"uids_to_notify_truncated,omitempty"`
+	Reactions             map[string][]string `json:"reactions,omitempty"`
+	ReactionsTruncated    bool                `json:"reactions_truncated,omitempty"`
 }
 
-// Attachment describes the file of a comment without its address.
+// Attachment describes the file of a comment. Its addresses appear only when shownAddress allows them.
 type Attachment struct {
-	FileName     string `json:"file_name,omitempty"`
-	FileType     string `json:"file_type,omitempty"`
-	ResourceType string `json:"resource_type,omitempty"`
+	FileName     string     `json:"file_name,omitempty"`
+	FileType     string     `json:"file_type,omitempty"`
+	ResourceType string     `json:"resource_type,omitempty"`
+	FileSize     *int64     `json:"file_size,omitempty"`
+	UploadState  string     `json:"upload_state,omitempty"`
+	FileURL      string     `json:"file_url,omitempty"`
+	Image        string     `json:"image,omitempty"`
+	ImageWidth   *int64     `json:"image_width,omitempty"`
+	ImageHeight  *int64     `json:"image_height,omitempty"`
+	FileDuration *int64     `json:"file_duration,omitempty"`
+	TnS          *Thumbnail `json:"tn_s,omitempty"`
+	TnM          *Thumbnail `json:"tn_m,omitempty"`
+	TnL          *Thumbnail `json:"tn_l,omitempty"`
 }
 
 // CommentList is one page of comments of one task or one project.
@@ -368,6 +383,7 @@ type Reminder struct {
 	Due          *Due   `json:"due,omitempty"`
 	MinuteOffset *int   `json:"minute_offset,omitempty"`
 	IsUrgent     bool   `json:"is_urgent"`
+	NotifyUID    string `json:"notify_uid,omitempty"`
 }
 
 // ReminderList is one page of reminders.
@@ -387,6 +403,7 @@ type Filter struct {
 	Order       int    `json:"order"`
 	IsFavorite  bool   `json:"is_favorite"`
 	IsFrozen    bool   `json:"is_frozen"`
+	OrderKey    string `json:"order_key,omitempty"`
 }
 
 // FilterList is every saved filter of the account. The Sync endpoint answers them at once.
@@ -802,9 +819,10 @@ func (c *Client) listComments(ctx context.Context, call listCall, taskID, projec
 func commentOf(raw rawComment) Comment {
 	comment := Comment{ID: raw.ID, Content: raw.Content, PostedAt: text(raw.PostedAt), PostedBy: text(raw.PostedUID)}
 	if raw.Attachment != nil {
-		comment.Attachment = &Attachment{FileName: raw.Attachment.FileName, FileType: raw.Attachment.FileType,
-			ResourceType: raw.Attachment.ResourceType}
+		comment.Attachment = attachmentOf(raw.Attachment)
 	}
+	comment.UIDsToNotify, comment.UIDsToNotifyTruncated = notifiedOf(raw.UIDsToNotify)
+	comment.Reactions, comment.ReactionsTruncated = reactionsOf(raw.Reactions)
 	return comment
 }
 
@@ -848,7 +866,7 @@ func (c *Client) listReminders(ctx context.Context, call listCall, taskID string
 
 func reminderOf(raw rawReminder, taskID string) Reminder {
 	return Reminder{ID: raw.ID, TaskID: taskID, Type: raw.Type, Due: dueOf(raw.Due), MinuteOffset: raw.MinuteOffset,
-		IsUrgent: raw.IsUrgent}
+		IsUrgent: raw.IsUrgent, NotifyUID: idText(raw.NotifyUID)}
 }
 
 // listFilters reads the saved filters of the account through one read-only Sync request, the only route
@@ -875,7 +893,7 @@ func (c *Client) listFilters(ctx context.Context) (*FilterList, error) {
 		}
 		result.Filters = append(result.Filters, Filter{ID: raw.ID, Name: raw.Name, Query: raw.Query,
 			Description: raw.Description, Color: raw.Color, Order: raw.Order, IsFavorite: raw.IsFavorite,
-			IsFrozen: raw.IsFrozen})
+			IsFrozen: raw.IsFrozen, OrderKey: boundedText(text(raw.OrderKey), maxOrderKey)})
 	}
 	sort.SliceStable(result.Filters, func(i, j int) bool { return result.Filters[i].Order < result.Filters[j].Order })
 	return result, nil
