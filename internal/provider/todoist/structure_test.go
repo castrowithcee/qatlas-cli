@@ -436,6 +436,13 @@ func TestNoToolReachesAccountAdministration(t *testing.T) {
 			// The read-only workspace_id filter narrows the completed tasks; the connection still holds them.
 			schema = strings.ReplaceAll(schema, `"workspace_id"`, "")
 		}
+		switch descriptor.ID {
+		case "todoist.projects.list":
+			// The read-only workspace_id and folder_id filters narrow the projects; the connection still holds them.
+			schema = strings.ReplaceAll(strings.ReplaceAll(schema, `"workspace_id"`, ""), `"folder_id"`, "")
+		case "todoist.sections.list":
+			schema = strings.ReplaceAll(schema, `"workspace_id"`, "")
+		}
 		for _, forbidden := range []string{"workspace", "commands", "notification", "collaborator", "folder",
 			"\"path\"", "\"method\"", "\"url\""} {
 			if strings.Contains(schema, forbidden) {
