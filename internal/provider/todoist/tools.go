@@ -27,6 +27,7 @@ var readRisk = capability.Risk{
 // schema strings.
 const (
 	idSchema          = `{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9]+$"}`
+	positiveSchema    = `{"type":"integer","minimum":1}`
 	limitSchema       = `{"type":"integer","minimum":1,"maximum":200}`
 	cursorSchema      = `{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[A-Za-z0-9_-]+$"}`
 	searchSchema      = `{"type":"string","minLength":1,"maxLength":200,"pattern":"^[^\\x00-\\x1f\\x7f]+$"}`
@@ -274,10 +275,15 @@ var projectsList = descriptor("projects", "list", "List Todoist projects",
 	"List one bounded batch of the active projects of an explicit Todoist connection, optionally searched by "+
 		"name; a project connection lists only its own projects",
 	[]string{"projects", "list", "search"},
-	`{"type":"object","properties":{"search":`+searchSchema+`,`+pageInput+`},"additionalProperties":false}`,
+	`{"type":"object","properties":{"search":`+searchSchema+`,"workspace_id":`+positiveSchema+`,"folder_id":`+
+		positiveSchema+`,`+pageInput+`},"additionalProperties":false}`,
 	listOutput("projects", projectSchema),
 	[]capability.Argument{
 		{Name: "search", Description: "Return only projects whose name matches this Todoist search text"},
+		{Name: "workspace_id", Description: "Positive integer; return only projects of this workspace; " +
+			"not with search; the connection's projects still bound them"},
+		{Name: "folder_id", Description: "Positive integer; return only projects of this folder; " +
+			"not with search; the connection's projects still bound them"},
 		limitArgument, cursorArgument,
 	},
 	append([]capability.Field{
@@ -298,12 +304,14 @@ var sectionsList = descriptor("sections", "list", "List Todoist sections",
 	"List one bounded batch of the active sections of the projects of an explicit Todoist connection, "+
 		"optionally of one project or searched by name",
 	[]string{"sections", "list", "search"},
-	`{"type":"object","properties":{"project_id":`+idSchema+`,"search":`+searchSchema+`,`+pageInput+`},`+
-		`"additionalProperties":false}`,
+	`{"type":"object","properties":{"project_id":`+idSchema+`,"search":`+searchSchema+`,"workspace_id":`+positiveSchema+`,`+
+		pageInput+`},"additionalProperties":false}`,
 	listOutput("sections", sectionSchema),
 	[]capability.Argument{
 		{Name: "project_id", Description: "Return only sections of this project of the connection"},
 		{Name: "search", Description: "Return only sections whose name matches this Todoist search text"},
+		{Name: "workspace_id", Description: "Positive integer; return only sections of this workspace; " +
+			"not with project_id; the connection's projects still bound them"},
 		limitArgument, cursorArgument,
 	},
 	append([]capability.Field{
@@ -399,7 +407,7 @@ var completedList = taskTool(descriptor("completed-tasks", "list", "List complet
 		"expression; how far back Todoist answers depends on the account's plan",
 	[]string{"tasks", "completed", "list", "history", "filter"},
 	`{"type":"object","properties":{"since":`+instantSchema+`,"until":`+instantSchema+`,"project_id":`+idSchema+`,`+
-		`"section_id":`+idSchema+`,"parent_id":`+idSchema+`,"workspace_id":{"type":"integer","minimum":1},`+
+		`"section_id":`+idSchema+`,"parent_id":`+idSchema+`,"workspace_id":`+positiveSchema+`,`+
 		`"query":`+querySchema+`,"filter_lang":`+languageTagSchema+`,`+pageInput+`},"required":["since","until"],`+
 		`"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
@@ -694,19 +702,45 @@ func searchable(path, search string) (string, url.Values) {
 	return path + "/search", url.Values{"query": {search}}
 }
 
+// positiveFilter validates an optional positive integer filter and sets it on the query.
+func positiveFilter(name string, value *int64, query url.Values) (string, error) {
+	if value == nil {
+		return "", nil
+	}
+	if *value < 1 {
+		return "", invalidRequest(name + " must be a positive integer")
+	}
+	text := strconv.FormatInt(*value, 10)
+	query.Set(name, text)
+	return text, nil
+}
+
 func prepareProjectsList(bound scope, arguments struct {
-	Search string `json:"search"`
+	Search      string `json:"search"`
+	WorkspaceID *int64 `json:"workspace_id"`
+	FolderID    *int64 `json:"folder_id"`
 	page
 }) (run, error) {
 	if err := checkSearch(arguments.Search); err != nil {
 		return nil, err
 	}
+	if arguments.Search != "" && (arguments.WorkspaceID != nil || arguments.FolderID != nil) {
+		return nil, invalidRequest("workspace_id and folder_id cannot be combined with search")
+	}
 	if err := bound.requireProjectLevel(); err != nil {
 		return nil, err
 	}
 	path, query := searchable("/projects", arguments.Search)
+	workspace, err := positiveFilter("workspace_id", arguments.WorkspaceID, query)
+	if err != nil {
+		return nil, err
+	}
+	folder, err := positiveFilter("folder_id", arguments.FolderID, query)
+	if err != nil {
+		return nil, err
+	}
 	call, err := newListCall("list projects", path, query, arguments.Limit, arguments.Cursor,
-		projectsList.ID, bound.String(), arguments.Search)
+		projectsList.ID, bound.String(), arguments.Search, workspace, folder)
 	if err != nil {
 		return nil, err
 	}
@@ -729,8 +763,9 @@ func prepareProjectsGet(bound scope, arguments struct {
 }
 
 func prepareSectionsList(bound scope, arguments struct {
-	ProjectID string `json:"project_id"`
-	Search    string `json:"search"`
+	ProjectID   string `json:"project_id"`
+	Search      string `json:"search"`
+	WorkspaceID *int64 `json:"workspace_id"`
 	page
 }) (run, error) {
 	if err := checkID("project_id", arguments.ProjectID); err != nil {
@@ -749,12 +784,19 @@ func prepareSectionsList(bound scope, arguments struct {
 	if single, ok := bound.single(); ok && project == "" {
 		project = single
 	}
+	if project != "" && arguments.WorkspaceID != nil {
+		return nil, invalidRequest("workspace_id cannot be combined with project_id or a project connection")
+	}
 	path, query := searchable("/sections", arguments.Search)
 	if project != "" {
 		query.Set("project_id", project)
 	}
+	workspace, err := positiveFilter("workspace_id", arguments.WorkspaceID, query)
+	if err != nil {
+		return nil, err
+	}
 	call, err := newListCall("list sections", path, query, arguments.Limit, arguments.Cursor,
-		sectionsList.ID, bound.String(), project, arguments.Search)
+		sectionsList.ID, bound.String(), project, arguments.Search, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -929,13 +971,9 @@ func prepareCompletedList(bound scope, arguments struct {
 	if arguments.ParentID != "" {
 		query.Set("parent_id", arguments.ParentID)
 	}
-	workspace := ""
-	if arguments.WorkspaceID != nil {
-		if *arguments.WorkspaceID < 1 {
-			return nil, invalidRequest("workspace_id must be a positive integer")
-		}
-		workspace = strconv.FormatInt(*arguments.WorkspaceID, 10)
-		query.Set("workspace_id", workspace)
+	workspace, err := positiveFilter("workspace_id", arguments.WorkspaceID, query)
+	if err != nil {
+		return nil, err
 	}
 	if err := checkLang("filter_lang", arguments.FilterLang); err != nil {
 		return nil, err
