@@ -67,7 +67,7 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 		if entry.auth != "" && entry.auth != "token "+tokenValue {
 			t.Errorf("request %s authorizes with %q", r.URL.Path, entry.auth)
 		}
-		if !slices.Contains([]string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete}, r.Method) ||
+		if !slices.Contains([]string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}, r.Method) ||
 			(r.Method == http.MethodGet && entry.body != "") {
 			t.Errorf("request %s uses %s", r.URL.Path, r.Method)
 		}
