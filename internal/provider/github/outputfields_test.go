@@ -215,15 +215,16 @@ var outputSamples = map[string]any{
 // sets, so its schema rightly omits them: a list leaves out what only the detail read adds, and a change
 // sets what only its counterpart sets.
 var unemittedMembers = map[string][]string{
-	"github.gists.create":            {"files[].binary", "files[].content", "files[].content_truncated"},
-	"github.gists.update":            {"files[].binary", "files[].content", "files[].content_truncated"},
-	"github.gists.list":              {"gists[].files[].binary", "gists[].files[].content", "gists[].files[].content_truncated"},
-	"github.issue-dependencies.add":  {"removed"},
-	"github.sub-issues.add":          {"removed"},
-	"github.sub-issues.reprioritize": {"removed", "sub_issues_summary"},
-	"github.project-items.list":      {"items[].body", "items[].url"},
-	"github.workflow-jobs.list":      {"jobs[].steps", "jobs[].url"},
-	"github.workflow-runs.list":      {"runs[].url"},
+	"github.code-scanning-alerts.list": {"alerts[].linked_pull_requests", "alerts[].linked_pull_requests_truncated"},
+	"github.gists.create":              {"files[].binary", "files[].content", "files[].content_truncated"},
+	"github.gists.update":              {"files[].binary", "files[].content", "files[].content_truncated"},
+	"github.gists.list":                {"gists[].files[].binary", "gists[].files[].content", "gists[].files[].content_truncated"},
+	"github.issue-dependencies.add":    {"removed"},
+	"github.sub-issues.add":            {"removed"},
+	"github.sub-issues.reprioritize":   {"removed", "sub_issues_summary"},
+	"github.project-items.list":        {"items[].body", "items[].url"},
+	"github.workflow-jobs.list":        {"jobs[].steps", "jobs[].url"},
+	"github.workflow-runs.list":        {"runs[].url"},
 }
 
 // checkOutput reports every member of the output of sample that the output schema or the fields lack, at any

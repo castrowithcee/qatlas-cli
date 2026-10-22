@@ -87,7 +87,7 @@ var metaObjectsList = capability.Descriptor{
 		`,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"objects":{"type":"array","items":{` +
 		`"type":"object","properties":{` + metaObjectProps + `},` + metaObjectRequired + `,"additionalProperties":false}},` +
-		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
+		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["objects","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "limit", Description: "Objects per page, from 1 through 100; 25 when omitted"},
@@ -97,6 +97,7 @@ var metaObjectsList = capability.Descriptor{
 		{Name: "objects", Description: "The objects on this page, without their fields, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
+		totalCountField,
 	},
 	Examples: []capability.Example{{Description: "List the object metadata", Arguments: json.RawMessage(`{}`)}},
 }
@@ -197,6 +198,7 @@ type MetaObjectList struct {
 	Objects    []MetaObjectSummary `json:"objects"`
 	NextCursor string              `json:"next_cursor,omitempty"`
 	HasMore    bool                `json:"has_more"`
+	TotalCount *int64              `json:"total_count,omitempty"`
 }
 
 // MetaObject is an object with its fields.
@@ -338,8 +340,9 @@ func unwrapMeta(op string, body json.RawMessage, key string) (json.RawMessage, e
 }
 
 type metaPage struct {
-	Data     json.RawMessage `json:"data"`
-	PageInfo struct {
+	Data       json.RawMessage `json:"data"`
+	TotalCount json.RawMessage `json:"totalCount"`
+	PageInfo   struct {
 		HasNextPage bool    `json:"hasNextPage"`
 		EndCursor   *string `json:"endCursor"`
 	} `json:"pageInfo"`
@@ -396,7 +399,11 @@ func (c *Client) ListMetaObjects(ctx context.Context, connection string, limit i
 	if err != nil {
 		return nil, err
 	}
-	result := &MetaObjectList{Objects: make([]MetaObjectSummary, 0, len(items)), HasMore: page.PageInfo.HasNextPage}
+	total, err := pageTotal(op, page.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+	result := &MetaObjectList{Objects: make([]MetaObjectSummary, 0, len(items)), HasMore: page.PageInfo.HasNextPage, TotalCount: total}
 	for _, item := range items {
 		var record metaObjectRecord
 		if json.Unmarshal(item, &record) != nil {
