@@ -75,6 +75,23 @@ func fullCommentsBody() string {
 		`"owner-email":"` + personal + `","owner-photo-id":"` + avatarID + `"}]`
 }
 
+// fullMembersBody answers get-team-members as Penpot 2.18.0 does: every column of the membership row plus the
+// joined profile (name and fullname both carry the full name). The team and profile identifiers of the row are
+// sent, too, and must not be repeated in the output.
+func fullMembersBody() string {
+	return `[{"team-id":"` + teamA + `","profile-id":"` + ownerA + `","id":"` + ownerA + `","email":"` + personal + `",` +
+		`"name":"Ada\u0007 Lovelace","fullname":"Ada\u0007 Lovelace","photo-id":"` + avatarID + `","is-active":true,` +
+		`"is-owner":false,"is-admin":true,"can-edit":false,` +
+		`"created-at":"2026-01-02T03:04:05.123Z","modified-at":"2026-02-03T04:05:06.789Z"}]`
+}
+
+// fullWebhooksBody answers get-webhooks as Penpot 2.18.0 does: id, uri, mtype, is_active, error_code,
+// error_count, and profile_id.
+func fullWebhooksBody() string {
+	return `[{"id":"` + hookA + `","uri":"` + hookURL + `","mtype":"application/json","is-active":false,` +
+		`"error-code":"ssl-validation-error","error-count":2,"profile-id":"` + ownerA + `"}]`
+}
+
 func structureHandler(c call) (*http.Response, error) {
 	switch c.command() {
 	case cmdThreads:
@@ -83,6 +100,10 @@ func structureHandler(c call) (*http.Response, error) {
 		return jsonResponse(200, fullCommentsBody()), nil
 	case cmdTeams:
 		return jsonResponse(200, fullTeamsBody()), nil
+	case cmdTeamMembers:
+		return jsonResponse(200, fullMembersBody()), nil
+	case cmdWebhooks:
+		return jsonResponse(200, fullWebhooksBody()), nil
 	case cmdProjects:
 		if c.body["team-id"] == teamA {
 			return jsonResponse(200, fullProjectsBody()), nil
@@ -113,6 +134,8 @@ func structureFieldCases() []fieldCase {
 		{librariesList, "one", `{` + fileArgs + `}`},
 		{commentsThreads, "one", `{` + fileArgs + `}`},
 		{commentsList, "one", `{` + fileArgs + `,"thread_id":"` + threadA + `"}`},
+		{membersList, "one", `{"team_id":"` + teamA + `"}`},
+		{webhooksList, "one", `{"team_id":"` + teamA + `"}`},
 	}
 }
 
@@ -493,5 +516,45 @@ func TestCommentPeopleListsAreBoundedAndOutsideTargetsKeepIdentifiersOnly(t *tes
 	}
 	if got["team_id"] != teamB || got["owner_photo_id"] != avatarID || got["owner_id"] != ownerA {
 		t.Errorf("identifiers missing: %s", result)
+	}
+}
+
+func TestMembersListReportsNamesPhotoAndMembershipWithoutRepeatedIDs(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(membersList.ID, "one", `{"team_id":"`+teamA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := decodeList(t, result, "members")
+	want := map[string]any{"id": ownerA, "email": personal, "role": "admin", "is_active": true,
+		"name": "Ada  Lovelace", "fullname": "Ada  Lovelace", "photo_id": avatarID,
+		"is_owner": false, "is_admin": true, "can_edit": false,
+		"created_at": "2026-01-02T03:04:05.123Z", "modified_at": "2026-02-03T04:05:06.789Z"}
+	if len(members) != 1 || !reflect.DeepEqual(members[0], want) {
+		t.Fatalf("members = %#v\nwant    = %#v", members, want)
+	}
+	if strings.Contains(result, "profile_id") || strings.Count(result, teamA) != 1 {
+		t.Errorf("result repeats the team or profile identifier: %s", result)
+	}
+}
+
+func TestWebhooksListReportsProfileAndNeverTheURL(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, structureHandler)
+	result, err := env.invoke(webhooksList.ID, "one", `{"team_id":"`+teamA+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"id": hookA, "host": "hooks.example.com", "mtype": "application/json", "is_active": false,
+		"error_code": "ssl-validation-error", "error_count": 2.0, "profile_id": ownerA}
+	hooks := decodeList(t, result, "webhooks")
+	if len(hooks) != 1 || !reflect.DeepEqual(hooks[0], want) {
+		t.Fatalf("webhooks = %#v\nwant     = %#v", hooks, want)
+	}
+	for _, leak := range []string{"canary", "pw-", "secret-path", "https://"} {
+		if strings.Contains(result, leak) {
+			t.Errorf("result carries %q: %s", leak, result)
+		}
 	}
 }
