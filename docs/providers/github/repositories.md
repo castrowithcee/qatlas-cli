@@ -28,7 +28,7 @@ repositories on a fine-grained token.
 | `github.repositories.create` | creates one repository under the token's own account or an organization |
 | `github.repositories.fork` | forks a repository into the token's own account or an organization |
 | `github.repositories.delete` | deletes one repository permanently; offered only where a connection's `tools` list names it |
-| `github.collaborators.list` | lists the collaborators of a repository with their role and permissions |
+| `github.collaborators.list` | lists the collaborators of a repository |
 
 `github.repositories.create` makes one new repository under the token's own account, or, with `owner`, under
 an organization a connection names as an owner target; it is private by default. `owner` is an organization as
@@ -54,10 +54,8 @@ customer other than the one those targets name.
 `tools` list names it. `confirm_name` must repeat the repository as `owner/name` exactly, checked before any
 credential is resolved, since this cannot be undone.
 
-`github.collaborators.list` reads the collaborators of a repository, filtered by `affiliation` (`all` when
-omitted) and `permission` (every permission level when omitted), paged, a cursor bound to the repository and
-its filters. It never answers an email address or another personal detail GitHub's collaborator object may
-carry.
+`github.collaborators.list` reads the collaborators of a repository, paged, a cursor bound to the repository
+and its filters.
 
 Creating or forking a repository needs `repo` on a classic token, or Administration: read and write on a
 fine-grained token; deleting one, listed-only, needs `delete_repo` as well on a classic token. Listing
