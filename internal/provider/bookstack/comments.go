@@ -54,13 +54,13 @@ var (
 			"comments.get for its text and replies. " + commentNote + ". page_id is required for a connection " +
 			"with targets",
 		Tags: []string{"knowledge", "comments", "bookstack"}, Risk: bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + commentListSchema.properties() + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(commentListOutput),
-		Arguments: []capability.Argument{
+		Arguments: append([]capability.Argument{
 			{Name: "page_id", Description: "Only comments of this page; required for a connection with targets"},
 			{Name: "limit", Description: "Maximum number of comments to return; 0 returns all"},
 			{Name: "offset", Description: "Number of comments to skip"},
-		},
+		}, commentListSchema.arguments()...),
 		Fields: []capability.Field{
 			{Name: "id", Description: "Comment identifier"},
 			{Name: "page_id", Description: "Identifier of the page the comment is on"},
@@ -214,12 +214,18 @@ func (m commentMutation) validate() error {
 func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var input struct {
-		PageID *int64 `json:"page_id"`
-		Limit  int    `json:"limit"`
-		Offset int    `json:"offset"`
+		PageID  *int64      `json:"page_id"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Sort    string      `json:"sort"`
+		Filters []filterArg `json:"filters"`
 	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list comments", "the validated arguments could not be read")
+	}
+	query, err := parseListQuery(commentListSchema, input.Sort, input.Filters)
+	if err != nil {
+		return nil, err
 	}
 	var pageID int64
 	if input.PageID != nil {
@@ -239,7 +245,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.ListComments(ctx, pageID, input.Limit, input.Offset)
+	return client.ListComments(ctx, pageID, input.Limit, input.Offset, query)
 }
 
 func invokeCommentsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -328,8 +334,8 @@ func invokeCommentsDelete(ctx context.Context, resolved *config.Resolved, secret
 
 // ListComments returns the comments of one page, or of every page for an unbound connection without page_id.
 // BookStack ignores a filter it does not know, so each row is checked here against type and page; limit and
-// offset count the rows that remain.
-func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset int) (output.Collection, error) {
+// offset count the rows that remain. The filters of q work the same way and come in addition to type and page.
+func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
 		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
 	}
@@ -343,7 +349,7 @@ func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset i
 	if pageID != 0 {
 		query.Set("filter[commentable_id]", strconv.FormatInt(pageID, 10))
 	}
-	rows, err := scanList(ctx, c, scanSpec[commentJSON]{
+	spec := scanSpec[commentJSON]{
 		op: "list comments", path: "/api/comments", query: query, filtered: true, limit: limit, offset: offset,
 		narrow: "page_id", arguments: argNames(commentsList),
 		id:   func(m commentJSON) int64 { return m.ID },
@@ -356,7 +362,9 @@ func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset i
 				"created_at": m.CreatedAt, "updated_at": m.UpdatedAt,
 			}
 		},
-	})
+	}
+	spec.withListQuery(q, commentValue)
+	rows, err := scanList(ctx, c, spec)
 	if err != nil {
 		return output.Collection{}, err
 	}
