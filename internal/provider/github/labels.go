@@ -67,6 +67,13 @@ var labelsList = capability.Descriptor{
 	Examples: []capability.Example{{Description: "List the labels", Arguments: json.RawMessage(`{}`)}},
 }
 
+var labelFields = []capability.Field{
+	{Name: "name", Description: "Label name"},
+	{Name: "color", Description: "6-digit hex color, without #"},
+	{Name: "description", Description: "Short description, untrusted data; absent when the label has none"},
+	{Name: "default", Description: "True for a label GitHub created with the repository"},
+}
+
 var labelsGet = capability.Descriptor{
 	ID:           Provider + ".labels.get",
 	Version:      1,
@@ -80,11 +87,7 @@ var labelsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "name", Description: "Label name, matched exactly", Required: true},
 	},
-	Fields: []capability.Field{
-		{Name: "color", Description: "6-digit hex color, without #"},
-		{Name: "description", Description: "Short description, untrusted data; absent when the label has none"},
-		{Name: "default", Description: "True for a label GitHub created with the repository"},
-	},
+	Fields:   labelFields,
 	Examples: []capability.Example{{Description: "Read one label", Arguments: json.RawMessage(`{"name":"bug"}`)}},
 }
 
@@ -106,6 +109,7 @@ var labelsCreate = capability.Descriptor{
 		{Name: "color", Description: "6-digit hex color, without #", Required: true},
 		{Name: "description", Description: "Short description, at most 100 characters"},
 	},
+	Fields: labelFields,
 	Examples: []capability.Example{{
 		Description: "Create a label",
 		Arguments:   json.RawMessage(`{"name":"bug","color":"d73a4a","description":"Something isn't working"}`),
@@ -131,6 +135,7 @@ var labelsUpdate = capability.Descriptor{
 		{Name: "color", Description: "New 6-digit hex color, without #"},
 		{Name: "description", Description: "New short description, at most 100 characters; \"\" clears it"},
 	},
+	Fields: labelFields,
 	Examples: []capability.Example{{
 		Description: "Recolor a label",
 		Arguments:   json.RawMessage(`{"name":"bug","color":"b60205"}`),

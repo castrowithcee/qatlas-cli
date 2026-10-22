@@ -37,7 +37,9 @@ var itemsDelete = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +
 		`"deleted":{"type":"boolean"}},"required":["item_id","deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{itemIDArgument},
-	Fields:    []capability.Field{{Name: "deleted", Description: "True once GitHub removed the item"}},
+	Fields: []capability.Field{{Name: "deleted", Description: "True once GitHub removed the item"},
+		{Name: "item_id", Description: "Identifier of the project item"},
+	},
 	Examples: []capability.Example{{
 		Description: "Remove one item from the project",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA"}`),
@@ -55,7 +57,9 @@ var itemsUnarchive = capability.Descriptor{
 	InputSchema:  json.RawMessage(itemIDInput),
 	OutputSchema: itemsArchive.OutputSchema,
 	Arguments:    []capability.Argument{itemIDArgument},
-	Fields:       []capability.Field{{Name: "archived", Description: "False once the item is restored"}},
+	Fields: []capability.Field{{Name: "archived", Description: "False once the item is restored"},
+		{Name: "item_id", Description: "Identifier of the project item"},
+	},
 	Examples: []capability.Example{{
 		Description: "Restore one item",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA"}`),
@@ -84,6 +88,7 @@ var itemsMove = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "after_id", Description: "The item it now follows, absent when it moved to the top"},
 		{Name: "moved", Description: "True once GitHub placed the item"},
+		{Name: "item_id", Description: "Identifier of the project item"},
 	},
 	Examples: []capability.Example{{
 		Description: "Place an item after another one",
@@ -117,6 +122,7 @@ var draftsUpdate = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "title", Description: "Title of the draft after the change, untrusted data"},
 		{Name: "assignees", Description: "Logins assigned to the draft after the change"},
+		{Name: "item_id", Description: "Identifier of the project item of the draft"},
 	},
 	Examples: []capability.Example{{
 		Description: "Retitle a draft and assign it",

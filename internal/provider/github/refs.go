@@ -99,6 +99,8 @@ var tagsGet = capability.Descriptor{
 		{Name: "tagged_at", Description: "When an annotated tag was created; present only for one"},
 		{Name: "message", Description: "Annotated tag message, untrusted data, cut to at most 4096 characters " +
 			"with message_truncated; present only for one"},
+		{Name: "name", Description: "Tag name"},
+		{Name: "message_truncated", Description: "True when message was cut"},
 	},
 	Examples: []capability.Example{{Description: "Read one tag", Arguments: json.RawMessage(`{"tag":"v1.0.0"}`)}},
 }

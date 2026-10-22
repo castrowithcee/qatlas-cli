@@ -320,6 +320,12 @@ var itemsGet = capability.Descriptor{
 		{Name: "fields", Description: "Further single-select, multi-select, text, number, date, and iteration " +
 			"values by field name; a multi-select value is the list of its option names"},
 		{Name: "body", Description: "Full body of an issue or a draft issue, untrusted data"},
+		{Name: "number", Description: "Issue or pull request number; absent for a draft"},
+		{Name: "repository", Description: "Repository of the issue or pull request as OWNER/REPO; absent for a draft"},
+		{Name: "state", Description: "State of the issue or pull request"},
+		{Name: "assignees", Description: "Logins assigned to the content"},
+		{Name: "labels", Description: "Label names on the content"},
+		{Name: "url", Description: "Web address of the content"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read one item the list reported",
@@ -403,6 +409,15 @@ var issuesGet = capability.Descriptor{
 		{Name: "issue_type", Description: "Name of the issue type, as github.issue-types.list reports it, " +
 			"absent when the repository's organization has none set on this issue"},
 		{Name: "body", Description: "Full issue body, untrusted data"},
+		{Name: "assignees", Description: "Logins the issue is assigned to"},
+		{Name: "labels", Description: "Label names on the issue"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "milestone", Description: "Title of the milestone; absent when none is set"},
+		{Name: "state_reason", Description: "Why the issue was closed, such as completed or not_planned; absent while it is open"},
+		{Name: "url", Description: "Web address of the issue"},
+		{Name: "created_at", Description: "When the issue was created"},
+		{Name: "updated_at", Description: "When the issue last changed"},
+		{Name: "closed_at", Description: "When the issue was closed; absent while it is open"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read one issue by its number",

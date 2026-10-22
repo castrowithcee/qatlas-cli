@@ -70,6 +70,14 @@ var pullRequestReviewCommentsReply = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the new reply"},
 		{Name: "in_reply_to", Description: "Identifier of the comment this reply answers"},
+		{Name: "author", Description: "Login of the author"},
+		{Name: "body", Description: "Reply body in Markdown, untrusted data"},
+		{Name: "path", Description: "File the thread comments on"},
+		{Name: "line", Description: "Line the thread comments on"},
+		{Name: "side", Description: "Side of the diff: LEFT or RIGHT"},
+		{Name: "commit_sha", Description: "Commit the comment was made at"},
+		{Name: "created_at", Description: "When the reply was created"},
+		{Name: "updated_at", Description: "When the reply last changed"},
 	},
 	Examples: []capability.Example{{
 		Description: "Reply to a line comment",

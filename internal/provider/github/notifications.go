@@ -82,6 +82,7 @@ var notificationFields = []capability.Field{
 	{Name: "subject_type", Description: "Kind of subject, such as Issue, PullRequest, Commit, Release, or Discussion"},
 	{Name: "subject_url", Description: "API address of the subject"},
 	{Name: "latest_comment_url", Description: "API address of the latest comment of the subject"},
+	{Name: "title_truncated", Description: "True when subject_title was cut"},
 }
 
 var notificationPaging = []capability.Argument{
