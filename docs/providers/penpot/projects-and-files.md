@@ -20,11 +20,21 @@ through the project list, deleted projects included. Penpot returns only files a
 there; the `deleted-at` field would always be empty and is not returned.
 
 `files.get` reads a file's library summary (for components, variants, colors, and typographies a `count` and up to 20
-`samples`) and one page (up to 200 shapes). `page_id` is optional; the first page of the file is read when omitted.
-It reads the project's file list and refuses a `file_id` that is not in it before the summary or page is requested.
-Shapes are listed in ID order. Fills, images, media references, text content, and every other shape property are not
-returned (a deliberate limit: geometry and identity only). A file's page list is not offered: the summary carries
-none, so other pages are reached only through a known `page_id`.
+`samples`) and one page: its metadata and up to 200 shapes. `page_id` is optional; the first page of the file is read
+when omitted. It reads the project's file list and refuses a `file_id` that is not in it before the summary or page is
+requested. Shapes are listed in ID order. A shape carries the attributes Penpot's schema defines for its type
+(geometry, styling, component references, layout, interactions, and content); the descriptor lists them. Keys are
+snake case, whether Penpot sends kebab case or camel case; map keys that are IDs and the keys of `plugin_data` stay
+as they are. Missing and empty values are left out, numbers are passed on as written.
+
+The answer is bounded: free values go to depth 8, 200 entries per list or object, and 4 KiB per text, and the
+attributes of all shapes together take 1 MiB, after which `truncated` is set. A value beyond a bound is left out whole,
+never cut, and named in `omitted_fields` of its shape (or of the page). Binary-encoded shape content is not returned
+and is named the same way. Identifiers that point to libraries outside the targets, such as `component_file`,
+`shape_ref`, and media in fills, are returned as identifiers only; they are neither resolved nor requested, so the
+call makes the same two requests after the file binding as before. Names, text content, and plugin data are untrusted
+provider data; control characters in them become spaces. A file's page list is not offered: the summary carries none,
+so other pages are reached only through a known `page_id`.
 
 ## Projects and files
 
