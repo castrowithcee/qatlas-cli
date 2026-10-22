@@ -3,9 +3,13 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -41,6 +45,8 @@ const (
 	alertHelpLimit     = 4000
 	alertNumberSchema  = `{"type":"integer","minimum":1,"maximum":9007199254740991}`
 	alertToolSchema    = `{"type":"string","minLength":1,"maxLength":100}`
+	alertGUIDSchema    = `{"type":"string","minLength":1,"maxLength":256}`
+	alertAssigneesReg  = `^(\\*|[A-Za-z0-9][A-Za-z0-9_-]{0,99})$`
 	alertSecretTypeReg = `^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$`
 )
 
@@ -49,6 +55,8 @@ var (
 	codeScanningSeverities = []string{"critical", "high", "medium", "low", "warning", "note", "error"}
 	dependabotStates       = []string{"open", "fixed", "dismissed", "auto_dismissed"}
 	dependabotSeverities   = []string{"critical", "high", "medium", "low"}
+	codeScanningSorts      = []string{"created", "updated"}
+	codeScanningDirections = []string{"asc", "desc"}
 	secretStates           = []string{"open", "resolved"}
 	secretResolutions      = []string{"false_positive", "wont_fix", "revoked", "pattern_edited", "pattern_deleted",
 		"used_in_tests"}
@@ -83,14 +91,37 @@ func alertGetOutput(properties string) json.RawMessage {
 const alertCommonProperties = `"number":{"type":"integer"},"state":{"type":"string"},"created_at":{"type":"string"},` +
 	`"updated_at":{"type":"string"},"url":{"type":"string"}`
 
-const codeScanningProperties = alertCommonProperties + `,"fixed_at":{"type":"string"},` +
+const codeScanningLinkKeysSchema = `{"type":"object","properties":{"url":{"type":"string"},` +
+	`"instances_url":{"type":"string"}},"additionalProperties":false}`
+
+var codeScanningListProperties = alertCommonProperties + `,"fixed_at":{"type":"string"},` +
 	`"dismissed_at":{"type":"string"},"dismissed_by":{"type":"string"},"dismissed_reason":{"type":"string"},` +
 	`"dismissed_comment":{"type":"string"},"rule_id":{"type":"string"},"rule_name":{"type":"string"},` +
 	`"severity":{"type":"string"},"security_severity":{"type":"string"},"rule_description":{"type":"string"},` +
 	`"tags":{"type":"array","items":{"type":"string"}},"tool":{"type":"string"},"tool_version":{"type":"string"},` +
 	`"ref":{"type":"string"},"commit_sha":{"type":"string"},"path":{"type":"string"},"start_line":{"type":"integer"},` +
 	`"end_line":{"type":"integer"},"message":{"type":"string"},"help":{"type":"string"},` +
-	`"truncated":{"type":"boolean"}`
+	`"truncated":{"type":"boolean"},"links":` + codeScanningLinkKeysSchema + `,"rule_detail":` +
+	objectSchema(`"id":{"type":"string"},"name":{"type":"string"},"severity":{"type":"string"},`+
+		`"security_severity_level":{"type":"string"},"description":{"type":"string"},`+
+		`"description_truncated":{"type":"boolean"},"full_description":{"type":"string"},`+
+		`"full_description_truncated":{"type":"boolean"},"tags":{"type":"array","maxItems":100,`+
+		`"items":{"type":"string"}},"tags_truncated":{"type":"boolean"},"help":{"type":"string"},`+
+		`"help_truncated":{"type":"boolean"},"help_uri":{"type":"string"}`) + `,"tool_detail":` +
+	objectSchema(`"name":{"type":"string"},"version":{"type":"string"},"guid":{"type":"string"}`) +
+	`,"most_recent_instance":` + objectSchema(`"ref":{"type":"string"},"analysis_key":{"type":"string"},`+
+	`"environment":{"type":"string"},"category":{"type":"string"},"state":{"type":"string"},`+
+	`"commit_sha":{"type":"string"},"message":`+objectSchema(`"text":{"type":"string"},`+
+	`"text_truncated":{"type":"boolean"},"markdown":{"type":"string"},"markdown_truncated":{"type":"boolean"}`)+
+	`,"location":`+objectSchema(`"path":{"type":"string"},"start_line":{"type":"integer"},`+
+	`"end_line":{"type":"integer"},"start_column":{"type":"integer"},"end_column":{"type":"integer"}`)+
+	`,"url":{"type":"string"},"classifications":{"type":"array","maxItems":100,"items":{"type":"string"}},`+
+	`"classifications_truncated":{"type":"boolean"}`) + `,"dismissed_by_detail":` + restAccountSchema +
+	`,"dismissal_approved_by":` + restAccountSchema + `,"assignees":{"type":"array","maxItems":100,"items":` +
+	restAccountSchema + `},"assignees_truncated":{"type":"boolean"}`
+
+var codeScanningProperties = codeScanningListProperties + `,"linked_pull_requests":{"type":"array",` +
+	`"maxItems":100,"items":` + restPullSimpleSchema + `},"linked_pull_requests_truncated":{"type":"boolean"}`
 
 const dependabotProperties = alertCommonProperties + `,"fixed_at":{"type":"string"},` +
 	`"dismissed_at":{"type":"string"},"dismissed_by":{"type":"string"},"dismissed_reason":{"type":"string"},` +
@@ -118,22 +149,34 @@ var codeScanningAlertsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub code scanning alerts",
 	Description: "List one bounded, filtered batch of the code scanning alerts of a repository an explicit " +
-		"connection allows, newest first; alert texts are untrusted data",
+		"connection allows, newest first unless sort and direction say otherwise; alert texts are untrusted data",
 	Tags:     []string{"github", "security", "code-scanning", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(codeScanningStates) + `,"severity":` +
-		enumSchema(codeScanningSeverities) + `,"tool_name":` + alertToolSchema + `,"ref":` + refSchema + `,` + pagingKeys),
-	OutputSchema: alertListOutput("alerts", codeScanningProperties),
+		enumSchema(codeScanningSeverities) + `,"tool_name":` + alertToolSchema + `,"tool_guid":` + alertGUIDSchema +
+		`,"ref":` + refSchema + `,"pr":` + alertNumberSchema + `,"assignees":{"type":"array","minItems":1,` +
+		`"maxItems":10,"items":{"type":"string","minLength":1,"maxLength":100,"pattern":"` + alertAssigneesReg + `"}},` +
+		`"sort":` + enumSchema(codeScanningSorts) + `,"direction":` + enumSchema(codeScanningDirections) + `,` + pagingKeys),
+	OutputSchema: alertListOutput("alerts", codeScanningListProperties),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "Return only alerts in this state: " + strings.Join(codeScanningStates, ", ")},
 		{Name: "severity", Description: "Return only alerts of this severity: " + strings.Join(codeScanningSeverities, ", ")},
 		{Name: "tool_name", Description: "Return only alerts of this code scanning tool, such as CodeQL"},
+		{Name: "tool_guid", Description: "Return only alerts of the code scanning tool with this GUID, at most 256 " +
+			"characters; not together with tool_name"},
 		{Name: "ref", Description: "Return only alerts of this Git reference, a branch name or refs/heads/NAME"},
+		{Name: "pr", Description: "Return only alerts of the pull request with this number"},
+		{Name: "assignees", Description: "Return only alerts assigned to these logins, at most 10; [\"*\"] returns " +
+			"alerts with at least one assignee and [\"none\"] alerts with none, each only alone"},
+		{Name: "sort", Description: "Sort by " + strings.Join(codeScanningSorts, " or ") + "; created when omitted"},
+		{Name: "direction", Description: "Sort direction, " + strings.Join(codeScanningDirections, " or ") +
+			"; desc when omitted"},
 	}, alertPagingArguments...),
 	Fields: append([]capability.Field{
-		{Name: "alerts", Description: "Alerts with number, state, rule, severity, tool, most recent location, and " +
-			"message; texts are untrusted data cut at 500 characters (truncated says so)"},
+		{Name: "alerts", Description: "Alerts as the get tool reads them, without linked_pull_requests and with the " +
+			"rule help cut at 500 characters; texts are untrusted data cut at 500 characters (truncated and the " +
+			"*_truncated members say so)"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the open high-severity alerts of the default branch",
@@ -179,6 +222,22 @@ var codeScanningAlertsGet = capability.Descriptor{
 		{Name: "end_line", Description: "Last line of the most recent location"},
 		{Name: "message", Description: "Alert message; untrusted data"},
 		{Name: "truncated", Description: "True when a text of the alert was cut"},
+		{Name: "links", Description: "REST url and instances_url of the alert by their GitHub names, untrusted data, never fetched"},
+		{Name: "rule_detail", Description: "Rule as an object: id, name, severity, security_severity_level, description, " +
+			"full_description, tags (at most 100), help (cut at 4000 characters), and help_uri; untrusted data, each " +
+			"cut text and list says so in its *_truncated member"},
+		{Name: "tool_detail", Description: "Tool as an object: name, version, and guid; untrusted data"},
+		{Name: "most_recent_instance", Description: "Most recent instance: ref, analysis_key, environment, category, " +
+			"state, commit_sha, message (text and markdown, cut), location (path, start_line, end_line, " +
+			"start_column, end_column), url (the web address), and classifications; untrusted data"},
+		{Name: "dismissed_by_detail", Description: "Account that dismissed the alert: " + restAccountMembers},
+		{Name: "dismissal_approved_by", Description: "Account that approved the dismissal: " + restAccountMembers},
+		{Name: "assignees", Description: "Accounts the alert is assigned to, at most 100: " + restAccountMembers},
+		{Name: "assignees_truncated", Description: "True when the alert has more assignees than shown"},
+		{Name: "linked_pull_requests", Description: "Pull requests linked to the alert, at most 100, each with the " +
+			"members of GitHub's simple pull request; a head or base repository outside the connection's targets " +
+			"keeps only id, node_id, and full_name; untrusted data"},
+		{Name: "linked_pull_requests_truncated", Description: "True when more pull requests are linked than shown"},
 	},
 	Examples: []capability.Example{{Description: "Read one alert", Arguments: json.RawMessage(`{"alert_number":42}`)}},
 }
@@ -320,18 +379,24 @@ var securityAlertTools = append([]string{codeScanningAlertsList.ID, codeScanning
 
 // alertArguments holds the arguments of every alert tool; the input schema of each admits only its own.
 type alertArguments struct {
-	AlertNumber int64  `json:"alert_number"`
-	State       string `json:"state"`
-	Severity    string `json:"severity"`
-	ToolName    string `json:"tool_name"`
-	Ref         string `json:"ref"`
-	SecretType  string `json:"secret_type"`
-	Resolution  string `json:"resolution"`
-	Limit       int    `json:"limit"`
-	Cursor      string `json:"cursor"`
+	AlertNumber int64    `json:"alert_number"`
+	State       string   `json:"state"`
+	Severity    string   `json:"severity"`
+	ToolName    string   `json:"tool_name"`
+	ToolGUID    string   `json:"tool_guid"`
+	Ref         string   `json:"ref"`
+	PR          *int64   `json:"pr"`
+	Assignees   []string `json:"assignees"`
+	Sort        string   `json:"sort"`
+	Direction   string   `json:"direction"`
+	SecretType  string   `json:"secret_type"`
+	Resolution  string   `json:"resolution"`
+	Limit       int      `json:"limit"`
+	Cursor      string   `json:"cursor"`
 
 	page, perPage int
 	binding       []byte
+	allowed       allowlist
 }
 
 func (a *alertArguments) query() url.Values {
@@ -385,6 +450,11 @@ func alertsHandler(id string, check func(*alertArguments, target) error,
 		if err != nil {
 			return nil, err
 		}
+		if id == codeScanningAlertsGet.ID {
+			if arguments.allowed, err = allowlistOf(resolved); err != nil {
+				return nil, providerError("open", err.Error())
+			}
+		}
 		if err := check(&arguments, bound); err != nil {
 			return nil, err
 		}
@@ -421,17 +491,65 @@ func listAlertsCheck(list string, states, severities []string) func(*alertArgume
 		if a.Ref != "" && !validRef(a.Ref) {
 			return invalidRequest("ref must be a branch name or Git reference")
 		}
+		if err := a.checkCodeScanningFilters(); err != nil {
+			return err
+		}
 		if a.SecretType != "" && !validSecretTypes(a.SecretType) {
 			return invalidRequest("secret_type must be a comma-separated list of secret type names")
 		}
 		if a.Resolution != "" && !containsFold(secretResolutions, a.Resolution) {
 			return invalidRequest("resolution must be one of " + strings.Join(secretResolutions, ", "))
 		}
-		a.binding = fingerprint("security-alerts", list, bound.String(), strings.ToLower(a.State),
-			strings.ToLower(a.Severity), a.ToolName, a.Ref, a.SecretType, strings.ToLower(a.Resolution))
+		parts := []any{"security-alerts", list, bound.String(), strings.ToLower(a.State),
+			strings.ToLower(a.Severity), a.ToolName, a.Ref, a.SecretType, strings.ToLower(a.Resolution)}
+		if a.hasCodeScanningFilters() {
+			// Only a request that sets one of these filters binds them, so a cursor without them stays valid.
+			parts = append(parts, a.ToolGUID, a.PR, strings.ToLower(strings.Join(a.Assignees, ",")),
+				strings.ToLower(a.Sort), strings.ToLower(a.Direction))
+		}
+		a.binding = fingerprint(parts...)
 		a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 		return err
 	}
+}
+
+func (a *alertArguments) hasCodeScanningFilters() bool {
+	return a.ToolGUID != "" || a.PR != nil || len(a.Assignees) > 0 || a.Sort != "" || a.Direction != ""
+}
+
+// checkCodeScanningFilters rejects a filter combination or value GitHub would not take, before any credential
+// is resolved.
+func (a *alertArguments) checkCodeScanningFilters() error {
+	if a.ToolGUID != "" {
+		if utf8.RuneCountInString(a.ToolGUID) > 256 || strings.IndexFunc(a.ToolGUID, unicode.IsControl) >= 0 {
+			return invalidRequest("tool_guid must be the GUID of a code scanning tool, at most 256 characters")
+		}
+		if a.ToolName != "" {
+			return invalidRequest("tool_name and tool_guid cannot be combined; name the tool by one of them")
+		}
+	}
+	if a.PR != nil && *a.PR < 1 {
+		return invalidRequest("pr must be a positive pull request number")
+	}
+	if len(a.Assignees) > maxAssignees {
+		return invalidRequest(fmt.Sprintf("assignees accepts at most %d values", maxAssignees))
+	}
+	for _, login := range a.Assignees {
+		special := login == "*" || strings.EqualFold(login, "none")
+		if special && len(a.Assignees) > 1 {
+			return invalidRequest("assignees accepts * or none only alone")
+		}
+		if !special && !validLogin(login) {
+			return invalidRequest("assignees must be GitHub logins, or * or none")
+		}
+	}
+	if a.Sort != "" && !containsFold(codeScanningSorts, a.Sort) {
+		return invalidRequest("sort must be one of " + strings.Join(codeScanningSorts, ", "))
+	}
+	if a.Direction != "" && !containsFold(codeScanningDirections, a.Direction) {
+		return invalidRequest("direction must be one of " + strings.Join(codeScanningDirections, ", "))
+	}
+	return nil
 }
 
 func validSecretTypes(value string) bool {
@@ -495,6 +613,75 @@ type CodeScanningAlert struct {
 	Message          string   `json:"message,omitempty"`
 	Help             string   `json:"help,omitempty"`
 	Truncated        bool     `json:"truncated,omitempty"`
+
+	// The members below hold the rest of GitHub's alert. url stays the web address; the REST url and
+	// instances_url sit in Links.
+	Links                       Links                 `json:"links,omitempty"`
+	RuleDetail                  *CodeScanningRule     `json:"rule_detail,omitempty"`
+	ToolDetail                  *CodeScanningTool     `json:"tool_detail,omitempty"`
+	MostRecentInstance          *CodeScanningInstance `json:"most_recent_instance,omitempty"`
+	DismissedByDetail           *RESTAccount          `json:"dismissed_by_detail,omitempty"`
+	DismissalApprovedBy         *RESTAccount          `json:"dismissal_approved_by,omitempty"`
+	Assignees                   []RESTAccount         `json:"assignees,omitempty"`
+	AssigneesTruncated          bool                  `json:"assignees_truncated,omitempty"`
+	LinkedPullRequests          []RESTPullSimple      `json:"linked_pull_requests,omitempty"`
+	LinkedPullRequestsTruncated bool                  `json:"linked_pull_requests_truncated,omitempty"`
+}
+
+// CodeScanningRule is the rule of an alert.
+type CodeScanningRule struct {
+	ID                       string   `json:"id,omitempty"`
+	Name                     string   `json:"name,omitempty"`
+	Severity                 string   `json:"severity,omitempty"`
+	SecuritySeverityLevel    string   `json:"security_severity_level,omitempty"`
+	Description              string   `json:"description,omitempty"`
+	DescriptionTruncated     bool     `json:"description_truncated,omitempty"`
+	FullDescription          string   `json:"full_description,omitempty"`
+	FullDescriptionTruncated bool     `json:"full_description_truncated,omitempty"`
+	Tags                     []string `json:"tags,omitempty"`
+	TagsTruncated            bool     `json:"tags_truncated,omitempty"`
+	Help                     string   `json:"help,omitempty"`
+	HelpTruncated            bool     `json:"help_truncated,omitempty"`
+	HelpURI                  string   `json:"help_uri,omitempty"`
+}
+
+// CodeScanningTool is the analysis tool of an alert.
+type CodeScanningTool struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+	GUID    string `json:"guid,omitempty"`
+}
+
+// CodeScanningMessage is the message of an instance.
+type CodeScanningMessage struct {
+	Text              string `json:"text,omitempty"`
+	TextTruncated     bool   `json:"text_truncated,omitempty"`
+	Markdown          string `json:"markdown,omitempty"`
+	MarkdownTruncated bool   `json:"markdown_truncated,omitempty"`
+}
+
+// CodeScanningLocation is the location of an instance.
+type CodeScanningLocation struct {
+	Path        string `json:"path,omitempty"`
+	StartLine   int    `json:"start_line,omitempty"`
+	EndLine     int    `json:"end_line,omitempty"`
+	StartColumn int    `json:"start_column,omitempty"`
+	EndColumn   int    `json:"end_column,omitempty"`
+}
+
+// CodeScanningInstance is the most recent instance of an alert. URL is its web address.
+type CodeScanningInstance struct {
+	Ref                      string                `json:"ref,omitempty"`
+	AnalysisKey              string                `json:"analysis_key,omitempty"`
+	Environment              string                `json:"environment,omitempty"`
+	Category                 string                `json:"category,omitempty"`
+	State                    string                `json:"state,omitempty"`
+	CommitSHA                string                `json:"commit_sha,omitempty"`
+	Message                  *CodeScanningMessage  `json:"message,omitempty"`
+	Location                 *CodeScanningLocation `json:"location,omitempty"`
+	URL                      string                `json:"url,omitempty"`
+	Classifications          []string              `json:"classifications,omitempty"`
+	ClassificationsTruncated bool                  `json:"classifications_truncated,omitempty"`
 }
 
 // CodeScanningAlertList is one batch of code scanning alerts.
@@ -505,46 +692,75 @@ type CodeScanningAlertList struct {
 }
 
 type codeScanningAlertJSON struct {
-	Number           int       `json:"number"`
-	State            string    `json:"state"`
-	CreatedAt        string    `json:"created_at"`
-	UpdatedAt        string    `json:"updated_at"`
-	HTMLURL          string    `json:"html_url"`
-	FixedAt          string    `json:"fixed_at"`
-	DismissedAt      string    `json:"dismissed_at"`
-	DismissedReason  string    `json:"dismissed_reason"`
-	DismissedComment string    `json:"dismissed_comment"`
-	DismissedBy      alertUser `json:"dismissed_by"`
+	Number           int         `json:"number"`
+	State            string      `json:"state"`
+	CreatedAt        string      `json:"created_at"`
+	UpdatedAt        string      `json:"updated_at"`
+	HTMLURL          string      `json:"html_url"`
+	FixedAt          string      `json:"fixed_at"`
+	DismissedAt      string      `json:"dismissed_at"`
+	DismissedReason  string      `json:"dismissed_reason"`
+	DismissedComment string      `json:"dismissed_comment"`
+	DismissedBy      *accountRaw `json:"dismissed_by"`
 	Rule             struct {
 		ID                    string   `json:"id"`
 		Name                  string   `json:"name"`
 		Severity              string   `json:"severity"`
 		SecuritySeverityLevel string   `json:"security_severity_level"`
 		Description           string   `json:"description"`
+		FullDescription       string   `json:"full_description"`
 		Help                  string   `json:"help"`
+		HelpURI               string   `json:"help_uri"`
 		Tags                  []string `json:"tags"`
 	} `json:"rule"`
 	Tool struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
+		GUID    string `json:"guid"`
 	} `json:"tool"`
 	MostRecentInstance struct {
-		Ref       string `json:"ref"`
-		CommitSHA string `json:"commit_sha"`
-		Message   struct {
-			Text string `json:"text"`
+		Ref         string `json:"ref"`
+		AnalysisKey string `json:"analysis_key"`
+		Environment string `json:"environment"`
+		Category    string `json:"category"`
+		State       string `json:"state"`
+		CommitSHA   string `json:"commit_sha"`
+		Message     struct {
+			Text     string `json:"text"`
+			Markdown string `json:"markdown"`
 		} `json:"message"`
 		Location struct {
-			Path      string `json:"path"`
-			StartLine int    `json:"start_line"`
-			EndLine   int    `json:"end_line"`
+			Path        string `json:"path"`
+			StartLine   int    `json:"start_line"`
+			EndLine     int    `json:"end_line"`
+			StartColumn int    `json:"start_column"`
+			EndColumn   int    `json:"end_column"`
 		} `json:"location"`
+		HTMLURL         string    `json:"html_url"`
+		Classifications []*string `json:"classifications"`
 	} `json:"most_recent_instance"`
+	DismissalApprovedBy *accountRaw     `json:"dismissal_approved_by"`
+	Assignees           []accountRaw    `json:"assignees"`
+	LinkedPullRequests  []pullSimpleRaw `json:"linked_pull_requests"`
+	links               Links
 }
 
-func (j codeScanningAlertJSON) view(detail bool) CodeScanningAlert {
+func (j *codeScanningAlertJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain codeScanningAlertJSON
+	if err = json.Unmarshal(data, (*plain)(j)); err != nil {
+		return err
+	}
+	j.links, err = readLinks(data, []string{"url", "instances_url"})
+	return err
+}
+
+func (j codeScanningAlertJSON) view(detail bool, allowed allowlist) CodeScanningAlert {
+	var dismissedBy string
+	if j.DismissedBy != nil && j.DismissedBy.Login != nil {
+		dismissedBy = *j.DismissedBy.Login
+	}
 	v := CodeScanningAlert{Number: j.Number, State: j.State, CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt,
-		URL: j.HTMLURL, FixedAt: j.FixedAt, DismissedAt: j.DismissedAt, DismissedBy: alertLogin(j.DismissedBy),
+		URL: j.HTMLURL, FixedAt: j.FixedAt, DismissedAt: j.DismissedAt, DismissedBy: dismissedBy,
 		DismissedReason: j.DismissedReason, RuleID: j.Rule.ID, RuleName: j.Rule.Name, Severity: j.Rule.Severity,
 		SecuritySeverity: j.Rule.SecuritySeverityLevel, Tags: j.Rule.Tags, Tool: j.Tool.Name,
 		ToolVersion: j.Tool.Version, Ref: j.MostRecentInstance.Ref, CommitSHA: j.MostRecentInstance.CommitSHA,
@@ -563,14 +779,98 @@ func (j codeScanningAlertJSON) view(detail bool) CodeScanningAlert {
 		v.Help = clip(j.Rule.Help, alertHelpLimit)
 	}
 	v.Truncated = cut
+	j.addDetails(&v, detail, allowed)
 	return v
+}
+
+// addDetails sets the members beyond the compact view. Only they pass through the projection helpers; the
+// compact members keep their handling above. A list cuts the rule help shorter than a get.
+func (j codeScanningAlertJSON) addDetails(v *CodeScanningAlert, detail bool, allowed allowlist) {
+	v.Links = j.links
+	v.DismissedByDetail = j.DismissedBy.project()
+	v.DismissalApprovedBy = j.DismissalApprovedBy.project()
+	v.Assignees, v.AssigneesTruncated = accounts(j.Assignees)
+
+	rule := CodeScanningRule{ID: *nameText(&j.Rule.ID), Name: *nameText(&j.Rule.Name),
+		Severity: *nameText(&j.Rule.Severity), SecuritySeverityLevel: *nameText(&j.Rule.SecuritySeverityLevel)}
+	rule.Description, rule.DescriptionTruncated = clipClean(j.Rule.Description, alertTextLimit)
+	rule.FullDescription, rule.FullDescriptionTruncated = clipClean(j.Rule.FullDescription, alertTextLimit)
+	helpLimit := alertTextLimit
+	if detail {
+		helpLimit = alertHelpLimit
+	}
+	rule.Help, rule.HelpTruncated = clipClean(j.Rule.Help, helpLimit)
+	if uri := address(&j.Rule.HelpURI); uri != nil {
+		rule.HelpURI = *uri
+	}
+	tags, cut := capped(j.Rule.Tags)
+	for i := range tags {
+		rule.Tags = append(rule.Tags, *nameText(&tags[i]))
+	}
+	rule.TagsTruncated = cut
+	if !reflect.ValueOf(rule).IsZero() {
+		v.RuleDetail = &rule
+	}
+
+	tool := CodeScanningTool{Name: *nameText(&j.Tool.Name), Version: *nameText(&j.Tool.Version),
+		GUID: *nameText(&j.Tool.GUID)}
+	if tool != (CodeScanningTool{}) {
+		v.ToolDetail = &tool
+	}
+
+	in := j.MostRecentInstance
+	instance := CodeScanningInstance{Ref: *nameText(&in.Ref), AnalysisKey: *longText(&in.AnalysisKey),
+		Environment: *longText(&in.Environment), Category: *longText(&in.Category), State: *nameText(&in.State),
+		CommitSHA: *nameText(&in.CommitSHA)}
+	if uri := address(&in.HTMLURL); uri != nil {
+		instance.URL = *uri
+	}
+	message := CodeScanningMessage{}
+	message.Text, message.TextTruncated = clipClean(in.Message.Text, alertTextLimit)
+	message.Markdown, message.MarkdownTruncated = clipClean(in.Message.Markdown, alertTextLimit)
+	if message != (CodeScanningMessage{}) {
+		instance.Message = &message
+	}
+	location := CodeScanningLocation{Path: *longText(&in.Location.Path), StartLine: in.Location.StartLine,
+		EndLine: in.Location.EndLine, StartColumn: in.Location.StartColumn, EndColumn: in.Location.EndColumn}
+	if location != (CodeScanningLocation{}) {
+		instance.Location = &location
+	}
+	classifications, cut := capped(in.Classifications)
+	for _, classification := range classifications {
+		if classification != nil && *classification != "" {
+			instance.Classifications = append(instance.Classifications, *nameText(classification))
+		}
+	}
+	instance.ClassificationsTruncated = cut
+	if !reflect.ValueOf(instance).IsZero() {
+		v.MostRecentInstance = &instance
+	}
+
+	if detail {
+		pulls, cut := capped(j.LinkedPullRequests)
+		for i := range pulls {
+			v.LinkedPullRequests = append(v.LinkedPullRequests, *pulls[i].project(allowed))
+		}
+		v.LinkedPullRequestsTruncated = cut
+	}
+}
+
+// clipClean replaces the control characters of an untrusted text and cuts it at limit characters.
+func clipClean(text string, limit int) (string, bool) {
+	cleaned, cut := cleanText(&text, limit, true)
+	return *cleaned, cut
 }
 
 func (c *Client) listCodeScanningAlerts(ctx context.Context, a *alertArguments) (*CodeScanningAlertList, error) {
 	const op = "list code scanning alerts"
 	query := a.query()
 	setQuery(query, "state", strings.ToLower(a.State), "severity", strings.ToLower(a.Severity),
-		"tool_name", a.ToolName, "ref", a.Ref)
+		"tool_name", a.ToolName, "ref", a.Ref, "tool_guid", a.ToolGUID, "sort", strings.ToLower(a.Sort),
+		"direction", strings.ToLower(a.Direction), "assignees", strings.Join(a.Assignees, ","))
+	if a.PR != nil {
+		query.Set("pr", strconv.FormatInt(*a.PR, 10))
+	}
 	var raw []codeScanningAlertJSON
 	hasNext, err := c.restPage(ctx, op, c.alertPath("code-scanning", 0), query, &raw)
 	if err != nil {
@@ -581,7 +881,7 @@ func (c *Client) listCodeScanningAlerts(ctx context.Context, a *alertArguments) 
 		if entry.Number < 1 {
 			return nil, invalidEntry(op, "an alert")
 		}
-		result.Alerts = append(result.Alerts, entry.view(false))
+		result.Alerts = append(result.Alerts, entry.view(false, nil))
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
@@ -596,7 +896,7 @@ func (c *Client) getCodeScanningAlert(ctx context.Context, a *alertArguments) (*
 	if raw.Number < 1 {
 		return nil, invalidEntry(op, "an alert")
 	}
-	view := raw.view(true)
+	view := raw.view(true, a.allowed)
 	return &view, nil
 }
 
