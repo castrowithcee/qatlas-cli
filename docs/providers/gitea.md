@@ -64,6 +64,7 @@ scope shows as `not-found` (see Errors).
 | `accounts.me` | `read:user` |
 | `repositories.get` | `read:repository` |
 | `repositories.list` | `read:repository`; the token's own repositories and a user's also `read:user`, an organization's also `read:organization` |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | presumably `read:repository` |
 | `settings.get`, `signing-keys.get`, `markdown.render`, `markup.render`, `nodeinfo.get` | presumably `read:misc` |
 | `version.get` | none |
 | `issues.list`, `issues.get`, `issue-timeline.list` | `read:issue` |
@@ -196,6 +197,7 @@ Members only one product documents appear only there; the descriptor of each too
 | `repositories.list`, `repositories.get` | read | both |
 | `settings.get`, `version.get`, `signing-keys.get` | read | both |
 | `markdown.render`, `markup.render` | read | both |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | read | both |
 | `nodeinfo.get` | read | Forgejo |
 | `issues.list`, `issues.search`, `issues.get`, `issue-timeline.list` | read | both |
 | `issues.create` | create | both |
@@ -227,6 +229,14 @@ for one issue, its `number`. Issues and pull requests share one index space.
   lie outside the targets.
 - Not offered: the deprecated `assignee` of create and update, and the due-date members of both, which
   `issue-deadlines.set` covers. A label is set on creation only, by its numeric ID; the update API has no label member.
+
+## Issue templates and configuration
+
+`issue-templates.list`, `issue-config.get`, and `issue-config.validate` read the issue templates, the issue
+configuration file, and the instance's validation of it for one repository (`repository` as `OWNER/REPO`, checked
+against the targets). Template and link texts, form attributes, and validation messages come from repository files
+and are untrusted data. `assignees` of a template is a Gitea member. The template list is cut at 100 entries with
+`truncated` set.
 
 ## Not offered
 
