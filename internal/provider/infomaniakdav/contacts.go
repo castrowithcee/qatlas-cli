@@ -53,25 +53,25 @@ var contactFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the contact resource, the id argument of the get tool"},
 	{Name: "uid", Description: "vCard UID, untrusted data"},
 	{Name: "name", Description: "Formatted name (FN), untrusted personal data; built from the structured name if absent"},
-	{Name: "email", Description: "First e-mail address, untrusted personal data; only the list tool reports it"},
+	{Name: "email", Description: "First e-mail address, untrusted personal data"},
 	{Name: "organization", Description: "Organization, untrusted data"},
-	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix; only the get tool reports it"},
-	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "title", Description: "Job title; only the get tool reports it"},
-	{Name: "birthday", Description: "Birthday as the card states it; only the get tool reports it"},
-	{Name: "note", Description: "Note, untrusted data; only the get tool reports it"},
-	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed; only the get tool reports them"},
-	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
+	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix"},
+	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref"},
+	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref"},
+	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref"},
+	{Name: "title", Description: "Job title"},
+	{Name: "birthday", Description: "Birthday as the card states it"},
+	{Name: "note", Description: "Note, untrusted data"},
+	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed"},
+	{Name: "truncated", Description: "Names of the members that were cut at their cap"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}, dav.ContactFullFields...)
+}, bothTools(dav.ContactFullFields)...)
 
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.list", Version: 1, Title: "List Infomaniak contacts",
 	Description: "List the contacts of one allow-listed address book, ordered by name; the result is limited " +
-		"and compact, and a card that is not a valid vCard is left out",
+		"and reports the same members as the get tool, and a card that is not a valid vCard is left out",
 	Tags: []string{"infomaniak", "dav", "contacts", "contact", "list"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
@@ -258,9 +258,12 @@ func (c *Client) listContacts(ctx context.Context, book, body string, filter dav
 			continue
 		}
 		seen[id] = true
-		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
+		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], true)
 		if err != nil {
 			continue
+		}
+		if len(contact.Emails) > 0 {
+			contact.Email = contact.Emails[0].Value
 		}
 		contact.ID = id
 		contact.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])

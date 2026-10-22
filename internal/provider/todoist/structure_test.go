@@ -702,7 +702,7 @@ func TestPlanLimitsArePermissionFailures(t *testing.T) {
 func TestRemindersGetStaysOnTheConnectionsTasks(t *testing.T) {
 	env := newEnvironment(t, &fakeTodoist{})
 	result, err := env.invoke("todoist.reminders.get", "one", `{"reminder_id":"remOne"}`)
-	if err != nil || result != `{"id":"remOne","is_urgent":false,"minute_offset":30,"task_id":"taskDue","type":"relative"}` {
+	if err != nil || result != `{"id":"remOne","is_urgent":false,"minute_offset":30,"notify_uid":"1","task_id":"taskDue","type":"relative"}` {
 		t.Errorf("reminder = %s, %v", result, err)
 	}
 	requests := env.fake.recorded()

@@ -203,7 +203,7 @@ var commentsCreate = changing(capability.EffectCreate, capability.IdempotencyNon
 		{Name: "project_id", Description: "Project of the connection to comment on"},
 		{Name: "content", Description: "Comment text in Markdown, at most 15000 characters; stored as given", Required: true},
 	},
-	[]capability.Field{{Name: "id", Description: "Comment ID"}, {Name: "content", Description: "Comment text, untrusted data"}},
+	commentOutputFields,
 	[]capability.Example{{Description: "Comment on a task",
 		Arguments: json.RawMessage(`{"task_id":"6X7rM8997g3RQmvh","content":"Waiting for the signed offer"}`)}}))
 
@@ -220,7 +220,7 @@ var commentsUpdate = changing(capability.EffectUpdate, capability.IdempotencyIde
 		{Name: "comment_id", Description: "Comment ID, as returned by todoist.comments.list", Required: true},
 		{Name: "content", Description: "New comment text, at most 15000 characters", Required: true},
 	},
-	[]capability.Field{{Name: "id", Description: "Comment ID"}, {Name: "content", Description: "Comment text, untrusted data"}},
+	commentOutputFields,
 	[]capability.Example{{Description: "Correct a comment",
 		Arguments: json.RawMessage(`{"comment_id":"6X7rfFVPjhvv84XG","content":"Offer signed on Monday"}`)}}))
 

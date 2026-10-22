@@ -294,4 +294,6 @@ func TestEveryOutputMemberIsInSchemaAndFields(t *testing.T) {
 		t.Fatalf("no omitted_fields in %v", out)
 	}
 	outputCoverage(t, descriptorOf(t, "seatable.base.columns.list"), out)
+
+	viewsOutputCoverage(t)
 }
