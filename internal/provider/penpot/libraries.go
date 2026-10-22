@@ -20,13 +20,16 @@ var librariesList = capability.Descriptor{
 	InputSchema: schemaOf(`"project_id":`+uuidSchema+`,"file_id":`+uuidSchema, `"project_id","file_id"`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"libraries":{"type":"array","items":` +
 		`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"project_id":{"type":"string"},"is_shared":{"type":"boolean"},"is_indirect":{"type":"boolean"}},` +
+		`"project_id":{"type":"string"},"is_shared":{"type":"boolean"},"is_indirect":{"type":"boolean"},` +
+		`"features":` + featuresSchema + `,"team_id":{"type":"string"},"created_at":` + timestampSchema +
+		`,"modified_at":` + timestampSchema + `,"revn":{"type":"integer"},"vern":{"type":"integer"},` +
+		`"version":{"type":"integer"},"synced_at":` + timestampSchema + `},` +
 		`"required":["id","name","project_id"],"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"outside_targets":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["libraries","count","outside_targets","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{projectIDArgument, fileIDArgument},
 	Fields: []capability.Field{
-		{Name: "libraries", Description: "Libraries inside the targets with id, name, project_id, is_shared, and is_indirect (used through another library)"},
+		{Name: "libraries", Description: "Libraries inside the targets with id, name, project_id, is_shared, is_indirect (used through another library), features, team_id, created_at, modified_at, revn, vern, version, and synced_at (when the file last synchronized this library); names and features are untrusted provider data"},
 		{Name: "count", Description: "Number of libraries in this answer"},
 		{Name: "outside_targets", Description: "Number of libraries outside this connection's targets; they are not described"},
 		{Name: "truncated", Description: "True when the answer was cut at 200 libraries"},
@@ -82,11 +85,19 @@ var librariesLink = capability.Descriptor{
 
 // Library is one library a file uses.
 type Library struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	ProjectID  string `json:"project_id"`
-	IsShared   bool   `json:"is_shared,omitempty"`
-	IsIndirect bool   `json:"is_indirect,omitempty"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	ProjectID  string   `json:"project_id"`
+	IsShared   bool     `json:"is_shared,omitempty"`
+	IsIndirect bool     `json:"is_indirect,omitempty"`
+	Features   []string `json:"features,omitempty"`
+	TeamID     string   `json:"team_id,omitempty"`
+	CreatedAt  string   `json:"created_at,omitempty"`
+	ModifiedAt string   `json:"modified_at,omitempty"`
+	Revn       *int64   `json:"revn,omitempty"`
+	Vern       *int64   `json:"vern,omitempty"`
+	Version    *int64   `json:"version,omitempty"`
+	SyncedAt   string   `json:"synced_at,omitempty"`
 }
 
 // LibrariesResult is the answer of libraries.list.
@@ -159,7 +170,10 @@ func invokeLibrariesList(ctx context.Context, resolved *config.Resolved, secrets
 			continue
 		}
 		result.Libraries = append(result.Libraries, Library{ID: id, Name: entry.str("name"), ProjectID: project,
-			IsShared: entry.boolean("isshared"), IsIndirect: entry.boolean("isindirect")})
+			IsShared: entry.boolean("isshared"), IsIndirect: entry.boolean("isindirect"),
+			Features: entry.stringList("features"), TeamID: team, CreatedAt: entry.str("createdat"),
+			ModifiedAt: entry.str("modifiedat"), Revn: entry.optInteger("revn"), Vern: entry.optInteger("vern"),
+			Version: entry.optInteger("version"), SyncedAt: entry.str("syncedat")})
 	}
 	result.Count = len(result.Libraries)
 	return result, nil

@@ -16,6 +16,12 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
 
 - Backend RPC `POST /api/rpc/command/<name>` with `Authorization: Token ...` (documented). None of the read commands
   paginates; `get-page` returns the first page when `page-id` is omitted.
+- Listings (`teams.clj`, `projects.clj`, `files.clj`, `binfile/common.clj`, `nitrate.clj`): `get-teams` returns the
+  columns of the `team` table with the account's permissions; the subscription is added only with the `subscriptions`
+  flag, the organization only with the `admin-console` flag (teams with an expired organization license are then
+  removed). `get-projects` returns deleted but recoverable projects since 2.12. `get-project-files` and
+  `get-file-libraries` return only files that are not deleted. Assumed: timestamps are sent as text, sets such as
+  `features` as lists, and a missing or null member is simply absent.
 - Comments (`comments.clj`): the update and delete commands check that the caller owns the comment or thread and
   answer without a body. `get-comment-threads` also returns owner name and email, which Qatlas drops. `share-id` and
   `mentions` are optional and never sent.

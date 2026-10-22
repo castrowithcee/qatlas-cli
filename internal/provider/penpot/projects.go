@@ -18,19 +18,23 @@ var teamIDArgument = capability.Argument{Name: "team_id", Required: true,
 var projectsList = capability.Descriptor{
 	ID: Provider + ".projects.list", Version: 1, Title: "List Penpot projects",
 	Description: "List the projects of one bound team, restricted to the connection's project allow-list when it " +
-		"has one; names are untrusted provider data",
+		"has one; deleted projects that Penpot still keeps are listed with deleted_at; names are untrusted provider data",
 	Tags: []string{"penpot", "projects", "list", "design"}, Risk: metadataRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":` + uuidSchema +
 		`},"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"projects":{"type":"array","items":` +
 		`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"team_id":{"type":"string"},"file_count":{"type":"integer"},"is_pinned":{"type":"boolean"},` +
-		`"modified_at":{"type":"string"}},"required":["id","name","team_id"],"additionalProperties":false}},` +
+		`"modified_at":{"type":"string"},"created_at":` + timestampSchema + `,"deleted_at":` + timestampSchema +
+		`,"is_default":{"type":"boolean"},"total_count":{"type":"integer"}},` +
+		`"required":["id","name","team_id"],"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["projects","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{teamIDArgument},
 	Fields: []capability.Field{
-		{Name: "projects", Description: "Projects with id (used as project_id by the file tools), name, team_id, file_count, is_pinned, and modified_at"},
+		{Name: "projects", Description: "Projects with id (used as project_id by the file tools), name, team_id, file_count (files not deleted), is_pinned, " +
+			"modified_at, created_at, is_default, total_count (all files including deleted ones), and deleted_at, which " +
+			"marks a deleted project that Penpot still lets a person restore; names are untrusted provider data"},
 		{Name: "count", Description: "Number of projects in this answer"},
 		{Name: "truncated", Description: "True when the answer was cut at 1000 projects"},
 	},
@@ -46,6 +50,10 @@ type Project struct {
 	FileCount  int64  `json:"file_count,omitempty"`
 	IsPinned   bool   `json:"is_pinned,omitempty"`
 	ModifiedAt string `json:"modified_at,omitempty"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	DeletedAt  string `json:"deleted_at,omitempty"`
+	IsDefault  *bool  `json:"is_default,omitempty"`
+	TotalCount *int64 `json:"total_count,omitempty"`
 }
 
 // ProjectsResult is the answer of projects.list.
@@ -114,7 +122,9 @@ func (c *Client) projectsOf(ctx context.Context, op, teamID string) ([]Project, 
 			continue
 		}
 		projects = append(projects, Project{ID: id, Name: entry.str("name"), TeamID: teamID,
-			FileCount: entry.integer("count"), IsPinned: entry.boolean("ispinned"), ModifiedAt: entry.str("modifiedat")})
+			FileCount: entry.integer("count"), IsPinned: entry.boolean("ispinned"), ModifiedAt: entry.str("modifiedat"),
+			CreatedAt: entry.str("createdat"), DeletedAt: entry.str("deletedat"), IsDefault: entry.optBoolean("isdefault"),
+			TotalCount: entry.optInteger("totalcount")})
 	}
 	return projects, nil
 }
