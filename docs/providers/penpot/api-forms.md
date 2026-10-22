@@ -23,8 +23,10 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
   `get-file-libraries` return only files that are not deleted. Assumed: timestamps are sent as text, sets such as
   `features` as lists, and a missing or null member is simply absent.
 - Comments (`comments.clj`): the update and delete commands check that the caller owns the comment or thread and
-  answer without a body. `get-comment-threads` also returns owner name and email, which Qatlas drops. `share-id` and
-  `mentions` are optional and never sent.
+  answer without a body. The reading commands return the thread and comment columns plus the author's name, email, and
+  photo (`comment_thread` and `comment` tables, migrations 0031, 0077, and 0136); the threads also carry file name,
+  team, project, and the caller's unread count. `share-id` is optional and never sent; the write commands send no
+  `mentions`.
 - Project and file management (`projects.clj`, `files.clj`, `files_create.clj`, `management.clj`): `delete-project`
   marks the project deleted and refuses the default project; `move-files` takes a set of file IDs and the target
   project, refuses a move into the same project, and answers without a body. Names are at most 250 characters. The
