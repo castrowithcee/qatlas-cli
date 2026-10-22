@@ -13,8 +13,8 @@ Group `administration`.
 
 ## Instance information
 
-`bookstack.system.get` returns the instance information without logo. It returns no
-content and therefore also works on a connection with targets.
+`bookstack.system.get` returns the instance information including the address of the logo, which is
+never fetched and is untrusted data. It returns no content and therefore also works on a connection with targets.
 
 ## Content permissions
 
@@ -59,8 +59,8 @@ with targets the item is proven first (see [Targets](README.md#targets)).
 ## Recycle bin
 
 `bookstack.recycle-bin.list` lists the deleted items of the instance (`limit`, `offset`, `sort`, `filters`). Each entry carries `id`
-(the deletion identifier) and, of the deleted item, only its basic metadata where BookStack reports it, never its
-content. Names are untrusted data.
+(the deletion identifier) and, of the deleted item, its metadata as BookStack reports it (including the creator, editor, owner, and the parent), never its
+content. Names and descriptions are untrusted data.
 
 `bookstack.recycle-bin.restore` restores one deletion by `deletion_id`.
 `bookstack.recycle-bin.destroy` destroys one deletion permanently; this cannot be
@@ -78,7 +78,7 @@ authentication identifiers, IP addresses). Names and texts are untrusted data.
 
 `bookstack.users.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.users.get` (`id`) need the role permission
 `users-manage`. BookStack does not report roles in the
-listing, so only `get` carries them. Avatar and edit addresses are never returned. `last_activity_at` and `created_at`
+listing, so only `get` carries them. The avatar and edit addresses are returned as untrusted addresses of the instance and are never fetched. `last_activity_at` and `created_at`
 can be sorted but not filtered: the listing joins the latest activity as `last_activity_at`, so a filter on the alias
 fails and one on `created_at` is ambiguous. A filter on `email` or `external_auth_id` narrows only what the tool
 already lists.

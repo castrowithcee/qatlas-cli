@@ -54,6 +54,8 @@ var (
 		{Name: "last_activity_at", Description: "Time of the last activity of the user"},
 		{Name: "roles", Description: "Roles of the user as id and display_name; the listing does not carry them"},
 		{Name: "profile_url", Description: "Address of the profile of the user"},
+		{Name: "edit_url", Description: "Address of the edit page of the user in the instance, never fetched, untrusted data"},
+		{Name: "avatar_url", Description: "Address of the avatar of the user, never fetched, untrusted data"},
 	}
 
 	usersList = capability.Descriptor{
@@ -62,7 +64,7 @@ var (
 			"BookStack does not report roles in the listing; read one user to see them. " + usersRoles,
 		Tags: []string{"administration", "users", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + userListSchema.properties() + `},"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{` + userObject + `},"required":["id","name","slug"]}}`),
+		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{` + userObject + `,"edit_url":{},"avatar_url":{}},"required":["id","name","slug"]}}`),
 		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of users to return; 0 returns all"},
 			{Name: "offset", Description: "Number of users to skip"},
@@ -76,7 +78,7 @@ var (
 		Description: "Read one user of the instance with the roles. " + usersRoles,
 		Tags:        []string{"administration", "users", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(idOnlySchema),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + userObject + `},"required":["id","name","slug"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + userObject + `,"edit_url":{"type":"string"},"avatar_url":{"type":"string"}},"required":["id","name","slug"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "User identifier", Required: true}},
 		Fields:       userFields,
 	}
@@ -112,7 +114,7 @@ var (
 		Tags:        []string{"administration", "roles", "bookstack"}, Risk: peopleReadRisk, Provider: Provider,
 		InputSchema: json.RawMessage(idOnlySchema),
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{` + roleCommon + `,"permissions":{"type":"array","items":{"type":"string"}},` +
-			`"users":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"truncated":{"type":"boolean"}},"required":["id","display_name","permissions","users","truncated"]}`),
+			`"users":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}}},"truncated":{"type":"boolean"}},"required":["id","display_name","permissions","users","truncated"]}`),
 		Arguments: []capability.Argument{{Name: "id", Description: "Role identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Role identifier"},
@@ -124,7 +126,7 @@ var (
 			{Name: "created_at", Description: "Creation timestamp"},
 			{Name: "updated_at", Description: "Last change timestamp"},
 			{Name: "permissions", Description: "Names of the permissions of the role"},
-			{Name: "users", Description: "Users with the role as id and name, at most 1000"},
+			{Name: "users", Description: "Users with the role as id, name, and slug, at most 1000"},
 			{Name: "truncated", Description: "True when the users or permissions were cut"},
 		},
 	}
@@ -145,6 +147,8 @@ type accountJSON struct {
 	UpdatedAt      string         `json:"updated_at"`
 	LastActivityAt string         `json:"last_activity_at"`
 	ProfileURL     string         `json:"profile_url"`
+	EditURL        string         `json:"edit_url"`
+	AvatarURL      string         `json:"avatar_url"`
 	Roles          []userRoleJSON `json:"roles"`
 }
 
@@ -155,6 +159,8 @@ func userRow(u accountJSON) output.Row {
 		"created_at": clip(u.CreatedAt, maxResultString), "updated_at": clip(u.UpdatedAt, maxResultString),
 		"last_activity_at": clip(u.LastActivityAt, maxResultString), "profile_url": clip(u.ProfileURL, maxResultString),
 	}
+	setText(row, "edit_url", u.EditURL)
+	setText(row, "avatar_url", u.AvatarURL)
 	if u.Roles != nil {
 		roles := make([]map[string]any, 0, len(u.Roles))
 		for i, r := range u.Roles {
@@ -183,6 +189,7 @@ type roleJSON struct {
 	Users            []struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
+		Slug string `json:"slug"`
 	} `json:"users"`
 }
 
@@ -350,7 +357,9 @@ func roleObject(role roleJSON) output.Object {
 		if i >= maxRoleMembers {
 			break
 		}
-		users = append(users, map[string]any{"id": u.ID, "name": clip(u.Name, maxResultString)})
+		member := map[string]any{"id": u.ID, "name": clip(u.Name, maxResultString)}
+		setText(member, "slug", u.Slug)
+		users = append(users, member)
 	}
 	permissions := make([]string, 0, len(role.Permissions))
 	for i, name := range role.Permissions {

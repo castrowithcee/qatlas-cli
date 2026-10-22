@@ -13,8 +13,8 @@ import (
 )
 
 const recycleBinEntry = `{"id":4,"deleted_by":2,"created_at":"2026-10-01T10:00:00Z","updated_at":"x","deletable_type":"page","deletable_id":9,` +
-	`"deletable":{"id":9,"name":"Gone","slug":"gone","book_id":3,"chapter_id":5,"description":"SECRET","html":"<p>body</p>","pages_count":0,` +
-	`"parent":{"id":5,"name":"Parent","slug":"parent","type":"chapter","description":"SECRET"}}}`
+	`"deletable":{"id":9,"name":"Gone","slug":"gone","book_id":3,"chapter_id":5,"description":"Desc","html":"<p>body</p>","pages_count":0,` +
+	`"parent":{"id":5,"name":"Parent","slug":"parent","type":"chapter","description":"Desc"}}}`
 
 func TestRecycleBinDescriptors(t *testing.T) {
 	reg := capability.NewRegistry()
@@ -66,7 +66,8 @@ func TestRecycleBinListReducesFields(t *testing.T) {
 	row := got.Rows[0]
 	want := map[string]any{"id": int64(4), "deleted_by": int64(2), "created_at": "2026-10-01T10:00:00Z", "deletable_type": "page",
 		"deletable_id": int64(9), "name": "Gone", "slug": "gone", "book_id": int64(3), "chapter_id": int64(5),
-		"pages_count": int64(0), "parent_type": "chapter", "parent_id": int64(5)}
+		"pages_count": int64(0), "parent_type": "chapter", "parent_id": int64(5), "updated_at": "x",
+		"deletable": map[string]any{"description": "Desc", "parent": map[string]any{"name": "Parent", "slug": "parent", "description": "Desc"}}}
 	if !reflect.DeepEqual(map[string]any(row), want) {
 		t.Errorf("row = %v, want %v", row, want)
 	}

@@ -227,14 +227,9 @@ func TestUserUpdateWithoutRolesDoesNotLookUpRoles(t *testing.T) {
 	for _, f := range obj.Fields {
 		names = append(names, f.Name)
 	}
-	for _, need := range []string{"id", "name", "email", "roles", "profile_url"} {
+	for _, need := range []string{"id", "name", "email", "roles", "profile_url", "avatar_url", "edit_url"} {
 		if !slices.Contains(names, need) {
 			t.Errorf("result lacks %q: %v", need, names)
-		}
-	}
-	for _, banned := range []string{"avatar_url", "edit_url"} {
-		if slices.Contains(names, banned) {
-			t.Errorf("result carries %q", banned)
 		}
 	}
 }
