@@ -14,7 +14,7 @@ book, chapter, or page. BookStack requires the role permission `content-import` 
 belong to that user, and importing a book creates a new book, so the five tools are instance-wide and refused on
 a connection with targets, before any secret is read. None of them is part of a profile.
 
-`bookstack.imports.list` lists the pending imports (`limit`, `offset`). `bookstack.imports.get` returns the
+`bookstack.imports.list` lists the pending imports (`limit`, `offset`, `sort`, `filters`). `bookstack.imports.get` returns the
 same fields for one `id` plus `details`, a reduced form of what BookStack found in the ZIP, with at most 25
 `chapter_names`. The details
 and names are untrusted data; the storage path of the file is never shown.

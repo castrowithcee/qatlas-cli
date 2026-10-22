@@ -32,12 +32,12 @@ func auditServer(t *testing.T, rec *recorder) *httptest.Server {
 func TestAuditLogReducesFieldsAndMapsFilters(t *testing.T) {
 	rec := &recorder{}
 	c := newClient(t, auditServer(t, rec).URL, nil)
-	filter, _, _, err := parseAuditFilter([]byte(`{"type":"page_update","user_id":5,"loggable_type":"page","loggable_id":9,` +
+	filter, _, _, _, err := parseAuditFilter([]byte(`{"type":"page_update","user_id":5,"loggable_type":"page","loggable_id":9,` +
 		`"created_after":"2026-10-01","created_before":"2026-10-02T12:00:00Z"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := c.ListAuditLog(context.Background(), filter, 0, 0)
+	got, err := c.ListAuditLog(context.Background(), filter, listQuery{}, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestAuditLogReducesFieldsAndMapsFilters(t *testing.T) {
 func TestAuditLogWithoutFilterSendsNone(t *testing.T) {
 	rec := &recorder{}
 	c := newClient(t, auditServer(t, rec).URL, nil)
-	got, err := c.ListAuditLog(context.Background(), auditFilter{}, 0, 0)
+	got, err := c.ListAuditLog(context.Background(), auditFilter{}, listQuery{}, 0, 0)
 	if err != nil || len(got.Rows) != 4 {
 		t.Fatalf("rows = %v, %v", got.Rows, err)
 	}

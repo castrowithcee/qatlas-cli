@@ -58,7 +58,7 @@ with targets the item is proven first (see [Targets](README.md#targets)).
 
 ## Recycle bin
 
-`bookstack.recycle-bin.list` lists the deleted items of the instance (`limit`, `offset`). Each entry carries `id`
+`bookstack.recycle-bin.list` lists the deleted items of the instance (`limit`, `offset`, `sort`, `filters`). Each entry carries `id`
 (the deletion identifier) and, of the deleted item, only its basic metadata where BookStack reports it, never its
 content. Names are untrusted data.
 
@@ -76,13 +76,18 @@ These tools cover the whole instance, so they are refused on a connection with t
 read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
 authentication identifiers, IP addresses). Names and texts are untrusted data.
 
-`bookstack.users.list` (`limit`, `offset`) and `bookstack.users.get` (`id`) need the role permission
+`bookstack.users.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.users.get` (`id`) need the role permission
 `users-manage`. BookStack does not report roles in the
-listing, so only `get` carries them. Avatar and edit addresses are never returned.
+listing, so only `get` carries them. Avatar and edit addresses are never returned. `last_activity_at` and `created_at`
+can be sorted but not filtered: the listing joins the latest activity as `last_activity_at`, so a filter on the alias
+fails and one on `created_at` is ambiguous. A filter on `email` or `external_auth_id` narrows only what the tool
+already lists.
 
-`bookstack.roles.list` (`limit`, `offset`) and `bookstack.roles.get` (`id`) need `user-roles-manage`. `get` returns the
+`bookstack.roles.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.roles.get` (`id`) need `user-roles-manage`. `get` returns the
 `permissions` and the `users` of the role besides the listed fields, at most 1000 users; `truncated` is true when the
-users or permissions were cut.
+users or permissions were cut. `users_count` and `permissions_count` can be sorted but not filtered: BookStack
+computes them as aliases of counting subqueries, and the database does not accept such an alias in a filter
+condition. Without `sort`, the list is ordered by `id`, which is not a listed field and so no `sort` value.
 
 ### Changing roles
 
@@ -141,9 +146,9 @@ role cannot be determined. `users.delete` does the same check when `migrate_owne
 to hand the content to a guest user. Without `roles` or `migrate_ownership_id` no role is read.
 
 `bookstack.audit-log.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
-of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
-the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
+of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, `sort`, `filters`, and
+the arguments `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
 `loggable_type` (`page`, `chapter`, `book`, or `bookshelf`), `loggable_id`, and `created_after`/`created_before`
 (`YYYY-MM-DD` or RFC 3339; dates are UTC and a date alone means the start of that day). Values are checked before
-any request. BookStack ignores filters it does not know, so every returned entry is checked again against all
-filters.
+any request. The arguments and `filters` all must hold; `ip` is personal data, and a filter on it widens neither
+the connection nor the tool allow list.
