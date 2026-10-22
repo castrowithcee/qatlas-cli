@@ -32,7 +32,7 @@ type run func(ctx context.Context, c *Client) (any, error)
 var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea.minimum}
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
-	markdownRender, markupRender}
+	markdownRender, markupRender, issueTemplatesList, issueConfigGet, issueConfigValidate}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

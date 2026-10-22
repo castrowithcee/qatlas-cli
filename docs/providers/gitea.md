@@ -62,6 +62,7 @@ scope shows as `not-found` (see Errors).
 | `accounts.me` | `read:user` |
 | `repositories.get` | `read:repository` |
 | `repositories.list` | `read:repository`; the token's own repositories and a user's also `read:user`, an organization's also `read:organization` |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | presumably `read:repository` |
 | `settings.get`, `signing-keys.get`, `markdown.render`, `markup.render`, `nodeinfo.get` | presumably `read:misc` |
 | `version.get` | none |
 | target selection | `read:user` for the account, `read:organization` for its organizations |
@@ -118,6 +119,14 @@ refused before the token is read.
 
 `max_response_items` and `default_paging_num` from `settings.get` describe the instance; paging still follows
 Pagination below.
+
+## Issue templates and configuration
+
+`issue-templates.list`, `issue-config.get`, and `issue-config.validate` read the issue templates, the issue
+configuration file, and the instance's validation of it for one repository (`repository` as `OWNER/REPO`, checked
+against the targets). Template and link texts, form attributes, and validation messages come from repository files
+and are untrusted data. `assignees` of a template is a Gitea member. The template list is cut at 100 entries with
+`truncated` set.
 
 ## Version and connection test
 
@@ -188,6 +197,7 @@ Members only one product documents appear only there; the descriptor of each too
 | `repositories.list`, `repositories.get` | read | both |
 | `settings.get`, `version.get`, `signing-keys.get` | read | both |
 | `markdown.render`, `markup.render` | read | both |
+| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | read | both |
 | `nodeinfo.get` | read | Forgejo |
 
 Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. A connection offers reads by default.
