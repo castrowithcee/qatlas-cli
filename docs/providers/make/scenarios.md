@@ -29,8 +29,12 @@ own team, and, for runs, organization, after Make answers.
 
 ## Blueprints and connection references
 
-`make.scenarios.blueprint` reads one scenario's blueprint and passes it through unmodified beyond this
-provider's own response size limit. A module's `parameters` may reference a connection, a key, or a webhook,
+`make.scenarios.blueprint` reads one scenario's blueprint and masks its credentials. Credentials are masked
+only where Make documents them (`authPass`) and in authorization, cookie, and API-key headers; a secret typed
+into any other free module field (query strings, bodies, app-specific parameters) is not recognised. Keep
+secrets in Make connections or keys, which a blueprint references only by id. `make.scenarios.create` and
+`make.scenarios.update` refuse a blueprint that still holds the marker in such a place, so a masked read can
+never overwrite a stored credential. A module's `parameters` may reference a connection, a key, or a webhook,
 but only ever by the numeric id Make itself assigns it, never by the value stored behind that id: this is
 exactly why a blueprint can be exported and re-imported into another scenario without ever re-entering a
 credential, and why Make's own "Clone scenario" endpoint accepts an id-to-id `account`/`key`/`hook` mapping

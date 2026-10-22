@@ -24,14 +24,16 @@ var inviteLinkPattern = regexp.MustCompile(`^https://t\.me/(?:\+|joinchat/)[A-Za
 
 var invitelinksPrimary = capability.Descriptor{
 	ID:          Provider + ".invite-links.primary",
-	Version:     1,
+	Version:     2,
 	Title:       "Read the primary Telegram invite link",
 	Description: "Read the primary invite link of a bound chat; the link grants joining the chat",
 	Tags:        []string{"telegram", "invitelinks", "read"},
 	Risk:        readRisk(inviteLinkSensitivity),
 	Provider:    Provider,
-	Group:       groupInviteLinks,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
+	// The link grants joining the chat without sign-in, so effects alone must not expose it.
+	RequiresToolAllowList: true,
+	Group:                 groupInviteLinks,
+	InputSchema:           json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"invite_link":{"type":"string"}},` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{chatArgument},

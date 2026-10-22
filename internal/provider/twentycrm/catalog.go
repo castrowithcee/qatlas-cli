@@ -62,6 +62,8 @@ type catalogField struct {
 	Relation   string
 	Reference  bool
 	InResponse bool
+	// Files marks a list whose elements carry the subfields fileId and url.
+	Files      bool
 	Enumerated bool
 	Enum       []string
 	// CreateShape and UpdateShape are the value shapes of the field in the create schema (SINGULAR) and the
@@ -245,6 +247,11 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		}
 		if ref == "" && prop.Items != nil {
 			ref = prop.Items.Ref
+		}
+		if prop.Items != nil {
+			_, hasID := prop.Items.Properties["fileId"]
+			_, hasURL := prop.Items.Properties["url"]
+			field.Files = hasID && hasURL
 		}
 		field.Relation = relationTarget(ref)
 		field.Reference = ref != ""

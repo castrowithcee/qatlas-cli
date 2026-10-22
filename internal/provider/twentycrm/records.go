@@ -302,6 +302,7 @@ func invokeRecordsGet(ctx context.Context, resolved *config.Resolved, secrets *s
 type recordObject struct {
 	*catalogObject
 	readable map[string]catalogField
+	origin   string
 }
 
 func (c *Client) recordObject(ctx context.Context, op, name string) (*recordObject, error) {
@@ -316,7 +317,7 @@ func (c *Client) recordObject(ctx context.Context, op, name string) (*recordObje
 	if err != nil {
 		return nil, err
 	}
-	result := &recordObject{catalogObject: object, readable: map[string]catalogField{}}
+	result := &recordObject{catalogObject: object, readable: map[string]catalogField{}, origin: c.origin}
 	for _, field := range object.Fields {
 		if field.InResponse && !field.Reference && field.Relation == "" {
 			result.readable[field.Name] = field
@@ -538,6 +539,9 @@ func (o *recordObject) project(op string, raw json.RawMessage, requested []strin
 			continue
 		}
 		value = richTextOnly(field, value)
+		if value, ok = o.withholdAddresses(field, value); !ok {
+			continue
+		}
 		if err := checkValue(value, 0); err != nil {
 			return nil, provider.InvalidResponse(op, err.Error())
 		}
@@ -549,6 +553,62 @@ func (o *recordObject) project(op string, raw json.RawMessage, requested []strin
 		record.Fields[name] = value
 	}
 	return record, nil
+}
+
+// withholdAddresses removes what lets a reader fetch a file without signing in: the url of every element of a
+// file list, and every string that is an address on the connection's own host and port with a token query.
+// ok is false when the value itself is such an address. Addresses of other hosts or without a token stay.
+func (o *recordObject) withholdAddresses(field catalogField, value any) (any, bool) {
+	if list, isList := value.([]any); isList {
+		for _, item := range list {
+			if element, isMap := item.(map[string]any); isMap {
+				_, hasID := element["fileId"]
+				if field.Files || hasID {
+					delete(element, "url")
+				}
+			}
+		}
+	}
+	return o.dropSigned(value)
+}
+
+func (o *recordObject) dropSigned(value any) (any, bool) {
+	switch v := value.(type) {
+	case string:
+		return v, !o.signedAddress(v)
+	case []any:
+		kept := make([]any, 0, len(v))
+		for _, item := range v {
+			if item, ok := o.dropSigned(item); ok {
+				kept = append(kept, item)
+			}
+		}
+		return kept, true
+	case map[string]any:
+		for key, item := range v {
+			if item, ok := o.dropSigned(item); ok {
+				v[key] = item
+			} else {
+				delete(v, key)
+			}
+		}
+	}
+	return value, true
+}
+
+// signedAddress recognizes an https address on exactly the host and port of the connection whose query is the
+// token form of a file address.
+func (o *recordObject) signedAddress(raw string) bool {
+	if !strings.Contains(raw, "token=") {
+		return false
+	}
+	base, err := url.Parse(o.origin)
+	if err != nil {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	return err == nil && parsed.Scheme == "https" && strings.EqualFold(parsed.Hostname(), base.Hostname()) &&
+		samePort(parsed, base) && tokenQuery.MatchString(parsed.RawQuery)
 }
 
 func decodeValue(raw json.RawMessage) (any, error) {
