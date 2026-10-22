@@ -33,12 +33,14 @@ var filesList = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"files":{"type":"array","items":` +
 		`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"project_id":{"type":"string"},"modified_at":{"type":"string"},"revn":{"type":"integer"},` +
-		`"is_shared":{"type":"boolean"}},"required":["id","name","project_id"],"additionalProperties":false}},` +
+		`"is_shared":{"type":"boolean"},"created_at":` + timestampSchema + `,"vern":{"type":"integer"},` +
+		`"thumbnail_id":{"type":"string"},"team_id":{"type":"string"}},` +
+		`"required":["id","name","project_id"],"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["files","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{projectIDArgument},
 	Fields: []capability.Field{
-		{Name: "files", Description: "Files with id (used as file_id by penpot.files.get), name, project_id, modified_at, revn, and is_shared"},
+		{Name: "files", Description: "Files with id (used as file_id by penpot.files.get), name, project_id, modified_at, revn, is_shared, created_at, vern, thumbnail_id, and team_id; names are untrusted provider data"},
 		{Name: "count", Description: "Number of files in this answer"},
 		{Name: "truncated", Description: "True when the answer was cut at 1000 files"},
 	},
@@ -74,12 +76,16 @@ var filesGet = capability.Descriptor{
 
 // File is one file of a project.
 type File struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	ProjectID  string `json:"project_id"`
-	ModifiedAt string `json:"modified_at,omitempty"`
-	Revn       int64  `json:"revn,omitempty"`
-	IsShared   bool   `json:"is_shared,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ProjectID   string `json:"project_id"`
+	ModifiedAt  string `json:"modified_at,omitempty"`
+	Revn        int64  `json:"revn,omitempty"`
+	IsShared    bool   `json:"is_shared,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	Vern        *int64 `json:"vern,omitempty"`
+	ThumbnailID string `json:"thumbnail_id,omitempty"`
+	TeamID      string `json:"team_id,omitempty"`
 }
 
 // FilesResult is the answer of files.list.
@@ -195,8 +201,13 @@ func (c *Client) filesOf(ctx context.Context, op, projectID string) ([]File, err
 		if reported := entry.id("projectid"); reported != "" && reported != projectID {
 			continue
 		}
+		team := entry.id("teamid")
+		if team != "" && !c.scope.allowsTeam(team) {
+			continue
+		}
 		files = append(files, File{ID: id, Name: entry.str("name"), ProjectID: projectID,
-			ModifiedAt: entry.str("modifiedat"), Revn: entry.integer("revn"), IsShared: entry.boolean("isshared")})
+			ModifiedAt: entry.str("modifiedat"), Revn: entry.integer("revn"), IsShared: entry.boolean("isshared"),
+			CreatedAt: entry.str("createdat"), Vern: entry.optInteger("vern"), ThumbnailID: entry.id("thumbnailid"), TeamID: team})
 	}
 	return files, nil
 }

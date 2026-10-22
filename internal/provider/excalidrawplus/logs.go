@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -37,7 +38,7 @@ var logsRisk = capability.Risk{
 
 const logSchema = `{"type":"object","properties":{"id":{"type":"string"},"action":{"type":"string"},` +
 	`"operation":{"type":"string"},"created_at":{"type":"string"},"user_id":{"type":"string"},` +
-	`"user_email":{"type":"string"},"status":{"type":"string"}},"required":["id","action"],` +
+	`"user_email":{"type":"string"},"status":{"type":"integer"}},"required":["id","action"],` +
 	`"additionalProperties":false}`
 
 var logFields = []capability.Field{
@@ -47,12 +48,12 @@ var logFields = []capability.Field{
 	{Name: "created_at", Description: "Time of the entry, as Excalidraw+ reports it"},
 	{Name: "user_id", Description: "Acting user's identifier, untrusted data; personal data"},
 	{Name: "user_email", Description: "Acting user's email address, untrusted data; personal data"},
-	{Name: "status", Description: "Outcome recorded, untrusted data"},
+	{Name: "status", Description: "Outcome code recorded as an integer, untrusted data"},
 }
 
 var logsList = capability.Descriptor{
 	ID:      Provider + ".logs.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List Excalidraw+ activity log",
 	Description: "Read the workspace activity log, optionally of one user or action and of a time range of at " +
 		"most 366 days; only for a connection with the * wildcard target. Entries are personal data; IP " +
@@ -81,13 +82,13 @@ var logsList = capability.Descriptor{
 }
 
 type logJSON struct {
-	ID        string `json:"id"`
-	Action    string `json:"action"`
-	Operation string `json:"operation"`
-	CreatedAt string `json:"created_at"`
-	UserID    string `json:"user_id"`
-	UserEmail string `json:"user_email"`
-	Status    string `json:"status"`
+	ID        string          `json:"id"`
+	Action    string          `json:"action"`
+	Operation string          `json:"operation"`
+	CreatedAt string          `json:"created_at"`
+	UserID    string          `json:"user_id"`
+	UserEmail string          `json:"user_email"`
+	Status    json.RawMessage `json:"status"`
 }
 
 type logsPageJSON struct {
@@ -97,13 +98,13 @@ type logsPageJSON struct {
 
 // LogEntry is the reduced view of one activity log entry; untrusted personal data.
 type LogEntry struct {
-	ID        string `json:"id"`
-	Action    string `json:"action"`
-	Operation string `json:"operation,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UserID    string `json:"user_id,omitempty"`
-	UserEmail string `json:"user_email,omitempty"`
-	Status    string `json:"status,omitempty"`
+	ID        string      `json:"id"`
+	Action    string      `json:"action"`
+	Operation string      `json:"operation,omitempty"`
+	CreatedAt string      `json:"created_at,omitempty"`
+	UserID    string      `json:"user_id,omitempty"`
+	UserEmail string      `json:"user_email,omitempty"`
+	Status    json.Number `json:"status,omitempty"`
 }
 
 // LogsPage is one offset-paginated listing of log entries.
@@ -217,8 +218,34 @@ func (c *Client) ListLogs(ctx context.Context, input logsArguments, from, to str
 		result.Logs = append(result.Logs, LogEntry{ID: bounded(item.ID, maxLogText),
 			Action: bounded(item.Action, maxLogText), Operation: bounded(item.Operation, maxLogText),
 			CreatedAt: bounded(item.CreatedAt, maxLogText), UserID: bounded(item.UserID, maxLogText),
-			UserEmail: bounded(item.UserEmail, maxLogText), Status: bounded(item.Status, maxLogText)})
+			UserEmail: bounded(item.UserEmail, maxLogText), Status: logStatus(item.Status)})
 	}
 	result.Count = len(result.Logs)
 	return result, nil
+}
+
+// logStatus accepts an integer given as a JSON number or as a string of digits. Anything else
+// (fractions, exponents, text, null, absence) yields no status instead of an invented one.
+func logStatus(raw json.RawMessage) json.Number {
+	text := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(text, `"`) {
+		var str string
+		if json.Unmarshal(raw, &str) != nil {
+			return ""
+		}
+		text = strings.TrimSpace(str)
+	}
+	sign := ""
+	if strings.HasPrefix(text, "-") {
+		sign, text = "-", text[1:]
+	}
+	if text == "" || len(text) > 18 || (len(text) > 1 && text[0] == '0') || (sign != "" && text == "0") {
+		return ""
+	}
+	for _, r := range text {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return json.Number(sign + text)
 }
