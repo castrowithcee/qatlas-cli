@@ -254,9 +254,9 @@ it cannot be told apart from a missing right. Unclear outcomes are checked with 
 The tool group `account` reads the own account data, status, notifications, activity stream, and unified search of
 the identity, changes the status, and dismisses notifications. All its tools need an `account` target and refuse
 without one locally, before any credential access or request. Provider text is untrusted data, capped and marked
-`truncated` when cut. Links, icons, previews, and rich objects are never reported; an action of a notification shows
-only its label and method and is never followed. `account.status.set` and `account.status.clear` send one request, need `confirm`,
-and are in no profile.
+`truncated` when cut. Icons, previews, and rich objects are never reported, nor are links except a search hit's, which
+is untrusted text and never fetched; an action of a notification shows only its label and method and is never followed.
+`account.status.set` and `account.status.clear` send one request, need `confirm`, and are in no profile.
 
 `account.notifications.list` reports at most 100 notifications; with the `etag` of a previous list an unchanged list is
 reported as `unchanged`. `account.activity.list` takes a filter from a fixed list that the instance must also offer,
