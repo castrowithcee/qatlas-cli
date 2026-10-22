@@ -56,19 +56,20 @@ func TestTeamReadsUseBoundTeamAndNarrowFields(t *testing.T) {
 
 func TestOrganizationGetLimitsFields(t *testing.T) {
 	var calls []call
-	body := `{"organization":{"id":501,"name":"N","zone":"eu1.make.com","teams":[{"id":9}],"ssoType":"saml2",` +
-		`"license":{"operations":10000,"dlm":true,"plan":"pro","nested":{"a":1},"list":[1]}}}`
+	body := `{"organization":{"id":501,"name":"N","zone":"eu1.make.com","teams":[{"id":9,"name":"Foreign"}],` +
+		`"ssoType":"saml2","license":{"operations":10000,"dlm":true,"plan":"pro","nested":{"a":1},"list":[1]}}}`
 	env := newEnvironment(t, &calls, teamsHandler(t, ownOrg, body))
 	got, err := env.invoke(organizationGet.ID, "org", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{"teams", "ssoType", "nested", `"list"`, `"name"`} {
+	for _, bad := range []string{"nested", `"list"`, "Foreign"} {
 		if strings.Contains(got, bad) {
 			t.Fatalf("result %s leaks %s", got, bad)
 		}
 	}
-	if !strings.Contains(got, `"operations":10000`) || !strings.Contains(got, `"zone":"eu1.make.com"`) {
+	if !strings.Contains(got, `"operations":10000`) || !strings.Contains(got, `"zone":"eu1.make.com"`) ||
+		!strings.Contains(got, `"teams":[{"id":9}]`) || !strings.Contains(got, `"sso_type":"saml2"`) {
 		t.Fatalf("result = %s", got)
 	}
 }
