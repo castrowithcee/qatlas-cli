@@ -95,12 +95,14 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return header, err
 }
 
-// request is what a call adds to a plain GET: a fixed method and, for POST, a body the handler built from
-// validated arguments. The zero value is a GET without a body.
+// request is what a call adds to a plain GET: a fixed method and, for a change, a body the handler built from
+// validated arguments. The zero value is a GET without a body. change marks a request that mutates the
+// instance: a failure whose outcome is open then says so.
 type request struct {
 	method      string
 	contentType string
 	body        []byte
+	change      bool
 }
 
 // textAnswer receives a plain-text or HTML answer: data keeps at most limit bytes, and truncated reports that
@@ -119,6 +121,38 @@ func (c *Client) post(ctx context.Context, op, path string, req request, answer 
 	return err
 }
 
+// uncertain is appended to a failure of a change whose request may have reached the instance: the change may
+// have been applied although no confirmation arrived. A change is never repeated by Qatlas itself.
+const uncertain = "; the change may have been applied, read the current state before repeating it"
+
+// change sends exactly one mutating request of a fixed method (POST, PATCH, or DELETE) and API path, which the
+// caller builds from constants and escaped, validated segments. body is encoded as JSON and must be built from
+// validated arguments only; nil sends none. out receives the JSON answer, nil ignores an answer such as the
+// empty one of a DELETE. The request is never retried. A failure whose outcome is open, such as a timeout, a
+// reset connection, a 5xx status, or an unreadable answer, carries the uncertain note; a refusal that proves
+// the change was not applied does not.
+func (c *Client) change(ctx context.Context, op, method, path string, body any, out any) error {
+	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodDelete {
+		return provider.Fail(op, "the request method is not one of this provider")
+	}
+	spec := request{method: method, change: true}
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return provider.Fail(op, "the request could not be built")
+		}
+		spec.contentType, spec.body = "application/json", encoded
+	}
+	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, spec, out)
+	return err
+}
+
+// unsure marks the failure of a change whose outcome is open.
+func unsure(failure *provider.Error) *provider.Error {
+	failure.Message += uncertain
+	return failure
+}
+
 // getText sends one GET of a fixed API path and reads the answer as text.
 func (c *Client) getText(ctx context.Context, op, path string, answer *textAnswer) error {
 	_, _, err := exchange(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, path, nil, request{},
@@ -133,8 +167,9 @@ func send(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, 
 	return exchange(ctx, client, limiter, p, root, auth, op, path, query, request{}, out)
 }
 
-// exchange is the one place that builds and sends a request. Only GET and POST exist, a body only on POST. out
-// is a *textAnswer for a text answer and a JSON target otherwise.
+// exchange is the one place that builds and sends a request. Only GET, POST, PATCH, and DELETE exist, a body
+// never on GET. out is a *textAnswer for a text answer, a JSON target otherwise, and nil for an answer that is
+// not read.
 func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limiter, p *product, root, auth, op,
 	path string, query url.Values, spec request, out any) (int, http.Header, error) {
 	if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, "?#") {
@@ -144,7 +179,12 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	if method == "" {
 		method = http.MethodGet
 	}
-	if (method != http.MethodGet && method != http.MethodPost) || (method == http.MethodGet && spec.body != nil) {
+	switch method {
+	case http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete:
+	default:
+		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
+	}
+	if method == http.MethodGet && spec.body != nil {
 		return 0, nil, provider.Fail(op, "the request method is not one of this provider")
 	}
 	for key := range query {
@@ -184,16 +224,32 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	req.Header.Set("User-Agent", "qatlas-cli")
 	response, err := client.Do(req)
 	if err != nil {
-		return 0, nil, provider.Transport(op, p.name, err)
+		failure := provider.Transport(op, p.name, err)
+		if spec.change && failure.MayHaveArrived() {
+			failure = unsure(failure)
+		}
+		return 0, nil, failure
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return response.StatusCode, nil, refusal(op, p, limiter, response)
+		failure := refusal(op, p, limiter, response)
+		if spec.change && response.StatusCode >= 500 {
+			failure = unsure(failure)
+		}
+		return response.StatusCode, nil, failure
+	}
+	if out == nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		return response.StatusCode, response.Header, nil
 	}
 	if isText {
 		data, err := io.ReadAll(io.LimitReader(response.Body, int64(text.limit)+1))
 		if err != nil {
-			return response.StatusCode, nil, provider.InvalidResponse(op, "the "+p.name+" response could not be read")
+			failure := provider.InvalidResponse(op, "the "+p.name+" response could not be read")
+			if spec.change {
+				failure = unsure(failure)
+			}
+			return response.StatusCode, nil, failure
 		}
 		text.truncated = len(data) > text.limit
 		if text.truncated {
@@ -203,6 +259,9 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 		return response.StatusCode, response.Header, nil
 	}
 	if failure := provider.ReadJSON(op, p.name, response.Body, maxResponseBytes, out); failure != nil {
+		if spec.change {
+			failure = unsure(failure)
+		}
 		return response.StatusCode, nil, failure
 	}
 	return response.StatusCode, response.Header, nil
@@ -254,12 +313,15 @@ func truncateText(value string, limit int) string {
 	return value
 }
 
-func (o object) text(key string) (string, bool) {
+func (o object) text(key string) (string, bool) { return o.textUpTo(key, maxStringLength) }
+
+// textUpTo reads a string member and cuts it at limit bytes.
+func (o object) textUpTo(key string, limit int) (string, bool) {
 	var value string
 	if json.Unmarshal(o[key], &value) != nil {
 		return "", false
 	}
-	return bounded(value), true
+	return truncateText(value, limit), true
 }
 
 func (o object) integer(key string) (int64, bool) {

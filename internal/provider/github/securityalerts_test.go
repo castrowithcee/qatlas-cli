@@ -22,6 +22,8 @@ type alertFake struct {
 	mode string
 	// codeScanning replaces the code scanning alert the routes answer with.
 	codeScanning string
+	// dependabot replaces the Dependabot alert the routes answer with.
+	dependabot string
 	// queries records the raw query of every request by route.
 	queries []string
 }
@@ -84,6 +86,10 @@ func (a *alertFake) route(w http.ResponseWriter, req *http.Request) bool {
 			`"most_recent_instance":{"ref":"refs/heads/main","commit_sha":"abc","message":{"text":"tainted"},` +
 			`"location":{"path":"a.go","start_line":7,"end_line":8}}}`
 	case "dependabot":
+		single = a.dependabot
+		if single != "" {
+			break
+		}
 		single = `{"number":7,"state":"open","html_url":"https://x/7","dependency":{"package":{"ecosystem":"npm",` +
 			`"name":"lodash"},"manifest_path":"package.json","scope":"runtime","relationship":"direct"},` +
 			`"security_advisory":{"ghsa_id":"GHSA-xxxx","cve_id":"CVE-2026-1","summary":"Prototype pollution",` +

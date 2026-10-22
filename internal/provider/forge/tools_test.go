@@ -25,16 +25,21 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		var ids []string
 		for _, d := range reg.Provider(p.id) {
 			ids = append(ids, d.ID)
-			if d.Risk.Effect != capability.EffectRead || !strings.HasPrefix(d.Risk.DataSensitivity, p.id+"-") {
+			changes := d.Risk.Effect != capability.EffectRead
+			if changes != (d.Risk.Confirmation == capability.ConfirmationRequired) ||
+				!strings.HasPrefix(d.Risk.DataSensitivity, p.id+"-") || !d.Risk.OpenWorld {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
 			}
 		}
 		want := []string{p.id + ".accounts.me", p.id + ".issue-config.get", p.id + ".issue-config.validate",
-			p.id + ".issue-templates.list", p.id + ".markdown.render", p.id + ".markup.render",
+			p.id + ".issue-deadlines.set", p.id + ".issue-templates.list", p.id + ".issue-timeline.list",
+			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
+			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
+			p.id + ".markdown.render", p.id + ".markup.render",
 			p.id + ".repositories.get", p.id + ".repositories.list", p.id + ".settings.get",
 			p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
-			want = slices.Insert(want, 6, p.id+".nodeinfo.get")
+			want = slices.Insert(want, 16, p.id+".nodeinfo.get")
 		}
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -83,7 +88,9 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		t.Error("the Forgejo tool is registered for Gitea")
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
-		markdownRender, markupRender, issueTemplatesList, issueConfigGet, issueConfigValidate} {
+		markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
+		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList, issueConfigGet,
+		issueConfigValidate} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))

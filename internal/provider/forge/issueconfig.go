@@ -46,9 +46,6 @@ var issueConfigValidationMembers = []member{
 
 const issueConfigSensitivity = "-repository-data"
 
-const repositoryArgument = "Repository as OWNER/REPO; optional when the connection's targets name exactly one " +
-	"repository; must lie inside the targets when the connection lists any"
-
 // issueConfigTool builds a read of one fixed path below a repository whose answer is one object or a list.
 func issueConfigTool(action, title, description, endpoint string, members []member, key string, required ...string) *tool {
 	return &tool{
@@ -67,9 +64,8 @@ func issueConfigTool(action, title, description, endpoint string, members []memb
 				Tags: []string{p.id, "issues", action},
 				Risk: readRisk(p.id + issueConfigSensitivity), InputSchema: inputSchema(`"repository":` + repoSchema),
 				OutputSchema: json.RawMessage(output),
-				Arguments: []capability.Argument{{Name: "repository", Description: repositoryArgument,
-					Target: kindRepository}},
-				Fields: fields,
+				Arguments:    []capability.Argument{repositoryArgument},
+				Fields:       fields,
 				Examples: []capability.Example{{Description: title,
 					Arguments: json.RawMessage(`{"repository":"example/project"}`)}},
 			}

@@ -67,8 +67,7 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 		if entry.auth != "" && entry.auth != "token "+tokenValue {
 			t.Errorf("request %s authorizes with %q", r.URL.Path, entry.auth)
 		}
-		renders := slices.Contains([]string{"/api/v1/markdown", "/api/v1/markdown/raw", "/api/v1/markup"}, r.URL.Path)
-		if (r.Method != http.MethodGet && !(r.Method == http.MethodPost && renders)) ||
+		if !slices.Contains([]string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete}, r.Method) ||
 			(r.Method == http.MethodGet && entry.body != "") {
 			t.Errorf("request %s uses %s", r.URL.Path, r.Method)
 		}
@@ -161,6 +160,8 @@ var connections = map[string][]string{
 	"two":   {"repos/acme/widget", "repos/acme/gadget"},
 }
 
+var allEffects = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
+
 func testConfig(p *product) *config.Config {
 	cfg := &config.Config{
 		Version:     1,
@@ -170,8 +171,11 @@ func testConfig(p *product) *config.Config {
 	}
 	for name, targets := range connections {
 		cfg.Connections[name] = config.Connection{Service: "forge", Credential: "token",
-			Effects: []config.Effect{config.EffectRead}, Targets: targets}
+			Effects: allEffects, Targets: targets}
 	}
+	// A connection whose tools list names issues.delete is the only one that offers it.
+	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get"}}
 	return cfg
 }
 
@@ -204,8 +208,14 @@ func newEnvironment(t *testing.T, p *product, handler func(call) *http.Response)
 
 func (e *environment) invoke(t *testing.T, tool *tool, connection, arguments string) (map[string]any, error) {
 	t.Helper()
+	return e.invokeAs(t, tool, connection, arguments, true)
+}
+
+// invokeAs calls a tool with or without the confirmation a change needs.
+func (e *environment) invokeAs(t *testing.T, tool *tool, connection, arguments string, confirmed bool) (map[string]any, error) {
+	t.Helper()
 	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: e.p.toolID(tool), Connection: connection, Arguments: json.RawMessage(arguments),
+		Operation: e.p.toolID(tool), Connection: connection, Arguments: json.RawMessage(arguments), Confirmed: confirmed,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), tokenValue) || strings.Contains(err.Error(), bodyCanary) {
