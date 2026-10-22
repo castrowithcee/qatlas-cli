@@ -36,8 +36,8 @@ const (
 	metaTokenMax = 64
 
 	// A free object (default value, settings, relation, duplicate criteria) beyond these limits is left out.
-	metaFreeDepthMax = 8
-	metaFreeBytesMax = 16 << 10
+	freeObjectDepthMax = 8
+	freeObjectBytesMax = 16 << 10
 )
 
 // metaFieldTypes are the values of FieldMetadataType (twenty-shared, twentyhq/twenty commit
@@ -428,8 +428,8 @@ func metaUUID(value *string) string {
 // freeObjects collects the names of free objects left out for their size.
 type freeObjects []string
 
-// bound decodes a free object without a float detour. A value deeper than metaFreeDepthMax or larger than
-// metaFreeBytesMax serialized is left out whole and named, never shortened; an empty value is absent.
+// bound decodes a free object without a float detour. A value deeper than freeObjectDepthMax or larger than
+// freeObjectBytesMax serialized is left out whole and named, never shortened; an empty value is absent.
 func (o *freeObjects) bound(name string, raw json.RawMessage) any {
 	if isNull(raw) {
 		return nil
@@ -442,7 +442,7 @@ func (o *freeObjects) bound(name string, raw json.RawMessage) any {
 	if err != nil || emptyValue(value) {
 		return nil
 	}
-	if compact.Len() > metaFreeBytesMax || valueDepth(value) > metaFreeDepthMax {
+	if compact.Len() > freeObjectBytesMax || valueDepth(value) > freeObjectDepthMax {
 		*o = append(*o, name)
 		return nil
 	}

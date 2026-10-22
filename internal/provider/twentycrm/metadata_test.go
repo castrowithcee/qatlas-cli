@@ -465,10 +465,10 @@ func nestedJSON(levels int) string {
 }
 
 func TestMetadataOversizedFreeObjectsAreOmittedAndNamed(t *testing.T) {
-	big := `{"x":"` + strings.Repeat("y", metaFreeBytesMax) + `"}`
-	edge := `{"x":"` + strings.Repeat("y", metaFreeBytesMax-20) + `"}`
-	field := `{"id":"` + metaFieldID + `","type":"TEXT","name":"n","label":"L","defaultValue":` + nestedJSON(metaFreeDepthMax+1) +
-		`,"settings":` + big + `,"relation":` + nestedJSON(metaFreeDepthMax) + `,"morphRelations":[` + edge + `]}`
+	big := `{"x":"` + strings.Repeat("y", freeObjectBytesMax) + `"}`
+	edge := `{"x":"` + strings.Repeat("y", freeObjectBytesMax-20) + `"}`
+	field := `{"id":"` + metaFieldID + `","type":"TEXT","name":"n","label":"L","defaultValue":` + nestedJSON(freeObjectDepthMax+1) +
+		`,"settings":` + big + `,"relation":` + nestedJSON(freeObjectDepthMax) + `,"morphRelations":[` + edge + `]}`
 	object := `{"id":"` + metaObjID + `","duplicateCriteria":[` + big + `],"fields":[` + field + `]}`
 	serveMeta(t, metaFormat{objectGet: object, fldGet: field})
 	out, err := runMeta(t, invokeMetaFieldsGet, `{"id":"`+metaFieldID+`"}`)
