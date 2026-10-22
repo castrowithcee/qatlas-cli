@@ -12,8 +12,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const collectionSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"is_default":{"type":"boolean"},"created":{"type":"string"},"updated":{"type":"string"}},` +
+var collectionSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
+	`"is_default":{"type":"boolean"},"created":{"type":"string"},"updated":{"type":"string"},` +
+	`"workspace":{"type":"string"},"creator":{"type":"string"},"updater":{"type":"string"},` +
+	`"teams":{"type":"array","items":{"type":"string"},"maxItems":` + strconv.Itoa(maxListedIDs) + `},` +
+	`"sort_order":{"type":"string"},"emoji":` + emojiSchema + `},` +
 	`"required":["id","name"],"additionalProperties":false}`
 
 var collectionFields = []capability.Field{
@@ -22,6 +25,12 @@ var collectionFields = []capability.Field{
 	{Name: "is_default", Description: "True for the workspace's default collection"},
 	{Name: "created", Description: "Creation time, as Excalidraw+ reports it"},
 	{Name: "updated", Description: "Last update time, as Excalidraw+ reports it"},
+	{Name: "workspace", Description: "Workspace identifier, untrusted data"},
+	{Name: "creator", Description: "Identifier of the creating user, untrusted data"},
+	{Name: "updater", Description: "Identifier of the last updating user, untrusted data"},
+	{Name: "teams", Description: "Identifiers of the teams the collection belongs to, at most 100"},
+	{Name: "sort_order", Description: "Opaque ordering key, untrusted data"},
+	{Name: "emoji", Description: "Emoji of the collection with id, native, and unified, untrusted data"},
 }
 
 var collectionsList = capability.Descriptor{
@@ -59,6 +68,13 @@ type collectionJSON struct {
 	Created   string `json:"created"`
 	Updated   string `json:"updated"`
 	IsDeleted bool   `json:"isDeleted"`
+
+	Workspace string     `json:"workspace"`
+	Creator   string     `json:"creator"`
+	Updater   string     `json:"updater"`
+	Teams     []string   `json:"teams"`
+	SortOrder string     `json:"sortOrder"`
+	Emoji     *emojiJSON `json:"emoji"`
 }
 
 type collectionsPageJSON struct {
@@ -66,13 +82,20 @@ type collectionsPageJSON struct {
 	Data []collectionJSON `json:"data"`
 }
 
-// Collection is the stable view of one collection. Creator, teams, and emoji are not passed on.
+// Collection is the stable view of one collection.
 type Collection struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	IsDefault bool   `json:"is_default,omitempty"`
 	Created   string `json:"created,omitempty"`
 	Updated   string `json:"updated,omitempty"`
+
+	Workspace string   `json:"workspace,omitempty"`
+	Creator   string   `json:"creator,omitempty"`
+	Updater   string   `json:"updater,omitempty"`
+	Teams     []string `json:"teams,omitempty"`
+	SortOrder string   `json:"sort_order,omitempty"`
+	Emoji     *Emoji   `json:"emoji,omitempty"`
 }
 
 // CollectionsPage is one offset-paginated, allow-list-filtered listing.
@@ -150,7 +173,9 @@ func (c *Client) ListCollections(ctx context.Context, input pageArgs) (*Collecti
 			continue
 		}
 		result.Collections = append(result.Collections, Collection{ID: item.ID, Name: boundedValue(item.Name),
-			IsDefault: item.IsDefault, Created: boundedValue(item.Created), Updated: boundedValue(item.Updated)})
+			IsDefault: item.IsDefault, Created: boundedValue(item.Created), Updated: boundedValue(item.Updated),
+			Workspace: cleanValue(item.Workspace), Creator: cleanValue(item.Creator), Updater: cleanValue(item.Updater),
+			Teams: idsOf(item.Teams), SortOrder: cleanValue(item.SortOrder), Emoji: emojiOf(item.Emoji)})
 	}
 	result.Count = len(result.Collections)
 	return result, nil

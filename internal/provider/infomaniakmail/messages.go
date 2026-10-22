@@ -27,9 +27,12 @@ const (
 	maxName          = 128
 	maxFromAddresses = 10
 	maxToAddresses   = 20
-	maxFlags         = 20
-	maxFlagText      = 64
-	dateLayout       = "2006-01-02"
+	// maxEnvelopeAddresses bounds Sender, Reply-To, Cc, and Bcc; maxInReplyTo the In-Reply-To message IDs.
+	maxEnvelopeAddresses = 20
+	maxInReplyTo         = 20
+	maxFlags             = 20
+	maxFlagText          = 64
+	dateLayout           = "2006-01-02"
 )
 
 var messagesList = capability.Descriptor{
@@ -62,7 +65,7 @@ var messagesList = capability.Descriptor{
 		`"from":{"type":"array","items":` + addressSchema + `},` +
 		`"to":{"type":"array","items":` + addressSchema + `},` +
 		`"subject":{"type":"string"},"flags":{"type":"array","items":{"type":"string"}},` +
-		`"size":{"type":"integer"}},"required":["uid","from","to","subject","flags","size"],` +
+		`"size":{"type":"integer"},` + envelopeSchema + `},"required":["uid","from","to","subject","flags","size"],` +
 		`"additionalProperties":false}},` +
 		`"count":{"type":"integer"},"matched":{"type":"integer"},"has_more":{"type":"boolean"}},` +
 		`"required":["folder","uidvalidity","messages","count","matched","has_more"],"additionalProperties":false}`),
@@ -71,7 +74,8 @@ var messagesList = capability.Descriptor{
 		{Name: "since", Description: "Only messages received on or after this date, YYYY-MM-DD"},
 		{Name: "before", Description: "Only messages received before this date, YYYY-MM-DD"},
 		{Name: "unread", Description: "When true, only messages without the Seen flag"},
-		{Name: "sender", Description: "Only messages from this address; when the connection has a sender " +
+		{Name: "sender", Description: "Only messages from this address (the From filter, not the " +
+			"ENVELOPE Sender that the output field sender reports); when the connection has a sender " +
 			"allow-list, the address must be on it"},
 		{Name: "uid_from", Description: "Lowest UID of the window; needs uidvalidity"},
 		{Name: "uid_to", Description: "Highest UID of the window, at most " + strconv.Itoa(maxUIDWindow) +
@@ -81,7 +85,7 @@ var messagesList = capability.Descriptor{
 		{Name: "limit", Description: "Messages to return, 1 to " + strconv.Itoa(maxLimit) + "; " +
 			strconv.Itoa(defaultLimit) + " when omitted"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "folder", Description: "Folder the UIDs belong to"},
 		{Name: "uidvalidity", Description: "UIDVALIDITY of the folder; a UID means nothing without it"},
 		{Name: "uid", Description: "Message UID within folder and uidvalidity"},
@@ -95,13 +99,43 @@ var messagesList = capability.Descriptor{
 		{Name: "count", Description: "Messages returned"},
 		{Name: "matched", Description: "Messages the folder search found in the window before the limit"},
 		{Name: "has_more", Description: "True when the search found more messages than limit; they are older"},
-	},
+	}, envelopeFields...),
 	Examples: []capability.Example{{Description: "List the newest unread messages of the inbox",
 		Arguments: json.RawMessage(`{"folder":"INBOX","unread":true}`)}},
 }
 
 const addressSchema = `{"type":"object","properties":{"name":{"type":"string"},"address":{"type":"string"}},` +
 	`"required":["address"],"additionalProperties":false}`
+
+// envelopeSchema and envelopeFields are the envelope members that messages.list and messages.get share
+// beyond uid, date, from, to, subject, flags, and size.
+const envelopeSchema = `"sender":{"type":"array","items":` + addressSchema + `},"sender_truncated":{"type":"boolean"},` +
+	`"reply_to":{"type":"array","items":` + addressSchema + `},"reply_to_truncated":{"type":"boolean"},` +
+	`"cc":{"type":"array","items":` + addressSchema + `},"cc_truncated":{"type":"boolean"},` +
+	`"bcc":{"type":"array","items":` + addressSchema + `},"bcc_truncated":{"type":"boolean"},` +
+	`"in_reply_to":{"type":"array","items":{"type":"string"}},"in_reply_to_truncated":{"type":"boolean"},` +
+	`"internal_date":{"type":"string"},"message_id":{"type":"string"}`
+
+var envelopeFields = []capability.Field{
+	{Name: "sender", Description: "ENVELOPE Sender addresses (name and address), at most " +
+		strconv.Itoa(maxEnvelopeAddresses) + "; untrusted. Not the sender argument, which filters on From"},
+	{Name: "sender_truncated", Description: "True when the Sender header holds more addresses than listed"},
+	{Name: "reply_to", Description: "Reply-To addresses (name and address), at most " +
+		strconv.Itoa(maxEnvelopeAddresses) + "; untrusted"},
+	{Name: "reply_to_truncated", Description: "True when Reply-To holds more addresses than listed"},
+	{Name: "cc", Description: "Cc addresses (name and address), at most " + strconv.Itoa(maxEnvelopeAddresses) +
+		"; untrusted"},
+	{Name: "cc_truncated", Description: "True when Cc holds more addresses than listed"},
+	{Name: "bcc", Description: "Bcc addresses (name and address) as the stored message shows them, at most " +
+		strconv.Itoa(maxEnvelopeAddresses) + "; untrusted"},
+	{Name: "bcc_truncated", Description: "True when Bcc holds more addresses than listed"},
+	{Name: "in_reply_to", Description: "In-Reply-To message IDs as <id@host>, only well formed ones, at most " +
+		strconv.Itoa(maxInReplyTo) + "; untrusted"},
+	{Name: "in_reply_to_truncated", Description: "True when more well formed In-Reply-To IDs exist than listed"},
+	{Name: "internal_date", Description: "INTERNALDATE, the time the server received the message, as RFC 3339 in UTC"},
+	{Name: "message_id", Description: "Message-ID header as <id@host>, when it is well formed; usable as " +
+		"in_reply_to of messages.send; untrusted"},
+}
 
 // Address is one envelope address.
 type Address struct {
@@ -118,6 +152,19 @@ type Message struct {
 	Subject string    `json:"subject"`
 	Flags   []string  `json:"flags"`
 	Size    int64     `json:"size"`
+
+	Sender             []Address `json:"sender,omitempty"`
+	SenderTruncated    bool      `json:"sender_truncated,omitempty"`
+	ReplyTo            []Address `json:"reply_to,omitempty"`
+	ReplyToTruncated   bool      `json:"reply_to_truncated,omitempty"`
+	Cc                 []Address `json:"cc,omitempty"`
+	CcTruncated        bool      `json:"cc_truncated,omitempty"`
+	Bcc                []Address `json:"bcc,omitempty"`
+	BccTruncated       bool      `json:"bcc_truncated,omitempty"`
+	InReplyTo          []string  `json:"in_reply_to,omitempty"`
+	InReplyToTruncated bool      `json:"in_reply_to_truncated,omitempty"`
+	InternalDate       string    `json:"internal_date,omitempty"`
+	MessageID          string    `json:"message_id,omitempty"`
 }
 
 // MessagesPage is one folder listing. UIDs are valid only with Folder and UIDValidity.
@@ -317,7 +364,7 @@ func (c *Client) ListMessages(ctx context.Context, q query) (*MessagesPage, erro
 		wanted[uid] = true
 	}
 	buffers, err := conn.client.Fetch(imap.UIDSetNum(uids...), &imap.FetchOptions{
-		UID: true, Envelope: true, Flags: true, RFC822Size: true,
+		UID: true, Envelope: true, Flags: true, RFC822Size: true, InternalDate: true,
 	}).Collect()
 	if err != nil {
 		return nil, failure(op, err)
@@ -334,7 +381,8 @@ func (c *Client) ListMessages(ctx context.Context, q query) (*MessagesPage, erro
 		if !c.fromAllowed(buffer.Envelope.From) || !fromSender(buffer.Envelope.From, q.sender) {
 			continue
 		}
-		page.Messages = append(page.Messages, messageOf(buffer.UID, buffer.Envelope, buffer.Flags, buffer.RFC822Size))
+		page.Messages = append(page.Messages,
+			messageOf(buffer.UID, buffer.Envelope, buffer.Flags, buffer.RFC822Size, buffer.InternalDate))
 	}
 	sort.Slice(page.Messages, func(i, j int) bool { return page.Messages[i].UID > page.Messages[j].UID })
 	page.Count = len(page.Messages)
@@ -372,7 +420,7 @@ func fromSender(from []imap.Address, sender string) bool {
 	return false
 }
 
-func messageOf(uid imap.UID, envelope *imap.Envelope, flags []imap.Flag, size int64) Message {
+func messageOf(uid imap.UID, envelope *imap.Envelope, flags []imap.Flag, size int64, internalDate time.Time) Message {
 	message := Message{
 		UID: uint32(uid), From: addressesOf(envelope.From, maxFromAddresses),
 		To: addressesOf(envelope.To, maxToAddresses), Subject: clean(envelope.Subject, maxSubject),
@@ -380,6 +428,18 @@ func messageOf(uid imap.UID, envelope *imap.Envelope, flags []imap.Flag, size in
 	}
 	if !envelope.Date.IsZero() {
 		message.Date = envelope.Date.UTC().Format(time.RFC3339)
+	}
+	if !internalDate.IsZero() {
+		message.InternalDate = internalDate.UTC().Format(time.RFC3339)
+	}
+	message.Sender, message.SenderTruncated = boundedAddresses(envelope.Sender, maxEnvelopeAddresses)
+	message.ReplyTo, message.ReplyToTruncated = boundedAddresses(envelope.ReplyTo, maxEnvelopeAddresses)
+	message.Cc, message.CcTruncated = boundedAddresses(envelope.Cc, maxEnvelopeAddresses)
+	message.Bcc, message.BccTruncated = boundedAddresses(envelope.Bcc, maxEnvelopeAddresses)
+	message.InReplyTo, message.InReplyToTruncated = messageIDsOf(envelope.InReplyTo, maxInReplyTo)
+	// The client library hands the IDs over without their angle brackets.
+	if id := "<" + envelope.MessageID + ">"; validMessageID(id) {
+		message.MessageID = id
 	}
 	for i, flag := range flags {
 		if i >= maxFlags {
@@ -390,17 +450,44 @@ func messageOf(uid imap.UID, envelope *imap.Envelope, flags []imap.Flag, size in
 	return message
 }
 
-func addressesOf(list []imap.Address, max int) []Address {
-	out := []Address{}
-	for i := range list {
-		if len(out) >= max {
-			break
+// messageIDsOf keeps the well formed message IDs, as <id@host>, up to max. The second result says more well
+// formed IDs existed.
+func messageIDsOf(ids []string, max int) ([]string, bool) {
+	var out []string
+	for _, raw := range ids {
+		id := "<" + raw + ">"
+		if !validMessageID(id) {
+			continue
 		}
+		if len(out) >= max {
+			return out, true
+		}
+		out = append(out, id)
+	}
+	return out, false
+}
+
+func addressesOf(list []imap.Address, max int) []Address {
+	out, _ := boundedAddresses(list, max)
+	if out == nil {
+		out = []Address{}
+	}
+	return out
+}
+
+// boundedAddresses lists the addresses that have an address part, up to max. The second result says more
+// existed.
+func boundedAddresses(list []imap.Address, max int) ([]Address, bool) {
+	var out []Address
+	for i := range list {
 		address := list[i].Addr()
 		if address == "" {
 			continue
 		}
+		if len(out) >= max {
+			return out, true
+		}
 		out = append(out, Address{Name: clean(list[i].Name, maxName), Address: clean(address, maxAddressLength)})
 	}
-	return out
+	return out, false
 }

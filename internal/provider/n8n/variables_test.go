@@ -276,3 +276,76 @@ func TestVariableChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestVariablesListReportsTypeAndTheWholeProject(t *testing.T) {
+	body := `{"data":[{"id":"` + ownVariable + `","key":"OWN_KEY","value":"own","type":"string","project":` + richProject + `},` +
+		`{"id":"` + globalVariable + `","key":"GLOBAL_KEY","value":"","type":"string","project":null}],"nextCursor":null}`
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(variablesList.ID, "open", `{}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	want := `{"variables":[{"id":"` + ownVariable + `","key":"OWN_KEY","value":"own","scope":"project",` +
+		`"project_id":"` + ownProject + `","type":"string","project":{"id":"` + ownProject + `","name":"Marketing",` +
+		`"type":"team","created_at":"2026-01-01T00:00:00.000Z","updated_at":"2026-01-02T00:00:00.000Z",` +
+		`"icon":{"type":"emoji","value":"rocket","color":"#ff0000"},"description":"Workflows the marketing team owns.",` +
+		`"custom_telemetry_tags":[{"key":"team","value":"mkt"},{"key":"cost","value":"42"}],` +
+		`"creator_id":"f9a2cbb8-0b1e-4b64-9c1c-0d5f5f1f2a3b"}},` +
+		`{"id":"` + globalVariable + `","key":"GLOBAL_KEY","value":"","scope":"global","type":"string"}],` +
+		`"has_more":false,"count":2}`
+	assertSameJSON(t, result, want)
+}
+
+// An answer without type and project fields keeps the former output; the project allow-list still hides
+// the variables of other projects together with their project objects.
+func TestVariablesListKeepsFormerOutputAndAllowListFiltering(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"data":[{"id":"a","key":"K","value":"v","project":{"id":"`+ownProject+`"}},`+
+			`{"id":"b","key":"L","value":"w","project":{"id":"`+foreignProject+`","name":"`+foreignCanary+`"}}],`+
+			`"nextCursor":null}`), nil
+	})
+	result, err := env.invoke(variablesList.ID, "project", `{}`)
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	assertSameJSON(t, result, `{"variables":[{"id":"a","key":"K","value":"v","scope":"project",`+
+		`"project_id":"`+ownProject+`","project":{"id":"`+ownProject+`","name":"","type":"","created_at":"","updated_at":""}}],`+
+		`"has_more":false,"count":1}`)
+	if strings.Contains(result, foreignCanary) {
+		t.Fatalf("result leaked a foreign project: %s", result)
+	}
+}
+
+func TestVariablesListSendsTheStateFilter(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"data":[],"nextCursor":null}`), nil
+	})
+	if _, err := env.invoke(variablesList.ID, "open", `{"state":"empty","cursor":"c1"}`); err != nil {
+		t.Fatal(err)
+	}
+	if calls[0].query.Get("state") != "empty" || calls[0].query.Get("cursor") != "c1" {
+		t.Fatalf("query = %v", calls[0].query)
+	}
+	if _, err := env.invoke(variablesList.ID, "open", `{}`); err != nil {
+		t.Fatal(err)
+	}
+	if calls[1].query.Has("state") {
+		t.Fatalf("state sent without being asked: %v", calls[1].query)
+	}
+	for _, state := range []string{"full", "EMPTY", ""} {
+		var none []call
+		e := newEnvironment(t, &none, noRequest(t))
+		_, err := e.invoke(variablesList.ID, "open", fmt.Sprintf(`{"state":%q}`, state))
+		if err == nil || len(none) != 0 {
+			t.Fatalf("state %q: err = %v, calls = %v", state, err, none)
+		}
+	}
+	for _, a := range variablesList.Arguments {
+		if a.Name == "cursor" && !strings.Contains(a.Description, "same project_id and state") {
+			t.Fatalf("cursor description lacks the filter rule: %q", a.Description)
+		}
+	}
+}

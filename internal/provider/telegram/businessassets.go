@@ -97,8 +97,7 @@ var businessGifts = capability.Descriptor{
 		`"next_offset":{"type":"string"},"gifts":{"type":"array","items":{"type":"object","properties":{` +
 		`"type":{"type":"string"},"gift_id":{"type":"string"},"name":{"type":"string"},"number":{"type":"integer"},` +
 		`"send_date":{"type":"integer"},"is_saved":{"type":"boolean"},"text":{"type":"string"},` +
-		`"sender":{"type":"object","properties":{"id":{"type":"integer"},"is_bot":{"type":"boolean"},` +
-		`"first_name":{"type":"string"},"username":{"type":"string"}}},` +
+		`"sender":` + userSchema + `,` +
 		`"star_count":{"type":"integer"},"convert_star_count":{"type":"integer"}},"additionalProperties":false}}},` +
 		`"required":["total_count","gifts"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -109,7 +108,7 @@ var businessGifts = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "total_count", Description: "Number of gifts of the account"},
 		{Name: "next_offset", Description: "Offset of the next page; absent on the last page"},
-		{Name: "gifts", Description: "Gifts with type, gift_id, name, number, send_date, is_saved, text, sender, " +
+		{Name: "gifts", Description: "Gifts with type, gift_id, name, number, send_date, is_saved, text, sender (a Telegram User), " +
 			"star_count, and convert_star_count; star values are read-only numbers"},
 	},
 	Examples: []capability.Example{{
