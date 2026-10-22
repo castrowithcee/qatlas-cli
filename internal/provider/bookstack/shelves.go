@@ -26,9 +26,9 @@ const listUserSchema = `{"properties":{"id":{"type":"integer"}}}`
 
 const bookUserSchema = `{"type":"object","properties":{"id":{"type":"integer"}}}`
 
-const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + listUserSchema + `,"updated_by":` + listUserSchema + `,"owned_by":` + listUserSchema + `},"required":["id","name","slug","description","created_at","updated_at"]}}`
+const shelfListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + listUserSchema + `,"updated_by":` + listUserSchema + `,"owned_by":` + listUserSchema + `,"cover":{}},"required":["id","name","slug","description","created_at","updated_at"]}}`
 
-const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + bookUserSchema + `,"updated_by":` + bookUserSchema + `,"owned_by":` + bookUserSchema + `}}},"truncated":{"type":"boolean"}},"required":["id","name","slug","books","truncated"]}`
+const shelfGetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"},"books":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":` + bookUserSchema + `,"updated_by":` + bookUserSchema + `,"owned_by":` + bookUserSchema + `}}},"truncated":{"type":"boolean"},"cover":` + coverDetailSchema + `},"required":["id","name","slug","books","truncated"]}`
 
 const shelfWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"owned_by":{"type":"object"},"tags":{"type":"array"}},"required":["id","name","slug"]}`
 
@@ -74,6 +74,7 @@ var (
 			{Name: "created_by", Description: "Creator as id only"},
 			{Name: "updated_by", Description: "Last editor as id only"},
 			{Name: "owned_by", Description: "Owner as id only"},
+			{Name: "cover", Description: coverListDescription},
 		},
 		Examples: []capability.Example{{Description: "List the first 25 shelves", Arguments: json.RawMessage(`{"limit":25,"offset":0}`)}},
 	}
@@ -89,7 +90,8 @@ var (
 		Arguments:    []capability.Argument{{Name: "id", Description: "Shelf identifier", Required: true}},
 		Fields: append(shelfGetFields(),
 			capability.Field{Name: "books", Description: "Books on the shelf in shelf order; each also with description (untrusted data), timestamps, and creator, last editor, and owner as id only"},
-			capability.Field{Name: "truncated", Description: "True when the book list was cut at 2000 entries"}),
+			capability.Field{Name: "truncated", Description: "True when the book list was cut at 2000 entries"},
+			capability.Field{Name: "cover", Description: coverDetailDescription}),
 		Examples: []capability.Example{{Description: "Read shelf 3", Arguments: json.RawMessage(`{"id":3}`)}},
 	}
 
@@ -165,6 +167,7 @@ type shelfJSON struct {
 	OwnedBy         *userJSON       `json:"owned_by"`
 	Tags            []tagJSON       `json:"tags"`
 	Books           []shelfBookJSON `json:"books"`
+	Cover           *coverJSON      `json:"cover"`
 }
 
 // shelfBookJSON is a book of a shelf read; BookStack gives its users as identifiers only.
@@ -354,6 +357,7 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery
 				"description": clip(s.Description, maxDescriptionChars), "created_at": s.CreatedAt, "updated_at": s.UpdatedAt,
 			}
 			addListUsers(row, s.CreatedBy, s.UpdatedBy, s.OwnedBy)
+			addListCover(row, s.Cover)
 			return row
 		},
 	}
@@ -407,6 +411,9 @@ func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) 
 		}
 	}
 	fields = append(fields, output.Field{Name: "books", Value: books}, output.Field{Name: "truncated", Value: truncated})
+	if cover := coverDetail(shelf.Cover); cover != nil {
+		fields = append(fields, output.Field{Name: "cover", Value: cover})
+	}
 	return output.Object{Fields: fields}, nil
 }
 

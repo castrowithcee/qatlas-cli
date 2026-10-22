@@ -26,11 +26,24 @@ const (
 	 "created_by":{"id":1,"name":"Admin","slug":"admin"},"updated_by":{"id":2,"name":"Editor","slug":"editor"},
 	 "owned_by":{"id":3,"name":"Owner","slug":"owner"},"draft":false,"markdown":"# m","revision_count":5,
 	 "template":false,"editor":"wysiwyg",
+	 "comments":{"active":[{"comment":{"id":22,"commentable_id":306,"commentable_type":"page",
+	  "html":"<p>Does this need revising?</p>","parent_id":null,"local_id":1,
+	  "created_by":{"id":1,"name":"Admin","slug":"admin"},"updated_by":1,
+	  "created_at":"2023-06-07T07:50:56.000000Z","updated_at":"2023-06-07T07:50:56.000000Z","content_ref":"","archived":false},
+	  "depth":0,"children":[{"comment":{"id":34,"commentable_id":306,"commentable_type":"page",
+	  "html":"<p>I think it's okay!</p>","parent_id":1,"local_id":2,
+	  "created_by":{"id":2,"name":"Editor","slug":"editor"},"updated_by":1,
+	  "created_at":"2023-06-07T13:46:25.000000Z","updated_at":"2023-06-07T13:46:25.000000Z","content_ref":"bkmrk-x","archived":false},
+	  "depth":1,"children":[]}]}],
+	 "archived":[{"comment":{"id":21,"commentable_id":306,"commentable_type":"page","html":"<p>Fix the title</p>",
+	  "parent_id":null,"local_id":3,"created_by":{"id":2,"name":"Editor","slug":"editor"},"updated_by":1,
+	  "created_at":"2023-06-07T07:50:49.000000Z","updated_at":"2025-10-24T08:37:22.000000Z","content_ref":"","archived":true},
+	  "depth":0,"children":[]}]},
 	 "tags":[{"name":"Category","value":"Top Content","order":0},{"name":"Animal","value":"Cat","order":1}]}`
 
 	fixtureBooksList = `{"data":[{"id":1,"name":"BookStack User Guide","slug":"bookstack-user-guide",
 	 "description":"Guide","created_at":"2019-05-05T21:48:46.000000Z","updated_at":"2019-12-11T20:57:31.000000Z",
-	 "created_by":1,"updated_by":4,"owned_by":3,"cover":null}],"total":14}`
+	 "created_by":1,"updated_by":4,"owned_by":3,"cover":{"id":9,"name":"c.jpg","url":"https://example.com/c.jpg"}}],"total":14}`
 
 	fixtureBookRead = `{"id":16,"name":"My own book","slug":"my-own-book","description":"d","description_html":"<p>d</p>",
 	 "created_at":"2020-01-12T14:09:59.000000Z","updated_at":"2020-01-12T14:11:51.000000Z",
@@ -46,7 +59,9 @@ const (
 	   "template":false,"created_at":"2021-12-19T18:22:11.000000Z","updated_at":"2022-07-29T13:44:15.000000Z",
 	   "url":"https://example.com/books/my-own-book/page/cool-animals","type":"page"}],
 	 "tags":[{"name":"Category","value":"Guide","order":0}],
-	 "cover":{"id":452,"name":"c.jpg","url":"https://example.com/c.jpg"},
+	 "cover":{"id":452,"name":"c.jpg","url":"https://example.com/c.jpg","created_at":"2020-01-12T14:11:51.000000Z",
+	  "updated_at":"2020-01-12T14:12:51.000000Z","created_by":1,"updated_by":2,"path":"/uploads/c.jpg",
+	  "type":"cover_book","uploaded_to":16},
 	 "shelves":[{"id":1,"name":"Great reads","slug":"great-reads"}]}`
 
 	fixtureChaptersList = `{"data":[{"id":1,"book_id":1,"name":"Content Creation","slug":"content-creation",
@@ -74,7 +89,9 @@ const (
 	 "owned_by":{"id":3,"name":"Owner","slug":"owner"},
 	 "created_at":"2020-04-10T13:24:09.000000Z","updated_at":"2020-04-10T13:31:04.000000Z",
 	 "tags":[{"name":"Category","value":"Guide","order":0}],
-	 "cover":{"id":501,"name":"c.jpg","url":"http://bookstack.local/c.jpg","path":"/uploads/c.jpg"},
+	 "cover":{"id":501,"name":"c.jpg","url":"http://bookstack.local/c.jpg","path":"/uploads/c.jpg",
+	  "created_at":"2020-04-10T13:31:04.000000Z","updated_at":"2020-04-10T13:32:04.000000Z","created_by":1,
+	  "updated_by":2,"type":"cover_bookshelf","uploaded_to":14},
 	 "books":[{"id":5,"name":"Sint explicabo","slug":"jbsQrzuaXe","description":"Hic forum est.",
 	  "created_at":"2020-04-10T13:31:04.000000Z","updated_at":"2020-04-11T13:31:04.000000Z",
 	  "created_by":1,"updated_by":2,"owned_by":3}]}`
@@ -271,14 +288,47 @@ func TestContentReadsShowEveryDocumentedField(t *testing.T) {
 	if _, ok := page["book_slug"]; ok {
 		t.Error("pages.get shows a book_slug the answer does not document")
 	}
+	if _, ok := page["comments_truncated"]; ok {
+		t.Error("pages.get marks an uncut comment tree")
+	}
+	wantComments := map[string]any{
+		"active": []any{map[string]any{
+			"depth": 0.0,
+			"comment": map[string]any{
+				"id": 22.0, "commentable_id": 306.0, "commentable_type": "page", "html": "<p>Does this need revising?</p>",
+				"local_id": 1.0, "archived": false, "created_by": detail(1, "Admin", "admin"), "updated_by": id(1),
+				"created_at": "2023-06-07T07:50:56.000000Z", "updated_at": "2023-06-07T07:50:56.000000Z",
+			},
+			"children": []any{map[string]any{
+				"depth": 1.0, "children": []any{},
+				"comment": map[string]any{
+					"id": 34.0, "commentable_id": 306.0, "commentable_type": "page", "html": "<p>I think it's okay!</p>",
+					"parent_id": 1.0, "local_id": 2.0, "content_ref": "bkmrk-x", "archived": false,
+					"created_by": detail(2, "Editor", "editor"), "updated_by": id(1),
+					"created_at": "2023-06-07T13:46:25.000000Z", "updated_at": "2023-06-07T13:46:25.000000Z",
+				},
+			}},
+		}},
+		"archived": []any{map[string]any{
+			"depth": 0.0, "children": []any{},
+			"comment": map[string]any{
+				"id": 21.0, "commentable_id": 306.0, "commentable_type": "page", "html": "<p>Fix the title</p>",
+				"local_id": 3.0, "archived": true, "created_by": detail(2, "Editor", "editor"), "updated_by": id(1),
+				"created_at": "2023-06-07T07:50:49.000000Z", "updated_at": "2025-10-24T08:37:22.000000Z",
+			},
+		}},
+	}
+	if !reflect.DeepEqual(page["comments"], wantComments) {
+		t.Errorf("pages.get comments = %v", page["comments"])
+	}
 
 	book := at(t, results["bookstack.books.list"], 0).(map[string]any)
 	if !reflect.DeepEqual(book["created_by"], id(1)) || !reflect.DeepEqual(book["updated_by"], id(4)) ||
 		!reflect.DeepEqual(book["owned_by"], id(3)) {
 		t.Errorf("books.list users = %v", book)
 	}
-	if _, ok := book["cover"]; ok {
-		t.Error("books.list shows the cover")
+	if want := map[string]any{"id": 9.0, "name": "c.jpg", "url": "https://example.com/c.jpg"}; !reflect.DeepEqual(book["cover"], want) {
+		t.Errorf("books.list cover = %v", book["cover"])
 	}
 
 	read := results["bookstack.books.get"].(map[string]any)
@@ -287,8 +337,13 @@ func TestContentReadsShowEveryDocumentedField(t *testing.T) {
 		!reflect.DeepEqual(at(t, read, "tags", 0), map[string]any{"name": "Category", "value": "Guide", "order": 0.0}) {
 		t.Errorf("books.get = %v", read)
 	}
-	if _, ok := read["cover"]; ok {
-		t.Error("books.get shows the cover")
+	wantCover := map[string]any{
+		"id": 452.0, "name": "c.jpg", "url": "https://example.com/c.jpg", "path": "/uploads/c.jpg",
+		"type": "cover_book", "uploaded_to": 16.0, "created_at": "2020-01-12T14:11:51.000000Z",
+		"updated_at": "2020-01-12T14:12:51.000000Z", "created_by": id(1), "updated_by": id(2),
+	}
+	if !reflect.DeepEqual(read["cover"], wantCover) {
+		t.Errorf("books.get cover = %v", read["cover"])
 	}
 	wantChapter := map[string]any{
 		"type": "chapter", "id": 50.0, "name": "Bridge Structures", "slug": "bridge-structures", "book_id": 16.0,
@@ -367,9 +422,7 @@ func TestShelfAndImageReadsShowEveryDocumentedField(t *testing.T) {
 		"id": 8.0, "name": "Qui qui", "description": "Enim dolor", "created_at": "2019-05-05T22:10:16.000000Z",
 		"created_by": id(4), "updated_by": id(1), "owned_by": id(2),
 	})
-	if _, ok := row.(map[string]any)["cover"]; ok {
-		t.Error("shelves.list shows the cover")
-	}
+	check("shelves.list cover", row, map[string]any{"cover": map[string]any{"id": 4.0, "name": "shelf.jpg", "url": "https://example.com/shelf.jpg"}})
 
 	shelf, err := objectJSON(c.GetShelf(context.Background(), 14))
 	if err != nil {
@@ -385,9 +438,11 @@ func TestShelfAndImageReadsShowEveryDocumentedField(t *testing.T) {
 			"created_by": id(1), "updated_by": id(2), "owned_by": id(3),
 		}},
 	})
-	if _, ok := shelf.(map[string]any)["cover"]; ok {
-		t.Error("shelves.get shows the cover")
-	}
+	check("shelves.get cover", shelf, map[string]any{"cover": map[string]any{
+		"id": 501.0, "name": "c.jpg", "url": "http://bookstack.local/c.jpg", "path": "/uploads/c.jpg",
+		"type": "cover_bookshelf", "uploaded_to": 14.0, "created_at": "2020-04-10T13:31:04.000000Z",
+		"updated_at": "2020-04-10T13:32:04.000000Z", "created_by": id(1), "updated_by": id(2),
+	}})
 
 	images, err := rowsJSON(c.ListImages(context.Background(), 0, "", 0, 0, listQuery{}))
 	if err != nil {

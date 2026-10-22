@@ -28,7 +28,7 @@ var (
 		Tags:        []string{"knowledge", "books", "bookstack"},
 		Risk:        bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + bookListSchema.properties() + `},"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"owned_by":{"properties":{"id":{"type":"integer"}}}},"required":["id","name","slug","description","created_at","updated_at"]}}`),
+		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"properties":{"id":{"type":"integer"}}},"updated_by":{"properties":{"id":{"type":"integer"}}},"owned_by":{"properties":{"id":{"type":"integer"}}},"cover":{}},"required":["id","name","slug","description","created_at","updated_at"]}}`),
 		Arguments: append([]capability.Argument{
 			{Name: "limit", Description: "Maximum number of books to return; 0 returns all"},
 			{Name: "offset", Description: "Number of books to skip"},
@@ -43,6 +43,7 @@ var (
 			{Name: "created_by", Description: "Creator as id only"},
 			{Name: "updated_by", Description: "Last editor as id only"},
 			{Name: "owned_by", Description: "Owner as id only"},
+			{Name: "cover", Description: coverListDescription},
 		},
 		Examples: []capability.Example{{Description: "List the first 25 books", Arguments: json.RawMessage(`{"limit":25,"offset":0}`)}},
 	}
@@ -53,7 +54,7 @@ var (
 		Tags:        []string{"knowledge", "books", "bookstack"},
 		Risk:        bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"default_template_id":{"type":"integer"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"contents":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},"pages":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}}}}}}},"shelves":{"type":"array"},"truncated":{"type":"boolean"}},"required":["id","name","slug","contents","truncated"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"default_template_id":{"type":"integer"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"contents":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},"pages":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}}}}}}},"shelves":{"type":"array"},"truncated":{"type":"boolean"},"cover":` + coverDetailSchema + `},"required":["id","name","slug","contents","truncated"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Book identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Book identifier"},
@@ -71,6 +72,7 @@ var (
 			{Name: "contents", Description: "Chapters with their pages and pages, in book order; type chapter or page; each with book_id, created_at and url, an untrusted address"},
 			{Name: "shelves", Description: "Shelves holding the book with id, name, slug; only for a connection without targets"},
 			{Name: "truncated", Description: "True when the content tree was cut at 2000 entries"},
+			{Name: "cover", Description: coverDetailDescription},
 		},
 		Examples: []capability.Example{{Description: "Read book 7", Arguments: json.RawMessage(`{"id":7}`)}},
 	}
@@ -206,6 +208,7 @@ type bookJSON struct {
 	DefaultTemplateID int64       `json:"default_template_id"`
 	Contents          []entryJSON `json:"contents"`
 	Tags              []tagJSON   `json:"tags"`
+	Cover             *coverJSON  `json:"cover"`
 	Shelves           []struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
@@ -248,6 +251,9 @@ type listedJSON struct {
 	UpdatedBy *userJSON `json:"updated_by"`
 	OwnedBy   *userJSON `json:"owned_by"`
 	BookSlug  string    `json:"book_slug"`
+
+	// Book and shelf rows carry the cover image; null when there is none.
+	Cover *coverJSON `json:"cover"`
 }
 
 func invokeBooksList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -376,6 +382,7 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int, q listQuery) 
 				"description": clip(b.Description, maxDescriptionChars), "created_at": b.CreatedAt, "updated_at": b.UpdatedAt,
 			}
 			addListUsers(row, b.CreatedBy, b.UpdatedBy, b.OwnedBy)
+			addListCover(row, b.Cover)
 			return row
 		},
 	}
@@ -478,6 +485,9 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 		fields = append(fields, output.Field{Name: "shelves", Value: shelves})
 	}
 	fields = append(fields, output.Field{Name: "truncated", Value: truncated})
+	if cover := coverDetail(book.Cover); cover != nil {
+		fields = append(fields, output.Field{Name: "cover", Value: cover})
+	}
 	return output.Object{Fields: fields}, nil
 }
 
