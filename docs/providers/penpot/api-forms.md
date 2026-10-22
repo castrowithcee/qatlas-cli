@@ -21,7 +21,10 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
   flag, the organization only with the `admin-console` flag (teams with an expired organization license are then
   removed). `get-projects` returns deleted but recoverable projects since 2.12. `get-project-files` and
   `get-file-libraries` return only files that are not deleted. Assumed: timestamps are sent as text, sets such as
-  `features` as lists, and a missing or null member is simply absent.
+  `features` as lists, and a missing or null member is simply absent. `get-team-members` joins the membership row
+  (`team_profile_rel`) with the profile's id, email, full name, photo, and activity; the row's team and profile IDs
+  repeat the request and the member ID. `get-webhooks` selects id, URI, payload type, activity, error code and count,
+  and the creating profile.
 - Comments (`comments.clj`): the update and delete commands check that the caller owns the comment or thread and
   answer without a body. The reading commands return the thread and comment columns plus the author's name, email, and
   photo (`comment_thread` and `comment` tables, migrations 0031, 0077, and 0136); the threads also carry file name,
