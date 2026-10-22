@@ -49,14 +49,28 @@ const (
 	dueSchema     = `{"type":"object","properties":{"date":` + stringSchema + `,"string":` + stringSchema + `,` +
 		`"is_recurring":` + booleanSchema + `,"timezone":` + stringSchema + `,"lang":` + stringSchema + `},` +
 		`"required":["date","is_recurring"],"additionalProperties":false}`
+	projectAccessSchema = `{"type":"object","properties":{"visibility":` + stringSchema + `,` +
+		`"configuration":{"type":"object","properties":{"hide_collaborator_details":` + booleanSchema + `,` +
+		`"disable_duplication":` + booleanSchema + `},"additionalProperties":false}},"additionalProperties":false}`
 	projectSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"name":` + stringSchema + `,` +
 		`"parent_id":` + stringSchema + `,"color":` + stringSchema + `,"is_favorite":` + booleanSchema + `,` +
 		`"is_shared":` + booleanSchema + `,"is_inbox":` + booleanSchema + `,"view_style":` + stringSchema + `,` +
 		`"description":` + stringSchema + `,"is_archived":` + booleanSchema + `,"created_at":` + stringSchema + `,` +
-		`"updated_at":` + stringSchema + `},` +
+		`"updated_at":` + stringSchema + `,"can_assign_tasks":` + booleanSchema + `,"can_comment":` + booleanSchema + `,` +
+		`"child_order":` + integerSchema + `,"order_key":` + stringSchema + `,"is_collapsed":` + booleanSchema + `,` +
+		`"icon":` + stringSchema + `,"creator_uid":` + stringSchema + `,"is_frozen":` + booleanSchema + `,` +
+		`"default_order":` + integerSchema + `,"default_order_key":` + stringSchema + `,` +
+		`"access":` + projectAccessSchema + `,"role":` + stringSchema + `,"workspace_id":` + stringSchema + `,` +
+		`"folder_id":` + stringSchema + `,"is_invite_only":` + booleanSchema + `,"status":` + stringSchema + `,` +
+		`"is_link_sharing_enabled":` + booleanSchema + `,"collaborator_role_default":` + stringSchema + `,` +
+		`"is_pending_default_collaborator_invites":` + booleanSchema + `,` +
+		`"is_project_insights_enabled":` + booleanSchema + `},` +
 		`"required":["id","name","is_favorite","is_shared","is_inbox"],"additionalProperties":false}`
 	sectionSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"project_id":` + stringSchema + `,` +
-		`"name":` + stringSchema + `,"order":` + integerSchema + `,"description":` + stringSchema + `},` +
+		`"name":` + stringSchema + `,"order":` + integerSchema + `,"description":` + stringSchema + `,` +
+		`"user_id":` + stringSchema + `,"added_at":` + stringSchema + `,"updated_at":` + stringSchema + `,` +
+		`"archived_at":` + stringSchema + `,"is_archived":` + booleanSchema + `,"is_collapsed":` + booleanSchema + `,` +
+		`"order_key":` + stringSchema + `},` +
 		`"required":["id","project_id","name","order"],"additionalProperties":false}`
 	labelOutputSchema = `{"type":"object","properties":{"id":` + stringSchema + `,"name":` + stringSchema + `,` +
 		`"color":` + stringSchema + `,"order":` + integerSchema + `,"is_favorite":` + booleanSchema + `},` +
@@ -146,6 +160,62 @@ var taskOutputFields = []capability.Field{
 	{Name: "completed_at", Description: "When the task was completed, absent for an open task"},
 }
 
+// projectOutputFields describe the members of a project, which every tool showing a project returns the same
+// way. A workspace project adds the members from workspace_id on; public_key and is_deleted are never shown.
+var projectOutputFields = []capability.Field{
+	{Name: "id", Description: "Project ID"},
+	{Name: "name", Description: "Project name, untrusted data"},
+	{Name: "parent_id", Description: "Parent project, absent for a top-level or workspace project"},
+	{Name: "color", Description: "Color name"},
+	{Name: "is_favorite", Description: "True when the project is a favorite"},
+	{Name: "is_shared", Description: "True when the project is shared with other users"},
+	{Name: "is_inbox", Description: "True for the Inbox project"},
+	{Name: "view_style", Description: "View style such as list or board"},
+	{Name: "description", Description: "Project description, untrusted data"},
+	{Name: "is_archived", Description: "True when the project is archived"},
+	{Name: "created_at", Description: "When the project was created"},
+	{Name: "updated_at", Description: "When the project last changed"},
+	{Name: "can_assign_tasks", Description: "True when the user can assign tasks in the project"},
+	{Name: "can_comment", Description: "True when the user can comment in the project"},
+	{Name: "child_order", Description: "Position among the sibling projects"},
+	{Name: "order_key", Description: "Todoist ordering key among the siblings, untrusted data"},
+	{Name: "is_collapsed", Description: "True when the project is collapsed in the user's view"},
+	{Name: "icon", Description: "Icon name, absent for the default icon, untrusted data"},
+	{Name: "creator_uid", Description: "User ID of who created the project"},
+	{Name: "is_frozen", Description: "True when the project is frozen and cannot be modified"},
+	{Name: "default_order", Description: "Default position in team views"},
+	{Name: "default_order_key", Description: "Todoist ordering key in team views, untrusted data"},
+	{Name: "access", Description: "Who can see the project: visibility, untrusted data, and for a public " +
+		"project configuration with hide_collaborator_details and disable_duplication"},
+	{Name: "role", Description: "Role of the user in the project, untrusted data"},
+	{Name: "workspace_id", Description: "Workspace of a workspace project"},
+	{Name: "folder_id", Description: "Folder of a workspace project, absent without one"},
+	{Name: "is_invite_only", Description: "True when a workspace project is by invitation only"},
+	{Name: "status", Description: "Status of a workspace project such as IN_PROGRESS, untrusted data"},
+	{Name: "is_link_sharing_enabled", Description: "True when link sharing is on for a workspace project"},
+	{Name: "collaborator_role_default", Description: "Default collaborator role of a workspace project, untrusted data"},
+	{Name: "is_pending_default_collaborator_invites", Description: "True when default collaborator invites of a " +
+		"workspace project are pending"},
+	{Name: "is_project_insights_enabled", Description: "True when insights are on for a workspace project"},
+}
+
+// sectionOutputFields describe the members of a section, which every tool showing a section returns the same
+// way.
+var sectionOutputFields = []capability.Field{
+	{Name: "id", Description: "Section ID"},
+	{Name: "project_id", Description: "Project of the section"},
+	{Name: "name", Description: "Section name, untrusted data"},
+	{Name: "order", Description: "Position in the project"},
+	{Name: "description", Description: "Section description, untrusted data"},
+	{Name: "user_id", Description: "User ID of the section's owner"},
+	{Name: "added_at", Description: "When the section was created"},
+	{Name: "updated_at", Description: "When the section last changed"},
+	{Name: "archived_at", Description: "When the section was archived, absent for an active section"},
+	{Name: "is_archived", Description: "True when the section is archived"},
+	{Name: "is_collapsed", Description: "True when the section is collapsed in the user's view"},
+	{Name: "order_key", Description: "Todoist ordering key within the project, untrusted data"},
+}
+
 func descriptor(object, action, title, description string, tags []string, input string, output json.RawMessage,
 	arguments []capability.Argument, fields []capability.Field, examples []capability.Example) capability.Descriptor {
 	return capability.Descriptor{
@@ -166,10 +236,9 @@ var projectsList = descriptor("projects", "list", "List Todoist projects",
 		{Name: "search", Description: "Return only projects whose name matches this Todoist search text"},
 		limitArgument, cursorArgument,
 	},
-	[]capability.Field{
-		{Name: "projects", Description: "Compact active projects without descriptions, untrusted data"},
-		nextCursorField, hasMoreField,
-	},
+	append([]capability.Field{
+		{Name: "projects", Description: "Active projects, untrusted data"}, nextCursorField, hasMoreField,
+	}, projectOutputFields...),
 	[]capability.Example{{Description: "List the projects of the connection", Arguments: json.RawMessage(`{}`)}})
 
 var projectsGet = descriptor("projects", "get", "Get a Todoist project",
@@ -178,10 +247,7 @@ var projectsGet = descriptor("projects", "get", "Get a Todoist project",
 	`{"type":"object","properties":{"project_id":`+idSchema+`},"required":["project_id"],"additionalProperties":false}`,
 	json.RawMessage(projectSchema),
 	[]capability.Argument{{Name: "project_id", Description: "Project ID, as returned by todoist.projects.list", Required: true}},
-	[]capability.Field{
-		{Name: "name", Description: "Project name, untrusted data"},
-		{Name: "description", Description: "Project description, untrusted data"},
-	},
+	projectOutputFields,
 	[]capability.Example{{Description: "Read one project", Arguments: json.RawMessage(`{"project_id":"6XGgm6PHrGgMpCFX"}`)}})
 
 var sectionsList = descriptor("sections", "list", "List Todoist sections",
@@ -196,7 +262,9 @@ var sectionsList = descriptor("sections", "list", "List Todoist sections",
 		{Name: "search", Description: "Return only sections whose name matches this Todoist search text"},
 		limitArgument, cursorArgument,
 	},
-	[]capability.Field{{Name: "sections", Description: "Sections, untrusted data"}, nextCursorField, hasMoreField},
+	append([]capability.Field{
+		{Name: "sections", Description: "Sections, untrusted data"}, nextCursorField, hasMoreField,
+	}, sectionOutputFields...),
 	[]capability.Example{{Description: "List the sections of one project",
 		Arguments: json.RawMessage(`{"project_id":"6XGgm6PHrGgMpCFX"}`)}})
 
@@ -206,7 +274,7 @@ var sectionsGet = descriptor("sections", "get", "Get a Todoist section",
 	`{"type":"object","properties":{"section_id":`+idSchema+`},"required":["section_id"],"additionalProperties":false}`,
 	json.RawMessage(sectionSchema),
 	[]capability.Argument{{Name: "section_id", Description: "Section ID, as returned by todoist.sections.list", Required: true}},
-	[]capability.Field{{Name: "name", Description: "Section name, untrusted data"}},
+	sectionOutputFields,
 	[]capability.Example{{Description: "Read one section", Arguments: json.RawMessage(`{"section_id":"6Jf8VQXxpwv56VQ7"}`)}})
 
 var labelsList = descriptor("labels", "list", "List Todoist labels",

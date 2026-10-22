@@ -125,7 +125,7 @@ func (c *Client) browseProjects(ctx context.Context, parent, query string, bindi
 	}
 	var kept []rawProject
 	for _, raw := range raws {
-		if !validID(raw.ID) || raw.IsDeleted || raw.IsArchived {
+		if !validID(raw.ID) || raw.IsDeleted || raw.archived() {
 			continue
 		}
 		if (parent != "" || query == "") && text(raw.ParentID) != parent {
@@ -229,7 +229,7 @@ func (c *Client) browseSections(ctx context.Context, parent, query string, bindi
 		ServerSearch: query != ""}
 	for _, raw := range raws {
 		// The server filter is a courtesy: a section of another project is not listed.
-		if !validID(raw.ID) || raw.IsDeleted || raw.IsArchived || raw.ProjectID != parent {
+		if !validID(raw.ID) || raw.IsDeleted || raw.archived() || raw.ProjectID != parent {
 			continue
 		}
 		name := browseText(raw.Name)

@@ -22,7 +22,7 @@ type rawProject struct {
 	Description string  `json:"description"`
 	IsFavorite  bool    `json:"is_favorite"`
 	IsShared    bool    `json:"is_shared"`
-	IsArchived  bool    `json:"is_archived"`
+	IsArchived  *bool   `json:"is_archived"`
 	IsDeleted   bool    `json:"is_deleted"`
 	IsInbox     bool    `json:"inbox_project"`
 	// WorkspaceID is set only on a project of a Todoist workspace, never on a personal one.
@@ -30,7 +30,35 @@ type rawProject struct {
 	ViewStyle   string          `json:"view_style"`
 	CreatedAt   *string         `json:"created_at"`
 	UpdatedAt   *string         `json:"updated_at"`
+
+	CanAssignTasks  *bool   `json:"can_assign_tasks"`
+	CanComment      *bool   `json:"can_comment"`
+	ChildOrder      *int64  `json:"child_order"`
+	OrderKey        *string `json:"order_key"`
+	IsCollapsed     *bool   `json:"is_collapsed"`
+	Icon            *string `json:"icon"`
+	CreatorUID      *string `json:"creator_uid"`
+	IsFrozen        *bool   `json:"is_frozen"`
+	DefaultOrder    *int64  `json:"default_order"`
+	DefaultOrderKey *string `json:"default_order_key"`
+	Access          *struct {
+		Visibility    *string `json:"visibility"`
+		Configuration *struct {
+			HideCollaboratorDetails *bool `json:"hide_collaborator_details"`
+			DisableDuplication      *bool `json:"disable_duplication"`
+		} `json:"configuration"`
+	} `json:"access"`
+	Role                                *string         `json:"role"`
+	FolderID                            json.RawMessage `json:"folder_id"`
+	IsInviteOnly                        *bool           `json:"is_invite_only"`
+	Status                              *string         `json:"status"`
+	IsLinkSharingEnabled                *bool           `json:"is_link_sharing_enabled"`
+	CollaboratorRoleDefault             *string         `json:"collaborator_role_default"`
+	IsPendingDefaultCollaboratorInvites *bool           `json:"is_pending_default_collaborator_invites"`
+	IsProjectInsightsEnabled            *bool           `json:"is_project_insights_enabled"`
 }
+
+func (r rawProject) archived() bool { return r.IsArchived != nil && *r.IsArchived }
 
 type rawSection struct {
 	ID          string  `json:"id"`
@@ -38,9 +66,17 @@ type rawSection struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description"`
 	Order       int     `json:"section_order"`
-	IsArchived  bool    `json:"is_archived"`
+	IsArchived  *bool   `json:"is_archived"`
 	IsDeleted   bool    `json:"is_deleted"`
+	UserID      *string `json:"user_id"`
+	AddedAt     *string `json:"added_at"`
+	UpdatedAt   *string `json:"updated_at"`
+	ArchivedAt  *string `json:"archived_at"`
+	IsCollapsed *bool   `json:"is_collapsed"`
+	OrderKey    *string `json:"order_key"`
 }
+
+func (r rawSection) archived() bool { return r.IsArchived != nil && *r.IsArchived }
 
 type rawLabel struct {
 	ID         string `json:"id"`
@@ -160,6 +196,41 @@ type Project struct {
 	IsArchived  bool   `json:"is_archived,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
+
+	CanAssignTasks  *bool          `json:"can_assign_tasks,omitempty"`
+	CanComment      *bool          `json:"can_comment,omitempty"`
+	ChildOrder      *int64         `json:"child_order,omitempty"`
+	OrderKey        string         `json:"order_key,omitempty"`
+	IsCollapsed     *bool          `json:"is_collapsed,omitempty"`
+	Icon            string         `json:"icon,omitempty"`
+	CreatorUID      string         `json:"creator_uid,omitempty"`
+	IsFrozen        *bool          `json:"is_frozen,omitempty"`
+	DefaultOrder    *int64         `json:"default_order,omitempty"`
+	DefaultOrderKey string         `json:"default_order_key,omitempty"`
+	Access          *ProjectAccess `json:"access,omitempty"`
+	Role            string         `json:"role,omitempty"`
+
+	// The members below belong to workspace projects only.
+	WorkspaceID                         string `json:"workspace_id,omitempty"`
+	FolderID                            string `json:"folder_id,omitempty"`
+	IsInviteOnly                        *bool  `json:"is_invite_only,omitempty"`
+	Status                              string `json:"status,omitempty"`
+	IsLinkSharingEnabled                *bool  `json:"is_link_sharing_enabled,omitempty"`
+	CollaboratorRoleDefault             string `json:"collaborator_role_default,omitempty"`
+	IsPendingDefaultCollaboratorInvites *bool  `json:"is_pending_default_collaborator_invites,omitempty"`
+	IsProjectInsightsEnabled            *bool  `json:"is_project_insights_enabled,omitempty"`
+}
+
+// ProjectAccess tells who can see a project. Its settings exist for a public project only.
+type ProjectAccess struct {
+	Visibility    string               `json:"visibility,omitempty"`
+	Configuration *ProjectAccessConfig `json:"configuration,omitempty"`
+}
+
+// ProjectAccessConfig holds the settings of a publicly shared project.
+type ProjectAccessConfig struct {
+	HideCollaboratorDetails *bool `json:"hide_collaborator_details,omitempty"`
+	DisableDuplication      *bool `json:"disable_duplication,omitempty"`
 }
 
 // ProjectList is one page of projects.
@@ -175,6 +246,13 @@ type Section struct {
 	Name        string `json:"name"`
 	Order       int    `json:"order"`
 	Description string `json:"description,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	AddedAt     string `json:"added_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	ArchivedAt  string `json:"archived_at,omitempty"`
+	IsArchived  *bool  `json:"is_archived,omitempty"`
+	IsCollapsed *bool  `json:"is_collapsed,omitempty"`
+	OrderKey    string `json:"order_key,omitempty"`
 }
 
 // SectionList is one page of sections.
@@ -323,19 +401,58 @@ func text(value *string) string {
 	return *value
 }
 
-func projectOf(raw rawProject, full bool) Project {
+// idText reads an identifier Todoist sends as a string, or as a number, without a detour through a float.
+func idText(raw json.RawMessage) string {
+	var id string
+	if json.Unmarshal(raw, &id) == nil {
+		return boundedText(id, maxTagText)
+	}
+	var number json.Number
+	if json.Unmarshal(raw, &number) == nil {
+		return boundedText(number.String(), maxTagText)
+	}
+	return ""
+}
+
+// projectOf is the one mapping of a project every project output shares, a personal and a workspace one
+// alike. Texts Todoist composes itself and identifiers of other people are bounded.
+func projectOf(raw rawProject) Project {
 	project := Project{ID: raw.ID, Name: raw.Name, ParentID: text(raw.ParentID), Color: raw.Color,
-		IsFavorite: raw.IsFavorite, IsShared: raw.IsShared, IsInbox: raw.IsInbox, ViewStyle: raw.ViewStyle}
-	if full {
-		project.Description, project.IsArchived = raw.Description, raw.IsArchived
-		project.CreatedAt, project.UpdatedAt = text(raw.CreatedAt), text(raw.UpdatedAt)
+		IsFavorite: raw.IsFavorite, IsShared: raw.IsShared, IsInbox: raw.IsInbox, ViewStyle: raw.ViewStyle,
+		Description: raw.Description, IsArchived: raw.archived(),
+		CreatedAt: text(raw.CreatedAt), UpdatedAt: text(raw.UpdatedAt),
+		CanAssignTasks: raw.CanAssignTasks, CanComment: raw.CanComment, ChildOrder: raw.ChildOrder,
+		OrderKey: boundedText(text(raw.OrderKey), maxOrderKey), IsCollapsed: raw.IsCollapsed,
+		Icon: boundedText(text(raw.Icon), maxTagText), CreatorUID: boundedText(text(raw.CreatorUID), maxTagText),
+		IsFrozen: raw.IsFrozen, DefaultOrder: raw.DefaultOrder,
+		DefaultOrderKey: boundedText(text(raw.DefaultOrderKey), maxOrderKey),
+		Role:            boundedText(text(raw.Role), maxTagText),
+		WorkspaceID:     idText(raw.WorkspaceID), FolderID: idText(raw.FolderID), IsInviteOnly: raw.IsInviteOnly,
+		Status: boundedText(text(raw.Status), maxTagText), IsLinkSharingEnabled: raw.IsLinkSharingEnabled,
+		CollaboratorRoleDefault:             boundedText(text(raw.CollaboratorRoleDefault), maxTagText),
+		IsPendingDefaultCollaboratorInvites: raw.IsPendingDefaultCollaboratorInvites,
+		IsProjectInsightsEnabled:            raw.IsProjectInsightsEnabled}
+	if access := raw.Access; access != nil {
+		out := ProjectAccess{Visibility: boundedText(text(access.Visibility), maxTagText)}
+		if config := access.Configuration; config != nil &&
+			(config.HideCollaboratorDetails != nil || config.DisableDuplication != nil) {
+			out.Configuration = &ProjectAccessConfig{HideCollaboratorDetails: config.HideCollaboratorDetails,
+				DisableDuplication: config.DisableDuplication}
+		}
+		if out.Visibility != "" || out.Configuration != nil {
+			project.Access = &out
+		}
 	}
 	return project
 }
 
 func sectionOf(raw rawSection) Section {
-	return Section{ID: raw.ID, ProjectID: raw.ProjectID, Name: raw.Name, Order: raw.Order,
-		Description: text(raw.Description)}
+	section := Section{ID: raw.ID, ProjectID: raw.ProjectID, Name: raw.Name, Order: raw.Order,
+		Description: text(raw.Description), UserID: boundedText(text(raw.UserID), maxTagText),
+		AddedAt: text(raw.AddedAt), UpdatedAt: text(raw.UpdatedAt), ArchivedAt: text(raw.ArchivedAt),
+		IsArchived: raw.IsArchived, IsCollapsed: raw.IsCollapsed,
+		OrderKey: boundedText(text(raw.OrderKey), maxOrderKey)}
+	return section
 }
 
 func dueOf(raw *rawDue) *Due {
@@ -449,7 +566,7 @@ func (c *Client) listProjects(ctx context.Context, call listCall) (*ProjectList,
 			return nil, err
 		}
 		if ok {
-			result.Projects = append(result.Projects, projectOf(raw, false))
+			result.Projects = append(result.Projects, projectOf(raw))
 		}
 	}
 	return result, nil
@@ -460,7 +577,7 @@ func (c *Client) getProject(ctx context.Context, id string) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	project := projectOf(raw, true)
+	project := projectOf(raw)
 	return &project, nil
 }
 
