@@ -137,8 +137,8 @@ const companyBody = `{
 }`
 
 // schemaBody is the workspace document of a compatible workspace, shortened: company, person, a custom
-// object (rocket), and a system object (workspaceMember). Descriptions carry a canary, because no
-// description may reach any output.
+// object (rocket), and a system object (workspaceMember). Descriptions carry a canary that objects.get
+// reports and that no other tool may show.
 const schemaBody = `{
   "openapi":"3.1.0",
   "paths":{
@@ -173,7 +173,7 @@ const schemaBody = `{
 
 const descriptionCanary = "description-canary-twenty-3c58"
 
-// enumCanary is an enum value of the workspace document, which no output may show.
+// enumCanary is an enum value of the workspace document, which only objects.get reports.
 const enumCanary = "ENUM_CANARY_TWENTY_8E21"
 
 // Register publishes the configuration metadata the TUI needs and exactly two read-only operations.
