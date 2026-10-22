@@ -34,14 +34,16 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want := []string{p.id + ".accounts.me", p.id + ".assignees.list", p.id + ".comments.create",
 			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".comments.list",
 			p.id + ".comments.list-repository", p.id + ".comments.update", p.id + ".issue-config.get",
-			p.id + ".issue-config.validate", p.id + ".issue-deadlines.set", p.id + ".issue-templates.list",
-			p.id + ".issue-timeline.list", p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete",
-			p.id + ".issues.get", p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search",
-			p.id + ".issues.update", p.id + ".labels.create", p.id + ".labels.delete", p.id + ".labels.get",
-			p.id + ".labels.list", p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render",
-			p.id + ".org-labels.create", p.id + ".org-labels.delete", p.id + ".org-labels.get",
-			p.id + ".org-labels.list", p.id + ".org-labels.update", p.id + ".repositories.get",
-			p.id + ".repositories.list", p.id + ".settings.get", p.id + ".signing-keys.get", p.id + ".version.get"}
+			p.id + ".issue-config.validate", p.id + ".issue-deadlines.set", p.id + ".issue-labels.add",
+			p.id + ".issue-labels.clear", p.id + ".issue-labels.list", p.id + ".issue-labels.remove",
+			p.id + ".issue-labels.replace", p.id + ".issue-templates.list", p.id + ".issue-timeline.list",
+			p.id + ".issues.close", p.id + ".issues.create", p.id + ".issues.delete", p.id + ".issues.get",
+			p.id + ".issues.list", p.id + ".issues.reopen", p.id + ".issues.search", p.id + ".issues.update",
+			p.id + ".labels.create", p.id + ".labels.delete", p.id + ".labels.get", p.id + ".labels.list",
+			p.id + ".labels.update", p.id + ".markdown.render", p.id + ".markup.render", p.id + ".org-labels.create",
+			p.id + ".org-labels.delete", p.id + ".org-labels.get", p.id + ".org-labels.list",
+			p.id + ".org-labels.update", p.id + ".repositories.get", p.id + ".repositories.list",
+			p.id + ".settings.get", p.id + ".signing-keys.get", p.id + ".version.get"}
 		if p == forgejo {
 			want = append(want, p.id+".nodeinfo.get")
 			slices.Sort(want)
@@ -101,7 +103,8 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		signingKeysGet, markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate,
 		issuesClose, issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, issueTemplatesList,
 		issueConfigGet, issueConfigValidate, assigneesList, labelsList, labelsGet, labelsCreate, labelsUpdate,
-		labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete} {
+		labelsDelete, orgLabelsList, orgLabelsGet, orgLabelsCreate, orgLabelsUpdate, orgLabelsDelete, issueLabelsList,
+		issueLabelsAdd, issueLabelsReplace, issueLabelsRemove, issueLabelsClear} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))

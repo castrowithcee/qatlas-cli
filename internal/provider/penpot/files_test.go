@@ -3,6 +3,7 @@ package penpot
 import (
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -193,5 +194,57 @@ func TestFilesListBoundsCount(t *testing.T) {
 	result, err := env.invoke(filesList.ID, "one", `{"project_id":"`+projectA1+`"}`)
 	if err != nil || !strings.Contains(result, `"truncated":true`) {
 		t.Fatalf("result = %.200s, err = %v", result, err)
+	}
+}
+
+func TestFilesGetObjectIDsFilter(t *testing.T) {
+	other := "aaaaaaaa-0000-4000-8000-000000000002"
+	base := `{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","page_id":"` + pageID + `"`
+	for name, tc := range map[string]struct {
+		extra string
+		want  any
+	}{
+		"one":  {`,"object_ids":["` + other + `"]}`, other},
+		"many": {`,"object_ids":["` + other + `","` + pageID + `"]}`, []any{other, pageID}},
+	} {
+		var calls []call
+		env := newEnvironment(t, &calls, filesHandler(1))
+		if _, err := env.invoke(filesGet.ID, "one", base+tc.extra); err != nil {
+			t.Fatal(name, err)
+		}
+		if len(calls) != 4 {
+			t.Errorf("%s: commands = %v", name, commands(calls))
+		}
+		got := calls[len(calls)-1].body["object-id"]
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: object-id = %#v, want %#v", name, got, tc.want)
+		}
+	}
+}
+
+func TestFilesGetRejectsBadObjectIDsBeforeIO(t *testing.T) {
+	other := "aaaaaaaa-0000-4000-8000-000000000002"
+	many := make([]string, 51)
+	for i := range many {
+		many[i] = `"aaaaaaaa-0000-4000-8000-0000000001` + fmt.Sprintf("%02d", i) + `"`
+	}
+	head := `{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `"`
+	page := `,"page_id":"` + pageID + `"`
+	var calls []call
+	env := newEnvironment(t, &calls, filesHandler(1))
+	for _, arguments := range []string{
+		head + `,"object_ids":["` + other + `"]}`,
+		head + page + `,"object_ids":["nope"]}`,
+		head + page + `,"object_ids":[]}`,
+		head + page + `,"object_ids":[` + strings.Join(many, ",") + `]}`,
+		head + page + `,"object_ids":["` + other + `","` + strings.ToUpper(other) + `"]}`,
+	} {
+		_, err := env.invoke(filesGet.ID, "one", arguments)
+		if err == nil || strings.Contains(err.Error(), other) {
+			t.Errorf("%.120s: err = %v", arguments, err)
+		}
+	}
+	if len(calls) != 0 || *env.reads != 0 {
+		t.Fatalf("calls = %d, secret reads = %d", len(calls), *env.reads)
 	}
 }
