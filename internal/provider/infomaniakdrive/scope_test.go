@@ -17,11 +17,12 @@ import (
 // The tree of the fake drive: a files target, an object below it, and objects outside of it. The identifiers
 // are distinctive so a test can prove that no refusal quotes one.
 const (
-	subTarget  int64 = 7042
-	subInside  int64 = 7043
-	subOutside int64 = 7050
-	subOther   int64 = 7060
-	subName          = "secret-name-canary-77"
+	subTarget   int64 = 7042
+	subInside   int64 = 7043
+	subOutside  int64 = 7050
+	subOther    int64 = 7060
+	subUploaded int64 = 8123
+	subName           = "secret-name-canary-77"
 )
 
 var subParents = map[int64][]int64{
@@ -34,7 +35,7 @@ var subParents = map[int64][]int64{
 var fileReadPath = regexp.MustCompile(`^/3/drive/5001/files/(\d+)$`)
 
 // subtreeFake answers the drive tree. mode changes the answer of a read with parents: "" is honest, "noparents"
-// omits them, "5xx" fails, "404" answers not found.
+// omits them, "5xx" fails, "404" answers not found, "nofile" answers an upload without a usable file.
 type subtreeFake struct{ mode string }
 
 func (f subtreeFake) handler(t *testing.T) func(*http.Request) (*http.Response, error) {
@@ -66,6 +67,20 @@ func (f subtreeFake) handler(t *testing.T) func(*http.Request) (*http.Response, 
 			return jsonResponse(200, envelopeSuccess(body+"}")), nil
 		}
 		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/3/drive/5001/upload":
+			if f.mode == "nofile" {
+				return jsonResponse(200, envelopeSuccess(`true`)), nil
+			}
+			q := r.URL.Query()
+			// The new id stays clear of the tree identifiers so a refusal text could never be confused with one.
+			id, parent := subUploaded, q.Get("directory_id")
+			if q.Get("file_id") != "" {
+				id, _ = strconv.ParseInt(q.Get("file_id"), 10, 64)
+				parent = "0"
+			}
+			return jsonResponse(200, envelopeSuccess(fmt.Sprintf(
+				`{"id":%d,"name":"a.txt","type":"file","size":4,"parent_id":%s,"status":"ok","last_modified_at":1735776000}`,
+				id, parent))), nil
 		case r.URL.Path == usersPathOf():
 			return jsonResponse(200, usersPage(1, 1, memberJSONOf(memberUser, "active", memberTeam))), nil
 		case strings.HasSuffix(r.URL.Path, "/download"):
@@ -229,13 +244,27 @@ func noIdentifiers(t *testing.T, err error, ids ...int64) {
 		return
 	}
 	for _, id := range ids {
-		if id > 0 && strings.Contains(err.Error(), strconv.FormatInt(id, 10)) {
+		// A whole number only: a random token or a longer number may contain the digits by chance.
+		whole := regexp.MustCompile(`(?:^|[^0-9A-Za-z])` + strconv.FormatInt(id, 10) + `(?:$|[^0-9A-Za-z])`)
+		if id > 0 && whole.MatchString(err.Error()) {
 			t.Errorf("error %q names an identifier", err)
 		}
 	}
 	if strings.Contains(err.Error(), subName) {
 		t.Errorf("error %q names an object", err)
 	}
+}
+
+// An upload without a usable file names its client token; digits of it that equal an identifier are no leak.
+func TestNoIdentifiersIgnoresDigitsInsideALongerToken(t *testing.T) {
+	var calls []call
+	env := subtreeEnvironment(t, t.TempDir(), &calls, subtreeFake{mode: "nofile"}.handler(t), subTargets(subTarget)...)
+	args := driveArgs(fmt.Sprintf(`,"directory_id":%d,"name":"a.txt","client_token":"7042704370427043","content_base64":"ZGF0YQ=="`, subInside))
+	_, err := env.invokeConfirmed(filesUpload.ID, "sub", args)
+	if err == nil || !strings.Contains(err.Error(), "7042704370427043") {
+		t.Fatalf("err = %v, want an error that names the client token", err)
+	}
+	noIdentifiers(t, err, subTarget, subInside)
 }
 
 // destination is the second object of a tool with two, otherwise unused.
@@ -263,6 +292,9 @@ func TestSubtreeAllowsObjectsInsideWithExactlyOneReadEach(t *testing.T) {
 				}
 				_, err := env.invokeConfirmed(tc.tool, "sub", tc.args(dir, object, destination))
 				noIdentifiers(t, err, subInside, subTarget)
+				if tc.tool == filesUpload.ID && err != nil {
+					t.Fatalf("upload inside the scope failed: %v", err)
+				}
 				method, path := tc.effect(object, destination)
 				if !sent(calls, method, path) {
 					t.Fatalf("err = %v; the effect %s %s was not sent: %+v", err, method, path, calls)
