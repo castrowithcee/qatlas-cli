@@ -24,6 +24,9 @@ type tool struct {
 	since    map[string]version
 	describe func(p *product) capability.Descriptor
 	prepare  func(p *product, allowed allowlist, raw json.RawMessage) (run, error)
+	// needs names a newer version that arguments of the call require, for an argument only later versions of a
+	// product know; nil when the arguments never change the version.
+	needs func(p *product, raw json.RawMessage) (version, bool)
 }
 
 type run func(ctx context.Context, c *Client) (any, error)
@@ -33,7 +36,9 @@ var everywhere = map[string]version{forgejo.id: forgejo.minimum, gitea.id: gitea
 
 var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, nodeInfoGet, signingKeysGet,
 	markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList}
+	issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, pullRequestsList, pullRequestsGet,
+	pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
+	pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -63,7 +68,13 @@ func (t *tool) handler(p *product) capability.Handler {
 		if err != nil {
 			return nil, err
 		}
-		if needed := t.since[p.id]; p.minimum.less(needed) {
+		needed := t.since[p.id]
+		if t.needs != nil {
+			if extra, ok := t.needs(p, raw); ok && needed.less(extra) {
+				needed = extra
+			}
+		}
+		if p.minimum.less(needed) {
 			if err := requireVersion(ctx, p, resolved, secrets, red, t.group+" "+t.action, needed); err != nil {
 				return nil, err
 			}

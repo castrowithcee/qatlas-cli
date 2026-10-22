@@ -40,6 +40,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == forgejo {
 			want = slices.Insert(want, 13, p.id+".nodeinfo.get")
 		}
+		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
+			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
+			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
+			p.id+".pull-requests.list-pinned")
+		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
 		}
@@ -88,7 +93,9 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet, signingKeysGet,
 		markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate, issuesClose,
-		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList} {
+		issuesReopen, issuesDelete, issueDeadlinesSet, issueTimelineList, pullRequestsList, pullRequestsGet,
+		pullRequestsGetByBranches, pullRequestsListPinned, pullRequestsCheckMerged, commitPullRequestsGet,
+		pullRequestFilesList, pullRequestCommitsList, pullRequestDiffsGet} {
 		for _, p := range products {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
