@@ -92,8 +92,8 @@ needs the `read` effect. The profile `events` adds `events.create` and `events.u
 `contacts.create` and `contacts.update` and is not recommended. `events.delete` and `contacts.delete`
 belong to no profile: a connection offers one only when its `tools` list names it.
 
-Each collection carries `id`, `name`, `description`, and, for a calendar, `color` when the server reports a
-valid hex value.
+Of `calendar-timezone` only the TZID is reported; the VTIMEZONE rule definition is not evaluated or passed on.
+Vendor properties such as `getctag`, `calendar-order`, and `schedule-*` are not standards and are not read.
 
 ## Events
 
