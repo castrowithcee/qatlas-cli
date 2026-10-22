@@ -34,7 +34,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type call struct {
-	method, path, query, auth string
+	method, path, query, auth, contentType, body string
 }
 
 // serve answers every request with handler and records it. A request to another host, with a Sudo header, a
@@ -43,7 +43,12 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 	t.Helper()
 	previous := transport
 	transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		entry := call{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization")}
+		entry := call{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
+			contentType: r.Header.Get("Content-Type")}
+		if r.Body != nil {
+			data, _ := io.ReadAll(r.Body)
+			entry.body = string(data)
+		}
 		*calls = append(*calls, entry)
 		if r.URL.Host != apiHost {
 			t.Errorf("request to host %q", r.URL.Host)
@@ -62,7 +67,9 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 		if entry.auth != "" && entry.auth != "token "+tokenValue {
 			t.Errorf("request %s authorizes with %q", r.URL.Path, entry.auth)
 		}
-		if r.Method != http.MethodGet {
+		renders := slices.Contains([]string{"/api/v1/markdown", "/api/v1/markdown/raw", "/api/v1/markup"}, r.URL.Path)
+		if (r.Method != http.MethodGet && !(r.Method == http.MethodPost && renders)) ||
+			(r.Method == http.MethodGet && entry.body != "") {
 			t.Errorf("request %s uses %s", r.URL.Path, r.Method)
 		}
 		return handler(entry), nil

@@ -3,6 +3,7 @@ package forge
 import (
 	"encoding/json"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -21,6 +22,7 @@ const (
 	kindTexts
 	kindObject
 	kindObjects
+	kindFree
 )
 
 // maxListItems bounds a list inside one object, such as the topics of a repository.
@@ -70,6 +72,8 @@ func (m member) schema(p *product) string {
 		return schemaOf(p, m.sub)
 	case kindObjects:
 		return `{"type":"array","items":` + schemaOf(p, m.sub) + `}`
+	case kindFree:
+		return `{"type":"object"}`
 	}
 	return `{"type":"string"}`
 }
@@ -123,6 +127,12 @@ func (m member) read(p *product, o object) (any, bool) {
 			return nil, false
 		}
 		return project(p, m.sub, child), true
+	case kindFree:
+		var free map[string]any
+		if json.Unmarshal(o[m.name], &free) != nil || free == nil {
+			return nil, false
+		}
+		return boundedFree(free, 0), true
 	case kindObjects:
 		var children []object
 		if json.Unmarshal(o[m.name], &children) != nil {
@@ -153,4 +163,49 @@ func plainAddress(value string) bool {
 	}
 	parsed, err := url.Parse(value)
 	return err == nil && parsed.User == nil && parsed.RawQuery == "" && !parsed.ForceQuery
+}
+
+// Bounds of a member whose structure the API leaves open.
+const (
+	maxFreeDepth = 4
+	maxFreeKeys  = 100
+)
+
+// boundedFree copies a free-form JSON value with bounded strings, lists, keys, and depth; a deeper value is
+// dropped.
+func boundedFree(value any, depth int) any {
+	switch v := value.(type) {
+	case string:
+		return bounded(v)
+	case []any:
+		if depth >= maxFreeDepth {
+			return nil
+		}
+		if len(v) > maxListItems {
+			v = v[:maxListItems]
+		}
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = boundedFree(item, depth+1)
+		}
+		return out
+	case map[string]any:
+		if depth >= maxFreeDepth {
+			return nil
+		}
+		out := make(map[string]any, min(len(v), maxFreeKeys))
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if len(out) >= maxFreeKeys {
+				break
+			}
+			out[bounded(key)] = boundedFree(v[key], depth+1)
+		}
+		return out
+	}
+	return value
 }
