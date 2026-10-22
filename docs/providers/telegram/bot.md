@@ -11,16 +11,19 @@ updated: 2026-10-22
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token. It runs on every connection, since it
 concerns only the connection's own token; every other tool of this group needs the `bot` target.
-`telegram.webhook.get` (`read`) shows whether a webhook is active, the number of waiting updates, and the time of
-the last delivery error, never the webhook URL.
+The webhook URL counts as an access value: webhook paths usually carry a secret that lets anyone inject updates
+without sign-in. `telegram.webhook.get` (`read`) therefore never shows it, only whether a webhook is active. Its
+`last_error_message` is Telegram's text about delivery to the webhook; it appears as untrusted, capped text in the
+output, never in an error.
 
 ## Commands and menu button
 
 `telegram.commands.get` (`read`), `telegram.commands.set` (`update`), and `telegram.commands.delete` (`delete`,
 `tools` list) read, replace, and remove the commands of one `scope` and `language_code`; the scopes `chat`,
-`chat_administrators`, and `chat_member` require a named bound `chat`. `telegram.menu-button.get` (`read`) never
-shows a web app URL, and `telegram.menu-button.set` (`update`) sets `commands` or `default`, never a web app. Both
-address the default button or, with a bound `chat` given by numeric ID, that private chat.
+`chat_administrators`, and `chat_member` require a named bound `chat`. `telegram.menu-button.get` (`read`) shows
+the web app URL of the button as an address that is never fetched, and `telegram.menu-button.set` (`update`) sets
+`commands` or `default`, never a web app. Both address the default button or, with a bound `chat` given by numeric
+ID, that private chat.
 
 ## Profile and default rights
 
