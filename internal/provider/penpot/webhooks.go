@@ -39,13 +39,14 @@ var webhooksList = capability.Descriptor{
 	InputSchema: schemaOf(`"team_id":`+uuidSchema, `"team_id"`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":{"type":"string"},"webhooks":{"type":"array","items":` +
 		`{"type":"object","properties":{"id":{"type":"string"},"host":{"type":"string"},"mtype":{"type":"string"},` +
-		`"is_active":{"type":"boolean"},"error_code":{"type":"string"},"error_count":{"type":"integer"}},` +
+		`"is_active":{"type":"boolean"},"error_code":{"type":"string"},"error_count":{"type":"integer"},` +
+		`"profile_id":{"type":"string"}},` +
 		`"required":["id","mtype","is_active"],"additionalProperties":false}},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["team_id","webhooks","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{teamIDArgument},
 	Fields: []capability.Field{
 		{Name: "team_id", Description: "Identifier of the team"},
-		{Name: "webhooks", Description: "Webhooks with id (used as webhook_id), host of the target URL, mtype, is_active, error_code, and error_count"},
+		{Name: "webhooks", Description: "Webhooks with id (used as webhook_id), host of the target URL, mtype, is_active, error_code, error_count, and profile_id (the account that created the webhook)"},
 		{Name: "count", Description: "Number of webhooks in this answer"},
 		{Name: "truncated", Description: "True when the answer was cut at 100 webhooks"},
 	},
@@ -100,6 +101,7 @@ type Webhook struct {
 	IsActive   bool   `json:"is_active"`
 	ErrorCode  string `json:"error_code,omitempty"`
 	ErrorCount int64  `json:"error_count,omitempty"`
+	ProfileID  string `json:"profile_id,omitempty"`
 }
 
 // WebhooksResult is the answer of webhooks.list.
@@ -191,7 +193,8 @@ func (c *Client) teamWebhooks(ctx context.Context, op, teamID string) ([]Webhook
 			break
 		}
 		hooks = append(hooks, Webhook{ID: id, Host: webhookHost(entry.str("uri")), Mtype: entry.str("mtype"),
-			IsActive: entry.boolean("isactive"), ErrorCode: entry.str("errorcode"), ErrorCount: entry.integer("errorcount")})
+			IsActive: entry.boolean("isactive"), ErrorCode: entry.str("errorcode"), ErrorCount: entry.integer("errorcount"),
+			ProfileID: entry.id("profileid")})
 	}
 	return hooks, truncated, nil
 }

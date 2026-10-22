@@ -20,8 +20,9 @@ The five tools administer teams. `team_id` must be a bound team (checked before 
 any request; the refusal never names the team). **There is no wildcard target and Qatlas never adds a target**: the
 team that `teams.create` makes is outside every connection until you add `team/ID` to a connection yourself.
 
-- `members.list` answers at most 200 members; `id` is used as `member_id`. Email addresses are personal data: the tool
-  has its own sensitivity class, `penpot-members`; names and photos are not returned.
+- `members.list` answers at most 200 members; `id` is used as `member_id`. Email addresses, names, and photo
+  identifiers are personal data and untrusted provider data: the tool has its own sensitivity class,
+  `penpot-members`. The role stays derived from the membership flags, which are returned as well.
 - `members.set-role` sets `admin`, `editor`, or `viewer`. The role `owner` is not offered, so ownership cannot be
   transferred. Penpot refuses a change of the owner and a change without admin rights.
 - `members.remove`: Penpot refuses to remove the token's own account, and an admin cannot remove the owner. The member
