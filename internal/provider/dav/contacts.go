@@ -21,6 +21,7 @@ const (
 type TypedValue struct {
 	Value string `json:"value,omitempty"`
 	Type  string `json:"type,omitempty"`
+	Pref  int    `json:"pref,omitempty"`
 }
 
 // ContactName is the structured name (N) of a contact.
@@ -42,9 +43,11 @@ type PostalAddress struct {
 	Region     string `json:"region,omitempty"`
 	PostalCode string `json:"postal_code,omitempty"`
 	Country    string `json:"country,omitempty"`
+	Pref       int    `json:"pref,omitempty"`
 }
 
-// Contact is one contact. The list tool reports only the compact members.
+// Contact is one contact. The list tool reports only the compact members. A property that holds embedded
+// data (photo, logo, sound, key, agent card) is never read; only an address reference is.
 type Contact struct {
 	ID             string          `json:"id"`
 	UID            string          `json:"uid,omitempty"`
@@ -59,8 +62,30 @@ type Contact struct {
 	Birthday       string          `json:"birthday,omitempty"`
 	Note           string          `json:"note,omitempty"`
 	URLs           []string        `json:"urls,omitempty"`
-	Truncated      []string        `json:"truncated,omitempty"`
-	ETag           string          `json:"etag,omitempty"`
+
+	Nicknames         []string       `json:"nicknames,omitempty"`
+	Mailer            string         `json:"mailer,omitempty"`
+	Timezone          string         `json:"timezone,omitempty"`
+	Geo               string         `json:"geo,omitempty"`
+	Role              string         `json:"role,omitempty"`
+	Class             string         `json:"class,omitempty"`
+	SortString        string         `json:"sort_string,omitempty"`
+	Revision          string         `json:"revision,omitempty"`
+	ProductID         string         `json:"product_id,omitempty"`
+	NameSource        string         `json:"name_source,omitempty"`
+	Profile           string         `json:"profile,omitempty"`
+	Source            []string       `json:"source,omitempty"`
+	Labels            []ContactLabel `json:"labels,omitempty"`
+	Categories        []string       `json:"categories,omitempty"`
+	OrganizationUnits []string       `json:"organization_units,omitempty"`
+	PhotoURI          string         `json:"photo_uri,omitempty"`
+	LogoURI           string         `json:"logo_uri,omitempty"`
+	SoundURI          string         `json:"sound_uri,omitempty"`
+	AgentURI          string         `json:"agent_uri,omitempty"`
+	KeyURI            string         `json:"key_uri,omitempty"`
+
+	Truncated []string `json:"truncated,omitempty"`
+	ETag      string   `json:"etag,omitempty"`
 }
 
 var errNoContact = errors.New("no contact")
@@ -117,7 +142,7 @@ func ParseContact(data string, full bool) (contact *Contact, err error) {
 			break
 		}
 		contact.Addresses = append(contact.Addresses, PostalAddress{
-			Type: typeOf(address.Field), POBox: Clean(address.PostOfficeBox, MaxContactText),
+			Type: typeOf(address.Field), Pref: contactPref(address.Field), POBox: Clean(address.PostOfficeBox, MaxContactText),
 			Extended: Clean(address.ExtendedAddress, MaxContactText), Street: Clean(address.StreetAddress, MaxContactText),
 			Locality: Clean(address.Locality, MaxContactText), Region: Clean(address.Region, MaxContactText),
 			PostalCode: Clean(address.PostalCode, MaxContactText), Country: Clean(address.Country, MaxContactText),
@@ -130,6 +155,7 @@ func ParseContact(data string, full bool) (contact *Contact, err error) {
 		}
 		contact.URLs = append(contact.URLs, Clean(field.Value, MaxContactText))
 	}
+	cut = fillContactFull(contact, card, cut)
 	contact.Truncated = cut
 	return contact, nil
 }
@@ -140,7 +166,7 @@ func typedOf(fields []*vcard.Field, name string, cut []string) ([]TypedValue, []
 		if i >= MaxContactEntries {
 			return out, append(cut, name)
 		}
-		out = append(out, TypedValue{Value: Clean(field.Value, MaxContactText), Type: typeOf(field)})
+		out = append(out, TypedValue{Value: Clean(field.Value, MaxContactText), Type: typeOf(field), Pref: contactPref(field)})
 	}
 	return out, cut
 }

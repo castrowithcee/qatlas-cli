@@ -22,15 +22,15 @@ const (
 )
 
 const (
-	typedValueSchema = `{"type":"object","properties":{"value":{"type":"string"},"type":{"type":"string"}},` +
-		`"additionalProperties":false}`
+	typedValueSchema = `{"type":"object","properties":{"value":{"type":"string"},"type":{"type":"string"},` +
+		`"pref":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
 	nameSchema = `{"type":"object","properties":{"family":{"type":"string"},"given":{"type":"string"},` +
 		`"additional":{"type":"string"},"prefix":{"type":"string"},"suffix":{"type":"string"}},` +
 		`"additionalProperties":false}`
 	postalSchema = `{"type":"object","properties":{"type":{"type":"string"},"po_box":{"type":"string"},` +
 		`"extended":{"type":"string"},"street":{"type":"string"},"locality":{"type":"string"},` +
-		`"region":{"type":"string"},"postal_code":{"type":"string"},"country":{"type":"string"}},` +
-		`"additionalProperties":false}`
+		`"region":{"type":"string"},"postal_code":{"type":"string"},"country":{"type":"string"},` +
+		`"pref":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
 	contactSchema = `{"type":"object","properties":{` +
 		`"id":{"type":"string"},"uid":{"type":"string"},"name":{"type":"string"},"structured_name":` + nameSchema + `,` +
 		`"email":{"type":"string"},"emails":{"type":"array","items":` + typedValueSchema + `},` +
@@ -38,8 +38,8 @@ const (
 		`"addresses":{"type":"array","items":` + postalSchema + `},` +
 		`"organization":{"type":"string"},"title":{"type":"string"},"birthday":{"type":"string"},` +
 		`"note":{"type":"string"},"urls":{"type":"array","items":{"type":"string"}},` +
-		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"}},` +
-		`"required":["id"],"additionalProperties":false}`
+		`"truncated":{"type":"array","items":{"type":"string"}},"etag":{"type":"string"},` +
+		dav.ContactFullProperties + `},"required":["id"],"additionalProperties":false}`
 	addressbookArgSchema = `"addressbook":{"type":"string","minLength":1,"maxLength":128}`
 )
 
@@ -48,16 +48,16 @@ var contactRisk = capability.Risk{
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: contactsSensitivity,
 }
 
-var contactFields = []capability.Field{
+var contactFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the contact resource, the id argument of the get tool"},
 	{Name: "uid", Description: "vCard UID, untrusted data"},
 	{Name: "name", Description: "Formatted name (FN), untrusted personal data; built from the structured name if absent"},
 	{Name: "email", Description: "First e-mail address, untrusted personal data; only the list tool reports it"},
 	{Name: "organization", Description: "Organization, untrusted data"},
 	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix; only the get tool reports it"},
-	{Name: "emails", Description: "At most 20 e-mail addresses with type; only the get tool reports them"},
-	{Name: "phones", Description: "At most 20 phone numbers with type; only the get tool reports them"},
-	{Name: "addresses", Description: "At most 20 postal addresses with type; only the get tool reports them"},
+	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref; only the get tool reports them"},
+	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref; only the get tool reports them"},
+	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref; only the get tool reports them"},
 	{Name: "title", Description: "Job title; only the get tool reports it"},
 	{Name: "birthday", Description: "Birthday as the card states it; only the get tool reports it"},
 	{Name: "note", Description: "Note, untrusted data; only the get tool reports it"},
@@ -65,7 +65,7 @@ var contactFields = []capability.Field{
 	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}
+}, dav.ContactFullFields...)
 
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.list", Version: 1, Title: "List Infomaniak contacts",
@@ -93,7 +93,7 @@ var contactsList = capability.Descriptor{
 var contactsGet = capability.Descriptor{
 	ID: Provider + ".contacts.get", Version: 1, Title: "Read an Infomaniak contact",
 	Description: "Read one contact of an allow-listed address book with its structured fields and entity tag; " +
-		"a photo or other binary data is never returned",
+		"embedded binary data and embedded keys are never returned",
 	Tags: []string{"infomaniak", "dav", "contacts", "contact", "get"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"id":{"type":"string","minLength":1,"maxLength":128}},"required":["addressbook","id"],` +
