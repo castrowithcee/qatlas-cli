@@ -61,7 +61,10 @@ no search, so the list is filtered locally. Qatlas resolves no URL to a target.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
 connection does not reach are left out. The catalog comes from the generated API document, which needs no
-settings right, unlike the metadata API (see [Data model](data-model.md)). Only names, types, and flags leave Qatlas.
+settings right, unlike the metadata API (see [Data model](data-model.md)). Enum values and field descriptions
+also leave Qatlas, as untrusted workspace data. Enum values appear only when every value has the form of a Twenty
+selection value (letters, digits, underscore, at most 64 characters) and the field has at most 500 values;
+otherwise `enum` is left out and named in `omitted_fields`.
 
 ## Credential and profiles
 

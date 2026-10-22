@@ -190,3 +190,14 @@ func TestWebhooksUpdateIsVersionTwo(t *testing.T) {
 		t.Errorf("version = %d", webhooksUpdate.Version)
 	}
 }
+
+func TestWebhooksListWithoutTheNewFieldKeepsTheFormerOutput(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, webhookHandler(200, ``))
+	result, err := env.invoke(webhooksList.ID, "one", `{"team_id":"`+teamA+`"}`)
+	want := `{"count":1,"team_id":"` + teamA + `","truncated":false,"webhooks":[{"error_count":2,` +
+		`"host":"hooks.example.com","id":"` + hookA + `","is_active":true,"mtype":"application/json"}]}`
+	if err != nil || result != want {
+		t.Fatalf("result = %s, err = %v\nwant   = %s", result, err, want)
+	}
+}

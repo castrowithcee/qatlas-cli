@@ -314,7 +314,7 @@ func TestIssueDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 			t.Fatalf("%s descriptor = %+v", p.id, d)
 		}
 		for _, other := range reg.Provider(p.id) {
-			if other.ID != d.ID && other.RequiresToolAllowList && !strings.Contains(other.ID, ".milestones.") {
+			if other.ID != d.ID && other.RequiresToolAllowList && !strings.HasSuffix(other.ID, ".delete") {
 				t.Errorf("%s is listed-only too", other.ID)
 			}
 		}
@@ -557,9 +557,20 @@ func TestAChangeWithAnOpenOutcomeIsNeverRepeated(t *testing.T) {
 
 func TestChangeAllowsOnlyTheMutatingMethods(t *testing.T) {
 	c := &Client{product: gitea, origin: baseURL, auth: "token x", http: &http.Client{Timeout: time.Second}}
-	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodHead, "SUDO", ""} {
+	for _, method := range []string{http.MethodGet, http.MethodHead, "SUDO", ""} {
 		if err := c.change(context.Background(), "test", method, "/repos/a/b/issues", nil, nil); err == nil {
 			t.Errorf("change accepted %q", method)
 		}
+	}
+	// PUT is a mutating method and reaches the transport with its body.
+	var calls []call
+	serve(t, &calls, func(call) *http.Response { return jsonResponse(200, `[]`) })
+	c = &Client{product: gitea, origin: baseURL, auth: "token " + tokenValue, http: provider.NoRedirectClient(time.Second, transport),
+		limiter: limiters.For(tokenValue)}
+	var out []object
+	if err := c.change(context.Background(), "test", http.MethodPut, "/repos/a/b/issues/1/labels",
+		map[string]any{"labels": []int64{1}}, &out); err != nil || len(calls) != 1 || calls[0].method != http.MethodPut ||
+		calls[0].body != `{"labels":[1]}` || calls[0].contentType != "application/json" {
+		t.Errorf("PUT = %v, %+v", err, calls)
 	}
 }

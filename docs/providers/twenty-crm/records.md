@@ -51,8 +51,7 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 - The operators follow the field kind, which Qatlas derives from the schema; the tool help lists them. A
   selection value must be an enum value of the schema.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
-  and the refusal names neither field nor value. The enum values of the schema serve only this check and
-  never appear in a result, including `objects.get`.
+  and the refusal names neither field nor value. The enum values of the schema serve this check.
 - `records.group-by` groups by selections, booleans, dates (by day, UTC), and relation identifiers, not by text,
   numbers, composite subfields, or the record `id`. Twenty cuts a longer group list silently, so an answer
   with 200 or more groups is refused as possibly incomplete; narrow it with conditions. Group values are

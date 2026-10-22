@@ -51,11 +51,11 @@ func teamArgs() map[string]string {
 	}
 }
 
-func TestMembersListReducesToRoleAndEmail(t *testing.T) {
+func TestMembersListReportsRoleAndEmail(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, teamHandler(200, ``))
 	result, err := env.invoke(membersList.ID, "one", teamArgs()[membersList.ID])
-	if err != nil || strings.Contains(result, memberCanary) || !strings.Contains(result, ownerEmail) ||
+	if err != nil || !strings.Contains(result, ownerEmail) ||
 		!strings.Contains(result, `"role":"owner"`) || !strings.Contains(result, `"role":"editor"`) ||
 		!strings.Contains(result, `"role":"viewer"`) || !strings.Contains(result, `"count":3`) {
 		t.Fatalf("result = %s, err = %v", result, err)
@@ -267,5 +267,18 @@ func TestTeamToolsHaveCompleteRisk(t *testing.T) {
 	}
 	if membersList.Risk.DataSensitivity != membersSensitive {
 		t.Error("the tools that handle email addresses need the members class")
+	}
+}
+
+func TestMembersListWithoutTheNewFieldsKeepsTheFormerOutput(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		return jsonResponse(200, `[{"id":"`+memberViewer+`","email":"`+ownerEmail+`","is-active":false}]`), nil
+	})
+	result, err := env.invoke(membersList.ID, "one", teamArgs()[membersList.ID])
+	want := `{"count":1,"members":[{"email":"` + ownerEmail + `","id":"` + memberViewer +
+		`","is_active":false,"role":"viewer"}],"team_id":"` + teamA + `","truncated":false}`
+	if err != nil || result != want {
+		t.Fatalf("result = %s, err = %v\nwant   = %s", result, err, want)
 	}
 }

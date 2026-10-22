@@ -573,7 +573,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 	if !strings.HasPrefix(toon, "tool:\n  id: bookstack.pages.list\n  version: 1\n  title: ") ||
 		!strings.Contains(toon, "\nconnections[1]{name,description}:\n") ||
 		!strings.Contains(toon, "  arguments[4]{name,type,required,form,limits,description}:\n") ||
-		!strings.Contains(toon, "  fields[11]{name,description}:\n") {
+		!strings.Contains(toon, "  fields[16]{name,description}:\n") {
 		t.Errorf("TOON output does not name the tool first and carry both tables:\n%s", toon)
 	}
 	for _, absent := range []string{"input_schema", "output_schema", "tags", "requires_tool_allow_list"} {
@@ -593,7 +593,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 	}
 	tool := document.Tool
 	if tool.ID != "bookstack.pages.list" || tool.Version != 1 || tool.Description == "" ||
-		len(tool.Examples) == 0 || len(tool.Fields) != 11 || tool.Effect != capability.EffectRead ||
+		len(tool.Examples) == 0 || len(tool.Fields) != 16 || tool.Effect != capability.EffectRead ||
 		tool.Idempotency != capability.IdempotencySafe || tool.Confirmation != capability.ConfirmationNone ||
 		tool.DataSensitivity == "" {
 		t.Errorf("tool contract = %+v", tool)
