@@ -61,7 +61,7 @@ func (e *payEnv) run(invoke payInvoke, args string) (string, error) {
 const memberOK = `{"ok":true,"result":{"status":"member","user":{"id":7}}}`
 
 func TestPaymentsToolsSendExactRequests(t *testing.T) {
-	gifts := `{"ok":true,"result":{"total_count":1,"next_offset":"n","gifts":[{"type":"regular","owned_gift_id":"HIDE",` +
+	gifts := `{"ok":true,"result":{"total_count":1,"next_offset":"n","gifts":[{"type":"regular","owned_gift_id":"OWN",` +
 		`"send_date":5,"is_saved":true,"text":"hi","sender_user":{"id":3,"first_name":"A","phone":"HIDE"},` +
 		`"convert_star_count":4,"transfer_star_count":9,"can_be_upgraded":true,` +
 		`"gift":{"id":"g1","star_count":50,"upgrade_star_count":99,"sticker":{"file_id":"HIDE"}}}]}}`
@@ -91,17 +91,24 @@ func TestPaymentsToolsSendExactRequests(t *testing.T) {
 		{"available", invokeGiftsAvailableWith, []string{"bot"}, `{}`, "getAvailableGifts", `{}`,
 			`{"ok":true,"result":{"gifts":[{"id":"a","star_count":15,"upgrade_star_count":7,"total_count":100,` +
 				`"remaining_count":3,"sticker":{"file_id":"HIDE"}}]}}`,
-			`{"gifts":[{"gift_id":"a","star_count":15,"total_count":100,"remaining_count":3}]}`},
+			`{"gifts":[{"gift_id":"a","star_count":15,"total_count":100,"remaining_count":3,"sticker":{"kind":"sticker",` +
+				`"file_ref":"` + signRef(testToken, refFile, "bot", "HIDE") + `"},"upgrade_star_count":7}]}`},
 		{"chat", invokeGiftsChatWith, []string{"-1001"}, `{"limit":5,"offset":"o"}`, "getChatGifts",
 			`{"chat_id":"-1001","offset":"o","limit":5}`, gifts,
 			`{"total_count":1,"next_offset":"n","gifts":[{"type":"regular","gift_id":"g1","send_date":5,"is_saved":true,` +
-				`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"A"},"star_count":50,"convert_star_count":4}]}`},
+				`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"A"},"star_count":50,"convert_star_count":4,` +
+				`"owned_gift_id":"OWN","can_be_upgraded":true,"gift_details":{"id":"g1","star_count":50,` +
+				`"sticker":{"kind":"sticker","file_ref":"` + signRef(testToken, refFile, "-1001", "HIDE") + `"},` +
+				`"upgrade_star_count":99}}]}`},
 		{"chat default", invokeGiftsChatWith, []string{"-1001"}, `{}`, "getChatGifts", `{"chat_id":"-1001"}`,
 			`{"ok":true,"result":{"total_count":0,"gifts":[]}}`, `{"total_count":0,"gifts":[]}`},
 		{"user", invokeGiftsUserWith, []string{"-1001"}, `{"user_id":7,"limit":100}`, "getUserGifts",
 			`{"user_id":7,"limit":100}`, gifts,
 			`{"total_count":1,"next_offset":"n","gifts":[{"type":"regular","gift_id":"g1","send_date":5,"is_saved":true,` +
-				`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"A"},"star_count":50,"convert_star_count":4}]}`},
+				`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"A"},"star_count":50,"convert_star_count":4,` +
+				`"owned_gift_id":"OWN","can_be_upgraded":true,"gift_details":{"id":"g1","star_count":50,` +
+				`"sticker":{"kind":"sticker","file_ref":"` + signRef(testToken, refFile, "-1001", "HIDE") + `"},` +
+				`"upgrade_star_count":99}}]}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,7 +123,7 @@ func TestPaymentsToolsSendExactRequests(t *testing.T) {
 			if last.method != tc.method || last.body != tc.body {
 				t.Errorf("request = %+v, want %s %s", last, tc.method, tc.body)
 			}
-			if strings.Contains(got, "HIDE") {
+			if strings.Contains(got, "HIDE") || strings.Contains(got, "transfer_star_count") {
 				t.Errorf("foreign field leaked: %s", got)
 			}
 		})

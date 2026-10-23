@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -25,14 +26,11 @@ const (
 
 var (
 	limitArgument      = capability.Argument{Name: "limit", Description: "Page size from 1 through 100"}
-	giftOffsetArgument = capability.Argument{Name: "offset",
-		Description: "next_offset of a previous answer of this tool, passed back unchanged, up to 256 characters"}
-	giftsListField = capability.Field{Name: "gifts", Description: "Gifts with type, gift_id, name, number, send_date, " +
-		"is_saved, text, sender (a Telegram User), star_count, and convert_star_count; star values are read-only numbers"}
-	giftsPageFields = []capability.Field{
+	giftOffsetArgument = capability.Argument{Name: "offset", Description: giftOffsetText}
+	giftsPageFields    = []capability.Field{
 		{Name: "total_count", Description: "Number of gifts of the owner"},
 		{Name: "next_offset", Description: "Offset of the next page; absent on the last page"},
-		giftsListField,
+		giftsField(false),
 	}
 )
 
@@ -74,40 +72,39 @@ var giftsAvailable = capability.Descriptor{
 	ID: Provider + ".gifts.available", Version: 1, Title: "List the gifts Telegram offers for sale",
 	Description: "Read the public catalog of gifts that can be sent; needs the bot target, and nothing is bought or sent",
 	Tags:        []string{"telegram", "gifts", "read"}, Risk: paymentsRisk(), Provider: Provider, Group: groupPayments,
-	InputSchema: json.RawMessage(noArguments),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"gifts":{"type":"array","items":` +
-		`{"type":"object","properties":{"gift_id":{"type":"string"},"star_count":{"type":"integer"},` +
-		`"total_count":{"type":"integer"},"remaining_count":{"type":"integer"}},"additionalProperties":false}}},` +
-		`"required":["gifts"],"additionalProperties":false}`),
-	Fields: []capability.Field{{Name: "gifts",
-		Description: "Catalog entries with gift_id, star_count, total_count, and remaining_count"}},
+	InputSchema:  json.RawMessage(noArguments),
+	OutputSchema: json.RawMessage(availableGiftsOutputSchema),
+	Fields: []capability.Field{{Name: "gifts", Description: "Catalog entries with gift_id, star_count, total_count, " +
+		"remaining_count, omitted_fields, and " + giftTraitsText + "; " + giftStickerText}},
 	Examples: []capability.Example{{Description: "List the catalog", Arguments: json.RawMessage(`{}`)}},
 }
 
 var giftsChat = capability.Descriptor{
 	ID: Provider + ".gifts.chat", Version: 1, Title: "List the gifts of a Telegram chat",
-	Description: "List the gifts of a bound chat read-only, from 1 through 100 per page. Gift identifiers that " +
-		"could move, convert, or upgrade a gift are never returned",
+	Description: "List the gifts of a bound chat read-only, from 1 through 100 per page, optionally filtered and " +
+		"sorted by price as Telegram does",
 	Tags: []string{"telegram", "gifts", "read"}, Risk: paymentsRisk(), Provider: Provider, Group: groupPayments,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + limitSchema + `,` +
-		giftOffsetSchema + `},"additionalProperties":false}`),
+		giftOffsetSchema + `,` + giftSavedFilterSchema + `,` + giftKindFilterSchema + `},"additionalProperties":false}`),
 	OutputSchema: businessGifts.OutputSchema,
-	Arguments:    []capability.Argument{chatArgument, limitArgument, giftOffsetArgument},
-	Fields:       giftsPageFields,
-	Examples:     []capability.Example{{Description: "List the first gifts", Arguments: json.RawMessage(`{"limit":20}`)}},
+	Arguments: slices.Concat([]capability.Argument{chatArgument, limitArgument, giftOffsetArgument},
+		giftSavedFilterArguments, giftKindFilterArguments),
+	Fields:   giftsPageFields,
+	Examples: []capability.Example{{Description: "List the first gifts", Arguments: json.RawMessage(`{"limit":20}`)}},
 }
 
 var giftsUser = capability.Descriptor{
 	ID: Provider + ".gifts.user", Version: 1, Title: "List the gifts of a chat member",
 	Description: "List the gifts of a user verified as a member of a bound chat read-only, from 1 through 100 per " +
-		"page. Gift identifiers that could move, convert, or upgrade a gift are never returned",
+		"page, optionally filtered and sorted by price as Telegram does",
 	Tags: []string{"telegram", "gifts", "read"}, Risk: paymentsRisk(), Provider: Provider, Group: groupPayments,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + userIDSchema + `,` +
-		limitSchema + `,` + giftOffsetSchema + `},"required":["user_id"],"additionalProperties":false}`),
+		limitSchema + `,` + giftOffsetSchema + `,` + giftKindFilterSchema + `},"required":["user_id"],"additionalProperties":false}`),
 	OutputSchema: businessGifts.OutputSchema,
-	Arguments:    []capability.Argument{chatArgument, userIDArgument, limitArgument, giftOffsetArgument},
-	Fields:       giftsPageFields,
-	Examples:     []capability.Example{{Description: "List the first gifts", Arguments: json.RawMessage(`{"user_id":123,"limit":20}`)}},
+	Arguments: slices.Concat([]capability.Argument{chatArgument, userIDArgument, limitArgument, giftOffsetArgument},
+		giftKindFilterArguments),
+	Fields:   giftsPageFields,
+	Examples: []capability.Example{{Description: "List the first gifts", Arguments: json.RawMessage(`{"user_id":123,"limit":20}`)}},
 }
 
 type partnerOut struct {
@@ -233,6 +230,12 @@ type giftPageArgs struct {
 	Chat   string `json:"chat"`
 	Limit  *int   `json:"limit"`
 	Offset string `json:"offset"`
+	giftKindFilters
+}
+
+type giftChatArgs struct {
+	giftPageArgs
+	giftSavedFilters
 }
 
 type giftUserArgs struct {
@@ -258,7 +261,7 @@ func invokeGiftsChat(ctx context.Context, r *config.Resolved, s *secret.Resolver
 func invokeGiftsChatWith(ctx context.Context, r *config.Resolved, s *secret.Resolver, red *redact.Redactor,
 	raw json.RawMessage, httpClient *http.Client) (any, error) {
 	const op = "list chat gifts"
-	var a giftPageArgs
+	var a giftChatArgs
 	if decodeStrict(raw, &a) != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
@@ -273,7 +276,9 @@ func invokeGiftsChatWith(ctx context.Context, r *config.Resolved, s *secret.Reso
 		ChatID string `json:"chat_id"`
 		Offset string `json:"offset,omitempty"`
 		Limit  *int   `json:"limit,omitempty"`
-	}{c.target, a.Offset, a.Limit})
+		giftSavedFilters
+		giftKindFilters
+	}{c.target, a.Offset, a.Limit, a.giftSavedFilters, a.giftKindFilters})
 }
 
 func invokeGiftsUser(ctx context.Context, r *config.Resolved, s *secret.Resolver, red *redact.Redactor,
@@ -305,16 +310,17 @@ func invokeGiftsUserWith(ctx context.Context, r *config.Resolved, s *secret.Reso
 		UserID int64  `json:"user_id"`
 		Offset string `json:"offset,omitempty"`
 		Limit  *int   `json:"limit,omitempty"`
-	}{a.UserID, a.Offset, a.Limit})
+		giftKindFilters
+	}{a.UserID, a.Offset, a.Limit, a.giftKindFilters})
 }
 
-// ListOwnedGifts performs one read-only gifts request; no filter or sort parameter is ever sent.
+// ListOwnedGifts performs one read-only gifts request; a sticker file_ref is bound to the chat target.
 func (c *Client) ListOwnedGifts(ctx context.Context, op, method string, body any) (*giftsOut, error) {
 	raw, err := c.call(ctx, spec{op: op, method: method, limit: giftsResponseMax, readOnly: true}, body)
 	if err != nil {
 		return nil, err
 	}
-	return decodeOwnedGifts(op, raw)
+	return decodeOwnedGifts(op, raw, c.fileRefs(c.target))
 }
 
 // GetStarBalance performs one getMyStarBalance request.
@@ -365,38 +371,12 @@ func (c *Client) ListStarTransactions(ctx context.Context, offset, limit *int) (
 	}{out}, nil
 }
 
-// ListAvailableGifts performs one getAvailableGifts request; sticker files and upgrade prices are dropped.
+// ListAvailableGifts performs one getAvailableGifts request; a sticker file_ref is bound to the bot target.
 func (c *Client) ListAvailableGifts(ctx context.Context) (any, error) {
 	const op = "list available gifts"
 	raw, err := c.call(ctx, spec{op: op, method: "getAvailableGifts", limit: giftsResponseMax, readOnly: true}, struct{}{})
 	if err != nil {
 		return nil, err
 	}
-	var got struct {
-		Gifts []struct {
-			ID             string `json:"id"`
-			StarCount      int64  `json:"star_count"`
-			TotalCount     int64  `json:"total_count"`
-			RemainingCount int64  `json:"remaining_count"`
-		} `json:"gifts"`
-	}
-	if json.Unmarshal(raw, &got) != nil {
-		return nil, invalidResponse(op)
-	}
-	type item struct {
-		GiftID         string `json:"gift_id"`
-		StarCount      int64  `json:"star_count"`
-		TotalCount     int64  `json:"total_count,omitempty"`
-		RemainingCount int64  `json:"remaining_count,omitempty"`
-	}
-	out := make([]item, 0, min(len(got.Gifts), 256))
-	for _, g := range got.Gifts {
-		if len(out) == 256 {
-			break
-		}
-		out = append(out, item{capText(g.ID, maxNameRunes), g.StarCount, g.TotalCount, g.RemainingCount})
-	}
-	return struct {
-		Gifts []item `json:"gifts"`
-	}{out}, nil
+	return decodeAvailableGifts(op, raw, c.fileRefs(botTarget))
 }
