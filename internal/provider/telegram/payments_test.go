@@ -80,8 +80,8 @@ func TestPaymentsToolsSendExactRequests(t *testing.T) {
 		{"transactions", invokePaymentsStarTransactionsWith, []string{"bot"}, `{"offset":2,"limit":3}`,
 			"getStarTransactions", `{"offset":2,"limit":3}`,
 			`{"ok":true,"result":{"transactions":[{"id":"t1","amount":10,"nanostar_amount":1,"date":99,` +
-				`"source":{"type":"user","user":{"id":42,"first_name":"HIDE","username":"HIDE"},"invoice_payload":"HIDE"},` +
-				`"receiver":{"type":"fragment","withdrawal_state":{"url":"HIDE"}},"paid_media":[{"x":"HIDE"}]},` +
+				`"source":{"type":"user","user":{"id":42,"first_name":"HIDE","username":"HIDE"},"extra":"HIDE"},` +
+				`"receiver":{"type":"fragment","extra":"HIDE"}},` +
 				`{"id":"t2","amount":1,"date":1,"source":{"type":"chat","chat":{"id":-100,"title":"HIDE"}}}]}}`,
 			`{"transactions":[{"id":"t1","amount":10,"nanostar_amount":1,"date":99,"source":{"type":"user","id":42},` +
 				`"receiver":{"type":"fragment"}},{"id":"t2","amount":1,"nanostar_amount":0,"date":1,` +
