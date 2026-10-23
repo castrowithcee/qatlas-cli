@@ -23,6 +23,7 @@ type credEnv struct {
 	bodies map[string]string
 	team   int64
 	list   string
+	one    string
 	status int
 }
 
@@ -57,6 +58,8 @@ func newCredEnv(t *testing.T, team int64) *credEnv {
 			}
 			return jsonResponse(200, `{"requests":[`+credRequestJSON(credRequestID, ownTeam)+`,`+
 				credRequestJSON("223e4567-e89b-12d3-a456-426614174000", foreignTeam)+`]}`), nil
+		case r.Method == http.MethodGet && h.one != "":
+			return jsonResponse(200, `{"request":`+h.one+`}`), nil
 		case r.Method == http.MethodGet:
 			return jsonResponse(200, `{"request":`+credRequestJSON(credRequestID, h.team)+`}`), nil
 		case r.Method == http.MethodPost && r.URL.Path == apiPath+"/credential-requests/requests/v2":
@@ -83,7 +86,7 @@ func (h *credEnv) changing() []call {
 const credCreateArgs = `{"name":"Shop","credentials":[{"app_name":"google-sheets","app_modules":["*"],` +
 	`"app_version":2,"name_override":"Sheets"}],"provider_user_id":7}`
 
-func TestCredentialRequestsReadsHideLinkAndEmail(t *testing.T) {
+func TestCredentialRequestsReadsHideLink(t *testing.T) {
 	h := newCredEnv(t, ownTeam)
 	list, err := h.invoke(credentialRequestsList.ID, "open", `{"status":"pending","name":"Req"}`)
 	if err != nil || !strings.Contains(list, `"count":1`) || strings.Contains(list, "223e4567") {
@@ -97,13 +100,13 @@ func TestCredentialRequestsReadsHideLinkAndEmail(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, out := range []string{list, got} {
-		for _, leak := range []string{credLink, credEmailCanary, credSecretCanary, "publicUri", "token"} {
+		for _, leak := range []string{credLink, credSecretCanary, "publicUri", "token"} {
 			if strings.Contains(out, leak) {
 				t.Fatalf("output leaked %q: %s", leak, out)
 			}
 		}
 	}
-	if !strings.Contains(got, `"provider_id":7`) {
+	if !strings.Contains(got, `"provider_id":7`) || !strings.Contains(got, `"provider_email":"`+credEmailCanary+`"`) {
 		t.Fatalf("get = %s", got)
 	}
 }

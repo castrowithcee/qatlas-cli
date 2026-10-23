@@ -57,8 +57,8 @@ connection's targets admit them; a head from a fork outside the targets keeps on
 `full_name`. The repository's `temp_clone_token` is an access value and is never reported. Left out, with the
 reason:
 
-- `_links`: "`_links` repeats the addresses of the `*_url` members as `href` objects; those addresses are reported
-  once, in `links`."
+- `_links`, also of reviews and line comments: "`_links` repeats the addresses of the `*_url` members as `href`
+  objects; those addresses are reported once, in `links`."
 - Rendered body variants: "Rendered variants repeat the text field in another format and add no content."
 - Accounts: "An account inside another object carries the fields GitHub's own REST answers give it; the full
   profile is read with the account tools."
@@ -72,14 +72,19 @@ commit's message, verification payload, and signature are cut at 4096 characters
 the hard limit of 65536 bytes; `truncated` says when the diff held more. None of the three is ever read
 unbounded.
 
-`github.pull-request-checks.list` takes `number` alone: it reads the pull request to resolve its head commit,
-then the check runs (the GitHub Checks API, which Actions and most third-party CI systems report through) and
-the combined legacy commit status (the older Status API) at that commit, and merges them into one compact
-list; a legacy status is mapped into the same vocabulary, with `pending` becoming `in_progress` without a
-conclusion. `overall` summarises them:
+`github.pull-request-checks.list` reads the pull request to resolve its head commit, then the check runs (the
+GitHub Checks API, which Actions and most third-party CI systems report through) and the combined legacy commit
+status (the older Status API) at that commit, and merges them into one compact list; a legacy status is mapped
+into the same vocabulary, with `pending` becoming `in_progress` without a conclusion. The check runs and the
+statuses are also reported in full, beside the merged list. `overall` summarises the merged list:
 `pending` while a check still runs, `failure` once a finished check did not succeed, `success` when every one
 did, and `none` when nothing reported a check for the commit. `truncated` says when GitHub held more than the
 100 check runs or 100 statuses read per call.
+
+The filters `check_name`, `status`, `filter`, and `app_id` act on the check runs only, in the one check run
+request; the commit statuses have no filter and are always read whole. With a filter set, `overall` covers the
+filtered check runs and every status, so a filter that leaves out a failing check run also leaves out its
+failure.
 
 ### Changes
 
@@ -226,13 +231,18 @@ line outside the diff all answer 422; Qatlas re-reads the pull request once to t
 and refuses `invalid-request` naming the expected and the current commit, or, for another reason, answers
 `provider-error` naming the likely causes. Neither is ever retried automatically.
 
-`github.pull-request-review-comments.list` reads a pull request's line comments across every review.
+`github.pull-request-review-comments.list` reads a pull request's line comments across every review. `sort`,
+`direction`, and `since` (an RFC 3339 time, sent to GitHub in UTC) are part of the cursor binding when set, so a
+continuation never pages with other filters.
 `github.pull-request-review-comments.reply` takes `comment_id`, as the list reports it, and writes exactly one
 reply in its thread; a `comment_id` GitHub does not hold answers not found, naming the review comment.
 
 GitHub keeps whether a review thread is resolved only in GraphQL, never in the REST line comments read
 above, so `github.pull-request-review-threads.list`, `.resolve`, and `.unresolve` read and change that state on
-their own, by the thread's `id` as the list reports it. `.resolve` and `.unresolve` also take `number`: before
+their own, by the thread's `id` as the list reports it. The list reports the first 50 comments of a thread, with
+`comments_total_count` and `comments_truncated`: "A connection GitHub also serves as a list of its own is read with
+that list; this tool reports its count." The line comments of a pull request are read with
+`github.pull-request-review-comments.list`. `.resolve` and `.unresolve` also take `number`: before
 either changes anything, Qatlas reads the thread node itself and confirms it is a thread of `number` in the
 bound repository; a `thread_id` of another pull request or another repository is refused not found, naming
 "this review thread", and nothing is sent. Resolving an already-resolved thread, or unresolving an

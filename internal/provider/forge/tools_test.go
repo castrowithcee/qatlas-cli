@@ -61,7 +61,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		if p == gitea {
 			want = append(want, p.id+".assignees.check", p.id+".issue-assignees.add", p.id+".issue-assignees.check",
-				p.id+".issue-assignees.remove")
+				p.id+".issue-assignees.remove", p.id+".projects.list", p.id+".projects.get", p.id+".projects.create",
+				p.id+".projects.update", p.id+".projects.delete", p.id+".project-columns.list",
+				p.id+".project-columns.get", p.id+".project-columns.create", p.id+".project-columns.update",
+				p.id+".project-columns.delete", p.id+".project-columns.move", p.id+".project-columns.set-default",
+				p.id+".project-issues.list", p.id+".project-issues.add", p.id+".project-issues.remove",
+				p.id+".project-issues.move")
 			slices.Sort(want)
 		}
 		want = append(want, p.id+".issue-times.add", p.id+".issue-times.delete", p.id+".issue-times.list",
@@ -79,6 +84,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".pull-requests.list-pinned", p.id+".pull-request-branches.update",
 			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
 			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
+		want = append(want, p.id+".issue-pins.list", p.id+".issue-pins.check-allowed", p.id+".issue-pins.pin",
+			p.id+".issue-pins.unpin", p.id+".issue-pins.move")
 		want = append(want, p.id+".workflow-runs.list", p.id+".workflow-runs.get", p.id+".workflow-runs.delete",
 			p.id+".workflow-runs.cancel", p.id+".workflow-runs.rerun", p.id+".workflow-run-logs.get",
 			p.id+".workflow-jobs.list", p.id+".workflow-jobs.get", p.id+".workflow-jobs.rerun",
