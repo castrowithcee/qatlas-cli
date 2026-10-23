@@ -12,8 +12,8 @@ updated: 2026-10-23
 The administration tools of the [Infomaniak kChat provider](README.md). The effects and tool lists are in the
 [tool overview](README.md#tools); the target checks are described under [Scope](README.md#scope).
 
-- The `bots` tools return a fixed field set without any token; `bots.update` sends only the given fields of
-  `username`, `display_name`, `description`; `.disable` stops the bot's integrations at once.
+- The `bots` tools never return a token; `bots.update` sends only the fields it is given; `.disable` stops the
+  bot's integrations at once.
 - `emoji.create` takes a `name` and a released local PNG, GIF, or JPEG of up to 1 MiB, checked before any
   secret is read. Its multipart body holds `image` and `emoji` (JSON `name` and `creator_id`, the token's own
   user from `users/me`); that format is not proven live, so a wrong one is a `provider-error`.

@@ -278,7 +278,7 @@ func (c *Client) listEvents(ctx context.Context, calendar, body string, filter d
 		}
 		if filter.Expand {
 			// An expanded resource holds one VEVENT per occurrence; id and recurrence_id identify one.
-			occurrences, err := dav.ParseOccurrences(resources[i].Text[dav.KeyCalendar])
+			occurrences, err := dav.ParseOccurrences(resources[i].Text[dav.KeyCalendar], true)
 			if err != nil {
 				continue
 			}

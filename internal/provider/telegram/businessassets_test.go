@@ -83,7 +83,7 @@ func TestBusinessReadsAndRemoveRefuseBeforeSecret(t *testing.T) {
 			"missing":   {},
 			"foreign":   {"business": "zz"},
 			"no target": {"business": "b2"},
-			"unknown":   {"business": "b1", "exclude_unique": true},
+			"unknown":   {"business": "b1", "include_unique": true},
 			"photo":     {"business": "b1", "photo": "x"},
 		} {
 			if _, err := e.businessTool(tool, arguments); err == nil {
@@ -127,7 +127,7 @@ func TestBusinessRemovePhotoAndStarBalanceBodies(t *testing.T) {
 	}
 }
 
-func TestBusinessGiftsSendsOnlyPagingAndFiltersOutput(t *testing.T) {
+func TestBusinessGiftsSendsPagingAndMapsGifts(t *testing.T) {
 	e := newMediaEnv(t, "business/b1")
 	e.answer = func(*http.Request) (*http.Response, error) {
 		return response(200, `{"ok":true,"result":{"total_count":2,"next_offset":"n2","gifts":[`+
@@ -142,13 +142,14 @@ func TestBusinessGiftsSendsOnlyPagingAndFiltersOutput(t *testing.T) {
 	}
 	got, _ := json.Marshal(out)
 	want := `{"total_count":2,"next_offset":"n2","gifts":[{"type":"regular","gift_id":"G1","send_date":10,"is_saved":true,` +
-		`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"Bo","last_name":"X"},"star_count":50,"convert_star_count":9},` +
-		`{"type":"unique","gift_id":"G2","name":"Cat","number":8,"send_date":11,"is_saved":false}]}`
+		`"text":"hi","sender":{"id":3,"is_bot":false,"first_name":"Bo","last_name":"X"},"star_count":50,"convert_star_count":9,` +
+		`"owned_gift_id":"OWNED1","can_be_upgraded":true,"prepaid_upgrade_star_count":4,` +
+		`"gift_details":{"id":"G1","star_count":50,"upgrade_star_count":99}},` +
+		`{"type":"unique","gift_id":"G2","name":"Cat","number":8,"send_date":11,"is_saved":false,"owned_gift_id":"OWNED2",` +
+		`"can_be_transferred":true,"transfer_star_count":25,` +
+		`"gift_details":{"gift_id":"G2","base_name":"Cat","name":"CatSLUG","number":8}}]}`
 	if string(got) != want {
 		t.Errorf("out = %s\nwant %s", got, want)
-	}
-	if strings.Contains(string(got), "OWNED") {
-		t.Error("owned gift id leaked")
 	}
 	if len(e.requests) != 1 || e.requests[0].path != "POST /bot"+testToken+"/getBusinessAccountGifts" ||
 		string(e.requests[0].body) != `{"business_connection_id":"b1","offset":"n1","limit":2}` {
