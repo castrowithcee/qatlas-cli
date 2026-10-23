@@ -16,16 +16,30 @@ The project tools of the [GitHub provider](README.md). Every tool takes `project
 ## Owners
 
 `github.projects.list` finds a project number without knowing it in advance. It lists the projects of an owner
-(`users/LOGIN` or `orgs/LOGIN`) in number order, open and closed. The `project` value it reports is what the
-other tools take as their `project` argument. Titles are untrusted data. What the list shows depends on the
-targets, see [owner lists](README.md#owner-lists).
+(`users/LOGIN` or `orgs/LOGIN`), open and closed, in number order unless `order_by` and `direction` say otherwise;
+`query` searches them and `min_permission_level` keeps those the token holds at least that permission on. Its `project`
+value is what the other tools take as `project`. The targets decide what it shows: [owner lists](README.md#owner-lists).
 
-Reading the projects needs `read:project` on a classic token. A fine-grained token lists the projects of an
-organization with Projects read access, but not the projects of a user; GitHub refuses that with `permission`.
+Reading the projects needs `read:project` on a classic token. A fine-grained token lists the projects of an organization
+with Projects read access, but not the projects of a user; GitHub refuses that with `permission`.
 
-The tools that change a project, its fields, views, status updates, collaborators, and items need `project` on a
-classic token, or Projects read and write access of the organization on a fine-grained token; the projects of a
-user need a classic token. The sections below name only what a tool needs beyond that.
+The tools that change a project, its fields, views, status updates, collaborators, and items need `project` on a classic
+token, or Projects read and write access of the organization on a fine-grained token; the projects of a user need a
+classic token. The sections below name only what a tool needs beyond that.
+
+The read tools on this page report every member GitHub documents for their objects, except rendered variants, which
+repeat the text in another format and add no content, deprecated members a documented one replaces, lookups by argument
+(`field`, `view`, `workflow`, `projectV2`), which are queries, and the object a call names, which the call fixes and no
+entry repeats (such as the project of a field or the organization of a team).
+
+A connection GitHub also serves as a list of its own is read with that list and reported as a count; any other list
+inside an entry holds its first 10 entries, with its total and a truncated marker. A nested object carries its own
+fields, and an account the fields GitHub's own REST answers give it; the full profile is read with the account tools. A
+flat value that was there before (`author`, a name list) stays, with the full object beside it as `<name>_detail` or
+`<name>_details`. Names, titles, descriptions, bodies, filters, and addresses are untrusted data; a readme is cut at
+4000 characters, and a linked repository shows its address only inside the targets. A member of a project or team that
+GitHub refuses the token is absent and named in `unreadable`; the team count of a project is read only with
+`team_counts`.
 
 ## Project lifecycle
 
@@ -79,55 +93,49 @@ the views of its source along. No lifecycle tool deletes a field, an option, a v
 
 ## Project fields
 
-The field schema tools read the fields of a project and create, change, and delete them. Fields, options, and
-iterations are named, never identified: names are compared without case, and every name is resolved against
-the project's fields in one query before the one change is sent. Every change follows the rules under [confirmed changes](README.md#confirmed-changes).
+The field schema tools read the fields of a project and create, change, and delete them. The list reports the
+identifiers of fields, options, and iterations; every tool takes them by name only, compared without case, and resolves
+every name against the project's fields in one query before the one change is sent.
 
 | Tool | Does |
 | --- | --- |
-| `github.project-fields.list` | lists every field with its type, options, and iterations |
+| `github.project-fields.list` | lists every field with its type, options, and iterations, completed ones also apart |
 | `github.project-fields.create` | creates one field |
 | `github.project-fields.update` | renames a field or changes its options; every value stays |
 | `github.project-field-options.delete` | removes named options; every item loses a removed option; listed only |
 | `github.project-iterations.replace` | changes the iteration settings and adds, changes, or removes iterations; every item loses its value of the field; listed only |
 | `github.project-fields.delete` | deletes a field that is not built in, with its values; listed only |
 
-Built-in fields cannot be created or deleted. The `Status` field every project has is built in as well: GitHub
-neither deletes nor renames it, but its options are maintained like those of any single-select field. Names
-and descriptions are untrusted data.
+Built-in fields cannot be created or deleted. The `Status` field every project has is built in as well: GitHub neither
+deletes nor renames it, but its options are maintained like those of any single-select field. A field that mirrors an
+organization issue field names it; creating or changing issue fields is not supported.
 
-`github.project-fields.create` refuses a name the project already holds before the change, so a repeated create
-never makes a second field of one name.
+`github.project-fields.create` refuses a name the project already holds before the change, so a repeated create never
+makes a second field of one name.
 
-`github.project-fields.update` names an option to change an existing one; a name the field lacks adds an option at
-the end, and `order` names every option after these changes exactly once, in the new order. GitHub replaces the
-options of a field as a whole, so Qatlas sends every option the field keeps together with its identifier:
-renamed, recolored, and reordered options keep the values items hold. An option left out stays as it is.
+GitHub replaces the options of a field as a whole, so `github.project-fields.update` sends every option the field keeps
+together with its identifier: renamed, recolored, and reordered options keep the values items hold, and an option left
+out stays as it is.
 
-The value-losing changes are separate tools with the effect `delete`, offered only by a connection whose
-`tools` list names them:
+The value-losing changes are separate tools with the effect `delete`, listed only:
 
-- `github.project-field-options.delete` removes the named `options` of a select field. Every item that holds a
-  removed option loses it; at least one option stays, and deleting the field removes the last one.
-- `github.project-iterations.replace` changes the iterations of an iteration field; an iteration is named by
-  its `title`, and one the field lacks is added and then needs a `start_date`. Iterations left out stay,
-  completed ones included. GitHub takes iterations without identifiers and recreates every iteration of the field with such a change,
-  so every item loses its value of this field, whichever iterations the change names; set the values again
-  afterwards. Renaming an iteration field through `github.project-fields.update` keeps its values.
-- `github.project-fields.delete` deletes a field that is not built in, with its value on every item.
+- `github.project-field-options.delete` removes the named `options` of a select field; at least one option stays, and
+  deleting the field removes the last one.
+- `github.project-iterations.replace` changes the iterations of an iteration field; an iteration is named by its
+  `title`, and one the field lacks is added and then needs a `start_date`. Iterations left out stay, completed ones
+  included. GitHub takes iterations without identifiers and recreates every iteration of the field with such a change,
+  so every item loses its value of this field, whichever iterations the change names; set the values again afterwards.
+  Renaming an iteration field through `github.project-fields.update` keeps its values.
 
-A field, option, or iteration the project lacks, an option or iteration named twice, and an `order` that
-leaves an option out are refused before any change and name what the field holds. A repeated removal or
-delete is refused that way once the name is gone; its idempotency stays `unknown`, because a name may be
-taken again in between.
-
-The issue fields an organization defines for its issues (`createProjectV2IssueField`) are not supported.
+A field, option, or iteration the project lacks, an option or iteration named twice, and an `order` that leaves an
+option out are refused before any change and name what the field holds. A repeated removal or delete is refused that way
+once the name is gone; its idempotency stays `unknown`, because a name may be taken again in between.
 
 ## Project views
 
-The view tools read the views of a project and create, change, and delete them. A view is addressed by
-`view`, its number in the project, and the fields it shows by their names, compared without case and resolved
-against the project's fields and views in one query before the one change is sent. Every change follows the rules under [confirmed changes](README.md#confirmed-changes).
+The view tools read the views of a project and create, change, and delete them. A view is addressed by `view`, its
+number in the project, and the fields it shows by their names, compared without case and resolved against the project's
+fields and views in one query before the one change is sent.
 
 | Tool | Does |
 | --- | --- |
@@ -136,40 +144,35 @@ against the project's fields and views in one query before the one change is sen
 | `github.project-views.update` | changes a view; left-out settings stay |
 | `github.project-views.delete` | deletes one view; the items and fields stay; listed only |
 
-`github.project-views.list` answers at most 100 views. Names and filters are untrusted data.
+`github.project-views.list` answers at most 100 views. Each name list (`fields`, `group_by`, `column_by`, `sort_by`)
+stays, with the same fields as objects with identifiers beside it.
 
-`fields` names every field the view shows, in the view's order. GitHub shows the title first in every
-view, so `[]` leaves only the title; without `fields`, a new view shows GitHub's default selection. A roadmap
-takes no visible fields: GitHub refuses them, so Qatlas refuses `fields` for a roadmap, new or existing,
-before any change. A new board without further settings takes its columns from `Status`; a board changed to
-another layout no longer reports `column_by`.
+A roadmap takes no visible fields: GitHub refuses them, so Qatlas refuses `fields` for a roadmap, new or existing,
+before any change. A new board without further settings takes its columns from `Status`; a board changed to another
+layout no longer reports `column_by`.
 
-`filter` is written in GitHub's project filter syntax, such as `status:Todo` or `label:bug -status:Done`. It is
-the only filter expression Qatlas takes from a caller, and it reaches GitHub as one value, never as part of a
-query. GitHub judges the syntax and keeps a filter it cannot read as written. A filter holds at most 512
-characters, GitHub's own limit, and no control characters; `""` removes it.
+`filter` is written in GitHub's project filter syntax, such as `status:Todo` or `label:bug -status:Done`. It is the only
+filter expression Qatlas takes from a caller, and it reaches GitHub as one value, never as part of a query. GitHub
+judges the syntax and keeps a filter it cannot read as written.
 
-GitHub creates a view without a filter, so `github.project-views.create` with a non-empty `filter` sends two
-changes: the create, and then the filter of the new view. Once the view exists, the answer reports it in
-`view` together with `complete`. When the filter could not be set, `complete` is false and `error` says why,
-including when the filter may have been set without a confirmation; set it with `github.project-views.update`
+GitHub creates a view without a filter, so `github.project-views.create` with a non-empty `filter` sends two changes:
+the create, and then the filter of the new view. Once the view exists, the answer reports it even when the filter could
+not be set or may not have been, with `complete` false and `error`; set the filter with `github.project-views.update`
 then, instead of creating the view again. A repeated create makes a second view.
 
-A view number the project lacks is refused before any change and names the project's view numbers, and an
-unknown field names the project's fields. `github.project-views.delete` needs its name in the connection's
-`tools`. GitHub keeps the last view of a project, so Qatlas
-refuses to delete it. A repeated delete is refused once the number is gone; its idempotency stays `unknown`,
-because a delete addresses the view by number.
+A view number the project lacks is refused before any change and names the project's view numbers, and an unknown field
+names the project's fields. GitHub keeps the last view of a project, so Qatlas refuses to delete it. A repeated delete
+is refused once the number is gone; its idempotency stays `unknown`, because a delete addresses the view by number.
 
-GitHub's API does not set the grouping, the sorting, the board column field, field widths, the slice, or
-field sums of a view. The list reads the grouping, the sorting, and the board columns as GitHub reports them;
-widths, slices, and sums are neither read nor set. Change them in GitHub itself.
+GitHub's API does not set the grouping, the sorting, the board column field, field widths, the slice, or field sums of a
+view. The list reads the first three as GitHub reports them; widths, slices, and sums are neither read nor set. Change
+them in GitHub itself.
 
 ## Project status updates
 
-The status update tools read the status updates of a project and post, change, and delete them. A status
-update is addressed by `status_update_id`, the `id` the list names; it is resolved together with the project in
-one query and must belong to it before the one change is sent. Every change follows the rules under [confirmed changes](README.md#confirmed-changes).
+The status update tools read the status updates of a project and post, change, and delete them. A status update is
+addressed by `status_update_id`, the `id` the list names; it is resolved together with the project in one query and must
+belong to it before the one change is sent.
 
 | Tool | Does |
 | --- | --- |
@@ -179,17 +182,16 @@ one query and must belong to it before the one change is sent. Every change foll
 | `github.project-status.delete` | deletes one status update; listed only |
 
 `github.project-status.list` follows the [cursor contract](README.md#cursor-contract) with a cursor bound to the
-project. Bodies are untrusted data.
+project. `author` stays the login, with the author as an account beside it.
 
-A create needs at least one setting; GitHub posts a status update without a status or dates as well. In an
-update, `""` removes a date and empties `body`. GitHub does not check that the target date follows the start
-date. A status update of another project, or one GitHub does not show, is `not-found` before any change; a
-repeated delete ends that way.
+A create needs at least one setting; GitHub posts a status update without a status or dates as well. GitHub does not
+check that the target date follows the start date. A status update of another project, or one GitHub does not show, is
+`not-found` before any change; a repeated delete ends that way.
 
 ## Project collaborators and teams
 
-The access tools read the teams a project is linked to and change who reaches it. The changes are listed
-only: a connection offers them only while its `tools` list names them, and no setup profile ticks them. Every change follows the rules under [confirmed changes](README.md#confirmed-changes).
+The access tools read the teams a project is linked to and change who reaches it. The changes are listed only: a
+connection offers them only while its `tools` list names them, and no setup profile ticks them.
 
 | Tool | Does |
 | --- | --- |
@@ -199,44 +201,42 @@ only: a connection offers them only while its `tools` list names them, and no se
 | `github.projects.unlink-team` | removes that link and the read access it granted; listed only |
 
 `github.project-teams.list` follows the [cursor contract](README.md#cursor-contract) with a cursor bound to the project.
-The `team` slug of an entry is what `github.projects.link-team` takes, and its name is untrusted data. A
-project of a user is linked to no team and lists none. GitHub shows teams only to a token that may read the
-organizations, even for a project of a user: without `read:org` on a classic token, or Members read access on a
-fine-grained one, the list ends with `permission`, and the message names that scope.
+The `team` slug of an entry is what `github.projects.link-team` takes. A team reports its settings, its parent, and its
+first 10 ancestors, member statuses (each with its user as an account), and linked projects; its members, child teams,
+repositories, and invitations are counted only. A project of a user is linked to no team and lists none. GitHub shows
+teams only to a token that may read the organizations, even for a project of a user: without `read:org` on a classic
+token, or Members read access on a fine-grained one, the list ends with `permission`, and the message names that scope.
 
-Collaborators left out stay unchanged. Qatlas grants no
-access to people outside the owning organization: a role other than `none` for a `user` needs a project of an
-organization and a user who is a member of it, which Qatlas checks live before the change. Only a confirmed
-membership counts; a missing or unreadable membership refuses the whole request with `invalid-request` before
-any change, and the message does not name the login. A token that may not read memberships ends with
-`permission`. `none` is allowed for every user and team, also on a project of a user. The answer repeats the
-roles GitHub accepted. Every user and team is resolved with the project in one query first: an
-unknown login or a team the organization lacks is `not-found` before any change. A team is looked up inside the
-project's organization only, so a team of another organization can never be named.
+Collaborators left out stay unchanged. Qatlas grants no access to people outside the owning organization: a role other
+than `none` for a `user` needs a project of an organization and a user who is a member of it, which Qatlas checks live
+before the change. Only a confirmed membership counts; a missing or unreadable membership refuses the whole request with
+`invalid-request` before any change, and the message does not name the login. A token that may not read memberships ends
+with `permission`. `none` is allowed for every user and team, also on a project of a user. Every user and team is
+resolved with the project in one query first: an unknown login or a team the organization lacks is `not-found` before
+any change. A team is looked up inside the project's organization only, so a team of another organization can never be
+named.
 
 Teams belong to an organization, so Qatlas refuses a team for a `users/LOGIN/projects/NUMBER` project, in
-`github.project-collaborators.update` and in the team links, with `invalid-request` before a secret is read.
-GitHub's API reads neither the collaborators of a project nor their roles, so there is no tool that lists them;
-check them in GitHub itself. Changing collaborators needs the rights of a project administrator; resolving a team or checking a
-membership also needs `read:org` on a classic token, or Members read access on a fine-grained one. Inviting people
-by email, managing the teams themselves, and the settings of an organization are out of scope.
+`github.project-collaborators.update` and in the team links, with `invalid-request` before a secret is read. GitHub's
+API reads neither the collaborators of a project nor their roles, so there is no tool that lists them; check them in
+GitHub itself. Changing collaborators needs the rights of a project administrator; resolving a team or checking a
+membership also needs `read:org` on a classic token, or Members read access on a fine-grained one. Inviting people by
+email, managing the teams themselves, and the settings of an organization are out of scope.
 
 ## Project automations
 
-The automation tools read the built-in workflows of a project, such as `Item closed` or `Auto-archive items`,
-and delete one. A workflow is addressed by `workflow`, its number in the project, and resolved with the project
-in one query before the change is sent.
+The automation tools read the built-in workflows of a project, such as `Item closed`, and delete one. A workflow is
+addressed by `workflow`, its number in the project, and resolved with the project in one query before the change is sent.
 
 | Tool | Does |
 | --- | --- |
 | `github.project-workflows.list` | lists every workflow, in number order |
 | `github.project-workflows.delete` | deletes one workflow; listed only |
 
-A new project starts with GitHub's default workflows. GitHub's API neither creates, enables, disables, nor
-configures a workflow, and a deleted workflow cannot be created again through it: change them in GitHub
-itself. A workflow number the project lacks is refused before any change and names the project's workflow
-numbers; a repeated delete ends that way. Its idempotency stays `unknown`, because a delete addresses the
-workflow by number. `github.project-workflows.delete` needs its name in the connection's `tools`.
+GitHub's API neither creates, enables, disables, nor configures a workflow, and a deleted workflow cannot be created
+again through it: change them in GitHub itself. A workflow number the project lacks is refused before any change and
+names the project's workflow numbers; a repeated delete ends that way. Its idempotency stays `unknown`, because a delete
+addresses the workflow by number.
 
 ## Project-first use
 

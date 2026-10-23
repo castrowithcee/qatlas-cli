@@ -204,7 +204,10 @@ func TestProjectViewsListEveryView(t *testing.T) {
 		"{2 Table table  [Title Priority] [Priority] [] []}",
 		"{3 Plan roadmap  [Title] [] [] []}",
 	} {
-		if got := fmt.Sprint(list.Views[i]); got != want {
+		// The identifiers and the field objects are checked apart; the names stay as they were.
+		view := list.Views[i]
+		if got := fmt.Sprintf("{%d %s %s %s %v %v %v %v}", view.Number, view.Name, view.Layout, view.Filter,
+			view.Fields, view.GroupBy, view.ColumnBy, view.SortBy); got != want {
 			t.Errorf("view %d = %s, want %s", i+1, got, want)
 		}
 	}
@@ -233,8 +236,10 @@ func TestProjectViewChangesSendOneMutationEach(t *testing.T) {
 			[]string{"filter:"},
 			map[string]string{"project": projectID, "name": "Triage", "layout": "TABLE_LAYOUT",
 				"configuration": "map[visibleFieldIds:[F_prio F_status]]"},
-			`{"complete":true,"project":"orgs/octo-org/projects/7","view":{"fields":["Title",` +
-				`"Priority","Status"],"filter":"","layout":"table","name":"Triage","number":4}}`},
+			`{"complete":true,"project":"orgs/octo-org/projects/7","view":{"configuration":{"visible_fields":[` +
+				`{"id":"F_title","name":"Title"},{"id":"F_prio","name":"Priority"},{"id":"F_status","name":"Status"}]},` +
+				`"fields":["Title","Priority","Status"],"filter":"","id":"V_new","layout":"table","name":"Triage",` +
+				`"number":4}}`},
 		{"create a roadmap with GitHub's fields", viewsCreate.ID, `{"name":"Plan","layout":"roadmap"}`, nil, nil,
 			map[string]string{"layout": "ROADMAP_LAYOUT", "configuration": "<nil>"}, `"complete":true`},
 		{"create a board with an empty filter", viewsCreate.ID, `{"name":"Bugs","layout":"board","filter":""}`, nil,
@@ -245,8 +250,8 @@ func TestProjectViewChangesSendOneMutationEach(t *testing.T) {
 				"$layout:ProjectV2ViewLayout!"},
 			[]string{"configuration:"},
 			map[string]string{"view": "V_2", "name": "Open", "layout": "BOARD_LAYOUT", "filter": "-status:Done"},
-			`"view":{"fields":["Title"],"filter":"-status:Done","layout":"board",` +
-				`"name":"Open","number":2}`},
+			`"view":{"configuration":{"visible_fields":[{"id":"F_title","name":"Title"}]},"fields":["Title"],` +
+				`"filter":"-status:Done","id":"V_2","layout":"board","name":"Open","number":2}`},
 		{"remove a filter", viewsUpdate.ID, `{"view":1,"filter":""}`,
 			[]string{"updateProjectV2View(input:{viewId:$view,filter:$filter})"}, nil,
 			map[string]string{"view": "V_1", "filter": ""}, `"filter":""`},

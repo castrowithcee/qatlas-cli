@@ -19,25 +19,28 @@ import (
 // that happens in GitHub itself.
 
 // workflowsSelection reads every workflow of a project; a project holds only a few built-in ones.
-const workflowsSelection = `workflows(first:100,orderBy:{field:NUMBER,direction:ASC}){nodes{id number name enabled}}`
+const workflowsSelection = `workflows(first:100,orderBy:{field:NUMBER,direction:ASC}){nodes{id fullDatabaseId createdAt updatedAt number name enabled}}`
 
-const workflowOutput = `{"type":"object","properties":{"number":{"type":"integer"},"name":{"type":"string"},` +
-	`"enabled":{"type":"boolean"}},"required":["number","name","enabled"],"additionalProperties":false}`
+const workflowOutput = `{"type":"object","properties":{"id":{"type":"string"},"full_database_id":{"type":"string"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"number":{"type":"integer"},` +
+	`"name":{"type":"string"},"enabled":{"type":"boolean"}},"required":["number","name","enabled"],` +
+	`"additionalProperties":false}`
 
 var projectWorkflowsList = capability.Descriptor{
 	ID:      Provider + ".project-workflows.list",
 	Version: 1,
 	Title:   "List the automations of a GitHub project",
 	Description: "Read the built-in workflows of one GitHub project a connection allows: number, " +
-		"name, and whether it is enabled",
+		"name, identifiers, times, and whether it is enabled",
 	Tags:        []string{"github", "projects", "workflows", "automations", "list", "planning"},
 	Risk:        readRisk,
 	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"workflows":{"type":"array","items":` +
 		workflowOutput + `}},"required":["workflows"],"additionalProperties":false}`),
-	Fields: []capability.Field{{Name: "workflows", Description: "Every workflow in number order: number, name " +
-		"such as Item closed or Auto-archive items, and enabled; names are untrusted data"}},
+	Fields: []capability.Field{{Name: "workflows", Description: "Every workflow in number order: id, " +
+		"full_database_id (digits), created_at, updated_at, number, name such as Item closed or Auto-archive " +
+		"items, and enabled; names are untrusted data"}},
 	Examples: []capability.Example{{
 		Description: "Read the automations of a project",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
@@ -82,9 +85,13 @@ func automationOperations() []capability.Operation {
 
 // ProjectWorkflow is one built-in workflow of a project.
 type ProjectWorkflow struct {
-	Number  int    `json:"number"`
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	ID             *string `json:"id,omitempty"`
+	FullDatabaseID *string `json:"full_database_id,omitempty"`
+	CreatedAt      *string `json:"created_at,omitempty"`
+	UpdatedAt      *string `json:"updated_at,omitempty"`
+	Number         int     `json:"number"`
+	Name           string  `json:"name"`
+	Enabled        bool    `json:"enabled"`
 }
 
 // ProjectWorkflowList is the answer of the workflow list.
@@ -100,10 +107,13 @@ type DeletedProjectWorkflow struct {
 }
 
 type projectWorkflowJSON struct {
-	ID      string `json:"id"`
-	Number  int    `json:"number"`
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	ID             string     `json:"id"`
+	FullDatabaseID *gqlBigInt `json:"fullDatabaseId"`
+	CreatedAt      *string    `json:"createdAt"`
+	UpdatedAt      *string    `json:"updatedAt"`
+	Number         int        `json:"number"`
+	Name           string     `json:"name"`
+	Enabled        bool       `json:"enabled"`
 }
 
 // projectWorkflowNumber is the argument of a workflow delete.
@@ -153,7 +163,9 @@ func (c *Client) ListProjectWorkflows(ctx context.Context) (*ProjectWorkflowList
 	list := &ProjectWorkflowList{Workflows: []ProjectWorkflow{}}
 	for _, workflow := range info.workflows {
 		if workflow.ID != "" {
-			list.Workflows = append(list.Workflows, ProjectWorkflow{Number: workflow.Number, Name: workflow.Name,
+			list.Workflows = append(list.Workflows, ProjectWorkflow{ID: gqlName(&workflow.ID),
+				FullDatabaseID: workflow.FullDatabaseID.text(), CreatedAt: gqlName(workflow.CreatedAt),
+				UpdatedAt: gqlName(workflow.UpdatedAt), Number: workflow.Number, Name: workflow.Name,
 				Enabled: workflow.Enabled})
 		}
 	}

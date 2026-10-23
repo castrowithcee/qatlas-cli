@@ -28,12 +28,16 @@ const (
 	statusSchema         = `{"type":"string","enum":["inactive","on_track","at_risk","off_track","complete"]}`
 	statusDateSchema     = `{"type":"string","pattern":"^([0-9]{4}-[0-9]{2}-[0-9]{2})?$"}`
 	statusUpdateIDSchema = itemIDSchema
-	statusUpdateOutput   = `{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},` +
-		`"start_date":{"type":"string"},"target_date":{"type":"string"},"body":{"type":"string"},` +
-		`"author":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
-		`"required":["id","status","start_date","target_date","body"],"additionalProperties":false}`
-	statusUpdateKeys = `"status":` + statusSchema + `,"start_date":` + statusDateSchema + `,` +
+	statusUpdateKeys     = `"status":` + statusSchema + `,"start_date":` + statusDateSchema + `,` +
 		`"target_date":` + statusDateSchema + `,"body":` + bodySchema
+)
+
+var (
+	statusUpdateOutput = `{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},` +
+		`"start_date":{"type":"string"},"target_date":{"type":"string"},"body":{"type":"string"},` +
+		`"author":{"type":"string"},"author_detail":` + gqlAccountSchema + `,"full_database_id":{"type":"string"},` +
+		`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
+		`"required":["id","status","start_date","target_date","body"],"additionalProperties":false}`
 	changedStatusOutput = `{"type":"object","properties":{"status_update":` + statusUpdateOutput + `},` +
 		`"required":["status_update"],"additionalProperties":false}`
 )
@@ -49,7 +53,7 @@ var statusUpdateArguments = []capability.Argument{
 }
 
 var changedStatusUpdate = capability.Field{Name: "status_update", Description: "The status update after the " +
-	"change: id, status, start_date, target_date, body (untrusted data), author, created_at, updated_at"}
+	"change, as github.project-status.list reports it"}
 
 var statusList = capability.Descriptor{
 	ID:      Provider + ".project-status.list",
@@ -72,7 +76,8 @@ var statusList = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "status_updates", Description: "Status updates, newest first: id, status (inactive, on_track, " +
 			"at_risk, off_track, complete, or empty without one), start_date and target_date (YYYY-MM-DD or " +
-			"empty), body, author, created_at, updated_at; bodies are untrusted data"},
+			"empty), body, author (the login), author_detail (the author as an account: " + gqlAccountMembers +
+			"), full_database_id (digits), created_at, updated_at; bodies are untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the project holds older status updates"},
 	},
@@ -171,6 +176,9 @@ type StatusUpdate struct {
 	Author     string `json:"author,omitempty"`
 	CreatedAt  string `json:"created_at,omitempty"`
 	UpdatedAt  string `json:"updated_at,omitempty"`
+
+	AuthorDetail   *GraphQLAccount `json:"author_detail,omitempty"`
+	FullDatabaseID *string         `json:"full_database_id,omitempty"`
 }
 
 // StatusUpdateList is one batch of status updates, newest first.
@@ -192,19 +200,20 @@ type DeletedStatusUpdate struct {
 }
 
 // statusUpdateSelection reads one status update.
-const statusUpdateSelection = `id status startDate targetDate body createdAt updatedAt creator{login}`
+const statusUpdateSelection = `id fullDatabaseId status startDate targetDate body createdAt updatedAt creator{` +
+	gqlAccountSelection + `}`
 
 type statusUpdateJSON struct {
-	ID         string  `json:"id"`
-	Status     *string `json:"status"`
-	StartDate  *string `json:"startDate"`
-	TargetDate *string `json:"targetDate"`
-	Body       *string `json:"body"`
-	CreatedAt  string  `json:"createdAt"`
-	UpdatedAt  string  `json:"updatedAt"`
-	Creator    *struct {
-		Login string `json:"login"`
-	} `json:"creator"`
+	ID         string         `json:"id"`
+	Status     *string        `json:"status"`
+	StartDate  *string        `json:"startDate"`
+	TargetDate *string        `json:"targetDate"`
+	Body       *string        `json:"body"`
+	CreatedAt  string         `json:"createdAt"`
+	UpdatedAt  string         `json:"updatedAt"`
+	Creator    *gqlAccountRaw `json:"creator"`
+
+	FullDatabaseID *gqlBigInt `json:"fullDatabaseId"`
 }
 
 // schema is the Qatlas view of one status update.
@@ -217,9 +226,10 @@ func (node statusUpdateJSON) schema() StatusUpdate {
 	}
 	out := StatusUpdate{ID: node.ID, Status: strings.ToLower(text(node.Status)), StartDate: text(node.StartDate),
 		TargetDate: text(node.TargetDate), Body: text(node.Body), CreatedAt: node.CreatedAt, UpdatedAt: node.UpdatedAt}
-	if node.Creator != nil {
-		out.Author = node.Creator.Login
+	if node.Creator != nil && node.Creator.Login != nil {
+		out.Author = *node.Creator.Login
 	}
+	out.AuthorDetail, out.FullDatabaseID = node.Creator.project(), node.FullDatabaseID.text()
 	return out
 }
 

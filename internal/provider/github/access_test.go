@@ -191,6 +191,15 @@ func TestProjectAccessRefusalsBeforeIO(t *testing.T) {
 	}
 }
 
+// teamNames prints the slug and the name of each team of a list.
+func teamNames(teams []LinkedTeam) string {
+	names := make([]string, len(teams))
+	for i, team := range teams {
+		names[i] = team.Team + ":" + team.Name
+	}
+	return fmt.Sprint(names)
+}
+
 // The team list reads one batch of the linked teams in name order in one query and continues with a cursor
 // bound to the project; a token that may not read teams is told which scope it lacks.
 func TestProjectTeamsListPagesByName(t *testing.T) {
@@ -199,13 +208,13 @@ func TestProjectTeamsListPagesByName(t *testing.T) {
 
 	result, err := invoke(t, core, teamsList.ID, "reader", `{"limit":1}`, false)
 	var first TeamList
-	if err != nil || json.Unmarshal(result, &first) != nil || fmt.Sprint(first.Teams) != "[{design Design}]" ||
+	if err != nil || json.Unmarshal(result, &first) != nil || teamNames(first.Teams) != "[design:Design]" ||
 		!first.HasMore || first.NextCursor == "" || !strings.Contains(string(result), `"project":"orgs/octo-org/projects/7"`) {
 		t.Fatalf("first batch = %s, %v", result, err)
 	}
 	result, err = invoke(t, core, teamsList.ID, "reader", `{"cursor":"`+first.NextCursor+`"}`, false)
 	var second TeamList
-	if err != nil || json.Unmarshal(result, &second) != nil || fmt.Sprint(second.Teams) != "[{ops Operations}]" ||
+	if err != nil || json.Unmarshal(result, &second) != nil || teamNames(second.Teams) != "[ops:Operations]" ||
 		second.HasMore {
 		t.Fatalf("second batch = %s, %v", result, err)
 	}
@@ -231,7 +240,8 @@ func TestProjectWorkflowsListEveryWorkflow(t *testing.T) {
 
 	result, err := invoke(t, core, projectWorkflowsList.ID, "admin", `{}`, false)
 	if err != nil || string(result) != `{"project":"orgs/octo-org/projects/7","workflows":[`+
-		`{"enabled":true,"name":"Item closed","number":1},{"enabled":false,"name":"Auto-archive items","number":3}]}` {
+		`{"enabled":true,"id":"W_1","name":"Item closed","number":1},`+
+		`{"enabled":false,"id":"W_3","name":"Auto-archive items","number":3}]}` {
 		t.Fatalf("result = %s, %v", result, err)
 	}
 	queries, mutations, _ := split(f.recorded())

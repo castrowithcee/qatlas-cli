@@ -180,7 +180,7 @@ func TestOwnerListsShowWhatTheTargetsAllow(t *testing.T) {
 	}
 	for _, request := range f.recorded() {
 		if request.path == "/api/graphql" && strings.Contains(request.document, "repositories(first") &&
-			!strings.Contains(request.document, "ownerAffiliations:[OWNER]") {
+			!strings.Contains(request.document, "projectsV2(") && !strings.Contains(request.document, "ownerAffiliations:[OWNER]") {
 			t.Fatalf("the repository list asks for more than the owner owns: %s", request.document)
 		}
 	}

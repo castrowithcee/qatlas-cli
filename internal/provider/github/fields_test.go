@@ -228,16 +228,18 @@ func TestFieldSchemaListsEveryField(t *testing.T) {
 		byName["Priority"].BuiltIn || byName["Note"].Type != "text" {
 		t.Errorf("fields = %+v", schema.Fields)
 	}
-	if got := fmt.Sprint(byName["Tags"]); got != "{Tags multi_select false [{UI blue Interface} {API gray }] <nil>}" {
+	if got := fmt.Sprint(byName["Tags"].Options); got != "[{M_ui UI blue Interface} {M_api API gray }]" {
 		t.Errorf("Tags = %s", got)
 	}
-	if got := fmt.Sprint(byName["Status"].Options); got != "[{Todo green Not started} {In progress yellow } {Done purple }]" {
+	if got := fmt.Sprint(byName["Status"].Options); got != "[{O_todo Todo green Not started} "+
+		"{O_progress In progress yellow } {O_done Done purple }]" {
 		t.Errorf("Status options = %s", got)
 	}
 	sprint := byName["Sprint"].Iteration
 	if sprint == nil || sprint.Duration != 14 || sprint.StartDay != "monday" ||
-		fmt.Sprint(sprint.Iterations) != "[{Sprint 4 2026-09-07 14 completed} {Sprint 5 2026-09-21 14 current} "+
-			"{Sprint 6 2026-10-05 14 planned}]" {
+		fmt.Sprint(sprint.Iterations) != "[{I_s4 Sprint 4 2026-09-07 14 completed} "+
+			"{I_s5 Sprint 5 2026-09-21 14 current} {I_s6 Sprint 6 2026-10-05 14 planned}]" ||
+		fmt.Sprint(sprint.CompletedIterations) != "[{I_s4 Sprint 4 2026-09-07 14}]" {
 		t.Errorf("Sprint = %+v", sprint)
 	}
 	if queries, mutations, _ := split(f.recorded()); len(queries) != 1 || len(mutations) != 0 {
@@ -267,22 +269,23 @@ func TestFieldChangesSendOneMutationEach(t *testing.T) {
 			map[string]string{"project": projectID, "type": "SINGLE_SELECT", "name": "Size", "multi": "<nil>",
 				"iteration": "<nil>", "single": "[map[color:GREEN description:small name:S] " +
 					"map[color:GRAY description: name:L]]"},
-			`{"field":{"built_in":false,"name":"Size","options":[{"color":"green","description":"small","name":"S"},` +
-				`{"color":"gray","description":"","name":"L"}],"type":"single_select"},"project":"orgs/octo-org/projects/7"}`},
+			`{"field":{"built_in":false,"id":"F_new","name":"Size","options":[{"color":"green","description":"small",` +
+				`"id":"N_0","name":"S"},{"color":"gray","description":"","id":"N_1","name":"L"}],"type":"single_select"},` +
+				`"project":"orgs/octo-org/projects/7"}`},
 		{"create a multi-select field", fieldsCreate.ID,
 			`{"name":"Areas","type":"multi_select","options":[{"name":"Docs","color":"pink"}]}`, nil, nil,
 			map[string]string{"type": "MULTI_SELECT", "single": "<nil>",
 				"multi": "[map[color:PINK description: name:Docs]]"}, `"type":"multi_select"`},
 		{"create a text field", fieldsCreate.ID, `{"name":"Owner","type":"text"}`, nil, nil,
 			map[string]string{"type": "TEXT", "single": "<nil>", "multi": "<nil>", "iteration": "<nil>"},
-			`{"field":{"built_in":false,"name":"Owner","type":"text"},"project":"orgs/octo-org/projects/7"}`},
+			`{"field":{"built_in":false,"id":"F_new","name":"Owner","type":"text"},"project":"orgs/octo-org/projects/7"}`},
 		{"create an iteration field", fieldsCreate.ID,
 			`{"name":"Cycle","type":"iteration","iteration":{"start_date":"2026-10-05","duration":14,` +
 				`"iterations":[{"title":"C2","start_date":"2026-10-19","duration":7},{"title":"C1","start_date":"2026-10-05"}]}}`,
 			nil, nil, map[string]string{"type": "ITERATION", "iteration": "map[duration:14 iterations:[" +
 				"map[duration:14 startDate:2026-10-05 title:C1] map[duration:7 startDate:2026-10-19 title:C2]] " +
 				"startDate:2026-10-05]"},
-			`"iterations":[{"duration":14,"start_date":"2026-10-05","state":"planned","title":"C1"},`},
+			`"iterations":[{"duration":14,"id":"NI_0","start_date":"2026-10-05","state":"planned","title":"C1"},`},
 		{"rename, add, and order options", fieldsUpdate.ID,
 			`{"field":"priority","options":[{"name":"p1","new_name":"High"},{"name":"P2","color":"yellow"}],` +
 				`"order":["P2","high"]}`,
@@ -302,7 +305,7 @@ func TestFieldChangesSendOneMutationEach(t *testing.T) {
 				"map[color:PURPLE description:Finished id:O_done name:Done]]"}, `"built_in":true`},
 		{"rename a field", fieldsUpdate.ID, `{"field":"note","name":"Notes"}`,
 			[]string{"updateProjectV2Field(input:{fieldId:$field,name:$name})", "$name:String!"}, nil,
-			map[string]string{"field": "F_note", "name": "Notes"}, `{"field":{"built_in":false,"name":"Notes"`},
+			map[string]string{"field": "F_note", "name": "Notes"}, `{"field":{"built_in":false,"id":"F_note","name":"Notes"`},
 		{"remove an option", fieldOptionsDelete.ID, `{"field":"Tags","options":["ui"]}`,
 			[]string{"multiSelectOptions:$multiSelectOptions"}, nil,
 			map[string]string{"field": "F_tags", "multiSelectOptions": "[map[color:GRAY description: id:M_api name:API]]"},
