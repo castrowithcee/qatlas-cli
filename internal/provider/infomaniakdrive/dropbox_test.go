@@ -251,7 +251,7 @@ func TestDropboxGetReadsOneDropboxAndDropsUnsafeURL(t *testing.T) {
 		t.Fatalf("invoke() = %v", err)
 	}
 	if len(calls) != 2 || calls[1].method != http.MethodGet || calls[1].path != dropboxPathOf(childFileID) ||
-		len(calls[1].query) != 0 || calls[1].body != "" {
+		calls[1].query.Encode() != "with=capabilities" || calls[1].body != "" {
 		t.Fatalf("calls = %+v", calls)
 	}
 	var out DropboxResult

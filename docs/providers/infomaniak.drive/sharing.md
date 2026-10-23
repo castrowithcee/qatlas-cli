@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Infomaniak kDrive sharing
@@ -28,9 +28,8 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
 - The link URL is its own sensitivity class, `infomaniak-kdrive-share-links`, which all three link tools carry
   instead of the file class: the URL is an access capability, not metadata. It is returned only as a string up to
   1024 characters, only when it is an absolute `https` URL without credentials; any other value from Infomaniak is
-  dropped and the link is returned without `url`. The other link fields (`right`, `valid_until`, the flags,
-  `access_blocked`, and the creation and update times) are untrusted data. A link is only reported for the file
-  it was asked for; an answer that names another file, or an unknown `right`, is an invalid response.
+  dropped and the link is returned without `url`. The other link fields are untrusted data. A link is only reported
+  for the file it was asked for; an answer that names another file, or an unknown `right`, is an invalid response.
 - `links.list` reads one page of `GET /3/drive/{d}/files/links` with the link included (`with=sharelink`):
   `limit` (5 to 1000, default 10) and an opaque `cursor`, answered as for `files.list`. Each entry is the usual entry
   plus its `link`. `links.get` answers `not-found` for a file without a link.
@@ -50,10 +49,14 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
   deletion needs `confirm`.
 - The dropbox has its own sensitivity class, `infomaniak-kdrive-dropboxes`. Every reported dropbox value is untrusted data and
   bounded; the `url` is returned only when it is an
-  absolute `https` URL without credentials of at most 1024 characters. Other fields Infomaniak documents (the
-  creator, the containing directory and user via `with`, and the remaining time, size, and usage figures) are not
-  read. `dropbox.get` answers `not-found` for a folder without a dropbox; `dropbox.delete`
-  answers only its `status`.
+  absolute `https` URL without credentials of at most 1024 characters, as is the creator's `avatar`; no address is
+  ever fetched. `dropbox.get` always asks Infomaniak for the capabilities, since the flags and limits come from
+  them, and answers `not-found` for a folder without a dropbox; `dropbox.delete` answers only its `status`.
+- The creator via `with=user` is returned without the security details Infomaniak can attach to a user (password
+  date, two-factor state, score): they are account security of another person. The user's type and teams need
+  `with` values the dropbox read does not document, so they are not asked for. Where the connection binds the drive
+  only by files or folder targets, `directory` carries no `path` and lists only the targets and the folders below
+  them as `parents`, as for the file entries: a path names folders outside the targets.
 - The deletion sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
   connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the
   dropbox before trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan
@@ -62,11 +65,15 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
 
 ## Access
 
-- `access.get` reads one file or folder: `users`, `teams`, and `invitations`, each entry with `id`, the access kind,
-  the display `name`, the `right`, and the `status`. Names and every other value are untrusted data; an invitation's
-  name can be an e-mail address. A list holds at most 200 entries and a name at most 256 bytes; `truncated` says a
-  list was cut. The class of all four tools is `infomaniak-kdrive-access`, separate from file metadata and from link
-  URLs, because who may reach a file is personal data.
+- `access.get` reads one file or folder: `users`, `teams`, and `invitations`. Names and every other value are
+  untrusted data; an invitation's name can be an e-mail address. A list holds at most 200 entries and a name at
+  most 256 bytes; `truncated` says a list was cut. The class of all four tools is `infomaniak-kdrive-access`,
+  separate from file metadata and from link URLs, because who may reach a file is personal data.
+- `with=parent_access` adds the access of the parent folder, at most 100 users and 100 teams, each flagged when cut.
+  The API's other `with` values, `user` and `invitation_drive`, document no response field and are not offered.
+  Where the connection binds the drive only by files or folder targets, a parent folder outside the targets, which
+  is always the case for a target itself, shows neither its `name` nor any detail of its users and teams, only
+  their identifiers.
 - `access.grant` sends one `POST /2/drive/{d}/files/{id}/access` with `right`, and any of `user_ids` (at most 20),
   `team_ids` (at most 10), at least one of them. There is no `emails` or `lang` argument, since no tool
   invites by e-mail. No `message` is offered. `access.update` and `access.revoke` take exactly one of `user_id` and `team_id`. `right` is

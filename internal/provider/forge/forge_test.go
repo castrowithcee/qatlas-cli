@@ -180,6 +180,8 @@ func testConfig(p *product) *config.Config {
 			p.id + ".pull-requests.merge", p.id + ".pull-request-branches.update", p.id + ".pull-requests.get"}}
 	cfg.Connections["release-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
+	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issue-times.delete", p.id + ".issue-times.reset"}}
 	return cfg
 }
 
