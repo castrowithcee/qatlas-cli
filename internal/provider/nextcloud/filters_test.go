@@ -22,7 +22,7 @@ func listContacts(t *testing.T, args string) (json.RawMessage, error) {
 }
 
 // checkEventMembersDeclared checks that every member the list reports is in the output schema and the fields. The
-// reverse direction is not asked: the shared schema also holds members that only the get tool fills.
+// reverse direction is not asked: a single answer rarely fills every member of the shared schema.
 func checkEventMembersDeclared(t *testing.T, result json.RawMessage) {
 	t.Helper()
 	var out struct {
@@ -161,7 +161,7 @@ func TestEventsListExpandReportsEachOccurrenceAgainstTheCalendarBinding(t *testi
 	}
 	want := []string{"once.ics|", "series.ics|2026-03-03T10:00:00Z", "series.ics|2026-03-04T10:00:00Z"}
 	if strings.Join(got, ",") != strings.Join(want, ",") || page.Events[2].Start != "2026-03-04T12:00:00Z" ||
-		page.Events[2].ETag != "e1" || page.Events[1].Description != "" {
+		page.Events[2].ETag != "e1" || page.Events[1].Description != "long text" {
 		t.Errorf("events = %v, page = %s", got, result)
 	}
 	checkEventMembersDeclared(t, result)
@@ -242,7 +242,7 @@ func TestContactsListSendsEveryFilterToTheReport(t *testing.T) {
 		`<card:text-match collation="i;octet" match-type="starts-with" negate-condition="yes">A&amp;B &lt;x&gt;</card:text-match>`,
 		`<card:param-filter name="TYPE"><card:text-match match-type="equals">work</card:text-match></card:param-filter>`,
 		`<card:prop-filter name="TEL"><card:is-not-defined/></card:prop-filter>`,
-		`<card:address-data>` + contactListProps + `</card:address-data>`,
+		`<card:address-data>` + contactGetProps + `</card:address-data>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %s: %s", want, body)

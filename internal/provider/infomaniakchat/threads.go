@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -61,20 +62,23 @@ var threadsList = capability.Descriptor{
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":` + idSchema + `,` +
-		`"page":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":` +
+		`"page":{"type":"integer","minimum":1},"since":` + timeSchema + `,"limit":{"type":"integer","minimum":1,"maximum":` +
 		itoa(maxThreadLimit) + `}},"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"team_id":` + idSchema + `,"threads":{"type":"array","items":` + threadEntrySchema + `},` +
-		`"page":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"total":{"type":"integer"},"page":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["team_id","threads","page","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		teamIDArgument,
 		{Name: "page", Description: "1-based page of kChat's own listing; the first page when omitted"},
+		{Name: "since", Description: "RFC 3339 time in the past; lists only the threads changed since then"},
 		{Name: "limit", Description: "Threads per kChat page, 1 to " + itoa(maxThreadLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
 	},
 	Fields: append(append([]capability.Field{}, threadEntryFields...),
 		capability.Field{Name: "team_id", Description: "Team that was read"},
+		capability.Field{Name: "total", Description: "kChat's count of the threads the token's own user follows in " +
+			"the team, before the reachable-channel filter; absent when kChat reports none"},
 		capability.Field{Name: "page", Description: "Page that was read"},
 		capability.Field{Name: "has_more", Description: "True when kChat's page was full, so a further page may exist; " +
 			"pages are never read on by themselves"},
@@ -150,6 +154,7 @@ type ThreadEntry struct {
 type ThreadsPage struct {
 	TeamID  string        `json:"team_id"`
 	Threads []ThreadEntry `json:"threads"`
+	Total   *int          `json:"total,omitempty"`
 	Page    int           `json:"page"`
 	HasMore bool          `json:"has_more"`
 	Count   int           `json:"count"`
@@ -179,6 +184,7 @@ type threadArguments struct {
 	TeamID   string `json:"team_id"`
 	ThreadID string `json:"thread_id"`
 	Page     int    `json:"page"`
+	Since    string `json:"since"`
 	Limit    int    `json:"limit"`
 }
 
@@ -223,25 +229,37 @@ func invokeThreadsList(ctx context.Context, resolved *config.Resolved, secrets *
 	if input.Page < 1 || input.Limit < 1 || input.Limit > maxThreadLimit {
 		return nil, invalidRequest("page must be at least 1 and limit 1 to " + itoa(maxThreadLimit))
 	}
+	var sinceMs int64
+	if input.Since != "" {
+		var err error
+		if sinceMs, err = sinceMilliseconds(input.Since, time.Now()); err != nil {
+			return nil, err
+		}
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListThreads(ctx, input.TeamID, input.Page, input.Limit)
+	return client.ListThreads(ctx, input.TeamID, input.Page, input.Limit, sinceMs)
 }
 
 // ListThreads reads the reachable channels of the team and one kChat page of followed threads, and keeps
 // only threads whose root is a live post of a reachable channel. It never reads on to a further page, and
-// never asks for deleted threads or extended user data.
-func (c *Client) ListThreads(ctx context.Context, teamID string, page, limit int) (*ThreadsPage, error) {
+// never asks for deleted threads or extended user data. A positive sinceMs limits the answer to threads
+// changed since then.
+func (c *Client) ListThreads(ctx context.Context, teamID string, page, limit int, sinceMs int64) (*ThreadsPage, error) {
 	const op = "list threads"
 	reachable, err := c.reachableChannels(ctx, op, teamID)
 	if err != nil {
 		return nil, err
 	}
 	query := url.Values{"page": {strconv.Itoa(page - 1)}, "pageSize": {strconv.Itoa(limit)}}
+	if sinceMs > 0 {
+		query.Set("since", strconv.FormatInt(sinceMs, 10))
+	}
 	var list struct {
 		Threads []userThreadJSON `json:"threads"`
+		Total   tolerant[*int]   `json:"total"`
 	}
 	if err := c.do(ctx, op, http.MethodGet, threadsPath(teamID), query, nil, &list, false); err != nil {
 		return nil, err
@@ -252,7 +270,11 @@ func (c *Client) ListThreads(ctx context.Context, teamID string, page, limit int
 			entries = append(entries, entry)
 		}
 	}
-	return &ThreadsPage{TeamID: teamID, Threads: entries, Page: page, HasMore: len(list.Threads) >= limit,
+	var total *int
+	if n := list.Total.Value; n != nil && *n >= 0 {
+		total = n
+	}
+	return &ThreadsPage{TeamID: teamID, Threads: entries, Total: total, Page: page, HasMore: len(list.Threads) >= limit,
 		Count: len(entries)}, nil
 }
 
