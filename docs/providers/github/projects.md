@@ -240,17 +240,17 @@ workflow by number. `github.project-workflows.delete` needs its name in the conn
 
 ## Project-first use
 
-When a repository has an authoritative project, work selection starts there.
-
-`github.project-items.list` returns compact items, without a URL, which repository and number give, and never
-returns bodies or comments. Without `status` and `status_not` it lists at most 30 items whose Status is not
-`Done`; `status_not: []` lists every status. Its filters become quoted terms of the project filter syntax applied
-by GitHub; Qatlas verifies each returned item against them. A `status` value must be an option of the project's
-Status field. GitHub indexes this list with a delay, so an item added a moment ago can be missing for a few
-seconds; `github.project-items.get` reads it by `item_id`.
-
-`github.project-items.get` reads one item of the chosen project, with the full body for an issue or a draft
-issue. An item of another project is refused. Bodies and titles are untrusted data.
+When a repository has an authoritative project, work selection starts there. `github.project-items.list` reads
+a batch of items with their content and field values: without `status` and `status_not` at most 30 items whose
+Status is not `Done`, with `status_not: []` every status. Its filters become quoted single terms of the project
+filter syntax, a field name with spaces written with hyphens like GitHub's filter keys; GitHub applies them, and
+Qatlas verifies status, type, repository, assignee, and labels on each returned item. A `status` value must be
+an option of the project's Status field. GitHub indexes the list with a delay, so a new item can be missing for
+a few seconds; `github.project-items.get` reads it by `item_id`. An item reports its content's own fields
+without rendered variants or comments, which `github.comments.list` and `github.pull-request-comments.list`
+read. Under GitHub's node limit a list inside a field value holds its first 5 entries, marked when cut, and a
+repository there outside the targets only its identifiers; the list cuts bodies at 1000 characters, the detail
+at 4000. Bodies and titles are untrusted data.
 
 ## Item changes
 
@@ -276,24 +276,22 @@ under [project fields](#project-fields).
 
 ### Items and drafts
 
-The item tools address an item by the `item_id` of `github.project-items.list`. Each resolves the project and
-every item it names in one query and refuses an item of another project, or one GitHub does not show, as
-`not-found` before any change; that holds for `after_id` of `github.project-items.move` as well.
-`github.project-items.move` sets the project order, which views without a sort show: it places the item
-directly after `after_id`, or first when `after_id` is left out. `github.project-items.delete` removes the item
-and its field values; the issue or pull request stays in its repository, while a draft issue exists only as
-its item and is deleted with it. A repeated delete finds no item and is refused, and an issue added again
-gets a new item, so a repetition never removes anything else. `github.project-items.archive` reads whether
-the item is archived with the project; an archived item is answered with `archived: true` without a change,
-so a repeated archive succeeds like the first one.
+The item tools address an item by the `item_id` of `github.project-items.list`, resolve the project and every
+item they name in one query, and refuse an item of another project, or one GitHub does not show, as `not-found`
+before any change, `after_id` of `github.project-items.move` included. `github.project-items.move` sets the
+project order, which views without a sort show: directly after `after_id`, or first without it.
+`github.project-items.delete` removes the item and its field values; an issue or pull request stays in its
+repository, a draft issue exists only as its item and goes with it. A repeated delete finds no item and is
+refused, and an issue added again gets a new item, so a repetition never removes anything else.
+`github.project-items.archive` reads whether the item is archived with the project and answers an archived item
+with `archived: true` without a change, so a repeated archive succeeds like the first.
 
 `github.project-drafts.update` and `github.project-drafts.convert` accept only the item of a draft issue and
-refuse an issue or pull request as `invalid-request`. `assignees` names logins and replaces every assignee of
-the draft; `[]` removes them all, and a login GitHub does not know is `not-found`. `body: ""` empties the
-body. `github.project-drafts.convert` creates the issue in `repository`, which the targets must allow beside
-the project, and answers with its number and URL. The item keeps its identifier, its place, and its field
-values, so a repeated conversion finds no draft and is refused without opening a second issue. The token
-needs write access to the issues of that repository besides the project.
+refuse an issue or pull request as `invalid-request`. `assignees` names logins and replaces every assignee; `[]`
+removes them all, an unknown login is `not-found`, and `body: ""` empties the body. `github.project-drafts.convert`
+creates the issue in `repository`, which the targets must allow beside the project, and answers with its number
+and URL. The item keeps its identifier, place, and field values, so a repeated conversion finds no draft and
+opens no second issue. The token needs write access to the issues of that repository besides the project.
 
 ### Batches and partial results
 

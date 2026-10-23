@@ -223,7 +223,7 @@ var unemittedMembers = map[string][]string{
 	"github.issue-dependencies.add":    {"removed"},
 	"github.sub-issues.add":            {"removed"},
 	"github.sub-issues.reprioritize":   {"removed", "sub_issues_summary"},
-	"github.project-items.list":        {"items[].body", "items[].url"},
+	"github.project-items.list":        {"items[].body"},
 }
 
 // checkOutput reports every member of the output of sample that the output schema or the fields lack, at any
