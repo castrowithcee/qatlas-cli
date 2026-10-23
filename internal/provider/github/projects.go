@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -26,6 +27,8 @@ type ItemListOptions struct {
 	Labels     []string `json:"labels"`
 	Limit      int      `json:"limit"`
 	Cursor     string   `json:"cursor"`
+
+	ItemFilters
 
 	// defaulted records that StatusNot is the default roster rather than the caller's choice.
 	defaulted bool
@@ -62,14 +65,22 @@ func (o *ItemListOptions) normalize(bound target) (string, error) {
 	if o.Assignee != "" && !validLogin(o.Assignee) {
 		return "", invalidRequest("assignee must be a GitHub login")
 	}
+	if err := o.ItemFilters.check(); err != nil {
+		return "", err
+	}
 	return decodeCursor(o.binding(bound), o.Cursor)
 }
 
 // binding identifies the target and the filters of a list request. Values are compared the way GitHub
 // compares them, without case, so spellings that select the same items share their cursors.
 func (o *ItemListOptions) binding(bound target) []byte {
-	return fingerprint("projects.items", bound.String(), folded(o.Status), folded(o.StatusNot), o.Type,
-		strings.ToLower(o.Repository), strings.ToLower(o.Assignee), folded(o.Labels))
+	parts := []any{"projects.items", bound.String(), folded(o.Status), folded(o.StatusNot), o.Type,
+		strings.ToLower(o.Repository), strings.ToLower(o.Assignee), folded(o.Labels)}
+	// The further filters join the fingerprint only when one is set, so a cursor made without them stays valid.
+	if extra := o.ItemFilters.binding(); extra != nil {
+		parts = append(parts, extra)
+	}
+	return fingerprint(parts...)
 }
 
 func folded(values []string) []string {
@@ -109,6 +120,7 @@ func (o *ItemListOptions) query() string {
 	if len(o.Labels) > 0 {
 		terms = append(terms, "label:"+quotedList(o.Labels))
 	}
+	terms = append(terms, o.ItemFilters.terms()...)
 	return strings.Join(terms, " ")
 }
 
@@ -202,7 +214,8 @@ type ItemList struct {
 	HasMore    bool   `json:"has_more"`
 }
 
-// Item is the stable Qatlas view of one project item. Body is set only by the detail read.
+// Item is the stable Qatlas view of one project item. The flat body is set only by the detail read; the list
+// reports the cut body inside Content.
 type Item struct {
 	ID         string         `json:"id"`
 	Type       string         `json:"type"`
@@ -216,6 +229,16 @@ type Item struct {
 	Labels     []string       `json:"labels"`
 	URL        string         `json:"url,omitempty"`
 	Body       *string        `json:"body,omitempty"`
+
+	CreatedAt            *string          `json:"created_at,omitempty"`
+	UpdatedAt            *string          `json:"updated_at,omitempty"`
+	Creator              *GraphQLAccount  `json:"creator,omitempty"`
+	IsArchived           *bool            `json:"is_archived,omitempty"`
+	FullDatabaseID       *string          `json:"full_database_id,omitempty"`
+	Content              *ItemContent     `json:"content,omitempty"`
+	FieldValues          []ItemFieldValue `json:"field_values,omitempty"`
+	FieldValuesTotal     *int64           `json:"field_values_total_count,omitempty"`
+	FieldValuesTruncated bool             `json:"field_values_truncated,omitempty"`
 }
 
 // normalizedItem carries whether its nested lists are complete, which the filter verification needs.
@@ -230,22 +253,20 @@ type normalizedItem struct {
 const fieldSelection = `fields(first:50){nodes{... on ProjectV2FieldCommon{id name dataType} ` +
 	`... on ProjectV2SingleSelectField{options{name}}}}`
 
-const fieldRef = `field{... on ProjectV2FieldCommon{id}}`
+const fieldRef = `field{... on ProjectV2FieldCommon{id name}}`
 
 const peopleAndLabels = `assignees(first:10){totalCount nodes{login}} labels(first:20){totalCount nodes{name}}`
 
-const itemFragment = `fragment itemFields on ProjectV2Item{id type ` +
-	`fieldValues(first:30){totalCount nodes{` +
-	`... on ProjectV2ItemFieldSingleSelectValue{name ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldTextValue{text ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldNumberValue{number ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldDateValue{date ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldIterationValue{title ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldMultiSelectValue{options{name} ` + fieldRef + `}}} ` +
+const itemFragment = `fragment itemFields on ProjectV2Item{id type createdAt updatedAt isArchived fullDatabaseId ` +
+	itemCreatorFields + ` ` +
+	`fieldValues(first:30){totalCount nodes{` + itemFieldValueSelection + `}} ` +
 	`content{__typename ` +
-	`... on Issue{number title issueState:state url repository{nameWithOwner} ` + peopleAndLabels + `} ` +
-	`... on PullRequest{number title pullRequestState:state url repository{nameWithOwner} ` + peopleAndLabels + `} ` +
-	`... on DraftIssue{title assignees(first:10){totalCount nodes{login}}}}}`
+	`... on Issue{number title issueState:state url repository{nameWithOwner} ` + peopleAndLabels + ` ` +
+	itemContentCommon + ` ` + itemIssueMembers + `} ` +
+	`... on PullRequest{number title pullRequestState:state url repository{nameWithOwner} ` + peopleAndLabels + ` ` +
+	itemContentCommon + ` ` + itemPullRequestMembers + `} ` +
+	`... on DraftIssue{id title body createdAt updatedAt ` + itemCreatorFields +
+	` assignees(first:10){totalCount nodes{login}}}}}`
 
 const itemsQuery = `query($project:ID!,$first:Int!,$after:String,$query:String!){project:node(id:$project){` +
 	`... on ProjectV2{items(first:$first,after:$after,query:$query){pageInfo{hasNextPage endCursor} ` +
@@ -267,8 +288,7 @@ func (c *Client) projectQuery() string {
 func (c *Client) itemQuery() string {
 	return `query($owner:String!,$number:Int!,$item:ID!){owner:` + c.target.ownerField() +
 		`(login:$owner){projectV2(number:$number){id ` + fieldSelection + `}} ` +
-		`item:node(id:$item){... on ProjectV2Item{...itemFields project{id} ` +
-		`content{... on Issue{body} ... on DraftIssue{body}}}}} ` + itemFragment
+		`item:node(id:$item){... on ProjectV2Item{...itemFields project{id}}} ` + itemFragment
 }
 
 func (c *Client) projectVariables() map[string]any {
@@ -402,41 +422,52 @@ type countedLabels struct {
 }
 
 type fieldValueJSON struct {
-	Name   *string  `json:"name"`
-	Text   *string  `json:"text"`
-	Number *float64 `json:"number"`
-	Date   *string  `json:"date"`
-	Title  *string  `json:"title"`
+	Typename    *string        `json:"__typename"`
+	ID          *string        `json:"id"`
+	DatabaseID  *int64         `json:"databaseId"`
+	CreatedAt   *string        `json:"createdAt"`
+	UpdatedAt   *string        `json:"updatedAt"`
+	Creator     *gqlAccountRaw `json:"creator"`
+	Name        *string        `json:"name"`
+	OptionID    *string        `json:"optionId"`
+	Color       *string        `json:"color"`
+	Description *string        `json:"description"`
+	Text        *string        `json:"text"`
+	Number      *json.Number   `json:"number"`
+	Date        *string        `json:"date"`
+	Title       *string        `json:"title"`
+	IterationID *string        `json:"iterationId"`
+	StartDate   *string        `json:"startDate"`
+	Duration    *int64         `json:"duration"`
+	Value       *string        `json:"value"`
 	// Options are the selected options of a multi-select value.
-	Options []struct {
-		Name string `json:"name"`
-	} `json:"options"`
-	Field struct {
-		ID string `json:"id"`
+	Options         []*itemOptionRaw           `json:"options"`
+	Labels          *gqlNodes[gqlLabelRaw]     `json:"labels"`
+	Milestone       *gqlMilestoneRaw           `json:"milestone"`
+	PullRequests    *gqlNodes[gqlReferenceRaw] `json:"pullRequests"`
+	Repository      *gqlNestedRepositoryRaw    `json:"repository"`
+	Reviewers       *gqlNodes[itemReviewerRaw] `json:"reviewers"`
+	Users           *gqlNodes[gqlAccountRaw]   `json:"users"`
+	IssueFieldValue *itemIssueFieldRaw         `json:"issueFieldValue"`
+	Field           struct {
+		ID   string  `json:"id"`
+		Name *string `json:"name"`
 	} `json:"field"`
 }
 
 type itemJSON struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	FieldValues struct {
+	ID             string         `json:"id"`
+	Type           string         `json:"type"`
+	CreatedAt      *string        `json:"createdAt"`
+	UpdatedAt      *string        `json:"updatedAt"`
+	IsArchived     *bool          `json:"isArchived"`
+	FullDatabaseID *gqlBigInt     `json:"fullDatabaseId"`
+	Creator        *gqlAccountRaw `json:"creator"`
+	FieldValues    struct {
 		TotalCount int              `json:"totalCount"`
 		Nodes      []fieldValueJSON `json:"nodes"`
 	} `json:"fieldValues"`
-	Content *struct {
-		Typename         string `json:"__typename"`
-		Number           int    `json:"number"`
-		Title            string `json:"title"`
-		IssueState       string `json:"issueState"`
-		PullRequestState string `json:"pullRequestState"`
-		URL              string `json:"url"`
-		Repository       *struct {
-			NameWithOwner string `json:"nameWithOwner"`
-		} `json:"repository"`
-		Assignees countedLogins `json:"assignees"`
-		Labels    countedLabels `json:"labels"`
-		Body      *string       `json:"body"`
-	} `json:"content"`
+	Content *itemContentJSON `json:"content"`
 	Project *struct {
 		ID string `json:"id"`
 	} `json:"project"`
@@ -451,7 +482,7 @@ var itemTypes = map[string]string{
 // model resolved for this request; only single-select, multi-select, text, number, date, and iteration
 // values are kept, a multi-select value as the list of its option names, and the Status value becomes its
 // own property.
-func (info *projectInfo) normalize(raw itemJSON) normalizedItem {
+func (info *projectInfo) normalize(raw itemJSON, allowed allowlist, bodyLimit int) normalizedItem {
 	kind, ok := itemTypes[raw.Type]
 	if !ok {
 		kind = strings.ToLower(raw.Type)
@@ -474,7 +505,9 @@ func (info *projectInfo) normalize(raw itemJSON) normalizedItem {
 		case field.DataType == "TEXT" && value.Text != nil:
 			item.Fields[field.Name] = *value.Text
 		case field.DataType == "NUMBER" && value.Number != nil:
-			item.Fields[field.Name] = *value.Number
+			if number, err := value.Number.Float64(); err == nil {
+				item.Fields[field.Name] = number
+			}
 		case field.DataType == "DATE" && value.Date != nil:
 			item.Fields[field.Name] = *value.Date
 		case field.DataType == "ITERATION" && value.Title != nil:
@@ -482,15 +515,29 @@ func (info *projectInfo) normalize(raw itemJSON) normalizedItem {
 		case field.DataType == "MULTI_SELECT" && value.Options != nil:
 			names := make([]string, len(value.Options))
 			for i, option := range value.Options {
-				names[i] = option.Name
+				if option != nil && option.Name != nil {
+					names[i] = *option.Name
+				}
 			}
 			item.Fields[field.Name] = names
 		}
+	}
+	item.CreatedAt, item.UpdatedAt, item.IsArchived = gqlName(raw.CreatedAt), gqlName(raw.UpdatedAt), raw.IsArchived
+	item.Creator, item.FullDatabaseID = raw.Creator.project(), raw.FullDatabaseID.text()
+	for i := range raw.FieldValues.Nodes {
+		if value, ok := raw.FieldValues.Nodes[i].widthValue(allowed); ok {
+			item.FieldValues = append(item.FieldValues, value)
+		}
+	}
+	if len(item.FieldValues) > 0 {
+		total := int64(raw.FieldValues.TotalCount)
+		item.FieldValuesTotal, item.FieldValuesTruncated = &total, !item.fieldsComplete
 	}
 	content := raw.Content
 	if content == nil {
 		return item
 	}
+	item.Content = content.width(bodyLimit)
 	item.Title, item.Number, item.URL = content.Title, content.Number, content.URL
 	item.State = strings.ToLower(content.IssueState + content.PullRequestState)
 	if content.Repository != nil {
@@ -574,18 +621,14 @@ func (c *Client) listItems(ctx context.Context, options ItemListOptions, after s
 				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 					Message: "GitHub returned an item without a usable identifier"}
 			}
-			item := info.normalize(edge.Node)
+			item := info.normalize(edge.Node, c.allowed, itemListBodyLimit)
 			if options.matches(item) {
 				if len(result.Items) == options.Limit {
 					// A further matching item exists: the batch is full and continues before it.
 					result.HasMore, result.NextCursor = true, encodeCursor(binding, last)
 					return result, nil
 				}
-				// The list leaves out the URL, derivable from the repository and the number; only the
-				// detail read adds it back.
-				entry := item.Item
-				entry.URL = ""
-				result.Items = append(result.Items, entry)
+				result.Items = append(result.Items, item.Item)
 			}
 			last = edge.Cursor
 		}
@@ -633,7 +676,7 @@ func (c *Client) GetItem(ctx context.Context, id string) (*Item, error) {
 	if detail.Item == nil || detail.Item.ID != id || detail.Item.Project == nil || detail.Item.Project.ID != info.id {
 		return nil, notFound(op, subject{in: c.target, what: "this item"})
 	}
-	item := info.normalize(*detail.Item).Item
+	item := info.normalize(*detail.Item, c.allowed, projectionBodyLimit).Item
 	if content := detail.Item.Content; content != nil && content.Body != nil &&
 		(item.Type == "issue" || item.Type == "draft_issue") {
 		body := *content.Body
