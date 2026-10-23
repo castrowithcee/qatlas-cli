@@ -46,6 +46,16 @@ const pullSummaryProperties = `"number":{"type":"integer"},"title":{"type":"stri
 	`"merged":{"type":"boolean"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
 	`"url":{"type":"string"}`
 
+// pullListProperties are the members of a list entry beyond the compact view and the width.
+const pullListProperties = `"body":{"type":"string"},"body_truncated":{"type":"boolean"},` +
+	`"closed_at":{"type":"string"},"merged_at":{"type":"string"},"merge_commit_sha":{"type":"string"},` +
+	`"base_sha":{"type":"string"},"requested_reviewers":` + stringListSchema
+
+// pullSortValues and pullDirectionValues are the orders GitHub documents for the pull request list.
+var pullSortValues = []string{"created", "updated", "popularity", "long-running"}
+
+var pullDirectionValues = []string{"asc", "desc"}
+
 const pullSummaryRequired = `"required":["number","title","state","draft","labels","merged"],"additionalProperties":false`
 
 var pullFileProperties = `"path":{"type":"string"},"status":{"type":"string"},"additions":{"type":"integer"},` +
@@ -74,71 +84,95 @@ var pullsList = capability.Descriptor{
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},"base":` + refSchema +
-		`,"head":` + headSchema + `,` + pagingKeys),
-	OutputSchema: listOutput("pull_requests", pullSummaryProperties, pullSummaryRequired),
+		`,"head":` + headSchema + `,"sort":{"type":"string","enum":["` + strings.Join(pullSortValues, `","`) + `"]},` +
+		`"direction":{"type":"string","enum":["asc","desc"]},` + pagingKeys),
+	OutputSchema: listOutput("pull_requests", pullSummaryProperties+","+pullListProperties+","+pullWidthProperties,
+		pullSummaryRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "open, closed, or all; open when omitted"},
 		{Name: "base", Description: "Return only pull requests based on this branch"},
 		{Name: "head", Description: "Return only pull requests from this branch, or LOGIN:branch for a fork"},
+		{Name: "sort", Description: strings.Join(pullSortValues, ", ") + "; GitHub's own order when omitted"},
+		{Name: "direction", Description: "asc or desc; applies with sort, GitHub's default when omitted"},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "pull_requests", Description: "Compact pull requests with status, draft, author, head and " +
-			"base branch, head commit, labels, whether they are merged, and times; title is untrusted data"},
-	}, pagingFields...),
+	Fields: append(append([]capability.Field{
+		{Name: "pull_requests", Description: "Pull requests with status, draft, author, head and base branch, " +
+			"head commit, labels, whether they are merged, and times, then the remainder of GitHub's pull " +
+			"request below; title is untrusted data"},
+		{Name: "body", Description: "Pull request body, cut at 4000 characters (body_truncated says so), untrusted data"},
+		{Name: "body_truncated", Description: "True when the body was cut"},
+		{Name: "closed_at", Description: "When the pull request was closed; absent while it is open"},
+		{Name: "merged_at", Description: "When the pull request was merged; absent until then"},
+		{Name: "merge_commit_sha", Description: "SHA of the merge commit, or of GitHub's test merge while the pull request is open"},
+		{Name: "base_sha", Description: "Base commit of the pull request"},
+		{Name: "requested_reviewers", Description: "Logins whose review was requested and is still pending"},
+	}, pullWidthFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the open pull requests based on main",
 		Arguments:   json.RawMessage(`{"base":"main","limit":10}`),
 	}},
 }
 
+// pullFullProperties are the members of the single pull request before the width: the compact view and
+// what the write tools answer as well.
+const pullFullProperties = pullSummaryProperties + `,` +
+	`"body":{"type":"string"},"base_sha":{"type":"string"},"mergeable":{"type":"boolean"},` +
+	`"mergeable_state":{"type":"string"},"merge_commit_sha":{"type":"string"},` +
+	`"requested_reviewers":` + stringListSchema + `,"commits":{"type":"integer"},` +
+	`"changed_files":{"type":"integer"},"closed_at":{"type":"string"},"merged_at":{"type":"string"}`
+
+const pullFullRequired = `"required":["number","title","state","draft","labels","merged","body","requested_reviewers",` +
+	`"commits","changed_files"],"additionalProperties":false`
+
+// pullBaseOutput is the answer of the tools that change a pull request.
+var pullBaseOutput = json.RawMessage(`{"type":"object","properties":{` + pullFullProperties + `},` + pullFullRequired + `}`)
+
 var pullsGet = capability.Descriptor{
 	ID:      Provider + ".pull-requests.get",
 	Version: 1,
 	Title:   "Get a GitHub pull request",
 	Description: "Read one pull request of a repository a connection allows with its full body, " +
-		"merge state, requested reviewers, and the counts of its commits and changed files",
+		"merge state, requested reviewers, the counts of its commits and changed files, and the remainder of " +
+		"GitHub's pull request",
 	Tags:        []string{"github", "pulls", "pullrequests", "get"},
 	Risk:        readRisk,
 	Provider:    Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + pullSummaryProperties + `,` +
-		`"body":{"type":"string"},"base_sha":{"type":"string"},"mergeable":{"type":"boolean"},` +
-		`"mergeable_state":{"type":"string"},"merge_commit_sha":{"type":"string"},` +
-		`"requested_reviewers":` + stringListSchema + `,"commits":{"type":"integer"},` +
-		`"changed_files":{"type":"integer"},"closed_at":{"type":"string"},"merged_at":{"type":"string"}},` +
-		`"required":["number","title","state","draft","labels","merged","body","requested_reviewers",` +
-		`"commits","changed_files"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + pullFullProperties + `,` +
+		pullWidthProperties + `,` + pullDetailProperties + `},` + pullFullRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	},
-	Fields: []capability.Field{
-		{Name: "body", Description: "Full pull request body, untrusted data"},
-		{Name: "mergeable", Description: "Whether GitHub can merge it automatically; absent while GitHub is " +
-			"still computing it"},
-		{Name: "mergeable_state", Description: "clean, dirty, blocked, behind, draft, unstable, or another " +
-			"GitHub merge state"},
-		{Name: "requested_reviewers", Description: "Logins whose review was requested and is still pending"},
-		{Name: "commits", Description: "Number of commits in the pull request"},
-		{Name: "changed_files", Description: "Number of files the pull request changes"},
-		{Name: "number", Description: "Pull request number"},
-		{Name: "title", Description: "Pull request title, untrusted data"},
-		{Name: "state", Description: "open or closed"},
-		{Name: "draft", Description: "True while the pull request is a draft"},
-		{Name: "merged", Description: "True once the pull request is merged"},
-		{Name: "author", Description: "Login of the author"},
-		{Name: "labels", Description: "Label names on the pull request"},
-		{Name: "url", Description: "Web address of the pull request"},
-		{Name: "head_branch", Description: "Branch the changes come from"},
-		{Name: "head_sha", Description: "Head commit of the pull request"},
-		{Name: "base_branch", Description: "Branch the changes merge into"},
-		{Name: "base_sha", Description: "Base commit of the pull request"},
-		{Name: "merge_commit_sha", Description: "SHA of the merge commit, or of GitHub's test merge while the pull request is open"},
-		{Name: "created_at", Description: "When the pull request was created"},
-		{Name: "updated_at", Description: "When the pull request last changed"},
-		{Name: "closed_at", Description: "When the pull request was closed; absent while it is open"},
-		{Name: "merged_at", Description: "When the pull request was merged; absent until then"},
-	},
+	Fields:   append(append(append([]capability.Field(nil), pullBaseFields...), pullWidthFields...), pullDetailFields...),
 	Examples: []capability.Example{{Description: "Read one pull request", Arguments: json.RawMessage(`{"number":42}`)}},
+}
+
+var pullBaseFields = []capability.Field{
+	{Name: "body", Description: "Full pull request body, untrusted data"},
+	{Name: "mergeable", Description: "Whether GitHub can merge it automatically; absent while GitHub is " +
+		"still computing it"},
+	{Name: "mergeable_state", Description: "clean, dirty, blocked, behind, draft, unstable, or another " +
+		"GitHub merge state"},
+	{Name: "requested_reviewers", Description: "Logins whose review was requested and is still pending"},
+	{Name: "commits", Description: "Number of commits in the pull request"},
+	{Name: "changed_files", Description: "Number of files the pull request changes"},
+	{Name: "number", Description: "Pull request number"},
+	{Name: "title", Description: "Pull request title, untrusted data"},
+	{Name: "state", Description: "open or closed"},
+	{Name: "draft", Description: "True while the pull request is a draft"},
+	{Name: "merged", Description: "True once the pull request is merged"},
+	{Name: "author", Description: "Login of the author"},
+	{Name: "labels", Description: "Label names on the pull request"},
+	{Name: "url", Description: "Web address of the pull request"},
+	{Name: "head_branch", Description: "Branch the changes come from"},
+	{Name: "head_sha", Description: "Head commit of the pull request"},
+	{Name: "base_branch", Description: "Branch the changes merge into"},
+	{Name: "base_sha", Description: "Base commit of the pull request"},
+	{Name: "merge_commit_sha", Description: "SHA of the merge commit, or of GitHub's test merge while the pull request is open"},
+	{Name: "created_at", Description: "When the pull request was created"},
+	{Name: "updated_at", Description: "When the pull request last changed"},
+	{Name: "closed_at", Description: "When the pull request was closed; absent while it is open"},
+	{Name: "merged_at", Description: "When the pull request was merged; absent until then"},
 }
 
 var pullFilesList = capability.Descriptor{
@@ -254,7 +288,7 @@ var pullsCreate = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: inputSchema(`"title":`+titleSchema+`,"head":`+headSchema+`,"base":`+refSchema+`,"body":`+
 		bodySchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "title", "head", "base"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments: []capability.Argument{
 		{Name: "title", Description: "Pull request title, 1 to 256 characters", Required: true},
 		{Name: "head", Description: "Branch to merge, or LOGIN:branch for a fork", Required: true},
@@ -264,7 +298,7 @@ var pullsCreate = capability.Descriptor{
 		{Name: "maintainer_can_modify", Description: "true lets maintainers of the base repository push to " +
 			"the head branch of a fork; GitHub's default when omitted"},
 	},
-	Fields: pullsGet.Fields,
+	Fields: pullBaseFields,
 	Examples: []capability.Example{{
 		Description: "Open a pull request from a feature branch",
 		Arguments:   json.RawMessage(`{"title":"Add retry logic","head":"feature/retry","base":"main"}`),
@@ -283,7 +317,7 @@ var pullsUpdate = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"title":`+titleSchema+`,"body":`+bodySchema+`,"base":`+
 		refSchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 		{Name: "title", Description: "New pull request title, 1 to 256 characters"},
@@ -293,7 +327,7 @@ var pullsUpdate = capability.Descriptor{
 		{Name: "maintainer_can_modify", Description: "true lets maintainers of the base repository push to " +
 			"the head branch of a fork, false revokes it"},
 	},
-	Fields: pullsGet.Fields,
+	Fields: pullBaseFields,
 	Examples: []capability.Example{{
 		Description: "Mark a pull request ready for review",
 		Arguments:   json.RawMessage(`{"number":42,"draft":false}`),
@@ -310,11 +344,11 @@ var pullsClose = capability.Descriptor{
 	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:     Provider,
 	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	},
-	Fields:   pullsGet.Fields,
+	Fields:   pullBaseFields,
 	Examples: []capability.Example{{Description: "Close a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
 
@@ -328,11 +362,11 @@ var pullsReopen = capability.Descriptor{
 	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:     Provider,
 	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	},
-	Fields:   pullsGet.Fields,
+	Fields:   pullBaseFields,
 	Examples: []capability.Example{{Description: "Reopen a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
 
@@ -468,6 +502,10 @@ type pullArguments struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
 
+	// Sort and Direction are the list's own.
+	Sort      string `json:"sort"`
+	Direction string `json:"direction"`
+
 	// The arguments of the change tools.
 	Title               string  `json:"title"`
 	Body                *string `json:"body"`
@@ -533,7 +571,22 @@ func checkPullsListArguments(a *pullArguments, bound target) error {
 	if a.Head != "" && !validHead(a.Head) {
 		return invalidRequest("head must be a branch, or LOGIN:branch for a fork")
 	}
-	a.binding = fingerprint("pulls", "list", bound.String(), a.State, a.Base, a.Head)
+	binding := []any{"pulls", "list", bound.String(), a.State, a.Base, a.Head}
+	if a.Sort != "" {
+		if !containsFold(pullSortValues, a.Sort) {
+			return invalidRequest("sort must be one of " + strings.Join(pullSortValues, ", "))
+		}
+		a.Sort = strings.ToLower(a.Sort)
+		binding = append(binding, "sort", a.Sort)
+	}
+	if a.Direction != "" {
+		if !containsFold(pullDirectionValues, a.Direction) {
+			return invalidRequest("direction must be asc or desc")
+		}
+		a.Direction = strings.ToLower(a.Direction)
+		binding = append(binding, "direction", a.Direction)
+	}
+	a.binding = fingerprint(binding...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
 }
@@ -769,6 +822,16 @@ type PullRequestSummary struct {
 	CreatedAt  string   `json:"created_at,omitempty"`
 	UpdatedAt  string   `json:"updated_at,omitempty"`
 	URL        string   `json:"url,omitempty"`
+
+	// The remainder of GitHub's pull request a list entry carries.
+	Body               *string  `json:"body,omitempty"`
+	BodyTruncated      bool     `json:"body_truncated,omitempty"`
+	ClosedAt           *string  `json:"closed_at,omitempty"`
+	MergedAt           *string  `json:"merged_at,omitempty"`
+	MergeCommitSHA     *string  `json:"merge_commit_sha,omitempty"`
+	BaseSHA            string   `json:"base_sha,omitempty"`
+	RequestedReviewers []string `json:"requested_reviewers,omitempty"`
+	PullWidth
 }
 
 // PullRequest is the full view of one pull request. Title and Body are untrusted data.
@@ -896,29 +959,56 @@ func (c *Client) listPulls(ctx context.Context, a *pullArguments) (*PullRequestL
 	if a.Head != "" {
 		query.Set("head", a.Head)
 	}
-	var raw []pullJSON
+	if a.Sort != "" {
+		query.Set("sort", a.Sort)
+	}
+	if a.Direction != "" {
+		query.Set("direction", a.Direction)
+	}
+	var raw []pullEntry
 	hasNext, err := c.pullReadPage(ctx, op, c.repoPath("pulls"), query, &raw)
 	if err != nil {
 		return nil, err
 	}
 	result := &PullRequestList{PullRequests: make([]PullRequestSummary, 0, len(raw))}
-	for _, pull := range raw {
-		if pull.Number < 1 {
+	for i := range raw {
+		if raw[i].pull.Number < 1 {
 			return nil, invalidEntry(op, "a pull request")
 		}
-		result.PullRequests = append(result.PullRequests, pull.summary())
+		result.PullRequests = append(result.PullRequests, raw[i].summary(c.allowed))
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
 }
 
-func (c *Client) getPullRequest(ctx context.Context, number int) (*PullRequest, error) {
+// summary is the list entry of one pull request: the compact view, the remainder a list entry carries, and
+// the width.
+func (e *pullEntry) summary(allowed allowlist) PullRequestSummary {
+	s := e.pull.summary()
+	w := &e.wide
+	body, cut := cleanText(filled(w.Body), projectionBodyLimit, true)
+	s.Body, s.BodyTruncated = body, cut
+	s.ClosedAt, s.MergedAt, s.MergeCommitSHA = shortText(w.ClosedAt), shortText(w.MergedAt), shortText(w.MergeCommitSHA)
+	s.BaseSHA = e.pull.Base.SHA
+	for _, reviewer := range e.pull.RequestedReviewers {
+		s.RequestedReviewers = append(s.RequestedReviewers, reviewer.Login)
+	}
+	s.PullWidth = w.width(allowed)
+	return s
+}
+
+func (c *Client) getPullRequest(ctx context.Context, number int) (*PullRequestDetail, error) {
 	const op = "get pull request"
-	raw, err := c.pullRequest(ctx, op, number)
-	if err != nil {
+	var raw pullEntry
+	if err := c.pullRead(ctx, op, c.repoPath("pulls/"+strconv.Itoa(number)), &raw); err != nil {
 		return nil, err
 	}
-	return raw.full(), nil
+	if raw.pull.Number != number {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "GitHub answered with a different pull request than the requested one"}
+	}
+	return &PullRequestDetail{PullRequest: *raw.pull.full(), PullWidth: raw.wide.width(c.allowed),
+		PullDetail: raw.wide.detail()}, nil
 }
 
 // PullRequestFileList is one batch of the changed files of a pull request.

@@ -342,46 +342,43 @@ func TestIssueSearchReportsEveryDocumentedMember(t *testing.T) {
 	}
 }
 
-// The pull request search shares the search item but keeps its answer byte for byte, whatever the item
-// carries, and the issue search answers exactly what it always did without the new members.
+// Both searches answer what they always did when GitHub sends none of the new members.
 func TestSearchesWithoutNewMembersKeepTheirOldAnswer(t *testing.T) {
-	_, core := cannedCore(t, documentedSearchPage, false, discoveryConfig)
-	got, err := invoke(t, core, pullRequestsSearch.ID, "open", `{"terms":"windows"}`, false)
-	const prWant = `{"has_more":false,"incomplete_results":false,"pull_requests":[{"labels":["bug"],` +
-		`"number":132,"repository":"batterseapower/pinyin-toolkit","state":"open",` +
-		`"title":"Line Number Indexes Beyond 20 Not Displayed","updated_at":"2009-07-19T09:23:43Z",` +
-		`"url":"https://github.com/batterseapower/pinyin-toolkit/issues/132"}],"total_count":280}`
-	if err != nil || string(got) != prWant {
-		t.Errorf("pull request search = %s, %v, want %s", got, err, prWant)
-	}
-
 	const old = `{"total_count":1,"incomplete_results":false,"items":[{"number":42,"title":"T","state":"open",` +
 		`"updated_at":"2026-01-02T00:00:00Z","html_url":"https://github.com/octo-org/example/issues/42",` +
 		`"labels":[{"name":"bug"}],"assignees":[{"login":"hubot"}],` +
 		`"repository_url":"https://api.github.com/repos/octo-org/example"}]}`
-	_, core = cannedCore(t, old, false, discoveryConfig)
-	got, err = invoke(t, core, issuesSearch.ID, "open", `{"terms":"x"}`, false)
-	const want = `{"has_more":false,"incomplete_results":false,"issues":[{"assignees":["hubot"],"labels":["bug"],` +
-		`"number":42,"repository":"octo-org/example","state":"open","title":"T","updated_at":"2026-01-02T00:00:00Z",` +
-		`"url":"https://github.com/octo-org/example/issues/42"}],"total_count":1}`
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The labels, the assignees, and repository_url are what GitHub sends for the flat members, so only their
-	// details and the links join them.
-	var members map[string]any
-	if err := json.Unmarshal(got, &members); err != nil {
-		t.Fatal(err)
-	}
-	issue := members["issues"].([]any)[0].(map[string]any)
-	for _, added := range []string{"labels_details", "assignees_details", "links"} {
-		if _, ok := issue[added]; !ok {
-			t.Errorf("issue search lacks %s: %s", added, got)
+	for _, c := range []struct{ tool, key, want string }{
+		{issuesSearch.ID, "issues", `{"has_more":false,"incomplete_results":false,"issues":[{"assignees":["hubot"],` +
+			`"labels":["bug"],"number":42,"repository":"octo-org/example","state":"open","title":"T",` +
+			`"updated_at":"2026-01-02T00:00:00Z","url":"https://github.com/octo-org/example/issues/42"}],` +
+			`"total_count":1}`},
+		{pullRequestsSearch.ID, "pull_requests", `{"has_more":false,"incomplete_results":false,"pull_requests":[` +
+			`{"assignees":["hubot"],"labels":["bug"],"number":42,"repository":"octo-org/example","state":"open",` +
+			`"title":"T","updated_at":"2026-01-02T00:00:00Z",` +
+			`"url":"https://github.com/octo-org/example/issues/42"}],"total_count":1}`},
+	} {
+		_, core := cannedCore(t, old, false, discoveryConfig)
+		got, err := invoke(t, core, c.tool, "open", `{"terms":"x"}`, false)
+		if err != nil {
+			t.Fatal(err)
 		}
-		delete(issue, added)
-	}
-	if rest, _ := json.Marshal(members); string(rest) != want {
-		t.Errorf("issue search = %s, want %s", rest, want)
+		// The labels, the assignees, and repository_url are what GitHub sends for the flat members, so only
+		// their details and the links join them.
+		var members map[string]any
+		if err := json.Unmarshal(got, &members); err != nil {
+			t.Fatal(err)
+		}
+		entry := members[c.key].([]any)[0].(map[string]any)
+		for _, added := range []string{"labels_details", "assignees_details", "links"} {
+			if _, ok := entry[added]; !ok {
+				t.Errorf("%s lacks %s: %s", c.tool, added, got)
+			}
+			delete(entry, added)
+		}
+		if rest, _ := json.Marshal(members); string(rest) != c.want {
+			t.Errorf("%s = %s, want %s", c.tool, rest, c.want)
+		}
 	}
 }
 
@@ -522,11 +519,6 @@ func TestIssueSearchFiltersReachTheRequestAndTheCursor(t *testing.T) {
 	}
 	if _, err := invoke(t, core, issuesSearch.ID, "org", `{"terms":"crash","cursor":"`+page.NextCursor+`"}`, false); err != nil {
 		t.Errorf("plain continuation = %v", err)
-	}
-
-	// The pull request search takes none of the issue search's filters.
-	if _, err := invoke(t, core, pullRequestsSearch.ID, "org", `{"terms":"crash","sort":"comments"}`, false); err == nil {
-		t.Error("github.pull-requests.search accepted sort")
 	}
 
 	for _, arguments := range []string{`{"terms":"crash","sort":"stars"}`, `{"terms":"crash","search_type":"vector"}`,
