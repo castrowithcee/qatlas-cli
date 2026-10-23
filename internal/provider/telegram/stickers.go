@@ -52,12 +52,22 @@ var stickerReadRisk = capability.Risk{
 
 const stickerItemSchema = `{"type":"object","properties":{"emoji":{"type":"string"},"type":{"type":"string"},` +
 	`"is_animated":{"type":"boolean"},"is_video":{"type":"boolean"},"custom_emoji_id":{"type":"string"},` +
-	`"set_name":{"type":"string"},"file_unique_id":{"type":"string"},"file_ref":{"type":"string"}},` +
-	`"additionalProperties":false}`
+	`"set_name":{"type":"string"},"file_unique_id":{"type":"string"},"file_ref":{"type":"string"},` +
+	`"width":{"type":"integer"},"height":{"type":"integer"},"thumbnail":` + stickerThumbnailSchema + `,` +
+	`"premium_animation":{"type":"object","properties":{"file_ref":{"type":"string"},` +
+	`"file_unique_id":{"type":"string"},"file_size":{"type":"integer"}},"additionalProperties":false},` +
+	`"mask_position":{"type":"object","properties":{"point":{"type":"string"},"x_shift":{"type":"number"},` +
+	`"y_shift":{"type":"number"},"scale":{"type":"number"}},"additionalProperties":false},` +
+	`"needs_repainting":{"type":"boolean"},"file_size":{"type":"integer"}},"additionalProperties":false}`
+
+const stickerThumbnailSchema = `{"type":"object","properties":{"file_ref":{"type":"string"},` +
+	`"file_unique_id":{"type":"string"},"width":{"type":"integer"},"height":{"type":"integer"},` +
+	`"file_size":{"type":"integer"}},"additionalProperties":false}`
 
 var stickerFields = "Each sticker has emoji, type (regular, mask, or custom_emoji), is_animated, is_video, " +
-	"custom_emoji_id, set_name, file_unique_id, and, only when the connection binds the bot target, a file_ref " +
-	"for stickers.send"
+	"custom_emoji_id, set_name, file_unique_id, width, height, mask_position (point, x_shift, y_shift, scale), " +
+	"needs_repainting, file_size, and, only when the connection binds the bot target, a file_ref for " +
+	"stickers.send, a thumbnail, and a premium_animation, each with a file_ref, file_unique_id, and file_size"
 
 var stickersSend = capability.Descriptor{
 	ID:      Provider + ".stickers.send",
@@ -103,7 +113,7 @@ var stickersetsGet = capability.Descriptor{
 	ID:          Provider + ".sticker-sets.get",
 	Version:     1,
 	Title:       "Read a Telegram sticker set",
-	Description: "Read the name, title, type, and stickers of one public sticker set by its name",
+	Description: "Read the name, title, type, thumbnail, and stickers of one public sticker set by its name",
 	Tags:        []string{"telegram", "stickers", "read"},
 	Risk:        stickerReadRisk,
 	Provider:    Provider,
@@ -111,7 +121,7 @@ var stickersetsGet = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,` +
 		`"maxLength":64,"pattern":"` + stickerSetNamePattern + `"}},"required":["name"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"title":{"type":"string"},` +
-		`"sticker_type":{"type":"string"},"stickers":{"type":"array","items":` + stickerItemSchema +
+		`"sticker_type":{"type":"string"},"thumbnail":` + stickerThumbnailSchema + `,"stickers":{"type":"array","items":` + stickerItemSchema +
 		`}},"required":["name"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "name", Required: true,
 		Description: "Sticker set name, from 1 through 64 letters, digits, or underscores"}},
@@ -119,6 +129,8 @@ var stickersetsGet = capability.Descriptor{
 		{Name: "name", Description: "Name of the sticker set"},
 		{Name: "title", Description: "Title of the sticker set"},
 		{Name: "sticker_type", Description: "regular, mask, or custom_emoji"},
+		{Name: "thumbnail", Description: "Set thumbnail with width, height, file_unique_id, file_size, and, only when " +
+			"the connection binds the bot target, a file_ref"},
 		{Name: "stickers", Description: stickerFields},
 	},
 	Examples: []capability.Example{{Description: "Read a sticker set", Arguments: json.RawMessage(`{"name":"animals_by_bot"}`)}},
@@ -304,6 +316,30 @@ type tgSticker struct {
 	Emoji         string `json:"emoji"`
 	SetName       string `json:"set_name"`
 	CustomEmojiID string `json:"custom_emoji_id"`
+	Width         int64  `json:"width"`
+	Height        int64  `json:"height"`
+	// Thumbnail and PremiumAnimation reuse the media mapper's types, which read file_id apart.
+	Thumbnail        *photoSize `json:"thumbnail"`
+	PremiumAnimation *file      `json:"premium_animation"`
+	MaskPosition     *tgMask    `json:"mask_position"`
+	NeedsRepainting  *bool      `json:"needs_repainting"`
+	FileSize         int64      `json:"file_size"`
+}
+
+// tgMask keeps the floats of a MaskPosition as their original JSON text, so no conversion can change them.
+type tgMask struct {
+	Point  string       `json:"point"`
+	XShift *json.Number `json:"x_shift"`
+	YShift *json.Number `json:"y_shift"`
+	Scale  *json.Number `json:"scale"`
+}
+
+// maskOut keeps zero shifts: they are values, not absences.
+type maskOut struct {
+	Point  string       `json:"point,omitempty"`
+	XShift *json.Number `json:"x_shift,omitempty"`
+	YShift *json.Number `json:"y_shift,omitempty"`
+	Scale  *json.Number `json:"scale,omitempty"`
 }
 
 type stickerOut struct {
@@ -315,6 +351,14 @@ type stickerOut struct {
 	SetName       string `json:"set_name,omitempty"`
 	FileUniqueID  string `json:"file_unique_id,omitempty"`
 	FileRef       string `json:"file_ref,omitempty"`
+	Width         int64  `json:"width,omitempty"`
+	Height        int64  `json:"height,omitempty"`
+	// Thumbnail and PremiumAnimation exist only with a bot-bound file_ref, like the sticker file itself.
+	Thumbnail        *photoSize `json:"thumbnail,omitempty"`
+	PremiumAnimation *file      `json:"premium_animation,omitempty"`
+	MaskPosition     *maskOut   `json:"mask_position,omitempty"`
+	NeedsRepainting  *bool      `json:"needs_repainting,omitempty"`
+	FileSize         int64      `json:"file_size,omitempty"`
 }
 
 type stickersOut struct {
@@ -325,6 +369,7 @@ type stickerSetOut struct {
 	Name        string       `json:"name"`
 	Title       string       `json:"title,omitempty"`
 	StickerType string       `json:"sticker_type,omitempty"`
+	Thumbnail   *photoSize   `json:"thumbnail,omitempty"`
 	Stickers    []stickerOut `json:"stickers"`
 }
 
@@ -352,22 +397,44 @@ func validStickerSetName(name string) bool {
 	return true
 }
 
+// stickerRefs signs the files of catalog stickers; nil without the bot target leaves every file without a
+// reference.
+func (c *Client) stickerRefs() fileRefFunc {
+	if !c.set.bot {
+		return nil
+	}
+	return c.fileRefs(botTarget)
+}
+
 // stickersOf reduces provider stickers to the allow-list. A file_ref exists only when the connection binds
 // the bot target, because only such a connection accepts a bot-bound reference.
 func (c *Client) stickersOf(in []tgSticker) []stickerOut {
 	if len(in) > maxStickersOut {
 		in = in[:maxStickersOut]
 	}
+	refs := c.stickerRefs()
 	out := make([]stickerOut, 0, len(in))
 	for _, s := range in {
 		item := stickerOut{Emoji: capText(s.Emoji, maxNameRunes), Type: capText(s.Type, maxNameRunes),
 			IsAnimated: s.IsAnimated, IsVideo: s.IsVideo, SetName: capText(s.SetName, maxNameRunes),
-			FileUniqueID: capText(s.FileUniqueID, maxNameRunes)}
+			FileUniqueID: capText(s.FileUniqueID, maxNameRunes), Width: s.Width, Height: s.Height,
+			NeedsRepainting: s.NeedsRepainting, FileSize: s.FileSize}
 		if digitsOnly(s.CustomEmojiID) {
 			item.CustomEmojiID = s.CustomEmojiID
 		}
 		if c.set.bot {
 			item.FileRef = signRef(c.token, refFile, botTarget, s.FileID)
+		}
+		if refs != nil {
+			item.Thumbnail = refs.thumbnail(s.Thumbnail)
+			if s.PremiumAnimation != nil {
+				item.PremiumAnimation = &file{FileRef: refs.ref(s.PremiumAnimation.fileID),
+					FileUniqueID: cleanText(s.PremiumAnimation.FileUniqueID, maxNameRunes), FileSize: s.PremiumAnimation.FileSize}
+			}
+		}
+		if s.MaskPosition != nil {
+			item.MaskPosition = &maskOut{Point: cleanText(s.MaskPosition.Point, maxNameRunes),
+				XShift: s.MaskPosition.XShift, YShift: s.MaskPosition.YShift, Scale: s.MaskPosition.Scale}
 		}
 		out = append(out, item)
 	}
@@ -403,13 +470,18 @@ func invokeStickersetsGetWith(ctx context.Context, resolved *config.Resolved, se
 		Name        string      `json:"name"`
 		Title       string      `json:"title"`
 		StickerType string      `json:"sticker_type"`
+		Thumbnail   *photoSize  `json:"thumbnail"`
 		Stickers    []tgSticker `json:"stickers"`
 	}
 	if json.Unmarshal(answer, &set) != nil || set.Name == "" {
 		return nil, invalidResponse(op)
 	}
-	return stickerSetOut{Name: capText(set.Name, maxNameRunes), Title: capText(set.Title, maxNameRunes),
-		StickerType: capText(set.StickerType, maxNameRunes), Stickers: client.stickersOf(set.Stickers)}, nil
+	out := stickerSetOut{Name: capText(set.Name, maxNameRunes), Title: capText(set.Title, maxNameRunes),
+		StickerType: capText(set.StickerType, maxNameRunes), Stickers: client.stickersOf(set.Stickers)}
+	if refs := client.stickerRefs(); refs != nil {
+		out.Thumbnail = refs.thumbnail(set.Thumbnail)
+	}
+	return out, nil
 }
 
 func invokeStickersCustomEmoji(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
