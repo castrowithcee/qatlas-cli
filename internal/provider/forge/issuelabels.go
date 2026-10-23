@@ -30,17 +30,24 @@ func issueLabelsPath(repo target, number int64) string { return issuePath(repo, 
 // readIndex is the evidence read of the label tools: it reads the issue or pull request of the index and
 // requires the canonical repository of the answer to lie inside the targets.
 func readIndex(ctx context.Context, c *Client, allowed allowlist, op string, repo target, number int64) error {
+	_, err := readIndexObject(ctx, c, allowed, op, repo, number)
+	return err
+}
+
+// readIndexObject is readIndex that also returns the issue or pull request it proved.
+func readIndexObject(ctx context.Context, c *Client, allowed allowlist, op string, repo target,
+	number int64) (object, error) {
 	var issue object
 	if _, err := c.get(ctx, op, issuePath(repo, number), nil, &issue); err != nil {
-		return err
+		return nil, err
 	}
 	if got, ok := issue.integer("number"); !ok || got != number {
-		return provider.InvalidResponse(op, c.product.name+" returned an issue without its index")
+		return nil, provider.InvalidResponse(op, c.product.name+" returned an issue without its index")
 	}
 	if !admitted(allowed, issue) {
-		return outsideTargets("repository")
+		return nil, outsideTargets("repository")
 	}
-	return nil
+	return issue, nil
 }
 
 // proveLabels reads the labels of the repository and, for IDs it did not find there, those of its owner as an

@@ -26,8 +26,9 @@ the Forgejo instance of the connection.
 `base_url` is required and has no default: `https://HOST`, optionally with a port, without a path, user info, query,
 or fragment. An instance served below a path prefix is not supported. `qatlas config validate` refuses a missing or
 other address with `config-invalid` without quoting it. Qatlas appends `/api/v1` and follows no redirect, so the token
-never travels to another host. The only request outside `/api/v1` is the download of a release asset from
-`/attachments/UUID` on the same origin, described in [Releases](releases.md).
+never travels to another host. The only request outside `/api/v1` is the download of a release, issue, or comment
+attachment from `/attachments/UUID` on the same origin, described in [Releases](releases.md) and
+[Attachments](attachments.md).
 
 The credential provides `token`, an access token created in the account's applications settings. It is sent as
 `Authorization: token ...` and registered with the redactor. Nothing else authenticates a request: no basic
@@ -177,6 +178,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Instance-wide tools](instance.md): settings, signing keys, NodeInfo, and rendering
 - [Issues](issues.md): issues, due dates, timelines, issue templates, and the issue configuration
 - [Comments](comments.md): comments on issues and pull requests
+- [Attachments](attachments.md): the attachments of issues, pull requests, and comments
 - [Assignees](assignees.md): assignable users and the assignees of an issue
 - [Reactions](reactions.md): the reactions of issues, pull requests, and comments
 - [Labels](labels.md): repository and organization labels
