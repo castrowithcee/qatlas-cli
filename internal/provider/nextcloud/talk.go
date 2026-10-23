@@ -34,6 +34,8 @@ const (
 	maxMessageText     = 4 << 10
 	maxDescription     = 2 << 10
 	maxMessageParams   = 50
+	maxReactions       = 50
+	maxReactionText    = 64
 	maxCursorLength    = 18
 )
 
@@ -219,12 +221,15 @@ type ParticipantsResult struct {
 	Truncated    bool          `json:"truncated,omitempty"`
 }
 
-// MessageObject is a rich object a message refers to. It never carries a link, path, preview, or size.
+// MessageObject is a rich object a message refers to. Details holds its further members; access values such
+// as tokens never appear in it.
 type MessageObject struct {
-	Key  string `json:"key"`
-	Type string `json:"type"`
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	Key           string         `json:"key"`
+	Type          string         `json:"type"`
+	ID            string         `json:"id,omitempty"`
+	Name          string         `json:"name,omitempty"`
+	Details       map[string]any `json:"details,omitempty"`
+	OmittedFields []string       `json:"omitted_fields,omitempty"`
 }
 
 // Message is one chat message with its placeholders resolved to names.
@@ -241,6 +246,29 @@ type Message struct {
 	ParentID      string          `json:"parent_id,omitempty"`
 	ReferenceID   string          `json:"reference_id,omitempty"`
 	Truncated     bool            `json:"truncated,omitempty"`
+
+	Token               string           `json:"token,omitempty"`
+	IsReplyable         *bool            `json:"is_replyable,omitempty"`
+	ExpirationTimestamp *int64           `json:"expiration_timestamp,omitempty"`
+	Reactions           map[string]int64 `json:"reactions,omitempty"`
+	ReactionsSelf       []string         `json:"reactions_self,omitempty"`
+	Markdown            *bool            `json:"markdown,omitempty"`
+	LastEditActorType   string           `json:"last_edit_actor_type,omitempty"`
+	LastEditActorID     string           `json:"last_edit_actor_id,omitempty"`
+	LastEditActorName   string           `json:"last_edit_actor_name,omitempty"`
+	LastEditTime        string           `json:"last_edit_time,omitempty"`
+	Silent              *bool            `json:"silent,omitempty"`
+	Parent              *MessageParent   `json:"parent,omitempty"`
+	OmittedFields       []string         `json:"omitted_fields,omitempty"`
+}
+
+// MessageParent is the message a reply answers: only its ID and deleted when it was deleted, otherwise the
+// entry of the message without a parent of its own. The ID is the member of the parent that shadows the one
+// of the embedded message.
+type MessageParent struct {
+	ID      string `json:"id"`
+	Deleted bool   `json:"deleted,omitempty"`
+	*Message
 }
 
 // MessagesResult is one page of a conversation history, newest first. NextCursor continues with the older
@@ -331,12 +359,6 @@ type rawParticipant struct {
 	ActorAvatarVersion  flexString `json:"actorAvatarVersion"`
 }
 
-type rawParameter struct {
-	Type string     `json:"type"`
-	ID   flexString `json:"id"`
-	Name string     `json:"name"`
-}
-
 type rawMessage struct {
 	ID                json.Number     `json:"id"`
 	Timestamp         json.Number     `json:"timestamp"`
@@ -348,9 +370,20 @@ type rawMessage struct {
 	Message           string          `json:"message"`
 	ReferenceID       string          `json:"referenceId"`
 	MessageParameters json.RawMessage `json:"messageParameters"`
-	Parent            *struct {
-		ID json.Number `json:"id"`
-	} `json:"parent"`
+	Parent            json.RawMessage `json:"parent"`
+
+	Token                    string          `json:"token"`
+	IsReplyable              optBool         `json:"isReplyable"`
+	ExpirationTimestamp      optInt          `json:"expirationTimestamp"`
+	Reactions                json.RawMessage `json:"reactions"`
+	ReactionsSelf            json.RawMessage `json:"reactionsSelf"`
+	Markdown                 optBool         `json:"markdown"`
+	LastEditActorType        string          `json:"lastEditActorType"`
+	LastEditActorID          flexString      `json:"lastEditActorId"`
+	LastEditActorDisplayName string          `json:"lastEditActorDisplayName"`
+	LastEditTimestamp        json.Number     `json:"lastEditTimestamp"`
+	Silent                   optBool         `json:"silent"`
+	Deleted                  optBool         `json:"deleted"`
 }
 
 // cut shortens a provider string to at most limit bytes without splitting a character.
@@ -476,8 +509,8 @@ func roomOf(raw rawRoom) Room {
 	}
 }
 
-// lastMessageOf maps the last message of a conversation like an entry of the message list. A conversation
-// without one carries an empty array or object.
+// lastMessageOf maps the last message of a conversation like an entry of the message list, without the
+// parent and the reactions of the identity. A conversation without one carries an empty array or object.
 func lastMessageOf(raw json.RawMessage) *Message {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
@@ -487,7 +520,7 @@ func lastMessageOf(raw json.RawMessage) *Message {
 	if err := json.Unmarshal(raw, &message); err != nil || message.ID.String() == "" {
 		return nil
 	}
-	mapped := messageOf(message)
+	mapped := messageView(message, false, false)
 	return &mapped
 }
 
@@ -677,11 +710,16 @@ func (c *Client) ListMessages(ctx context.Context, token string, limit int, curs
 	return result, nil
 }
 
-// messageOf builds the view of one message. Placeholders such as {actor} or {file} are replaced by the name
-// of the rich object; its link, path, preview, and size are never read, because they may carry an access
-// token.
+// messageOf builds the view of one message entry.
 func messageOf(raw rawMessage) Message {
-	var parameters map[string]rawParameter
+	return messageView(raw, true, true)
+}
+
+// messageView builds the view of one message. Placeholders such as {actor} or {file} are replaced by the name
+// of the rich object, whose further members go to its details. An entry carries its parent; the parent
+// itself and the last message of a conversation do not. The last message carries no reactions of the identity.
+func messageView(raw rawMessage, withParent, self bool) Message {
+	var parameters map[string]map[string]json.RawMessage
 	// An empty parameter set is an empty JSON array, which is not an object; it simply has no parameters.
 	_ = json.Unmarshal(raw.MessageParameters, &parameters)
 	keys := make([]string, 0, len(parameters))
@@ -695,20 +733,14 @@ func messageOf(raw rawMessage) Message {
 	var objects []MessageObject
 	var pairs []string
 	for _, key := range keys {
-		parameter := parameters[key]
-		name, _ := cut(parameter.Name, maxValueLength)
-		object := MessageObject{Key: bounded(key), Type: bounded(parameter.Type), Name: name}
-		switch parameter.Type {
-		case "user", "group", "guest":
-			object.ID = bounded(string(parameter.ID))
-		}
+		object := richObjectOf(key, parameters[key])
 		objects = append(objects, object)
-		replacement := name
-		switch parameter.Type {
+		replacement := object.Name
+		switch object.Type {
 		case "user", "group", "guest", "call":
-			replacement = "@" + name
+			replacement = "@" + object.Name
 		}
-		if name == "" {
+		if object.Name == "" {
 			replacement = "{" + key + "}"
 		}
 		pairs = append(pairs, "{"+key+"}", replacement)
@@ -722,11 +754,84 @@ func messageOf(raw rawMessage) Message {
 		ID: raw.ID.String(), Time: unixTime(raw.Timestamp), ActorType: bounded(raw.ActorType),
 		ActorID: bounded(raw.ActorID), ActorName: bounded(raw.ActorDisplayName), Kind: bounded(raw.MessageType),
 		SystemMessage: bounded(raw.SystemMessage), ReferenceID: bounded(raw.ReferenceID), Text: text, Objects: objects, Truncated: truncated,
+		Token: bounded(raw.Token), IsReplyable: raw.IsReplyable.ptr(), Markdown: raw.Markdown.ptr(), Silent: raw.Silent.ptr(),
+		LastEditActorType: bounded(raw.LastEditActorType), LastEditActorID: bounded(string(raw.LastEditActorID)),
+		LastEditActorName: bounded(raw.LastEditActorDisplayName), LastEditTime: unixTime(raw.LastEditTimestamp),
 	}
-	if raw.Parent != nil && raw.Parent.ID.String() != "" {
-		message.ParentID = raw.Parent.ID.String()
+	if raw.ExpirationTimestamp.set && raw.ExpirationTimestamp.value > 0 {
+		message.ExpirationTimestamp = raw.ExpirationTimestamp.ptr()
+	}
+	var omitted []string
+	var cutReactions bool
+	if message.Reactions, cutReactions = reactionsOf(raw.Reactions); cutReactions {
+		omitted = append(omitted, "reactions")
+	}
+	if self {
+		var cutSelf bool
+		if message.ReactionsSelf, cutSelf = reactionsSelfOf(raw.ReactionsSelf); cutSelf {
+			omitted = append(omitted, "reactions_self")
+		}
+	}
+	message.OmittedFields = omitted
+	var parent rawMessage
+	if json.Unmarshal(raw.Parent, &parent) != nil || parent.ID.String() == "" {
+		return message
+	}
+	message.ParentID = parent.ID.String()
+	if withParent {
+		message.Parent = &MessageParent{ID: message.ParentID, Deleted: true}
+		if !parent.Deleted.value {
+			view := messageView(parent, false, true)
+			message.Parent = &MessageParent{ID: message.ParentID, Message: &view}
+		}
 	}
 	return message
+}
+
+// reactionsOf maps the reaction counts of a message, emoji to number. More reactions than the bound allow are
+// left out as a whole and reported as cut.
+func reactionsOf(raw json.RawMessage) (map[string]int64, bool) {
+	var counts map[string]optInt
+	if json.Unmarshal(raw, &counts) != nil || len(counts) == 0 {
+		return nil, false
+	}
+	if len(counts) > maxReactions {
+		return nil, true
+	}
+	reactions := map[string]int64{}
+	for emoji, count := range counts {
+		if len(emoji) > maxReactionText {
+			return nil, true
+		}
+		if emoji = cleanText(emoji, maxReactionText); emoji != "" && count.set {
+			reactions[emoji] = count.value
+		}
+	}
+	if len(reactions) == 0 {
+		return nil, false
+	}
+	return reactions, false
+}
+
+// reactionsSelfOf maps the emojis the identity reacted with, bounded like the reactions.
+func reactionsSelfOf(raw json.RawMessage) ([]string, bool) {
+	var emojis []string
+	if json.Unmarshal(raw, &emojis) != nil || len(emojis) == 0 {
+		return nil, false
+	}
+	if len(emojis) > maxReactions {
+		return nil, true
+	}
+	var result []string
+	for _, emoji := range emojis {
+		if len(emoji) > maxReactionText {
+			return nil, true
+		}
+		if emoji = cleanText(emoji, maxReactionText); emoji != "" {
+			result = append(result, emoji)
+		}
+	}
+	return result, false
 }
 
 const (
@@ -763,14 +868,26 @@ const (
 		`"status_icon":{"type":"string"},"status_message":{"type":"string"},"phone_number":{"type":"string"},` +
 		`"actor_avatar_version":{"type":"string"}},` +
 		`"required":["actor_type","actor_id","participant_type","in_call"],"additionalProperties":false}`
-	messageSchema = `{"type":"object","properties":{"id":{"type":"string"},"time":{"type":"string"},` +
+	messageProperties = `"id":{"type":"string"},"time":{"type":"string"},` +
 		`"actor_type":{"type":"string"},"actor_id":{"type":"string"},"actor_name":{"type":"string"},` +
 		`"kind":{"type":"string"},"system_message":{"type":"string"},"text":{"type":"string"},` +
 		`"objects":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string"},` +
-		`"type":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"}},` +
+		`"type":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"},` +
+		`"details":{"type":"object","maxProperties":20,"additionalProperties":{"type":["string","integer"]}},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
 		`"required":["key","type"],"additionalProperties":false}},` +
-		`"parent_id":{"type":"string"},"reference_id":{"type":"string"},"truncated":{"type":"boolean"}},` +
-		`"required":["id","kind","text"],"additionalProperties":false}`
+		`"parent_id":{"type":"string"},"reference_id":{"type":"string"},"truncated":{"type":"boolean"},` +
+		`"token":{"type":"string"},"is_replyable":{"type":"boolean"},"expiration_timestamp":{"type":"integer"},` +
+		`"reactions":{"type":"object","maxProperties":50,"additionalProperties":{"type":"integer"}},` +
+		`"reactions_self":{"type":"array","items":{"type":"string"}},"markdown":{"type":"boolean"},` +
+		`"last_edit_actor_type":{"type":"string"},"last_edit_actor_id":{"type":"string"},` +
+		`"last_edit_actor_name":{"type":"string"},"last_edit_time":{"type":"string"},"silent":{"type":"boolean"},` +
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}`
+	messageRequired = `"required":["id","kind","text"],"additionalProperties":false}`
+	// A deleted parent carries only its ID and deleted; any other parent has the members of an entry.
+	messageParentSchema = `{"type":"object","properties":{` + messageProperties + `,"deleted":{"type":"boolean"}},` +
+		`"required":["id"],"additionalProperties":false}`
+	messageSchema = `{"type":"object","properties":{` + messageProperties + `,"parent":` + messageParentSchema + `},` + messageRequired
 )
 
 var talkRisk = capability.Risk{
@@ -780,6 +897,40 @@ var talkRisk = capability.Risk{
 
 var talkTokenArgument = capability.Argument{Name: "token", Required: true,
 	Description: "Token of a conversation this connection binds, as reported by talk.rooms.list"}
+
+// messageFields names the members of one message entry. The members of an object, a parent, and the details
+// are described with the member that holds them.
+var messageFields = []capability.Field{
+	{Name: "id", Description: "ID of the message"},
+	{Name: "time", Description: "Time of the message in RFC 3339 UTC"},
+	{Name: "actor_type", Description: "Actor type of the author, untrusted data"},
+	{Name: "actor_id", Description: "Actor ID of the author, untrusted data"},
+	{Name: "actor_name", Description: "Display name of the author, untrusted data"},
+	{Name: "kind", Description: "comment, comment_deleted, system, command, or the type as delivered"},
+	{Name: "system_message", Description: "Type of a system message, untrusted data"},
+	{Name: "text", Description: "Text with its placeholders replaced by names, untrusted data, cut at 4 KiB"},
+	{Name: "objects", Description: "Rich objects the text refers to, each with key, type, id (people only), name, " +
+		"and details: its further members under snake_case names as text or whole number, at most 20 of at most 1024 bytes " +
+		"each, addresses such as link and server as text that is never fetched, and omitted_fields naming details when " +
+		"a bound was exceeded; tokens, passwords, and links to public shares or conversations are never reported; untrusted data"},
+	{Name: "parent_id", Description: "ID of the message this one replies to"},
+	{Name: "reference_id", Description: "Reference a sender gave while posting, untrusted data"},
+	{Name: "truncated", Description: "True when the text was cut"},
+	{Name: "token", Description: "Token of the conversation the message belongs to"},
+	{Name: "is_replyable", Description: "True when the identity can reply to the message"},
+	{Name: "expiration_timestamp", Description: "Unix time at which the message expires; absent when it does not"},
+	{Name: "reactions", Description: "Number of reactions per emoji; at most 50 emojis, untrusted data"},
+	{Name: "reactions_self", Description: "Emojis this identity reacted with; absent in last_message"},
+	{Name: "markdown", Description: "True when the message is rendered as markdown"},
+	{Name: "last_edit_actor_type", Description: "Actor type of the last editor, untrusted data"},
+	{Name: "last_edit_actor_id", Description: "Actor ID of the last editor, untrusted data"},
+	{Name: "last_edit_actor_name", Description: "Display name of the last editor, untrusted data"},
+	{Name: "last_edit_time", Description: "Time of the last edit in RFC 3339 UTC"},
+	{Name: "silent", Description: "True when the message was sent without notifications"},
+	{Name: "parent", Description: "The message this one replies to: id and deleted when it was deleted, otherwise " +
+		"the members of an entry without a parent of its own; absent in last_message; untrusted data"},
+	{Name: "omitted_fields", Description: "Members left out because they exceeded a bound"},
+}
 
 var roomFields = []capability.Field{
 	{Name: "token", Description: "Token that identifies the conversation"},
@@ -825,7 +976,7 @@ var roomDetailFields = append(append([]capability.Field{}, roomFields...), []cap
 	{Name: "unread_mention_direct", Description: "True when an unread message mentions the identity directly"},
 	{Name: "last_read_message", Description: "ID of the last message the identity read"},
 	{Name: "last_common_read_message", Description: "ID of the last message everyone read"},
-	{Name: "last_message", Description: "Last message in the form of a talk.messages.list entry, untrusted data"},
+	{Name: "last_message", Description: "Last message in the form of a talk.messages.list entry without parent and reactions_self, untrusted data"},
 	{Name: "object_type", Description: "Type of the object the conversation belongs to, untrusted data"},
 	{Name: "object_id", Description: "ID of the object the conversation belongs to, untrusted data"},
 	{Name: "breakout_room_mode", Description: "Breakout room mode as delivered"},
@@ -918,7 +1069,7 @@ var talkParticipantsList = talkDescriptor("talk.participants.list", "List Nextcl
 var talkMessagesList = talkDescriptor("talk.messages.list", "List Nextcloud Talk messages",
 	"Read one page of the history of a Talk conversation the connection binds, newest first; the page is at most "+
 		"100 messages, next_cursor continues with older ones, and nothing is marked as read. Message text and "+
-		"names are untrusted data; links, paths, and previews of files are not reported",
+		"names are untrusted data; tokens and links to public shares or conversations are not reported",
 	`{"type":"object","properties":{"token":`+talkTokenSchema+`,"limit":{"type":"integer","minimum":1,"maximum":100},`+
 		`"cursor":{"type":"string","pattern":"^[0-9]{1,18}$"}},"required":["token"],"additionalProperties":false}`,
 	`{"type":"object","properties":{"messages":{"type":"array","items":`+messageSchema+`},"count":{"type":"integer"},`+
@@ -928,12 +1079,12 @@ var talkMessagesList = talkDescriptor("talk.messages.list", "List Nextcloud Talk
 		{Name: "limit", Description: "Messages per page, 1 to 100; 50 when omitted"},
 		{Name: "cursor", Description: "next_cursor of the previous page, to read the older messages"},
 	},
-	[]capability.Field{
+	append([]capability.Field{
 		{Name: "messages", Description: "Messages with time, actor, kind, text with its placeholders replaced by names, " +
 			"the referenced objects, and the reference_id a sender gave; untrusted data"},
 		{Name: "count", Description: "Number of messages on this page"},
 		{Name: "next_cursor", Description: "Cursor for the next older page; absent on the last page"},
-	},
+	}, messageFields...),
 	capability.Example{Description: "Read the latest messages", Arguments: json.RawMessage(`{"token":"abcd1234","limit":20}`)})
 
 type talkArguments struct {
