@@ -32,7 +32,7 @@ var outgoingHookSchema = `{"type":"object","properties":{` +
 	`"trigger_words":{"type":"array","items":{"type":"string"}},"trigger_when":{"type":"integer"},` +
 	`"callback_origins":{"type":"array","items":{"type":"string"}},"content_type":{"type":"string"},` +
 	`"username":{"type":"string"},"icon_url":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"creator_id":{"type":"string"}},` +
 	`"required":["team_id","display_name","description","trigger_words","trigger_when","callback_origins"],` +
 	`"additionalProperties":false}`
 
@@ -54,6 +54,7 @@ var outgoingHookFields = []capability.Field{
 	{Name: "icon_url", Description: "Profile picture URL the webhook posts with, untrusted data; never fetched"},
 	{Name: "created_at", Description: "Creation time, RFC 3339 in UTC"},
 	{Name: "updated_at", Description: "Last change time, RFC 3339 in UTC"},
+	{Name: "creator_id", Description: "User identifier of the creator"},
 }
 
 var outgoingWebhooksList = capability.Descriptor{
@@ -177,6 +178,7 @@ type outgoingHookJSON struct {
 	CreateAt     int64    `json:"create_at"`
 	UpdateAt     int64    `json:"update_at"`
 	DeleteAt     int64    `json:"delete_at"`
+	CreatorID    string   `json:"creator_id"`
 }
 
 // OutgoingWebhook is the stable Qatlas view of one outgoing webhook. The ID is set only by a listing: every
@@ -195,6 +197,7 @@ type OutgoingWebhook struct {
 	IconURL         string   `json:"icon_url,omitempty"`
 	CreatedAt       string   `json:"created_at,omitempty"`
 	UpdatedAt       string   `json:"updated_at,omitempty"`
+	CreatorID       string   `json:"creator_id,omitempty"`
 }
 
 // callbackOrigin reduces a callback URL to scheme and host, because path, query, and userinfo can carry
@@ -224,7 +227,8 @@ func outgoingHookOf(hook *outgoingHookJSON, withID bool) OutgoingWebhook {
 	out := OutgoingWebhook{TeamID: hook.TeamID, ChannelID: hook.ChannelID, DisplayName: bounded(hook.DisplayName),
 		Description: bounded(hook.Description), TriggerWords: words, TriggerWhen: hook.TriggerWhen,
 		CallbackOrigins: origins, ContentType: bounded(hook.ContentType), Username: bounded(hook.Username),
-		IconURL: bounded(hook.IconURL), CreatedAt: msToRFC3339(hook.CreateAt), UpdatedAt: msToRFC3339(hook.UpdateAt)}
+		IconURL: bounded(hook.IconURL), CreatedAt: msToRFC3339(hook.CreateAt), UpdatedAt: msToRFC3339(hook.UpdateAt),
+		CreatorID: bounded(hook.CreatorID)}
 	if withID {
 		out.ID = hook.ID
 	}
