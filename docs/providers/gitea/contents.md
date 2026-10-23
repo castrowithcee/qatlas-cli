@@ -1,23 +1,24 @@
 ---
 description: >
-  Describes the content-reading tools of the Gitea and Forgejo providers: files and directories, raw content,
-  repository archives, and editor configuration, the repository binding, path rules, bounds, the local file
-  downloads, and the differences between the products.
+  Describes the content tools of the Gitea and Forgejo providers: reading files and directories, raw content,
+  repository archives, and editor configuration, and writing files as commits, the repository binding, path rules,
+  bounds, local files, the commit rules, and the differences between the products.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Contents
 
 The content tools read the files of a repository at a branch, tag, or commit, download a raw file or a repository
-archive to a local file, and read the editor configuration of a path. [Forgejo](../forgejo.md) names the
+archive to a local file, read the editor configuration of a path, and write files as commits. [Forgejo](../forgejo.md) names the
 differences.
 
 ## Scopes
 
-All tools need `read:repository` (presumably; not checked against a live instance).
+The read tools need `read:repository`, the write tools `write:repository` (presumably; not checked against a live
+instance).
 
 ## Target binding
 
@@ -48,6 +49,36 @@ backslashes, or control characters. Each segment is sent as its own escaped path
   empty `config`.
 - Names, paths, contents, and settings are untrusted data.
 
+## Writing
+
+Each write tool sends exactly one commit request and never repeats it: after an open outcome (timeout, reset, 5xx)
+it reports that the change may have been applied, and the state must be read before trying again. A refusal with
+400, 409, or 422 is reported without the instance's text, as a missing or stale `sha`, an existing or missing path,
+a protected or moved branch, or a patch that does not apply.
+
+- `contents.create` and `contents.update` write one file. `contents.update` needs the `sha` of the version being
+  replaced, as `contents.get` reports it; Gitea would create the file without it, so Qatlas requires it. A repeated
+  update carries a stale `sha` and is refused, which makes it idempotent in effect.
+- `contents.change-files` writes up to 50 files as one commit, each path once. Every operation is `create`,
+  `update` (needs `sha`), and on Gitea also `upload` (create or replace) and `rename` (needs `from_path`, content
+  optional). A batch never deletes: `delete` is not an operation, and `contents.delete` removes one file per call,
+  needs its `sha`, is offered only to a connection whose `tools` list names it, and is in no profile.
+- `contents.apply-diff` applies a unified diff as one commit. Forgejo documents `sha` as required for this route;
+  Qatlas does not send it.
+- Content is text (`content`, up to 256 KiB) or a local file (`local_path`, from a directory the connection
+  releases for reading), exactly one of them per file, and 8 MiB together per call. Both are read and bounded
+  before the token is resolved, and a local path is never quoted in an error. Because of that, `contents.create`,
+  `contents.update`, and `contents.change-files` are offered only to a connection that releases a directory for
+  reading, also for text.
+- `branch` is the base and target, `new_branch` creates a branch from it first. Both follow the
+  [branch names](branches.md#branch-names). `force_push` (Gitea) and `force_overwrite_new_branch` (Forgejo) are not
+  offered.
+- `author`, `committer` (name and email), and `dates` are sent only when named; otherwise the commit carries the
+  identity of the token. The instance takes one for the other when only one is named. `signoff` adds the
+  committer's sign-off line.
+- The answer carries the written files, the commit, and its signature verification, without the content and
+  without the raw signature.
+
 ## Tools
 
 | Tool | Effect | Provider |
@@ -59,3 +90,8 @@ backslashes, or control characters. Each segment is sent as its own escaped path
 | `contents.get-raw` | read | Gitea, Forgejo |
 | `archives.get` | read | Gitea, Forgejo |
 | `editorconfig.get` | read | Gitea, Forgejo |
+| `contents.create` | create | Gitea, Forgejo |
+| `contents.update` | update | Gitea, Forgejo |
+| `contents.change-files` | update | Gitea, Forgejo |
+| `contents.apply-diff` | update | Gitea, Forgejo |
+| `contents.delete` | delete, listed only | Gitea, Forgejo |

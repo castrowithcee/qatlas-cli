@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Gitea
@@ -198,7 +198,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Actions runs](actions.md): workflow runs, jobs, tasks, logs, and operating runs
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
-- [Contents](contents.md): files, raw content, archives, and editor configuration of a repository
+- [Contents](contents.md): files, raw content, archives, editor configuration, and writing files as commits
 
 ## Not offered
 
