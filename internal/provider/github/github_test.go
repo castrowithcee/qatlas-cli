@@ -1838,5 +1838,9 @@ func ownerFiltersStripped(descriptor capability.Descriptor) string {
 	if descriptor.ID == secretScanningAlertsList.ID {
 		schema = strings.NewReplacer("owner_email_hash", "", "owner-email", "", "owner-id", "", "owner-name", "").Replace(schema)
 	}
+	if descriptor.ID == projectsList.ID {
+		// The project list takes a bounded search text, which travels as a GraphQL variable.
+		schema = strings.ReplaceAll(schema, `"query":`, "")
+	}
 	return schema
 }

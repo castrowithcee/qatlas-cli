@@ -259,13 +259,19 @@ func (info *projectInfo) settableNames() []string {
 	return names
 }
 
-// fieldNodeSelection is the whole schema of one field: its name and type, the identifier, color, and
-// description of every option, and the settings and every iteration of an iteration field.
-const fieldNodeSelection = `... on ProjectV2FieldCommon{id name dataType} ` +
-	`... on ProjectV2SingleSelectField{options{id name color description}} ` +
-	`... on ProjectV2MultiSelectField{multiSelectOptions{id name color description}} ` +
+// fieldNodeSelection is the whole schema of one field: its name, type, identifiers, and times, the identifier,
+// color, and description of every option, and the settings and every iteration of an iteration field. The
+// issue field a project field mirrors is read with its scalar members.
+const fieldNodeSelection = `... on ProjectV2FieldCommon{id databaseId name dataType createdAt updatedAt isIssueField} ` +
+	`... on ProjectV2Field{` + fieldIssueRef + `} ` +
+	`... on ProjectV2SingleSelectField{options{id name color description} ` + fieldIssueRef + `} ` +
+	`... on ProjectV2MultiSelectField{multiSelectOptions{id name color description} ` + fieldIssueRef + `} ` +
 	`... on ProjectV2IterationField{configuration{duration startDay ` +
 	`iterations{id title startDate duration} completedIterations{id title startDate duration}}}`
+
+// fieldIssueRef is the organization issue field a project field mirrors.
+const fieldIssueRef = `issueField{... on IssueFieldCommon{name description dataType visibility createdAt ` +
+	`fullDatabaseId} ... on Node{id}}`
 
 // planningFieldSelection is the field model a change needs: besides the names, the identifiers of every
 // option and iteration. GitHub holds at most 50 fields per project, so one page reads them all.

@@ -172,9 +172,15 @@ func TestProjectStatusListPagesNewestFirst(t *testing.T) {
 	if err != nil || json.Unmarshal(result, &first) != nil {
 		t.Fatalf("result = %s, %v", result, err)
 	}
-	if !strings.Contains(string(result), `"project":"orgs/octo-org/projects/7"`) || len(first.StatusUpdates) != 1 ||
+	if len(first.StatusUpdates) != 1 {
+		t.Fatalf("first batch = %s", result)
+	}
+	detail := first.StatusUpdates[0].AuthorDetail
+	first.StatusUpdates[0].AuthorDetail = nil
+	if !strings.Contains(string(result), `"project":"orgs/octo-org/projects/7"`) ||
 		fmt.Sprint(first.StatusUpdates[0]) != "{SU_1 on_track 2026-09-01 2026-12-18 Going well octocat "+
-			"2026-09-20T00:00:00Z 2026-09-21T00:00:00Z}" || !first.HasMore || first.NextCursor == "" {
+			"2026-09-20T00:00:00Z 2026-09-21T00:00:00Z <nil> <nil>}" || detail == nil || *detail.Login != "octocat" ||
+		!first.HasMore || first.NextCursor == "" {
 		t.Fatalf("first batch = %s", result)
 	}
 	queries, _, _ := split(f.recorded())
@@ -187,7 +193,7 @@ func TestProjectStatusListPagesNewestFirst(t *testing.T) {
 	result, err = invoke(t, core, statusList.ID, "status", `{"cursor":"`+first.NextCursor+`"}`, false)
 	var second StatusUpdateList
 	if err != nil || json.Unmarshal(result, &second) != nil || len(second.StatusUpdates) != 1 || second.HasMore ||
-		fmt.Sprint(second.StatusUpdates[0]) != "{SU_2      2026-09-01T00:00:00Z 2026-09-01T00:00:00Z}" {
+		fmt.Sprint(second.StatusUpdates[0]) != "{SU_2      2026-09-01T00:00:00Z 2026-09-01T00:00:00Z <nil> <nil>}" {
 		t.Fatalf("second batch = %s, %v", result, err)
 	}
 	if queries, _, _ := split(f.recorded()); queries[1].variables["after"] != "su-0" {
@@ -214,7 +220,7 @@ func TestProjectStatusChangesSendOneMutationEach(t *testing.T) {
 				"targetDate:$target,body:$body})", "$status:ProjectV2StatusUpdateStatus", "$start:Date"}, nil,
 			map[string]string{"project": projectID, "status": "AT_RISK", "start": "2026-09-01",
 				"target": "2026-12-18", "body": "Slipping"},
-			`{"project":"orgs/octo-org/projects/7","status_update":{"author":"octocat","body":"Slipping",` +
+			`{"project":"orgs/octo-org/projects/7","status_update":{"author":"octocat","author_detail":{"login":"octocat"},"body":"Slipping",` +
 				`"created_at":"2026-09-25T00:00:00Z","id":"SU_new","start_date":"2026-09-01","status":"at_risk",` +
 				`"target_date":"2026-12-18","updated_at":"2026-09-25T00:00:00Z"}}`},
 		{"post a body alone", statusCreate.ID, `{"body":"Kickoff"}`,
