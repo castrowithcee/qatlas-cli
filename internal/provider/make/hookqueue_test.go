@@ -197,7 +197,7 @@ func TestHookQueueRefusesForeignHookBeforeAnyQueueRequest(t *testing.T) {
 	}
 }
 
-func TestHookQueueOutputsNeverRevealTriggerSecretsOrListPayloads(t *testing.T) {
+func TestHookQueueOutputsNeverRevealTriggerSecrets(t *testing.T) {
 	q := newQueueEnv(t, ownTeam, ownScenario, okQueue)
 	for _, c := range []struct{ op, args string }{
 		{hookQueueList.ID, `{"hook_id":77}`}, {hookQueueGet.ID, `{"hook_id":77,"incoming_id":"a1"}`},
@@ -211,9 +211,6 @@ func TestHookQueueOutputsNeverRevealTriggerSecretsOrListPayloads(t *testing.T) {
 			if strings.Contains(result, s) {
 				t.Fatalf("%s leaked %q: %s", c.op, s, result)
 			}
-		}
-		if c.op == hookQueueList.ID && (strings.Contains(result, canaryHeader) || strings.Contains(result, "data")) {
-			t.Fatalf("list returned a payload: %s", result)
 		}
 	}
 }
@@ -301,5 +298,67 @@ func TestHookQueueDeleteIsNeverRetriedAndForbiddenNamesScope(t *testing.T) {
 			!strings.Contains(perr.Message, "hooks:read") {
 			t.Fatalf("%s err = %v, want the hooks:read hint", args.op, err)
 		}
+	}
+}
+
+func TestHookQueueListReturnsMaskedPayloads(t *testing.T) {
+	q := newQueueEnv(t, ownTeam, ownScenario, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"incomings":[{"id":"a1","scope":"s","size":12,"created":"t","data":{"name":"x",`+
+			`"url":"`+canaryHookURL+`","id":"`+canaryUDID+`","headers":{"Host":"hook.example.com",`+
+			`"Authorization":"Bearer tok","X":"ok"}}},{"id":"a2"}]}`), nil
+	})
+	result, err := q.invoke(hookQueueList.ID, "open", `{"hook_id":77,"sort_dir":"asc"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{canaryUDID, canaryHookURL, "hook.example.com", "Bearer tok"} {
+		if strings.Contains(result, bad) {
+			t.Fatalf("list leaked %q: %s", bad, result)
+		}
+	}
+	for _, want := range []string{`"X":"ok"`, `"Authorization":"[redacted]"`, `"Host":"[redacted]"`, `"name":"x"`} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("list lacks %s: %s", want, result)
+		}
+	}
+	if strings.Contains(result, "truncated") {
+		t.Fatalf("a payload within the caps was marked: %s", result)
+	}
+	if got := q.queueCalls()[0].query.Get("pg[sortDir]"); got != "asc" {
+		t.Fatalf("sort_dir = %q", got)
+	}
+	assertOutputDeclared(t, hookQueueList.ID, []byte(result))
+}
+
+func TestHookQueueListOmitsPayloadOverTheLimitAndMarksIt(t *testing.T) {
+	long := strings.Repeat("x", maxPayloadString+1)
+	q := newQueueEnv(t, ownTeam, ownScenario, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"incomings":[{"id":"a1","size":9,"data":{"a":"`+long+`"}},`+
+			`{"id":"a2","data":{"a":"small"}}]}`), nil
+	})
+	result, err := q.invoke(hookQueueList.ID, "open", `{"hook_id":77}`)
+	if err != nil || strings.Contains(result, "xxxx") || !strings.Contains(result, `"truncated":true`) ||
+		!strings.Contains(result, `"data":{"a":"small"}`) || strings.Count(result, `"truncated"`) != 1 {
+		t.Fatalf("list = %s, %v", result, err)
+	}
+	assertOutputDeclared(t, hookQueueList.ID, []byte(result))
+}
+
+func TestHookQueueListBoundsThePageAndRefusesBadSortDir(t *testing.T) {
+	item := `{"id":"a%d","data":{"a":"` + strings.Repeat("y", maxPayloadString) + `"}}`
+	var items []string
+	for i := 0; i < 2000; i++ {
+		items = append(items, strings.Replace(item, "%d", strconv.Itoa(i), 1))
+	}
+	q := newQueueEnv(t, ownTeam, ownScenario, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"incomings":[`+strings.Join(items, ",")+`]}`), nil
+	})
+	result, err := q.invoke(hookQueueList.ID, "open", `{"hook_id":77}`)
+	if err != nil || len(result) > maxQueuePageBytes+len(items)*64 || !strings.Contains(result, `"truncated":true`) {
+		t.Fatalf("list = %d bytes, %v", len(result), err)
+	}
+	q = newQueueEnv(t, ownTeam, ownScenario, okQueue)
+	if _, err := q.invoke(hookQueueList.ID, "open", `{"hook_id":77,"sort_dir":"up"}`); err == nil || len(q.calls) != 0 {
+		t.Fatalf("bad sort_dir: %v, calls = %d", err, len(q.calls))
 	}
 }

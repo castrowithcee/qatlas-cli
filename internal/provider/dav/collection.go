@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
 
 // Bounds of the collection properties shared by the DAV providers.
@@ -135,3 +137,42 @@ func TimezoneID(value string) string {
 	}
 	return ""
 }
+
+const (
+	propertyStringList = `{"type":"array","items":{"type":"string"}}`
+	propertyFormatList = `{"type":"array","items":{"type":"object","properties":{"content_type":{"type":"string"},` +
+		`"version":{"type":"string"}},"additionalProperties":false}}`
+	propertyCommon = `"max_resource_size":{"type":"integer","minimum":0},"collations":` + propertyStringList +
+		`,"privileges":` + propertyStringList + `,"sync_token":{"type":"string"}`
+)
+
+// CalendarPropertiesSchema and AddressbookPropertiesSchema are the JSON Schema members, without braces, of the
+// properties CollectionPropertiesOf reports.
+const (
+	CalendarPropertiesSchema = `"calendar_data":` + propertyFormatList + `,` + propertyCommon + `,` +
+		`"min_date_time":{"type":"string"},"max_date_time":{"type":"string"},` +
+		`"max_instances":{"type":"integer","minimum":0},` +
+		`"max_attendees_per_instance":{"type":"integer","minimum":0},"timezone":{"type":"string"}`
+	AddressbookPropertiesSchema = `"address_data":` + propertyFormatList + `,` + propertyCommon
+)
+
+// CalendarPropertyFields and AddressbookPropertyFields describe the properties for the capability descriptors.
+var (
+	commonPropertyFields = []capability.Field{
+		{Name: "max_resource_size", Description: "Largest accepted object in bytes"},
+		{Name: "collations", Description: "Supported text collations, at most 16"},
+		{Name: "privileges", Description: "Privileges of the bound identity in the DAV: namespace, at most 32"},
+		{Name: "sync_token", Description: "Sync token of the collection, untrusted data"},
+	}
+	CalendarPropertyFields = append([]capability.Field{
+		{Name: "calendar_data", Description: "Supported data formats as content_type and version, at most 8"},
+		{Name: "min_date_time", Description: "Earliest accepted date as RFC 3339 in UTC"},
+		{Name: "max_date_time", Description: "Latest accepted date as RFC 3339 in UTC"},
+		{Name: "max_instances", Description: "Most instances of one recurring event"},
+		{Name: "max_attendees_per_instance", Description: "Most attendees of one event instance"},
+		{Name: "timezone", Description: "TZID of the default time zone, untrusted data"},
+	}, commonPropertyFields...)
+	AddressbookPropertyFields = append([]capability.Field{
+		{Name: "address_data", Description: "Supported data formats as content_type and version, at most 8"},
+	}, commonPropertyFields...)
+)

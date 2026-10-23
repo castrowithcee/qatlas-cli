@@ -47,7 +47,9 @@ const (
 
 const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
-	`<d:displayname/><d:resourcetype/><c:addressbook-description/><oc:invite/></d:prop></d:propfind>`
+	`<d:displayname/><d:resourcetype/><c:addressbook-description/><c:supported-address-data/>` +
+	`<c:max-resource-size/><c:supported-collation-set/><d:current-user-privilege-set/><d:sync-token/>` +
+	`<oc:invite/></d:prop></d:propfind>`
 
 // contactListProps and contactGetProps name the card properties a read asks the server for. PHOTO, LOGO,
 // SOUND, KEY, and AGENT are never requested: CardDAV cannot filter by VALUE=uri, so the server would send
@@ -97,7 +99,8 @@ const (
 		dav.ContactValueProperties + `},"required":["id"],"additionalProperties":false}`
 	addressbookSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"description":{"type":"string"},"read_only":{"type":"boolean"},` +
-		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
+		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"},` +
+		dav.AddressbookPropertiesSchema + `},` +
 		`"required":["id","name"],"additionalProperties":false}`
 	addressbookArgSchema = `"addressbook":{"type":"string","minLength":1,"maxLength":255}`
 )
@@ -139,7 +142,7 @@ var addressbooksList = capability.Descriptor{
 		addressbookSchema + `},"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["addressbooks","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "URI of the address book, the form of the addressbook/URI target"},
 		{Name: "name", Description: "Display name, untrusted data"},
 		{Name: "description", Description: "Description, untrusted data"},
@@ -147,9 +150,9 @@ var addressbooksList = capability.Descriptor{
 		{Name: "shares", Description: "At most 50 users and groups the address book is shared with, untrusted data; " +
 			"other recipients are typed other without id or name"},
 		{Name: "shares_truncated", Description: "True when the address book has more shares than reported"},
-		{Name: "count", Description: "Number of reported address books"},
-		{Name: "truncated", Description: "True when more address books match than one listing reports"},
-	},
+	}, append(append([]capability.Field{}, dav.AddressbookPropertyFields...),
+		capability.Field{Name: "count", Description: "Number of reported address books"},
+		capability.Field{Name: "truncated", Description: "True when more address books match than one listing reports"})...),
 	Examples: []capability.Example{{Description: "List the bound address books", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -209,6 +212,7 @@ type Addressbook struct {
 
 	Shares          []CollectionShare `json:"shares,omitempty"`
 	SharesTruncated bool              `json:"shares_truncated,omitempty"`
+	dav.CollectionProperties
 }
 
 // AddressbooksResult is the result of the address book list.
@@ -462,6 +466,8 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxAddressbookName),
 			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxAddressbookText),
 			ReadOnly:    uri == systemAddressbook,
+
+			CollectionProperties: dav.CollectionPropertiesOf(&resources[i], false),
 		}
 		book.Shares, book.SharesTruncated = davSharesOf(resources[i].Invites, resources[i].InvitesTruncated)
 		result.Addressbooks = append(result.Addressbooks, book)
