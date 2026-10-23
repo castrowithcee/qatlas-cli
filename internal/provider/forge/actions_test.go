@@ -54,7 +54,7 @@ func newActionsEnvironment(t *testing.T, p *product, v string, api func(call) *h
 	cfg.Connections["files"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Files: config.Files{Read: []string{dirs.read}, Write: []string{dirs.write}}}
 	cfg.Connections["actions-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
-		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".workflow-runs.delete"}}
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".workflow-runs.delete", p.id + ".workflow-artifacts.delete"}}
 	for name, connection := range cfg.Connections {
 		connection.Effects = append(slices.Clone(connection.Effects), config.EffectExecute)
 		cfg.Connections[name] = connection

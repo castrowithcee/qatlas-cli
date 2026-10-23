@@ -195,7 +195,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
-- [Actions runs](actions.md): workflow runs, jobs, tasks, logs, and operating runs
+- [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
 
 ## Not offered
 
@@ -206,7 +206,7 @@ tokens, keys, webhooks, or OAuth2 applications, creating users, adding email add
 ## Setup profile
 
 The profile `read`, recommended, selects `accounts.me`, `repositories.list`, `repositories.get`, `settings.get`,
-and `version.get`.
+and `version.get`. The Actions profiles are described with [Actions](actions.md#setup-profiles).
 
 ## Public instances
 

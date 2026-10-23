@@ -191,25 +191,33 @@ func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values
 // means the length is not known beforehand. The token goes to that origin only. A redirect is refused, never
 // followed: the instance answers with one when it serves the file from another address.
 func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
+	return c.fetchFileVia(ctx, op, path, size, to, "")
+}
+
+// fetchFileVia is fetchFile for an instance that answers with one redirect to a signed address of its own: when
+// signedPath is not empty, exactly one redirect is followed, and only to the instance's origin, that exact path,
+// and a query of sig and expires alone. The second request carries no token, and a redirect answered to it is
+// refused. Every other redirect is refused.
+func (c *Client) fetchFileVia(ctx context.Context, op, path string, size int64, to io.ReaderFrom,
+	signedPath string) error {
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#") {
 		return provider.Fail(op, "the request path is not one of this provider")
 	}
-	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, c.product.name, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin+path, nil)
+	response, err := c.fetchOnce(ctx, op, c.origin+path, c.auth)
 	if err != nil {
-		return provider.Fail(op, "the request could not be built")
+		return err
 	}
-	req.Header.Set("Authorization", c.auth)
-	req.Header.Set("User-Agent", "qatlas-cli")
-	long := *c.http
-	long.Timeout = transferTimeout
-	response, err := long.Do(req)
-	if err != nil {
-		return provider.Transport(op, c.product.name, err)
+	defer func() { response.Body.Close() }()
+	if signedPath != "" && response.StatusCode >= 300 && response.StatusCode < 400 {
+		target, ok := c.signedTarget(response, signedPath)
+		if ok {
+			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+			response.Body.Close()
+			if response, err = c.fetchOnce(ctx, op, target, ""); err != nil {
+				return err
+			}
+		}
 	}
-	defer response.Body.Close()
 	switch {
 	case response.StatusCode >= 300 && response.StatusCode < 400:
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
@@ -228,6 +236,51 @@ func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to 
 		return err
 	}
 	return nil
+}
+
+// fetchOnce sends one GET of a file address; auth is empty for the signed address, which carries its own proof.
+func (c *Client) fetchOnce(ctx context.Context, op, address, auth string) (*http.Response, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, provider.Waited(op, c.product.name, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return nil, provider.Fail(op, "the request could not be built")
+	}
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	req.Header.Set("User-Agent", "qatlas-cli")
+	long := *c.http
+	long.Timeout = transferTimeout
+	response, err := long.Do(req)
+	if err != nil {
+		return nil, provider.Transport(op, c.product.name, err)
+	}
+	return response, nil
+}
+
+// signedTarget returns the address of a redirect that is the signed address of the instance itself.
+func (c *Client) signedTarget(response *http.Response, signedPath string) (string, bool) {
+	base, err := url.Parse(c.origin)
+	if err != nil {
+		return "", false
+	}
+	relative, err := url.Parse(response.Header.Get("Location"))
+	if err != nil {
+		return "", false
+	}
+	location := base.ResolveReference(relative)
+	if location.User != nil || location.Fragment != "" || location.Opaque != "" ||
+		location.Scheme+"://"+strings.ToLower(location.Host) != c.origin || location.EscapedPath() != signedPath {
+		return "", false
+	}
+	query := location.Query()
+	if len(query) != 2 || len(query["sig"]) != 1 || len(query["expires"]) != 1 || query.Get("sig") == "" ||
+		query.Get("expires") == "" {
+		return "", false
+	}
+	return location.String(), true
 }
 
 // trackedReader remembers a failure of the source, so it can be told from a failure of the local file.
@@ -357,7 +410,7 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 		}
 		return response.StatusCode, nil, failure
 	}
-	if out == nil {
+	if out == nil || response.StatusCode == http.StatusNoContent {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return response.StatusCode, response.Header, nil
 	}
