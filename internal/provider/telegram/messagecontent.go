@@ -582,11 +582,7 @@ func (s messageScope) messageContent(m *tgMessage) (out messageContentOut, omitt
 	if c := m.Checklist; c != nil {
 		list := &checklistOut{Title: txtBody(c.Title), TitleEntities: entities(c.TitleEntities),
 			OthersCanAddTasks: c.OthersCanAddTasks, OthersCanMarkTasksAsDone: c.OthersCanMarkTasksAsDone}
-		for _, t := range c.Tasks {
-			list.Tasks = append(list.Tasks, checklistTaskOut{ID: t.ID, Text: txtBody(t.Text), TextEntities: entities(t.TextEntities),
-				CompletedByUser: headUser(t.CompletedByUser), CompletedByChat: s.headChat(t.CompletedByChat),
-				CompletionDate: t.CompletionDate})
-		}
+		list.Tasks = s.checklistTasks(c.Tasks)
 		out.Checklist = bounded(&omitted, "checklist", list)
 	}
 	if c := m.Contact; c != nil {
