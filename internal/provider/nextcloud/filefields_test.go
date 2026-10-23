@@ -16,7 +16,10 @@ const readExtraProps = `<d:creationdate/><nc:creation_time/><nc:upload_time/><d:
 	`<nc:sharees/><nc:note/><nc:share-attributes/><nc:hide-download/><nc:mount-type/><nc:is-mount-root/>` +
 	`<nc:is-federated/><nc:is-encrypted/><oc:comments-count/><oc:comments-unread/><oc:comments-href/><oc:tags/>` +
 	`<oc:checksums/><nc:has-preview/><nc:hidden/><nc:metadata_etag/><nc:data-fingerprint/><oc:data-fingerprint/>` +
-	`<d:quota-used-bytes/><d:quota-available-bytes/><nc:contained-file-count/><nc:contained-folder-count/>`
+	`<d:quota-used-bytes/><d:quota-available-bytes/><nc:contained-file-count/><nc:contained-folder-count/>` +
+	`<nc:group-folder-id/><nc:acl-enabled/><nc:acl-can-manage/><nc:acl-list/><nc:inherited-acl-list/><nc:lock/>` +
+	`<nc:lock-owner-type/><nc:lock-owner/><nc:lock-owner-displayname/><nc:lock-owner-editor/><nc:lock-time/>` +
+	`<nc:lock-timeout/><nc:rich-workspace-file/><nc:reminder-due-date/><nc:version-label/><nc:version-author/>`
 
 const fixedProps = `<d:displayname/><d:resourcetype/><d:getcontenttype/><d:getcontentlength/>` +
 	`<d:getlastmodified/><d:getetag/><oc:fileid/><oc:size/><oc:permissions/>`
