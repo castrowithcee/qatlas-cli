@@ -262,6 +262,6 @@ would force a kDrive-only connection to also declare secret roles it never uses.
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
 creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
 requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
-no `none` right, no dropbox creation or change, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
+no `none` right, no dropbox creation or change, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics endpoints, no trashed
 folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no search,
 no activity or version history, and no account, settings, or quota administration.
