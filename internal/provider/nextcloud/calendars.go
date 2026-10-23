@@ -91,7 +91,7 @@ var eventFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the event resource, the id argument of the get tool"},
 	{Name: "uid", Description: "iCalendar UID, untrusted data"},
 	{Name: "summary", Description: "Title, untrusted data"},
-	{Name: "description", Description: "Description, untrusted data; only the get tool reports it"},
+	{Name: "description", Description: "Description, untrusted data"},
 	{Name: "location", Description: "Location, untrusted data"},
 	{Name: "start", Description: "Start as a date (all-day), a UTC time ending in Z, or a local time without zone"},
 	{Name: "end", Description: "End in the form of start, when the event carries one"},
@@ -99,8 +99,8 @@ var eventFields = append([]capability.Field{
 	{Name: "timezone", Description: "Time zone name of a local start, or UTC"},
 	{Name: "status", Description: "TENTATIVE, CONFIRMED, or CANCELLED when the event carries one"},
 	{Name: "rrule", Description: "Recurrence rule of a repeating event"},
-	{Name: "organizer", Description: "Organizer, untrusted data; only the get tool reports it"},
-	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data; only the get tool reports them"},
+	{Name: "organizer", Description: "Organizer, untrusted data"},
+	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data"},
 	{Name: "etag", Description: "Entity tag of the current version of the event"},
 	{Name: "count", Description: "Number of reported events"},
 	{Name: "truncated", Description: "True when more events match the range than limit allows"},
@@ -149,7 +149,7 @@ var eventsList = capability.Descriptor{
 	ID: Provider + ".calendar.events.list", Version: 1, Title: "List Nextcloud calendar events",
 	Description: "List the events of one bound calendar that overlap a time range, ordered by start; a " +
 		"repeating event is reported once with its recurrence rule unless expand lists its occurrences; " +
-		"optional structured filters narrow the answer; the result is limited and compact",
+		"optional structured filters narrow the answer; the result is limited and carries the fields of the get tool",
 	Tags: []string{"nextcloud", "calendar", "event", "list"}, Risk: calendarRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarArgSchema + `,` +
 		`"start":{"type":"string","minLength":20,"maxLength":40},"end":{"type":"string","minLength":20,"maxLength":40},` +
@@ -495,7 +495,7 @@ func (c *Client) listEvents(ctx context.Context, calendar, body string, filter d
 		}
 		if filter.Expand {
 			// An expanded resource holds one VEVENT per occurrence; id and recurrence_id identify one.
-			occurrences, err := dav.ParseOccurrences(resources[i].Text[dav.KeyCalendar], false)
+			occurrences, err := dav.ParseOccurrences(resources[i].Text[dav.KeyCalendar])
 			if err != nil {
 				continue
 			}
@@ -515,7 +515,7 @@ func (c *Client) listEvents(ctx context.Context, calendar, body string, filter d
 			continue
 		}
 		seen[id] = true
-		event, err := dav.ParseEvent(resources[i].Text[dav.KeyCalendar], false)
+		event, err := dav.ParseEvent(resources[i].Text[dav.KeyCalendar], true)
 		if err != nil {
 			continue
 		}

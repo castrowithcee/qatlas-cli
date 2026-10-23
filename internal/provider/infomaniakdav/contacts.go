@@ -66,7 +66,7 @@ var contactFields = append([]capability.Field{
 	{Name: "truncated", Description: "Names of the members that were cut at their cap"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
-}, bothTools(dav.ContactFullFields)...)
+}, dav.ContactFullFields...)
 
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.list", Version: 1, Title: "List Infomaniak contacts",

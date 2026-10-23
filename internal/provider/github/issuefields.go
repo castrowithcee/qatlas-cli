@@ -39,11 +39,13 @@ const (
 )
 
 const issueFieldOptionProperties = `"id":{"type":"string"},"name":{"type":"string"},` +
-	`"description":{"type":"string"},"color":{"type":"string"}`
+	`"description":{"type":"string"},"color":{"type":"string"},"priority":{"type":"integer"},` +
+	`"database_id":{"type":"integer"},"full_database_id":{"type":"string"}`
 const issueFieldOptionRequired = `"required":["id","name"],"additionalProperties":false`
 
 const issueFieldProperties = `"id":{"type":"string"},"name":{"type":"string"},` +
 	`"description":{"type":"string"},"data_type":{"type":"string"},"visibility":{"type":"string"},` +
+	`"created_at":{"type":"string"},"full_database_id":{"type":"string"},` +
 	`"options":{"type":"array","items":{"type":"object","properties":{` + issueFieldOptionProperties + `},` +
 	issueFieldOptionRequired + `}}`
 const issueFieldRequired = `"required":["id","name","data_type","visibility"],"additionalProperties":false`
@@ -84,10 +86,14 @@ var issueFieldsList = capability.Descriptor{
 	Arguments: append([]capability.Argument{issueFieldsRepositoryArgument, issueFieldsOrganizationArgument},
 		pagingArguments...),
 	Fields: append([]capability.Field{
-		{Name: "issue_fields", Description: "Issue fields: id and single_select_option_id/" +
-			"multi_select_option_ids of github.issue-fields.set need the field's own id, name and description " +
-			"(untrusted data), data_type (text, number, date, single_select, or multi_select), visibility " +
-			"(all or org_only), and for a select field its options, each with id, name, description, and color"},
+		{Name: "issue_fields", Description: "Issue fields; github.issue-fields.set needs the field id and, for " +
+			"a select field, the id of an option; names and descriptions are untrusted data"},
+		{Name: "data_type", Description: "Field type: text, number, date, single_select, or multi_select"},
+		{Name: "visibility", Description: "Who sees the field: all or org_only"},
+		{Name: "created_at", Description: "Creation time of the field"},
+		{Name: "full_database_id", Description: "Numeric identifier of the field or option as digits"},
+		{Name: "options", Description: "Options of a select field, each with id, name, description, color, " +
+			"priority, database_id, and full_database_id"},
 		issueFieldsRepositoryField, issueFieldsOrganizationField,
 	}, pagingFields...),
 	Examples: []capability.Example{{
@@ -212,9 +218,11 @@ func (t target) issueFieldsLocate(value any, err error) (any, error) {
 	return fields, nil
 }
 
-const issueFieldSelection = `id name description dataType visibility ` +
-	`... on IssueFieldSingleSelect{options{id name description color}} ` +
-	`... on IssueFieldMultiSelect{options{id name description color}}`
+const issueFieldOptionSelection = `id name description color priority databaseId fullDatabaseId`
+
+const issueFieldSelection = `id name description dataType visibility createdAt fullDatabaseId ` +
+	`... on IssueFieldSingleSelect{options{` + issueFieldOptionSelection + `}} ` +
+	`... on IssueFieldMultiSelect{options{` + issueFieldOptionSelection + `}}`
 
 const issueFieldsRepoQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){issueFields(first:$first,after:$after){` +
@@ -225,19 +233,24 @@ const issueFieldsOrgQuery = `query($owner:String!,$first:Int!,$after:String){` +
 	`pageInfo{hasNextPage endCursor} nodes{` + issueFieldSelection + `}}}}`
 
 type issueFieldOptionJSON struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	Color       string  `json:"color"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Description    *string    `json:"description"`
+	Color          string     `json:"color"`
+	Priority       *int64     `json:"priority"`
+	DatabaseID     *int64     `json:"databaseId"`
+	FullDatabaseID *gqlBigInt `json:"fullDatabaseId"`
 }
 
 type issueFieldNodeJSON struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description"`
-	DataType    string                 `json:"dataType"`
-	Visibility  string                 `json:"visibility"`
-	Options     []issueFieldOptionJSON `json:"options"`
+	ID             string                 `json:"id"`
+	Name           string                 `json:"name"`
+	Description    *string                `json:"description"`
+	DataType       string                 `json:"dataType"`
+	Visibility     string                 `json:"visibility"`
+	CreatedAt      *string                `json:"createdAt"`
+	FullDatabaseID *gqlBigInt             `json:"fullDatabaseId"`
+	Options        []issueFieldOptionJSON `json:"options"`
 }
 
 type issueFieldsConnectionJSON struct {
@@ -263,6 +276,10 @@ type IssueFieldOption struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Color       string `json:"color,omitempty"`
+
+	Priority       *int64  `json:"priority,omitempty"`
+	DatabaseID     *int64  `json:"database_id,omitempty"`
+	FullDatabaseID *string `json:"full_database_id,omitempty"`
 }
 
 // IssueField is one organization issue field, as github.issue-fields.list reports it.
@@ -273,6 +290,9 @@ type IssueField struct {
 	DataType    string             `json:"data_type"`
 	Visibility  string             `json:"visibility"`
 	Options     []IssueFieldOption `json:"options,omitempty"`
+
+	CreatedAt      *string `json:"created_at,omitempty"`
+	FullDatabaseID *string `json:"full_database_id,omitempty"`
 }
 
 func issueFieldOf(op string, node issueFieldNodeJSON) (IssueField, error) {
@@ -280,12 +300,14 @@ func issueFieldOf(op string, node issueFieldNodeJSON) (IssueField, error) {
 		return IssueField{}, invalidEntry(op, "an issue field")
 	}
 	field := IssueField{ID: node.ID, Name: node.Name, DataType: strings.ToLower(node.DataType),
-		Visibility: strings.ToLower(node.Visibility)}
+		Visibility: strings.ToLower(node.Visibility), CreatedAt: gqlName(node.CreatedAt),
+		FullDatabaseID: node.FullDatabaseID.text()}
 	if node.Description != nil {
 		field.Description = *node.Description
 	}
 	for _, option := range node.Options {
-		item := IssueFieldOption{ID: option.ID, Name: option.Name, Color: strings.ToLower(option.Color)}
+		item := IssueFieldOption{ID: option.ID, Name: option.Name, Color: strings.ToLower(option.Color),
+			Priority: option.Priority, DatabaseID: option.DatabaseID, FullDatabaseID: option.FullDatabaseID.text()}
 		if option.Description != nil {
 			item.Description = *option.Description
 		}
