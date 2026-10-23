@@ -49,6 +49,12 @@ var activityLinkSchema = `{"type":"object","properties":{"id":{"type":"string"},
 	`"object":{"type":"string"},"record_id":{"type":"string"}},"required":["id","activity_id","object","record_id"],` +
 	`"additionalProperties":false}`
 
+// activityListLinkSchema is a link of the list, which also reports its timestamps.
+var activityListLinkSchema = `{"type":"object","properties":{"id":{"type":"string"},"activity_id":{"type":"string"},` +
+	`"object":{"type":"string"},"record_id":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"}},"required":["id","activity_id","object","record_id"],` +
+	`"additionalProperties":false}`
+
 var activityLinkFields = []capability.Field{
 	{Name: "id", Description: "Link identifier, the id to delete"},
 	{Name: "activity_id", Description: "Identifier of the note or task"},
@@ -70,7 +76,7 @@ var activitytargetsList = capability.Descriptor{
 		recordIDSchema + `,"object":` + objectNameSchema + `,"record_id":` + recordIDSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":{"type":"string","minLength":1,"maxLength":` +
 		strconv.Itoa(maxBoundCursorLen) + `,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["activity"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"links":{"type":"array","items":` + activityLinkSchema +
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"links":{"type":"array","items":` + activityListLinkSchema +
 		`},"omitted":{"type":"integer"},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["links","omitted","has_more"],"additionalProperties":false}`),
 	Arguments: append(append([]capability.Argument{}, activityArguments...),
@@ -80,7 +86,7 @@ var activitytargetsList = capability.Descriptor{
 		capability.Argument{Name: "limit", Description: "Links per page, from 1 through 100; 25 when omitted"},
 		capability.Argument{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same list; the first page when omitted"}),
 	Fields: []capability.Field{
-		{Name: "links", Description: "Links with id, activity_id, object, and record_id"},
+		{Name: "links", Description: "Links with id, activity_id, object, record_id, created_at, and updated_at"},
 		{Name: "omitted", Description: "Number of links on this page whose other side is not reachable, never named"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when a following page exists"},
@@ -143,6 +149,9 @@ type ActivityTarget struct {
 	ActivityID string `json:"activity_id"`
 	Object     string `json:"object"`
 	RecordID   string `json:"record_id"`
+	// CreatedAt and UpdatedAt are set by the list only.
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // ActivityTargetList is one page of links; Omitted counts those whose other side is not reachable.
@@ -405,6 +414,13 @@ func (c *Client) ListActivityTargets(ctx context.Context, args *activityInput, b
 			return nil, err
 		}
 		if visible {
+			var times struct {
+				CreatedAt *string `json:"createdAt"`
+				UpdatedAt *string `json:"updatedAt"`
+			}
+			if json.Unmarshal(item, &times) == nil {
+				parsed.CreatedAt, parsed.UpdatedAt = timestamp(times.CreatedAt), timestamp(times.UpdatedAt)
+			}
 			result.Links = append(result.Links, parsed)
 		} else {
 			result.Omitted++

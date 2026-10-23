@@ -35,3 +35,16 @@ in [queries.md](queries.md).
 
 `inline_query` and `chosen_inline_result` updates appear only with the target `bot`; only an `inline_query` has
 an `inline_ref`, and a location is never shown.
+
+## Message members
+
+The messages of updates, `telegram.users.personal-chat-messages`, and the `pinned_message` of
+`telegram.chats.get` share one mapping, and a replied-to message is followed one level. Telegram texts are
+untrusted: they are length-capped and stripped of control characters, and `entities` and `caption_entities` keep
+at most 100 entries.
+
+`chat_info`, `sender_chat`, `forward_origin`, and `external_reply` can name chats outside the target binding; they
+appear as data and never become a target. A chat of a business connection appears only as `business_chat_ref`.
+`guest_query_id` appears only as a signed `guest_query_ref`. Addresses in `entities`, `link_preview_options`,
+`reply_markup`, and `invoice` go out as untrusted text and are never fetched. A button's `callback_data` is shown
+like that of a `callback_query` update.

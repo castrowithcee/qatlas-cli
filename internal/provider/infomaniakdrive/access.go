@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -53,15 +54,33 @@ const (
 )
 
 var accessEntrySchema = `{"type":"object","properties":{"id":{"type":"integer"},"access":{"type":"string"},` +
-	`"name":{"type":"string"},"right":{"type":"string"},"status":{"type":"string"}},` +
+	`"name":{"type":"string"},"right":{"type":"string"},"status":{"type":"string"},"color":{"type":"integer"}},` +
 	`"required":["id","name"],"additionalProperties":false}`
+
+// parentAccessEntrySchema is an entry of parent_access, whose members all but id are absent for a parent
+// folder outside the targets of the connection.
+const parentAccessEntrySchema = `{"type":"object","properties":{"id":{"type":"integer"},"access":{"type":"string"},` +
+	`"name":{"type":"string"},"right":{"type":"string"},"status":{"type":"string"},"color":{"type":"integer"}},` +
+	`"required":["id"],"additionalProperties":false}`
+
+const parentAccessSchema = `{"type":"object","properties":{"mismatch":{"type":"boolean"},"name":{"type":"string"},` +
+	`"users":{"type":"array","items":` + parentAccessEntrySchema + `},"users_truncated":{"type":"boolean"},` +
+	`"teams":{"type":"array","items":` + parentAccessEntrySchema + `},"teams_truncated":{"type":"boolean"}},` +
+	`"required":["mismatch"],"additionalProperties":false}`
+
+// accessWithValues are the with values of access.get. The API also documents user and invitation_drive, but
+// no response field belongs to them.
+var accessWithValues = []string{"parent_access"}
+
+// maxParentAccessEntries bounds one list of parent_access.
+const maxParentAccessEntries = 100
 
 var accessListSchema = `{"type":"object","properties":{` +
 	`"drive_id":{"type":"integer"},"file_id":{"type":"integer"},` +
 	`"users":{"type":"array","items":` + accessEntrySchema + `},` +
 	`"teams":{"type":"array","items":` + accessEntrySchema + `},` +
 	`"invitations":{"type":"array","items":` + accessEntrySchema + `},` +
-	`"truncated":{"type":"boolean"}},` +
+	`"truncated":{"type":"boolean"},"parent_access":` + parentAccessSchema + `},` +
 	`"required":["drive_id","file_id","users","teams","invitations","truncated"],"additionalProperties":false}`
 
 var accessChangeSchema = `{"type":"object","properties":{` +
@@ -84,6 +103,11 @@ var accessListFields = []capability.Field{
 		"of an invitation can be an e-mail address"},
 	{Name: "truncated", Description: "True when a list held more than 200 entries and was cut, so it is not the " +
 		"whole access"},
+	{Name: "color", Description: "Colour index of an entry as Infomaniak reports it; absent without one"},
+	{Name: "parent_access", Description: "Access of the parent folder, untrusted personal data; only with with " +
+		"parent_access: mismatch, the parent's name, and users and teams in the form of the lists above with at " +
+		"most 100 entries each, flagged by users_truncated and teams_truncated; when the parent folder is outside " +
+		"the targets of this connection, without name and with only the id of each user and team"},
 }
 
 var accessChangeFields = []capability.Field{
@@ -129,10 +153,11 @@ var accessGet = capability.Descriptor{
 	Provider:              Provider,
 	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
-		objectIDSchema + `},"required":["drive_id","file_id"],"additionalProperties":false}`),
+		objectIDSchema + `,` + withInputSchema(accessWithValues) + `},"required":["drive_id","file_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(accessListSchema),
-	Arguments:    []capability.Argument{driveIDArgument, accessFileArgument},
-	Fields:       accessListFields,
+	Arguments: []capability.Argument{driveIDArgument, accessFileArgument,
+		{Name: "with", Description: "Related data to load; parent_access adds the access of the parent folder"}},
+	Fields: accessListFields,
 	Examples: []capability.Example{{Description: "Read the access of one folder",
 		Arguments: json.RawMessage(`{"drive_id":1,"file_id":42}`)}},
 }
@@ -214,6 +239,28 @@ type AccessEntry struct {
 	Name   string `json:"name"`
 	Right  string `json:"right,omitempty"`
 	Status string `json:"status,omitempty"`
+	Color  *int64 `json:"color,omitempty"`
+}
+
+// ParentAccessEntry is an entry of the access of the parent folder. For a parent folder outside the targets
+// of the connection it holds the identifier only.
+type ParentAccessEntry struct {
+	ID     int64  `json:"id"`
+	Access string `json:"access,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Right  string `json:"right,omitempty"`
+	Status string `json:"status,omitempty"`
+	Color  *int64 `json:"color,omitempty"`
+}
+
+// ParentAccess is the access of the parent folder of a file, as with=parent_access loads it.
+type ParentAccess struct {
+	Mismatch       bool                `json:"mismatch"`
+	Name           string              `json:"name,omitempty"`
+	Users          []ParentAccessEntry `json:"users,omitempty"`
+	UsersTruncated bool                `json:"users_truncated,omitempty"`
+	Teams          []ParentAccessEntry `json:"teams,omitempty"`
+	TeamsTruncated bool                `json:"teams_truncated,omitempty"`
 }
 
 // AccessList is the stable answer of an access read.
@@ -224,6 +271,8 @@ type AccessList struct {
 	Teams       []AccessEntry `json:"teams"`
 	Invitations []AccessEntry `json:"invitations"`
 	Truncated   bool          `json:"truncated"`
+	// ParentAccess exists only when with asked for it and Infomaniak reported it.
+	ParentAccess *ParentAccess `json:"parent_access,omitempty"`
 }
 
 // AccessResult is one target of a grant and whether Infomaniak reached it.
@@ -359,18 +408,24 @@ func (c *Client) verifyAccessTargets(ctx context.Context, op string, driveID int
 func invokeAccessGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "get access"
-	var input fileArguments
+	var input struct {
+		fileArguments
+		With []string `json:"with"`
+	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(accessFileReason)
 	}
+	if err := checkValues(input.With, accessWithValues, "with"); err != nil {
+		return nil, err
+	}
 	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
-	return client.GetAccess(ctx, input.DriveID, input.FileID)
+	return client.GetAccess(ctx, input.DriveID, input.FileID, input.With)
 }
 
 type accessEntryJSON struct {
@@ -379,6 +434,7 @@ type accessEntryJSON struct {
 	Name   string  `json:"name"`
 	Right  *string `json:"right"`
 	Status string  `json:"status"`
+	Color  *int64  `json:"color"`
 }
 
 func accessEntriesOf(items []accessEntryJSON, truncated *bool) []AccessEntry {
@@ -389,7 +445,8 @@ func accessEntriesOf(items []accessEntryJSON, truncated *bool) []AccessEntry {
 	entries := make([]AccessEntry, 0, len(items))
 	for _, item := range items {
 		entry := AccessEntry{ID: item.ID, Access: boundedText(item.Access, accessKindLength),
-			Name: boundedText(item.Name, maxAccessText), Status: boundedText(item.Status, accessKindLength)}
+			Name: boundedText(item.Name, maxAccessText), Status: boundedText(item.Status, accessKindLength),
+			Color: valuePointer(item.Color)}
 		if item.Right != nil {
 			entry.Right = boundedText(*item.Right, accessKindLength)
 		}
@@ -398,21 +455,70 @@ func accessEntriesOf(items []accessEntryJSON, truncated *bool) []AccessEntry {
 	return entries
 }
 
-// GetAccess reads the access of exactly one file or folder, bounded in entries and in text.
-func (c *Client) GetAccess(ctx context.Context, driveID, fileID int64) (*AccessList, error) {
-	const op = "get access"
-	var raw struct {
-		Users       []accessEntryJSON `json:"users"`
-		Teams       []accessEntryJSON `json:"teams"`
-		Invitations []accessEntryJSON `json:"invitations"`
+// parentAccessOf maps the access of the parent folder, bounded in entries and in text. Where the parent folder
+// lies outside the targets of the connection, its name and the details of its users and teams are left out.
+func parentAccessOf(raw *parentAccessJSON, inside bool) *ParentAccess {
+	access := &ParentAccess{Mismatch: raw.Mismatch}
+	if inside {
+		access.Name = boundedText(raw.Name, maxAccessText)
 	}
-	if err := c.do(ctx, op, accessPath(driveID, fileID), nil, &raw); err != nil {
+	entries := func(items []accessEntryJSON) ([]ParentAccessEntry, bool) {
+		items, truncated := capList(items, maxParentAccessEntries)
+		out := make([]ParentAccessEntry, 0, len(items))
+		for _, item := range items {
+			if !inside {
+				out = append(out, ParentAccessEntry{ID: item.ID})
+				continue
+			}
+			entry := ParentAccessEntry{ID: item.ID, Access: boundedText(item.Access, accessKindLength),
+				Name: boundedText(item.Name, maxAccessText), Status: boundedText(item.Status, accessKindLength),
+				Color: valuePointer(item.Color)}
+			if item.Right != nil {
+				entry.Right = boundedText(*item.Right, accessKindLength)
+			}
+			out = append(out, entry)
+		}
+		return out, truncated
+	}
+	access.Users, access.UsersTruncated = entries(raw.Users)
+	access.Teams, access.TeamsTruncated = entries(raw.Teams)
+	return access
+}
+
+type parentAccessJSON struct {
+	Mismatch bool              `json:"mismatch"`
+	Name     string            `json:"name"`
+	Users    []accessEntryJSON `json:"users"`
+	Teams    []accessEntryJSON `json:"teams"`
+}
+
+// GetAccess reads the access of exactly one file or folder, bounded in entries and in text; with loads related
+// data. The parent folder of a files target is outside the targets, so its details stay out of the answer.
+func (c *Client) GetAccess(ctx context.Context, driveID, fileID int64, with []string) (*AccessList, error) {
+	const op = "get access"
+	if err := checkValues(with, accessWithValues, "with"); err != nil {
+		return nil, err
+	}
+	var query url.Values
+	if len(with) > 0 {
+		query = url.Values{"with": {strings.Join(with, ",")}}
+	}
+	var raw struct {
+		Users        []accessEntryJSON `json:"users"`
+		Teams        []accessEntryJSON `json:"teams"`
+		Invitations  []accessEntryJSON `json:"invitations"`
+		ParentAccess *parentAccessJSON `json:"parent_access"`
+	}
+	if err := c.do(ctx, op, accessPath(driveID, fileID), query, &raw); err != nil {
 		return nil, err
 	}
 	list := &AccessList{DriveID: driveID, FileID: fileID}
 	list.Users = accessEntriesOf(raw.Users, &list.Truncated)
 	list.Teams = accessEntriesOf(raw.Teams, &list.Truncated)
 	list.Invitations = accessEntriesOf(raw.Invitations, &list.Truncated)
+	if slices.Contains(with, "parent_access") && raw.ParentAccess != nil {
+		list.ParentAccess = parentAccessOf(raw.ParentAccess, c.scope.wholeDrive(driveID) || !c.scope.isSubtreeRoot(driveID, fileID))
+	}
 	return list, nil
 }
 
