@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -159,13 +160,14 @@ var addressbooksList = capability.Descriptor{
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.list", Version: 1, Title: "List Nextcloud contacts",
 	Description: "List the contacts of one bound address book, ordered by name, optionally only those whose " +
-		"formatted name or e-mail address contains a text; the result is limited and compact, and a card " +
+		"formatted name or e-mail address contains a text, and optionally narrowed by structured property " +
+		"filters; the result is limited and compact, and a card " +
 		"that is not a valid vCard is left out; photos and other binary data are never returned",
 	Tags: []string{"nextcloud", "contacts", "contact", "list", "search"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"query":{"type":"string","minLength":1,"maxLength":128},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["addressbook"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
+		`"required":["addressbook"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"addressbook":{"type":"string"},` +
 		`"contacts":{"type":"array","items":` + contactSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["addressbook","contacts","count"],` +
@@ -174,6 +176,10 @@ var contactsList = capability.Descriptor{
 		addressbookArgument,
 		{Name: "query", Description: "Text the formatted name or an e-mail address contains, case-insensitive"},
 		{Name: "limit", Description: "Maximum number of contacts, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on contact properties; each names a property and " +
+			"exactly one of text (1 to 256 bytes, optionally match_type, negate, and collation) or defined false, and " +
+			"optionally a parameter with the same condition form; a query narrows the answer further"},
+		{Name: "test", Description: "anyof (default) or allof: whether any or all of the property_filters must match"},
 	},
 	Fields: contactFields,
 	Examples: []capability.Example{{
@@ -241,6 +247,9 @@ type contactArguments struct {
 	Query       string `json:"query"`
 	Limit       int    `json:"limit"`
 	ID          string `json:"id"`
+
+	PropertyFilters []dav.ContactPropertyFilter `json:"property_filters"`
+	Test            string                      `json:"test"`
 }
 
 func decodeContactArguments(op string, raw json.RawMessage) (contactArguments, error) {
@@ -340,11 +349,16 @@ func invokeContactsList(ctx context.Context, resolved *config.Resolved, secrets 
 			return nil, providerError(op, "query must be plain text of at most 128 bytes")
 		}
 	}
+	filter := dav.ContactFilter{Properties: input.PropertyFilters, Test: input.Test}
+	body, err := contactListBody(op, query, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := openAddressbook(ctx, op, resolved, secrets, red, input.Addressbook)
 	if err != nil {
 		return nil, err
 	}
-	return client.listContacts(ctx, input.Addressbook, query, limit)
+	return client.listContacts(ctx, input.Addressbook, body, query, filter, limit)
 }
 
 func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -353,6 +367,9 @@ func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	input, err := decodeContactArguments(op, raw)
 	if err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.Test != "" {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !contactChildID(input.ID) {
 		return nil, providerError(op, "the contact id must be one literal path segment as the contacts list reports it")
@@ -434,6 +451,34 @@ func contactQueryBody(query string) string {
 		contactPropEnd + filter + `</card:addressbook-query>`
 }
 
+// contactListBody builds the list request. Without structured filters it is the query body. With them, the body
+// comes from the shared filter builder and only its address-data is narrowed to the listed properties; an
+// addressbook-query holds a single filter, so a query text cannot join it and is applied to the answer instead.
+func contactListBody(op, query string, filter dav.ContactFilter) (string, error) {
+	if filter.Zero() {
+		return contactQueryBody(query), nil
+	}
+	body, err := dav.ContactQueryBody(op, filter)
+	if err != nil {
+		return "", err
+	}
+	return strings.Replace(body, `<card:address-data/>`,
+		`<card:address-data>`+contactListProps+`</card:address-data>`, 1), nil
+}
+
+// containsFold reports whether the contact's name or one of its e-mail addresses contains the lower-cased query.
+func containsFold(contact *dav.Contact, query string) bool {
+	if strings.Contains(strings.ToLower(contact.Name), query) || strings.Contains(strings.ToLower(contact.Email), query) {
+		return true
+	}
+	for _, email := range contact.Emails {
+		if strings.Contains(strings.ToLower(email.Value), query) {
+			return true
+		}
+	}
+	return false
+}
+
 // contactMultigetBody asks for one card by its path.
 func contactMultigetBody(path string) string {
 	return contactBodyHead + `<card:addressbook-multiget` + contactNamespaces + contactProp + contactGetProps +
@@ -480,13 +525,19 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 	return result, nil
 }
 
-func (c *Client) listContacts(ctx context.Context, book, query string, limit int) (*ContactsPage, error) {
+func (c *Client) listContacts(ctx context.Context, book, body, query string, filter dav.ContactFilter, limit int) (*ContactsPage, error) {
 	const op = "list contacts"
 	base := c.addressbookHome(book)
-	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, contactQueryBody(query))
+	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, body)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
+	query = strings.ToLower(query)
 	resources, err := c.contactServer().ParseMultiStatus(op, data)
 	if err != nil {
 		return nil, err
@@ -501,6 +552,9 @@ func (c *Client) listContacts(ctx context.Context, book, query string, limit int
 		seen[id] = true
 		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
 		if err != nil {
+			continue
+		}
+		if !filter.Zero() && query != "" && !containsFold(contact, query) {
 			continue
 		}
 		contact.ID = id

@@ -115,13 +115,13 @@ func TestParseOccurrencesReadsEveryVEvent(t *testing.T) {
 		"BEGIN:VEVENT\r\nUID:u1@example.com\r\nRECURRENCE-ID:20260302T100000Z\r\nDTSTART:20260302T100000Z\r\nSUMMARY:Daily\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\n" +
 		"BEGIN:VEVENT\r\nUID:u1@example.com\r\nRECURRENCE-ID:20260303T100000Z\r\nDTSTART:20260303T110000Z\r\nSUMMARY:Moved\r\nEND:VEVENT\r\n" +
 		"END:VCALENDAR\r\n"
-	events, err := ParseOccurrences(data)
+	events, err := ParseOccurrences(data, true)
 	if err != nil || len(events) != 2 || events[0].RecurrenceID != "2026-03-02T10:00:00Z" ||
 		events[1].RecurrenceID != "2026-03-03T10:00:00Z" || events[1].Start != "2026-03-03T11:00:00Z" ||
 		events[1].Description != "" {
 		t.Errorf("events = %+v, err = %v", events, err)
 	}
-	if _, err := ParseOccurrences("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:x\r\nEND:VCALENDAR\r\n"); err == nil {
+	if _, err := ParseOccurrences("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:x\r\nEND:VCALENDAR\r\n", true); err == nil {
 		t.Error("no VEVENT must be an error")
 	}
 }
