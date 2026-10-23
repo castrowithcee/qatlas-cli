@@ -232,13 +232,16 @@ its token requirements are left to GitHub's decision per request, classic or fin
 
 | Tool | Does |
 | --- | --- |
-| `github.stars.list` | lists the repositories the account has starred, in batches |
+| `github.stars.list` | lists the repositories the account has starred, in batches, with the time each was starred and the repository in full |
 | `github.stars.add` | stars one repository; a repository already starred is left as it is |
 | `github.stars.remove` | unstars one repository; a repository that is not starred is left as it is |
 
 `github.stars.list` reads data of the account behind the token as a whole and follows the
 [account-wide rule](accounts.md#account-wide-tools); on a connection without repository or project targets, it
-narrows its answer to the starred repositories of the owners the targets name, when it names any.
+narrows its answer to the starred repositories of the owners the targets name, when it names any. It asks
+GitHub for the star media type, which is what carries the star time; `sort` and `direction` reach GitHub only
+when set, so the order stays GitHub's own by star time otherwise, and bind the cursor only while set. The
+repository follows the [result object rules](README.md#result-objects).
 `github.stars.add` and `github.stars.remove` take `repository` like every other repository tool and check it
 against the targets before a secret is read.
 
@@ -259,8 +262,11 @@ which stays `read`, unchanged. The profile `discovery` is described under [accou
 
 | Tool | Searches |
 | --- | --- |
-| `github.repositories.search` | repositories |
+| `github.repositories.search` | repositories, optionally sorted by `sort` and `order`, with `text_matches` on request |
 
 It reads GitHub's own search index with `terms`, under the rules described in [Search](README.md#search), and
-forces the [target qualifiers](README.md#target-scoping). The code and commit search are described with the
-[code](code.md#search), the user and organization search with the [accounts](accounts.md#search).
+forces the [target qualifiers](README.md#target-scoping). `sort` and `order` are arguments of their own, never
+part of `terms`, and GitHub's best match order stays when they are omitted. A match carries the repository
+under the [result object rules](README.md#result-objects), beside its compact members. The code and commit
+search are described with the [code](code.md#search), the user and organization search with the
+[accounts](accounts.md#search).
