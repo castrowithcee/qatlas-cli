@@ -772,8 +772,8 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{connectionsRename.ID},
 		}, {
 			ID: "connections-access-read", Title: "Read the access lists of the bound team's connections",
-			Description: "lists the users and roles on a locked connection's access list, never a name or " +
-				"email, changes nothing, and needs the connections:read scope; Make must have locked " +
+			Description: "lists the users, with name and email, and groups on a locked connection's access list, " +
+				"changes nothing, and needs the connections:read scope; Make must have locked " +
 				"connections enabled for the organization",
 			Tools: []string{connectionsAccessList.ID},
 		}, {
@@ -786,7 +786,7 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "credentialrequests-read", Title: "Read the bound team's credential requests",
 			Description: "lists and reads the credential requests of the bound team by allow-listed metadata, " +
-				"never a request link, secret, or email address; changes nothing and needs the " +
+				"never a request link or secret; changes nothing and needs the " +
 				"credential-requests:read scope; refused on a connection with a scenario or folder allow-list",
 			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID},
 		}, {
