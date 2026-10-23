@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -195,7 +196,7 @@ func TestAttachmentListSendsOneFixedFilterAndReportsNoAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(list.Attachments) != 1 || list.Omitted != 3 || !list.HasMore || list.NextCursor == "" ||
-		list.Attachments[0] != (AttachmentSummary{ID: attachID, CreatedAt: "2026-01-01T00:00:00Z",
+		!reflect.DeepEqual(list.Attachments[0], AttachmentSummary{ID: attachID, CreatedAt: "2026-01-01T00:00:00Z",
 			UpdatedAt: "2026-01-02T00:00:00Z", Label: "offer", Extension: ".pdf", FileID: fileUUID}) {
 		t.Fatalf("list = %+v", list)
 	}
