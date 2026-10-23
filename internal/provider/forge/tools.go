@@ -60,7 +60,10 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	issueBlocksList, issueBlocksAdd, issueBlocksRemove, issueAttachmentsList, issueAttachmentsGet,
 	issueAttachmentsUpload, issueAttachmentsUpdate, issueAttachmentsDelete, issueAttachmentsDownload,
 	commentAttachmentsList, commentAttachmentsGet, commentAttachmentsUpload, commentAttachmentsUpdate,
-	commentAttachmentsDelete, commentAttachmentsDownload}
+	commentAttachmentsDelete, commentAttachmentsDownload, workflowRunsList, workflowRunsGet, workflowRunsDelete,
+	workflowRunsCancel, workflowRunsForceCancel, workflowRunsRerun, workflowRunsRerunFailed, workflowRunsApprove,
+	workflowRunAttemptsGet, workflowRunAttemptsListJobs, workflowRunLogsGet, workflowJobsList, workflowJobsGet,
+	workflowJobsRerun, workflowJobLogsGet, actionsTasksList}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -112,7 +115,7 @@ func (t *tool) handler(p *product) capability.Handler {
 		if err != nil {
 			return nil, err
 		}
-		return operation(ctx, client)
+		return operation(context.WithValue(ctx, redactorKey{}, red), client)
 	}
 }
 
