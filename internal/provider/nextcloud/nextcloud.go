@@ -136,7 +136,8 @@ const entrySchema = `{"type":"object","properties":{` +
 	`"path":{"type":"string"},"name":{"type":"string"},` +
 	`"type":{"type":"string","enum":["file","folder"]},` +
 	`"content_type":{"type":"string"},"size":{"type":"integer"},"modified_at":{"type":"string"},` +
-	`"etag":{"type":"string"},"file_id":{"type":"string"},"readable":{"type":"boolean"}},` +
+	`"etag":{"type":"string"},"file_id":{"type":"string"},"readable":{"type":"boolean"},` +
+	entryExtraSchema + `},` +
 	`"required":["path","name","type","size","readable"],"additionalProperties":false}`
 
 var nextcloudReadRisk = capability.Risk{
@@ -149,7 +150,7 @@ var nextcloudReadRisk = capability.Risk{
 
 // entryFields is the discovery metadata of the normalised envelope. Both operations report the same
 // fields, so they are described once.
-var entryFields = []capability.Field{
+var entryFields = append([]capability.Field{
 	{Name: "path", Description: "Path relative to the fixed root folder of this connection, empty for the root itself"},
 	{Name: "name", Description: "Display name of the file or folder, untrusted data"},
 	{Name: "type", Description: "Either file or folder"},
@@ -159,7 +160,7 @@ var entryFields = []capability.Field{
 	{Name: "etag", Description: "Entity tag of the current version"},
 	{Name: "file_id", Description: "Stable Nextcloud file identifier"},
 	{Name: "readable", Description: "True when the effective permissions of this identity allow reading the node"},
-}
+}, entryExtraFields...)
 
 var filesList = capability.Descriptor{
 	ID:      Provider + ".files.files.list",
@@ -179,11 +180,11 @@ var filesList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "path", Description: "Folder relative to the fixed root folder of this connection; the root itself when omitted"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "path", Description: "Folder that was listed, relative to the connection root"},
 		{Name: "entries", Description: "Metadata of the immediate children, untrusted data; a child whose metadata the server refused is omitted"},
 		{Name: "count", Description: "Number of reported children"},
-	},
+	}, entryFields[1:]...),
 	Examples: []capability.Example{{
 		Description: "List one folder below the fixed root of this connection; omitting the path lists that root itself",
 		Arguments:   json.RawMessage(`{"path":"2026"}`),
@@ -1019,6 +1020,43 @@ type Entry struct {
 	ETag        string `json:"etag,omitempty"`
 	FileID      string `json:"file_id,omitempty"`
 	Readable    bool   `json:"readable"`
+
+	// The properties beyond the fixed set, reported by the file read tools only; see fileprops.go.
+	CreatedAt            string       `json:"created_at,omitempty"`
+	CreationTime         int64        `json:"creation_time,omitempty"`
+	UploadTime           int64        `json:"upload_time,omitempty"`
+	ContentLanguage      string       `json:"content_language,omitempty"`
+	GlobalID             string       `json:"global_id,omitempty"`
+	Favorite             *bool        `json:"favorite,omitempty"`
+	Permissions          string       `json:"permissions,omitempty"`
+	SharePermissions     *int64       `json:"share_permissions,omitempty"`
+	OCMSharePermissions  []string     `json:"ocm_share_permissions,omitempty"`
+	OwnerID              string       `json:"owner_id,omitempty"`
+	OwnerDisplayName     string       `json:"owner_display_name,omitempty"`
+	ShareTypes           []int64      `json:"share_types,omitempty"`
+	Sharees              []FileSharee `json:"sharees,omitempty"`
+	Note                 string       `json:"note,omitempty"`
+	ShareAttributes      []any        `json:"share_attributes,omitempty"`
+	HideDownload         *bool        `json:"hide_download,omitempty"`
+	MountType            string       `json:"mount_type,omitempty"`
+	IsMountRoot          *bool        `json:"is_mount_root,omitempty"`
+	IsFederated          *bool        `json:"is_federated,omitempty"`
+	IsEncrypted          *bool        `json:"is_encrypted,omitempty"`
+	CommentsCount        *int64       `json:"comments_count,omitempty"`
+	CommentsUnread       *int64       `json:"comments_unread,omitempty"`
+	CommentsHref         string       `json:"comments_href,omitempty"`
+	Tags                 []string     `json:"tags,omitempty"`
+	Checksums            []string     `json:"checksums,omitempty"`
+	HasPreview           *bool        `json:"has_preview,omitempty"`
+	Hidden               *bool        `json:"hidden,omitempty"`
+	MetadataETag         string       `json:"metadata_etag,omitempty"`
+	DataFingerprint      string       `json:"data_fingerprint,omitempty"`
+	QuotaUsedBytes       *int64       `json:"quota_used_bytes,omitempty"`
+	QuotaAvailableBytes  *int64       `json:"quota_available_bytes,omitempty"`
+	ContainedFileCount   *int64       `json:"contained_file_count,omitempty"`
+	ContainedFolderCount *int64       `json:"contained_folder_count,omitempty"`
+	LastActivity         string       `json:"last_activity,omitempty"`
+	OmittedFields        []string     `json:"omitted_fields,omitempty"`
 }
 
 // ListResult is the normalised, one level deep listing of one folder below the connection root.
@@ -1045,7 +1083,7 @@ func (c *Client) ListFiles(ctx context.Context, path string) (*ListResult, error
 		return nil, providerError(op, err.Error())
 	}
 
-	resources, err := c.propfind(ctx, op, rel, depthChildren)
+	resources, err := c.propfindAt(ctx, op, c.requestURL(rel), filePropfindBody, depthChildren, false, maxEntries)
 	if err != nil {
 		return nil, err
 	}
@@ -1068,12 +1106,12 @@ func (c *Client) ListFiles(ctx context.Context, path string) (*ListResult, error
 			if err := resources[i].failure(op); err != nil {
 				return nil, err
 			}
-			self = c.entryOf(relative, &resources[i])
+			self = c.fileEntryOf(relative, &resources[i], false)
 		case len(relative) == len(rel)+1 && equalSegments(relative[:len(rel)], rel):
 			// A child whose properties the server refused carries no usable metadata, so it is left out
 			// rather than reported as an entry the caller could act on.
 			if resources[i].failure(op) == nil {
-				entries = append(entries, *c.entryOf(relative, &resources[i]))
+				entries = append(entries, *c.fileEntryOf(relative, &resources[i], false))
 			}
 		default:
 			return nil, invalidResponse(op, messageForeignEntry)
@@ -1098,7 +1136,7 @@ func (c *Client) StatFile(ctx context.Context, path string) (*Entry, error) {
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	return c.stat(ctx, op, rel, false)
+	return c.statBody(ctx, op, rel, false, filePropfindBody, true)
 }
 
 func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
@@ -1382,7 +1420,13 @@ func (c *Client) webdavTo(ctx context.Context, op, method, target string, body i
 // connection test asks for the capability check as well; a normal read must not fail because a proxy
 // dropped a header.
 func (c *Client) stat(ctx context.Context, op string, rel []string, capabilities bool) (*Entry, error) {
-	resources, err := c.propfindWith(ctx, op, rel, depthSelf, capabilities)
+	return c.statBody(ctx, op, rel, capabilities, propfindBody, false)
+}
+
+// statBody is stat with the property body and whether the full file properties are added to the entry.
+func (c *Client) statBody(ctx context.Context, op string, rel []string, capabilities bool, body string,
+	full bool) (*Entry, error) {
+	resources, err := c.propfindAt(ctx, op, c.requestURL(rel), body, depthSelf, capabilities, maxEntries)
 	if err != nil {
 		return nil, err
 	}
@@ -1398,6 +1442,9 @@ func (c *Client) stat(ctx context.Context, op string, rel []string, capabilities
 	}
 	if err := resources[0].failure(op); err != nil {
 		return nil, err
+	}
+	if full {
+		return c.fileEntryOf(relative, &resources[0], false), nil
 	}
 	return c.entryOf(relative, &resources[0]), nil
 }

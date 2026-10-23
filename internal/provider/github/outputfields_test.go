@@ -16,7 +16,7 @@ import (
 // generic map carries a literal with the members the handler sets; the three delete tools are the only ones.
 var outputSamples = map[string]any{
 	"github.accounts.me":                           Account{},
-	"github.actions-permissions.get":               ActionsPermissions{},
+	"github.actions-permissions.get":               ActionsPermissionsRead{},
 	"github.actions-permissions.update":            SettingsChange[ActionsPermissions]{},
 	"github.blame.get":                             BlameResult{},
 	"github.branches.create":                       BranchCreated{},
@@ -223,8 +223,6 @@ var unemittedMembers = map[string][]string{
 	"github.sub-issues.add":            {"removed"},
 	"github.sub-issues.reprioritize":   {"removed", "sub_issues_summary"},
 	"github.project-items.list":        {"items[].body", "items[].url"},
-	"github.workflow-jobs.list":        {"jobs[].steps", "jobs[].url"},
-	"github.workflow-runs.list":        {"runs[].url"},
 }
 
 // checkOutput reports every member of the output of sample that the output schema or the fields lack, at any

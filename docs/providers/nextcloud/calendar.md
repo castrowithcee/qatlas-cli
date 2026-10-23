@@ -20,3 +20,7 @@ calendar's entry is neither listed nor counted, and refused like a missing one; 
 Sharing gives one user or group access to an own calendar, never by link, e-mail, or team; Nextcloud ignores an
 unknown recipient, so check `shares` of `calendar.calendars.list`.
 `calendar.events.get` has the limits and the `overrides` rule of [infomaniak.dav.md](../infomaniak.dav.md#events).
+
+Of `calendar-timezone` only the TZID is reported; the VTIMEZONE rule definition is not evaluated or passed on.
+Vendor properties such as `getctag`, `calendar-color`, `calendar-order`, and `schedule-*` are not standards and are
+not read; only `oc:invite` is, as `shares`.
