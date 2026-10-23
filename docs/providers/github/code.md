@@ -53,6 +53,12 @@ all, only the commit behind each line, so `ranges` never does either; each one i
 range on both sides. `author` is the login when GitHub reports one, the commit author's name otherwise. A ref
 GitHub cannot resolve, and a path with no blame at that ref, both answer `not-found`.
 
+Each range carries a compact commit by default; `commit_details: true` reads it in full. GitHub answers the
+ranges of the whole file whatever the line range, and the full commit multiplies that answer, so a file with
+many ranges would fail as `invalid-response` once it grows too large. Lists and connections of a commit are not
+read, texts and signatures are untrusted and cut, and archive addresses are answered only where they carry no
+token.
+
 `github.commits.list` filters by `ref` (a branch, a tag, or a commit SHA, GitHub's `sha` parameter), `path`
 (a repository path commits must touch), `author` (a GitHub login), and `since`/`until` (a commit date, as
 `YYYY-MM-DD` or a UTC time as `YYYY-MM-DDTHH:MM:SSZ`; a date becomes midnight UTC for `since` or the last
