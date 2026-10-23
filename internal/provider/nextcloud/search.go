@@ -45,10 +45,6 @@ const entryPropsXML = `<d:displayname/><d:resourcetype/><d:getcontenttype/><d:ge
 
 const xmlHeader = `<?xml version="1.0" encoding="UTF-8"?>`
 
-const favoritesBody = xmlHeader +
-	`<oc:filter-files xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><oc:filter-rules>` +
-	`<oc:favorite>1</oc:favorite></oc:filter-rules><d:prop>` + entryPropsXML + `</d:prop></oc:filter-files>`
-
 const searchResultSchema = `{"type":"object","properties":{"entries":{"type":"array","items":` + entrySchema +
 	`},"count":{"type":"integer"},"truncated":{"type":"boolean"}},"required":["entries","count"],"additionalProperties":false}`
 
@@ -257,8 +253,8 @@ func (c *Client) searchBody(req *searchRequest) string {
 		where = "<d:and>" + strings.Join(req.conditions, "") + "</d:and>"
 	}
 	scope := escapePath(append([]string{"files", c.user}, c.root...))
-	return xmlHeader + `<d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:basicsearch>` +
-		`<d:select><d:prop>` + entryPropsXML + `</d:prop></d:select>` +
+	return xmlHeader + `<d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:basicsearch>` +
+		`<d:select><d:prop>` + fileSearchProps + `</d:prop></d:select>` +
 		`<d:from><d:scope><d:href>` + xmlText(scope) + `</d:href><d:depth>infinity</d:depth></d:scope></d:from>` +
 		`<d:where>` + where + `</d:where><d:orderby/>` +
 		`<d:limit><d:nresults>` + strconv.Itoa(req.limit) + `</d:nresults></d:limit>` +
@@ -299,7 +295,7 @@ func readMultiStatus(op string, response *http.Response, limit int, allowEmpty b
 
 // entriesBelowRoot keeps the answered nodes that lie below the connection root. A node outside it, the
 // root itself, and a node the server refused are dropped, not reported.
-func (c *Client) entriesBelowRoot(op string, resources []resource, limit int) *entryListResult {
+func (c *Client) entriesBelowRoot(op string, resources []resource, limit int, search bool) *entryListResult {
 	result := &entryListResult{Entries: []Entry{}}
 	for i := range resources {
 		relative, err := c.relativeOf(op, resources[i].href)
@@ -310,7 +306,7 @@ func (c *Client) entriesBelowRoot(op string, resources []resource, limit int) *e
 			result.Truncated = true
 			break
 		}
-		result.Entries = append(result.Entries, *c.entryOf(relative, &resources[i]))
+		result.Entries = append(result.Entries, *c.fileEntryOf(relative, &resources[i], search))
 	}
 	sort.Slice(result.Entries, func(i, j int) bool { return result.Entries[i].Path < result.Entries[j].Path })
 	result.Count = len(result.Entries)
@@ -323,7 +319,7 @@ func (c *Client) SearchFiles(ctx context.Context, op string, req *searchRequest)
 	if err != nil {
 		return nil, err
 	}
-	result := c.entriesBelowRoot(op, resources, req.limit)
+	result := c.entriesBelowRoot(op, resources, req.limit, true)
 	result.Truncated = result.Truncated || len(resources) >= req.limit
 	return result, nil
 }
@@ -331,11 +327,11 @@ func (c *Client) SearchFiles(ctx context.Context, op string, req *searchRequest)
 // ListFavorites sends one REPORT on the connection root.
 func (c *Client) ListFavorites(ctx context.Context) (*entryListResult, error) {
 	const op = "list favorites"
-	resources, err := c.multistatusAt(ctx, op, methodReport, c.requestURL(nil), favoritesBody, "application/xml; charset=utf-8", "", maxFavoriteScan, true)
+	resources, err := c.multistatusAt(ctx, op, methodReport, c.requestURL(nil), fileFavoritesBody, "application/xml; charset=utf-8", "", maxFavoriteScan, true)
 	if err != nil {
 		return nil, err
 	}
-	return c.entriesBelowRoot(op, resources, maxEntries), nil
+	return c.entriesBelowRoot(op, resources, maxEntries, false), nil
 }
 
 func invokeFilesSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
