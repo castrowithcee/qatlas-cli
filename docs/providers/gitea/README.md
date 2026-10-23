@@ -183,6 +183,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Reactions](reactions.md): the reactions of issues, pull requests, and comments
 - [Issue dependencies](issue-dependencies.md): what an issue depends on and what it blocks
 - [Issue pins](issue-pins.md): pinned issues and pull requests and their positions
+- [Issue subscriptions](issue-subscriptions.md): the subscribers of an issue or pull request
+- [Issue locks](issue-locks.md): locking and unlocking the conversation of an issue or pull request
 - [Labels](labels.md): repository and organization labels
 - [Issue labels](issue-labels.md): the labels of an issue or pull request
 - [Milestones](milestones.md): the milestones of a repository
@@ -191,6 +193,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
+- [Branches](branches.md): the branches of a repository
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
 

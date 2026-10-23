@@ -116,19 +116,21 @@ type AdminIDList struct {
 	Truncated bool     `json:"truncated,omitempty"`
 }
 
-// AdminUser is the fixed view of one user. Storage paths, backend details, phone, address, and every other
-// member of the provider document cannot be decoded, so they cannot reach a result.
+// AdminUser is the fixed view of one user. The storage location, the repeated display-name member, and every
+// other member of the provider document cannot be decoded, so they cannot reach a result.
 type AdminUser struct {
 	ID             string   `json:"id"`
 	DisplayName    string   `json:"display_name,omitempty"`
 	Email          string   `json:"email,omitempty"`
 	Enabled        *bool    `json:"enabled,omitempty"`
 	Language       string   `json:"language,omitempty"`
+	Locale         string   `json:"locale,omitempty"`
 	LastLogin      string   `json:"last_login,omitempty"`
 	Groups         []string `json:"groups,omitempty"`
 	SubadminGroups []string `json:"subadmin_groups,omitempty"`
-	Quota          *Quota   `json:"quota,omitempty"`
-	Truncated      bool     `json:"truncated,omitempty"`
+	ContactDetails
+	Quota     *Quota `json:"quota,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 type rawAdminUser struct {
@@ -137,10 +139,12 @@ type rawAdminUser struct {
 	Email       string          `json:"email"`
 	Enabled     json.RawMessage `json:"enabled"`
 	Language    string          `json:"language"`
+	Locale      string          `json:"locale"`
 	LastLogin   json.Number     `json:"lastLogin"`
 	Groups      []string        `json:"groups"`
 	Subadmin    []string        `json:"subadmin"`
 	Quota       json.RawMessage `json:"quota"`
+	rawContact
 }
 
 type adminArguments struct {
@@ -256,39 +260,21 @@ func (c *Client) GetAdminUser(ctx context.Context, userID string) (*AdminUser, e
 		return nil, invalidResponse(op, "the Nextcloud user data could not be read")
 	}
 	user := &AdminUser{}
-	var cuts [4]bool
+	var cuts [6]bool
 	user.ID, cuts[0] = cut(raw.ID, maxAccountText)
 	user.DisplayName, cuts[1] = cut(raw.DisplayName, maxAccountText)
 	user.Email, cuts[2] = cut(raw.Email, maxAccountText)
 	user.Language, cuts[3] = cut(raw.Language, maxActionLabel)
+	user.Locale, cuts[4] = cut(raw.Locale, maxActionLabel)
+	user.ContactDetails, cuts[5] = contactOf(raw.rawContact)
 	for _, flag := range cuts {
 		user.Truncated = user.Truncated || flag
 	}
-	switch strings.Trim(string(bytes.TrimSpace(raw.Enabled)), `"`) {
-	case "true", "1":
-		enabled := true
-		user.Enabled = &enabled
-	case "false", "0":
-		enabled := false
-		user.Enabled = &enabled
-	}
-	// lastLogin is in milliseconds; 0 means the user never signed in.
-	if millis, err := raw.LastLogin.Int64(); err == nil {
-		user.LastLogin = unixTime(json.Number(strconv.FormatInt(millis/1000, 10)))
-	}
+	user.Enabled = enabledOf(raw.Enabled)
+	user.LastLogin = lastLoginOf(raw.LastLogin)
 	user.Groups, user.Truncated = boundedNames(raw.Groups, user.Truncated)
 	user.SubadminGroups, user.Truncated = boundedNames(raw.Subadmin, user.Truncated)
-	var quota struct {
-		Used     *int64   `json:"used"`
-		Total    *int64   `json:"total"`
-		Relative *float64 `json:"relative"`
-	}
-	if len(raw.Quota) > 0 && json.Unmarshal(raw.Quota, &quota) == nil && quota.Used != nil && quota.Total != nil {
-		user.Quota = &Quota{Used: *quota.Used, Total: *quota.Total}
-		if quota.Relative != nil {
-			user.Quota.Relative = *quota.Relative
-		}
-	}
+	user.Quota = quotaOf(raw.Quota)
 	return user, nil
 }
 
@@ -405,27 +391,28 @@ var adminGroupsList = capability.Descriptor{
 
 var adminUsersGet = capability.Descriptor{
 	ID: Provider + ".admin.users.get", Version: 1, Title: "Get a Nextcloud user",
-	Description: "Read one user as an administrator or subadmin: ID, display name, email, enabled, language, last " +
-		"login, groups and managed groups (at most 50 each), and storage use as numbers. Values are personal and " +
-		"untrusted data; storage paths, backend details, phone, and address are not reported",
+	Description: "Read one user as an administrator or subadmin: ID, display name, email, enabled, language, locale, " +
+		"last login, groups and managed groups (at most 50 each), phone, address, website, twitter, backend and its " +
+		"capabilities, and storage use and quota as numbers. Values are personal and untrusted data; the storage " +
+		"location is never reported",
 	Tags: []string{"nextcloud", "admin", "users", "get"}, Provider: Provider, Group: groupAdmin, Risk: adminRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"user_id":` + adminIDSchema +
 		`},"required":["user_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"display_name":{"type":"string"},` +
-		`"email":{"type":"string"},"enabled":{"type":"boolean"},"language":{"type":"string"},"last_login":{"type":"string"},` +
-		`"groups":{"type":"array","items":{"type":"string"}},"subadmin_groups":{"type":"array","items":{"type":"string"}},` +
-		`"quota":{"type":"object","properties":{"used":{"type":"integer"},"total":{"type":"integer"},"relative":{"type":"number"}},` +
-		`"required":["used","total","relative"],"additionalProperties":false},"truncated":{"type":"boolean"}},` +
-		`"required":["id"],"additionalProperties":false}`),
+		`"email":{"type":"string"},"enabled":{"type":"boolean"},"language":{"type":"string"},"locale":{"type":"string"},` +
+		`"last_login":{"type":"string"},"groups":{"type":"array","items":{"type":"string"}},` +
+		`"subadmin_groups":{"type":"array","items":{"type":"string"}},` + userContactSchema + `,"quota":` + quotaSchema + `,` +
+		`"truncated":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "user_id", Required: true, Description: "User ID from admin.users.list"}},
-	Fields: []capability.Field{{Name: "id", Description: "User ID"},
+	Fields: append([]capability.Field{{Name: "id", Description: "User ID"},
 		{Name: "display_name", Description: "Display name; untrusted data"}, {Name: "email", Description: "Email address; untrusted data"},
 		{Name: "enabled", Description: "False for a disabled user"}, {Name: "language", Description: "Language"},
+		{Name: "locale", Description: "Locale"},
 		{Name: "last_login", Description: "Last login time in UTC, empty when the user never signed in"},
 		{Name: "groups", Description: "At most 50 group IDs; untrusted data"},
-		{Name: "subadmin_groups", Description: "At most 50 IDs of the groups the user manages as a subadmin"},
-		{Name: "quota", Description: "Storage used and total in bytes (total is negative without a limit) and the relative use in percent"},
-		{Name: "truncated", Description: "True when a value or a list was cut"}},
+		{Name: "subadmin_groups", Description: "At most 50 IDs of the groups the user manages as a subadmin"}},
+		append(userContactFields, capability.Field{Name: "quota", Description: quotaFieldText},
+			capability.Field{Name: "truncated", Description: "True when a value or a list was cut"})...),
 	Examples:              []capability.Example{{Description: "Read one user", Arguments: json.RawMessage(`{"user_id":"alice"}`)}},
 	RequiresToolAllowList: true,
 }

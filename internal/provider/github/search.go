@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -231,6 +232,36 @@ const repositorySearchProperties = `"repository":{"type":"string"},"description"
 	`"visibility":{"type":"string"},"language":{"type":"string"},"stars":{"type":"integer"},` +
 	`"fork":{"type":"boolean"},"archived":{"type":"boolean"},"updated_at":{"type":"string"},"url":{"type":"string"}`
 
+// repositorySearchWidthProperties are the members of GitHub's repository beyond the compact ones above; the
+// repository and its star count keep the compact members full_name and stargazers_count would repeat.
+var repositorySearchWidthProperties = restRepositoryPropertiesExcept(repositorySearchCompact...)
+
+var repositorySearchCompact = []string{"full_name", "stargazers_count", "description", "visibility", "language",
+	"fork", "archived", "updated_at", "url"}
+
+var repositorySearchKeys = `"sort":{"type":"string","enum":["stars","forks","help-wanted-issues","updated"]},` +
+	`"order":{"type":"string","enum":["asc","desc"]},"text_matches":{"type":"boolean"}`
+
+var repositorySearchSortValues = []string{"stars", "forks", "help-wanted-issues", "updated"}
+
+var repositorySearchArguments = append([]capability.Argument{searchTermsArgument,
+	{Name: "sort", Description: "stars, forks, help-wanted-issues, or updated; GitHub's best match order when omitted"},
+	{Name: "order", Description: "asc or desc; applies with sort, desc when omitted"},
+	{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
+}, pagingArguments...)
+
+const repositorySearchExtraProperties = `"score":{"type":"number"},` +
+	`"text_matches":{"type":"array","maxItems":100,"items":` + textMatchSchema + `},` +
+	`"text_matches_truncated":{"type":"boolean"}`
+
+var repositorySearchExtraFields = []capability.Field{
+	{Name: "score", Description: "Relevance score GitHub gave the match"},
+	{Name: "text_matches", Description: "Where the terms matched, only when text_matches is set, at most 100: " +
+		"object_type, property, fragment (cut at 1000 characters, fragment_truncated says so), matches (text " +
+		"and indices), and links with the object_url; untrusted data, never fetched"},
+	{Name: "text_matches_truncated", Description: "True when more text matches followed than shown"},
+}
+
 const repositorySearchRequired = `"required":["repository","visibility","stars","fork","archived"],"additionalProperties":false`
 
 var repositoriesSearch = capability.Descriptor{
@@ -239,24 +270,38 @@ var repositoriesSearch = capability.Descriptor{
 	Title:   "Search GitHub repositories",
 	Description: "Search repositories GitHub's index covers with terms and qualifiers, narrowed to the " +
 		"repositories and the owners a connection's targets allow when it names any",
-	Tags:         []string{"github", "repositories", "search", "discovery"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema: searchOutput("repositories", repositorySearchProperties, repositorySearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
-	Fields: append(append([]capability.Field{
+	Tags:        []string{"github", "repositories", "search", "discovery"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"terms":`+termsSchema+`,`+repositorySearchKeys+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("repositories", repositorySearchProperties+`,`+repositorySearchWidthProperties+`,`+
+		repositorySearchExtraProperties, repositorySearchRequired),
+	Arguments: repositorySearchArguments,
+	Fields: append(append(append(append([]capability.Field{
 		{Name: "repositories", Description: "Compact repositories: repository as OWNER/REPO, description " +
-			"(untrusted data), visibility, language, stars, fork, archived, and updated_at"},
-	}, searchCountFields...), pagingFields...),
+			"(untrusted data), visibility, language, stars, fork, archived, and updated_at, then the members " +
+			"of GitHub's repository below; a repository outside the connection's targets keeps only id and node_id"},
+	}, repositorySearchWidthFields...), repositorySearchExtraFields...), searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search Go repositories about a topic",
 		Arguments:   json.RawMessage(`{"terms":"qatlas language:go","limit":10}`),
 	}},
 }
 
-const codeSearchProperties = `"path":{"type":"string"},"repository":{"type":"string"},"sha":{"type":"string"},` +
-	`"url":{"type":"string"}`
+var codeSearchProperties = `"path":{"type":"string"},"repository":{"type":"string"},"sha":{"type":"string"},` +
+	`"url":{"type":"string"},"name":{"type":"string"},"score":{"type":"number"},"file_size":{"type":"integer"},` +
+	`"language":{"type":"string"},"last_modified_at":{"type":"string"},` +
+	`"line_numbers":{"type":"array","maxItems":100,"items":{"type":"string"}},` +
+	`"line_numbers_truncated":{"type":"boolean"},"links":` + linksSchema(codeSearchLinkKeys) + `,` +
+	`"repository_detail":` + restRepositorySchema + `,` +
+	`"text_matches":{"type":"array","maxItems":100,"items":` + textMatchSchema + `},` +
+	`"text_matches_truncated":{"type":"boolean"}`
+
+var codeSearchKeys = `"text_matches":{"type":"boolean"}`
+
+var codeSearchArguments = append([]capability.Argument{searchTermsArgument,
+	{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
+}, pagingArguments...)
 
 const codeSearchRequired = `"required":["path","repository"],"additionalProperties":false`
 
@@ -269,13 +314,13 @@ var codeSearch = capability.Descriptor{
 	Tags:         []string{"github", "code", "search", "discovery"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+codeSearchKeys+`,`+pagingKeys, "terms"),
 	OutputSchema: searchOutput("files", codeSearchProperties, codeSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
-	Fields: append(append([]capability.Field{
-		{Name: "files", Description: "Compact code matches: path, repository as OWNER/REPO, sha, and url; " +
-			"never a file body or a fragment"},
-	}, searchCountFields...), pagingFields...),
+	Arguments:    codeSearchArguments,
+	Fields: append(append(append([]capability.Field{
+		{Name: "files", Description: "Code matches: path, repository as OWNER/REPO, sha, and url (the web " +
+			"address), then the members of GitHub's code search result below; never a file body"},
+	}, codeSearchExtraFields...), searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search for a symbol inside one repository",
 		Arguments:   json.RawMessage(`{"terms":"handleRequest language:go","limit":10}`),
@@ -615,6 +660,19 @@ func (a *searchArguments) sortedOptions(values []string, sortMessage string) ([]
 	return binding, nil
 }
 
+// codeOptions validates the text match switch of the code search, which takes no sort and no order: GitHub
+// marks its sort as closing down, and its order has no effect without it.
+func (a *searchArguments) codeOptions() ([]any, error) {
+	if a.Sort != "" || a.Order != "" {
+		return nil, invalidRequest("the code search takes no sort or order")
+	}
+	if !a.TextMatches {
+		return nil, nil
+	}
+	a.textMatches = true
+	return []any{"text_matches"}, nil
+}
+
 // textMatchContext asks for the text match media type when the request set text_matches.
 func (a *searchArguments) textMatchContext(ctx context.Context) context.Context {
 	if !a.textMatches {
@@ -648,6 +706,10 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 		options, err = a.issueOptions()
 	case commitsSearch.ID:
 		options, err = a.sortedOptions(commitSearchSortValues, "sort must be author-date or committer-date")
+	case repositoriesSearch.ID:
+		options, err = a.sortedOptions(repositorySearchSortValues, "sort must be stars, forks, help-wanted-issues, or updated")
+	case codeSearch.ID:
+		options, err = a.codeOptions()
 	}
 	if err != nil {
 		return err
@@ -736,7 +798,8 @@ const (
 		"beyond the token's own identity"
 )
 
-// RepositorySearchResult is the compact view of one repository search match.
+// RepositorySearchResult is one repository search match: the compact view, the members of GitHub's repository,
+// and the search members. The compact members shadow the repository members of the same name.
 type RepositorySearchResult struct {
 	Repository  string `json:"repository"`
 	Description string `json:"description,omitempty"`
@@ -747,6 +810,11 @@ type RepositorySearchResult struct {
 	Archived    bool   `json:"archived"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
 	URL         string `json:"url,omitempty"`
+
+	RESTRepository
+	Score                *json.Number    `json:"score,omitempty"`
+	TextMatches          []RESTTextMatch `json:"text_matches,omitempty"`
+	TextMatchesTruncated bool            `json:"text_matches_truncated,omitempty"`
 }
 
 // RepositorySearchList is one batch of a repository search.
@@ -758,48 +826,89 @@ type RepositorySearchList struct {
 	HasMore           bool                     `json:"has_more"`
 }
 
+// repositorySearchItem decodes one repository search match three times from the same object: the compact
+// view, the repository, and the search members. A member the wider views cannot read is left out rather than
+// failing a read the compact view already decoded.
+type repositorySearchItem struct {
+	compact struct {
+		FullName        string `json:"full_name"`
+		Description     string `json:"description"`
+		Visibility      string `json:"visibility"`
+		Language        string `json:"language"`
+		StargazersCount int    `json:"stargazers_count"`
+		Fork            bool   `json:"fork"`
+		Archived        bool   `json:"archived"`
+		UpdatedAt       string `json:"updated_at"`
+		HTMLURL         string `json:"html_url"`
+	}
+	wide repositoryRaw
+	more struct {
+		Score       *json.Number   `json:"score"`
+		TextMatches []textMatchRaw `json:"text_matches"`
+	}
+}
+
+func (e *repositorySearchItem) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &e.compact); err != nil {
+		return err
+	}
+	_ = json.Unmarshal(data, &e.wide)
+	_ = json.Unmarshal(data, &e.more)
+	return nil
+}
+
 func (c *Client) searchRepositories(ctx context.Context, a *searchArguments) (*RepositorySearchList, error) {
 	const op = "search repositories"
 	var raw struct {
-		TotalCount int  `json:"total_count"`
-		Incomplete bool `json:"incomplete_results"`
-		Items      []struct {
-			FullName        string `json:"full_name"`
-			Description     string `json:"description"`
-			Visibility      string `json:"visibility"`
-			Language        string `json:"language"`
-			StargazersCount int    `json:"stargazers_count"`
-			Fork            bool   `json:"fork"`
-			Archived        bool   `json:"archived"`
-			UpdatedAt       string `json:"updated_at"`
-			HTMLURL         string `json:"html_url"`
-		} `json:"items"`
+		TotalCount int                    `json:"total_count"`
+		Incomplete bool                   `json:"incomplete_results"`
+		Items      []repositorySearchItem `json:"items"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/repositories", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/repositories", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, repositorySearchPermission)
 	}
 	result := &RepositorySearchList{Repositories: make([]RepositorySearchResult, 0, len(raw.Items)),
 		TotalCount: raw.TotalCount, IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
-		if !validRepository(item.FullName) {
+		compact := &item.compact
+		if !validRepository(compact.FullName) {
 			return nil, invalidEntry(op, "a repository")
 		}
-		result.Repositories = append(result.Repositories, RepositorySearchResult{Repository: item.FullName,
-			Description: item.Description, Visibility: strings.ToLower(item.Visibility), Language: item.Language,
-			Stars: item.StargazersCount, Fork: item.Fork, Archived: item.Archived, UpdatedAt: item.UpdatedAt,
-			URL: item.HTMLURL})
+		match := RepositorySearchResult{Repository: compact.FullName, Description: compact.Description,
+			Visibility: strings.ToLower(compact.Visibility), Language: compact.Language,
+			Stars: compact.StargazersCount, Fork: compact.Fork, Archived: compact.Archived,
+			UpdatedAt: compact.UpdatedAt, URL: compact.HTMLURL, Score: item.more.Score}
+		// The repository and its star count are already the compact members repository and stars.
+		if detail := item.wide.project(a.allowed); detail != nil {
+			detail.FullName, detail.StargazersCount = nil, nil
+			match.RESTRepository = *detail
+		}
+		match.TextMatches, match.TextMatchesTruncated = projectTextMatches(item.more.TextMatches)
+		result.Repositories = append(result.Repositories, match)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
 }
 
-// CodeSearchResult is the compact view of one code search match, without a file body or a fragment.
+// CodeSearchResult is one code search match, without a file body.
 type CodeSearchResult struct {
 	Path       string `json:"path"`
 	Repository string `json:"repository"`
 	SHA        string `json:"sha,omitempty"`
 	URL        string `json:"url,omitempty"`
+
+	Name                 *string         `json:"name,omitempty"`
+	Score                *json.Number    `json:"score,omitempty"`
+	FileSize             *int64          `json:"file_size,omitempty"`
+	Language             *string         `json:"language,omitempty"`
+	LastModifiedAt       *string         `json:"last_modified_at,omitempty"`
+	LineNumbers          []string        `json:"line_numbers,omitempty"`
+	LineNumbersTruncated bool            `json:"line_numbers_truncated,omitempty"`
+	Links                Links           `json:"links,omitempty"`
+	RepositoryDetail     *RESTRepository `json:"repository_detail,omitempty"`
+	TextMatches          []RESTTextMatch `json:"text_matches,omitempty"`
+	TextMatchesTruncated bool            `json:"text_matches_truncated,omitempty"`
 }
 
 // CodeSearchList is one batch of a code search.
@@ -811,32 +920,72 @@ type CodeSearchList struct {
 	HasMore           bool               `json:"has_more"`
 }
 
+// codeSearchLinkKeys are the API addresses of a code search match; its web address is the url.
+var codeSearchLinkKeys = []string{"url", "git_url"}
+
+// codeSearchItem decodes one code search match twice from the same object: the compact view and the rest.
+type codeSearchItem struct {
+	compact struct {
+		Path       string `json:"path"`
+		SHA        string `json:"sha"`
+		HTMLURL    string `json:"html_url"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+	}
+	more struct {
+		Name           *string        `json:"name"`
+		Score          *json.Number   `json:"score"`
+		FileSize       *int64         `json:"file_size"`
+		Language       *string        `json:"language"`
+		LastModifiedAt *string        `json:"last_modified_at"`
+		LineNumbers    []*string      `json:"line_numbers"`
+		Repository     *repositoryRaw `json:"repository"`
+		TextMatches    []textMatchRaw `json:"text_matches"`
+	}
+	links Links
+}
+
+func (e *codeSearchItem) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &e.compact); err != nil {
+		return err
+	}
+	_ = json.Unmarshal(data, &e.more)
+	e.links, _ = readLinks(data, codeSearchLinkKeys)
+	return nil
+}
+
 func (c *Client) searchCode(ctx context.Context, a *searchArguments) (*CodeSearchList, error) {
 	const op = "search code"
 	var raw struct {
-		TotalCount int  `json:"total_count"`
-		Incomplete bool `json:"incomplete_results"`
-		Items      []struct {
-			Path       string `json:"path"`
-			SHA        string `json:"sha"`
-			HTMLURL    string `json:"html_url"`
-			Repository struct {
-				FullName string `json:"full_name"`
-			} `json:"repository"`
-		} `json:"items"`
+		TotalCount int              `json:"total_count"`
+		Incomplete bool             `json:"incomplete_results"`
+		Items      []codeSearchItem `json:"items"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/code", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/code", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, codeSearchPermission)
 	}
 	result := &CodeSearchList{Files: make([]CodeSearchResult, 0, len(raw.Items)), TotalCount: raw.TotalCount,
 		IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
-		if item.Path == "" || !validRepository(item.Repository.FullName) {
+		compact, more := &item.compact, &item.more
+		if compact.Path == "" || !validRepository(compact.Repository.FullName) {
 			return nil, invalidEntry(op, "a code match")
 		}
-		result.Files = append(result.Files, CodeSearchResult{Path: item.Path, Repository: item.Repository.FullName,
-			SHA: item.SHA, URL: item.HTMLURL})
+		match := CodeSearchResult{Path: compact.Path, Repository: compact.Repository.FullName,
+			SHA: compact.SHA, URL: compact.HTMLURL, Name: nameText(more.Name), Score: more.Score,
+			FileSize: more.FileSize, Language: nameText(more.Language), LastModifiedAt: shortText(more.LastModifiedAt),
+			Links: item.links, RepositoryDetail: more.Repository.project(a.allowed)}
+		lines, cut := capped(more.LineNumbers)
+		for _, line := range lines {
+			if text := shortText(line); text != nil {
+				match.LineNumbers = append(match.LineNumbers, *text)
+			}
+		}
+		match.LineNumbersTruncated = cut
+		match.TextMatches, match.TextMatchesTruncated = projectTextMatches(more.TextMatches)
+		result.Files = append(result.Files, match)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
@@ -1255,4 +1404,33 @@ func (c *Client) searchOrganizations(ctx context.Context, a *searchArguments) (*
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
+}
+
+// repositorySearchWidthFields describe the repository members of a repository search match.
+var repositorySearchWidthFields = func() []capability.Field {
+	var out []capability.Field
+	for _, field := range restRepositoryFields {
+		if !slices.Contains(repositorySearchCompact, field.Name) {
+			out = append(out, field)
+		}
+	}
+	return out
+}()
+
+var codeSearchExtraFields = []capability.Field{
+	{Name: "name", Description: "File name, untrusted data"},
+	{Name: "score", Description: "Relevance score GitHub gave the match"},
+	{Name: "file_size", Description: "Size of the file in bytes"},
+	{Name: "language", Description: "Language GitHub detected for the file, untrusted data"},
+	{Name: "last_modified_at", Description: "Time the file was last modified"},
+	{Name: "line_numbers", Description: "Line ranges of the matches, such as 73..77, at most 100, untrusted data"},
+	{Name: "line_numbers_truncated", Description: "True when more line ranges followed than shown"},
+	{Name: "links", Description: "REST url and git_url of the file by their GitHub names, untrusted data, never fetched"},
+	{Name: "repository_detail", Description: "Repository of the file with the members of GitHub's repository, " +
+		"untrusted data, addresses never fetched; a repository outside the connection's targets keeps only id, " +
+		"node_id, and full_name"},
+	{Name: "text_matches", Description: "Where the terms matched, only when text_matches is set, at most 100: " +
+		"object_type, property, fragment (cut at 1000 characters, fragment_truncated says so), matches (text " +
+		"and indices), and links with the object_url; untrusted data, never fetched"},
+	{Name: "text_matches_truncated", Description: "True when more text matches followed than shown"},
 }

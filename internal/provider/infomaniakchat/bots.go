@@ -41,7 +41,8 @@ const botScopeNote = "Instance-wide: only on a connection that binds every team 
 
 var botSchema = `{"type":"object","properties":{` +
 	`"user_id":` + idSchema + `,"username":{"type":"string"},"display_name":{"type":"string"},` +
-	`"description":{"type":"string"},"owner_id":{"type":"string"},"deleted":{"type":"boolean"}},` +
+	`"description":{"type":"string"},"owner_id":{"type":"string"},"deleted":{"type":"boolean"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"deleted_at":{"type":"string"}},` +
 	`"required":["user_id","username","display_name","description","owner_id","deleted"],"additionalProperties":false}`
 
 var botFields = []capability.Field{
@@ -51,6 +52,9 @@ var botFields = []capability.Field{
 	{Name: "description", Description: "Description, untrusted data"},
 	{Name: "owner_id", Description: "User identifier of the bot's owner"},
 	{Name: "deleted", Description: "True when the bot is deactivated"},
+	{Name: "created_at", Description: "Creation time in RFC 3339, when kChat reports one"},
+	{Name: "updated_at", Description: "Last change time in RFC 3339, when kChat reports one"},
+	{Name: "deleted_at", Description: "Deactivation time in RFC 3339, when the bot is deactivated"},
 }
 
 var botIDArgument = capability.Argument{Name: "bot_user_id", Required: true,
@@ -61,14 +65,15 @@ var botsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Infomaniak kChat bots",
 	Description: "List the bot accounts of the kChat instance, one kChat page at a time, with user ID, handle, " +
-		"display name, description, owner, and deactivation state. " + botScopeNote,
+		"display name, description, owner, deactivation state, and times; deactivated bots only on request. " + botScopeNote,
 	Tags:                  []string{"infomaniak", "kchat", "bots", "administration", "list"},
 	Risk:                  botRisk(capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone),
 	Provider:              Provider,
 	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"page":{"type":"integer","minimum":1},` +
-		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
+		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `},` +
+		`"include_deleted":{"type":"boolean"},"only_orphaned":{"type":"boolean"}},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"bots":{"type":"array","items":` + botSchema + `},` +
@@ -79,6 +84,8 @@ var botsList = capability.Descriptor{
 		{Name: "page", Description: "1-based page of kChat's own listing; the first page when omitted"},
 		{Name: "per_page", Description: "Bots per kChat page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
+		{Name: "include_deleted", Description: "True to list deactivated bots too; only active bots when omitted"},
+		{Name: "only_orphaned", Description: "True to list only bots whose owner is deactivated"},
 	},
 	Fields: append(append([]capability.Field{}, botFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
@@ -99,11 +106,12 @@ var botsGet = capability.Descriptor{
 	Risk:                  botRisk(capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone),
 	Provider:              Provider,
 	RequiresToolAllowList: true,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"bot_user_id":` + idSchema + `},` +
-		`"required":["bot_user_id"],"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"bot_user_id":` + idSchema + `,` +
+		`"include_deleted":{"type":"boolean"}},"required":["bot_user_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(botSchema),
-	Arguments:    []capability.Argument{botIDArgument},
-	Fields:       botFields,
+	Arguments: []capability.Argument{botIDArgument,
+		{Name: "include_deleted", Description: "True to read the bot although it is deactivated"}},
+	Fields: botFields,
 	Examples: []capability.Example{{Description: "Read one bot",
 		Arguments: json.RawMessage(`{"bot_user_id":"abc123bot00000000000000000"}`)}},
 }
@@ -164,12 +172,14 @@ var botsEnable = botStateTool("enable", "Enable an Infomaniak kChat bot", "Enabl
 
 // botJSON is the subset of the kChat Bot resource this provider reads.
 type botJSON struct {
-	UserID      string `json:"user_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Description string `json:"description"`
-	OwnerID     string `json:"owner_id"`
-	DeleteAt    int64  `json:"delete_at"`
+	UserID      string  `json:"user_id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	Description string  `json:"description"`
+	OwnerID     string  `json:"owner_id"`
+	DeleteAt    int64   `json:"delete_at"`
+	CreateAt    flexInt `json:"create_at"`
+	UpdateAt    flexInt `json:"update_at"`
 }
 
 // Bot is the stable Qatlas view of one bot account.
@@ -180,11 +190,16 @@ type Bot struct {
 	Description string `json:"description"`
 	OwnerID     string `json:"owner_id"`
 	Deleted     bool   `json:"deleted"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	DeletedAt   string `json:"deleted_at,omitempty"`
 }
 
 func botOf(b *botJSON) Bot {
 	return Bot{UserID: b.UserID, Username: bounded(b.Username), DisplayName: bounded(b.DisplayName),
-		Description: bounded(b.Description), OwnerID: bounded(b.OwnerID), Deleted: b.DeleteAt != 0}
+		Description: bounded(b.Description), OwnerID: bounded(b.OwnerID), Deleted: b.DeleteAt != 0,
+		CreatedAt: msToRFC3339(int64(b.CreateAt)), UpdatedAt: msToRFC3339(int64(b.UpdateAt)),
+		DeletedAt: msToRFC3339(b.DeleteAt)}
 }
 
 // BotsPage is one page of the bot accounts of the instance.
@@ -253,12 +268,15 @@ func openInstance(ctx context.Context, resolved *config.Resolved, secrets *secre
 }
 
 type botArguments struct {
-	Page        int     `json:"page"`
-	PerPage     int     `json:"per_page"`
-	BotUserID   string  `json:"bot_user_id"`
-	Username    *string `json:"username"`
-	DisplayName *string `json:"display_name"`
-	Description *string `json:"description"`
+	Page           int     `json:"page"`
+	PerPage        int     `json:"per_page"`
+	Sort           string  `json:"sort"`
+	IncludeDeleted bool    `json:"include_deleted"`
+	OnlyOrphaned   bool    `json:"only_orphaned"`
+	BotUserID      string  `json:"bot_user_id"`
+	Username       *string `json:"username"`
+	DisplayName    *string `json:"display_name"`
+	Description    *string `json:"description"`
 }
 
 func invokeBotsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -278,13 +296,20 @@ func invokeBotsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return client.ListBots(ctx, input.Page, input.PerPage)
+	return client.ListBots(ctx, input.Page, input.PerPage, input.IncludeDeleted, input.OnlyOrphaned)
 }
 
-// ListBots reads exactly one page of kChat's own listing of active bots and never reads on by itself.
-func (c *Client) ListBots(ctx context.Context, page, perPage int) (*BotsPage, error) {
+// ListBots reads exactly one page of kChat's own listing of bots, the active ones unless includeDeleted is
+// set, and never reads on by itself.
+func (c *Client) ListBots(ctx context.Context, page, perPage int, includeDeleted, onlyOrphaned bool) (*BotsPage, error) {
 	const op = "list bots"
 	query := url.Values{"page": {strconv.Itoa(page - 1)}, "per_page": {strconv.Itoa(perPage)}}
+	if includeDeleted {
+		query.Set("include_deleted", "true")
+	}
+	if onlyOrphaned {
+		query.Set("only_orphaned", "true")
+	}
 	var bots []botJSON
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/bots", query, nil, &bots, false); err != nil {
 		return nil, err
@@ -331,7 +356,11 @@ func invokeBotsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 		return nil, err
 	}
 	var bot botJSON
-	if err := client.do(ctx, op, http.MethodGet, botPath(input.BotUserID), nil, nil, &bot, false); err != nil {
+	var query url.Values
+	if input.IncludeDeleted {
+		query = url.Values{"include_deleted": {"true"}}
+	}
+	if err := client.do(ctx, op, http.MethodGet, botPath(input.BotUserID), query, nil, &bot, false); err != nil {
 		return nil, err
 	}
 	if bot.UserID != input.BotUserID {

@@ -141,7 +141,8 @@ func TestTalkPollGetReportsOptionsVotesAndVoters(t *testing.T) {
 	if err := json.Unmarshal(response.Result, &got); err != nil || got.Status != "closed" || got.MaxVotes != 2 ||
 		got.Options[0].Votes == nil || *got.Options[0].Votes != 2 || got.Options[1].Votes != nil || *got.Options[2].Votes != 1 ||
 		got.NumVoters == nil || *got.NumVoters != 3 || len(got.VotedSelf) != 1 || got.VotedSelf[0] != 2 ||
-		len(got.Voters) != 2 || got.Voters[0].ActorName != "Bob" || got.Voters[1].OptionID != 2 || got.AuthorName != "Alice" {
+		len(got.Voters) != 2 || got.Voters[0].ActorName != "Bob" || got.Voters[1].OptionID != 2 || got.AuthorName != "Alice" ||
+		got.AuthorType != "users" || !strings.Contains(string(response.Result), `"author_type":"users"`) {
 		t.Errorf("result = %s, %v", response.Result, err)
 	}
 	if strings.Contains(string(response.Result), bodyCanary) || len(*calls) != 2 {

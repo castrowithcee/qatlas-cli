@@ -15,10 +15,13 @@ The Files tools work in the bound Files folder: they list and read metadata or u
 create files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and
 organise (see [Organising](#organising)). Deleting is separate (see [Deleting](#deleting)).
 
-The metadata of a file or folder covers the WebDAV properties Nextcloud documents independently of optional apps, with
-these limits. The temporary direct download address grants access without login and is not reported, nor is its
-expiry. The class 2 lock properties are placeholders with fixed values in Nextcloud and are not reported. A nested or
-multi-valued property over a bound is left out whole and named in `omitted_fields`, never cut.
+The metadata of a file or folder covers the WebDAV properties Nextcloud documents, including those an app or server
+feature such as group folders, file locking, or reminders adds when it is active, with these limits. The temporary
+direct download address grants access without login and is not reported, nor is its expiry. Lock tokens are access
+values and are never reported. The class 2 lock properties are placeholders with fixed values in Nextcloud and are not
+reported. The folder workspace text is file content, which metadata reads never return; its file ID is reported.
+App-registered metadata properties have no documented set and are not reported. A nested or multi-valued property over
+a bound is left out whole and named in `omitted_fields`, never cut.
 
 ## Organising
 
