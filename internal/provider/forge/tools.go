@@ -54,7 +54,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	pullRequestsClose, pullRequestsReopen, pullRequestsCancelAutoMerge, pullRequestsMerge, pullRequestBranchesUpdate,
 	releaseAssetsList, releaseAssetsGet, releaseAssetsDownload, releaseAssetsUpload, releaseAssetsUpdate,
 	releaseAssetsDelete, issueReactionsList, issueReactionsAdd, issueReactionsRemove, commentReactionsList,
-	commentReactionsAdd, commentReactionsRemove}
+	commentReactionsAdd, commentReactionsRemove, issueDependenciesList, issueDependenciesAdd,
+	issueDependenciesRemove, issueBlocksList, issueBlocksAdd, issueBlocksRemove}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
