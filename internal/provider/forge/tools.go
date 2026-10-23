@@ -69,7 +69,7 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	branchesRename, branchesUpdateRef, branchesDelete, reviewsList, reviewsGet, reviewsCreate, reviewsSubmit,
 	reviewsApprove, reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList, reviewCommentsGet,
 	reviewCommentsCreate, reviewCommentsDelete, reviewCommentsReply, reviewCommentsResolve,
-	reviewCommentsUnresolve}
+	reviewCommentsUnresolve, reviewersList, reviewersRequest, reviewersRemove}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

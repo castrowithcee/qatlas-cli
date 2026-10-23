@@ -105,6 +105,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".pull-request-review-comments.reply", p.id+".pull-request-review-comments.resolve",
 				p.id+".pull-request-review-comments.unresolve")
 		}
+		want = append(want, p.id+".pull-request-reviewers.list", p.id+".pull-request-reviewers.request",
+			p.id+".pull-request-reviewers.remove")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

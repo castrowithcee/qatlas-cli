@@ -15,8 +15,7 @@ These tools read and change the reviews of one pull request and the inline comme
 providers unless a line says otherwise; [Gitea](README.md) describes the shared configuration, targets, pagination,
 and errors, [Pull requests](pull-requests.md) the pull request itself, and [Forgejo](../forgejo.md) lists what
 differs. Review texts, comment texts, file paths, diff excerpts, and names are untrusted data; reviewers are
-personal data. The conversation of a pull request is `comments.*` ([Comments](comments.md)); requested reviewers
-are not covered here.
+personal data. The conversation of a pull request is `comments.*` ([Comments](comments.md)).
 
 | Tool | Effect | Provider |
 | --- | --- | --- |
@@ -31,6 +30,9 @@ are not covered here.
 | `pull-request-review-comments.delete` | delete, listed-only | Forgejo |
 | `pull-request-review-comments.reply` | create | Gitea |
 | `pull-request-review-comments.resolve`, `.unresolve` | update | Gitea |
+| `pull-request-reviewers.list` | read | both |
+| `pull-request-reviewers.request` | create | both |
+| `pull-request-reviewers.remove` | delete | both |
 
 ## Scopes
 
@@ -84,3 +86,13 @@ listed-only, in no profile, and read the review or comment first.
 
 `reviews.list` pages like every list of the provider and returns `number`. `review-comments.list` reads one review;
 the instance does not page it, so at most 100 comments are returned and `truncated` marks more.
+
+## Requested reviewers
+
+`pull-request-reviewers.list` returns the users who can be asked to review in a repository; the instance does not
+page it, and `truncated` marks a cut list. `request` and `remove` act on a **pull request** (read first, an issue index is refused without a
+change) and take `reviewers` (user names) and `team_reviewers` (team names), at least one name in all. Names are
+validated before any request. Teams belong to the organization that owns the repository: `team_reviewers` is
+accepted only when the connection's targets are empty or name that organization as `orgs/NAME`, otherwise it is
+`invalid-request`. `remove` only withdraws requests; it is not listed-only. A change sends one request and is not
+repeated after an unclear outcome.
