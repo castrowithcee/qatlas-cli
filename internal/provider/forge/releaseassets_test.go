@@ -111,7 +111,8 @@ func newAssetEnvironment(t *testing.T, p *product, handler func(call) *http.Resp
 	cfg.Connections["files"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Files: files}
 	cfg.Connections["files-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
-		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".release-assets.delete"}}
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".release-assets.delete", p.id + ".issue-attachments.delete",
+			p.id + ".comment-attachments.delete"}}
 	return &environment{core: application.New(registry(t), cfg, resolver(red, &reads), red), red: red,
 		reads: &reads, calls: &calls, p: p}, dirs
 }

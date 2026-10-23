@@ -45,13 +45,13 @@ func (o *CommentListOptions) binding(bound target) []byte {
 const commentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){__typename ... on Issue{` +
 	`comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body createdAt updatedAt url}}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{` + commentSelection + `}}}}}}`
 
 // CommentList is the normalised batch of comments of one issue.
 type CommentList struct {
-	Comments   []Comment `json:"comments"`
-	NextCursor string    `json:"next_cursor,omitempty"`
-	HasMore    bool      `json:"has_more"`
+	Comments   []ListedComment `json:"comments"`
+	NextCursor string          `json:"next_cursor,omitempty"`
+	HasMore    bool            `json:"has_more"`
 }
 
 // Comment is the stable Qatlas view of one issue comment. Body is untrusted data. DatabaseID is the
@@ -77,17 +77,7 @@ type commentsPageJSON struct {
 					HasNextPage bool   `json:"hasNextPage"`
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
-				Nodes []struct {
-					ID         string `json:"id"`
-					DatabaseID int64  `json:"databaseId"`
-					Author     *struct {
-						Login string `json:"login"`
-					} `json:"author"`
-					Body      string `json:"body"`
-					CreatedAt string `json:"createdAt"`
-					UpdatedAt string `json:"updatedAt"`
-					URL       string `json:"url"`
-				} `json:"nodes"`
+				Nodes []issueCommentNodeJSON `json:"nodes"`
 			} `json:"comments"`
 		} `json:"issueOrPullRequest"`
 	} `json:"repository"`
@@ -137,18 +127,13 @@ func (c *Client) listComments(ctx context.Context, options CommentListOptions, a
 		return nil, invalidResponse(op, false)
 	}
 	comments := page.Repository.Issue.Comments
-	result := &CommentList{Comments: make([]Comment, 0, len(comments.Nodes))}
+	result := &CommentList{Comments: make([]ListedComment, 0, len(comments.Nodes))}
 	for _, node := range comments.Nodes {
 		if node.ID == "" {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub returned a comment without a usable identifier"}
 		}
-		comment := Comment{ID: node.ID, DatabaseID: node.DatabaseID, Body: node.Body, CreatedAt: node.CreatedAt,
-			UpdatedAt: node.UpdatedAt, URL: node.URL}
-		if node.Author != nil {
-			comment.Author = node.Author.Login
-		}
-		result.Comments = append(result.Comments, comment)
+		result.Comments = append(result.Comments, node.project())
 	}
 	if comments.PageInfo.HasNextPage {
 		if comments.PageInfo.EndCursor == "" {
