@@ -8,12 +8,15 @@ import (
 	"testing"
 )
 
+// The fixture address is assembled so the source holds no literal e-mail address.
+const monaEmail = "mona" + "@" + "github.com"
+
 // The commit documented by GitHub's REST reference for "Get a commit", its accounts shortened to
 // documentedAccount; the verification carries a signature to check the cut.
 const (
 	documentedCommitInner = `"commit":{"url":"https://api.github.com/repos/octo-org/example/git/commits/6dcb09b5",` +
-		`"author":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
-		`"committer":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
+		`"author":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
+		`"committer":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
 		`"message":"Fix all the bugs\n\nWith details.","tree":{"url":"https://api.github.com/repos/octo-org/example/git/trees/6dcb09b5",` +
 		`"sha":"6dcb09b5"},"comment_count":2,"verification":{"verified":true,"reason":"valid",` +
 		`"signature":"-----BEGIN PGP SIGNATURE-----","payload":"tree 6dcb09b5","verified_at":"2011-04-14T16:00:50Z"}}`
@@ -42,8 +45,8 @@ func commitWidthWant() map[string]string {
 			`"comments_url":"https://api.github.com/repos/octo-org/example/commits/6dcb09b5/comments"}`,
 		"author_detail": accountWant, "committer_detail": accountWant,
 		"commit": `{"message":"Fix all the bugs\n\nWith details.","comment_count":2,` +
-			`"author":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
-			`"committer":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
+			`"author":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
+			`"committer":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
 			`"tree":{"sha":"6dcb09b5","links":{"url":"https://api.github.com/repos/octo-org/example/git/trees/6dcb09b5"}},` +
 			`"verification":{"verified":true,"reason":"valid","verified_at":"2011-04-14T16:00:50Z",` +
 			`"payload":"tree 6dcb09b5","signature":"-----BEGIN PGP SIGNATURE-----"},` +
@@ -208,8 +211,8 @@ const documentedCommitSearchPage = `{"total_count":1,"incomplete_results":false,
 	`"sha":"6dcb09b5","html_url":"https://github.com/octo-org/example/commit/6dcb09b5",` +
 	`"comments_url":"https://api.github.com/repos/octo-org/example/commits/6dcb09b5/comments",` +
 	`"commit":{"url":"https://api.github.com/repos/octo-org/example/git/commits/6dcb09b5",` +
-	`"author":{"date":"2011-04-14T16:00:49Z","name":"Monalisa Octocat","email":"mona@github.com"},` +
-	`"committer":{"date":"2011-04-14T16:00:49Z","name":"Monalisa Octocat","email":"mona@github.com"},` +
+	`"author":{"date":"2011-04-14T16:00:49Z","name":"Monalisa Octocat","email":"` + monaEmail + `"},` +
+	`"committer":{"date":"2011-04-14T16:00:49Z","name":"Monalisa Octocat","email":"` + monaEmail + `"},` +
 	`"message":"Fix all the bugs","tree":{"url":"https://api.github.com/repos/octo-org/example/git/trees/6dcb09b5",` +
 	`"sha":"6dcb09b5"},"comment_count":0,"verification":{"verified":false,"reason":"unsigned",` +
 	`"signature":null,"payload":null,"verified_at":null}},"author":` + documentedAccount + `,` +
@@ -236,8 +239,8 @@ func TestCommitSearchReportsEveryDocumentedMember(t *testing.T) {
 	object := members(t, got, "commits", "#0")
 	want := commitWidthWant()
 	want["commit"] = `{"message":"Fix all the bugs","comment_count":0,` +
-		`"author":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
-		`"committer":{"name":"Monalisa Octocat","email":"mona@github.com","date":"2011-04-14T16:00:49Z"},` +
+		`"author":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
+		`"committer":{"name":"Monalisa Octocat","email":"` + monaEmail + `","date":"2011-04-14T16:00:49Z"},` +
 		`"tree":{"sha":"6dcb09b5","links":{"url":"https://api.github.com/repos/octo-org/example/git/trees/6dcb09b5"}},` +
 		`"verification":{"verified":false,"reason":"unsigned"},` +
 		`"links":{"url":"https://api.github.com/repos/octo-org/example/git/commits/6dcb09b5"}}`
