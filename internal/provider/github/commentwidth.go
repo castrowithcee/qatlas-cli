@@ -95,6 +95,31 @@ type ListedComment struct {
 	UserContentEditsTotalCount *int64                 `json:"user_content_edits_total_count,omitempty"`
 }
 
+// projectGivenReactionGroups maps the reaction groups and leaves out a group nobody gave.
+func projectGivenReactionGroups(raw []*gqlReactionGroupRaw) []GraphQLReactionGroup {
+	var groups []GraphQLReactionGroup
+	for _, group := range raw {
+		if group != nil && group.Reactors != nil && group.Reactors.TotalCount != nil && *group.Reactors.TotalCount == 0 {
+			continue
+		}
+		if g := group.project(); g != nil {
+			groups = append(groups, *g)
+		}
+	}
+	return groups
+}
+
+// gqlNames bounds a list of enum names and leaves out empty ones.
+func gqlNames(raw []*string) []string {
+	var names []string
+	for _, name := range raw {
+		if n := gqlName(name); n != nil {
+			names = append(names, *n)
+		}
+	}
+	return names
+}
+
 // project maps one node. A reaction group nobody gave says nothing and stays out.
 func (n *issueCommentNodeJSON) project() ListedComment {
 	comment := ListedComment{
@@ -114,19 +139,8 @@ func (n *issueCommentNodeJSON) project() ListedComment {
 	if n.Author != nil && n.Author.Login != nil {
 		comment.Author = *n.Author.Login
 	}
-	for _, group := range n.ReactionGroups {
-		if group != nil && group.Reactors != nil && group.Reactors.TotalCount != nil && *group.Reactors.TotalCount == 0 {
-			continue
-		}
-		if g := group.project(); g != nil {
-			comment.ReactionGroups = append(comment.ReactionGroups, *g)
-		}
-	}
-	for _, reason := range n.ViewerCannotUpdateReasons {
-		if r := gqlName(reason); r != nil {
-			comment.ViewerCannotUpdateReasons = append(comment.ViewerCannotUpdateReasons, *r)
-		}
-	}
+	comment.ReactionGroups = projectGivenReactionGroups(n.ReactionGroups)
+	comment.ViewerCannotUpdateReasons = gqlNames(n.ViewerCannotUpdateReasons)
 	return comment
 }
 
