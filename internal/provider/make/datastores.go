@@ -18,7 +18,7 @@ import (
 // read first and bound back to the bound team through fetchDataStore, and a data structure named by a create
 // or update is read first and bound the same way, before the one changing request.
 // API (checked 2026-10-04 against developers.make.com's published API reference, not a live account):
-//   - GET /data-stores (teamId required; cols[], pg[offset], pg[limit], pg[sortBy]=name), datastores:read,
+//   - GET /data-stores (teamId required; cols[], pg[offset], pg[limit], pg[sortBy]=name, pg[sortDir]), datastores:read,
 //     answering {"dataStores":[{id,name,records,size,maxSize,teamId,datastructureId}]}; size and maxSize
 //     are documented as strings.
 //   - GET /data-stores/{id} (cols[]), answering {"dataStore":{...}}. The reference lists the scope
@@ -97,8 +97,8 @@ var dataStoresList = capability.Descriptor{
 		"Refused on a connection with a scenario allow-list. Needs the datastores:read scope",
 	Tags: []string{"make", "datastores", "list", "automation"}, Risk: dataStoresReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"offset":{"type":"integer","minimum":0},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		sortDirSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"data_stores":{"type":"array","items":` + dataStoreSummarySchema + `},` +
 		`"offset":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
@@ -107,6 +107,7 @@ var dataStoresList = capability.Descriptor{
 		{Name: "offset", Description: "Data stores to skip before this page; 0 when omitted"},
 		{Name: "limit", Description: "Data stores per page, 1 to " + strconv.Itoa(maxListLimit) + "; " +
 			strconv.Itoa(defaultListLimit) + " when omitted"},
+		sortDirArgument,
 	},
 	Fields: append(append([]capability.Field{}, dataStoreSummaryFields...),
 		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
@@ -295,6 +296,9 @@ func invokeDataStoresList(ctx context.Context, resolved *config.Resolved, secret
 	var input pagingArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := input.validate(); err != nil {
+		return nil, err
 	}
 	if err := selectDataStructures(resolved); err != nil {
 		return nil, err
