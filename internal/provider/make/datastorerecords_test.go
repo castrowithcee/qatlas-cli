@@ -391,3 +391,28 @@ func TestRecordsReplaceAndUpdateAreNeverRetriedAndCheckTheKey(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordsListReportsSpecStrictAndMakesCount(t *testing.T) {
+	h := newRecordsEnv(t)
+	h.records = `{"records":[{"key":"a","data":{"n":1}}],"spec":[{"type":"number","name":"n","default":7},` +
+		`{"type":"text","name":"t","default":"` + strings.Repeat("x", maxSpecDefault+1) + `"}],"strict":false,"count":300,` +
+		`"pg":{"sortBy":"x"}}`
+	result, err := h.invoke(dataStoreRecordsList.ID, "open", `{"datastore_id":`+storeID+`}`)
+	for _, want := range []string{`"count":1`, `"total_count":300`, `"strict":false`, `"default":7`, `"spec_truncated":true`} {
+		if err != nil || !strings.Contains(result, want) {
+			t.Fatalf("list lacks %s: %s, %v", want, result, err)
+		}
+	}
+	if assertOutputDeclared(t, dataStoreRecordsList.ID, []byte(result)) < 8 {
+		t.Fatalf("too few members: %s", result)
+	}
+	if q := h.calls[len(h.calls)-1].query; q.Get("pg[sortBy]") != "" || q.Get("pg[sortDir]") != "" {
+		t.Fatalf("records list sent a sort: %+v", q)
+	}
+	h.records = `{"records":[]}`
+	result, err = h.invoke(dataStoreRecordsList.ID, "open", `{"datastore_id":`+storeID+`}`)
+	if err != nil || strings.Contains(result, "total_count") || strings.Contains(result, "strict") ||
+		strings.Contains(result, `"spec`) {
+		t.Fatalf("answer without the new fields = %s, %v", result, err)
+	}
+}
