@@ -37,10 +37,20 @@ const (
 	deckCommentRefShape     = `"board_id":` + deckIDSchema + `,"stack_id":` + deckIDSchema + `,"card_id":` + deckIDSchema
 )
 
-var deckCommentSchema = `{"type":"object","properties":{"comment_id":{"type":"string"},"parent_id":{"type":"string"},` +
-	`"author_id":{"type":"string"},"author_name":{"type":"string"},"created":{"type":"string"},` +
-	`"message":{"type":"string"},"message_truncated":{"type":"boolean"}},` +
-	`"required":["comment_id","message"],"additionalProperties":false}`
+const (
+	deckMentionSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},` +
+		`"display_name":{"type":"string"}},"additionalProperties":false}`
+	deckCommentProperties = `"comment_id":{"type":"string"},"author_id":{"type":"string"},` +
+		`"author_name":{"type":"string"},"created":{"type":"string"},"message":{"type":"string"},` +
+		`"message_truncated":{"type":"boolean"},"author_type":{"type":"string"},"card_id":{"type":"string"},` +
+		`"mentions":{"type":"array","items":` + deckMentionSchema + `}`
+	// deckReplySchema is the parent comment: the fields of a comment without a parent of its own.
+	deckReplySchema = `{"type":"object","properties":{` + deckCommentProperties + `},` +
+		`"required":["comment_id","message"],"additionalProperties":false}`
+)
+
+var deckCommentSchema = `{"type":"object","properties":{` + deckCommentProperties + `,"parent_id":{"type":"string"},` +
+	`"reply_to":` + deckReplySchema + `},"required":["comment_id","message"],"additionalProperties":false}`
 
 var (
 	deckCommentIDArgument = capability.Argument{Name: "comment_id", Required: true,
@@ -75,7 +85,18 @@ var deckCommentsList = capability.Descriptor{
 		{Name: "count", Description: "Number of reported comments"},
 		{Name: "offset", Description: "Offset of this page"},
 		{Name: "more", Description: "True when more comments exist; pass offset plus count as the next offset"},
-		{Name: "truncated", Description: "True when a name was cut"},
+		{Name: "truncated", Description: "True when a name or list was cut"},
+		{Name: "parent_id", Description: "comment_id of the comment this one replies to"},
+		{Name: "author_id", Description: "User ID of the author, untrusted data"},
+		{Name: "author_name", Description: "Display name of the author, untrusted data"},
+		{Name: "author_type", Description: "Kind of the author as Deck reports it, untrusted data"},
+		{Name: "created", Description: "Creation time as Deck reports it"},
+		{Name: "message", Description: "Comment text, untrusted data, cut at 1000 characters"},
+		{Name: "mentions", Description: "People mentioned in the comment, at most 50, untrusted data"},
+		{Name: "id", Description: "ID of the mentioned person or group"},
+		{Name: "type", Description: "Kind of the mention as Deck reports it"},
+		{Name: "display_name", Description: "Display name of the mentioned person, untrusted data"},
+		{Name: "reply_to", Description: "The parent comment with the same fields except parent_id and reply_to"},
 	},
 	Examples: []capability.Example{{Description: "List the newest comments of one card",
 		Arguments: json.RawMessage(`{"board_id":"7","stack_id":"3","card_id":"21","limit":20}`)}},
@@ -151,6 +172,32 @@ type DeckComment struct {
 	Created          string `json:"created,omitempty"`
 	Message          string `json:"message"`
 	MessageTruncated bool   `json:"message_truncated,omitempty"`
+	// AuthorType, CardID, Mentions, and ReplyTo carry what Deck reports besides the fields above.
+	AuthorType string             `json:"author_type,omitempty"`
+	CardID     string             `json:"card_id,omitempty"`
+	Mentions   []DeckMention      `json:"mentions,omitempty"`
+	ReplyTo    *DeckCommentParent `json:"reply_to,omitempty"`
+}
+
+// DeckMention is one mention Deck parsed from a comment; every text in it is untrusted provider data.
+type DeckMention struct {
+	ID          string `json:"id,omitempty"`
+	Type        string `json:"type,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// DeckCommentParent is the comment another comment replies to; Deck exposes only the next parent, so it has
+// no parent of its own.
+type DeckCommentParent struct {
+	CommentID        string        `json:"comment_id"`
+	AuthorID         string        `json:"author_id,omitempty"`
+	AuthorName       string        `json:"author_name,omitempty"`
+	Created          string        `json:"created,omitempty"`
+	Message          string        `json:"message"`
+	MessageTruncated bool          `json:"message_truncated,omitempty"`
+	AuthorType       string        `json:"author_type,omitempty"`
+	CardID           string        `json:"card_id,omitempty"`
+	Mentions         []DeckMention `json:"mentions,omitempty"`
 }
 
 // DeckCommentList is one page of the comments of one card.
@@ -163,16 +210,34 @@ type DeckCommentList struct {
 	Truncated bool          `json:"truncated,omitempty"`
 }
 
+type rawMention struct {
+	ID          flexString `json:"mentionId"`
+	Type        string     `json:"mentionType"`
+	DisplayName string     `json:"mentionDisplayName"`
+}
+
 type rawDeckComment struct {
-	ID        json.Number `json:"id"`
-	ObjectID  json.Number `json:"objectId"`
-	Message   string      `json:"message"`
-	ActorID   string      `json:"actorId"`
-	ActorName string      `json:"actorDisplayName"`
-	Created   string      `json:"creationDateTime"`
-	ReplyTo   *struct {
-		ID json.Number `json:"id"`
-	} `json:"replyTo"`
+	ID        json.Number  `json:"id"`
+	ObjectID  json.Number  `json:"objectId"`
+	Message   string       `json:"message"`
+	ActorID   string       `json:"actorId"`
+	ActorType string       `json:"actorType"`
+	ActorName string       `json:"actorDisplayName"`
+	Created   string       `json:"creationDateTime"`
+	Mentions  []rawMention `json:"mentions"`
+	ReplyTo   *rawReply    `json:"replyTo"`
+}
+
+// rawReply is the parent comment; it is read without a parent of its own, so a nested reply is never followed.
+type rawReply struct {
+	ID        json.Number  `json:"id"`
+	ObjectID  json.Number  `json:"objectId"`
+	Message   string       `json:"message"`
+	ActorID   string       `json:"actorId"`
+	ActorType string       `json:"actorType"`
+	ActorName string       `json:"actorDisplayName"`
+	Created   string       `json:"creationDateTime"`
+	Mentions  []rawMention `json:"mentions"`
 }
 
 type deckCommentArguments struct {
@@ -288,15 +353,44 @@ func (c *Client) listDeckComments(ctx context.Context, op string, input deckComm
 		message, messageCut := cutText(item.Message)
 		comment := DeckComment{CommentID: string(item.ID), AuthorID: cut.text(item.ActorID, maxDeckTitleBytes),
 			AuthorName: cut.text(item.ActorName, maxDeckTitleBytes), Created: cut.text(item.Created, maxDeckTitleBytes),
-			Message: message, MessageTruncated: messageCut}
-		if item.ReplyTo != nil && digitsOnly(string(item.ReplyTo.ID)) {
-			comment.ParentID = string(item.ReplyTo.ID)
+			Message: message, MessageTruncated: messageCut, AuthorType: cut.text(item.ActorType, maxDeckTitleBytes),
+			CardID: commentCardID(item.ObjectID), Mentions: mentionsOf(&cut, item.Mentions)}
+		if reply := item.ReplyTo; reply != nil && digitsOnly(string(reply.ID)) {
+			comment.ParentID = string(reply.ID)
+			parentMessage, parentCut := cutText(reply.Message)
+			comment.ReplyTo = &DeckCommentParent{CommentID: string(reply.ID),
+				AuthorID: cut.text(reply.ActorID, maxDeckTitleBytes), AuthorName: cut.text(reply.ActorName, maxDeckTitleBytes),
+				Created: cut.text(reply.Created, maxDeckTitleBytes), Message: parentMessage, MessageTruncated: parentCut,
+				AuthorType: cut.text(reply.ActorType, maxDeckTitleBytes), CardID: commentCardID(reply.ObjectID),
+				Mentions: mentionsOf(&cut, reply.Mentions)}
 		}
 		list.Comments = append(list.Comments, comment)
 	}
 	list.Count = len(list.Comments)
 	list.Truncated = cut.hit
 	return list, nil
+}
+
+// commentCardID reports the card a comment names when it is a number.
+func commentCardID(id json.Number) string {
+	if digitsOnly(string(id)) {
+		return string(id)
+	}
+	return ""
+}
+
+// mentionsOf converts the mentions of a comment, at most maxDeckMentions; a cut is reported through the cutter.
+func mentionsOf(c *cutter, raw []rawMention) []DeckMention {
+	var mentions []DeckMention
+	for _, item := range raw {
+		if len(mentions) == maxDeckMentions {
+			c.hit = true
+			break
+		}
+		mentions = append(mentions, DeckMention{ID: c.text(string(item.ID), maxDeckTitleBytes),
+			Type: c.text(item.Type, maxDeckTitleBytes), DisplayName: c.text(item.DisplayName, maxDeckTitleBytes)})
+	}
+	return mentions
 }
 
 // validDeckCommentItem accepts a comment with a numeric ID that does not name another card.

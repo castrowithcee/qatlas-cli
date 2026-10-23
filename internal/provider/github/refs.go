@@ -24,7 +24,8 @@ import (
 // bounds a commit's.
 const maxTagMessageLength = 4096
 
-const branchProperties = `"name":{"type":"string"},"protected":{"type":"boolean"},"sha":{"type":"string"}`
+var branchProperties = `"name":{"type":"string"},"protected":{"type":"boolean"},"sha":{"type":"string"},` +
+	branchWidthProperties
 
 const branchRequired = `"required":["name","protected","sha"],"additionalProperties":false`
 
@@ -37,17 +38,20 @@ var branchesList = capability.Descriptor{
 	Tags:         []string{"github", "branches", "list"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(pagingKeys),
+	InputSchema:  inputSchema(`"protected":{"type":"boolean"},` + pagingKeys),
 	OutputSchema: listOutput("branches", branchProperties, branchRequired),
-	Arguments:    pagingArguments,
-	Fields: append([]capability.Field{
+	Arguments: append([]capability.Argument{
+		{Name: "protected", Description: "true returns only protected branches, false only unprotected ones; " +
+			"every branch when omitted"},
+	}, pagingArguments...),
+	Fields: append(append([]capability.Field{
 		{Name: "branches", Description: "Branches with name, whether they are protected, and their latest " +
-			"commit sha"},
-	}, pagingFields...),
+			"commit sha, then the members of GitHub's branch below"},
+	}, branchWidthFields...), pagingFields...),
 	Examples: []capability.Example{{Description: "List the branches", Arguments: json.RawMessage(`{}`)}},
 }
 
-const tagEntryProperties = `"name":{"type":"string"},"sha":{"type":"string"}`
+var tagEntryProperties = `"name":{"type":"string"},"sha":{"type":"string"},` + tagWidthProperties
 
 const tagEntryRequired = `"required":["name","sha"],"additionalProperties":false`
 
@@ -63,16 +67,18 @@ var tagsList = capability.Descriptor{
 	InputSchema:  inputSchema(pagingKeys),
 	OutputSchema: listOutput("tags", tagEntryProperties, tagEntryRequired),
 	Arguments:    pagingArguments,
-	Fields: append([]capability.Field{
-		{Name: "tags", Description: "Tags with name and the commit SHA it points at; an annotated tag's own " +
-			"object SHA is not this commit SHA and is read only by github.tags.get"},
-	}, pagingFields...),
+	Fields: append(append([]capability.Field{
+		{Name: "tags", Description: "Tags with name and the commit SHA it points at, then the members of " +
+			"GitHub's tag below; an annotated tag's own object SHA is not this commit SHA and is read only by " +
+			"github.tags.get"},
+	}, tagWidthFields...), pagingFields...),
 	Examples: []capability.Example{{Description: "List the tags", Arguments: json.RawMessage(`{}`)}},
 }
 
-const tagDetailProperties = `"name":{"type":"string"},"type":{"type":"string"},"sha":{"type":"string"},` +
+var tagDetailProperties = `"name":{"type":"string"},"type":{"type":"string"},"sha":{"type":"string"},` +
 	`"target_sha":{"type":"string"},"target_type":{"type":"string"},"tagger":{"type":"string"},` +
-	`"tagged_at":{"type":"string"},"message":{"type":"string"},"message_truncated":{"type":"boolean"}`
+	`"tagged_at":{"type":"string"},"message":{"type":"string"},"message_truncated":{"type":"boolean"},` +
+	tagGetWidthProperties
 
 var tagsGet = capability.Descriptor{
 	ID:      Provider + ".tags.get",
@@ -89,7 +95,7 @@ var tagsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "tag", Description: "Tag name", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "type", Description: "lightweight or annotated"},
 		{Name: "sha", Description: "The commit this tag points at when lightweight, or its own tag object SHA " +
 			"when annotated"},
@@ -101,13 +107,13 @@ var tagsGet = capability.Descriptor{
 			"with message_truncated; present only for one"},
 		{Name: "name", Description: "Tag name"},
 		{Name: "message_truncated", Description: "True when message was cut"},
-	},
+	}, tagGetWidthFields...),
 	Examples: []capability.Example{{Description: "Read one tag", Arguments: json.RawMessage(`{"tag":"v1.0.0"}`)}},
 }
 
 func refsOperations() []capability.Operation {
 	return []capability.Operation{
-		{Descriptor: branchesList, Handler: refsHandler(branchesList.ID, checkRefsPagingOnly("branches"),
+		{Descriptor: branchesList, Handler: refsHandler(branchesList.ID, checkBranchesListArguments,
 			func(ctx context.Context, c *Client, a *refsArguments) (any, error) { return c.listBranches(ctx, a) })},
 		{Descriptor: tagsList, Handler: refsHandler(tagsList.ID, checkRefsPagingOnly("tags"),
 			func(ctx context.Context, c *Client, a *refsArguments) (any, error) { return c.listTags(ctx, a) })},
@@ -119,12 +125,14 @@ func refsOperations() []capability.Operation {
 // refsArguments holds the arguments of every branch and tag tool; the input schema of each tool admits only
 // its own. page, perPage, and binding are derived by the checks.
 type refsArguments struct {
-	Tag    string `json:"tag"`
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor"`
+	Tag       string `json:"tag"`
+	Protected *bool  `json:"protected"`
+	Limit     int    `json:"limit"`
+	Cursor    string `json:"cursor"`
 
-	page, perPage int
-	binding       []byte
+	protectedValue string
+	page, perPage  int
+	binding        []byte
 }
 
 // refsHandler decodes and checks the arguments and the repository before a credential is resolved, so a
@@ -165,6 +173,23 @@ func checkRefsPagingOnly(list string) func(*refsArguments, target) error {
 	}
 }
 
+// checkBranchesListArguments adds the protection filter to the paging; it joins the binding only when set,
+// so a cursor issued without it stays valid.
+func checkBranchesListArguments(a *refsArguments, bound target) error {
+	limit, err := normalizeLimit(a.Limit)
+	if err != nil {
+		return err
+	}
+	binding := []any{"refs", "branches", bound.String()}
+	if a.Protected != nil {
+		a.protectedValue = strconv.FormatBool(*a.Protected)
+		binding = append(binding, "protected", a.protectedValue)
+	}
+	a.binding = fingerprint(binding...)
+	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
+	return err
+}
+
 func checkTagsGetArguments(a *refsArguments, _ target) error {
 	if !validRef(a.Tag) {
 		return invalidRequest("tag must be a valid tag name")
@@ -173,7 +198,11 @@ func checkTagsGetArguments(a *refsArguments, _ target) error {
 }
 
 func (a *refsArguments) query() url.Values {
-	return url.Values{"per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	query := url.Values{"per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	if a.protectedValue != "" {
+		query.Set("protected", a.protectedValue)
+	}
+	return query
 }
 
 // Permission messages of the branch and tag tools. GitHub decides on every request; a message names what
@@ -189,21 +218,29 @@ const (
 
 // Branch is the compact view of one branch.
 type Branch struct {
-	Name      string `json:"name"`
-	Protected bool   `json:"protected"`
-	SHA       string `json:"sha"`
+	Name       string                `json:"name"`
+	Protected  bool                  `json:"protected"`
+	SHA        string                `json:"sha"`
+	Commit     *RESTRefCommit        `json:"commit,omitempty"`
+	Protection *RESTBranchProtection `json:"protection,omitempty"`
+	Links      Links                 `json:"links,omitempty"`
 }
 
 type branchJSON struct {
 	Name      string `json:"name"`
 	Protected bool   `json:"protected"`
 	Commit    struct {
-		SHA string `json:"sha"`
+		SHA string  `json:"sha"`
+		URL *string `json:"url"`
 	} `json:"commit"`
+	Protection    *branchProtectionRaw `json:"protection"`
+	ProtectionURL *string              `json:"protection_url"`
 }
 
 func (b branchJSON) view() Branch {
-	return Branch{Name: b.Name, Protected: b.Protected, SHA: b.Commit.SHA}
+	return Branch{Name: b.Name, Protected: b.Protected, SHA: b.Commit.SHA,
+		Commit:     &RESTRefCommit{SHA: *nameText(&b.Commit.SHA), Links: linkOf("url", b.Commit.URL)},
+		Protection: b.Protection.project(), Links: linkOf("protection_url", b.ProtectionURL)}
 }
 
 // BranchList is one batch of branches.
@@ -233,19 +270,31 @@ func (c *Client) listBranches(ctx context.Context, a *refsArguments) (*BranchLis
 
 // TagEntry is the compact view of one tag of the list.
 type TagEntry struct {
-	Name string `json:"name"`
-	SHA  string `json:"sha"`
+	Name   string         `json:"name"`
+	SHA    string         `json:"sha"`
+	NodeID *string        `json:"node_id,omitempty"`
+	Commit *RESTRefCommit `json:"commit,omitempty"`
+	Links  Links          `json:"links,omitempty"`
 }
 
 type tagEntryJSON struct {
-	Name   string `json:"name"`
+	Name   string  `json:"name"`
+	NodeID *string `json:"node_id"`
 	Commit struct {
-		SHA string `json:"sha"`
+		SHA string  `json:"sha"`
+		URL *string `json:"url"`
 	} `json:"commit"`
+	ZipballURL *string `json:"zipball_url"`
+	TarballURL *string `json:"tarball_url"`
 }
 
 func (t tagEntryJSON) view() TagEntry {
-	return TagEntry{Name: t.Name, SHA: t.Commit.SHA}
+	links := linkOf("zipball_url", t.ZipballURL)
+	if tarball := linkOf("tarball_url", t.TarballURL); tarball != nil {
+		links = withLink(links, "tarball_url", tarball["tarball_url"])
+	}
+	return TagEntry{Name: t.Name, SHA: t.Commit.SHA, NodeID: nameText(t.NodeID),
+		Commit: &RESTRefCommit{SHA: *nameText(&t.Commit.SHA), Links: linkOf("url", t.Commit.URL)}, Links: links}
 }
 
 // TagList is one batch of tags.
@@ -284,25 +333,23 @@ type TagDetail struct {
 	TaggedAt         string `json:"tagged_at,omitempty"`
 	Message          string `json:"message,omitempty"`
 	MessageTruncated bool   `json:"message_truncated,omitempty"`
+	TagWidth
 }
 
 type tagRefJSON struct {
-	Object struct {
-		SHA  string `json:"sha"`
-		Type string `json:"type"`
-	} `json:"object"`
+	Ref    *string      `json:"ref"`
+	NodeID *string      `json:"node_id"`
+	URL    *string      `json:"url"`
+	Object refObjectRaw `json:"object"`
 }
 
 type tagObjectJSON struct {
-	Message string `json:"message"`
-	Tagger  struct {
-		Name string `json:"name"`
-		Date string `json:"date"`
-	} `json:"tagger"`
-	Object struct {
-		SHA  string `json:"sha"`
-		Type string `json:"type"`
-	} `json:"object"`
+	NodeID       *string                `json:"node_id"`
+	URL          *string                `json:"url"`
+	Message      string                 `json:"message"`
+	Tagger       commitIdentityRaw      `json:"tagger"`
+	Object       refObjectRaw           `json:"object"`
+	Verification *commitVerificationRaw `json:"verification"`
 }
 
 // tagRefPath and tagObjectPath escape the tag name and the object SHA as one opaque path segment each, the
@@ -326,23 +373,30 @@ func (c *Client) getTag(ctx context.Context, name string) (*TagDetail, error) {
 	if err := c.rest(ctx, op, c.tagRefPath(name), &ref); err != nil {
 		return nil, actionsFailure(err, tagsReadPermission)
 	}
-	if !validObjectSHA(ref.Object.SHA) {
+	refSHA, refType := valueOr(ref.Object.SHA), valueOr(ref.Object.Type)
+	if !validObjectSHA(refSHA) {
 		return nil, invalidEntry(op, "a tag ref")
 	}
-	if ref.Object.Type != "tag" {
-		return &TagDetail{Name: name, Type: "lightweight", SHA: ref.Object.SHA}, nil
+	refDetail := &RESTTagRef{Ref: nameText(ref.Ref), NodeID: nameText(ref.NodeID), Object: ref.Object.project(),
+		Links: linkOf("url", ref.URL)}
+	if refType != "tag" {
+		return &TagDetail{Name: name, Type: "lightweight", SHA: refSHA, TagWidth: TagWidth{RefDetail: refDetail}}, nil
 	}
 	var obj tagObjectJSON
-	if err := c.rest(ctx, op, c.tagObjectPath(ref.Object.SHA), &obj); err != nil {
+	if err := c.rest(ctx, op, c.tagObjectPath(refSHA), &obj); err != nil {
 		return nil, actionsFailure(err, tagsReadPermission)
 	}
-	if !validObjectSHA(obj.Object.SHA) || obj.Object.Type == "" {
+	targetSHA, targetType := valueOr(obj.Object.SHA), valueOr(obj.Object.Type)
+	if !validObjectSHA(targetSHA) || targetType == "" {
 		return nil, invalidEntry(op, "a tag object")
 	}
 	message, truncated := cutRunes(obj.Message, maxTagMessageLength)
-	return &TagDetail{Name: name, Type: "annotated", SHA: ref.Object.SHA, TargetSHA: obj.Object.SHA,
-		TargetType: obj.Object.Type, Tagger: obj.Tagger.Name, TaggedAt: obj.Tagger.Date, Message: message,
-		MessageTruncated: truncated}, nil
+	return &TagDetail{Name: name, Type: "annotated", SHA: refSHA, TargetSHA: targetSHA,
+		TargetType: targetType, Tagger: valueOr(obj.Tagger.Name), TaggedAt: valueOr(obj.Tagger.Date),
+		Message: message, MessageTruncated: truncated,
+		TagWidth: TagWidth{NodeID: nameText(obj.NodeID), Links: linkOf("url", obj.URL),
+			TaggerDetail: obj.Tagger.project(), ObjectDetail: obj.Object.project(),
+			Verification: obj.Verification.project(), RefDetail: refDetail}}, nil
 }
 
 // validObjectSHA accepts the hex object SHA GitHub's Git refs and Git tags routes report: at least the

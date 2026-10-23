@@ -59,3 +59,8 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Attachments of issues and comments carry `type` and allow `browser_download_url` in the edit; the latter is not
   offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
+
+## Not on Forgejo
+
+Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
+not registered. See [Projects](gitea/projects.md).

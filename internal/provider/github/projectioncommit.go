@@ -325,12 +325,14 @@ func (r *commitRaw) project() RESTCommit {
 var restCommitIdentitySchema = objectSchema(`"name":{"type":"string"},"email":{"type":"string"},` +
 	`"date":{"type":"string"}`)
 
+var restCommitVerificationSchema = objectSchema(`"verified":{"type":"boolean"},"reason":{"type":"string"},` +
+	`"verified_at":{"type":"string"},"payload":{"type":"string"},"payload_truncated":{"type":"boolean"},` +
+	`"signature":{"type":"string"},"signature_truncated":{"type":"boolean"}`)
+
 var restCommitInnerSchema = objectSchema(`"message":{"type":"string"},"message_truncated":{"type":"boolean"},` +
 	`"comment_count":{"type":"integer"},"author":` + restCommitIdentitySchema + `,"committer":` +
 	restCommitIdentitySchema + `,"tree":` + objectSchema(`"sha":{"type":"string"},"links":`+
-	linksSchema(restCommitTreeLinkKeys)) + `,"verification":` + objectSchema(`"verified":{"type":"boolean"},`+
-	`"reason":{"type":"string"},"verified_at":{"type":"string"},"payload":{"type":"string"},`+
-	`"payload_truncated":{"type":"boolean"},"signature":{"type":"string"},"signature_truncated":{"type":"boolean"}`) +
+	linksSchema(restCommitTreeLinkKeys)) + `,"verification":` + restCommitVerificationSchema +
 	`,"links":` + linksSchema(restCommitInnerLinkKeys))
 
 var restCommitFileSchema = objectSchema(`"sha":{"type":"string"},"path":{"type":"string"},` +
@@ -338,12 +340,14 @@ var restCommitFileSchema = objectSchema(`"sha":{"type":"string"},"path":{"type":
 	`"changes":{"type":"integer"},"previous_filename":{"type":"string"},"patch":{"type":"string"},` +
 	`"patch_truncated":{"type":"boolean"},"links":` + linksSchema(restDiffEntryLinkKeys))
 
+var restCommitParentsSchema = `{"type":"array","maxItems":100,"items":` + objectSchema(`"sha":{"type":"string"},`+
+	`"url":{"type":"string"},"links":`+linksSchema(restCommitParentKeys)) + `}`
+
 // restCommitProperties describes RESTCommit.
 var restCommitProperties = `"sha":{"type":"string"},"node_id":{"type":"string"},"url":{"type":"string"},` +
 	`"links":` + linksSchema(restCommitLinkKeys) + `,"author_detail":` + restAccountSchema +
 	`,"committer_detail":` + restAccountSchema + `,"commit":` + restCommitInnerSchema +
-	`,"parents_details":{"type":"array","maxItems":100,"items":` + objectSchema(`"sha":{"type":"string"},`+
-	`"url":{"type":"string"},"links":`+linksSchema(restCommitParentKeys)) + `},"stats":` +
+	`,"parents_details":` + restCommitParentsSchema + `,"stats":` +
 	objectSchema(`"additions":{"type":"integer"},"deletions":{"type":"integer"},"total":{"type":"integer"}`) +
 	`,"files":{"type":"array","maxItems":300,"items":` + restCommitFileSchema + `},"files_truncated":{"type":"boolean"}`
 

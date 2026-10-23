@@ -16,7 +16,8 @@ import (
 var userGroupSchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"name":{"type":"string"},"display_name":{"type":"string"},` +
 	`"description":{"type":"string"},"source":{"type":"string"},"member_count":{"type":"integer"},` +
-	`"allow_reference":{"type":"boolean"}},` +
+	`"allow_reference":{"type":"boolean"},"remote_id":{"type":"string"},"create_at":{"type":"string"},` +
+	`"update_at":{"type":"string"},"delete_at":{"type":"string"},"has_syncables":{"type":"boolean"}},` +
 	`"required":["id","name","display_name","description","source","member_count","allow_reference"],` +
 	`"additionalProperties":false}`
 
@@ -26,13 +27,14 @@ var usergroupsList = capability.Descriptor{
 	Title:   "List Infomaniak kChat user groups",
 	Description: "List the user groups of one bound team or of one channel this connection may reach, one page at " +
 		"a time, with name, display name, description, source, and member count; exactly one of team_id and " +
-		"channel_id; no members",
+		"channel_id; optionally only groups that may be mentioned; no members",
 	Tags:     []string{"infomaniak", "kchat", "usergroups", "users", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"team_id":` + idSchema + `,"channel_id":` + idSchema + `,"page":{"type":"integer","minimum":1},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `},` +
+		`"filter_allow_reference":{"type":"boolean"}},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"team_id":` + idSchema + `,"channel_id":` + idSchema + `,"groups":{"type":"array","items":` +
 		userGroupSchema + `},"page":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
@@ -44,6 +46,7 @@ var usergroupsList = capability.Descriptor{
 		{Name: "page", Description: "1-based page of the user groups; the first page when omitted"},
 		{Name: "limit", Description: "User groups per page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
+		{Name: "filter_allow_reference", Description: "True lists only groups that may be mentioned"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the user group"},
@@ -53,6 +56,11 @@ var usergroupsList = capability.Descriptor{
 		{Name: "source", Description: "Origin of the group as kChat reports it, untrusted data"},
 		{Name: "member_count", Description: "Number of members as kChat reports it"},
 		{Name: "allow_reference", Description: "True when the group may be mentioned"},
+		{Name: "remote_id", Description: "Identifier of the group in its source system, untrusted data"},
+		{Name: "create_at", Description: "When the group was created, RFC 3339 in UTC"},
+		{Name: "update_at", Description: "When the group was last updated, RFC 3339 in UTC"},
+		{Name: "delete_at", Description: "When the group was deleted, RFC 3339 in UTC"},
+		{Name: "has_syncables", Description: "True when the group is linked to teams or channels"},
 		{Name: "team_id", Description: "Team that was listed, when listed by team"},
 		{Name: "channel_id", Description: "Channel that was listed, when listed by channel"},
 		{Name: "page", Description: "Page that was read"},
@@ -71,6 +79,12 @@ type userGroupJSON struct {
 	Source         string `json:"source"`
 	MemberCount    int    `json:"member_count"`
 	AllowReference bool   `json:"allow_reference"`
+
+	RemoteID     tolerant[string] `json:"remote_id"`
+	CreateAt     flexInt          `json:"create_at"`
+	UpdateAt     flexInt          `json:"update_at"`
+	DeleteAt     flexInt          `json:"delete_at"`
+	HasSyncables tolerant[*bool]  `json:"has_syncables"`
 }
 
 // UserGroup is the stable Qatlas view of one user group.
@@ -82,6 +96,12 @@ type UserGroup struct {
 	Source         string `json:"source"`
 	MemberCount    int    `json:"member_count"`
 	AllowReference bool   `json:"allow_reference"`
+
+	RemoteID     string `json:"remote_id,omitempty"`
+	CreateAt     string `json:"create_at,omitempty"`
+	UpdateAt     string `json:"update_at,omitempty"`
+	DeleteAt     string `json:"delete_at,omitempty"`
+	HasSyncables *bool  `json:"has_syncables,omitempty"`
 }
 
 // UserGroupsPage is one page of the user groups of a team or channel.
@@ -97,7 +117,10 @@ type UserGroupsPage struct {
 func invokeUserGroupsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "list user groups"
-	var input usersListArguments
+	var input struct {
+		usersListArguments
+		FilterAllowReference bool `json:"filter_allow_reference"`
+	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
@@ -119,14 +142,17 @@ func invokeUserGroupsList(ctx context.Context, resolved *config.Resolved, secret
 	if err := filter.confirm(ctx, client, op); err != nil {
 		return nil, err
 	}
-	return client.ListUserGroups(ctx, filter, page, limit)
+	return client.ListUserGroups(ctx, filter, input.FilterAllowReference, page, limit)
 }
 
 // ListUserGroups reads one page of the user groups of a team or channel and never follows a further page.
 // kChat answers with a bare array or with an object holding a groups array; both are read.
-func (c *Client) ListUserGroups(ctx context.Context, filter userFilter, page, limit int) (*UserGroupsPage, error) {
+func (c *Client) ListUserGroups(ctx context.Context, filter userFilter, onlyReferable bool, page, limit int) (*UserGroupsPage, error) {
 	const op = "list user groups"
 	query := url.Values{"page": {strconv.Itoa(page - 1)}, "per_page": {strconv.Itoa(limit)}}
+	if onlyReferable {
+		query.Set("filter_allow_reference", "true")
+	}
 	path := "/api/v4/teams/" + url.PathEscape(filter.teamID) + "/groups"
 	if filter.teamID == "" {
 		path = "/api/v4/channels/" + url.PathEscape(filter.channelID) + "/groups"
@@ -153,7 +179,9 @@ func (c *Client) ListUserGroups(ctx context.Context, filter userFilter, page, li
 		}
 		entries = append(entries, UserGroup{ID: g.ID, Name: bounded(g.Name), DisplayName: bounded(g.DisplayName),
 			Description: bounded(g.Description), Source: bounded(g.Source), MemberCount: g.MemberCount,
-			AllowReference: g.AllowReference})
+			AllowReference: g.AllowReference, RemoteID: cleanText(g.RemoteID.Value),
+			CreateAt: msToRFC3339(int64(g.CreateAt)), UpdateAt: msToRFC3339(int64(g.UpdateAt)),
+			DeleteAt: msToRFC3339(int64(g.DeleteAt)), HasSyncables: g.HasSyncables.Value})
 	}
 	return &UserGroupsPage{TeamID: filter.teamID, ChannelID: filter.channelID, Groups: entries, Page: page,
 		HasMore: len(groups) >= limit, Count: len(entries)}, nil
