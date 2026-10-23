@@ -62,10 +62,11 @@ const notificationsChangePermission = "GitHub refused this change of a notificat
 const repositorySubscriptionPermission = "GitHub refused this change of a repository subscription; check the " +
 	"scopes or permissions of the token, and that it can see the repository"
 
-const notificationProperties = `"id":{"type":"string"},"repository":{"type":"string"},"reason":{"type":"string"},` +
+var notificationProperties = `"id":{"type":"string"},"repository":{"type":"string"},"reason":{"type":"string"},` +
 	`"unread":{"type":"boolean"},"updated_at":{"type":"string"},"last_read_at":{"type":"string"},` +
 	`"subject_title":{"type":"string"},"title_truncated":{"type":"boolean"},"subject_type":{"type":"string"},` +
-	`"subject_url":{"type":"string"},"latest_comment_url":{"type":"string"}`
+	`"subject_url":{"type":"string"},"latest_comment_url":{"type":"string"},` + detailProperty("repository", restRepositorySchema, false) +
+	`,"links":` + linksSchema(notificationLinkKeys)
 
 const notificationRequired = `"required":["id","repository","reason","unread","updated_at","subject_title",` +
 	`"subject_type"],"additionalProperties":false`
@@ -83,6 +84,8 @@ var notificationFields = []capability.Field{
 	{Name: "subject_url", Description: "API address of the subject"},
 	{Name: "latest_comment_url", Description: "API address of the latest comment of the subject"},
 	{Name: "title_truncated", Description: "True when subject_title was cut"},
+	repositoryDetailField,
+	{Name: "links", Description: "REST url and subscription_url of the thread, untrusted data, never fetched"},
 }
 
 var notificationPaging = []capability.Argument{
@@ -119,7 +122,8 @@ var notificationsList = capability.Descriptor{
 	}, notificationPaging...),
 	Fields: append([]capability.Field{
 		{Name: "notifications", Description: "Threads of one batch: id, repository, reason, unread, times, " +
-			"subject_title (untrusted data), subject_type, and the subject and latest comment address"},
+			"subject_title (untrusted data), subject_type, the subject and latest comment address, the repository " +
+			"object, and the addresses of the thread"},
 		{Name: "repository", Description: "Repository the list was bound to; absent for the whole account"},
 	}, pagingFields...),
 	Examples: []capability.Example{{
@@ -300,6 +304,9 @@ type Notification struct {
 	SubjectType      string `json:"subject_type"`
 	SubjectURL       string `json:"subject_url,omitempty"`
 	LatestCommentURL string `json:"latest_comment_url,omitempty"`
+
+	RepositoryDetail *RESTRepository `json:"repository_detail,omitempty"`
+	Links            Links           `json:"links,omitempty"`
 }
 
 // NotificationList is one batch of notification threads.
@@ -358,6 +365,30 @@ type notificationJSON struct {
 			Login string `json:"login"`
 		} `json:"owner"`
 	} `json:"repository"`
+
+	repositoryDetail *repositoryRaw
+	links            Links
+}
+
+var notificationLinkKeys = []string{"url", "subscription_url"}
+
+// UnmarshalJSON reads the compact members and, next to them, the whole repository and the addresses of the
+// thread.
+func (n *notificationJSON) UnmarshalJSON(data []byte) error {
+	type plain notificationJSON
+	if err := json.Unmarshal(data, (*plain)(n)); err != nil {
+		return err
+	}
+	var wide struct {
+		Repository *repositoryRaw `json:"repository"`
+	}
+	if err := json.Unmarshal(data, &wide); err != nil {
+		return err
+	}
+	n.repositoryDetail = wide.Repository
+	var err error
+	n.links, err = readLinks(data, notificationLinkKeys)
+	return err
 }
 
 // repositoryTarget reads the repository of a thread as a checked target; ok is false for an entry that names
@@ -367,7 +398,7 @@ func (n notificationJSON) repositoryTarget() (target, bool) {
 	return parsed, err == nil
 }
 
-func (n notificationJSON) view(op string) (Notification, error) {
+func (n notificationJSON) view(op string, allowed allowlist) (Notification, error) {
 	repository, ok := n.repositoryTarget()
 	if n.ID == "" || !ok {
 		return Notification{}, invalidEntry(op, "a notification")
@@ -375,7 +406,8 @@ func (n notificationJSON) view(op string) (Notification, error) {
 	title, cut := clipText(n.Subject.Title, notificationTitleLimit)
 	return Notification{ID: n.ID, Repository: repository.argument(), Reason: n.Reason, Unread: n.Unread,
 		UpdatedAt: n.UpdatedAt, LastReadAt: n.LastReadAt, SubjectTitle: title, TitleTruncated: cut,
-		SubjectType: n.Subject.Type, SubjectURL: n.Subject.URL, LatestCommentURL: n.Subject.LatestCommentURL}, nil
+		SubjectType: n.Subject.Type, SubjectURL: n.Subject.URL, LatestCommentURL: n.Subject.LatestCommentURL,
+		RepositoryDetail: n.repositoryDetail.project(allowed), Links: n.links}, nil
 }
 
 // admitsRepository reports whether the list lets a tool touch data of one repository: the list is empty, or
@@ -581,7 +613,7 @@ func (c *Client) listNotifications(ctx context.Context, o *notificationListOptio
 		result.Repository = scope.argument()
 	}
 	for _, entry := range raw {
-		view, err := entry.view(op)
+		view, err := entry.view(op, c.allowed)
 		if err != nil {
 			return nil, err
 		}
@@ -643,7 +675,7 @@ func invokeNotificationsGet(ctx context.Context, resolved *config.Resolved, secr
 	if err != nil {
 		return nil, err
 	}
-	return thread.view(op)
+	return thread.view(op, client.allowed)
 }
 
 func invokeNotificationsDismiss(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

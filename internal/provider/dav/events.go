@@ -49,8 +49,8 @@ type Event struct {
 
 var errNoEvent = errors.New("no event")
 
-// ParseOccurrences reads every VEVENT of an iCalendar object as one event with all members except overrides, and its recurrence_id.
-// A server fills such an object when it expanded a recurring event for a range.
+// ParseOccurrences reads every VEVENT of an iCalendar object as one event and its recurrence_id, each with all
+// members except overrides. A server fills such an object when it expanded a recurring event for a range.
 func ParseOccurrences(data string) (events []*Event, err error) {
 	defer func() {
 		if recover() != nil {

@@ -1,11 +1,11 @@
 package telegram
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,7 +19,6 @@ import (
 const (
 	maxGiftsLimit    = 100
 	maxGiftsOffset   = 256
-	giftsResponseMax = 512 << 10
 	isPublicSchema   = `"is_public":{"type":"boolean"}`
 	isPublicArgument = "Whether the photo is the public one shown to everyone; omit to keep Telegram's default"
 )
@@ -82,8 +81,8 @@ var businessGifts = capability.Descriptor{
 	ID:      Provider + ".business.gifts",
 	Version: 1,
 	Title:   "List the gifts of a Telegram business account",
-	Description: "List the gifts of a bound business account read-only, from 1 through 100 per page. Gift identifiers " +
-		"that could move, convert, or upgrade a gift are never returned",
+	Description: "List the gifts of a bound business account read-only, from 1 through 100 per page, optionally " +
+		"filtered and sorted by price as Telegram does",
 	Tags: []string{"telegram", "business", "gifts", "read"},
 	Risk: capability.Risk{
 		Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -91,25 +90,18 @@ var businessGifts = capability.Descriptor{
 	},
 	Provider: Provider, Group: groupBusiness,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + businessConnectionSchema + `,` +
-		`"limit":{"type":"integer","minimum":1,"maximum":100},"offset":{"type":"string","minLength":1,"maxLength":256}},` +
-		`"required":["business"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"total_count":{"type":"integer"},` +
-		`"next_offset":{"type":"string"},"gifts":{"type":"array","items":{"type":"object","properties":{` +
-		`"type":{"type":"string"},"gift_id":{"type":"string"},"name":{"type":"string"},"number":{"type":"integer"},` +
-		`"send_date":{"type":"integer"},"is_saved":{"type":"boolean"},"text":{"type":"string"},` +
-		`"sender":` + userSchema + `,` +
-		`"star_count":{"type":"integer"},"convert_star_count":{"type":"integer"}},"additionalProperties":false}}},` +
-		`"required":["total_count","gifts"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+		`"limit":{"type":"integer","minimum":1,"maximum":100},"offset":{"type":"string","minLength":1,"maxLength":256},` +
+		giftSavedFilterSchema + `,` + giftKindFilterSchema + `},"required":["business"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(ownedGiftsOutputSchema),
+	Arguments: slices.Concat([]capability.Argument{
 		{Name: "business", Description: businessArgument, Required: true},
 		{Name: "limit", Description: "Page size from 1 through 100"},
-		{Name: "offset", Description: "next_offset of a previous answer of this tool, passed back unchanged, up to 256 characters"},
-	},
+		{Name: "offset", Description: giftOffsetText},
+	}, giftSavedFilterArguments, giftKindFilterArguments),
 	Fields: []capability.Field{
 		{Name: "total_count", Description: "Number of gifts of the account"},
 		{Name: "next_offset", Description: "Offset of the next page; absent on the last page"},
-		{Name: "gifts", Description: "Gifts with type, gift_id, name, number, send_date, is_saved, text, sender (a Telegram User), " +
-			"star_count, and convert_star_count; star values are read-only numbers"},
+		giftsField(true),
 	},
 	Examples: []capability.Example{{
 		Description: "List the first gifts",
@@ -259,43 +251,6 @@ func (c *Client) RemoveBusinessPhoto(ctx context.Context, id string, isPublic *b
 	return map[string]any{"deleted": true}, nil
 }
 
-type tgOwnedGift struct {
-	Type             string  `json:"type"`
-	SendDate         int64   `json:"send_date"`
-	IsSaved          bool    `json:"is_saved"`
-	Text             string  `json:"text"`
-	SenderUser       *tgUser `json:"sender_user"`
-	ConvertStarCount int64   `json:"convert_star_count"`
-	Gift             struct {
-		ID        string `json:"id"`
-		GiftID    string `json:"gift_id"`
-		BaseName  string `json:"base_name"`
-		Number    int64  `json:"number"`
-		StarCount int64  `json:"star_count"`
-	} `json:"gift"`
-}
-
-// giftOut deliberately omits owned_gift_id and every transfer, upgrade, or price-for-action field: nothing
-// returned here can address a financial action.
-type giftOut struct {
-	Type             string     `json:"type"`
-	GiftID           string     `json:"gift_id,omitempty"`
-	Name             string     `json:"name,omitempty"`
-	Number           int64      `json:"number,omitempty"`
-	SendDate         int64      `json:"send_date,omitempty"`
-	IsSaved          bool       `json:"is_saved"`
-	Text             string     `json:"text,omitempty"`
-	Sender           *senderOut `json:"sender,omitempty"`
-	StarCount        int64      `json:"star_count,omitempty"`
-	ConvertStarCount int64      `json:"convert_star_count,omitempty"`
-}
-
-type giftsOut struct {
-	TotalCount int64     `json:"total_count"`
-	NextOffset string    `json:"next_offset,omitempty"`
-	Gifts      []giftOut `json:"gifts"`
-}
-
 func invokeBusinessGifts(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	return invokeBusinessGiftsWith(ctx, resolved, secrets, red, raw, newHTTPClient())
@@ -308,6 +263,8 @@ func invokeBusinessGiftsWith(ctx context.Context, resolved *config.Resolved, sec
 		Business string `json:"business"`
 		Limit    *int   `json:"limit"`
 		Offset   string `json:"offset"`
+		giftSavedFilters
+		giftKindFilters
 	}
 	if err := decodeStrict(raw, &arguments); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
@@ -325,11 +282,14 @@ func invokeBusinessGiftsWith(ctx context.Context, resolved *config.Resolved, sec
 	if err != nil {
 		return nil, err
 	}
-	return client.ListBusinessGifts(ctx, arguments.Business, arguments.Limit, arguments.Offset)
+	return client.ListBusinessGifts(ctx, arguments.Business, arguments.Limit, arguments.Offset,
+		arguments.giftSavedFilters, arguments.giftKindFilters)
 }
 
-// ListBusinessGifts performs one getBusinessAccountGifts request; no filter or sort parameter is ever sent.
-func (c *Client) ListBusinessGifts(ctx context.Context, id string, limit *int, offset string) (*giftsOut, error) {
+// ListBusinessGifts performs one getBusinessAccountGifts request. The files of a business gift get no file_ref,
+// like every business file.
+func (c *Client) ListBusinessGifts(ctx context.Context, id string, limit *int, offset string,
+	saved giftSavedFilters, kinds giftKindFilters) (*giftsOut, error) {
 	const op = "list business gifts"
 	if !validBusinessID(id) || !c.set.hasBusiness(id) {
 		return nil, providerError(op, "this connection does not bind that business connection")
@@ -339,35 +299,13 @@ func (c *Client) ListBusinessGifts(ctx context.Context, id string, limit *int, o
 			ID     string `json:"business_connection_id"`
 			Offset string `json:"offset,omitempty"`
 			Limit  *int   `json:"limit,omitempty"`
-		}{id, offset, limit})
+			giftSavedFilters
+			giftKindFilters
+		}{id, offset, limit, saved, kinds})
 	if err != nil {
 		return nil, err
 	}
-	return decodeOwnedGifts(op, raw)
-}
-
-// decodeOwnedGifts maps an OwnedGifts answer to the shared gift output; it is the only gift mapping.
-func decodeOwnedGifts(op string, raw json.RawMessage) (*giftsOut, error) {
-	var got struct {
-		TotalCount int64         `json:"total_count"`
-		Gifts      []tgOwnedGift `json:"gifts"`
-		NextOffset string        `json:"next_offset"`
-	}
-	if json.Unmarshal(raw, &got) != nil {
-		return nil, invalidResponse(op)
-	}
-	out := &giftsOut{TotalCount: got.TotalCount, NextOffset: capText(got.NextOffset, maxGiftsOffset), Gifts: []giftOut{}}
-	for i, g := range got.Gifts {
-		if i >= maxGiftsLimit {
-			break
-		}
-		item := giftOut{Type: capText(g.Type, maxNameRunes), SendDate: g.SendDate, IsSaved: g.IsSaved,
-			Text: capText(g.Text, maxNameRunes), Sender: sender(g.SenderUser), ConvertStarCount: g.ConvertStarCount,
-			GiftID: capText(cmp.Or(g.Gift.ID, g.Gift.GiftID), maxNameRunes), Name: capText(g.Gift.BaseName, maxNameRunes),
-			Number: g.Gift.Number, StarCount: g.Gift.StarCount}
-		out.Gifts = append(out.Gifts, item)
-	}
-	return out, nil
+	return decodeOwnedGifts(op, raw, nil)
 }
 
 func invokeBusinessStarBalance(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

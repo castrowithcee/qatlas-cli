@@ -128,7 +128,16 @@ type pullSimpleRaw struct {
 		Number   *int64 `json:"number"`
 	} `json:"stack"`
 	Draft *bool `json:"draft"`
-	links Links
+
+	// The members only the single pull request carries.
+	Rebaseable          *bool       `json:"rebaseable"`
+	MergedBy            *accountRaw `json:"merged_by"`
+	Comments            *int64      `json:"comments"`
+	ReviewComments      *int64      `json:"review_comments"`
+	MaintainerCanModify *bool       `json:"maintainer_can_modify"`
+	Additions           *int64      `json:"additions"`
+	Deletions           *int64      `json:"deletions"`
+	links               Links
 }
 
 func (r *pullSimpleRaw) UnmarshalJSON(data []byte) (err error) {
@@ -253,19 +262,39 @@ func (r *pullSimpleRaw) project(allowed allowlist) *RESTPullSimple {
 			}
 		}
 	}
-	if a := r.AutoMerge; a != nil {
-		message, cut := cleanText(a.CommitMessage, projectionBodyLimit, true)
-		pull.AutoMerge = &RESTPullAutoMerge{EnabledBy: a.EnabledBy.project(), MergeMethod: nameText(a.MergeMethod),
-			CommitTitle: longText(a.CommitTitle), CommitMessage: message, CommitMessageCut: cut}
-	}
-	if s := r.Stack; s != nil {
-		pull.Stack = &RESTPullStack{Size: s.Size, Position: s.Position, ID: s.ID, Number: s.Number}
-		if b := s.Base; b != nil {
-			pull.Stack.Base = &RESTPullStackBase{Ref: nameText(b.Ref), SHA: nameText(b.SHA)}
-		}
-	}
+	pull.AutoMerge = r.autoMerge()
+	pull.Stack = r.stack()
 	return pull
 }
+
+func (r *pullSimpleRaw) autoMerge() *RESTPullAutoMerge {
+	a := r.AutoMerge
+	if a == nil {
+		return nil
+	}
+	message, cut := cleanText(a.CommitMessage, projectionBodyLimit, true)
+	return &RESTPullAutoMerge{EnabledBy: a.EnabledBy.project(), MergeMethod: nameText(a.MergeMethod),
+		CommitTitle: longText(a.CommitTitle), CommitMessage: message, CommitMessageCut: cut}
+}
+
+func (r *pullSimpleRaw) stack() *RESTPullStack {
+	s := r.Stack
+	if s == nil {
+		return nil
+	}
+	stack := &RESTPullStack{Size: s.Size, Position: s.Position, ID: s.ID, Number: s.Number}
+	if b := s.Base; b != nil {
+		stack.Base = &RESTPullStackBase{Ref: nameText(b.Ref), SHA: nameText(b.SHA)}
+	}
+	return stack
+}
+
+var restPullAutoMergeSchema = objectSchema(`"enabled_by":` + restAccountSchema + `,` +
+	`"merge_method":{"type":"string"},"commit_title":{"type":"string"},"commit_message":{"type":"string"},` +
+	`"commit_message_truncated":{"type":"boolean"}`)
+
+var restPullStackSchema = objectSchema(`"base":` + objectSchema(`"ref":{"type":"string"},"sha":{"type":"string"}`) +
+	`,"size":{"type":"integer"},"position":{"type":"integer"},"id":{"type":"integer"},"number":{"type":"integer"}`)
 
 var restPullSimpleProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},"number":{"type":"integer"},` +
 	`"state":{"type":"string"},"locked":{"type":"boolean"},"title":{"type":"string"},"user":` + restAccountSchema +
@@ -280,11 +309,7 @@ var restPullSimpleProperties = `"id":{"type":"integer"},"node_id":{"type":"strin
 	`"requested_teams":{"type":"array","maxItems":100,"items":` + restPullTeamSchema + `},` +
 	`"requested_teams_truncated":{"type":"boolean"},"head":` + restPullRefSchema + `,"base":` + restPullRefSchema + `,` +
 	`"link_relations":{"type":"object","maxProperties":8,"additionalProperties":{"type":"string"}},` +
-	`"author_association":{"type":"string"},"auto_merge":` + objectSchema(`"enabled_by":`+restAccountSchema+`,`+
-	`"merge_method":{"type":"string"},"commit_title":{"type":"string"},"commit_message":{"type":"string"},`+
-	`"commit_message_truncated":{"type":"boolean"}`) + `,"stack":` + objectSchema(`"base":`+
-	objectSchema(`"ref":{"type":"string"},"sha":{"type":"string"}`)+`,"size":{"type":"integer"},`+
-	`"position":{"type":"integer"},"id":{"type":"integer"},"number":{"type":"integer"}`) +
+	`"author_association":{"type":"string"},"auto_merge":` + restPullAutoMergeSchema + `,"stack":` + restPullStackSchema +
 	`,"draft":{"type":"boolean"},"url":{"type":"string"},"links":` + linksSchema(restPullSimpleLinkKeys)
 
 var restPullSimpleSchema = objectSchema(restPullSimpleProperties)

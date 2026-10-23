@@ -18,13 +18,17 @@ The issue tools of the [GitHub provider](README.md). Every tool takes `repositor
 `github.issues.list` and `github.issues.get` read issues only, newest first, without comments.
 `github.issues.list` names the repository once at the result level and leaves the URL out of each issue,
 derivable from the repository and the number. `github.comments.list` reads the comments of one issue, oldest
-first, and is the only tool that returns comments.
+first, and is the only issue tool that returns comments. It and `github.pull-request-comments.list` answer
+GitHub's issue comment in full. The object a call names is fixed by the call and not repeated in every entry,
+so a comment carries no issue, pull request, or repository. Rendered variants repeat the text field in another
+format and add no content. A comment's reactions and edit history are served as lists of their own, so it
+reports their counts, and reaction groups only for kinds somebody gave.
 
 `github.issues.get`, the issue changes, `github.issues.search`, `github.sub-issues.list`, and
-`github.issue-dependencies.list` answer GitHub's issue in full. The issue tools refuse pull requests, so an
-issue answer never carries the pull request member; the rendered body variants `body_html` and `body_text` are
-left out, since the body itself is answered. An issue's repository object is answered only where the call does
-not fix the repository, and a sub-issue leaves out the address of its parent, the issue the call named.
+`github.issue-dependencies.list` answer GitHub's issue in full without the rendered body variants. The issue
+tools refuse pull requests, so an issue answer never carries the pull request member. An issue's repository
+object is answered only where the call does not fix the repository, and a sub-issue leaves out the address of
+its parent, the issue the call named.
 
 ## Changes
 
@@ -48,9 +52,9 @@ request as `invalid-request` and name the number and the repository, with a clas
 alike; a change is never sent. A fine-grained token without access to pull requests is refused by GitHub on
 such a number; only then Qatlas looks the number up once, and a refusal that names no pull request stays
 `permission`. A pull request's own conversation comments are read and written by
-`github.pull-request-comments.list` and `.create`, described under
-[Pull request reviews and comments](pull-requests.md#pull-request-reviews-and-comments); the mirror image holds there, an
-issue number given to either is refused as `invalid-request`.
+`github.pull-request-comments.list` and `.create`
+([Pull request reviews and comments](pull-requests.md#pull-request-reviews-and-comments)); an issue number
+given to either is refused as `invalid-request`.
 
 ```text
 qatlas: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
@@ -61,19 +65,15 @@ the issue's current milestone, since a milestone number is never `0` and GitHub 
 `null` in that case. A milestone-only change is enough on its own.
 
 `github.comments.update` and `github.comments.delete` address one existing issue comment by its `comment_id`,
-the numeric identifier GitHub reports in a comment's URL after `#issuecomment-`, not the `id`
-`github.comments.list` and `github.comments.create` answer, which is a GraphQL identifier the issue comment
-REST route does not accept. Both tools also report this numeric identifier as `database_id`, alongside `id`,
-which `github.pull-request-comments.list` and `.create` report as well, so it never needs a separate lookup; the
-reaction tools under [Reactions](#reactions) take the same identifier for kind `issue_comment`.
-`github.pull-request-review-comments.list` and `.reply` already report the numeric identifier a line comment
-needs as `id`, since GitHub gives that route no GraphQL identifier of its own. Both comment tools read the
-comment first: its route already scopes it to the connection's
-bound repository, so a comment of another repository answers `not-found`, and the issue it belongs to is read
-the same way an issue change reads it, so a pull request's own conversation comment is refused as
-`invalid-request` the same way a pull request number is, before anything changes. `github.comments.delete`
-removes a comment permanently and is offered only where a connection's `tools` list names it, the way
-`github.labels.delete` is.
+the numeric identifier GitHub reports in a comment's URL after `#issuecomment-`. The `id` of
+`github.comments.list` and `github.comments.create` is a GraphQL identifier the issue comment REST route does
+not accept, so every comment tool also reports the numeric one as `database_id`; the reaction tools under
+[Reactions](#reactions) take it for kind `issue_comment`. `github.pull-request-review-comments.list` and
+`.reply` report the numeric identifier a line comment needs as `id`, since GitHub gives that route no GraphQL
+identifier. Both change tools read the comment first: its route scopes it to the connection's bound
+repository, so a comment of another repository answers `not-found`, and a pull request's own conversation
+comment is refused as `invalid-request` before anything changes. `github.comments.delete` removes a comment
+permanently and is offered only where a connection's `tools` list names it, as `github.labels.delete` is.
 
 ## Issue search
 

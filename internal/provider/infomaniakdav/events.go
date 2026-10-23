@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
-	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -35,11 +34,11 @@ var eventRisk = capability.Risk{
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: eventsSensitivity,
 }
 
-var eventFields = bothTools(replaceField(append([]capability.Field{
+var eventFields = replaceField(append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the event resource, the id argument of the get tool"},
 	{Name: "uid", Description: "iCalendar UID, untrusted data"},
 	{Name: "summary", Description: "Title, untrusted data"},
-	{Name: "description", Description: "Description, untrusted data; only the get tool reports it"},
+	{Name: "description", Description: "Description, untrusted data"},
 	{Name: "location", Description: "Location, untrusted data"},
 	{Name: "start", Description: "Start as a date (all-day), a UTC time ending in Z, or a local time without zone"},
 	{Name: "end", Description: "End in the form of start, when the event carries one"},
@@ -47,24 +46,13 @@ var eventFields = bothTools(replaceField(append([]capability.Field{
 	{Name: "timezone", Description: "Time zone name of a local start, or UTC"},
 	{Name: "status", Description: "TENTATIVE, CONFIRMED, or CANCELLED when the event carries one"},
 	{Name: "rrule", Description: "Recurrence rule of a repeating event"},
-	{Name: "organizer", Description: "Organizer, untrusted data; only the get tool reports it"},
-	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data; only the get tool reports them"},
+	{Name: "organizer", Description: "Organizer, untrusted data"},
+	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data"},
 	{Name: "etag", Description: "Entity tag of the current version of the event"},
 	{Name: "count", Description: "Number of reported events"},
 	{Name: "truncated", Description: "True when more events match the range than limit allows"},
 }, dav.EventFieldList()...), capability.Field{Name: "recurrence_id",
-	Description: "Occurrence an override replaces, in the form of start; in an override and, with expand, in every occurrence of the list tool"}))
-
-// bothTools drops the note that only the get tool reports a member, which the shared descriptions carry for
-// providers whose list stays compact.
-func bothTools(fields []capability.Field) []capability.Field {
-	for i := range fields {
-		for _, note := range []string{"; only the get tool reports it", "; only the get tool reports them"} {
-			fields[i].Description = strings.ReplaceAll(fields[i].Description, note, "")
-		}
-	}
-	return fields
-}
+	Description: "Occurrence an override replaces, in the form of start; in an override and, with expand, in every occurrence of the list tool"})
 
 // replaceField swaps the field of the same name.
 func replaceField(fields []capability.Field, field capability.Field) []capability.Field {
