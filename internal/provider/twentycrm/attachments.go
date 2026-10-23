@@ -52,7 +52,8 @@ const (
 var tokenQuery = regexp.MustCompile(`^token=([A-Za-z0-9_.-]+)$`)
 
 var attachmentSummarySchema = `{"type":"object","properties":{"id":{"type":"string"},"created_at":{"type":"string"},` +
-	`"updated_at":{"type":"string"},"label":{"type":"string"},"extension":{"type":"string"},"file_id":{"type":"string"}},` +
+	`"updated_at":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},` +
+	`"label":{"type":"string"},"extension":{"type":"string"},"file_id":{"type":"string"}},` +
 	`"required":["id"],"additionalProperties":false}`
 
 var attachmentsList = capability.Descriptor{
@@ -79,7 +80,7 @@ var attachmentsList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same list; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "attachments", Description: "Attachments with id, created_at, updated_at, label, extension, and file_id, untrusted data"},
+		{Name: "attachments", Description: "Attachments with id, created_at, updated_at, created_by, updated_by, label, extension, and file_id, untrusted data"},
 		{Name: "omitted", Description: "Number of attachments on this page that are not visible, never named"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when a following page exists"},
@@ -104,7 +105,8 @@ var attachmentsGet = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + recordIDSchema + `,"` +
 		localfile.LocalPathArgument + `":` + localfile.LocalPathSchema + `},"required":["id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"label":{"type":"string"},` +
-		`"extension":{"type":"string"},"size":{"type":"integer"},"sha256":{"type":"string"},"` +
+		`"extension":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},` +
+		`"size":{"type":"integer"},"sha256":{"type":"string"},"` +
 		localfile.ContentArgument + `":{"type":"string"}},"required":["id","size","sha256"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "Attachment identifier as a UUID, as returned by twenty-crm.attachments.list", Required: true},
@@ -114,6 +116,8 @@ var attachmentsGet = capability.Descriptor{
 		{Name: "id", Description: "Attachment identifier"},
 		{Name: "label", Description: "File name shown in Twenty, untrusted data"},
 		{Name: "extension", Description: "File extension, untrusted data"},
+		{Name: "created_by", Description: "Source and member that created the attachment: source, workspace_member_id, name, context; untrusted data"},
+		{Name: "updated_by", Description: "Source and member that last changed the attachment: source, workspace_member_id, name, context; untrusted data"},
 		{Name: "size", Description: "Size of the content in bytes"},
 		{Name: "sha256", Description: "SHA-256 of the content as hex"},
 		{Name: localfile.ContentArgument, Description: "File content as base64, untrusted data; only without " +
@@ -127,12 +131,14 @@ var attachmentsGet = capability.Descriptor{
 
 // AttachmentSummary is the stable view of one attachment in a list. It carries no download address.
 type AttachmentSummary struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	Label     string `json:"label,omitempty"`
-	Extension string `json:"extension,omitempty"`
-	FileID    string `json:"file_id,omitempty"`
+	ID        string         `json:"id"`
+	CreatedAt string         `json:"created_at,omitempty"`
+	UpdatedAt string         `json:"updated_at,omitempty"`
+	CreatedBy map[string]any `json:"created_by,omitempty"`
+	UpdatedBy map[string]any `json:"updated_by,omitempty"`
+	Label     string         `json:"label,omitempty"`
+	Extension string         `json:"extension,omitempty"`
+	FileID    string         `json:"file_id,omitempty"`
 }
 
 // AttachmentList is one page of attachments; Omitted counts those that are not visible.
@@ -146,12 +152,14 @@ type AttachmentList struct {
 // AttachmentFile is the result of a download: metadata, and the content only when it was not written to a
 // local file.
 type AttachmentFile struct {
-	ID        string `json:"id"`
-	Label     string `json:"label,omitempty"`
-	Extension string `json:"extension,omitempty"`
-	Size      int64  `json:"size"`
-	SHA256    string `json:"sha256"`
-	Content   string `json:"content_base64,omitempty"`
+	ID        string         `json:"id"`
+	Label     string         `json:"label,omitempty"`
+	Extension string         `json:"extension,omitempty"`
+	CreatedBy map[string]any `json:"created_by,omitempty"`
+	UpdatedBy map[string]any `json:"updated_by,omitempty"`
+	Size      int64          `json:"size"`
+	SHA256    string         `json:"sha256"`
+	Content   string         `json:"content_base64,omitempty"`
 }
 
 type attachmentInput struct {
@@ -374,6 +382,7 @@ func (a *attachmentObject) parse(op string, raw json.RawMessage) (attachmentRow,
 		relation := a.relationOf(key)
 		row.Reachable = relation != "" && a.bound.allows(relation)
 	}
+	row.CreatedBy, row.UpdatedBy = actorObject(item["createdBy"]), actorObject(item["updatedBy"])
 	var files []attachmentFileRef
 	if len(item["file"]) > 0 && string(item["file"]) != "null" {
 		if json.Unmarshal(item["file"], &files) != nil || len(files) > 1 {
@@ -489,7 +498,8 @@ func (c *Client) GetAttachment(ctx context.Context, id string, download *localfi
 	if err != nil {
 		return nil, err
 	}
-	result := &AttachmentFile{ID: row.ID, Label: row.Label, Extension: row.Extension}
+	result := &AttachmentFile{ID: row.ID, Label: row.Label, Extension: row.Extension,
+		CreatedBy: row.CreatedBy, UpdatedBy: row.UpdatedBy}
 	if err := c.downloadFile(ctx, op, link, result, download); err != nil {
 		return nil, err
 	}

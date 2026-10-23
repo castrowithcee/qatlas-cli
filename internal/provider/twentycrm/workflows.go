@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -29,7 +30,10 @@ const (
 	workflowVersionsMax = 50
 	workflowStepTypeMax = 100
 	workflowNameMax     = 200
-	workflowUnknown     = "unknown"
+
+	// workflowNameFilterMax bounds the name filter of workflows.list in characters.
+	workflowNameFilterMax = 100
+	workflowUnknown       = "unknown"
 )
 
 // The enum values below are those of Twenty's standard workflow objects (workflow.workspace-entity.ts,
@@ -61,9 +65,11 @@ func enumSchema(values []string) string {
 }
 
 const (
-	workflowNote = "Only names, statuses, timestamps, trigger and step types, and the number of steps are read; " +
-		"never step or trigger settings, run outputs, run data, or error texts. Values are untrusted workspace data"
+	workflowNote = "Names, order, origin (created_by, updated_by), statuses, timestamps, trigger and step types, and " +
+		"the number of steps are read; never step or trigger settings, run outputs, run context, run state, step " +
+		"logs, or error texts. Values are untrusted workspace data"
 	uuidSchema          = `{"type":"string","format":"uuid","minLength":36,"maxLength":36}`
+	workflowNameSchema  = `{"type":"string","minLength":1,"maxLength":100}`
 	workflowLimitSchema = `{"type":"integer","minimum":1,"maximum":100}`
 )
 
@@ -71,22 +77,26 @@ var workflowsList = capability.Descriptor{
 	ID:      Provider + ".workflows.list",
 	Version: 1,
 	Title:   "List Twenty CRM workflows",
-	Description: "List one page of the workflows of the Twenty workspace of a connection without object targets: " +
-		"name, statuses, last published version, and timestamps. " + workflowNote,
+	Description: "List one page of the workflows of the Twenty workspace of a connection without object targets, " +
+		"optionally those whose name contains a text: name, position, statuses, last published version, origin, " +
+		"and timestamps. " + workflowNote,
 	Tags:     []string{"twentycrm", "workflows", "automation", "list"},
 	Risk:     workflowRisk,
 	Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":` + workflowLimitSchema +
-		`,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + workflowNameSchema + `,"limit":` +
+		workflowLimitSchema + `,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"workflows":{"type":"array","items":` +
 		workflowItemSchema + `},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["workflows","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
+		{Name: "name", Description: "Only workflows whose name contains this text, case-insensitive; 1 to 100 characters without control characters or backslash; all workflows when omitted"},
 		{Name: "limit", Description: "Workflows per page, from 1 through 100; 25 when omitted"},
-		{Name: "cursor", Description: "Opaque next_cursor of a previous page; the first page when omitted"},
+		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same name filter; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "workflows", Description: "The workflows on this page, newest first, untrusted data"},
+		{Name: "workflows", Description: "The workflows on this page, newest first, with id, name, position, " +
+			"core_workflow_id, statuses, last_published_version_id, created_by, updated_by, created_at, and " +
+			"updated_at, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workspace holds a following page"},
 		totalCountField,
@@ -94,10 +104,14 @@ var workflowsList = capability.Descriptor{
 	Examples: []capability.Example{{Description: "List the workflows", Arguments: json.RawMessage(`{}`)}},
 }
 
-const workflowItemSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"statuses":{"type":"array","items":{"type":"string"}},"last_published_version_id":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","statuses"],` +
-	`"additionalProperties":false}`
+// workflowProperties describes a workflow in workflows.list and, flat, in workflows.get.
+const workflowProperties = `"id":{"type":"string"},"name":{"type":"string"},"position":{"type":"number"},` +
+	`"core_workflow_id":{"type":"string"},"statuses":{"type":"array","items":{"type":"string"}},` +
+	`"last_published_version_id":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"}`
+
+const workflowItemSchema = `{"type":"object","properties":{` + workflowProperties + `},` +
+	`"required":["id","name","statuses"],"additionalProperties":false}`
 
 var workflowsGet = capability.Descriptor{
 	ID:      Provider + ".workflows.get",
@@ -110,10 +124,9 @@ var workflowsGet = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `},` +
 		`"required":["id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"statuses":{"type":"array","items":{"type":"string"}},"last_published_version_id":{"type":"string"},` +
-		`"created_at":{"type":"string"},"updated_at":{"type":"string"},"versions":{"type":"array","items":{` +
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + workflowProperties + `,"versions":{"type":"array","items":{` +
 		`"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
+		`"position":{"type":"number"},"workflow_id":{"type":"string"},"core_workflow_version_id":{"type":"string"},` +
 		`"status":` + enumSchema(append(append([]string{}, workflowVersionStatuses...), workflowUnknown)) + `,` +
 		`"trigger_type":{"type":"string"},"step_types":{"type":"array","items":{"type":"string"}},` +
 		`"step_count":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
@@ -124,7 +137,18 @@ var workflowsGet = capability.Descriptor{
 		{Name: "id", Description: "UUID of the workflow, as returned by twenty-crm.workflows.list", Required: true},
 	},
 	Fields: []capability.Field{
-		{Name: "versions", Description: "At most 50 newest versions, newest first, untrusted data"},
+		{Name: "id", Description: "Workflow identifier"},
+		{Name: "name", Description: "Workflow name, untrusted data"},
+		{Name: "statuses", Description: "Statuses of the workflow versions"},
+		{Name: "last_published_version_id", Description: "Identifier of the last published version"},
+		{Name: "created_at", Description: "Creation timestamp of the workflow"},
+		{Name: "updated_at", Description: "Last change timestamp of the workflow"},
+		{Name: "position", Description: "Sort position of the workflow"},
+		{Name: "core_workflow_id", Description: "Identifier of the workflow in Twenty's core schema"},
+		{Name: "created_by", Description: "Source and member that created the workflow: source, workspace_member_id, name, context; untrusted data"},
+		{Name: "updated_by", Description: "Source and member that last changed the workflow: source, workspace_member_id, name, context; untrusted data"},
+		{Name: "versions", Description: "At most 50 newest versions, newest first, with id, name, position, " +
+			"workflow_id, core_workflow_version_id, status, trigger_type, step_types, step_count, and timestamps, untrusted data"},
 		{Name: "has_more_versions", Description: "True when the workflow holds older versions that are not listed"},
 	},
 	Examples: []capability.Example{{
@@ -138,28 +162,36 @@ var workflowRunsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Twenty CRM workflow runs",
 	Description: "List one page of the runs of one workflow of the Twenty workspace of a connection without " +
-		"object targets, newest first, optionally of one status: status, version, and timestamps. " + workflowNote,
+		"object targets, newest first, optionally of one status or one workflow version: status, version, " +
+		"origin, and timestamps. " + workflowNote,
 	Tags:     []string{"twentycrm", "workflows", "automation", "runs", "list"},
 	Risk:     workflowRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":` + uuidSchema + `,` +
-		`"status":` + enumSchema(workflowRunStatuses) + `,"limit":` + workflowLimitSchema + `,` +
+		`"workflow_version_id":` + uuidSchema + `,"status":` + enumSchema(workflowRunStatuses) + `,"limit":` +
+		workflowLimitSchema + `,` +
 		`"cursor":` + cursorSchema + `},"required":["workflow_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"runs":{"type":"array","items":{` +
 		`"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"status":{"type":"string"},"workflow_version_id":{"type":"string"},"enqueued_at":{"type":"string"},` +
-		`"started_at":{"type":"string"},"ended_at":{"type":"string"},"created_at":{"type":"string"}},` +
+		`"position":{"type":"number"},"status":{"type":"string"},"workflow_id":{"type":"string"},` +
+		`"core_workflow_id":{"type":"string"},"workflow_version_id":{"type":"string"},` +
+		`"core_workflow_version_id":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},` +
+		`"enqueued_at":{"type":"string"},"started_at":{"type":"string"},"ended_at":{"type":"string"},` +
+		`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
 		`"required":["id","status"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"},` + totalCountSchema + `},` +
 		`"required":["runs","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "workflow_id", Description: "UUID of the workflow, as returned by twenty-crm.workflows.list", Required: true},
+		{Name: "workflow_version_id", Description: "Only runs of this workflow version, as a UUID; all versions when omitted"},
 		{Name: "status", Description: "Only runs of this status: " + strings.Join(workflowRunStatuses, ", ") + "; all statuses when omitted"},
 		{Name: "limit", Description: "Runs per page, from 1 through 100; 25 when omitted"},
-		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same workflow and status; the first page when omitted"},
+		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same workflow, version, and status; the first page when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "runs", Description: "The runs on this page, newest first, without outputs or errors, untrusted data"},
+		{Name: "runs", Description: "The runs on this page, newest first, with id, name, position, status, " +
+			"workflow_id, core_workflow_id, workflow_version_id, core_workflow_version_id, created_by, updated_by, " +
+			"and timestamps, without outputs, context, state, or errors, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following page, absent on the last page"},
 		{Name: "has_more", Description: "True when the workflow holds a following page"},
 		totalCountField,
@@ -172,12 +204,16 @@ var workflowRunsList = capability.Descriptor{
 
 // WorkflowSummary is the stable view of one workflow.
 type WorkflowSummary struct {
-	ID                     string   `json:"id"`
-	Name                   string   `json:"name"`
-	Statuses               []string `json:"statuses"`
-	LastPublishedVersionID string   `json:"last_published_version_id,omitempty"`
-	CreatedAt              string   `json:"created_at,omitempty"`
-	UpdatedAt              string   `json:"updated_at,omitempty"`
+	ID                     string         `json:"id"`
+	Name                   string         `json:"name"`
+	Position               json.Number    `json:"position,omitempty"`
+	CoreWorkflowID         string         `json:"core_workflow_id,omitempty"`
+	Statuses               []string       `json:"statuses"`
+	LastPublishedVersionID string         `json:"last_published_version_id,omitempty"`
+	CreatedBy              map[string]any `json:"created_by,omitempty"`
+	UpdatedBy              map[string]any `json:"updated_by,omitempty"`
+	CreatedAt              string         `json:"created_at,omitempty"`
+	UpdatedAt              string         `json:"updated_at,omitempty"`
 }
 
 // WorkflowList is one page of workflows.
@@ -190,14 +226,17 @@ type WorkflowList struct {
 
 // WorkflowVersion carries no trigger or step settings, only their types.
 type WorkflowVersion struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Status      string   `json:"status"`
-	TriggerType string   `json:"trigger_type,omitempty"`
-	StepTypes   []string `json:"step_types,omitempty"`
-	StepCount   int      `json:"step_count"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	UpdatedAt   string   `json:"updated_at,omitempty"`
+	ID                    string      `json:"id"`
+	Name                  string      `json:"name"`
+	Position              json.Number `json:"position,omitempty"`
+	WorkflowID            string      `json:"workflow_id,omitempty"`
+	CoreWorkflowVersionID string      `json:"core_workflow_version_id,omitempty"`
+	Status                string      `json:"status"`
+	TriggerType           string      `json:"trigger_type,omitempty"`
+	StepTypes             []string    `json:"step_types,omitempty"`
+	StepCount             int         `json:"step_count"`
+	CreatedAt             string      `json:"created_at,omitempty"`
+	UpdatedAt             string      `json:"updated_at,omitempty"`
 }
 
 // WorkflowDetail is a workflow with its newest versions.
@@ -209,14 +248,21 @@ type WorkflowDetail struct {
 
 // WorkflowRun carries no output, context, state, or error text.
 type WorkflowRun struct {
-	ID                string `json:"id"`
-	Name              string `json:"name,omitempty"`
-	Status            string `json:"status"`
-	WorkflowVersionID string `json:"workflow_version_id,omitempty"`
-	EnqueuedAt        string `json:"enqueued_at,omitempty"`
-	StartedAt         string `json:"started_at,omitempty"`
-	EndedAt           string `json:"ended_at,omitempty"`
-	CreatedAt         string `json:"created_at,omitempty"`
+	ID                    string         `json:"id"`
+	Name                  string         `json:"name,omitempty"`
+	Position              json.Number    `json:"position,omitempty"`
+	Status                string         `json:"status"`
+	WorkflowID            string         `json:"workflow_id,omitempty"`
+	CoreWorkflowID        string         `json:"core_workflow_id,omitempty"`
+	WorkflowVersionID     string         `json:"workflow_version_id,omitempty"`
+	CoreWorkflowVersionID string         `json:"core_workflow_version_id,omitempty"`
+	CreatedBy             map[string]any `json:"created_by,omitempty"`
+	UpdatedBy             map[string]any `json:"updated_by,omitempty"`
+	EnqueuedAt            string         `json:"enqueued_at,omitempty"`
+	StartedAt             string         `json:"started_at,omitempty"`
+	EndedAt               string         `json:"ended_at,omitempty"`
+	CreatedAt             string         `json:"created_at,omitempty"`
+	UpdatedAt             string         `json:"updated_at,omitempty"`
 }
 
 // WorkflowRunList is one page of runs.
@@ -238,12 +284,16 @@ type workflowPage struct {
 }
 
 type workflowRecord struct {
-	ID                     string   `json:"id"`
-	Name                   *string  `json:"name"`
-	Statuses               []string `json:"statuses"`
-	LastPublishedVersionID *string  `json:"lastPublishedVersionId"`
-	CreatedAt              *string  `json:"createdAt"`
-	UpdatedAt              *string  `json:"updatedAt"`
+	ID                     string          `json:"id"`
+	Name                   *string         `json:"name"`
+	Position               json.RawMessage `json:"position"`
+	CoreWorkflowID         *string         `json:"coreWorkflowId"`
+	Statuses               []string        `json:"statuses"`
+	LastPublishedVersionID *string         `json:"lastPublishedVersionId"`
+	CreatedBy              json.RawMessage `json:"createdBy"`
+	UpdatedBy              json.RawMessage `json:"updatedBy"`
+	CreatedAt              *string         `json:"createdAt"`
+	UpdatedAt              *string         `json:"updatedAt"`
 }
 
 func (r workflowRecord) summary(op string) (WorkflowSummary, error) {
@@ -251,6 +301,8 @@ func (r workflowRecord) summary(op string) (WorkflowSummary, error) {
 		return WorkflowSummary{}, provider.InvalidResponse(op, "Twenty returned a workflow without a usable identifier")
 	}
 	summary := WorkflowSummary{ID: r.ID, Name: capName(r.Name), Statuses: []string{},
+		Position: plainNumber(r.Position), CoreWorkflowID: uuidText(r.CoreWorkflowID),
+		CreatedBy: actorObject(r.CreatedBy), UpdatedBy: actorObject(r.UpdatedBy),
 		CreatedAt: timestamp(r.CreatedAt), UpdatedAt: timestamp(r.UpdatedAt)}
 	for _, status := range r.Statuses {
 		summary.Statuses = append(summary.Statuses, enumToken(workflowStatuses, status))
@@ -351,16 +403,43 @@ func workflowQuery(limit int, order, after string) url.Values {
 
 const newestFirst = "createdAt[DescNullsLast]"
 
+// workflowNameFilter checks the name filter of workflows.list and builds the ilike filter. The wildcards of
+// the pattern and the quote are masked, so the name is always matched as plain text; a backslash is refused
+// because Twenty's treatment of an escaped backslash is not documented.
+func workflowNameFilter(name string) (string, error) {
+	if name == "" {
+		return "", nil
+	}
+	if utf8.RuneCountInString(name) > workflowNameFilterMax || strings.TrimSpace(name) == "" ||
+		!cleanFilterString(name) || strings.ContainsRune(name, '\\') {
+		return "", invalidRequest("name must be 1 to 100 characters, not blank, without control characters or backslash")
+	}
+	masked := strings.NewReplacer(`%`, `\%`, `_`, `\_`, `"`, `\"`).Replace(name)
+	return `name[ilike]:"%` + masked + `%"`, nil
+}
+
 // ListWorkflows reads one page of workflows.
-func (c *Client) ListWorkflows(ctx context.Context, connection string, limit int, cursor string) (*WorkflowList, error) {
+func (c *Client) ListWorkflows(ctx context.Context, connection, name string, limit int, cursor string) (*WorkflowList, error) {
 	const op = "list workflows"
-	binding := provider.CursorBinding("workflows.list", connection)
+	filter, err := workflowNameFilter(name)
+	if err != nil {
+		return nil, err
+	}
+	parts := []any{"workflows.list", connection}
+	if name != "" {
+		parts = append(parts, name)
+	}
+	binding := provider.CursorBinding(parts...)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err
 	}
+	values := workflowQuery(limit, newestFirst, after)
+	if filter != "" {
+		values.Set("filter", filter)
+	}
 	var page workflowPage
-	if err := c.get(ctx, op, workflowsPath, workflowQuery(limit, newestFirst, after), maxResponseBytes, &page); err != nil {
+	if err := c.get(ctx, op, workflowsPath, values, maxResponseBytes, &page); err != nil {
 		return nil, err
 	}
 	items, err := page.items(op, "workflows", limit)
@@ -390,14 +469,16 @@ func (c *Client) ListWorkflows(ctx context.Context, connection string, limit int
 }
 
 type versionRecord struct {
-	ID         string          `json:"id"`
-	Name       *string         `json:"name"`
-	Status     string          `json:"status"`
-	WorkflowID string          `json:"workflowId"`
-	Trigger    json.RawMessage `json:"trigger"`
-	Steps      json.RawMessage `json:"steps"`
-	CreatedAt  *string         `json:"createdAt"`
-	UpdatedAt  *string         `json:"updatedAt"`
+	ID                    string          `json:"id"`
+	Name                  *string         `json:"name"`
+	Position              json.RawMessage `json:"position"`
+	CoreWorkflowVersionID *string         `json:"coreWorkflowVersionId"`
+	Status                string          `json:"status"`
+	WorkflowID            string          `json:"workflowId"`
+	Trigger               json.RawMessage `json:"trigger"`
+	Steps                 json.RawMessage `json:"steps"`
+	CreatedAt             *string         `json:"createdAt"`
+	UpdatedAt             *string         `json:"updatedAt"`
 }
 
 // typeOf reads only the type member of a trigger or step; its settings are decoded into nothing.
@@ -416,7 +497,9 @@ func (r versionRecord) project(op, workflowID string) (WorkflowVersion, error) {
 		return WorkflowVersion{}, provider.InvalidResponse(op, "Twenty returned a version of another workflow or without a usable identifier")
 	}
 	version := WorkflowVersion{ID: r.ID, Name: capName(r.Name), Status: enumToken(workflowVersionStatuses, r.Status),
-		CreatedAt: timestamp(r.CreatedAt), UpdatedAt: timestamp(r.UpdatedAt)}
+		Position: plainNumber(r.Position), WorkflowID: r.WorkflowID,
+		CoreWorkflowVersionID: uuidText(r.CoreWorkflowVersionID),
+		CreatedAt:             timestamp(r.CreatedAt), UpdatedAt: timestamp(r.UpdatedAt)}
 	if trimmed := strings.TrimSpace(string(r.Trigger)); trimmed != "" && trimmed != "null" {
 		version.TriggerType = typeOf(r.Trigger, workflowTriggerTypes)
 	}
@@ -487,36 +570,53 @@ func (c *Client) GetWorkflow(ctx context.Context, id string) (*WorkflowDetail, e
 }
 
 type runRecord struct {
-	ID                string  `json:"id"`
-	Name              *string `json:"name"`
-	Status            string  `json:"status"`
-	WorkflowID        string  `json:"workflowId"`
-	WorkflowVersionID *string `json:"workflowVersionId"`
-	EnqueuedAt        *string `json:"enqueuedAt"`
-	StartedAt         *string `json:"startedAt"`
-	EndedAt           *string `json:"endedAt"`
-	CreatedAt         *string `json:"createdAt"`
+	ID                    string          `json:"id"`
+	Name                  *string         `json:"name"`
+	Position              json.RawMessage `json:"position"`
+	Status                string          `json:"status"`
+	WorkflowID            string          `json:"workflowId"`
+	CoreWorkflowID        *string         `json:"coreWorkflowId"`
+	WorkflowVersionID     *string         `json:"workflowVersionId"`
+	CoreWorkflowVersionID *string         `json:"coreWorkflowVersionId"`
+	CreatedBy             json.RawMessage `json:"createdBy"`
+	UpdatedBy             json.RawMessage `json:"updatedBy"`
+	EnqueuedAt            *string         `json:"enqueuedAt"`
+	StartedAt             *string         `json:"startedAt"`
+	EndedAt               *string         `json:"endedAt"`
+	CreatedAt             *string         `json:"createdAt"`
+	UpdatedAt             *string         `json:"updatedAt"`
 }
 
 // runFields keeps Twenty from sending outputs, context, and state at all; the projection is a second line.
-const runFields = "id,name,status,workflowId,workflowVersionId,enqueuedAt,startedAt,endedAt,createdAt"
+const runFields = "id,name,position,status,workflowId,coreWorkflowId,workflowVersionId,coreWorkflowVersionId," +
+	"createdBy,updatedBy,enqueuedAt,startedAt,endedAt,createdAt,updatedAt"
 
 // ListWorkflowRuns reads one page of the runs of one workflow.
-func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, status string, limit int, cursor string) (*WorkflowRunList, error) {
+func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, versionID, status string, limit int, cursor string) (*WorkflowRunList, error) {
 	const op = "list workflow runs"
 	if !validUUID(workflowID) {
 		return nil, invalidRequest("the workflow id must be a UUID")
 	}
+	if versionID != "" && !validUUID(versionID) {
+		return nil, invalidRequest("the workflow version id must be a UUID")
+	}
 	if status != "" && enumToken(workflowRunStatuses, status) == workflowUnknown {
 		return nil, invalidRequest("status must be one of " + strings.Join(workflowRunStatuses, ", "))
 	}
-	binding := provider.CursorBinding("workflow-runs.list", connection, strings.ToLower(workflowID), status)
+	parts := []any{"workflow-runs.list", connection, strings.ToLower(workflowID), status}
+	if versionID != "" {
+		parts = append(parts, strings.ToLower(versionID))
+	}
+	binding := provider.CursorBinding(parts...)
 	limit, after, err := workflowPaging(limit, cursor, binding)
 	if err != nil {
 		return nil, err
 	}
 	values := workflowQuery(limit, newestFirst, after)
 	filter := "workflowId[eq]:" + workflowID
+	if versionID != "" {
+		filter += ",workflowVersionId[eq]:" + versionID
+	}
 	if status != "" {
 		filter += ",status[eq]:" + status
 	}
@@ -541,8 +641,11 @@ func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, s
 			return nil, provider.InvalidResponse(op, "Twenty returned a run of another workflow or without a usable identifier")
 		}
 		run := WorkflowRun{ID: record.ID, Name: capName(record.Name), Status: enumToken(workflowRunStatuses, record.Status),
+			Position: plainNumber(record.Position), WorkflowID: record.WorkflowID,
+			CoreWorkflowID: uuidText(record.CoreWorkflowID), CoreWorkflowVersionID: uuidText(record.CoreWorkflowVersionID),
+			CreatedBy: actorObject(record.CreatedBy), UpdatedBy: actorObject(record.UpdatedBy),
 			EnqueuedAt: timestamp(record.EnqueuedAt), StartedAt: timestamp(record.StartedAt),
-			EndedAt: timestamp(record.EndedAt), CreatedAt: timestamp(record.CreatedAt)}
+			EndedAt: timestamp(record.EndedAt), CreatedAt: timestamp(record.CreatedAt), UpdatedAt: timestamp(record.UpdatedAt)}
 		if record.WorkflowVersionID != nil && validUUID(*record.WorkflowVersionID) {
 			run.WorkflowVersionID = *record.WorkflowVersionID
 		}
@@ -557,6 +660,7 @@ func (c *Client) ListWorkflowRuns(ctx context.Context, connection, workflowID, s
 func invokeWorkflowsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
+		Name   string `json:"name"`
 		Limit  int    `json:"limit"`
 		Cursor string `json:"cursor"`
 	}
@@ -566,11 +670,14 @@ func invokeWorkflowsList(ctx context.Context, resolved *config.Resolved, secrets
 	if err := requireWorkspaceScope(resolved); err != nil {
 		return nil, err
 	}
+	if _, err := workflowNameFilter(args.Name); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListWorkflows(ctx, resolved.Name, args.Limit, args.Cursor)
+	return client.ListWorkflows(ctx, resolved.Name, args.Name, args.Limit, args.Cursor)
 }
 
 func invokeWorkflowsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -597,10 +704,11 @@ func invokeWorkflowsGet(ctx context.Context, resolved *config.Resolved, secrets 
 func invokeWorkflowRunsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
-		WorkflowID string `json:"workflow_id"`
-		Status     string `json:"status"`
-		Limit      int    `json:"limit"`
-		Cursor     string `json:"cursor"`
+		WorkflowID        string `json:"workflow_id"`
+		WorkflowVersionID string `json:"workflow_version_id"`
+		Status            string `json:"status"`
+		Limit             int    `json:"limit"`
+		Cursor            string `json:"cursor"`
 	}
 	if json.Unmarshal(raw, &args) != nil {
 		return nil, providerError("list workflow runs", "the validated arguments could not be read")
@@ -611,6 +719,9 @@ func invokeWorkflowRunsList(ctx context.Context, resolved *config.Resolved, secr
 	if !validUUID(args.WorkflowID) {
 		return nil, invalidRequest("the workflow id must be a UUID")
 	}
+	if args.WorkflowVersionID != "" && !validUUID(args.WorkflowVersionID) {
+		return nil, invalidRequest("the workflow version id must be a UUID")
+	}
 	if args.Status != "" && enumToken(workflowRunStatuses, args.Status) == workflowUnknown {
 		return nil, invalidRequest("status must be one of " + strings.Join(workflowRunStatuses, ", "))
 	}
@@ -618,5 +729,5 @@ func invokeWorkflowRunsList(ctx context.Context, resolved *config.Resolved, secr
 	if err != nil {
 		return nil, err
 	}
-	return client.ListWorkflowRuns(ctx, resolved.Name, args.WorkflowID, args.Status, args.Limit, args.Cursor)
+	return client.ListWorkflowRuns(ctx, resolved.Name, args.WorkflowID, args.WorkflowVersionID, args.Status, args.Limit, args.Cursor)
 }

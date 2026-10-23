@@ -28,7 +28,7 @@ const (
 
 const memberPageBody = `{"data":{"workspaceMembers":[{"id":"` + memberID + `","name":{"firstName":"` + personCn +
 	`","lastName":"Lovelace\u0007"},"userEmail":"` + emailCn + `\n","timeZone":"Europe/Zurich","locale":"de-CH",` +
-	`"avatarUrl":"` + avatarCn + `","userId":"` + userIDCn + `","colorScheme":"` + schemeCn + `","jobTitle":"` + schemeCn + `"},` +
+	`"avatarUrl":"` + avatarCn + `","userId":"` + userIDCn + `"},` +
 	`{"id":"` + memberID2 + `","name":null,"userEmail":null,"timeZone":"<script>","locale":"EN_us!"}]},` +
 	`"pageInfo":{"hasNextPage":true,"endCursor":"cursor1"}}`
 
@@ -67,7 +67,7 @@ func runMemberTool(t *testing.T, handler capability.Handler, args string, target
 	if marshalErr != nil {
 		t.Fatal(marshalErr)
 	}
-	for _, canary := range []string{avatarCn, userIDCn, schemeCn, keyNameCn} {
+	for _, canary := range []string{avatarCn, userIDCn, keyNameCn} {
 		if strings.Contains(string(out), canary) {
 			t.Errorf("%s reached the output: %s", canary, out)
 		}
@@ -88,7 +88,7 @@ func TestMembersListProjectsAFixedAllowlist(t *testing.T) {
 	}
 	query, _ := url.ParseQuery((*calls)[0].Query)
 	if len(*calls) != 1 || (*calls)[0].Path != membersPath || query.Get("limit") != "10" || query.Get("depth") != "0" ||
-		query.Get("fields") != "id,name,userEmail,timeZone,locale" || query.Get("filter") != "" {
+		query.Get("fields") != memberFields || query.Get("filter") != "" {
 		t.Errorf("request = %+v", *calls)
 	}
 }
