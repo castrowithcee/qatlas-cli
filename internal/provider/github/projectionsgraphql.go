@@ -2,6 +2,8 @@ package github
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
@@ -47,6 +49,29 @@ func gqlLinks(keys []string, values ...*string) Links {
 var gqlResourceLinkKeys = []string{"resource_path"}
 var gqlAvatarLinkKeys = []string{"avatar_url"}
 
+// gqlBigInt reads a BigInt, which GitHub sends as a string, and keeps its digits; a value that is not an
+// integer reads as absent instead of failing the answer.
+type gqlBigInt string
+
+var bigIntPattern = regexp.MustCompile(`^-?[0-9]{1,30}$`)
+
+func (b *gqlBigInt) UnmarshalJSON(data []byte) error {
+	text := strings.Trim(string(data), `"`)
+	if bigIntPattern.MatchString(text) {
+		*b = gqlBigInt(text)
+	}
+	return nil
+}
+
+// text returns the digits, or nil when there are none.
+func (b *gqlBigInt) text() *string {
+	if b == nil || *b == "" {
+		return nil
+	}
+	text := string(*b)
+	return &text
+}
+
 // ---- Account (Actor: User, Bot, Organization, Mannequin, EnterpriseUserAccount)
 
 // gqlAccountSelection selects an Actor. A member a type lacks is not asked for there and stays out of the view.
@@ -57,6 +82,10 @@ const gqlAccountSelection = `__typename login avatarUrl url resourcePath ` +
 
 // gqlUserSelection selects a User where the schema names the type itself, such as GitActor.user.
 const gqlUserSelection = `__typename id databaseId login name email avatarUrl url resourcePath isSiteAdmin`
+
+// gqlOrganizationSelection selects an Organization where the schema names the type itself, such as
+// Commit.onBehalfOf; the Actor fragments of gqlAccountSelection do not apply to it.
+const gqlOrganizationSelection = `__typename id databaseId login name email avatarUrl url resourcePath`
 
 type gqlAccountRaw struct {
 	Typename     *string `json:"__typename"`
