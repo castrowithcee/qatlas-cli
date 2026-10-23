@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Twenty CRM: members and roles
@@ -12,7 +12,12 @@ updated: 2026-10-22
 ## Members and roles
 
 `workspace-members.list`, `workspace-members.get`, and `roles.list` (`read`) are workspace-wide. Members are
-personal data with their own data class; avatars, user identifiers, and member and key names are never read.
+personal data with their own data class; key names are never read.
+
+- The avatar address of a member is a file address signed by Twenty with a token that grants access without
+  login, so it is never read.
+- A member's `userId` names the instance-wide Twenty user account behind the member, which no tool addresses;
+  people appear by their workspace member id.
 
 `roles.create`, `update`, `delete`, `set-object-permissions`, `set-field-permissions`, and `set-permission-flags` are
 confirmed, need a `tools` entry, and assign nothing. They change only a role that a first read shows editable and

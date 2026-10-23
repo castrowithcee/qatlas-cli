@@ -30,7 +30,7 @@ const fullChatInfo = `{"id":-1001,"type":"supergroup","title":"Team","username":
 	`"emoji_status_custom_emoji_id":"es1","emoji_status_expiration_date":1700000000,"bio":"About me",` +
 	`"has_private_forwards":true,"has_restricted_voice_and_video_messages":true,"join_to_send_messages":true,` +
 	`"join_by_request":true,"description":"About","invite_link":"` + inviteCanary + `",` +
-	`"pinned_message":{"message_id":55,"text":"PINNEDCANARY"},"permissions":{"can_send_messages":true},` +
+	`"pinned_message":{"message_id":55},"permissions":{"can_send_messages":true},` +
 	`"accepted_gift_types":{"unlimited_gifts":true,"limited_gifts":false,"unique_gifts":true,` +
 	`"premium_subscription":false,"gifts_from_channels":true},"can_send_paid_media":true,"slow_mode_delay":10,` +
 	`"unrestrict_boost_count":4,"message_auto_delete_time":86400,"has_aggressive_anti_spam_enabled":true,` +
@@ -107,7 +107,7 @@ func TestChatsGetPrintsEveryChatFullInfoMember(t *testing.T) {
 		`"unrestrict_boost_count":4,"message_auto_delete_time":86400,"has_aggressive_anti_spam_enabled":true,` +
 		`"has_hidden_members":true,"has_protected_content":true,"has_visible_history":true,"sticker_set_name":"set1",` +
 		`"can_set_sticker_set":true,"custom_emoji_sticker_set_name":"emoji1","linked_chat_id":-1002,` +
-		`"pinned_message_id":55,` +
+		`"pinned_message_id":55,"pinned_message":{"message_id":55},` +
 		`"location":{"location":{"latitude":52.52,"longitude":13.405},"address":"Berlin"},` +
 		`"rating":{"level":-1,"rating":0,"current_level_rating":-10,"next_level_rating":5},` +
 		`"first_profile_audio":{"kind":"audio","file_ref":"` + audioRef + `","file_unique_id":"au","duration":9,"title":"Song"},` +
