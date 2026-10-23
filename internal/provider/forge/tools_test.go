@@ -73,6 +73,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".issue-attachments.upload", p.id+".comment-attachments.delete", p.id+".comment-attachments.download",
 			p.id+".comment-attachments.get", p.id+".comment-attachments.list", p.id+".comment-attachments.update",
 			p.id+".comment-attachments.upload")
+		want = append(want, p.id+".branches.create", p.id+".branches.delete", p.id+".branches.get",
+			p.id+".branches.list", p.id+".branches.rename")
+		if p == gitea {
+			want = append(want, p.id+".branches.update-ref")
+		}
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",

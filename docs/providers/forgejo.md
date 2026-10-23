@@ -59,3 +59,5 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Attachments of issues and comments carry `type` and allow `browser_download_url` in the edit; the latter is not
   offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
+- Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
+  [Branches](gitea/branches.md).
