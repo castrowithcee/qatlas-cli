@@ -163,31 +163,48 @@ func TestAdminIDsAreValidatedAndPathSafe(t *testing.T) {
 	}
 }
 
-func TestAdminUsersGetReportsOnlyTheAllowlist(t *testing.T) {
+func TestAdminUsersGetReportsEveryDocumentedField(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
 		return ocsResponse(200, ocsData(`{"enabled":true,"storageLocation":"`+adminPathBad+`","id":"bob","lastLogin":1700000000000,`+
-			`"backend":"Database","subadmin":["staff"],"quota":{"free":5,"used":10,"total":100,"relative":10,"quota":100,"definition":"`+adminPathBad+`"},`+
-			`"email":"bob@example.invalid","displayname":"Bob","phone":"+49","address":"`+adminPathBad+`","website":"w","twitter":"t",`+
-			`"groups":["staff","dev"],"language":"de","locale":"de_DE","backendCapabilities":{"setDisplayName":true}}`)), nil
+			`"backend":"Database","subadmin":["staff"],"quota":{"free":5,"used":10,"total":100,"relative":10,"quota":-3,"definition":"`+adminPathBad+`"},`+
+			`"email":"bob@example.invalid","displayname":"Bob","display-name":"Bob","phone":"phone-1","address":"1 Main Street","website":"https://example.org",`+
+			`"twitter":"@bob","groups":["staff","dev"],"language":"de","locale":"de_DE",`+
+			`"backendCapabilities":{"setDisplayName":true,"setPassword":false}}`)), nil
 	})
 	got, err := adminCall(invokeAdminUsersGet, adminConnection(), `{"user_id":"bob"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(got)
-	for _, banned := range []string{adminPathBad, "Database", "backend", "storageLocation", "phone", "+49", "locale", "password", "free"} {
+	for _, banned := range []string{adminPathBad, "storageLocation", "display-name", "definition"} {
 		if strings.Contains(string(raw), banned) {
 			t.Errorf("the result carries %q: %s", banned, raw)
 		}
 	}
-	want := `{"id":"bob","display_name":"Bob","email":"bob@example.invalid","enabled":true,"language":"de",` +
-		`"last_login":"2023-11-14T22:13:20Z","groups":["staff","dev"],"subadmin_groups":["staff"],` +
-		`"quota":{"used":10,"total":100,"relative":10}}`
+	want := `{"id":"bob","display_name":"Bob","email":"bob@example.invalid","enabled":true,"language":"de","locale":"de_DE",` +
+		`"last_login":"2023-11-14T22:13:20Z","groups":["staff","dev"],"subadmin_groups":["staff"],"phone":"phone-1",` +
+		`"address":"1 Main Street","website":"https://example.org","twitter":"@bob","backend":"Database",` +
+		`"backend_capabilities":{"set_display_name":true,"set_password":false},` +
+		`"quota":{"used":10,"total":100,"relative":10,"free":5,"quota":-3}}`
 	if string(raw) != want {
 		t.Errorf("result = %s\nwant     %s", raw, want)
 	}
+	checkDeclared(t, adminUsersGet, raw, adminUsersGet.OutputSchema)
 	if (*calls)[0].url.Path != adminBase+"/users/bob" {
 		t.Errorf("path = %s", (*calls)[0].url.Path)
+	}
+}
+
+func TestAdminUsersGetKeepsOutputWithoutNewMembers(t *testing.T) {
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return ocsResponse(200, ocsData(`{"id":"bob","displayname":"Bob","enabled":true,"groups":["staff"],`+
+			`"quota":{"used":10,"total":100,"relative":10,"free":"n/a","quota":"none"}}`)), nil
+	})
+	got, err := adminCall(invokeAdminUsersGet, adminConnection(), `{"user_id":"bob"}`)
+	raw, _ := json.Marshal(got)
+	want := `{"id":"bob","display_name":"Bob","enabled":true,"groups":["staff"],"quota":{"used":10,"total":100,"relative":10}}`
+	if err != nil || string(raw) != want {
+		t.Errorf("result = %s, %v", raw, err)
 	}
 }
 
