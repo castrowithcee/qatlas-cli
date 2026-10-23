@@ -15,6 +15,11 @@ The Files tools work in the bound Files folder: they list and read metadata or u
 create files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and
 organise (see [Organising](#organising)). Deleting is separate (see [Deleting](#deleting)).
 
+The metadata of a file or folder covers the WebDAV properties Nextcloud documents independently of optional apps, with
+these limits. The temporary direct download address grants access without login and is not reported, nor is its
+expiry. The class 2 lock properties are placeholders with fixed values in Nextcloud and are not reported. A nested or
+multi-valued property over a bound is left out whole and named in `omitted_fields`, never cut.
+
 ## Organising
 
 `nextcloud.files.folders.create`, `nextcloud.files.files.move` (a rename is a move within one folder), and
@@ -53,6 +58,7 @@ hit and cannot be marked.
 The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
 literal, case-insensitive substring with wildcards masked; no caller XML, sorting, or offset exists. The server
 picks which matches a limit keeps, `truncated` says when it was reached, and the result is sorted by path.
+Search returns only the properties Nextcloud documents as selectable; other entry fields stay absent there.
 
 Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
 dropped silently, and a cut list is marked `truncated`.

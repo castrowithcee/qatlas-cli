@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub Actions
@@ -21,12 +21,12 @@ or a free REST path.
 | --- | --- |
 | `github.workflows.list` | lists workflows |
 | `github.workflows.get` | reads one workflow by identifier or file name such as `ci.yml` |
-| `github.workflow-runs.list` | lists compact runs, newest first, with structured filters |
+| `github.workflow-runs.list` | lists runs, newest first, with structured filters |
 | `github.workflow-runs.get` | reads one run |
-| `github.workflow-jobs.list` | lists the compact jobs of one run, without steps |
-| `github.workflow-jobs.get` | reads one job with its compact steps |
+| `github.workflow-jobs.list` | lists the jobs of one run with their steps |
+| `github.workflow-jobs.get` | reads one job with its steps |
 | `github.workflow-jobs.log` | reads the last lines of one job log within a hard size limit |
-| `github.workflow-artifacts.list` | lists the artifact metadata of one run |
+| `github.workflow-artifacts.list` | lists the artifact metadata of one run, optionally by name |
 | `github.workflow-runs.usage` | reads the billable time of one run for each runner operating system |
 | `github.workflows.dispatch` | starts one `workflow_dispatch` run on a branch or tag |
 | `github.workflow-runs.rerun` | re-runs every job of a completed run |
@@ -72,12 +72,14 @@ connections:
 
 ## Diagnosing a run
 
-`github.workflow-runs.list` names the repository once at the result level and leaves out pull requests, the per-run
-repository, the commit message, and the URL, the URL because it is derivable from the repository and the
-identifier. Its `status` filter takes a status or a conclusion. The title is untrusted data.
-`github.workflow-runs.get` reads one run, including its URL. `github.workflow-jobs.list` names the repository once
-at the result level the same way and leaves the URL out of each job; `github.workflow-jobs.get` reads one job
-with its compact steps and its URL.
+`github.workflow-runs.list` and `github.workflow-runs.get` answer a run with the same members. The called
+repository is named once at the result level, since the object a call names is fixed by the call and not
+repeated in every entry. The list leaves out pull requests unless `include_pull_requests` is true; the
+single read always carries them. The head repository of a fork outside the targets of the connection shows
+only its identifiers. An account inside a run carries the fields GitHub's own REST answers give it; the full
+profile is read with the account tools. `status` takes a status or a conclusion. Titles, commit messages
+(cut with a marker), and other texts are untrusted data. `github.workflow-jobs.list` answers a job with the
+same members and steps as `github.workflow-jobs.get`.
 
 ## Logs and artifacts
 
@@ -93,8 +95,12 @@ for the last `max_bytes` bytes only, and follows no further redirect. A storage 
 read up to 8 MiB, of which only the end is kept; a longer log is then refused.
 
 Artifacts are zip archives. A bounded download would still be binary and would need unpacking or storing,
-so Qatlas reads only their metadata. Run logs, which
-GitHub serves as a zip archive as well, are read per job instead.
+so Qatlas reads only their metadata. Run logs, which GitHub serves as a zip archive as well, are read per job
+instead.
+
+The `archive_download_url` of an artifact and the `logs_url` of a run are never answered: both addresses
+answer with a short-lived signed download link that grants access without sign-in, and logs and artifacts
+are read only through their own tools.
 
 ## Billable time
 
@@ -104,9 +110,6 @@ and nothing is rounded to whole minutes. Billable time only
 exists for private repositories on GitHub-hosted runners. At most 500 `job_runs` are answered for each
 operating system, and `truncated` is true when more were cut. GitHub has announced that this endpoint is being
 closed down; a refusal then comes back as GitHub answers it.
-
-The download of artifacts and of the log archive of a run, and their download links, are deliberately not
-offered: a signed link acts like a short-lived credential.
 
 ## Deleting run logs
 
@@ -194,7 +197,7 @@ and Qatlas keeps them behind a boundary of their own:
 | `github.workflow-files.update` | replaces one workflow file while it still has the given blob SHA |
 | `github.workflows.enable` | enables one workflow |
 | `github.workflows.disable` | disables one workflow; a disabled workflow stays as it is |
-| `github.actions-permissions.get` | reads whether Actions run and which actions they may use |
+| `github.actions-permissions.get` | reads whether Actions run, which actions they may use, and whether they must be pinned to a commit SHA |
 | `github.actions-permissions.update` | changes whether Actions run and which actions they may use |
 | `github.workflow-permissions.get` | reads the default `GITHUB_TOKEN` permissions and whether Actions may approve pull request reviews |
 | `github.workflow-permissions.update` | changes either of them |
