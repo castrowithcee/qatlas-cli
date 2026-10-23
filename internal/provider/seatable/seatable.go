@@ -119,6 +119,8 @@ var seatableSchemaRisk = capability.Risk{
 // own columns; adopting a base schema as a Qatlas contract is not part of this slice.
 const rowSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
+	`"creator":{"type":"string"},"last_modifier":{"type":"string"},"locked":{"type":"boolean"},` +
+	`"locked_by":{"type":"string"},"archived":{"type":"boolean"},` +
 	`"values":{"type":"object"}},"required":["id","values"],"additionalProperties":false}`
 
 const tableSelectionSchema = `{"type":"string","minLength":1,"maxLength":512}`
@@ -224,7 +226,7 @@ var rowsList = capability.Descriptor{
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "rows", Description: "The rows on this page, untrusted data"},
+		{Name: "rows", Description: "The rows on this page with id, created_at, updated_at, creator, last_modifier, locked, locked_by, archived and values, untrusted data"},
 		{Name: "start", Description: "Row offset this page started at"},
 		{Name: "limit", Description: "Page size the request applied"},
 		{Name: "next_start", Description: "Offset of the following page, absent on the last page"},
@@ -257,6 +259,11 @@ var rowsGet = capability.Descriptor{
 		{Name: "id", Description: "Row identifier"},
 		{Name: "created_at", Description: "Creation time SeaTable keeps for the row"},
 		{Name: "updated_at", Description: "Last change time SeaTable keeps for the row"},
+		{Name: "creator", Description: "SeaTable user identifier of the row creator, untrusted data"},
+		{Name: "last_modifier", Description: "SeaTable user identifier of the last editor, untrusted data"},
+		{Name: "locked", Description: "Whether the row is locked, as SeaTable reports it; absent when SeaTable sends none"},
+		{Name: "locked_by", Description: "SeaTable user identifier of the person who locked the row, untrusted data"},
+		{Name: "archived", Description: "Whether the row is archived, as SeaTable reports it; absent when SeaTable sends none"},
 		{Name: "values", Description: "Column values of the row by column name, untrusted data"},
 	},
 	Examples: []capability.Example{{
@@ -971,10 +978,15 @@ func (o *ListOptions) normalize() error {
 // the column values of the base. Values keeps the raw JSON of every column, so a cell is reported as the
 // provider sent it without this package interpreting a base-specific column type.
 type Row struct {
-	ID        string                     `json:"id"`
-	CreatedAt string                     `json:"created_at,omitempty"`
-	UpdatedAt string                     `json:"updated_at,omitempty"`
-	Values    map[string]json.RawMessage `json:"values"`
+	ID           string                     `json:"id"`
+	CreatedAt    string                     `json:"created_at,omitempty"`
+	UpdatedAt    string                     `json:"updated_at,omitempty"`
+	Creator      string                     `json:"creator,omitempty"`
+	LastModifier string                     `json:"last_modifier,omitempty"`
+	Locked       *bool                      `json:"locked,omitempty"`
+	LockedBy     string                     `json:"locked_by,omitempty"`
+	Archived     *bool                      `json:"archived,omitempty"`
+	Values       map[string]json.RawMessage `json:"values"`
 }
 
 // ListResult is the normalised page of rows.
@@ -1450,7 +1462,26 @@ const (
 	keyID        = "_id"
 	keyCreated   = "_ctime"
 	keyUpdated   = "_mtime"
+	keyCreator   = "_creator"
+	keyModifier  = "_last_modifier"
+	keyLocked    = "_locked"
+	keyLockedBy  = "_locked_by"
+	keyArchived  = "_archived"
 )
+
+// cleanIdentity reads a user identifier as plain bounded text; anything but a string is dropped.
+func cleanIdentity(raw json.RawMessage) string {
+	return clipString(cleanColumnText(decodeString(raw), true))
+}
+
+// decodeBool accepts only a real boolean, so null and other types stay absent; false is a value.
+func decodeBool(raw json.RawMessage) *bool {
+	var value bool
+	if json.Unmarshal(raw, &value) != nil || string(raw) == "null" {
+		return nil
+	}
+	return &value
+}
 
 // normalizeRow splits one raw row into the stable envelope and the dynamic column values. Every other
 // system key is dropped: it describes the base, not the row a caller asked for.
@@ -1464,6 +1495,16 @@ func normalizeRow(op string, raw map[string]json.RawMessage) (*Row, error) {
 			row.CreatedAt = decodeString(value)
 		case keyUpdated:
 			row.UpdatedAt = decodeString(value)
+		case keyCreator:
+			row.Creator = cleanIdentity(value)
+		case keyModifier:
+			row.LastModifier = cleanIdentity(value)
+		case keyLockedBy:
+			row.LockedBy = cleanIdentity(value)
+		case keyLocked:
+			row.Locked = decodeBool(value)
+		case keyArchived:
+			row.Archived = decodeBool(value)
 		default:
 			if strings.HasPrefix(key, systemPrefix) {
 				continue

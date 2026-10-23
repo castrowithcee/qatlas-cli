@@ -273,7 +273,7 @@ func TestCommentStatusErrorsDoNotCopyProviderText(t *testing.T) {
 	}
 }
 
-func TestListCollaboratorsReportsNamesAndMailsOnly(t *testing.T) {
+func TestListCollaboratorsReportsNamesMailsAndAvatar(t *testing.T) {
 	calls := serveComments(t, 200, "[]")
 	for _, target := range []string{"*", "Kunden"} {
 		c, _ := client(t, target)
@@ -282,8 +282,8 @@ func TestListCollaboratorsReportsNamesAndMailsOnly(t *testing.T) {
 			t.Fatalf("%s: %+v, %v", target, result, err)
 		}
 		encoded, _ := json.Marshal(result)
-		if strings.Contains(string(encoded), "avatar") || strings.Contains(string(encoded), "x.invalid") {
-			t.Errorf("avatar leaked: %s", encoded)
+		if result.Collaborators[0].AvatarURL != "https://x.invalid/a.png" {
+			t.Errorf("avatar = %q: %s", result.Collaborators[0].AvatarURL, encoded)
 		}
 	}
 	last := (*calls)[len(*calls)-1]
