@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub issues
@@ -15,20 +15,19 @@ The issue tools of the [GitHub provider](README.md). Every tool takes `repositor
 
 ## Reading issues and comments
 
-`github.issues.list` and `github.issues.get` read issues only, newest first, without comments.
-`github.issues.list` names the repository once at the result level and leaves the URL out of each issue,
-derivable from the repository and the number. `github.comments.list` reads the comments of one issue, oldest
-first, and is the only issue tool that returns comments. It and `github.pull-request-comments.list` answer
-GitHub's issue comment in full. The object a call names is fixed by the call and not repeated in every entry,
-so a comment carries no issue, pull request, or repository. Rendered variants repeat the text field in another
-format and add no content. A comment's reactions and edit history are served as lists of their own, so it
-reports their counts, and reaction groups only for kinds somebody gave.
+`github.issues.list` and `github.issues.get` read issues only. `github.comments.list` reads the comments of
+one issue, oldest first, and is the only issue tool that returns comments. It and
+`github.pull-request-comments.list` answer GitHub's issue comment in full. The object a call names is fixed by
+the call and not repeated in every entry: a comment carries no issue, pull request, or repository, and a
+sub-issue not the address of its parent. Rendered variants repeat the text field in another format and add no
+content. A comment reports its reactions and edit history as counts, and reaction groups only for kinds
+somebody gave.
 
-`github.issues.get`, the issue changes, `github.issues.search`, `github.sub-issues.list`, and
-`github.issue-dependencies.list` answer GitHub's issue in full without the rendered body variants. The issue
-tools refuse pull requests, so an issue answer never carries the pull request member. An issue's repository
-object is answered only where the call does not fix the repository, and a sub-issue leaves out the address of
-its parent, the issue the call named.
+Every issue tool answers GitHub's issue in full without rendered body variants, the pull request member (pull
+requests are refused), and the repository object where the call fixes it. `github.issues.list` reads a page in
+one query: its lists take at most 10 entries per issue (20 labels) below GitHub's node limit, and it cuts the
+body. It reads projects only with `project_details`, which needs `read:project` (classic) or Projects read
+(fine-grained). `projectV2(number:)` and `hovercard` are queries, not answer fields.
 
 ## Changes
 
