@@ -115,6 +115,23 @@ func outputCases() []outputCase {
 		{metaFieldsGet, invokeMetaFieldsGet, `{"id":"` + metaFieldID + `"}`, func(tail string) string {
 			return metaRichFieldJSON
 		}, false},
+		{rolesList, invokeRolesList, `{}`, func(string) string {
+			return `{"data":{"getRoles":[` + fullRoleJSON + `]}}`
+		}, false},
+		{agentsList, invokeAgentsList, `{}`, func(string) string {
+			return `{"data":{"findManyAgents":[` + agentOne + `]}}`
+		}, false},
+		{agentsGet, invokeAgentsGet, `{"id":"` + roleID + `"}`, func(string) string {
+			return `{"data":{"findOneAgent":` + agentOne + `}}`
+		}, false},
+		{skillsList, invokeSkillsList, `{}`, func(string) string { return `{"data":{"skills":[` + skillOne + `]}}` }, false},
+		{skillsGet, invokeSkillsGet, `{"id":"` + roleID + `"}`, func(string) string { return `{"data":{"skill":` + skillOne + `}}` }, false},
+		{logicFunctionsList, invokeLogicFunctionsList, `{}`, func(string) string {
+			return `{"data":{"findManyLogicFunctions":[` + logicFunctionOne + `]}}`
+		}, false},
+		{logicFunctionsGet, invokeLogicFunctionsGet, `{"id":"` + roleID + `"}`, func(string) string {
+			return `{"data":{"findOneLogicFunction":` + logicFunctionOne + `}}`
+		}, false},
 	}
 }
 
