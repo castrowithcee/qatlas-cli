@@ -86,47 +86,6 @@ func cleanBoostSource(s *boostSource) *boostSource {
 	return &out
 }
 
-type shippingAddressOut struct {
-	CountryCode string `json:"country_code,omitempty"`
-	State       string `json:"state,omitempty"`
-	City        string `json:"city,omitempty"`
-	StreetLine1 string `json:"street_line1,omitempty"`
-	StreetLine2 string `json:"street_line2,omitempty"`
-	PostCode    string `json:"post_code,omitempty"`
-}
-
-// cleanAddress prints an address as untrusted, bounded text; it is never fetched or resolved.
-func cleanAddress(a *shippingAddressOut) *shippingAddressOut {
-	if a == nil {
-		return nil
-	}
-	out := &shippingAddressOut{CountryCode: txtName(a.CountryCode), State: txtName(a.State), City: txtName(a.City),
-		StreetLine1: txtName(a.StreetLine1), StreetLine2: txtName(a.StreetLine2), PostCode: txtName(a.PostCode)}
-	if *out == (shippingAddressOut{}) {
-		return nil
-	}
-	return out
-}
-
-type orderInfoOut struct {
-	Name            string              `json:"name,omitempty"`
-	PhoneNumber     string              `json:"phone_number,omitempty"`
-	Email           string              `json:"email,omitempty"`
-	ShippingAddress *shippingAddressOut `json:"shipping_address,omitempty"`
-}
-
-func cleanOrderInfo(o *orderInfoOut) *orderInfoOut {
-	if o == nil {
-		return nil
-	}
-	out := &orderInfoOut{Name: txtName(o.Name), PhoneNumber: txtName(o.PhoneNumber), Email: txtName(o.Email),
-		ShippingAddress: cleanAddress(o.ShippingAddress)}
-	if *out == (orderInfoOut{}) {
-		return nil
-	}
-	return out
-}
-
 // Decoded event objects. Each embeds tgEvent, which carries the members they share with the other events.
 
 type tgMemberEvent struct {
