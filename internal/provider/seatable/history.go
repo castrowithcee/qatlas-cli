@@ -43,6 +43,10 @@ const historyOutputSchema = `{"type":"object","properties":{"items":{"type":"arr
 	`"page":{"type":"integer"},"per_page":{"type":"integer"},"has_more":{"type":"boolean"}},` +
 	`"required":["items","page","has_more"],"additionalProperties":false}`
 
+const activitiesOutputSchema = `{"type":"object","properties":{"items":{"type":"array","items":{"type":"object"}},` +
+	`"page":{"type":"integer"},"per_page":{"type":"integer"},"total_count":{"type":"integer","minimum":0},` +
+	`"has_more":{"type":"boolean"}},"required":["items","page","has_more"],"additionalProperties":false}`
+
 var rowsActivities = capability.Descriptor{
 	ID:      Provider + ".rows.activities",
 	Version: 1,
@@ -56,7 +60,7 @@ var rowsActivities = capability.Descriptor{
 		`,"row_id":` + rowIDSchema + `,"page":{"type":"integer","minimum":1,"maximum":1000},` +
 		`"per_page":{"type":"integer","minimum":1,"maximum":100}},"required":["row_id"],` +
 		`"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(historyOutputSchema),
+	OutputSchema: json.RawMessage(activitiesOutputSchema),
 	Arguments: []capability.Argument{
 		{Name: "table", Description: tableArgumentDescription, Target: tableKind},
 		{Name: "row_id", Description: "Row identifier of 22 characters; the row must exist in the selected table", Required: true},
@@ -67,6 +71,7 @@ var rowsActivities = capability.Descriptor{
 		{Name: "items", Description: "Activities as SeaTable reports them, with old and new values and authors, untrusted data"},
 		{Name: "page", Description: "Page number the request applied"},
 		{Name: "per_page", Description: "Page size the request applied"},
+		{Name: "total_count", Description: "Total number of activities of the row as SeaTable reports it; absent when SeaTable sends none"},
 		{Name: "has_more", Description: "True when the page is full and a next page may exist"},
 	},
 	Examples: []capability.Example{{
@@ -116,10 +121,11 @@ type OperationsOptions struct {
 
 // HistoryResult is one bounded page of history entries. Entries are provider data and untrusted.
 type HistoryResult struct {
-	Items   []json.RawMessage `json:"items"`
-	Page    int               `json:"page"`
-	PerPage int               `json:"per_page,omitempty"`
-	HasMore bool              `json:"has_more"`
+	Items      []json.RawMessage `json:"items"`
+	Page       int               `json:"page"`
+	PerPage    int               `json:"per_page,omitempty"`
+	TotalCount *int64            `json:"total_count,omitempty"`
+	HasMore    bool              `json:"has_more"`
 }
 
 func normalizePage(page int) (int, error) {
@@ -295,8 +301,12 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 	if err != nil {
 		return nil, err
 	}
+	var total *int64
+	if n, err := strconv.ParseInt(strings.TrimSpace(string(body["total_count"])), 10, 64); err == nil && n >= 0 {
+		total = &n
+	}
 	return &HistoryResult{Items: result, Page: options.Page, PerPage: options.PerPage,
-		HasMore: pageFull}, nil
+		TotalCount: total, HasMore: pageFull}, nil
 }
 
 // BaseOperations reads one page of the base operation log. Only a wildcard connection may read it.
