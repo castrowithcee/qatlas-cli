@@ -49,9 +49,10 @@ type Event struct {
 
 var errNoEvent = errors.New("no event")
 
-// ParseOccurrences reads every VEVENT of an iCalendar object as one event with all members except overrides, and its recurrence_id.
+// ParseOccurrences reads every VEVENT of an iCalendar object as one event and its recurrence_id. With full set it
+// carries all members except overrides, otherwise only the compact ones of ParseEvent.
 // A server fills such an object when it expanded a recurring event for a range.
-func ParseOccurrences(data string) (events []*Event, err error) {
+func ParseOccurrences(data string, full bool) (events []*Event, err error) {
 	defer func() {
 		if recover() != nil {
 			events, err = nil, errNoEvent
@@ -65,7 +66,7 @@ func ParseOccurrences(data string) (events []*Event, err error) {
 		if child.Name != ical.CompEvent {
 			continue
 		}
-		event := &Event{EventBody: bodyOf(child, true)}
+		event := &Event{EventBody: bodyOf(child, full)}
 		if prop := child.Props.Get(ical.PropRecurrenceID); prop != nil {
 			event.RecurrenceID, _, _ = timeOf(prop)
 		}
