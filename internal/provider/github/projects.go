@@ -299,11 +299,27 @@ func (c *Client) projectVariables() map[string]any {
 // those of a single-select field; merge makes both Options.
 type fieldJSON struct {
 	ID            string                 `json:"id"`
+	DatabaseID    *int64                 `json:"databaseId"`
 	Name          string                 `json:"name"`
 	DataType      string                 `json:"dataType"`
+	CreatedAt     *string                `json:"createdAt"`
+	UpdatedAt     *string                `json:"updatedAt"`
+	IsIssueField  *bool                  `json:"isIssueField"`
+	IssueField    *fieldIssueFieldJSON   `json:"issueField"`
 	Options       []optionJSON           `json:"options"`
 	MultiOptions  []optionJSON           `json:"multiSelectOptions"`
 	Configuration *iterationSettingsJSON `json:"configuration"`
+}
+
+// fieldIssueFieldJSON is the organization issue field a project field mirrors.
+type fieldIssueFieldJSON struct {
+	ID             *string    `json:"id"`
+	Name           *string    `json:"name"`
+	Description    *string    `json:"description"`
+	DataType       *string    `json:"dataType"`
+	Visibility     *string    `json:"visibility"`
+	CreatedAt      *string    `json:"createdAt"`
+	FullDatabaseID *gqlBigInt `json:"fullDatabaseId"`
 }
 
 func (field *fieldJSON) merge() {

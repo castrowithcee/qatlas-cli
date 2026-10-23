@@ -16,13 +16,10 @@ import (
 )
 
 // The owner lists answer which projects and repositories a user or an organization holds, so a caller finds
-// a project number or a repository name without knowing it in advance. They read names and a few flags only,
-// never items, issues, or settings.
+// a project number or a repository name without knowing it in advance. They read the members of the projects
+// and repositories themselves, never their items, issues, or settings.
 
-const ownerListInput = `{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":100},` +
-	`"cursor":` + cursorSchema + `},"additionalProperties":false}`
-
-// repositoryListInput adds the structured filters GitHub's repository connection offers.
+// repositoryListInput adds the structured filters GitHub's repository connection offers to the paging.
 const repositoryListInput = `{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":100},` +
 	`"cursor":` + cursorSchema + `,"privacy":{"type":"string","enum":["PUBLIC","PRIVATE"]},` +
 	`"visibility":{"type":"string","enum":["PUBLIC","PRIVATE","INTERNAL"]},"is_archived":{"type":"boolean"},` +
@@ -62,28 +59,36 @@ var projectsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub projects of an owner",
 	Description: "List one bounded batch of the projects of a user or an organization a connection " +
-		"allows, in number order, with number, title, URL, and whether each is closed",
+		"allows, in number order unless order_by says otherwise, with number, title, URL, whether each is " +
+		"closed, and the members of GitHub's project; the repositories of a project are cut at 10, with their " +
+		"total count and a truncated marker",
 	Tags:        []string{"github", "projects", "owner", "list", "planning"},
 	Risk:        readRisk,
 	Provider:    Provider,
-	InputSchema: json.RawMessage(ownerListInput),
+	InputSchema: json.RawMessage(projectListInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"projects":{"type":"array","items":{"type":"object","properties":{"project":{"type":"string"},` +
-		`"number":{"type":"integer"},"title":{"type":"string"},"url":{"type":"string"},"closed":{"type":"boolean"}},` +
+		`"number":{"type":"integer"},"title":{"type":"string"},"url":{"type":"string"},"closed":{"type":"boolean"},` +
+		projectWidthProperties + `},` +
 		`"required":["project","number","title","closed"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["projects","has_more"],"additionalProperties":false}`),
-	Arguments: ownerListArguments,
-	Fields: []capability.Field{
+	Arguments: projectListArguments,
+	Fields: append([]capability.Field{
 		{Name: "projects", Description: "Projects of the owner the connection allows: project as " +
-			"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER, number, title (untrusted data), url, closed"},
+			"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER, number, title (untrusted data), url, closed, " +
+			"and the members described below, untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the owner may hold further projects; a full batch alone " +
 			"never means the end"},
-	},
+	}, projectWidthFields...),
 	Examples: []capability.Example{{
 		Description: "List the projects of an organization",
 		Arguments:   json.RawMessage(`{"owner":"orgs/octo-org","limit":30}`),
+	}, {
+		Description: "Find the projects of an organization that can be edited, newest first",
+		Arguments: json.RawMessage(`{"owner":"orgs/octo-org","query":"roadmap","order_by":"CREATED_AT",` +
+			`"direction":"DESC","min_permission_level":"WRITE"}`),
 	}},
 }
 
@@ -134,6 +139,7 @@ type ProjectSummary struct {
 	Title   string `json:"title"`
 	URL     string `json:"url,omitempty"`
 	Closed  bool   `json:"closed"`
+	ProjectWidth
 }
 
 // RepositoryList is one batch of the repositories of an owner.
@@ -160,9 +166,11 @@ type OwnedRepository struct {
 // The GraphQL documents of the owner lists. The owner field is chosen by users or orgs; every value travels as
 // a variable. Repositories are the ones the owner owns: GitHub would add those it collaborates on otherwise.
 const (
-	ownerListHead     = `query($owner:String!,$first:Int!,$after:String`
-	projectsSelection = `(login:$owner){projectsV2(first:$first,after:$after,orderBy:{field:NUMBER,direction:ASC}){` +
-		`pageInfo{hasNextPage endCursor} edges{cursor node{number title url closed}}}}}`
+	ownerListHead        = `query($owner:String!,$first:Int!,$after:String`
+	projectsDeclarations = `,$query:String,$orderBy:ProjectV2Order!,$minPermissionLevel:ProjectV2PermissionLevel`
+	projectsArguments    = `(login:$owner){projectsV2(first:$first,after:$after,query:$query,orderBy:$orderBy,` +
+		`minPermissionLevel:$minPermissionLevel){pageInfo{hasNextPage endCursor} edges{cursor node{number title url closed`
+	projectsCompact          = projectsArguments + `}}}}}`
 	repositoriesDeclarations = `,$privacy:RepositoryPrivacy,$visibility:RepositoryVisibility,$isArchived:Boolean,` +
 		`$isFork:Boolean,$isLocked:Boolean,$hasIssuesEnabled:Boolean,$orderBy:RepositoryOrder!`
 	repositoriesArguments = `(login:$owner){repositories(first:$first,after:$after,ownerAffiliations:[OWNER],` +
@@ -195,6 +203,9 @@ type projectNodeJSON struct {
 	Title  string `json:"title"`
 	URL    string `json:"url"`
 	Closed bool   `json:"closed"`
+	projectWidthRaw
+	// unreadable names the members GitHub refused this token in this node.
+	unreadable []string
 }
 
 type repositoryNodeJSON struct {
@@ -226,6 +237,45 @@ type repositoryListOptions struct {
 	AdminCounts      bool   `json:"admin_counts"`
 	// compact asks for the compact view only, as the target browser needs it.
 	compact bool
+}
+
+// projectsSelection is the project node of the list with its width, and with the team count when asked.
+func projectsSelection(teamCounts bool) string {
+	selection := projectsArguments + ` ` + projectWidthSelection
+	if teamCounts {
+		selection += projectTeamsSelection
+	}
+	return selection + `}}}}}`
+}
+
+// projectListOptions are the paging and the filters of the project list. TeamCounts adds the team count of each
+// project and does not bind a cursor.
+type projectListOptions struct {
+	ownerListOptions
+	ProjectFilters
+	TeamCounts bool `json:"team_counts"`
+	// compact asks for the compact view only, as the target browser needs it.
+	compact bool
+}
+
+// normalize applies the bounds of one project list request. The filters bind the cursor, and an unfiltered
+// list keeps the binding it had without filters.
+func (o *projectListOptions) normalize(owner target) ([]byte, string, error) {
+	if err := o.ProjectFilters.check(); err != nil {
+		return nil, "", err
+	}
+	limit, err := normalizeLimit(o.Limit)
+	if err != nil {
+		return nil, "", err
+	}
+	o.Limit = limit
+	parts := []any{"projects", strings.ToLower(owner.String())}
+	if extra := o.ProjectFilters.binding(); extra != nil {
+		parts = append(parts, extra)
+	}
+	binding := fingerprint(parts...)
+	after, err := decodeCursor(binding, o.Cursor)
+	return binding, after, err
 }
 
 // filters are the values that bind a cursor and travel as GraphQL variables. Unset filters are left out, so
@@ -332,6 +382,14 @@ func scanOwner[T any](op, what string, limit int, after string, binding []byte,
 	return kept, encodeCursor(binding, last), nil
 }
 
+// ownerRules selects the rules of the entries of an owner list.
+func ownerRules(list string) refusalRules {
+	if list == "projectsV2" {
+		return projectRules()
+	}
+	return repositoryRules(list)
+}
+
 // ownerRights names what a token needs to list the projects or the repositories of an owner. GitHub decides on
 // every request, so a refusal names the requirement and never claims what the token holds.
 var ownerRights = map[string]struct{ what, needs string }{
@@ -376,7 +434,7 @@ func ownerPage[T any](ctx context.Context, c *Client, op, declarations, selectio
 			return nil, err
 		}
 		var rest []graphQLError
-		rest, unreadable = splitUnreadable(envelope.Errors, field)
+		rest, unreadable = splitUnreadable(envelope.Errors, ownerRules(field))
 		if len(rest) > 0 {
 			return nil, refused(c.graphQLFailure(op, rest, variables, false))
 		}
@@ -404,24 +462,41 @@ func ownerPage[T any](ctx context.Context, c *Client, op, declarations, selectio
 }
 
 // listProjects reads one batch of the projects of the bound owner that the targets show.
-func (c *Client) listProjects(ctx context.Context, options ownerListOptions, binding []byte,
+func (c *Client) listProjects(ctx context.Context, options projectListOptions, binding []byte,
 	after string) (*ProjectList, error) {
 	const op = "list projects"
 	owner := c.target
 	shown := func(node projectNodeJSON) target {
 		return target{kind: kindProject, scope: owner.scope, owner: owner.owner, number: node.Number}
 	}
+	selection := projectsSelection(options.TeamCounts)
+	if options.compact {
+		selection = projectsCompact
+	}
+	mark := func(node *projectNodeJSON, members []string) bool {
+		node.unreadable = members
+		return node.Number > 0
+	}
+	if options.compact {
+		mark = nil
+	}
 	nodes, next, err := scanOwner(op, "projects", options.Limit, after, binding,
 		func(first int, after string) (*connectionJSON[projectNodeJSON], error) {
-			return ownerPage[projectNodeJSON](ctx, c, op, "", projectsSelection, "projectsV2", first, after, nil, nil)
+			return ownerPage[projectNodeJSON](ctx, c, op, projectsDeclarations, selection, "projectsV2", first, after,
+				options.ProjectFilters.variables(), mark)
 		}, func(node projectNodeJSON) bool { return node.Number > 0 && c.allowed.shows(owner, shown(node)) })
 	if err != nil {
 		return nil, err
 	}
 	result := &ProjectList{Projects: make([]ProjectSummary, 0, len(nodes)), NextCursor: next, HasMore: next != ""}
 	for _, node := range nodes {
-		result.Projects = append(result.Projects, ProjectSummary{Project: shown(node).String(), Number: node.Number,
-			Title: node.Title, URL: node.URL, Closed: node.Closed})
+		summary := ProjectSummary{Project: shown(node).String(), Number: node.Number, Title: node.Title, URL: node.URL,
+			Closed: node.Closed}
+		if !options.compact {
+			summary.ProjectWidth = node.projectWidthRaw.width(c.allowed)
+			summary.Unreadable = node.unreadable
+		}
+		result.Projects = append(result.Projects, summary)
 	}
 	return result, nil
 }
@@ -471,10 +546,23 @@ func (c *Client) listRepositories(ctx context.Context, options repositoryListOpt
 
 func invokeProjectsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeOwnerList(ctx, resolved, secrets, red, raw, kindProject,
-		func(c *Client, options ownerListOptions, binding []byte, after string) (any, error) {
-			return c.listProjects(ctx, options, binding, after)
-		})
+	var options projectListOptions
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil, unreadable("list owner")
+	}
+	owner, err := selectOwner(resolved, kindProject, raw)
+	if err != nil {
+		return nil, err
+	}
+	binding, after, err := options.normalize(owner)
+	if err != nil {
+		return nil, err
+	}
+	client, err := openAt(ctx, resolved, secrets, red, owner)
+	if err != nil {
+		return nil, err
+	}
+	return owner.locate(client.listProjects(ctx, options, binding, after))
 }
 
 func invokeRepositoriesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -498,41 +586,23 @@ func invokeRepositoriesList(ctx context.Context, resolved *config.Resolved, secr
 	return owner.locate(client.listRepositories(ctx, options, binding, after))
 }
 
-// invokeOwnerList checks the owner, the paging, and the cursor before a credential is resolved, so a refused
-// request never becomes a secret read or a provider call.
-func invokeOwnerList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	raw json.RawMessage, kind targetKind,
-	list func(*Client, ownerListOptions, []byte, string) (any, error)) (any, error) {
-	var options ownerListOptions
-	if err := json.Unmarshal(raw, &options); err != nil {
-		return nil, unreadable("list owner")
-	}
-	owner, err := selectOwner(resolved, kind, raw)
-	if err != nil {
-		return nil, err
-	}
-	name := "projects"
-	if kind == kindRepository {
-		name = "repositories"
-	}
-	binding, after, err := options.normalize(name, owner)
-	if err != nil {
-		return nil, err
-	}
-	client, err := openAt(ctx, resolved, secrets, red, owner)
-	if err != nil {
-		return nil, err
-	}
-	return owner.locate(list(client, options, binding, after))
+// refusalRules locate the members GitHub refused inside one entry of a list: the path before the entry index,
+// whether a "node" segment follows the index, the members of the compact view, which are never set aside, and
+// the output name of a member.
+type refusalRules struct {
+	prefix  []string
+	node    bool
+	compact []string
+	name    func(string) string
 }
 
-// splitUnreadable separates the errors of members GitHub refused inside one repository node of the list from
-// all others. Only FORBIDDEN and INSUFFICIENT_SCOPES at owner, the list, edges, the index, node, and a member
-// qualify, and never a member of the compact view; every other error is returned unchanged. The members come
-// back by repository index under the names they have in the output.
-func splitUnreadable(errs []graphQLError, list string) (rest []graphQLError, unreadable map[int][]string) {
+// splitUnreadable separates the errors of members GitHub refused inside one entry of a list from all others.
+// Only FORBIDDEN and INSUFFICIENT_SCOPES at the path of the list, the index, and a member qualify, and never a
+// member of the compact view; every other error is returned unchanged. The members come back by entry index
+// under the names they have in the output.
+func splitUnreadable(errs []graphQLError, rules refusalRules) (rest []graphQLError, unreadable map[int][]string) {
 	for _, e := range errs {
-		index, member, ok := repositoryMemberPath(e, list)
+		index, member, ok := rules.memberPath(e)
 		if !ok {
 			rest = append(rest, e)
 			continue
@@ -552,38 +622,70 @@ func splitUnreadable(errs []graphQLError, list string) (rest []graphQLError, unr
 
 var memberKey = regexp.MustCompile(`^[A-Za-z]{1,64}$`)
 
-func repositoryMemberPath(e graphQLError, list string) (int, string, bool) {
+func (r refusalRules) memberPath(e graphQLError) (int, string, bool) {
 	if e.Type != "FORBIDDEN" && e.Type != "INSUFFICIENT_SCOPES" {
 		return 0, "", false
 	}
 	p := e.Path
-	index, isNumber := 0.0, false
-	if len(p) > 3 {
-		index, isNumber = p[3].(float64)
+	at := len(r.prefix)
+	skip := 1
+	if r.node {
+		skip = 2
 	}
-	member := pathSegment(p, 5)
-	if len(p) < 6 || pathSegment(p, 0) != "owner" || pathSegment(p, 1) != list || pathSegment(p, 2) != "edges" ||
-		!isNumber || index < 0 || index != float64(int(index)) || pathSegment(p, 4) != "node" ||
-		!memberKey.MatchString(member) {
+	if len(p) <= at+skip {
 		return 0, "", false
 	}
-	switch member {
-	case "name", "visibility", "isArchived":
+	for i, segment := range r.prefix {
+		if pathSegment(p, i) != segment {
+			return 0, "", false
+		}
+	}
+	index, isNumber := p[at].(float64)
+	member := pathSegment(p, at+skip)
+	if !isNumber || index < 0 || index != float64(int(index)) || (r.node && pathSegment(p, at+1) != "node") ||
+		!memberKey.MatchString(member) || slices.Contains(r.compact, member) {
 		return 0, "", false
 	}
-	return int(index), outputMember(member), true
+	return int(index), r.name(member), true
+}
+
+// repositoryRules are the rules of the members of a repository of an owner list.
+func repositoryRules(list string) refusalRules {
+	return refusalRules{prefix: []string{"owner", list, "edges"}, node: true,
+		compact: []string{"name", "visibility", "isArchived"}, name: outputMember}
+}
+
+// snakeMember names the output member a GraphQL member becomes; a connection read for its count becomes
+// <name>_total_count.
+func snakeMember(member string, totals ...string) string {
+	name := regexp.MustCompile(`[A-Z]`).ReplaceAllStringFunc(member, func(s string) string { return "_" + strings.ToLower(s) })
+	if slices.Contains(totals, member) {
+		return name + "_total_count"
+	}
+	return name
+}
+
+// projectRules are the rules of the members of a project of an owner list. A project holds teams only for a
+// token that may read the organizations, so its count can be refused.
+func projectRules() refusalRules {
+	return refusalRules{prefix: []string{"owner", "projectsV2", "edges"}, node: true,
+		compact: []string{"number", "title", "url", "closed"}, name: func(member string) string {
+			return snakeMember(member, "items", "fields", "views", "workflows", "statusUpdates", "teams")
+		}}
+}
+
+// teamRules are the rules of the members of a team of a project.
+func teamRules() refusalRules {
+	return refusalRules{prefix: []string{"owner", "projectV2", "teams", "nodes"},
+		compact: []string{"slug", "name"}, name: func(member string) string {
+			return snakeMember(member, "members", "childTeams", "repositories", "invitations")
+		}}
 }
 
 // outputMember names the output member a GraphQL member of the repository becomes.
 func outputMember(member string) string {
-	name := regexp.MustCompile(`[A-Z]`).ReplaceAllStringFunc(member, func(s string) string { return "_" + strings.ToLower(s) })
 	if member == "repositoryName" {
 		return "name"
 	}
-	for _, pair := range repositoryTotalMembers {
-		if pair == member {
-			return name + "_total_count"
-		}
-	}
-	return name
+	return snakeMember(member, repositoryTotalMembers...)
 }

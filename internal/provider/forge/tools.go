@@ -69,7 +69,14 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	branchesRename, branchesUpdateRef, branchesDelete, reviewsList, reviewsGet, reviewsCreate, reviewsSubmit,
 	reviewsApprove, reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList, reviewCommentsGet,
 	reviewCommentsCreate, reviewCommentsDelete, reviewCommentsReply, reviewCommentsResolve,
-	reviewCommentsUnresolve, reviewersList, reviewersRequest, reviewersRemove}
+	reviewCommentsUnresolve, workflowRunsList, workflowRunsGet, workflowRunsDelete, workflowRunsCancel,
+	workflowRunsForceCancel, workflowRunsRerun, workflowRunsRerunFailed, workflowRunsApprove,
+	workflowRunAttemptsGet, workflowRunAttemptsListJobs, workflowRunLogsGet, workflowJobsList, workflowJobsGet,
+	workflowJobsRerun, workflowJobLogsGet, actionsTasksList, commitsList, commitsGet, commitDiffsGet, compareGet,
+	commitStatusesList, commitStatusesGetCombined, commitStatusesCreate, gitBlobsGet, gitBlobsList, gitTreesGet,
+	gitRefsList, gitTagsGet, gitNotesGet, gitNotesSet, gitNotesDelete, contentsList, contentsGet, contentsGetExt,
+	contentsGetMany, contentsGetRaw, archivesGet, editorconfigGet, reviewersList, reviewersRequest,
+	reviewersRemove}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -121,7 +128,7 @@ func (t *tool) handler(p *product) capability.Handler {
 		if err != nil {
 			return nil, err
 		}
-		return operation(ctx, client)
+		return operation(context.WithValue(ctx, redactorKey{}, red), client)
 	}
 }
 
