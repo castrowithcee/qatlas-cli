@@ -55,6 +55,13 @@ func widthServer(t *testing.T, room, participant string) *[]call {
 // checkNested checks every member of a decoded object against the properties of its schema, recursively.
 func checkNested(t *testing.T, path string, value any, schema map[string]any) {
 	t.Helper()
+	if items, isList := value.([]any); isList {
+		element, _ := schema["items"].(map[string]any)
+		for _, item := range items {
+			checkNested(t, path+"[]", item, element)
+		}
+		return
+	}
 	object, ok := value.(map[string]any)
 	if !ok {
 		return
@@ -62,6 +69,9 @@ func checkNested(t *testing.T, path string, value any, schema map[string]any) {
 	properties, _ := schema["properties"].(map[string]any)
 	for key, member := range object {
 		declared, ok := properties[key].(map[string]any)
+		if free, isFree := schema["additionalProperties"].(map[string]any); !ok && isFree && properties == nil {
+			declared, ok = free, true
+		}
 		if !ok {
 			t.Errorf("%s.%s is not declared in the schema", path, key)
 			continue
@@ -121,7 +131,7 @@ func TestTalkRoomsReportEveryDocumentedField(t *testing.T) {
 		`"sip_enabled":1,"can_enable_sip":true,"unread_mention_direct":false,"last_read_message":99,` +
 		`"last_common_read_message":98,"last_message":{"id":"100","time":"2026-01-01T00:00:00Z","actor_type":"users",` +
 		`"actor_id":"bob","actor_name":"Bob","kind":"comment","text":"hi @Carol","objects":[{"key":"mention-user1",` +
-		`"type":"user","id":"carol","name":"Carol"}]},"object_type":"room","object_id":"obj-1","breakout_room_mode":"1",` +
+		`"type":"user","id":"carol","name":"Carol"}],"reactions":{"x":1}},"object_type":"room","object_id":"obj-1","breakout_room_mode":"1",` +
 		`"breakout_room_status":"0","status":"away","status_icon":"x","status_message":"gone","status_clear_at":1767300000,` +
 		`"avatar_version":"v3","is_custom_avatar":true,"call_start_time":1767225100,"call_recording":1,` +
 		`"recording_consent":2,"mention_permissions":1,"is_archived":false,"remote_server":"https://remote.example.invalid"}`

@@ -342,6 +342,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.blame(w, document, variables):
 	case f.issueFieldsChange(w, document, variables):
 	case f.issueFieldsPage(w, document, variables):
+	case strings.Contains(document, "issues(first:$first,after:$after,orderBy:$orderBy"):
+		f.issuesPage(w, variables)
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -1340,7 +1342,7 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 	filter, _ := vars["filter"].(map[string]any)
 	if fmt.Sprint(filter["states"]) != "[OPEN]" || fmt.Sprint(filter["labels"]) != "[bug]" || filter["assignee"] != "octocat" ||
 		vars["owner"] != "octo-org" || vars["name"] != "example" || vars["first"] != float64(30) ||
-		strings.Contains(request.document, "body") || strings.Contains(request.document, "comments") {
+		strings.Contains(request.document, "bodyHTML") || strings.Contains(request.document, "comments(") {
 		t.Errorf("request = %+v", request)
 	}
 	all, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Limit: 100})
@@ -1566,8 +1568,10 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		}
 		for _, entry := range entries {
 			if fields, ok := entry.(map[string]any); ok {
+				// Issue and item lists carry each entry's url; a draft issue has none.
 				_, ok := fields["url"]
-				if fields["type"] != "draft_issue" && ok == (tt.request.Operation != "github.project-items.list") {
+				want := tt.request.Operation == "github.issues.list" || tt.request.Operation == "github.project-items.list"
+				if fields["type"] != "draft_issue" && ok != want {
 					t.Errorf("%s entry url = %v: %v", tt.request.Operation, ok, fields)
 				}
 			}

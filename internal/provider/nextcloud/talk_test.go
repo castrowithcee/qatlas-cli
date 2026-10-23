@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -201,7 +202,7 @@ func TestTalkMessagesRefuseUnusableArguments(t *testing.T) {
 	}
 }
 
-func TestTalkMessagesNormaliseRichObjectsWithoutLinks(t *testing.T) {
+func TestTalkMessagesNormaliseRichObjectsWithoutAccessLinks(t *testing.T) {
 	params := `{"actor":{"type":"user","id":"bob","name":"Bob","link":"` + fileURL + `"},` +
 		`"file":{"type":"file","id":"77","name":"plan.pdf","path":"Talk/plan.pdf","link":"` + fileURL + `",` +
 		`"preview-available":"yes","mimetype":"application/pdf"}}`
@@ -218,12 +219,14 @@ func TestTalkMessagesNormaliseRichObjectsWithoutLinks(t *testing.T) {
 	var page MessagesResult
 	_ = json.Unmarshal(response.Result, &page)
 	if page.Messages[0].Text != "@Bob shared plan.pdf {unknown}" || len(page.Messages[0].Objects) != 2 ||
-		page.Messages[0].Objects[1] != (MessageObject{Key: "file", Type: "file", Name: "plan.pdf"}) ||
+		page.Messages[0].Objects[1].Key != "file" || page.Messages[0].Objects[1].Name != "plan.pdf" ||
+		!reflect.DeepEqual(page.Messages[0].Objects[1].Details, map[string]any{"path": "Talk/plan.pdf",
+			"preview_available": "yes", "mimetype": "application/pdf"}) ||
 		page.Messages[1].Text != "@Carl added you" || page.Messages[1].SystemMessage != "user_added" ||
 		page.Messages[1].ParentID != "3" {
 		t.Errorf("messages = %s", response.Result)
 	}
-	for _, leak := range []string{fileURL, "file-share-token-canary", "Talk/plan.pdf", "preview", "https://"} {
+	for _, leak := range []string{fileURL, "file-share-token-canary", "https://"} {
 		if strings.Contains(string(response.Result), leak) {
 			t.Errorf("the result carries %q: %s", leak, response.Result)
 		}

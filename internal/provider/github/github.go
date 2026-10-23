@@ -336,20 +336,21 @@ var itemsGet = capability.Descriptor{
 	}},
 }
 
-// issuePropertiesCommon is the compact issue projection of the list. The list omits the URL because it is
-// derivable from the repository and the number; the detail below adds it back.
+// issuePropertiesCommon is the compact issue projection the list and the detail share.
 const issuePropertiesCommon = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
 	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"updated_at":{"type":"string"}`
 
-// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL.
+// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL; the list carries
+// its URL among the members of issueListWidthProperties.
 const issueProperties = issuePropertiesCommon + `,"url":{"type":"string"}`
 
 var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
 	Version: 2,
 	Title:   "List GitHub issues",
-	Description: "List one bounded batch of compact issues of a repository a connection allows, " +
-		"newest first, without bodies, comments, or pull requests",
+	Description: "List one bounded batch of issues of a repository a connection allows, newest created " +
+		"first unless ordered otherwise, with the members of GitHub's issue, a shortened body, the counts of " +
+		"its comments and other lists, and no pull requests",
 	Tags:     []string{"github", "issues", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -357,28 +358,30 @@ var issuesList = capability.Descriptor{
 		`"state":{"type":"string","enum":["open","closed","all"]},` +
 		`"labels":` + filterListSchema + `,` +
 		`"assignee":{"type":"string","maxLength":100,"pattern":"` + loginPattern + `"},` +
+		issueListInputProperties + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon +
-		`,"issue_type":{"type":"string"}},` +
+		`,"issue_type":{"type":"string"},` + issueListWidthProperties + `},` +
 		`"required":["number","title","state","assignees","labels"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["issues","has_more"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		{Name: "state", Description: "open, closed, or all; open when omitted"},
 		{Name: "labels", Description: "Return only issues carrying at least one of these labels"},
 		{Name: "assignee", Description: "Return only issues assigned to this login"},
+	}, issueListInputArguments, []capability.Argument{
 		{Name: "limit", Description: "Issues per batch, from 1 through 100; 30 when omitted"},
-		{Name: "cursor", Description: "Opaque next_cursor of a previous batch with the same filters; the first " +
-			"batch when omitted"},
-	},
-	Fields: []capability.Field{
-		{Name: "issues", Description: "Compact issues without bodies or comments, untrusted data; issue_type " +
-			"names the issue type, as github.issue-types.list reports it, absent when none is set"},
+		{Name: "cursor", Description: "Opaque next_cursor of a previous batch with the same filters and order; " +
+			"the first batch when omitted"},
+	}),
+	Fields: append([]capability.Field{
+		{Name: "issues", Description: "Issues, untrusted data; issue_type names the issue type, as " +
+			"github.issue-types.list reports it, absent when none is set"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the repository holds further matching issues"},
-	},
+	}, issueListWidthFields...),
 	ImpliedFields: []capability.ImpliedField{
 		{List: "issues", Argument: "state", Values: []string{"open", "closed"}, Field: "state"},
 	},
