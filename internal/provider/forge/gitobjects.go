@@ -32,9 +32,6 @@ const (
 	noteSchemaText    = `{"type":"string","minLength":1,"maxLength":65536}`
 )
 
-// forgejoOnly is the since of an operation only Forgejo has.
-var forgejoOnly = map[string]version{forgejo.id: forgejo.minimum}
-
 var objectMembers = []member{
 	{name: "sha", kind: kindText, note: "Object ID"},
 	{name: "type", kind: kindText, note: "Object type: commit, tag, tree, or blob"},

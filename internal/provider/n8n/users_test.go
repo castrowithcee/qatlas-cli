@@ -199,3 +199,24 @@ func TestUserChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestUsersListSendsAndValidatesProjectID(t *testing.T) {
+	var calls []call
+	var mutations []string
+	env := newEnvironment(t, &calls, userServer(t, &mutations))
+	if _, err := env.invoke(usersList.ID, "pdelete-open", `{"project_id":"`+ownProject+`"}`); err != nil ||
+		calls[0].query.Get("projectId") != ownProject {
+		t.Fatalf("err = %v, calls = %+v", err, calls)
+	}
+	n := len(calls)
+	for _, bad := range []string{"a/b", "a b", "a?x=1", strings.Repeat("a", 200)} {
+		if _, err := env.invoke(usersList.ID, "pdelete-open", fmt.Sprintf(`{"project_id":%q}`, bad)); err == nil ||
+			len(calls) != n {
+			t.Fatalf("%q: err = %v, calls = %d", bad, err, len(calls))
+		}
+	}
+	if _, err := env.invoke(usersList.ID, "project", `{"project_id":"`+ownProject+`"}`); !isInvalidRequest(err) ||
+		len(calls) != n {
+		t.Fatalf("project target: err = %v", err)
+	}
+}

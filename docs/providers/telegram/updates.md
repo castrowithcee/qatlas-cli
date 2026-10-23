@@ -9,15 +9,25 @@ updated: 2026-10-23
 
 # Updates
 
-`telegram.updates.list` (`read`) shows the pending updates of the bot for every bound chat, topic, and business
-connection; of a topic only its messages and button presses, with the topic target as `chat`. Every other update
-is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
-`@username` target is matched through a fixed `getChat` call; the ID that returns is used for matching only.
-Business updates follow the [business rules](business.md#business-updates).
+`telegram.updates.list` (`read`) shows every update type of the Bot API that its target binding allows: the
+pending updates of the bot for every bound chat, topic, and business connection, and chatless updates with the
+target `bot`. Of a topic only its messages, button presses, and stopped generations appear, with the topic target
+as `chat`. Every update the binding does not allow, and every type Telegram adds later, is only counted in
+`skipped`, and `last_update_id` names the highest update seen, skipped ones included. An `@username` target is
+matched through a fixed `getChat` call; the ID that returns is used for matching only. Business updates follow
+the [business rules](business.md#business-updates).
+
+Updates without a chat (inline queries, chosen inline results, callbacks of inline messages, shipping and
+pre-checkout queries, purchased paid media, polls, poll answers, managed bots, subscriptions) appear only on a
+connection with the target `bot`. The people who trigger them are in that binding, so their user, address, and
+order data are shown. `voter_chat` and `actor_chat` are chats and never become a target.
 
 `telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again until Telegram
 drops them after at most 24 hours. Telegram allows one consumer per bot: the call conflicts with an active webhook
 or another `getUpdates` consumer, and a long poll interrupts that of another consumer.
+
+`allowed_updates` of `getUpdates` is no filter: Telegram stores the value permanently and bot-wide for every
+consumer. `telegram.updates.list` therefore never sends it.
 
 ## Confirming
 
@@ -29,12 +39,14 @@ the confirmed updates or competes for the offset. The result contains only `conf
 
 ## References in updates
 
-File, callback query, and join request query identifiers appear as [signed references](README.md#signed-references);
-`join_request_ref` appears only for a join request that carries a query. The tools that accept them are described
-in [queries.md](queries.md).
+File, callback query, join request query, guest query, shipping query, pre-checkout query, and inline message
+identifiers appear as [signed references](README.md#signed-references); `join_request_ref` appears only for a join
+request that carries a query. The identifiers of shipping and pre-checkout queries and of inline messages have no
+chat and are bound to `bot`. The tools that accept references are described in [queries.md](queries.md).
 
-`inline_query` and `chosen_inline_result` updates appear only with the target `bot`; only an `inline_query` has
-an `inline_ref`, and a location is never shown.
+The location of an inline query or chosen inline result is data the requesting person gave the bot, and it belongs
+to the `bot` binding. An invite link in member and join request events grants access without a login, so only its
+string is dropped; its other members are shown.
 
 ## Message members
 

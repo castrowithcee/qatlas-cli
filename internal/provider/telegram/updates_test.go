@@ -78,7 +78,7 @@ func TestUpdatesListFiltersBoundChatsAndSignsReferences(t *testing.T) {
 	encoded, _ := json.Marshal(got)
 	text := string(encoded)
 	for _, forbidden := range []string{"FOREIGNTEXT", "FOREIGNCB", "FOREIGNQUERY", "SMALLFILEID", "BIGFILEID", "DOCFILEID",
-		"CBQUERYID", "JOINQUERYID", "BIO", "-999", "INLINECB"} {
+		"CBQUERYID", "JOINQUERYID", "-999", "INLINECB"} {
 		if strings.Contains(text, forbidden) {
 			t.Errorf("output contains %q: %s", forbidden, text)
 		}

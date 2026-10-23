@@ -248,7 +248,7 @@ func TestUserMapperKeepsFalseFlagsAndBoundsTexts(t *testing.T) {
 
 func TestNewReferenceKindsAreSignedAndBound(t *testing.T) {
 	resolved := resolvedWith("-1001", "bot")
-	for kind, want := range map[refKind]byte{refGuestQuery: 7, refInlineMessage: 8} {
+	for kind, want := range map[refKind]byte{refGuestQuery: 7, refInlineMessage: 8, refShippingQuery: 9, refPreCheckoutQuery: 10} {
 		if byte(kind) != want || !kind.valid() {
 			t.Errorf("reference kind %d = %d, valid %v", want, kind, kind.valid())
 		}
@@ -256,7 +256,7 @@ func TestNewReferenceKindsAreSignedAndBound(t *testing.T) {
 	client, _ := multiClient(t, testToken, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return response(404, `{"ok":false}`), nil
 	}), "-1001", "bot")
-	for _, kind := range []refKind{refGuestQuery, refInlineMessage} {
+	for _, kind := range []refKind{refGuestQuery, refInlineMessage, refShippingQuery, refPreCheckoutQuery} {
 		raw := signRef(testToken, kind, "-1001", "ID1")
 		parsed, err := parseRef(resolved, kind, raw)
 		if err != nil || parsed.id != "ID1" {
@@ -291,7 +291,7 @@ func TestNewReferenceKindsAreSignedAndBound(t *testing.T) {
 			t.Errorf("kind %d: a reference of another token passed", kind)
 		}
 	}
-	if (refInlineMessage + 1).valid() {
+	if (refPreCheckoutQuery + 1).valid() {
 		t.Error("a kind after the last one is valid")
 	}
 }
