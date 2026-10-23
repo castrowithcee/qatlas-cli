@@ -154,19 +154,6 @@ type uniqueGiftOut struct {
 	PublisherChat    *chatRefOut            `json:"publisher_chat,omitempty"`
 }
 
-// entityOut is the Bot API MessageEntity of a gift text.
-type entityOut struct {
-	Type           string  `json:"type"`
-	Offset         int64   `json:"offset"`
-	Length         int64   `json:"length"`
-	URL            string  `json:"url,omitempty"`
-	User           *tgUser `json:"user,omitempty"`
-	Language       string  `json:"language,omitempty"`
-	CustomEmojiID  string  `json:"custom_emoji_id,omitempty"`
-	UnixTime       *int64  `json:"unix_time,omitempty"`
-	DateTimeFormat string  `json:"date_time_format,omitempty"`
-}
-
 type tgOwnedGift struct {
 	Type                    string          `json:"type"`
 	OwnedGiftID             string          `json:"owned_gift_id"`
