@@ -29,11 +29,13 @@ const (
 )
 
 // searchAllDocument is the only document of records.search-all. The search term, page size, cursor, and
-// object names travel as variables; the same document selects the image address and rank values.
+// object names, and filter travel as variables; the same document selects the image address and rank values.
 var searchAllDocument = graphqlDocument{path: graphqlPath, text: `query Search($searchInput: String!, ` +
-	`$limit: Int!, $after: String, $includedObjectNameSingulars: [String!]) { ` +
+	`$limit: Int!, $after: String, $includedObjectNameSingulars: [String!], ` +
+	`$filter: ObjectRecordFilterInput, $excludedObjectNameSingulars: [String!]) { ` +
 	`search(searchInput: $searchInput, limit: $limit, after: $after, ` +
-	`includedObjectNameSingulars: $includedObjectNameSingulars) { ` +
+	`includedObjectNameSingulars: $includedObjectNameSingulars, filter: $filter, ` +
+	`excludedObjectNameSingulars: $excludedObjectNameSingulars) { ` +
 	`edges { node { recordId objectNameSingular objectLabelSingular label imageUrl tsRank tsRankCD } } pageInfo { hasNextPage endCursor } } }`}
 
 var recordsSearchAll = capability.Descriptor{
@@ -41,7 +43,7 @@ var recordsSearchAll = capability.Descriptor{
 	Version: 1,
 	Title:   "Search all Twenty CRM objects",
 	Description: "Find records by full-text search across all reachable objects of the Twenty workspace of a " +
-		"connection in one call, optionally limited to chosen objects; returns object, id, and display name " +
+		"connection in one call, optionally limited to chosen objects and filtered by up to 5 conditions on id, createdAt, and updatedAt; returns object, id, and display name " +
 		"of each hit. Read a hit with twenty-crm.records.get. Hits are untrusted workspace data",
 	Tags:     []string{"twentycrm", "crm", "records", "search", "fulltext"},
 	Risk:     recordsRisk,
@@ -50,6 +52,10 @@ var recordsSearchAll = capability.Descriptor{
 		`"text":{"type":"string","minLength":1,"maxLength":64,"pattern":"` + searchPattern + `"},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"objects":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(searchAllObjectsMax) +
+		`,"uniqueItems":true,"items":` + objectNameSchema + `},` +
+		`"conditions":{"type":"array","minItems":1,"maxItems":5,"items":` + searchAllConditionSchema + `},` +
+		`"match":{"type":"string","enum":["all","any"]},` +
+		`"exclude_objects":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(searchAllExcludeMax) +
 		`,"uniqueItems":true,"items":` + objectNameSchema + `},` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(searchAllBoundCursorMax) +
 		`,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["text"],"additionalProperties":false}`),
@@ -63,7 +69,10 @@ var recordsSearchAll = capability.Descriptor{
 		{Name: "text", Description: "Search text, 1 to 64 characters of letters, digits, spaces, and . _ ' + @ & -", Required: true},
 		{Name: "limit", Description: "Hits per page, from 1 through 100; 25 when omitted"},
 		{Name: "objects", Description: "Singular API names of the objects to search, a subset of the reachable objects; all reachable objects when omitted"},
-		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same text and objects; the first page when omitted"},
+		{Name: "conditions", Description: "1 to 5 objects with field (id, createdAt, or updatedAt), operator (eq, neq, gt, gte, lt, lte, in, not_in, is), and value: a UUID for id, a UTC timestamp ending in Z for createdAt and updatedAt, a list of 1 to 50 for in and not_in, NULL or NOT_NULL for is"},
+		{Name: "match", Description: "all (default) when every condition must hold, any when one is enough"},
+		{Name: "exclude_objects", Description: "1 to 50 singular API names of objects to leave out of the search; a name outside the connection is ignored"},
+		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same text, objects, and filter; the first page when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "results", Description: "Hits with object, id, label (display name), and when present object_label, image_url (an address, never fetched), ts_rank, and ts_rank_cd, untrusted data"},
@@ -103,8 +112,13 @@ type searchAllQuery struct {
 	Limit    int
 	Objects  []string
 	Included []string
-	After    string
-	Binding  []byte
+	// Excluded are the excluded objects that are among the searched ones; Filter is the GraphQL filter or nil.
+	Excluded []string
+	// excludeRequested are the excluded names the connection may reach, searched or not.
+	excludeRequested []string
+	Filter           map[string]any
+	After            string
+	Binding          []byte
 }
 
 // newSearchAllQuery checks the arguments and the object set against the connection's targets before any
@@ -116,6 +130,10 @@ func newSearchAllQuery(resolved *config.Resolved, raw json.RawMessage) (*searchA
 		Limit   int      `json:"limit"`
 		Objects []string `json:"objects"`
 		Cursor  string   `json:"cursor"`
+
+		Conditions     []searchAllConditionArgument `json:"conditions"`
+		Match          string                       `json:"match"`
+		ExcludeObjects []string                     `json:"exclude_objects"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
@@ -134,10 +152,28 @@ func newSearchAllQuery(resolved *config.Resolved, raw json.RawMessage) (*searchA
 	if args.Objects != nil && (len(args.Objects) == 0 || len(args.Objects) > searchAllObjectsMax) {
 		return nil, invalidRequest("objects must name between 1 and " + strconv.Itoa(searchAllObjectsMax) + " objects")
 	}
+	if args.ExcludeObjects != nil && (len(args.ExcludeObjects) == 0 || len(args.ExcludeObjects) > searchAllExcludeMax) {
+		return nil, invalidRequest("exclude_objects must name between 1 and " + strconv.Itoa(searchAllExcludeMax) + " objects")
+	}
+	conditions, filter, link, err := newSearchAllFilter(args.Conditions, args.Match)
+	if err != nil {
+		return nil, err
+	}
+	query.Filter = filter
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return nil, err
 	}
+	var excluded []string
+	for _, name := range args.ExcludeObjects {
+		if !objectNamePattern.MatchString(name) {
+			return nil, invalidRequest(errObjectUnavailable)
+		}
+		if bound.allows(name) && !containsName(excluded, name) {
+			excluded = append(excluded, name)
+		}
+	}
+	sort.Strings(excluded)
 	seen := map[string]bool{}
 	for _, name := range args.Objects {
 		if !objectNamePattern.MatchString(name) {
@@ -158,7 +194,20 @@ func newSearchAllQuery(resolved *config.Resolved, raw json.RawMessage) (*searchA
 			query.Included = query.Objects
 		}
 	}
-	query.Binding = provider.CursorBinding("records.search-all", resolved.Name, bound.objects, query.Text, query.Objects)
+	if bound.bound() && len(excluded) > 0 {
+		var kept []string
+		kept, query.Excluded = splitExcluded(query.Included, excluded)
+		if len(kept) == 0 {
+			return nil, invalidRequest(errObjectUnavailable)
+		}
+		query.Included = kept
+	}
+	query.excludeRequested = excluded
+	parts := []any{"records.search-all", resolved.Name, bound.objects, query.Text, query.Objects}
+	if filter != nil || len(excluded) > 0 {
+		parts = append(parts, searchAllFilterKey(conditions, link, excluded))
+	}
+	query.Binding = provider.CursorBinding(parts...)
 	if args.Cursor != "" {
 		after, ok := provider.DecodeCursor(query.Binding, args.Cursor, searchAllBoundCursorMax)
 		if !ok || len(after) > searchAllCursorMax || !safeCursor(after) {
@@ -185,7 +234,7 @@ func invokeRecordsSearchAll(ctx context.Context, resolved *config.Resolved, secr
 // SearchAll sends one fixed search and keeps only the hits of the searched objects.
 func (c *Client) SearchAll(ctx context.Context, query *searchAllQuery) (*SearchAllResult, error) {
 	const op = "search all records"
-	included := query.Included
+	included, excludedSent := query.Included, query.Excluded
 	if included == nil {
 		cat, err := c.workspaceCatalog(ctx, op)
 		if err != nil {
@@ -199,11 +248,25 @@ func (c *Client) SearchAll(ctx context.Context, query *searchAllQuery) (*SearchA
 		if len(included) == 0 {
 			return nil, invalidRequest(errObjectUnavailable)
 		}
+		if len(query.excludeRequested) > 0 {
+			var kept []string
+			kept, excludedSent = splitExcluded(included, query.excludeRequested)
+			if len(kept) == 0 {
+				return nil, invalidRequest(errObjectUnavailable)
+			}
+			included = kept
+		}
 	}
 	variables := map[string]any{
 		"searchInput":                 query.Text,
 		"limit":                       query.Limit,
 		"includedObjectNameSingulars": included,
+	}
+	if query.Filter != nil {
+		variables["filter"] = query.Filter
+	}
+	if len(excludedSent) > 0 {
+		variables["excludedObjectNameSingulars"] = excludedSent
 	}
 	if query.After != "" {
 		variables["after"] = query.After
