@@ -1,0 +1,110 @@
+---
+description: >
+  Describes the Actions run tools of the Gitea and Forgejo providers: reading workflow runs, jobs, tasks, and job
+  logs, downloading the log archive of a run, and cancelling, re-running, approving, and deleting runs, their scopes,
+  the versions that have each operation, how runs and jobs are bound to the targets, the owner level only Gitea has,
+  and the limits.
+type: knowledge
+edit: shared
+created: 2026-10-23
+updated: 2026-10-23
+---
+
+# Actions runs
+
+The run tools observe and operate the workflow runs of one repository inside the connection's targets. They hold for
+Gitea and Forgejo alike unless a line names one product. Artifacts, workflows, and dispatching a workflow are
+described elsewhere; secrets, variables, and runners are not offered.
+
+## Scopes
+
+The tools presumably need `read:repository` to read and `write:repository` to cancel, re-run, approve, and delete,
+since the API serves Actions in the repository route group. None was checked against a live instance; a missing
+scope shows as `not-found`.
+
+## Versions
+
+Forgejo added its Actions API in steps; an instance below the version of an operation is refused before the
+request, naming the version it needs.
+
+| Tool | Forgejo | Gitea |
+| --- | --- | --- |
+| `workflow-runs.list`, `workflow-runs.get`, `actions-tasks.list` | 15 | 1.27 |
+| `workflow-runs.delete`, `workflow-jobs.list`, `workflow-job-logs.get` | 16 | 1.27 |
+| `workflow-runs.cancel` | 16 | 28 |
+| `workflow-run-logs.get` | 16 | 28 |
+| `workflow-runs.rerun`, `workflow-jobs.get`, `workflow-jobs.rerun` | 17 | 1.27 |
+| `workflow-runs.force-cancel`, `workflow-runs.approve` | none | 28 |
+| `workflow-runs.rerun-failed`, `workflow-run-attempts.get`, `workflow-run-attempts.list-jobs` | none | 1.27 |
+
+The `step`, `q`, `qi`, and `format` arguments of `workflow-job-logs.get` need Forgejo 17; `attempt` works from 16.
+`GET /actions/run`, which answers for a Forgejo job token only, is not offered.
+
+## Targets and binding
+
+Every tool takes `repository` (`OWNER/REPO`), checked against the targets before the credential is resolved and before
+any request; it may be left out only when the targets name exactly one repository. A run or job ID travels in a fixed
+path below the repository, which binds it to that repository. An answer must carry the ID asked for, and a run or job
+that names its repository must name one the targets allow; a violation is refused as `invalid-provider-response`
+without naming the repository. A list drops the rows that fail the check. A change sends one request and reads
+nothing first.
+
+### Owner level (Gitea)
+
+`workflow-runs.list` and `workflow-jobs.list` also list for an organization (`owner` as `orgs/NAME`) or for the user
+behind the token (`users/NAME`) instead of one repository; pass either `repository` or `owner`. The connection must
+name the owner as an owner target of the same kind: a repository target does not allow it, `users/NAME` does not
+allow `orgs/NAME`, and a connection without targets reaches it. The rows are checked against the targets by their
+repository, and a row of another owner is dropped. The user level is read through `/user/actions`, which acts on the
+account behind the token, so Qatlas first reads `GET /user` and refuses another user in `owner`.
+`exclude_pull_requests`, `workflow_id`, and `run_id` work on a repository only, `sort` and `order` not on an
+organization. Forgejo has no owner level; `owner` is refused as `invalid-request` before the secret.
+
+## Reading
+
+- `workflow-runs.list` reads one batch of runs with the filters each product documents; on Gitea `workflow_id` (a
+  workflow file such as `build.yml`) reads the per-workflow path. A filter of the other product is refused as
+  `invalid-request`.
+- `workflow-jobs.list` answers all jobs of a run at once on Forgejo and needs `run_id`; Gitea pages through the jobs
+  of a run, a repository, an organization, or the user and filters by `status`.
+- `workflow-run-attempts.get` and `workflow-run-attempts.list-jobs` read an attempt of a run on Gitea.
+- `actions-tasks.list` reads the tasks of the repository; Forgejo filters by `status`. The rows are the
+  `workflow_runs` of the API, answered as `tasks`.
+- Runs carry the members both products have under common names next to the members each product documents. Titles,
+  branches, names, and steps are untrusted data. The webhook payload of a Forgejo run (`event_payload`) is not
+  shown, since it holds the pushed commits and the inputs of a dispatch.
+
+## Logs
+
+A job log may carry whatever a workflow printed and is sensitive, untrusted text. `workflow-job-logs.get` returns
+the end of the log and `truncated`; a log above the size limit is refused. Terminal sequences and control characters
+are removed and every secret the process has resolved, such as the connection's token, is masked before the end is
+cut. A secret a workflow printed that Qatlas does not know cannot be masked, so the log stays classified as
+sensitive. The log is never stored.
+
+`workflow-run-logs.get` streams the ZIP archive of all job logs to a file in a directory released under
+`files.write`, up to a size limit. The path is checked before the credential is resolved, an existing file is
+replaced only with confirmation, a failed or refused download leaves no file, and a redirect to another address is
+not followed. The archive is neither unpacked nor masked.
+
+## Operating
+
+`workflow-runs.cancel`, `workflow-runs.force-cancel`, `workflow-runs.rerun`, `workflow-runs.rerun-failed`,
+`workflow-runs.approve`, and `workflow-jobs.rerun` have the effect `execute` and need confirmation. Each sends one
+request and never repeats it; when the outcome is open, the message says so. A re-run starts another attempt and is not
+idempotent. `workflow-runs.approve` lets a run that waits for approval, such as one from a fork, run with the
+repository's secrets. `workflow-jobs.rerun` names the job on Forgejo and the run and the job on Gitea. Gitea answers
+the run or job, which the tool returns beside `accepted`.
+
+`workflow-runs.delete` removes a run with its jobs and logs for good. It is offered only by a connection whose `tools`
+list names it and is in no setup profile.
+
+## Tools
+
+| Tool | Effect | Provider |
+| --- | --- | --- |
+| `workflow-runs.list`, `workflow-runs.get`, `workflow-jobs.list`, `workflow-jobs.get`, `workflow-job-logs.get`, `workflow-run-logs.get`, `actions-tasks.list` | read | both |
+| `workflow-run-attempts.get`, `workflow-run-attempts.list-jobs` | read | Gitea |
+| `workflow-runs.cancel`, `workflow-runs.rerun`, `workflow-jobs.rerun` | execute | both |
+| `workflow-runs.force-cancel`, `workflow-runs.rerun-failed`, `workflow-runs.approve` | execute | Gitea |
+| `workflow-runs.delete` | delete, listed only | both |

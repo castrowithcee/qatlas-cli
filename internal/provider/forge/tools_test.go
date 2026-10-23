@@ -105,6 +105,14 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".pull-request-review-comments.reply", p.id+".pull-request-review-comments.resolve",
 				p.id+".pull-request-review-comments.unresolve")
 		}
+		want = append(want, p.id+".workflow-runs.list", p.id+".workflow-runs.get", p.id+".workflow-runs.delete",
+			p.id+".workflow-runs.cancel", p.id+".workflow-runs.rerun", p.id+".workflow-run-logs.get",
+			p.id+".workflow-jobs.list", p.id+".workflow-jobs.get", p.id+".workflow-jobs.rerun",
+			p.id+".workflow-job-logs.get", p.id+".actions-tasks.list")
+		if p == gitea {
+			want = append(want, p.id+".workflow-runs.force-cancel", p.id+".workflow-runs.rerun-failed",
+				p.id+".workflow-runs.approve", p.id+".workflow-run-attempts.get", p.id+".workflow-run-attempts.list-jobs")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

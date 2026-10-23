@@ -195,6 +195,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
+- [Actions runs](actions.md): workflow runs, jobs, tasks, logs, and operating runs
 
 ## Not offered
 
