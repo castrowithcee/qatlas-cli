@@ -83,7 +83,8 @@ var usersList = capability.Descriptor{
 	Tags: []string{"n8n", "users", "list", "automation"}, Risk: userReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
+		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		`"project_id":` + targetIDSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"users":{"type":"array","items":` + userItemSchema + `},` +
@@ -92,6 +93,7 @@ var usersList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page"},
 		{Name: "limit", Description: "Users per page, 1 to 250; 100 when omitted"},
+		{Name: "project_id", Description: "Only users of this project; n8n answers not found for an unknown project"},
 	},
 	Fields: append([]capability.Field{{Name: "users", Description: "Users on this page"}}, append(userFields,
 		capability.Field{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
@@ -163,6 +165,7 @@ var usersDelete = capability.Descriptor{
 			`"transfer_project_id":"VmwOO9HeTEj20kxM"}`)}},
 }
 
+// instanceUserJSON deliberately has no mfaEnabled: another user's MFA state is account-security data.
 type instanceUserJSON struct {
 	ID        string  `json:"id"`
 	Email     *string `json:"email"`
@@ -253,6 +256,7 @@ type userArguments struct {
 	UserID              string `json:"user_id"`
 	Role                string `json:"role"`
 	TransferProjectID   string `json:"transfer_project_id"`
+	ProjectID           string `json:"project_id"`
 	DeleteOwnedResource *bool  `json:"delete_owned_resources"`
 	Cursor              string `json:"cursor"`
 	Limit               int    `json:"limit"`
@@ -276,6 +280,9 @@ func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
+	if input.ProjectID != "" && !validTargetID(input.ProjectID) {
+		return nil, invalidRequest("project_id must be a usable n8n identifier")
+	}
 	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
@@ -284,16 +291,20 @@ func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	page, err := client.ListUsers(ctx, input.Cursor, limit)
+	page, err := client.ListUsers(ctx, input.Cursor, input.ProjectID, limit)
 	return page, userError(err)
 }
 
-// ListUsers reads one page of GET /users, with the role included.
-func (c *Client) ListUsers(ctx context.Context, cursor string, limit int) (*InstanceUsersPage, error) {
+// ListUsers reads one page of GET /users, with the role included and, when projectID is set, only the
+// users of that project.
+func (c *Client) ListUsers(ctx context.Context, cursor, projectID string, limit int) (*InstanceUsersPage, error) {
 	const op = "list users"
 	query := url.Values{"limit": {strconv.Itoa(limit)}, "includeRole": {"true"}}
 	if cursor != "" {
 		query.Set("cursor", cursor)
+	}
+	if projectID != "" {
+		query.Set("projectId", projectID)
 	}
 	var page struct {
 		Data       []instanceUserJSON `json:"data"`
