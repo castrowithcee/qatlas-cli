@@ -321,3 +321,212 @@ func TestSearchAllReturnsHitDetailsAndDropsSignedAddresses(t *testing.T) {
 		}
 	}
 }
+
+const (
+	filterID1 = "11111111-1111-4111-8111-111111111111"
+	filterID2 = "22222222-2222-4222-8222-222222222222"
+)
+
+func TestSearchAllBuildsTheFilterVariable(t *testing.T) {
+	const stamp = "2026-03-01T10:00:00Z"
+	const wantStamp = "2026-03-01T10:00:00Z"
+	cases := []struct {
+		name, conditions, extra string
+		want                    any
+	}{
+		{"id eq", `{"field":"id","operator":"eq","value":"` + filterID1 + `"}`, ``,
+			map[string]any{"and": []any{map[string]any{"id": map[string]any{"eq": filterID1}}}}},
+		{"id gt", `{"field":"id","operator":"gt","value":"` + filterID1 + `"}`, ``,
+			map[string]any{"and": []any{map[string]any{"id": map[string]any{"gt": filterID1}}}}},
+		{"id in", `{"field":"id","operator":"in","value":["` + filterID2 + `","` + filterID1 + `"]}`, ``,
+			map[string]any{"and": []any{map[string]any{"id": map[string]any{"in": []any{filterID1, filterID2}}}}}},
+		{"id not_in", `{"field":"id","operator":"not_in","value":["` + filterID1 + `"]}`, ``,
+			map[string]any{"and": []any{map[string]any{"not": map[string]any{"id": map[string]any{"in": []any{filterID1}}}}}}},
+		{"id is", `{"field":"id","operator":"is","value":"NOT_NULL"}`, ``,
+			map[string]any{"and": []any{map[string]any{"id": map[string]any{"is": "NOT_NULL"}}}}},
+		{"createdAt lte", `{"field":"createdAt","operator":"lte","value":"` + stamp + `"}`, ``,
+			map[string]any{"and": []any{map[string]any{"createdAt": map[string]any{"lte": wantStamp}}}}},
+		{"updatedAt neq", `{"field":"updatedAt","operator":"neq","value":"` + stamp + `"}`, ``,
+			map[string]any{"and": []any{map[string]any{"updatedAt": map[string]any{"neq": wantStamp}}}}},
+		{"updatedAt not_in", `{"field":"updatedAt","operator":"not_in","value":["` + stamp + `"]}`, ``,
+			map[string]any{"and": []any{map[string]any{"not": map[string]any{"updatedAt": map[string]any{"in": []any{wantStamp}}}}}}},
+		{"updatedAt is", `{"field":"updatedAt","operator":"is","value":"NULL"}`, ``,
+			map[string]any{"and": []any{map[string]any{"updatedAt": map[string]any{"is": "NULL"}}}}},
+		{"createdAt gte any", `{"field":"createdAt","operator":"gte","value":"` + stamp + `"},` +
+			`{"field":"id","operator":"eq","value":"` + filterID1 + `"}`, `,"match":"any"`,
+			map[string]any{"or": []any{map[string]any{"createdAt": map[string]any{"gte": wantStamp}},
+				map[string]any{"id": map[string]any{"eq": filterID1}}}}},
+		{"all explicit", `{"field":"createdAt","operator":"gt","value":"` + stamp + `"},` +
+			`{"field":"id","operator":"neq","value":"` + filterID1 + `"}`, `,"match":"all"`,
+			map[string]any{"and": []any{map[string]any{"createdAt": map[string]any{"gt": wantStamp}},
+				map[string]any{"id": map[string]any{"neq": filterID1}}}}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			calls := searchAllServe(t, http.StatusOK, hitsAnswer)
+			if _, err := runSearchAll(`{"text":"Ada","conditions":[`+test.conditions+`]`+test.extra+`}`, "object/person"); err != nil {
+				t.Fatal(err)
+			}
+			sent := searchCalls(*calls)
+			if len(sent) != 1 || sent[0].query != searchAllDocument.text ||
+				!reflect.DeepEqual(sent[0].variables["filter"], test.want) || sent[0].variables["excludedObjectNameSingulars"] != nil {
+				t.Fatalf("requests = %+v, want filter %v", sent, test.want)
+			}
+		})
+	}
+}
+
+func TestSearchAllNeverSendsFilterVariablesWithoutFilter(t *testing.T) {
+	calls := searchAllServe(t, http.StatusOK, hitsAnswer)
+	if _, err := runSearchAll(`{"text":"Ada"}`, "object/person"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"filter", "excludedObjectNameSingulars"} {
+		if _, found := searchCalls(*calls)[0].variables[name]; found {
+			t.Errorf("%s was sent", name)
+		}
+	}
+}
+
+func TestSearchAllExcludesObjects(t *testing.T) {
+	cases := []struct {
+		name, args string
+		targets    []string
+		included   []any
+		excluded   any
+	}{
+		{"bound", `{"text":"a","exclude_objects":["company","workspaceMember","unknownThing","rocket"]}`,
+			[]string{"object/person", "object/company"}, []any{"person"}, []any{"company"}},
+		{"catalog", `{"text":"a","exclude_objects":["note","unknownThing"]}`, nil,
+			[]any{"company", "person", "rocket"}, []any{"note"}},
+		{"objects and exclude", `{"text":"a","objects":["person","note"],"exclude_objects":["note","company"]}`, nil,
+			[]any{"person"}, []any{"note"}},
+		{"outside the searched set", `{"text":"a","objects":["person"],"exclude_objects":["note"]}`, nil,
+			[]any{"person"}, nil},
+		{"only ignored names", `{"text":"a","exclude_objects":["workspaceMember"]}`, []string{"object/person"},
+			[]any{"person"}, nil},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			calls := searchAllServe(t, http.StatusOK, hitsAnswer)
+			if _, err := runSearchAll(test.args, test.targets...); err != nil {
+				t.Fatal(err)
+			}
+			sent := searchCalls(*calls)
+			if len(sent) != 1 || sent[0].query != searchAllDocument.text ||
+				!reflect.DeepEqual(sent[0].variables["includedObjectNameSingulars"], test.included) ||
+				!reflect.DeepEqual(sent[0].variables["excludedObjectNameSingulars"], test.excluded) {
+				t.Fatalf("variables = %+v, want included %v excluded %v", sent, test.included, test.excluded)
+			}
+		})
+	}
+}
+
+func TestSearchAllRefusesAnEmptyRemainderOfExcludedObjects(t *testing.T) {
+	for name, test := range map[string]struct {
+		args    string
+		targets []string
+		schema  bool
+	}{
+		"bound":   {`{"text":"a","exclude_objects":["person"]}`, []string{"object/person"}, false},
+		"objects": {`{"text":"a","objects":["person"],"exclude_objects":["person"]}`, nil, true},
+		"catalog": {`{"text":"a","exclude_objects":["company","note","person","rocket"]}`, nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := searchAllServe(t, http.StatusOK, hitsAnswer)
+			if _, err := runSearchAll(test.args, test.targets...); err == nil || classOf(err) != "" {
+				t.Fatalf("err = %v", err)
+			}
+			if len(searchCalls(*calls)) != 0 {
+				t.Fatalf("a search was sent: %+v", *calls)
+			}
+		})
+	}
+}
+
+func TestSearchAllRefusesInvalidFiltersBeforeAnyIO(t *testing.T) {
+	refuse(t)
+	many := func(n int) string {
+		values := make([]string, n)
+		for i := range values {
+			values[i] = `"` + filterID1[:35] + string(rune('a'+i%6)) + `"`
+		}
+		return "[" + strings.Join(values, ",") + "]"
+	}
+	cond := func(field, operator, value string) string {
+		return `{"field":"` + field + `","operator":"` + operator + `","value":` + value + `}`
+	}
+	six := strings.TrimSuffix(strings.Repeat(cond("id", "eq", `"`+filterID1+`"`)+",", 6), ",")
+	canary := "secretField"
+	for name, args := range map[string]string{
+		"deletedAt":         `"conditions":[` + cond("deletedAt", "is", `"NULL"`) + `]`,
+		"unknown field":     `"conditions":[` + cond(canary, "eq", `"`+filterID1+`"`) + `]`,
+		"unknown operator":  `"conditions":[` + cond("id", "like", `"`+filterID1+`"`) + `]`,
+		"bad uuid":          `"conditions":[` + cond("id", "eq", `"not-`+canary+`"`) + `]`,
+		"uuid not text":     `"conditions":[` + cond("id", "eq", `5`) + `]`,
+		"date only":         `"conditions":[` + cond("createdAt", "eq", `"2026-03-01"`) + `]`,
+		"date with offset":  `"conditions":[` + cond("createdAt", "eq", `"2026-03-01T10:00:00+02:00"`) + `]`,
+		"uuid as date":      `"conditions":[` + cond("updatedAt", "eq", `"`+filterID1+`"`) + `]`,
+		"date as uuid":      `"conditions":[` + cond("id", "eq", `"2026-03-01T10:00:00Z"`) + `]`,
+		"in scalar":         `"conditions":[` + cond("id", "in", `"`+filterID1+`"`) + `]`,
+		"eq list":           `"conditions":[` + cond("id", "eq", `["`+filterID1+`"]`) + `]`,
+		"not_in scalar":     `"conditions":[` + cond("id", "not_in", `"`+filterID1+`"`) + `]`,
+		"is other":          `"conditions":[` + cond("id", "is", `"`+filterID1+`"`) + `]`,
+		"is list":           `"conditions":[` + cond("id", "is", `["NULL"]`) + `]`,
+		"empty list":        `"conditions":[` + cond("id", "in", `[]`) + `]`,
+		"list of 51":        `"conditions":[` + cond("id", "in", many(51)) + `]`,
+		"mixed list":        `"conditions":[` + cond("id", "in", `["`+filterID1+`",3]`) + `]`,
+		"null value":        `"conditions":[` + cond("id", "eq", `null`) + `]`,
+		"no conditions":     `"conditions":[]`,
+		"six conditions":    `"conditions":[` + six + `]`,
+		"match alone":       `"match":"any"`,
+		"bad match":         `"match":"some","conditions":[` + cond("id", "eq", `"`+filterID1+`"`) + `]`,
+		"empty exclude":     `"exclude_objects":[]`,
+		"51 excludes":       `"exclude_objects":[` + strings.TrimSuffix(strings.Repeat(`"note",`, 51), ",") + `]`,
+		"malformed exclude": `"exclude_objects":["Bad Name"]`,
+	} {
+		_, err := runSearchAll(`{"text":"a",`+args+`}`, "object/person")
+		if err == nil {
+			t.Errorf("%s was accepted", name)
+			continue
+		}
+		for _, leak := range []string{canary, filterID1, "deletedAt", "2026-03-01", "Bad Name"} {
+			if strings.Contains(err.Error(), leak) {
+				t.Errorf("%s: message %q names %q", name, err, leak)
+			}
+		}
+	}
+}
+
+func TestSearchAllBindsTheCursorToTheFilter(t *testing.T) {
+	calls := searchAllServe(t, http.StatusOK, hitsAnswer)
+	base := `"conditions":[{"field":"id","operator":"in","value":["` + filterID1 + `","` + filterID2 + `"]},` +
+		`{"field":"createdAt","operator":"gt","value":"2026-03-01T10:00:00Z"}],"exclude_objects":["company","note"]`
+	first, err := runSearchAll(`{"text":"Ada",`+base+`}`, "object/person", "object/company", "object/note")
+	if err != nil || first.NextCursor == "" {
+		t.Fatalf("first = %+v, %v", first, err)
+	}
+	targets := []string{"object/person", "object/company", "object/note"}
+	reordered := `{"text":"Ada","exclude_objects":["note","company","note"],"conditions":[` +
+		`{"field":"createdAt","operator":"gt","value":"2026-03-01T10:00:00Z"},` +
+		`{"field":"id","operator":"in","value":["` + filterID2 + `","` + filterID1 + `","` + filterID2 + `"]},` +
+		`{"field":"createdAt","operator":"gt","value":"2026-03-01T10:00:00Z"}],"cursor":"` + first.NextCursor + `"}`
+	if _, err := runSearchAll(reordered, targets...); err != nil {
+		t.Fatalf("same filter reordered: %v", err)
+	}
+	if sent := searchCalls(*calls); len(sent) != 2 || sent[1].variables["after"] != "c3VjaA==" {
+		t.Fatalf("requests = %+v", sent)
+	}
+	refuse(t)
+	cursor := `,"cursor":"` + first.NextCursor + `"`
+	for name, args := range map[string]string{
+		"no filter":      `{"text":"Ada","exclude_objects":["company","note"]` + cursor + `}`,
+		"other value":    `{"text":"Ada","conditions":[{"field":"id","operator":"in","value":["` + filterID1 + `"]},{"field":"createdAt","operator":"gt","value":"2026-03-01T10:00:00Z"}],"exclude_objects":["company","note"]` + cursor + `}`,
+		"other match":    `{"text":"Ada","match":"any",` + base + cursor + `}`,
+		"other excluded": `{"text":"Ada","conditions":[{"field":"id","operator":"in","value":["` + filterID1 + `","` + filterID2 + `"]},{"field":"createdAt","operator":"gt","value":"2026-03-01T10:00:00Z"}],"exclude_objects":["company"]` + cursor + `}`,
+	} {
+		if _, err := runSearchAll(args, targets...); err == nil {
+			t.Errorf("%s: cursor was accepted", name)
+		}
+	}
+}

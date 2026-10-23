@@ -17,3 +17,4 @@ The threads tools of the [Infomaniak kChat provider](README.md). The effects and
   in [Scope](README.md#scope), so a thread of another bound team is refused.
 - `threads.follow` and `.unfollow` are idempotent, send no body, change nothing else, and report the state
   kChat confirmed. Threads never include deleted threads or participants' user data.
+- `threads.list` reports `total` as kChat's count before the reachable-channel filter.
