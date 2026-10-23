@@ -17,3 +17,9 @@ embedded. The system address book needs its own `addressbook/URI` target and is 
 no profile; deleting and sharing need a tools list. A contact update replaces by `etag`, refusing a card it cannot write
 whole. A new address book needs the general `addressbook` target; changing, deleting (with all contacts), or sharing one
 needs it bound and owned. Sharing: one user or group, never link, e-mail, or team; unknown ones are ignored (`shares`).
+Vendor properties of an address book are not standards and are not read; only `oc:invite` is, as `shares`.
+
+Contact filters only narrow the answer; every href keeps its address book binding, and the list never sends
+`nresults`: all hits are sorted before the cut at `limit`. An unsupported collation is a request error;
+`contacts.address-books.list` names the supported ones. An `addressbook-query` holds a single filter, so with
+`property_filters` a `query` is applied to the answer instead of the request.

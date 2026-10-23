@@ -283,11 +283,11 @@ var actionsPermissionsGet = capability.Descriptor{
 	Provider:              Provider,
 	RequiresToolAllowList: true,
 	InputSchema:           inputSchema(""),
-	OutputSchema:          settingsOutput(actionsPermissionsProperties, `"enabled"`),
-	Fields: []capability.Field{
+	OutputSchema:          settingsOutput(actionsPermissionsProperties+","+actionsPermissionsWidthProperties, `"enabled"`),
+	Fields: append([]capability.Field{
 		{Name: "enabled", Description: "True when GitHub Actions run in the repository"},
 		{Name: "allowed_actions", Description: "all, local_only, or selected; absent while Actions are disabled"},
-	},
+	}, actionsPermissionsWidthFields...),
 	Examples: []capability.Example{{Description: "Read the Actions permissions", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -398,7 +398,7 @@ func maintenanceOperations() []capability.Operation {
 			return c.setWorkflowState(ctx, a.Workflow, false)
 		}),
 		bind(actionsPermissionsGet, none, func(ctx context.Context, c *Client, _ *actionsArguments) (any, error) {
-			return c.actionsPermissions(ctx, "get actions permissions")
+			return c.actionsPermissionsWide(ctx, "get actions permissions")
 		}),
 		bind(actionsPermissionsUpdate, checkActionsPermissions, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
 			return c.updateActionsPermissions(ctx, a)
@@ -784,17 +784,32 @@ func (c *Client) settingsChange(ctx context.Context, op, path string, body any) 
 }
 
 func (c *Client) actionsPermissions(ctx context.Context, op string) (*ActionsPermissions, error) {
-	var raw struct {
-		Enabled        *bool  `json:"enabled"`
-		AllowedActions string `json:"allowed_actions"`
+	wide, err := c.actionsPermissionsWide(ctx, op)
+	if err != nil {
+		return nil, err
 	}
+	return &ActionsPermissions{Enabled: wide.Enabled, AllowedActions: wide.AllowedActions}, nil
+}
+
+// ActionsPermissionsRead is the answer of github.actions-permissions.get: the settings a change reports
+// before and after, with the members only a read adds.
+type ActionsPermissionsRead struct {
+	Enabled            bool   `json:"enabled"`
+	AllowedActions     string `json:"allowed_actions,omitempty"`
+	ShaPinningRequired *bool  `json:"sha_pinning_required,omitempty"`
+	Links              Links  `json:"links,omitempty"`
+}
+
+func (c *Client) actionsPermissionsWide(ctx context.Context, op string) (*ActionsPermissionsRead, error) {
+	var raw actionsPermissionsRaw
 	if err := c.settingsRead(ctx, op, "permissions", &raw); err != nil {
 		return nil, err
 	}
 	if raw.Enabled == nil {
 		return nil, invalidResponse(op, false)
 	}
-	return &ActionsPermissions{Enabled: *raw.Enabled, AllowedActions: raw.AllowedActions}, nil
+	return &ActionsPermissionsRead{Enabled: *raw.Enabled, AllowedActions: raw.AllowedActions,
+		ShaPinningRequired: raw.ShaPinningRequired, Links: raw.links}, nil
 }
 
 // updateActionsPermissions reads the current permissions, because GitHub replaces them as a whole, and sends

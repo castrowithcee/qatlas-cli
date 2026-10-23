@@ -37,17 +37,47 @@ const (
 // makeLatestValues are the values GitHub's make_latest accepts.
 var makeLatestValues = []string{"true", "false", "legacy"}
 
-const releaseSummaryProperties = `"id":{"type":"integer"},"tag":{"type":"string"},"name":{"type":"string"},` +
+var releaseLinkKeys = []string{"url", "assets_url", "upload_url", "tarball_url", "zipball_url", "discussion_url"}
+
+var releaseAssetLinkKeys = []string{"url", "browser_download_url"}
+
+const releaseCompactProperties = `"id":{"type":"integer"},"tag":{"type":"string"},"name":{"type":"string"},` +
 	`"draft":{"type":"boolean"},"prerelease":{"type":"boolean"},"author":{"type":"string"},` +
 	`"created_at":{"type":"string"},"published_at":{"type":"string"},"url":{"type":"string"}`
 
+var releaseAssetProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},"name":{"type":"string"},` +
+	`"label":{"type":"string"},"state":{"type":"string"},"size_bytes":{"type":"integer"},` +
+	`"content_type":{"type":"string"},"digest":{"type":"string"},"download_count":{"type":"integer"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"uploader":` + restAccountSchema + `,` +
+	`"links":` + linksSchema(releaseAssetLinkKeys)
+
+// releaseWidthProperties are the schema members every release view adds to the compact ones.
+var releaseWidthProperties = `"node_id":{"type":"string"},"updated_at":{"type":"string"},` +
+	`"immutable":{"type":"boolean"},"mentions_count":{"type":"integer"},"reactions":` + restReactionsSchema + `,` +
+	`"author_detail":` + restAccountSchema + `,"assets":{"type":"array","maxItems":100,"items":` +
+	objectSchema(releaseAssetProperties) + `},"assets_truncated":{"type":"boolean"},` +
+	`"links":` + linksSchema(releaseLinkKeys)
+
+var releaseSummaryProperties = releaseCompactProperties + `,` + releaseWidthProperties
+
 const releaseSummaryRequired = `"required":["id","tag","draft","prerelease"],"additionalProperties":false`
 
-const releaseAssetProperties = `"id":{"type":"integer"},"name":{"type":"string"},"label":{"type":"string"},` +
-	`"size_bytes":{"type":"integer"},"content_type":{"type":"string"},"digest":{"type":"string"},` +
-	`"download_count":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
-
 const releaseAssetRequired = `"required":["id","name","size_bytes","download_count"],"additionalProperties":false`
+
+// releaseWidthFields describe the members of releaseWidthProperties.
+var releaseWidthFields = []capability.Field{
+	{Name: "node_id", Description: "GraphQL node id of the release"},
+	{Name: "updated_at", Description: "Time of the last change"},
+	{Name: "immutable", Description: "True once the release can no longer be changed"},
+	{Name: "mentions_count", Description: "Number of accounts mentioned in the release notes"},
+	{Name: "reactions", Description: "Reaction counts: " + restReactionsMembers},
+	{Name: "author_detail", Description: "Author as an account: " + restAccountMembers},
+	{Name: "assets", Description: "Assets of the release, at most 100, with the members of github." +
+		"release-assets.list; name and label are untrusted data; contents are never read"},
+	{Name: "assets_truncated", Description: "True when the release holds more assets than shown"},
+	{Name: "links", Description: "REST url, assets_url, upload_url (a template), tarball_url, zipball_url, and " +
+		"discussion_url by their GitHub names, untrusted data, never fetched"},
+}
 
 var releasesList = capability.Descriptor{
 	ID:      Provider + ".releases.list",
@@ -55,15 +85,18 @@ var releasesList = capability.Descriptor{
 	Title:   "List GitHub releases",
 	Description: "List one bounded batch of compact releases of a repository a connection allows, " +
 		"in GitHub's own order; a draft appears only while the token can see it",
-	Tags:         []string{"github", "releases", "list"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(pagingKeys),
-	OutputSchema: listOutput("releases", releaseSummaryProperties, releaseSummaryRequired),
-	Arguments:    pagingArguments,
+	Tags:        []string{"github", "releases", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(pagingKeys),
+	OutputSchema: listOutput("releases", releaseSummaryProperties+`,"target_commitish":{"type":"string"},`+
+		`"body":{"type":"string"},"body_truncated":{"type":"boolean"},"assets_count":{"type":"integer"}`,
+		releaseSummaryRequired),
+	Arguments: pagingArguments,
 	Fields: append([]capability.Field{
-		{Name: "releases", Description: "Compact releases with tag, name, draft, prerelease, author, and " +
-			"times; name is untrusted data"},
+		{Name: "releases", Description: "Releases with tag, name, draft, prerelease, author, times, " +
+			"target_commitish, body (cut at 4000 characters, body_truncated says so), assets_count, and the " +
+			"members of github.releases.get; name and body are untrusted data"},
 	}, pagingFields...),
 	Examples: []capability.Example{{Description: "List the releases", Arguments: json.RawMessage(`{"limit":10}`)}},
 }
@@ -87,7 +120,7 @@ var releasesGet = capability.Descriptor{
 		{Name: "tag", Description: "Tag the release was cut from; finds only a published release, never a draft"},
 		{Name: "latest", Description: "true reads the latest published, non-prerelease release"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "body", Description: "Full release notes, untrusted data"},
 		{Name: "target_commitish", Description: "Branch or commit the release was, or will be, cut from"},
 		{Name: "assets_count", Description: "Number of assets attached to the release"},
@@ -100,7 +133,7 @@ var releasesGet = capability.Descriptor{
 		{Name: "created_at", Description: "When the release was created"},
 		{Name: "published_at", Description: "When the release was published; absent for a draft"},
 		{Name: "url", Description: "Web address of the release"},
-	},
+	}, releaseWidthFields...),
 	Examples: []capability.Example{{Description: "Read the latest release", Arguments: json.RawMessage(`{"latest":true}`)}},
 }
 
@@ -119,8 +152,9 @@ var releaseAssetsList = capability.Descriptor{
 		{Name: "id", Description: "Release identifier, as returned by github.releases.list", Required: true},
 	}, pagingArguments...),
 	Fields: append([]capability.Field{
-		{Name: "assets", Description: "Assets with name, label, size in bytes, content type, digest when " +
-			"GitHub reports one, download count, and times; name and label are untrusted data"},
+		{Name: "assets", Description: "Assets with name, label, state, size in bytes, content type, digest " +
+			"when GitHub reports one, download count, times, uploader (an account), and links (the REST url " +
+			"and browser_download_url, never fetched); name and label are untrusted data"},
 	}, pagingFields...),
 	Examples: []capability.Example{{Description: "List the assets of a release", Arguments: json.RawMessage(`{"id":1}`)}},
 }
@@ -488,17 +522,36 @@ type ReleaseList struct {
 	HasMore    bool             `json:"has_more"`
 }
 
-// ReleaseSummary is the compact list view of one release. Name is untrusted data.
+// ReleaseWidth holds the members of GitHub's release beyond the compact ones; every release view carries
+// them. Missing and null values stay out. The rendered body variants repeat the text and are left out.
+type ReleaseWidth struct {
+	NodeID          *string        `json:"node_id,omitempty"`
+	UpdatedAt       *string        `json:"updated_at,omitempty"`
+	Immutable       *bool          `json:"immutable,omitempty"`
+	MentionsCount   *int64         `json:"mentions_count,omitempty"`
+	Reactions       *RESTReactions `json:"reactions,omitempty"`
+	AuthorDetail    *RESTAccount   `json:"author_detail,omitempty"`
+	Assets          []ReleaseAsset `json:"assets,omitempty"`
+	AssetsTruncated bool           `json:"assets_truncated,omitempty"`
+	Links           Links          `json:"links,omitempty"`
+}
+
+// ReleaseSummary is the list view of one release. Name and Body are untrusted data.
 type ReleaseSummary struct {
-	ID          int64  `json:"id"`
-	Tag         string `json:"tag"`
-	Name        string `json:"name,omitempty"`
-	Draft       bool   `json:"draft"`
-	Prerelease  bool   `json:"prerelease"`
-	Author      string `json:"author,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	PublishedAt string `json:"published_at,omitempty"`
-	URL         string `json:"url,omitempty"`
+	ID              int64  `json:"id"`
+	Tag             string `json:"tag"`
+	Name            string `json:"name,omitempty"`
+	Draft           bool   `json:"draft"`
+	Prerelease      bool   `json:"prerelease"`
+	Author          string `json:"author,omitempty"`
+	CreatedAt       string `json:"created_at,omitempty"`
+	PublishedAt     string `json:"published_at,omitempty"`
+	URL             string `json:"url,omitempty"`
+	TargetCommitish string `json:"target_commitish,omitempty"`
+	Body            string `json:"body,omitempty"`
+	BodyTruncated   bool   `json:"body_truncated,omitempty"`
+	AssetsCount     *int   `json:"assets_count,omitempty"`
+	ReleaseWidth
 }
 
 // Release is the full view of one release. Name and Body are untrusted data.
@@ -515,50 +568,115 @@ type Release struct {
 	PublishedAt     string `json:"published_at,omitempty"`
 	AssetsCount     int    `json:"assets_count"`
 	URL             string `json:"url,omitempty"`
+	ReleaseWidth
 }
 
-// releaseJSON is the part of a REST release this provider reads.
+// releaseJSON is the part of a REST release this provider reads; links holds its REST url and the other
+// *_url addresses.
 type releaseJSON struct {
-	ID              int64   `json:"id"`
-	TagName         string  `json:"tag_name"`
-	TargetCommitish string  `json:"target_commitish"`
-	Name            *string `json:"name"`
-	Body            *string `json:"body"`
-	Draft           bool    `json:"draft"`
-	Prerelease      bool    `json:"prerelease"`
-	Author          *struct {
-		Login string `json:"login"`
-	} `json:"author"`
-	Assets      []json.RawMessage `json:"assets"`
-	CreatedAt   string            `json:"created_at"`
-	PublishedAt *string           `json:"published_at"`
-	HTMLURL     string            `json:"html_url"`
+	ID              int64               `json:"id"`
+	NodeID          *string             `json:"node_id"`
+	TagName         string              `json:"tag_name"`
+	TargetCommitish string              `json:"target_commitish"`
+	Name            *string             `json:"name"`
+	Body            *string             `json:"body"`
+	Draft           bool                `json:"draft"`
+	Prerelease      bool                `json:"prerelease"`
+	Immutable       *bool               `json:"immutable"`
+	MentionsCount   *int64              `json:"mentions_count"`
+	Reactions       *reactionsRaw       `json:"reactions"`
+	Author          *accountRaw         `json:"author"`
+	Assets          *[]releaseAssetJSON `json:"assets"`
+	CreatedAt       string              `json:"created_at"`
+	PublishedAt     *string             `json:"published_at"`
+	UpdatedAt       *string             `json:"updated_at"`
+	HTMLURL         string              `json:"html_url"`
+	links           Links
 }
 
-func (r releaseJSON) summary() ReleaseSummary {
+func (r *releaseJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain releaseJSON
+	if err = json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	r.links, err = readLinks(data, releaseLinkKeys)
+	return err
+}
+
+// assetCount is the number of assets GitHub sent, and whether it sent the list at all.
+func (r releaseJSON) assetCount() (int, bool) {
+	if r.Assets == nil {
+		return 0, false
+	}
+	return len(*r.Assets), true
+}
+
+// width projects the members beyond the compact ones. An asset GitHub sent without an identifier is refused.
+func (r releaseJSON) width() (ReleaseWidth, bool) {
+	width := ReleaseWidth{NodeID: nameText(r.NodeID), UpdatedAt: nameText(r.UpdatedAt), Immutable: r.Immutable,
+		MentionsCount: r.MentionsCount, Reactions: r.Reactions.project(), AuthorDetail: r.Author.project(),
+		Links: r.links}
+	if r.Assets != nil {
+		assets, cut := capped(*r.Assets)
+		for _, asset := range assets {
+			if asset.ID < 1 {
+				return ReleaseWidth{}, false
+			}
+			width.Assets = append(width.Assets, asset.view())
+		}
+		width.AssetsTruncated = cut
+	}
+	return width, true
+}
+
+func (r releaseJSON) login() string {
+	if r.Author == nil || r.Author.Login == nil {
+		return ""
+	}
+	return *r.Author.Login
+}
+
+func (r releaseJSON) summary() (ReleaseSummary, bool) {
+	width, ok := r.width()
+	if !ok {
+		return ReleaseSummary{}, false
+	}
 	s := ReleaseSummary{ID: r.ID, Tag: r.TagName, Draft: r.Draft, Prerelease: r.Prerelease, CreatedAt: r.CreatedAt,
-		URL: r.HTMLURL}
+		URL: r.HTMLURL, Author: r.login(), TargetCommitish: r.TargetCommitish, ReleaseWidth: width}
 	if r.Name != nil {
 		s.Name = *r.Name
-	}
-	if r.Author != nil {
-		s.Author = r.Author.Login
 	}
 	if r.PublishedAt != nil {
 		s.PublishedAt = *r.PublishedAt
 	}
-	return s
+	if body, cut := cleanText(r.Body, projectionBodyLimit, true); body != nil {
+		s.Body, s.BodyTruncated = *body, cut
+	}
+	if count, present := r.assetCount(); present {
+		s.AssetsCount = &count
+	}
+	return s, true
 }
 
-func (r releaseJSON) full() *Release {
-	s := r.summary()
-	full := &Release{ID: s.ID, Tag: s.Tag, Name: s.Name, TargetCommitish: r.TargetCommitish, Draft: s.Draft,
-		Prerelease: s.Prerelease, Author: s.Author, CreatedAt: s.CreatedAt, PublishedAt: s.PublishedAt,
-		AssetsCount: len(r.Assets), URL: s.URL}
+func (r releaseJSON) full() (*Release, bool) {
+	width, ok := r.width()
+	if !ok {
+		return nil, false
+	}
+	count, _ := r.assetCount()
+	full := &Release{ID: r.ID, Tag: r.TagName, Draft: r.Draft, Prerelease: r.Prerelease, CreatedAt: r.CreatedAt,
+		URL: r.HTMLURL, Author: r.login(), TargetCommitish: r.TargetCommitish, AssetsCount: count,
+		ReleaseWidth: width}
+	if r.Name != nil {
+		full.Name = *r.Name
+	}
+	if r.PublishedAt != nil {
+		full.PublishedAt = *r.PublishedAt
+	}
 	if r.Body != nil {
 		full.Body = *r.Body
 	}
-	return full
+	return full, true
 }
 
 func (c *Client) listReleases(ctx context.Context, a *releaseArguments) (*ReleaseList, error) {
@@ -573,7 +691,11 @@ func (c *Client) listReleases(ctx context.Context, a *releaseArguments) (*Releas
 		if release.ID < 1 {
 			return nil, invalidEntry(op, "a release")
 		}
-		result.Releases = append(result.Releases, release.summary())
+		summary, ok := release.summary()
+		if !ok {
+			return nil, invalidEntry(op, "a release asset")
+		}
+		result.Releases = append(result.Releases, summary)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
@@ -599,7 +721,16 @@ func (c *Client) getRelease(ctx context.Context, a *releaseArguments) (*Release,
 	if raw.ID < 1 {
 		return nil, invalidEntry(op, "a release")
 	}
-	return raw.full(), nil
+	return releaseView(op, raw, false)
+}
+
+// releaseView projects a release GitHub answered with, or refuses it as invalid.
+func releaseView(op string, raw releaseJSON, change bool) (*Release, error) {
+	release, ok := raw.full()
+	if !ok {
+		return nil, invalidResponse(op, change)
+	}
+	return release, nil
 }
 
 // ReleaseAssetList is one batch of the asset metadata of a release.
@@ -612,32 +743,50 @@ type ReleaseAssetList struct {
 // ReleaseAsset is the metadata of one release asset. Its content is never read. Name and Label are untrusted
 // data.
 type ReleaseAsset struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Label       string `json:"label,omitempty"`
-	SizeBytes   int64  `json:"size_bytes"`
-	ContentType string `json:"content_type,omitempty"`
-	Digest      string `json:"digest,omitempty"`
-	Downloads   int64  `json:"download_count"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
+	ID          int64        `json:"id"`
+	NodeID      *string      `json:"node_id,omitempty"`
+	Name        string       `json:"name"`
+	Label       string       `json:"label,omitempty"`
+	State       *string      `json:"state,omitempty"`
+	SizeBytes   int64        `json:"size_bytes"`
+	ContentType string       `json:"content_type,omitempty"`
+	Digest      string       `json:"digest,omitempty"`
+	Downloads   int64        `json:"download_count"`
+	CreatedAt   string       `json:"created_at,omitempty"`
+	UpdatedAt   string       `json:"updated_at,omitempty"`
+	Uploader    *RESTAccount `json:"uploader,omitempty"`
+	Links       Links        `json:"links,omitempty"`
 }
 
 type releaseAssetJSON struct {
-	ID            int64  `json:"id"`
-	Name          string `json:"name"`
-	Label         string `json:"label"`
-	Size          int64  `json:"size"`
-	ContentType   string `json:"content_type"`
-	Digest        string `json:"digest"`
-	DownloadCount int64  `json:"download_count"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID            int64       `json:"id"`
+	NodeID        *string     `json:"node_id"`
+	Name          string      `json:"name"`
+	Label         string      `json:"label"`
+	State         *string     `json:"state"`
+	Size          int64       `json:"size"`
+	ContentType   string      `json:"content_type"`
+	Digest        string      `json:"digest"`
+	DownloadCount int64       `json:"download_count"`
+	CreatedAt     string      `json:"created_at"`
+	UpdatedAt     string      `json:"updated_at"`
+	Uploader      *accountRaw `json:"uploader"`
+	links         Links
+}
+
+func (a *releaseAssetJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain releaseAssetJSON
+	if err = json.Unmarshal(data, (*plain)(a)); err != nil {
+		return err
+	}
+	a.links, err = readLinks(data, releaseAssetLinkKeys)
+	return err
 }
 
 func (a releaseAssetJSON) view() ReleaseAsset {
-	return ReleaseAsset{ID: a.ID, Name: a.Name, Label: a.Label, SizeBytes: a.Size, ContentType: a.ContentType,
-		Digest: a.Digest, Downloads: a.DownloadCount, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+	return ReleaseAsset{ID: a.ID, NodeID: nameText(a.NodeID), Name: a.Name, Label: a.Label, State: nameText(a.State),
+		SizeBytes: a.Size, ContentType: a.ContentType, Digest: a.Digest, Downloads: a.DownloadCount,
+		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Uploader: a.Uploader.project(), Links: a.links}
 }
 
 func (c *Client) listReleaseAssets(ctx context.Context, a *releaseArguments) (*ReleaseAssetList, error) {
@@ -708,7 +857,7 @@ func (c *Client) createRelease(ctx context.Context, a *releaseArguments) (*Relea
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, invalidResponse(op, true)
 	}
-	return raw.full(), nil
+	return releaseView(op, raw, true)
 }
 
 func (c *Client) updateRelease(ctx context.Context, a *releaseArguments) (*Release, error) {
@@ -718,7 +867,7 @@ func (c *Client) updateRelease(ctx context.Context, a *releaseArguments) (*Relea
 	if err := c.releaseChange(ctx, op, http.MethodPatch, path, a.updatePayload(), &raw); err != nil {
 		return nil, err
 	}
-	return raw.full(), nil
+	return releaseView(op, raw, true)
 }
 
 // DeletedRelease is the answer of a deleted release.

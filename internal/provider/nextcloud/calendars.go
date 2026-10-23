@@ -31,6 +31,7 @@ var calendarsRoot = []string{"remote.php", "dav", "calendars"}
 const (
 	maxCalendars        = 200
 	maxCalendarName     = 256
+	maxCalendarText     = 1024
 	defaultEventLimit   = 50
 	maxEventLimit       = 200
 	maxEventIDLength    = 255
@@ -40,8 +41,10 @@ const (
 // calendarsBody asks for exactly the properties the calendar listing is built from.
 const calendarsBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
-	`<d:displayname/><d:resourcetype/><d:current-user-privilege-set/><c:supported-calendar-component-set/>` +
-	`<oc:invite/>` +
+	`<d:displayname/><d:resourcetype/><c:calendar-description/><c:supported-calendar-component-set/>` +
+	`<c:supported-calendar-data/><c:max-resource-size/><c:min-date-time/><c:max-date-time/><c:max-instances/>` +
+	`<c:max-attendees-per-instance/><c:calendar-timezone/><c:supported-collation-set/>` +
+	`<d:current-user-privilege-set/><d:sync-token/><oc:invite/>` +
 	`</d:prop></d:propfind>`
 
 // calendarProbeBody is the connection test: only the resource type, to tell a calendar from another node.
@@ -70,8 +73,9 @@ var calendarRisk = capability.Risk{
 }
 
 const calendarSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"read_only":{"type":"boolean"},"components":{"type":"array","items":{"type":"string"}},` +
-	`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
+	`"description":{"type":"string"},"read_only":{"type":"boolean"},"components":{"type":"array","items":{"type":"string"}},` +
+	`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"},` +
+	dav.CalendarPropertiesSchema + `},` +
 	`"required":["id","name","read_only","components"],"additionalProperties":false}`
 
 var eventSchema = dav.EventSchema
@@ -94,13 +98,24 @@ var eventFields = append([]capability.Field{
 	{Name: "all_day", Description: "True for an event that lasts whole days"},
 	{Name: "timezone", Description: "Time zone name of a local start, or UTC"},
 	{Name: "status", Description: "TENTATIVE, CONFIRMED, or CANCELLED when the event carries one"},
-	{Name: "rrule", Description: "Recurrence rule of a repeating event, never expanded into occurrences"},
+	{Name: "rrule", Description: "Recurrence rule of a repeating event"},
 	{Name: "organizer", Description: "Organizer, untrusted data; only the get tool reports it"},
 	{Name: "attendees", Description: "At most 50 attendees with their parameters, untrusted data; only the get tool reports them"},
 	{Name: "etag", Description: "Entity tag of the current version of the event"},
 	{Name: "count", Description: "Number of reported events"},
 	{Name: "truncated", Description: "True when more events match the range than limit allows"},
-}, dav.EventFieldList()...)
+}, withExpandedRecurrenceID(dav.EventFieldList())...)
+
+// withExpandedRecurrenceID widens the shared recurrence_id note: the list reports it with expand.
+func withExpandedRecurrenceID(fields []capability.Field) []capability.Field {
+	for i := range fields {
+		if fields[i].Name == "recurrence_id" {
+			fields[i].Description = "Occurrence an override replaces, in the form of start; in an override of the get tool " +
+				"and, with expand, in every occurrence of the events list"
+		}
+	}
+	return fields
+}
 
 var calendarsList = capability.Descriptor{
 	ID: Provider + ".calendar.calendars.list", Version: 1, Title: "List Nextcloud calendars",
@@ -115,30 +130,31 @@ var calendarsList = capability.Descriptor{
 		calendarSchema + `},"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["calendars","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "URI of the calendar, the form of the calendar/URI target"},
 		{Name: "name", Description: "Display name, untrusted data"},
+		{Name: "description", Description: "Description, untrusted data"},
 		{Name: "read_only", Description: "True unless the identity may create and change events in the calendar"},
 		{Name: "components", Description: "Supported component types, VEVENT and VTODO"},
 		{Name: "shares", Description: "At most 50 users and groups the calendar is shared with, untrusted data; " +
 			"other recipients are typed other without id or name"},
 		{Name: "shares_truncated", Description: "True when the calendar has more shares than reported"},
-		{Name: "count", Description: "Number of reported calendars"},
-		{Name: "truncated", Description: "True when more calendars match than one listing reports"},
-	},
+	}, append(append([]capability.Field{}, dav.CalendarPropertyFields...),
+		capability.Field{Name: "count", Description: "Number of reported calendars"},
+		capability.Field{Name: "truncated", Description: "True when more calendars match than one listing reports"})...),
 	Examples: []capability.Example{{Description: "List the bound calendars", Arguments: json.RawMessage(`{}`)}},
 }
 
 var eventsList = capability.Descriptor{
 	ID: Provider + ".calendar.events.list", Version: 1, Title: "List Nextcloud calendar events",
 	Description: "List the events of one bound calendar that overlap a time range, ordered by start; a " +
-		"repeating event is reported once with its recurrence rule, never expanded; the result is limited " +
-		"and compact",
+		"repeating event is reported once with its recurrence rule unless expand lists its occurrences; " +
+		"optional structured filters narrow the answer; the result is limited and compact",
 	Tags: []string{"nextcloud", "calendar", "event", "list"}, Risk: calendarRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarArgSchema + `,` +
 		`"start":{"type":"string","minLength":20,"maxLength":40},"end":{"type":"string","minLength":20,"maxLength":40},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["calendar","start","end"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.EventFilterSchema() + `},` +
+		`"required":["calendar","start","end"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"calendar":{"type":"string"},` +
 		`"events":{"type":"array","items":` + eventSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["calendar","events","count"],"additionalProperties":false}`),
@@ -146,7 +162,12 @@ var eventsList = capability.Descriptor{
 		calendarArgument,
 		{Name: "start", Description: "Start of the range as an RFC 3339 time, for example 2026-03-01T00:00:00Z", Required: true},
 		{Name: "end", Description: "End of the range as an RFC 3339 time after start, at most 366 days later", Required: true},
-		{Name: "limit", Description: "Maximum number of events, 50 by default and at most 200"},
+		{Name: "limit", Description: "Maximum number of events or, with expand, occurrences, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on event properties, all of which must match; each " +
+			"names a property and exactly one of text (1 to 256 bytes, optionally negate and collation), defined false, " +
+			"or range (DTSTAMP, CREATED, and LAST-MODIFIED only), and optionally a parameter with text or defined false"},
+		{Name: "alarm_range", Description: "Only events with an alarm that triggers in this range of start and end, at most 366 days"},
+		{Name: "expand", Description: "True to list each occurrence of a repeating event in the range as its own entry with recurrence_id"},
 	},
 	Fields: eventFields,
 	Examples: []capability.Example{{
@@ -180,10 +201,12 @@ var eventsGet = capability.Descriptor{
 type Calendar struct {
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
+	Description     string            `json:"description,omitempty"`
 	ReadOnly        bool              `json:"read_only"`
 	Components      []string          `json:"components"`
 	Shares          []CollectionShare `json:"shares,omitempty"`
 	SharesTruncated bool              `json:"shares_truncated,omitempty"`
+	dav.CollectionProperties
 }
 
 // CalendarsResult is the result of the calendars list.
@@ -213,6 +236,10 @@ type eventArguments struct {
 	End      string `json:"end"`
 	Limit    int    `json:"limit"`
 	ID       string `json:"id"`
+
+	PropertyFilters []dav.PropertyFilter `json:"property_filters"`
+	AlarmRange      *dav.TimeRange       `json:"alarm_range"`
+	Expand          bool                 `json:"expand"`
 }
 
 func decodeEventArguments(op string, raw json.RawMessage) (eventArguments, error) {
@@ -275,11 +302,16 @@ func invokeEventsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if limit < 0 || limit > maxEventLimit {
 		return nil, providerError(op, "limit must be between 1 and 200")
 	}
+	filter := dav.EventFilter{Properties: input.PropertyFilters, Alarm: input.AlarmRange, Expand: input.Expand}
+	body, err := dav.EventQueryBody(op, from, to, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := openCalendar(ctx, op, resolved, secrets, red, input.Calendar)
 	if err != nil {
 		return nil, err
 	}
-	return client.listEvents(ctx, input.Calendar, from, to, limit)
+	return client.listEvents(ctx, input.Calendar, body, filter, limit)
 }
 
 func invokeEventsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -288,6 +320,9 @@ func invokeEventsGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	input, err := decodeEventArguments(op, raw)
 	if err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.AlarmRange != nil || input.Expand {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !checkEventID(input.ID) {
 		return nil, providerError(op, "the event id must be one literal path segment as the events list reports it")
@@ -415,10 +450,13 @@ func (c *Client) listCalendars(ctx context.Context, bound selection) (*Calendars
 		}
 		seen[uri] = true
 		calendar := Calendar{
-			ID:         uri,
-			Name:       dav.Clean(resources[i].Text[dav.KeyName], maxCalendarName),
-			ReadOnly:   !writable(resources[i].Privileges),
-			Components: componentsOf(resources[i].Components),
+			ID:          uri,
+			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxCalendarName),
+			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxCalendarText),
+			ReadOnly:    !writable(resources[i].Privileges),
+			Components:  componentsOf(resources[i].Components),
+
+			CollectionProperties: dav.CollectionPropertiesOf(&resources[i], true),
 		}
 		calendar.Shares, calendar.SharesTruncated = davSharesOf(resources[i].Invites, resources[i].InvitesTruncated)
 		result.Calendars = append(result.Calendars, calendar)
@@ -431,12 +469,17 @@ func (c *Client) listCalendars(ctx context.Context, bound selection) (*Calendars
 	return result, nil
 }
 
-func (c *Client) listEvents(ctx context.Context, calendar, from, to string, limit int) (*EventsPage, error) {
+func (c *Client) listEvents(ctx context.Context, calendar, body string, filter dav.EventFilter, limit int) (*EventsPage, error) {
 	const op = "list events"
 	base := c.calendarHome(calendar)
 	data, _, err := c.calendarRequest(ctx, op, methodReport, base, true, depthChildren,
-		dav.CalendarQueryBody(from, to), http.StatusMultiStatus, dav.MaxResponseBytes)
+		body, http.StatusMultiStatus, dav.MaxResponseBytes)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
 	resources, err := c.davServer().ParseMultiStatus(op, data)
@@ -447,7 +490,28 @@ func (c *Client) listEvents(ctx context.Context, calendar, from, to string, limi
 	seen := map[string]bool{}
 	for i := range resources {
 		id, ok := c.childOf(op, resources[i].Href, base)
-		if !ok || !checkEventID(id) || !resources[i].Read || seen[id] {
+		if !ok || !checkEventID(id) || !resources[i].Read {
+			continue
+		}
+		if filter.Expand {
+			// An expanded resource holds one VEVENT per occurrence; id and recurrence_id identify one.
+			occurrences, err := dav.ParseOccurrences(resources[i].Text[dav.KeyCalendar], false)
+			if err != nil {
+				continue
+			}
+			for _, event := range occurrences {
+				key := id + "\x00" + event.RecurrenceID
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				event.ID = id
+				event.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])
+				page.Events = append(page.Events, *event)
+			}
+			continue
+		}
+		if seen[id] {
 			continue
 		}
 		seen[id] = true
@@ -464,7 +528,10 @@ func (c *Client) listEvents(ctx context.Context, calendar, from, to string, limi
 		if a.Start != b.Start {
 			return a.Start < b.Start
 		}
-		return a.ID < b.ID
+		if a.ID != b.ID {
+			return a.ID < b.ID
+		}
+		return a.RecurrenceID < b.RecurrenceID
 	})
 	if len(page.Events) > limit {
 		page.Events, page.Truncated = page.Events[:limit], true

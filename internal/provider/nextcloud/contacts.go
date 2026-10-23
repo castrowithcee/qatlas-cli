@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,7 +48,9 @@ const (
 
 const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav" xmlns:oc="http://owncloud.org/ns"><d:prop>` +
-	`<d:displayname/><d:resourcetype/><c:addressbook-description/><oc:invite/></d:prop></d:propfind>`
+	`<d:displayname/><d:resourcetype/><c:addressbook-description/><c:supported-address-data/>` +
+	`<c:max-resource-size/><c:supported-collation-set/><d:current-user-privilege-set/><d:sync-token/>` +
+	`<oc:invite/></d:prop></d:propfind>`
 
 // contactListProps and contactGetProps name the card properties a read asks the server for. PHOTO, LOGO,
 // SOUND, KEY, and AGENT are never requested: CardDAV cannot filter by VALUE=uri, so the server would send
@@ -97,7 +100,8 @@ const (
 		dav.ContactValueProperties + `},"required":["id"],"additionalProperties":false}`
 	addressbookSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"description":{"type":"string"},"read_only":{"type":"boolean"},` +
-		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"}},` +
+		`"shares":{"type":"array","items":` + davShareSchema + `},"shares_truncated":{"type":"boolean"},` +
+		dav.AddressbookPropertiesSchema + `},` +
 		`"required":["id","name"],"additionalProperties":false}`
 	addressbookArgSchema = `"addressbook":{"type":"string","minLength":1,"maxLength":255}`
 )
@@ -139,7 +143,7 @@ var addressbooksList = capability.Descriptor{
 		addressbookSchema + `},"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["addressbooks","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "URI of the address book, the form of the addressbook/URI target"},
 		{Name: "name", Description: "Display name, untrusted data"},
 		{Name: "description", Description: "Description, untrusted data"},
@@ -147,22 +151,23 @@ var addressbooksList = capability.Descriptor{
 		{Name: "shares", Description: "At most 50 users and groups the address book is shared with, untrusted data; " +
 			"other recipients are typed other without id or name"},
 		{Name: "shares_truncated", Description: "True when the address book has more shares than reported"},
-		{Name: "count", Description: "Number of reported address books"},
-		{Name: "truncated", Description: "True when more address books match than one listing reports"},
-	},
+	}, append(append([]capability.Field{}, dav.AddressbookPropertyFields...),
+		capability.Field{Name: "count", Description: "Number of reported address books"},
+		capability.Field{Name: "truncated", Description: "True when more address books match than one listing reports"})...),
 	Examples: []capability.Example{{Description: "List the bound address books", Arguments: json.RawMessage(`{}`)}},
 }
 
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.list", Version: 1, Title: "List Nextcloud contacts",
 	Description: "List the contacts of one bound address book, ordered by name, optionally only those whose " +
-		"formatted name or e-mail address contains a text; the result is limited and compact, and a card " +
+		"formatted name or e-mail address contains a text, and optionally narrowed by structured property " +
+		"filters; the result is limited and compact, and a card " +
 		"that is not a valid vCard is left out; photos and other binary data are never returned",
 	Tags: []string{"nextcloud", "contacts", "contact", "list", "search"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"query":{"type":"string","minLength":1,"maxLength":128},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["addressbook"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
+		`"required":["addressbook"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"addressbook":{"type":"string"},` +
 		`"contacts":{"type":"array","items":` + contactSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["addressbook","contacts","count"],` +
@@ -171,6 +176,10 @@ var contactsList = capability.Descriptor{
 		addressbookArgument,
 		{Name: "query", Description: "Text the formatted name or an e-mail address contains, case-insensitive"},
 		{Name: "limit", Description: "Maximum number of contacts, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on contact properties; each names a property and " +
+			"exactly one of text (1 to 256 bytes, optionally match_type, negate, and collation) or defined false, and " +
+			"optionally a parameter with the same condition form; a query narrows the answer further"},
+		{Name: "test", Description: "anyof (default) or allof: whether any or all of the property_filters must match"},
 	},
 	Fields: contactFields,
 	Examples: []capability.Example{{
@@ -209,6 +218,7 @@ type Addressbook struct {
 
 	Shares          []CollectionShare `json:"shares,omitempty"`
 	SharesTruncated bool              `json:"shares_truncated,omitempty"`
+	dav.CollectionProperties
 }
 
 // AddressbooksResult is the result of the address book list.
@@ -237,6 +247,9 @@ type contactArguments struct {
 	Query       string `json:"query"`
 	Limit       int    `json:"limit"`
 	ID          string `json:"id"`
+
+	PropertyFilters []dav.ContactPropertyFilter `json:"property_filters"`
+	Test            string                      `json:"test"`
 }
 
 func decodeContactArguments(op string, raw json.RawMessage) (contactArguments, error) {
@@ -336,11 +349,16 @@ func invokeContactsList(ctx context.Context, resolved *config.Resolved, secrets 
 			return nil, providerError(op, "query must be plain text of at most 128 bytes")
 		}
 	}
+	filter := dav.ContactFilter{Properties: input.PropertyFilters, Test: input.Test}
+	body, err := contactListBody(op, query, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := openAddressbook(ctx, op, resolved, secrets, red, input.Addressbook)
 	if err != nil {
 		return nil, err
 	}
-	return client.listContacts(ctx, input.Addressbook, query, limit)
+	return client.listContacts(ctx, input.Addressbook, body, query, filter, limit)
 }
 
 func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -349,6 +367,9 @@ func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	input, err := decodeContactArguments(op, raw)
 	if err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.Test != "" {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !contactChildID(input.ID) {
 		return nil, providerError(op, "the contact id must be one literal path segment as the contacts list reports it")
@@ -430,6 +451,34 @@ func contactQueryBody(query string) string {
 		contactPropEnd + filter + `</card:addressbook-query>`
 }
 
+// contactListBody builds the list request. Without structured filters it is the query body. With them, the body
+// comes from the shared filter builder and only its address-data is narrowed to the listed properties; an
+// addressbook-query holds a single filter, so a query text cannot join it and is applied to the answer instead.
+func contactListBody(op, query string, filter dav.ContactFilter) (string, error) {
+	if filter.Zero() {
+		return contactQueryBody(query), nil
+	}
+	body, err := dav.ContactQueryBody(op, filter)
+	if err != nil {
+		return "", err
+	}
+	return strings.Replace(body, `<card:address-data/>`,
+		`<card:address-data>`+contactListProps+`</card:address-data>`, 1), nil
+}
+
+// containsFold reports whether the contact's name or one of its e-mail addresses contains the lower-cased query.
+func containsFold(contact *dav.Contact, query string) bool {
+	if strings.Contains(strings.ToLower(contact.Name), query) || strings.Contains(strings.ToLower(contact.Email), query) {
+		return true
+	}
+	for _, email := range contact.Emails {
+		if strings.Contains(strings.ToLower(email.Value), query) {
+			return true
+		}
+	}
+	return false
+}
+
 // contactMultigetBody asks for one card by its path.
 func contactMultigetBody(path string) string {
 	return contactBodyHead + `<card:addressbook-multiget` + contactNamespaces + contactProp + contactGetProps +
@@ -462,6 +511,8 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxAddressbookName),
 			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxAddressbookText),
 			ReadOnly:    uri == systemAddressbook,
+
+			CollectionProperties: dav.CollectionPropertiesOf(&resources[i], false),
 		}
 		book.Shares, book.SharesTruncated = davSharesOf(resources[i].Invites, resources[i].InvitesTruncated)
 		result.Addressbooks = append(result.Addressbooks, book)
@@ -474,13 +525,19 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 	return result, nil
 }
 
-func (c *Client) listContacts(ctx context.Context, book, query string, limit int) (*ContactsPage, error) {
+func (c *Client) listContacts(ctx context.Context, book, body, query string, filter dav.ContactFilter, limit int) (*ContactsPage, error) {
 	const op = "list contacts"
 	base := c.addressbookHome(book)
-	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, contactQueryBody(query))
+	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, body)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
+	query = strings.ToLower(query)
 	resources, err := c.contactServer().ParseMultiStatus(op, data)
 	if err != nil {
 		return nil, err
@@ -495,6 +552,9 @@ func (c *Client) listContacts(ctx context.Context, book, query string, limit int
 		seen[id] = true
 		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
 		if err != nil {
+			continue
+		}
+		if !filter.Zero() && query != "" && !containsFold(contact, query) {
 			continue
 		}
 		contact.ID = id

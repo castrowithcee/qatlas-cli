@@ -48,14 +48,16 @@ const pullSummaryProperties = `"number":{"type":"integer"},"title":{"type":"stri
 
 const pullSummaryRequired = `"required":["number","title","state","draft","labels","merged"],"additionalProperties":false`
 
-const pullFileProperties = `"path":{"type":"string"},"status":{"type":"string"},"additions":{"type":"integer"},` +
+var pullFileProperties = `"path":{"type":"string"},"status":{"type":"string"},"additions":{"type":"integer"},` +
 	`"deletions":{"type":"integer"},"changes":{"type":"integer"},"previous_path":{"type":"string"},` +
-	`"patch":{"type":"string"},"patch_truncated":{"type":"boolean"}`
+	`"patch":{"type":"string"},"patch_truncated":{"type":"boolean"},"sha":{"type":"string"},` +
+	`"links":` + linksSchema(restDiffEntryLinkKeys)
 
 const pullFileRequired = `"required":["path","status","additions","deletions","changes"],"additionalProperties":false`
 
-const pullCommitProperties = `"sha":{"type":"string"},"author":{"type":"string"},"message":{"type":"string"},` +
-	`"date":{"type":"string"},"url":{"type":"string"}`
+var pullCommitProperties = `"author":{"type":"string"},"committer":{"type":"string"},` +
+	`"message":{"type":"string"},"message_truncated":{"type":"boolean"},"date":{"type":"string"},` +
+	`"parents":{"type":"integer"},` + restCommitProperties
 
 const pullCommitRequired = `"required":["sha","message"],"additionalProperties":false`
 
@@ -157,6 +159,9 @@ var pullFilesList = capability.Descriptor{
 		{Name: "files", Description: "Changed files with path, status, additions, deletions, changes, the " +
 			"previous path for a rename, and patch cut to at most 4096 bytes with patch_truncated; patch is " +
 			"untrusted data and left out for a file GitHub sends none for"},
+		{Name: "sha", Description: "Blob SHA of the file, when GitHub sends one"},
+		{Name: "links", Description: "blob_url, raw_url, and contents_url of the file by their GitHub names, " +
+			"untrusted data, never fetched"},
 	}, pagingFields...),
 	Examples: []capability.Example{{Description: "List the files of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
@@ -177,8 +182,11 @@ var pullCommitsList = capability.Descriptor{
 	}, pagingArguments...),
 	Fields: append([]capability.Field{
 		{Name: "commits", Description: "Commits with SHA, author, message, and commit time; message is " +
-			"untrusted data"},
-	}, pagingFields...),
+			"untrusted data, cut at 4096 characters with message_truncated"},
+		{Name: "committer", Description: "Login of the committer when GitHub reports one, the committer's " +
+			"name otherwise"},
+		{Name: "parents", Description: "Number of parents of the commit"},
+	}, append(append([]capability.Field{}, restCommitFields...), pagingFields...)...),
 	Examples: []capability.Example{{Description: "List the commits of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
 
@@ -930,22 +938,36 @@ type PullRequestFile struct {
 	PreviousPath   string `json:"previous_path,omitempty"`
 	Patch          string `json:"patch,omitempty"`
 	PatchTruncated bool   `json:"patch_truncated,omitempty"`
+	SHA            string `json:"sha,omitempty"`
+	Links          Links  `json:"links,omitempty"`
 }
 
 type pullFileJSON struct {
-	Filename         string `json:"filename"`
-	Status           string `json:"status"`
-	Additions        int    `json:"additions"`
-	Deletions        int    `json:"deletions"`
-	Changes          int    `json:"changes"`
-	PreviousFilename string `json:"previous_filename"`
-	Patch            string `json:"patch"`
+	Filename         string  `json:"filename"`
+	Status           string  `json:"status"`
+	Additions        int     `json:"additions"`
+	Deletions        int     `json:"deletions"`
+	Changes          int     `json:"changes"`
+	PreviousFilename string  `json:"previous_filename"`
+	Patch            string  `json:"patch"`
+	SHA              *string `json:"sha"`
+	links            Links
+}
+
+func (f *pullFileJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain pullFileJSON
+	if err = json.Unmarshal(data, (*plain)(f)); err != nil {
+		return err
+	}
+	f.links, err = readLinks(data, restDiffEntryLinkKeys)
+	return err
 }
 
 func (f pullFileJSON) view() PullRequestFile {
 	patch, truncated := truncatePatch(f.Patch)
 	return PullRequestFile{Path: f.Filename, Status: f.Status, Additions: f.Additions, Deletions: f.Deletions,
-		Changes: f.Changes, PreviousPath: f.PreviousFilename, Patch: patch, PatchTruncated: truncated}
+		Changes: f.Changes, PreviousPath: f.PreviousFilename, Patch: patch, PatchTruncated: truncated,
+		SHA: valueOr(nameText(f.SHA)), Links: f.links}
 }
 
 // truncatePatch bounds one file patch the way jobLog's excerpt bounds a log: at most maxPatchBytes, cut at a
@@ -986,49 +1008,34 @@ type PullRequestCommitList struct {
 	HasMore    bool                `json:"has_more"`
 }
 
-// PullRequestCommit is the compact view of one commit. Message is untrusted data.
+// PullRequestCommit is the view of one commit of a pull request: the flat members and the commit projection.
+// Message is untrusted data, cut to maxCommitMessageLength characters. Date is the date of the git author.
 type PullRequestCommit struct {
-	SHA     string `json:"sha"`
-	Author  string `json:"author,omitempty"`
-	Message string `json:"message"`
-	Date    string `json:"date,omitempty"`
-	URL     string `json:"url,omitempty"`
+	RESTCommit
+	Author           string `json:"author,omitempty"`
+	Committer        string `json:"committer,omitempty"`
+	Message          string `json:"message"`
+	MessageTruncated bool   `json:"message_truncated,omitempty"`
+	Date             string `json:"date,omitempty"`
+	Parents          int    `json:"parents,omitempty"`
 }
 
-type pullCommitJSON struct {
-	SHA    string `json:"sha"`
-	Commit struct {
-		Author struct {
-			Name string `json:"name"`
-			Date string `json:"date"`
-		} `json:"author"`
-		Message string `json:"message"`
-	} `json:"commit"`
-	Author *struct {
-		Login string `json:"login"`
-	} `json:"author"`
-	HTMLURL string `json:"html_url"`
-}
-
-func (p pullCommitJSON) view() PullRequestCommit {
-	author := p.Commit.Author.Name
-	if p.Author != nil && p.Author.Login != "" {
-		author = p.Author.Login
-	}
-	return PullRequestCommit{SHA: p.SHA, Author: author, Message: p.Commit.Message, Date: p.Commit.Author.Date,
-		URL: p.HTMLURL}
+func (p *commitRaw) view() PullRequestCommit {
+	message, truncated := p.message()
+	return PullRequestCommit{RESTCommit: p.project(), Author: p.authorLogin(), Committer: p.committerLogin(),
+		Message: message, MessageTruncated: truncated, Date: p.authoredAt(), Parents: len(p.Parents)}
 }
 
 func (c *Client) listPullCommits(ctx context.Context, a *pullArguments) (*PullRequestCommitList, error) {
 	const op = "list pull request commits"
-	var raw []pullCommitJSON
+	var raw []commitRaw
 	hasNext, err := c.pullReadPage(ctx, op, c.repoPath("pulls/"+strconv.Itoa(a.Number)+"/commits"), a.query(), &raw)
 	if err != nil {
 		return nil, err
 	}
 	result := &PullRequestCommitList{Commits: make([]PullRequestCommit, 0, len(raw))}
 	for _, commit := range raw {
-		if commit.SHA == "" {
+		if commit.SHA == nil || *commit.SHA == "" {
 			return nil, invalidEntry(op, "a pull request commit")
 		}
 		result.Commits = append(result.Commits, commit.view())

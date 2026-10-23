@@ -23,7 +23,7 @@ repository; no tool accepts an owner or a free REST path.
 
 | Tool | Does |
 | --- | --- |
-| `github.releases.list` | lists compact releases, in GitHub's own order |
+| `github.releases.list` | lists releases, in GitHub's own order |
 | `github.releases.get` | reads one release by `id`, `tag`, or `latest` |
 | `github.release-assets.list` | lists the asset metadata of one release |
 | `github.releases.create` | cuts one release from `tag` |
@@ -42,11 +42,17 @@ connections:
 `github.releases.list` pages by GitHub's `Link` response header, like the Actions and pull request lists that
 carry no total count. A release `name` is untrusted data. A draft appears only while the configured token can
 see it. `github.releases.get` takes exactly one of `id`, `tag`, or `latest`; a lookup by `tag` never finds a
-draft, because GitHub does not index a draft's tag, so a draft is only reachable by `id`. It adds the full
-body (untrusted data), `target_commitish`, and `assets_count`.
+draft, because GitHub does not index a draft's tag, so a draft is only reachable by `id`.
+
+A release answers GitHub's release in full, with its assets. Rendered variants repeat the text field in
+another format and add no content, so `body_html` and `body_text` are left out. In a list, the release notes
+are cut and marked, since a batch of full notes would exceed a useful answer; `github.releases.get` answers
+them in full. A release answers at most 100 of its assets and marks a longer list; the rest is read with
+`github.release-assets.list`. The `upload_url` is a template address, not a credential, and every address is
+untrusted data that is never fetched.
 
 `github.release-assets.list` reads only metadata, with the name and label untrusted data; an asset's content
-is never read.
+is never read, and its `browser_download_url` is only an address.
 
 ### Changes
 

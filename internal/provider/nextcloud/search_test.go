@@ -15,9 +15,13 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const searchPrefix = `<?xml version="1.0" encoding="UTF-8"?><d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:basicsearch>` +
-	`<d:select><d:prop><d:displayname/><d:resourcetype/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:fileid/><oc:size/><oc:permissions/></d:prop></d:select>` +
+const searchPrefix = `<?xml version="1.0" encoding="UTF-8"?><d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:basicsearch>` +
+	`<d:select><d:prop><d:displayname/><d:resourcetype/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:fileid/><oc:size/><oc:permissions/>` + searchExtraProps + `</d:prop></d:select>` +
 	`<d:from><d:scope><d:href>/files/alice/Reports</d:href><d:depth>infinity</d:depth></d:scope></d:from><d:where>`
+
+// searchExtraProps are the properties beyond the fixed nine that Nextcloud documents as selectable in a search.
+const searchExtraProps = `<d:creationdate/><nc:upload_time/><oc:favorite/><oc:owner-id/><oc:owner-display-name/>` +
+	`<oc:checksums/><nc:has-preview/><oc:data-fingerprint/><nc:last_activity/>`
 
 func searchBodyWith(where string, limit string) string {
 	return searchPrefix + where + `</d:where><d:orderby/><d:limit><d:nresults>` + limit + `</d:nresults></d:limit></d:basicsearch></d:searchrequest>`
@@ -174,9 +178,7 @@ func TestFavoritesListSendsOneReportOnTheRoot(t *testing.T) {
 	if r := got.(*entryListResult); r.Count != 1 || r.Entries[0].Path != "fav.pdf" {
 		t.Errorf("result = %+v", r)
 	}
-	want := `<?xml version="1.0" encoding="UTF-8"?><oc:filter-files xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><oc:filter-rules>` +
-		`<oc:favorite>1</oc:favorite></oc:filter-rules><d:prop><d:displayname/><d:resourcetype/><d:getcontenttype/><d:getcontentlength/>` +
-		`<d:getlastmodified/><d:getetag/><oc:fileid/><oc:size/><oc:permissions/></d:prop></oc:filter-files>`
+	want := fileFavoritesLiteral
 	c := (*calls)[0]
 	if len(*calls) != 1 || c.method != "REPORT" || c.url.Path != aliceRoot || c.body != want {
 		t.Errorf("calls = %+v", *calls)
