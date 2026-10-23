@@ -1213,7 +1213,7 @@ func wantSensitivity(id string) string {
 	if strings.HasPrefix(id, Provider+".webhooks.") {
 		return webhookDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".workspace-members.") {
+	if strings.HasPrefix(id, Provider+".workspace-members.") || id == Provider+".roles.list" {
 		return memberDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".roles.") {
