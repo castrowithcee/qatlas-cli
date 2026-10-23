@@ -72,7 +72,7 @@ var chatsGet = capability.Descriptor{
 	ID:          Provider + ".chats.get",
 	Version:     1,
 	Title:       "Get Telegram chat information",
-	Description: "Read the master data of a bound chat (Bot API ChatFullInfo); the invite link and the content of the pinned message are never shown",
+	Description: "Read the master data of a bound chat (Bot API ChatFullInfo); the invite link is never shown",
 	Tags:        []string{"telegram", "chats", "read"},
 	Risk:        readRisk(dataSensitivity),
 	Provider:    Provider,
@@ -81,7 +81,9 @@ var chatsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},` +
 		`"title":{"type":"string"},"username":{"type":"string"},"is_forum":{"type":"boolean"},` +
 		`"description":{"type":"string"},"permissions":` + permissionsSchema + `,"slow_mode_delay":{"type":"integer"},` +
-		`"pinned_message_id":{"type":"integer"},"linked_chat_id":{"type":"integer"}` + chatInfoSchema + `},` +
+		`"pinned_message_id":{"type":"integer"},"pinned_message":` +
+		nestedSchema("The pinned message: message_id, message_thread_id, date, from, text, caption, media_items, omitted_fields and the header and content members") +
+		`,"linked_chat_id":{"type":"integer"}` + chatInfoSchema + `},` +
 		`"required":["id","type"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{chatArgument},
 	Fields: append([]capability.Field{
@@ -93,7 +95,8 @@ var chatsGet = capability.Descriptor{
 		{Name: "description", Description: "Chat description"},
 		{Name: "permissions", Description: "Default member permissions (booleans only)"},
 		{Name: "slow_mode_delay", Description: "Seconds between messages of one member"},
-		{Name: "pinned_message_id", Description: "Identifier of the pinned message; its content is never shown"},
+		{Name: "pinned_message_id", Description: "Identifier of the pinned message"},
+		messageHeadFields[0],
 		{Name: "linked_chat_id", Description: "Identifier of the linked chat; it never becomes a target"},
 	}, chatInfoFields...),
 	Examples: []capability.Example{{Description: "Read the chat of the connection", Arguments: json.RawMessage(`{}`)}},
@@ -187,6 +190,7 @@ type chatOut struct {
 	Permissions     *permissionsOut `json:"permissions,omitempty"`
 	SlowModeDelay   int64           `json:"slow_mode_delay,omitempty"`
 	PinnedMessageID int64           `json:"pinned_message_id,omitempty"`
+	PinnedMessage   *messageOut     `json:"pinned_message,omitempty"`
 	LinkedChatID    int64           `json:"linked_chat_id,omitempty"`
 
 	chatInfoOut
@@ -327,8 +331,8 @@ type chatBody struct {
 	ChatID string `json:"chat_id"`
 }
 
-// GetChat reads getChat of the selected chat; only the fields of chatOut are decoded. The invite link, the
-// pinned message content, and every other field never leave this function.
+// GetChat reads getChat of the selected chat; only the fields of chatOut are decoded. The invite link and every
+// other field never leave this function.
 func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	const op = "get chat"
 	raw, err := c.getChatRaw(ctx, op)
@@ -337,9 +341,7 @@ func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	}
 	var info struct {
 		chatOut
-		PinnedMessage *struct {
-			MessageID int64 `json:"message_id"`
-		} `json:"pinned_message"`
+		PinnedMessage *tgMessage `json:"pinned_message"`
 	}
 	if json.Unmarshal(raw, &info) != nil || info.ID == 0 {
 		return chatOut{}, invalidResponse(op)
@@ -347,6 +349,9 @@ func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	out := info.chatOut
 	if info.PinnedMessage != nil {
 		out.PinnedMessageID = info.PinnedMessage.MessageID
+		// The pinned message is shown in the chat that was asked, so its references are bound to it.
+		out.PinnedMessage = c.nestedMessage(info.PinnedMessage,
+			messageScope{binding: c.target, chatID: info.PinnedMessage.Chat.ID, refs: c.fileRefs(c.target)})
 	}
 	out.Type = capText(out.Type, maxNameRunes)
 	out.Title = capText(out.Title, maxNameRunes)

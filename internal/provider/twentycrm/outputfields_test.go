@@ -23,7 +23,8 @@ type outputCase struct {
 }
 
 // outputDocuments replaces the workspace document served for the schema path of a tool that needs one.
-var outputDocuments = map[string]string{objectsGet.ID: objectsOutputDocument}
+var outputDocuments = map[string]string{objectsGet.ID: objectsOutputDocument, activitytargetsList.ID: linkSchema,
+	attachmentsList.ID: attachmentSchema}
 
 // richCompany is a company record in the shape of the Twenty company object with a custom field.
 const richCompany = `{"id":"` + companyID + `","name":"Bike","domainName":{"primaryLinkUrl":"https://bike.example",` +
@@ -65,20 +66,35 @@ func outputCases() []outputCase {
 			return `{"data":{"company":` + richCompany + `}}`
 		}, false},
 		{workflowsList, invokeWorkflowsList, `{}`, func(tail string) string {
-			return `{"data":{"workflows":[{"id":"` + wfID + `","name":"Onboarding","statuses":["ACTIVE"],` +
-				`"lastPublishedVersionId":"` + wfVersion + `","createdAt":"2026-01-01T00:00:00.000Z",` +
-				`"updatedAt":"2026-01-02T00:00:00.000Z"}]}` + tail + `,` + outputPageInfo + `}`
+			return `{"data":{"workflows":[` + fullWorkflow + `]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
+		{workflowsGet, invokeWorkflowsGet, `{"id":"` + wfID + `"}`, func(tail string) string {
+			return `{"data":{"workflow":` + fullWorkflow + `,"workflowVersions":[{"id":"` + wfVersion + `","workflowId":"` + wfID +
+				`","coreWorkflowVersionId":"` + coreVersionID + `","position":3,"name":"v1","status":"ACTIVE",` +
+				`"trigger":{"type":"MANUAL"},"steps":[{"type":"CODE"}],"createdAt":"2026-01-01T00:00:00.000Z",` +
+				`"updatedAt":"2026-01-02T00:00:00.000Z"}]},` + outputPageInfo + `}`
+		}, false},
 		{workflowRunsList, invokeWorkflowRunsList, `{"workflow_id":"` + wfID + `"}`, func(tail string) string {
-			return `{"data":{"workflowRuns":[{"id":"` + wfRun + `","workflowId":"` + wfID + `","workflowVersionId":"` + wfVersion +
-				`","name":"Onboarding","status":"FAILED","enqueuedAt":"2026-01-01T00:00:00.000Z",` +
-				`"startedAt":"2026-01-01T00:00:01.000Z","endedAt":"2026-01-01T00:00:02.000Z",` +
-				`"createdAt":"2026-01-01T00:00:00.000Z"}]}` + tail + `,` + outputPageInfo + `}`
+			return `{"data":{"workflowRuns":[{"id":"` + wfRun + `","workflowId":"` + wfID + `","coreWorkflowId":"` + coreWfID +
+				`","workflowVersionId":"` + wfVersion + `","coreWorkflowVersionId":"` + coreVersionID + `","position":2,` +
+				`"name":"Onboarding","status":"FAILED","createdBy":` + actorAda + `,"updatedBy":` + actorAPI + `,` +
+				`"enqueuedAt":"2026-01-01T00:00:00.000Z","startedAt":"2026-01-01T00:00:01.000Z",` +
+				`"endedAt":"2026-01-01T00:00:02.000Z","createdAt":"2026-01-01T00:00:00.000Z",` +
+				`"updatedAt":"2026-01-01T00:00:03.000Z"}]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
 		{membersList, invokeMembersList, `{}`, func(tail string) string {
-			return `{"data":{"workspaceMembers":[{"id":"` + memberID + `","name":{"firstName":"Ada","lastName":"L"},` +
-				`"userEmail":"ada@example.test","timeZone":"Europe/Zurich","locale":"de-CH"}]}` + tail + `,` + outputPageInfo + `}`
+			return `{"data":{"workspaceMembers":[` + fullMember + `]}` + tail + `,` + outputPageInfo + `}`
 		}, true},
+		{membersGet, invokeMembersGet, `{"id":"` + memberID + `"}`, func(tail string) string {
+			return `{"data":{"workspaceMember":` + fullMember + `}}`
+		}, false},
+		{activitytargetsList, invokeActivityTargetsList, `{"activity":"note","activity_id":"` + noteID + `"}`, func(tail string) string {
+			return `{"data":{"noteTargets":[` + linkRow(`"targetPersonId":"`+recordID+`","createdAt":"2026-01-01T00:00:00.000Z",`+
+				`"updatedAt":"2026-01-02T00:00:00.000Z"`) + `]},` + outputPageInfo + `}`
+		}, false},
+		{attachmentsList, invokeAttachmentsList, `{"object":"person","record_id":"` + attPersonID + `"}`, func(tail string) string {
+			return `{"data":{"attachments":[` + withActors(attachmentRowJSON(personTarget(), fileEntry(goodURL()))) + `]},` + outputPageInfo + `}`
+		}, false},
 		{viewsList, invokeViewsList, `{}`, func(tail string) string {
 			return `{"data":[` + fullViewJSON(viewID) + `],` + uuidPageInfo + `}`
 		}, false},

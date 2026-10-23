@@ -33,7 +33,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		want := []string{p.id + ".accounts.me", p.id + ".assignees.list", p.id + ".comments.create",
 			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".comments.list",
-			p.id + ".comments.list-repository", p.id + ".comments.update", p.id + ".issue-config.get",
+			p.id + ".comments.list-repository", p.id + ".comments.update", p.id + ".comment-reactions.add", p.id + ".comment-reactions.list",
+			p.id + ".comment-reactions.remove", p.id + ".issue-reactions.add", p.id + ".issue-reactions.list",
+			p.id + ".issue-reactions.remove", p.id + ".issue-config.get",
 			p.id + ".issue-config.validate", p.id + ".issue-deadlines.set", p.id + ".issue-labels.add",
 			p.id + ".issue-labels.clear", p.id + ".issue-labels.list", p.id + ".issue-labels.remove",
 			p.id + ".issue-labels.replace", p.id + ".issue-templates.list", p.id + ".issue-timeline.list",
@@ -60,6 +62,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 				p.id+".issue-assignees.remove")
 			slices.Sort(want)
 		}
+		want = append(want, p.id+".issue-times.add", p.id+".issue-times.delete", p.id+".issue-times.list",
+			p.id+".issue-times.reset", p.id+".issue-stopwatches.delete", p.id+".issue-stopwatches.start",
+			p.id+".issue-stopwatches.stop", p.id+".my-stopwatches.list", p.id+".my-times.list",
+			p.id+".repository-times.list", p.id+".user-times.list")
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
