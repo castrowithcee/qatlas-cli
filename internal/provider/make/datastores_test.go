@@ -23,7 +23,7 @@ func dataStoreJSONOf(id string, team int64, name string) string {
 
 func dataStructureJSONOf(id string, team int64) string {
 	return `{"id":` + id + `,"name":"Shape","teamId":` + itoa64(team) + `,"strict":true,"spec":[` +
-		`{"type":"text","name":"title","label":"Title","required":true,"default":"` + canaryConnSecret + `"},` +
+		`{"type":"text","name":"title","label":"Title","required":true,"default":"untitled","undocumented":"` + canaryConnSecret + `"},` +
 		`{"type":"collection","name":"c","spec":[{"type":"array","name":"a","spec":{"type":"number"}}]}]}`
 }
 
@@ -113,9 +113,13 @@ func TestDataStoreReadsAreTeamBoundAndAllowListed(t *testing.T) {
 func TestDataStructureReadsBoundTheSpec(t *testing.T) {
 	h := newStoreEnv(t)
 	result, err := h.invoke(dataStructuresList.ID, "open", `{"limit":2}`)
-	if err != nil || !strings.Contains(result, `"count":1`) || strings.Contains(result, `"spec"`) ||
+	if err != nil || !strings.Contains(result, `"count":1`) || !strings.Contains(result, `"default":"untitled"`) ||
 		strings.Contains(result, canaryConnSecret) {
 		t.Fatalf("list = %s, %v", result, err)
+	}
+	if last := h.calls[len(h.calls)-1]; len(last.query["cols[]"]) != 5 || last.query.Get("pg[sortDir]") != "asc" ||
+		last.query.Get("pg[sortBy]") != "name" {
+		t.Fatalf("structure list query = %+v", last.query)
 	}
 	result, err = h.invoke(dataStructuresGet.ID, "open", `{"datastructure_id":`+structureID+`}`)
 	if err != nil || !strings.Contains(result, `"name":"title"`) || !strings.Contains(result, `"type":"number"`) ||
@@ -350,6 +354,61 @@ func TestDataStoreChangeToolsDeclareACompleteRisk(t *testing.T) {
 		if r.Effect == "" || r.Idempotency == "" || r.Confirmation != capability.ConfirmationRequired ||
 			!r.OpenWorld || r.DataSensitivity == "" {
 			t.Fatalf("%s has an incomplete risk: %+v", d.ID, r)
+		}
+	}
+}
+
+func TestSpecDefaultsFollowTheFieldType(t *testing.T) {
+	raw := `[{"type":"boolean","name":"b","default":false},{"type":"text","name":"t","default":"a\u0007b"},` +
+		`{"type":"number","name":"n","default":12345678901234567890.5},{"type":"number","name":"z","default":0},` +
+		`{"type":"text","name":"e","default":""},{"type":"date","name":"d","default":"2026-01-01"}]`
+	budget := &specBudget{left: 100}
+	fields := parseSpec([]byte(raw), 0, budget)
+	got := make([]string, len(fields))
+	for i, f := range fields {
+		got[i] = string(f.Default)
+	}
+	want := []string{"false", `"a b"`, "12345678901234567890.5", "0", "", ""}
+	if budget.truncated || strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("defaults = %q, truncated = %v", got, budget.truncated)
+	}
+	for name, field := range map[string]string{
+		"mismatch":   `{"type":"boolean","name":"b","default":"yes"}`,
+		"string num": `{"type":"number","name":"n","default":"5"}`,
+		"too long":   `{"type":"text","name":"t","default":"` + strings.Repeat("x", maxSpecDefault+1) + `"}`,
+		"long num":   `{"type":"number","name":"n","default":1` + strings.Repeat("0", maxSpecDefault) + `}`,
+	} {
+		budget = &specBudget{left: 100}
+		fields = parseSpec([]byte(`[`+field+`]`), 0, budget)
+		if len(fields) != 1 || fields[0].Default != nil || !budget.truncated {
+			t.Fatalf("%s: %+v, truncated = %v", name, fields, budget.truncated)
+		}
+	}
+}
+
+func TestStoreAndStructureListsSortDirection(t *testing.T) {
+	for _, tool := range []string{dataStoresList.ID, dataStructuresList.ID} {
+		h := newStoreEnv(t)
+		if _, err := h.invoke(tool, "open", `{"sort_dir":"desc"}`); err != nil {
+			t.Fatalf("%s: %v", tool, err)
+		}
+		if q := h.calls[len(h.calls)-1].query; q.Get("pg[sortDir]") != "desc" || q.Get("pg[sortBy]") != "name" {
+			t.Fatalf("%s query = %+v", tool, q)
+		}
+		h = newStoreEnv(t)
+		if _, err := h.invoke(tool, "open", `{"sort_dir":"up"}`); err == nil || len(h.calls) != 0 {
+			t.Fatalf("%s invalid sort_dir: err = %v, calls = %d", tool, err, len(h.calls))
+		}
+	}
+}
+
+func TestDataStructureOutputIsDeclared(t *testing.T) {
+	h := newStoreEnv(t)
+	for _, c := range []struct{ tool, args string }{
+		{dataStructuresList.ID, `{}`}, {dataStructuresGet.ID, `{"datastructure_id":` + structureID + `}`}} {
+		out, err := h.invoke(c.tool, "open", c.args)
+		if err != nil || assertOutputDeclared(t, c.tool, []byte(out)) < 5 || !strings.Contains(out, `"default":"untitled"`) {
+			t.Fatalf("%s = %s, %v", c.tool, out, err)
 		}
 	}
 }

@@ -181,7 +181,8 @@ func (c *Client) browseRepositories(ctx context.Context, owner target,
 	if err != nil {
 		return config.TargetPage{}, err
 	}
-	list, err := c.listRepositories(ctx, options, binding, after)
+	list, err := c.listRepositories(ctx, repositoryListOptions{ownerListOptions: options, compact: true}, binding,
+		after)
 	if err != nil {
 		return config.TargetPage{}, err
 	}

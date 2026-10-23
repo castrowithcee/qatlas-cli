@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -19,6 +21,35 @@ import (
 
 const ownerListInput = `{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":100},` +
 	`"cursor":` + cursorSchema + `},"additionalProperties":false}`
+
+// repositoryListInput adds the structured filters GitHub's repository connection offers.
+const repositoryListInput = `{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":100},` +
+	`"cursor":` + cursorSchema + `,"privacy":{"type":"string","enum":["PUBLIC","PRIVATE"]},` +
+	`"visibility":{"type":"string","enum":["PUBLIC","PRIVATE","INTERNAL"]},"is_archived":{"type":"boolean"},` +
+	`"is_fork":{"type":"boolean"},"is_locked":{"type":"boolean"},"has_issues_enabled":{"type":"boolean"},` +
+	`"order_by":{"type":"string","enum":["CREATED_AT","NAME","PUSHED_AT","STARGAZERS","UPDATED_AT"]},` +
+	`"direction":{"type":"string","enum":["ASC","DESC"]},"admin_counts":{"type":"boolean"}},` +
+	`"additionalProperties":false}`
+
+var repositoryListArguments = append(append([]capability.Argument(nil), ownerListArguments...),
+	capability.Argument{Name: "privacy", Description: "Only PUBLIC or only PRIVATE repositories (internal ones " +
+		"count as private); not together with visibility"},
+	capability.Argument{Name: "visibility", Description: "Only PUBLIC, PRIVATE, or INTERNAL repositories; not " +
+		"together with privacy"},
+	capability.Argument{Name: "is_archived", Description: "True for only archived, false for only unarchived " +
+		"repositories; both when omitted"},
+	capability.Argument{Name: "is_fork", Description: "True for only forks, false for only repositories that are " +
+		"no forks; both when omitted"},
+	capability.Argument{Name: "is_locked", Description: "True for only locked, false for only unlocked " +
+		"repositories; both when omitted"},
+	capability.Argument{Name: "has_issues_enabled", Description: "True for only repositories with issues " +
+		"enabled, false for only those without; both when omitted"},
+	capability.Argument{Name: "order_by", Description: "CREATED_AT, NAME, PUSHED_AT, STARGAZERS, or UPDATED_AT; " +
+		"NAME when omitted"},
+	capability.Argument{Name: "direction", Description: "ASC or DESC; ASC when omitted"},
+	capability.Argument{Name: "admin_counts", Description: "true to also read the members that can need " +
+		"push or admin rights, such as collaborators, deploy keys, branch protection rules, and vulnerability " +
+		"alerts; a member GitHub refuses the token is then absent and named in unreadable. false when omitted"})
 
 var ownerListArguments = []capability.Argument{
 	{Name: "limit", Description: "Entries per batch, from 1 through 100; 30 when omitted"},
@@ -61,25 +92,28 @@ var repositoriesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub repositories of an owner",
 	Description: "List one bounded batch of the repositories a user or an organization owns and an explicit " +
-		"connection allows, in name order, with visibility and whether each is archived",
+		"connection allows, in name order unless order_by says otherwise, with visibility, whether each is " +
+		"archived, and the members of GitHub's repository; lists and connections are cut at 10 entries per " +
+		"repository, with their total count and a truncated marker",
 	Tags:        []string{"github", "repositories", "owner", "list"},
 	Risk:        readRisk,
 	Provider:    Provider,
-	InputSchema: json.RawMessage(ownerListInput),
+	InputSchema: json.RawMessage(repositoryListInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"repositories":{"type":"array","items":{"type":"object","properties":{"repository":{"type":"string"},` +
-		`"visibility":{"type":"string"},"archived":{"type":"boolean"}},` +
+		`"visibility":{"type":"string"},"archived":{"type":"boolean"},` + repositoryWidthProperties + `},` +
 		`"required":["repository","visibility","archived"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["repositories","has_more"],"additionalProperties":false}`),
-	Arguments: ownerListArguments,
-	Fields: []capability.Field{
+	Arguments: repositoryListArguments,
+	Fields: append([]capability.Field{
 		{Name: "repositories", Description: "Repositories the owner owns and the connection allows: repository " +
-			"as OWNER/REPO, visibility (public, private, or internal), archived"},
+			"as OWNER/REPO, visibility (public, private, or internal), archived, and the members described below, " +
+			"untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the owner may hold further repositories; a full batch alone " +
 			"never means the end"},
-	},
+	}, repositoryWidthFields...),
 	Examples: []capability.Example{{
 		Description: "List the repositories of a user",
 		Arguments:   json.RawMessage(`{"owner":"users/octocat"}`),
@@ -104,9 +138,9 @@ type ProjectSummary struct {
 
 // RepositoryList is one batch of the repositories of an owner.
 type RepositoryList struct {
-	Repositories []RepositorySummary `json:"repositories"`
-	NextCursor   string              `json:"next_cursor,omitempty"`
-	HasMore      bool                `json:"has_more"`
+	Repositories []OwnedRepository `json:"repositories"`
+	NextCursor   string            `json:"next_cursor,omitempty"`
+	HasMore      bool              `json:"has_more"`
 }
 
 // RepositorySummary is the compact view of one repository: Repository is the value a repository argument
@@ -117,16 +151,29 @@ type RepositorySummary struct {
 	Archived   bool   `json:"archived"`
 }
 
+// OwnedRepository is one entry of the repository list: the compact view and the repository width.
+type OwnedRepository struct {
+	RepositorySummary
+	RepositoryWidth
+}
+
 // The GraphQL documents of the owner lists. The owner field is chosen by users or orgs; every value travels as
 // a variable. Repositories are the ones the owner owns: GitHub would add those it collaborates on otherwise.
 const (
-	ownerListVariables = `query($owner:String!,$first:Int!,$after:String){owner:`
-	projectsSelection  = `(login:$owner){projectsV2(first:$first,after:$after,orderBy:{field:NUMBER,direction:ASC}){` +
+	ownerListHead     = `query($owner:String!,$first:Int!,$after:String`
+	projectsSelection = `(login:$owner){projectsV2(first:$first,after:$after,orderBy:{field:NUMBER,direction:ASC}){` +
 		`pageInfo{hasNextPage endCursor} edges{cursor node{number title url closed}}}}}`
-	repositoriesSelection = `(login:$owner){repositories(first:$first,after:$after,ownerAffiliations:[OWNER],` +
-		`orderBy:{field:NAME,direction:ASC}){pageInfo{hasNextPage endCursor} ` +
-		`edges{cursor node{name visibility isArchived}}}}}`
+	repositoriesDeclarations = `,$privacy:RepositoryPrivacy,$visibility:RepositoryVisibility,$isArchived:Boolean,` +
+		`$isFork:Boolean,$isLocked:Boolean,$hasIssuesEnabled:Boolean,$orderBy:RepositoryOrder!`
+	repositoriesArguments = `(login:$owner){repositories(first:$first,after:$after,ownerAffiliations:[OWNER],` +
+		`privacy:$privacy,visibility:$visibility,isArchived:$isArchived,isFork:$isFork,isLocked:$isLocked,` +
+		`hasIssuesEnabled:$hasIssuesEnabled,orderBy:$orderBy){pageInfo{hasNextPage endCursor} edges{cursor node{`
+	repositoriesCompact = repositoriesArguments + `name visibility isArchived}}}}}`
 )
+
+func repositoriesSelection(adminCounts bool) string {
+	return repositoriesArguments + `name visibility isArchived ` + repositorySelection(adminCounts) + `}}}}}`
+}
 
 type pageInfoJSON struct {
 	HasNextPage bool   `json:"hasNextPage"`
@@ -154,12 +201,82 @@ type repositoryNodeJSON struct {
 	Name       string `json:"name"`
 	Visibility string `json:"visibility"`
 	IsArchived bool   `json:"isArchived"`
+	repositoryWidthRaw
+	// unreadable names the members GitHub refused this token in this node.
+	unreadable []string
 }
 
 // ownerListOptions are the paging of an owner list.
 type ownerListOptions struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
+}
+
+// repositoryListOptions are the paging and the filters of the repository list.
+type repositoryListOptions struct {
+	ownerListOptions
+	Privacy          string `json:"privacy"`
+	Visibility       string `json:"visibility"`
+	IsArchived       *bool  `json:"is_archived"`
+	IsFork           *bool  `json:"is_fork"`
+	IsLocked         *bool  `json:"is_locked"`
+	HasIssuesEnabled *bool  `json:"has_issues_enabled"`
+	OrderBy          string `json:"order_by"`
+	Direction        string `json:"direction"`
+	AdminCounts      bool   `json:"admin_counts"`
+	// compact asks for the compact view only, as the target browser needs it.
+	compact bool
+}
+
+// filters are the values that bind a cursor and travel as GraphQL variables. Unset filters are left out, so
+// GitHub applies none; the order defaults to the name, ascending.
+func (o *repositoryListOptions) filters() map[string]any {
+	filters := map[string]any{}
+	for name, value := range map[string]string{"privacy": o.Privacy, "visibility": o.Visibility} {
+		if value != "" {
+			filters[name] = value
+		}
+	}
+	for name, value := range map[string]*bool{"isArchived": o.IsArchived, "isFork": o.IsFork,
+		"isLocked": o.IsLocked, "hasIssuesEnabled": o.HasIssuesEnabled} {
+		if value != nil {
+			filters[name] = *value
+		}
+	}
+	order := map[string]string{"field": "NAME", "direction": "ASC"}
+	if o.OrderBy != "" {
+		order["field"] = o.OrderBy
+	}
+	if o.Direction != "" {
+		order["direction"] = o.Direction
+	}
+	filters["orderBy"] = order
+	return filters
+}
+
+// normalize applies the bounds of one repository list request. GitHub refuses privacy together with
+// visibility, so the request is refused before a credential is resolved. The filters bind the cursor, and an
+// unfiltered list keeps the binding it had without filters.
+func (o *repositoryListOptions) normalize(owner target) ([]byte, string, error) {
+	if o.Privacy != "" && o.Visibility != "" {
+		return nil, "", invalidRequest("privacy and visibility cannot be combined; pass only one of them")
+	}
+	limit, err := normalizeLimit(o.Limit)
+	if err != nil {
+		return nil, "", err
+	}
+	o.Limit = limit
+	parts := []any{"repositories", strings.ToLower(owner.String())}
+	if filters := o.filters(); o.Privacy != "" || o.Visibility != "" || len(filters) > 1 || o.OrderBy != "" ||
+		o.Direction != "" {
+		parts = append(parts, filters)
+	}
+	if o.AdminCounts {
+		parts = append(parts, "admin_counts")
+	}
+	binding := fingerprint(parts...)
+	after, err := decodeCursor(binding, o.Cursor)
+	return binding, after, err
 }
 
 // normalize applies the bounds of one owner list request and returns the GitHub cursor it continues after. A
@@ -227,22 +344,45 @@ var ownerRights = map[string]struct{ what, needs string }{
 // ownerPage reads one page of an owner connection. An owner GitHub leaves out is one it does not hold under
 // this kind, users or orgs, or does not show to this token; a refusal of the token names the list and what
 // it needs.
-func ownerPage[T any](ctx context.Context, c *Client, op, selection, field string, first int,
-	after string) (*connectionJSON[T], error) {
+func ownerPage[T any](ctx context.Context, c *Client, op, declarations, selection, field string, first int,
+	after string, filters map[string]any, mark func(*T, []string) bool) (*connectionJSON[T], error) {
 	variables := map[string]any{"owner": c.target.owner, "first": first, "after": nil}
+	for name, value := range filters {
+		variables[name] = value
+	}
 	if after != "" {
 		variables["after"] = after
 	}
 	var answer struct {
 		Owner map[string]*connectionJSON[T] `json:"owner"`
 	}
-	if err := c.graphql(ctx, op, ownerListVariables+c.target.ownerField()+selection, variables, &answer); err != nil {
+	document := ownerListHead + declarations + "){owner:" + c.target.ownerField() + selection
+	refused := func(err error) error {
 		var failure *provider.Error
 		if errors.As(err, &failure) && failure.Class == provider.ClassPermission {
 			rights := ownerRights[field]
 			failure.Message = permissionMessage(subject{in: c.target, what: rights.what}, false) + rights.needs
 		}
-		return nil, err
+		return err
+	}
+	var unreadable map[int][]string
+	if mark == nil {
+		if err := c.graphql(ctx, op, document, variables, &answer); err != nil {
+			return nil, refused(err)
+		}
+	} else {
+		envelope, err := c.post(ctx, op, document, variables, false)
+		if err != nil {
+			return nil, err
+		}
+		var rest []graphQLError
+		rest, unreadable = splitUnreadable(envelope.Errors, field)
+		if len(rest) > 0 {
+			return nil, refused(c.graphQLFailure(op, rest, variables, false))
+		}
+		if len(envelope.Data) == 0 || string(envelope.Data) == "null" || json.Unmarshal(envelope.Data, &answer) != nil {
+			return nil, invalidResponse(op, false)
+		}
 	}
 	if answer.Owner == nil {
 		return nil, notFound(op, subject{in: c.target})
@@ -251,6 +391,14 @@ func ownerPage[T any](ctx context.Context, c *Client, op, selection, field strin
 	if page == nil {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "GitHub returned an owner without its " + strings.ToLower(field)}
+	}
+	for index, members := range unreadable {
+		// A refused member that GitHub cannot null on its own empties the whole node; the repository is then
+		// unknown, and the page fails like a refusal instead of dropping the repository silently.
+		if index >= len(page.Edges) || !mark(&page.Edges[index].Node, members) {
+			return nil, refused(c.graphQLFailure(op, []graphQLError{{Type: "FORBIDDEN",
+				Path: []any{"owner", field}}}, variables, false))
+		}
 	}
 	return page, nil
 }
@@ -265,7 +413,7 @@ func (c *Client) listProjects(ctx context.Context, options ownerListOptions, bin
 	}
 	nodes, next, err := scanOwner(op, "projects", options.Limit, after, binding,
 		func(first int, after string) (*connectionJSON[projectNodeJSON], error) {
-			return ownerPage[projectNodeJSON](ctx, c, op, projectsSelection, "projectsV2", first, after)
+			return ownerPage[projectNodeJSON](ctx, c, op, "", projectsSelection, "projectsV2", first, after, nil, nil)
 		}, func(node projectNodeJSON) bool { return node.Number > 0 && c.allowed.shows(owner, shown(node)) })
 	if err != nil {
 		return nil, err
@@ -279,27 +427,44 @@ func (c *Client) listProjects(ctx context.Context, options ownerListOptions, bin
 }
 
 // listRepositories reads one batch of the repositories the bound owner owns that the targets show.
-func (c *Client) listRepositories(ctx context.Context, options ownerListOptions, binding []byte,
+func (c *Client) listRepositories(ctx context.Context, options repositoryListOptions, binding []byte,
 	after string) (*RepositoryList, error) {
 	const op = "list repositories"
 	owner := c.target
 	shown := func(node repositoryNodeJSON) target {
 		return target{kind: kindRepository, owner: owner.owner, repo: node.Name}
 	}
+	selection := repositoriesSelection(options.AdminCounts)
+	if options.compact {
+		selection = repositoriesCompact
+	}
+	mark := func(node *repositoryNodeJSON, members []string) bool {
+		node.unreadable = members
+		return node.Name != ""
+	}
+	if options.compact {
+		mark = nil
+	}
 	nodes, next, err := scanOwner(op, "repositories", options.Limit, after, binding,
 		func(first int, after string) (*connectionJSON[repositoryNodeJSON], error) {
-			return ownerPage[repositoryNodeJSON](ctx, c, op, repositoriesSelection, "repositories", first, after)
+			return ownerPage[repositoryNodeJSON](ctx, c, op, repositoriesDeclarations, selection, "repositories",
+				first, after, options.filters(), mark)
 		}, func(node repositoryNodeJSON) bool {
 			return validRepoName(node.Name) && c.allowed.shows(owner, shown(node))
 		})
 	if err != nil {
 		return nil, err
 	}
-	result := &RepositoryList{Repositories: make([]RepositorySummary, 0, len(nodes)), NextCursor: next,
+	result := &RepositoryList{Repositories: make([]OwnedRepository, 0, len(nodes)), NextCursor: next,
 		HasMore: next != ""}
 	for _, node := range nodes {
-		result.Repositories = append(result.Repositories, RepositorySummary{Repository: shown(node).argument(),
-			Visibility: strings.ToLower(node.Visibility), Archived: node.IsArchived})
+		summary := OwnedRepository{RepositorySummary: RepositorySummary{Repository: shown(node).argument(),
+			Visibility: strings.ToLower(node.Visibility), Archived: node.IsArchived}}
+		if !options.compact {
+			summary.RepositoryWidth = node.repositoryWidthRaw.width(c.allowed)
+			summary.Unreadable = node.unreadable
+		}
+		result.Repositories = append(result.Repositories, summary)
 	}
 	return result, nil
 }
@@ -314,10 +479,23 @@ func invokeProjectsList(ctx context.Context, resolved *config.Resolved, secrets 
 
 func invokeRepositoriesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeOwnerList(ctx, resolved, secrets, red, raw, kindRepository,
-		func(c *Client, options ownerListOptions, binding []byte, after string) (any, error) {
-			return c.listRepositories(ctx, options, binding, after)
-		})
+	var options repositoryListOptions
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil, unreadable("list owner")
+	}
+	owner, err := selectOwner(resolved, kindRepository, raw)
+	if err != nil {
+		return nil, err
+	}
+	binding, after, err := options.normalize(owner)
+	if err != nil {
+		return nil, err
+	}
+	client, err := openAt(ctx, resolved, secrets, red, owner)
+	if err != nil {
+		return nil, err
+	}
+	return owner.locate(client.listRepositories(ctx, options, binding, after))
 }
 
 // invokeOwnerList checks the owner, the paging, and the cursor before a credential is resolved, so a refused
@@ -346,4 +524,66 @@ func invokeOwnerList(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, err
 	}
 	return owner.locate(list(client, options, binding, after))
+}
+
+// splitUnreadable separates the errors of members GitHub refused inside one repository node of the list from
+// all others. Only FORBIDDEN and INSUFFICIENT_SCOPES at owner, the list, edges, the index, node, and a member
+// qualify, and never a member of the compact view; every other error is returned unchanged. The members come
+// back by repository index under the names they have in the output.
+func splitUnreadable(errs []graphQLError, list string) (rest []graphQLError, unreadable map[int][]string) {
+	for _, e := range errs {
+		index, member, ok := repositoryMemberPath(e, list)
+		if !ok {
+			rest = append(rest, e)
+			continue
+		}
+		if unreadable == nil {
+			unreadable = map[int][]string{}
+		}
+		if !slices.Contains(unreadable[index], member) {
+			unreadable[index] = append(unreadable[index], member)
+		}
+	}
+	for _, members := range unreadable {
+		slices.Sort(members)
+	}
+	return rest, unreadable
+}
+
+var memberKey = regexp.MustCompile(`^[A-Za-z]{1,64}$`)
+
+func repositoryMemberPath(e graphQLError, list string) (int, string, bool) {
+	if e.Type != "FORBIDDEN" && e.Type != "INSUFFICIENT_SCOPES" {
+		return 0, "", false
+	}
+	p := e.Path
+	index, isNumber := 0.0, false
+	if len(p) > 3 {
+		index, isNumber = p[3].(float64)
+	}
+	member := pathSegment(p, 5)
+	if len(p) < 6 || pathSegment(p, 0) != "owner" || pathSegment(p, 1) != list || pathSegment(p, 2) != "edges" ||
+		!isNumber || index < 0 || index != float64(int(index)) || pathSegment(p, 4) != "node" ||
+		!memberKey.MatchString(member) {
+		return 0, "", false
+	}
+	switch member {
+	case "name", "visibility", "isArchived":
+		return 0, "", false
+	}
+	return int(index), outputMember(member), true
+}
+
+// outputMember names the output member a GraphQL member of the repository becomes.
+func outputMember(member string) string {
+	name := regexp.MustCompile(`[A-Z]`).ReplaceAllStringFunc(member, func(s string) string { return "_" + strings.ToLower(s) })
+	if member == "repositoryName" {
+		return "name"
+	}
+	for _, pair := range repositoryTotalMembers {
+		if pair == member {
+			return name + "_total_count"
+		}
+	}
+	return name
 }

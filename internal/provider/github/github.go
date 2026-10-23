@@ -233,15 +233,14 @@ const cursorSchema = `{"type":"string","minLength":1,"maxLength":1024,"pattern":
 
 const stringListSchema = `{"type":"array","items":{"type":"string"}}`
 
-// itemPropertiesCommon is the compact item projection of the list. The list omits the URL because it is
-// derivable from the repository and the number; the detail below adds it back.
-const itemPropertiesCommon = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
+// itemPropertiesCommon is the item projection of the list and the detail; the detail adds the full body.
+var itemPropertiesCommon = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
 	`"number":{"type":"integer"},"repository":{"type":"string"},"state":{"type":"string"},` +
 	`"status":{"type":"string"},"fields":{"type":"object"},"assignees":` + stringListSchema + `,` +
-	`"labels":` + stringListSchema
+	`"labels":` + stringListSchema + `,` + itemWidthProperties
 
-// itemProperties is the item projection of the detail: itemPropertiesCommon plus the URL.
-const itemProperties = itemPropertiesCommon + `,"url":{"type":"string"}`
+// itemProperties is the item projection of the detail.
+var itemProperties = itemPropertiesCommon
 
 const itemRequired = `"required":["id","type","fields","assignees","labels"],"additionalProperties":false`
 
@@ -250,7 +249,8 @@ var itemsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
-		"a GitHub project a connection allows, its issues, pull requests, and draft issues; without a status filter only items whose status is not Done are listed",
+		"a GitHub project a connection allows, its issues, pull requests, and draft issues, each with its " +
+		"content and field values; without a status filter only items whose status is not Done are listed",
 	Tags:     []string{"github", "projects", "items", "list", "planning"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -259,14 +259,14 @@ var itemsList = capability.Descriptor{
 		`"type":{"type":"string","enum":["issue","pull_request","draft_issue"]},` +
 		`"repository":` + repoSchema + `,` +
 		`"assignee":{"type":"string","maxLength":100,"pattern":"` + loginPattern + `"},` +
-		`"labels":` + filterListSchema + `,` +
+		`"labels":` + filterListSchema + `,` + itemFilterInput + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"items":{"type":"array","items":{"type":"object","properties":{` + itemPropertiesCommon + `},` + itemRequired + `}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["items","has_more"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		{Name: "status", Description: "Return only items whose Status is one of these options"},
 		{Name: "status_not", Description: "Leave out items whose Status is one of these options; [Done] when " +
 			"neither status nor status_not is given, [] lists every status"},
@@ -275,22 +275,27 @@ var itemsList = capability.Descriptor{
 			"a filter inside the project, not a target"},
 		{Name: "assignee", Description: "Return only items assigned to this login"},
 		{Name: "labels", Description: "Return only items carrying at least one of these labels"},
+	}, itemFilterArguments, []capability.Argument{
 		{Name: "limit", Description: "Items per batch, from 1 through 100; 30 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch with the same filters; the first " +
 			"batch when omitted"},
-	},
-	Fields: []capability.Field{
-		{Name: "items", Description: "Compact project items without bodies or comments, untrusted data"},
+	}),
+	Fields: slices.Concat([]capability.Field{
+		{Name: "items", Description: "Project items with their content and field values, without comments, " +
+			"untrusted data"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the project may hold further matching items; a full " +
 			"batch alone never means the end"},
-	},
+	}, itemWidthFields),
 	Examples: []capability.Example{{
 		Description: "List the open roster of the project the connection allows",
 		Arguments:   json.RawMessage(`{"limit":30}`),
 	}, {
 		Description: "List the issues in progress of one repository",
 		Arguments:   json.RawMessage(`{"status":["In progress"],"type":"issue","repository":"octo-org/example"}`),
+	}, {
+		Description: "List the open pull requests updated in the last week that have no Priority",
+		Arguments:   json.RawMessage(`{"type":"pull_request","state":"open","updated_from":"@today-7","no":["Priority"]}`),
 	}},
 }
 
@@ -298,8 +303,8 @@ var itemsGet = capability.Descriptor{
 	ID:      Provider + ".project-items.get",
 	Version: 1,
 	Title:   "Get a GitHub project item",
-	Description: "Read one item of a GitHub project a connection allows with its project fields " +
-		"and, for an issue or a draft issue, its full body, without comments",
+	Description: "Read one item of a GitHub project a connection allows with its project fields, field " +
+		"values, content, and, for an issue or a draft issue, its full body, without comments",
 	Tags:     []string{"github", "projects", "items", "get", "planning"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -311,7 +316,7 @@ var itemsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "item_id", Description: "Project item identifier, as returned by github.project-items.list", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "Project item identifier"},
 		{Name: "type", Description: "Content type: issue, pull_request, draft_issue, or redacted"},
 		{Name: "title", Description: "Title of the content, untrusted data"},
@@ -324,28 +329,28 @@ var itemsGet = capability.Descriptor{
 		{Name: "state", Description: "State of the issue or pull request"},
 		{Name: "assignees", Description: "Logins assigned to the content"},
 		{Name: "labels", Description: "Label names on the content"},
-		{Name: "url", Description: "Web address of the content"},
-	},
+	}, itemWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read one item the list reported",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA"}`),
 	}},
 }
 
-// issuePropertiesCommon is the compact issue projection of the list. The list omits the URL because it is
-// derivable from the repository and the number; the detail below adds it back.
+// issuePropertiesCommon is the compact issue projection the list and the detail share.
 const issuePropertiesCommon = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
 	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"updated_at":{"type":"string"}`
 
-// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL.
+// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL; the list carries
+// its URL among the members of issueListWidthProperties.
 const issueProperties = issuePropertiesCommon + `,"url":{"type":"string"}`
 
 var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
 	Version: 2,
 	Title:   "List GitHub issues",
-	Description: "List one bounded batch of compact issues of a repository a connection allows, " +
-		"newest first, without bodies, comments, or pull requests",
+	Description: "List one bounded batch of issues of a repository a connection allows, newest created " +
+		"first unless ordered otherwise, with the members of GitHub's issue, a shortened body, the counts of " +
+		"its comments and other lists, and no pull requests",
 	Tags:     []string{"github", "issues", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -353,28 +358,30 @@ var issuesList = capability.Descriptor{
 		`"state":{"type":"string","enum":["open","closed","all"]},` +
 		`"labels":` + filterListSchema + `,` +
 		`"assignee":{"type":"string","maxLength":100,"pattern":"` + loginPattern + `"},` +
+		issueListInputProperties + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon +
-		`,"issue_type":{"type":"string"}},` +
+		`,"issue_type":{"type":"string"},` + issueListWidthProperties + `},` +
 		`"required":["number","title","state","assignees","labels"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["issues","has_more"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: slices.Concat([]capability.Argument{
 		{Name: "state", Description: "open, closed, or all; open when omitted"},
 		{Name: "labels", Description: "Return only issues carrying at least one of these labels"},
 		{Name: "assignee", Description: "Return only issues assigned to this login"},
+	}, issueListInputArguments, []capability.Argument{
 		{Name: "limit", Description: "Issues per batch, from 1 through 100; 30 when omitted"},
-		{Name: "cursor", Description: "Opaque next_cursor of a previous batch with the same filters; the first " +
-			"batch when omitted"},
-	},
-	Fields: []capability.Field{
-		{Name: "issues", Description: "Compact issues without bodies or comments, untrusted data; issue_type " +
-			"names the issue type, as github.issue-types.list reports it, absent when none is set"},
+		{Name: "cursor", Description: "Opaque next_cursor of a previous batch with the same filters and order; " +
+			"the first batch when omitted"},
+	}),
+	Fields: append([]capability.Field{
+		{Name: "issues", Description: "Issues, untrusted data; issue_type names the issue type, as " +
+			"github.issue-types.list reports it, absent when none is set"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the repository holds further matching issues"},
-	},
+	}, issueListWidthFields...),
 	ImpliedFields: []capability.ImpliedField{
 		{List: "issues", Argument: "state", Values: []string{"open", "closed"}, Field: "state"},
 	},
@@ -1027,8 +1034,11 @@ func validRepository(value string) bool {
 
 // safeFilterValue mirrors filterValuePattern and additionally refuses padding, so a value always stays one
 // quoted term of the project filter grammar.
-func safeFilterValue(value string) bool {
-	if value == "" || len([]rune(value)) > 100 || strings.TrimSpace(value) != value {
+func safeFilterValue(value string) bool { return safeFilterText(value, 100) }
+
+// safeFilterText is safeFilterValue with a longer bound for the values that may be longer.
+func safeFilterText(value string, max int) bool {
+	if value == "" || len([]rune(value)) > max || strings.TrimSpace(value) != value {
 		return false
 	}
 	for _, r := range value {
