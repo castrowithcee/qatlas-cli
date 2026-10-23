@@ -66,8 +66,11 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	projectColumnsMove, projectColumnsSetDefault, projectIssuesList, projectIssuesAdd, projectIssuesRemove,
 	projectIssuesMove, issueSubscriptionsList, issueSubscriptionsCheck, issueSubscriptionsAdd,
 	issueSubscriptionsRemove, issueLocksLock, issueLocksUnlock, branchesList, branchesGet, branchesCreate,
-	branchesRename, branchesUpdateRef, branchesDelete, workflowRunsList, workflowRunsGet, workflowRunsDelete,
-	workflowRunsCancel, workflowRunsForceCancel, workflowRunsRerun, workflowRunsRerunFailed, workflowRunsApprove,
+	branchesRename, branchesUpdateRef, branchesDelete, reviewsList, reviewsGet, reviewsCreate, reviewsSubmit,
+	reviewsApprove, reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList, reviewCommentsGet,
+	reviewCommentsCreate, reviewCommentsDelete, reviewCommentsReply, reviewCommentsResolve,
+	reviewCommentsUnresolve, workflowRunsList, workflowRunsGet, workflowRunsDelete, workflowRunsCancel,
+	workflowRunsForceCancel, workflowRunsRerun, workflowRunsRerunFailed, workflowRunsApprove,
 	workflowRunAttemptsGet, workflowRunAttemptsListJobs, workflowRunLogsGet, workflowJobsList, workflowJobsGet,
 	workflowJobsRerun, workflowJobLogsGet, actionsTasksList}
 

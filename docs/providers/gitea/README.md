@@ -191,6 +191,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Projects](projects.md): project boards, their columns, and their issues (Gitea 28 and later)
 - [Time tracking](time-tracking.md): tracked times and stopwatches of issues and pull requests
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
+- [Pull request reviews](pull-request-reviews.md): reviews and their inline comments
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository

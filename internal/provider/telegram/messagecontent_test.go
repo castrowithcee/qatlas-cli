@@ -337,6 +337,28 @@ func TestPersonalChatMessagesAndPinnedMessageCarryContent(t *testing.T) {
 // text message must fit the response bound. Telegram sends these members whether or not they are printed, so
 // the bound is set by the page Telegram returns, not by the mapping.
 func TestFullPageOfFullMessagesFitsTheResponseBound(t *testing.T) {
+	full := fullMessageJSON
+	var list []string
+	for i := 1; i <= maxUpdateLimit; i++ {
+		list = append(list, `{"update_id":`+strconv.Itoa(i)+`,"message":{`+
+			full(`,"reply_to_message":{"message_id":3,"date":90,"chat":`+headTeam+`,"text":"`+strings.Repeat("t", 4096)+`"}`)+`}}`)
+	}
+	updates := "[" + strings.Join(list, ",") + "]"
+	t.Logf("100 full messages: %d bytes of %d", len(updates), updatesResponseBytes)
+	var calls []recorded
+	client, _ := multiClient(t, testToken, fakeTelegram(&calls, updates, "0"), "-1001")
+	got, err := client.ListUpdates(context.Background(), maxUpdateLimit, 0)
+	if err != nil {
+		t.Fatalf("a full page does not fit: %v", err)
+	}
+	if n := len(got["updates"].([]updateOut)); n != maxUpdateLimit {
+		t.Errorf("updates = %d", n)
+	}
+}
+
+// fullMessageJSON returns the members of a message with every content member filled and text and caption at their
+// limits; extra is appended as further members.
+func fullMessageJSON(extra string) string {
 	entityList := func(n int) string {
 		var list []string
 		for i := 0; i < n; i++ {
@@ -361,41 +383,23 @@ func TestFullPageOfFullMessagesFitsTheResponseBound(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		blocks = append(blocks, `{"type":"paragraph","text":"`+strings.Repeat("r", 200)+`"}`)
 	}
-	full := func(extra string) string {
-		return `"message_id":9,"date":100,"chat":` + headTeam + `,"from":` + headUserA + `,"text":"` + strings.Repeat("t", 4096) +
-			`","caption":"` + strings.Repeat("c", 1024) + `","photo":` + photo + `,` + headJSON[:strings.Index(headJSON, `"reply_to_message"`)] +
-			`"entities":` + entityList(100) + `,"caption_entities":` + entityList(10) +
-			`,"link_preview_options":{"url":"https://example.org/` + strings.Repeat("l", 100) + `"},"effect_id":"` + strings.Repeat("e", 20) + `",` +
-			`"suggested_post_info":{"state":"pending","price":{"currency":"XTR","amount":1},"send_date":1},` +
-			`"rich_message":{"blocks":[` + strings.Join(blocks, ",") + `]},` +
-			`"paid_media":{"star_count":1,"paid_media":[{"type":"photo","photo":` + photo + `},{"type":"photo","photo":` + photo + `}]},` +
-			`"story":{"chat":{"id":-1,"type":"channel","title":"` + strings.Repeat("s", 100) + `"},"id":1},` +
-			`"checklist":{"title":"` + strings.Repeat("c", 100) + `","tasks":[` + strings.Join(tasks, ",") + `]},` +
-			`"contact":{"phone_number":"+49170","first_name":"` + strings.Repeat("f", 64) + `","vcard":"` + strings.Repeat("v", 500) + `"},` +
-			`"dice":{"emoji":"x","value":1},"game":{"title":"g","description":"` + strings.Repeat("d", 255) + `","photo":` + photo + `},` +
-			`"poll":{"id":"p","question":"` + strings.Repeat("q", 300) + `","options":[` + strings.Join(options, ",") + `],` +
-			`"explanation":"` + strings.Repeat("x", 200) + `","description":"` + strings.Repeat("d", 1000) + `"},` +
-			`"venue":{"location":{"latitude":1.5,"longitude":2.5},"title":"` + strings.Repeat("v", 100) + `","address":"` + strings.Repeat("a", 200) + `"},` +
-			`"location":{"latitude":1.5,"longitude":2.5,"horizontal_accuracy":12.5},` +
-			`"invoice":{"title":"i","description":"` + strings.Repeat("i", 255) + `","start_parameter":"s","currency":"EUR","total_amount":1},` +
-			`"reply_markup":{"inline_keyboard":[[` + strings.Join(buttons, ",") + `]]}` + extra
-	}
-	var list []string
-	for i := 1; i <= maxUpdateLimit; i++ {
-		list = append(list, `{"update_id":`+strconv.Itoa(i)+`,"message":{`+
-			full(`,"reply_to_message":{"message_id":3,"date":90,"chat":`+headTeam+`,"text":"`+strings.Repeat("t", 4096)+`"}`)+`}}`)
-	}
-	updates := "[" + strings.Join(list, ",") + "]"
-	t.Logf("100 full messages: %d bytes of %d", len(updates), updatesResponseBytes)
-	var calls []recorded
-	client, _ := multiClient(t, testToken, fakeTelegram(&calls, updates, "0"), "-1001")
-	got, err := client.ListUpdates(context.Background(), maxUpdateLimit, 0)
-	if err != nil {
-		t.Fatalf("a full page does not fit: %v", err)
-	}
-	if n := len(got["updates"].([]updateOut)); n != maxUpdateLimit {
-		t.Errorf("updates = %d", n)
-	}
+	return `"message_id":9,"date":100,"chat":` + headTeam + `,"from":` + headUserA + `,"text":"` + strings.Repeat("t", 4096) +
+		`","caption":"` + strings.Repeat("c", 1024) + `","photo":` + photo + `,` + headJSON[:strings.Index(headJSON, `"reply_to_message"`)] +
+		`"entities":` + entityList(100) + `,"caption_entities":` + entityList(10) +
+		`,"link_preview_options":{"url":"https://example.org/` + strings.Repeat("l", 100) + `"},"effect_id":"` + strings.Repeat("e", 20) + `",` +
+		`"suggested_post_info":{"state":"pending","price":{"currency":"XTR","amount":1},"send_date":1},` +
+		`"rich_message":{"blocks":[` + strings.Join(blocks, ",") + `]},` +
+		`"paid_media":{"star_count":1,"paid_media":[{"type":"photo","photo":` + photo + `},{"type":"photo","photo":` + photo + `}]},` +
+		`"story":{"chat":{"id":-1,"type":"channel","title":"` + strings.Repeat("s", 100) + `"},"id":1},` +
+		`"checklist":{"title":"` + strings.Repeat("c", 100) + `","tasks":[` + strings.Join(tasks, ",") + `]},` +
+		`"contact":{"phone_number":"+49170","first_name":"` + strings.Repeat("f", 64) + `","vcard":"` + strings.Repeat("v", 500) + `"},` +
+		`"dice":{"emoji":"x","value":1},"game":{"title":"g","description":"` + strings.Repeat("d", 255) + `","photo":` + photo + `},` +
+		`"poll":{"id":"p","question":"` + strings.Repeat("q", 300) + `","options":[` + strings.Join(options, ",") + `],` +
+		`"explanation":"` + strings.Repeat("x", 200) + `","description":"` + strings.Repeat("d", 1000) + `"},` +
+		`"venue":{"location":{"latitude":1.5,"longitude":2.5},"title":"` + strings.Repeat("v", 100) + `","address":"` + strings.Repeat("a", 200) + `"},` +
+		`"location":{"latitude":1.5,"longitude":2.5,"horizontal_accuracy":12.5},` +
+		`"invoice":{"title":"i","description":"` + strings.Repeat("i", 255) + `","start_parameter":"s","currency":"EUR","total_amount":1},` +
+		`"reply_markup":{"inline_keyboard":[[` + strings.Join(buttons, ",") + `]]}` + extra
 }
 
 func TestNestedMessageTextAndCaptionKeepLineBreaksLikeTheTopLevel(t *testing.T) {

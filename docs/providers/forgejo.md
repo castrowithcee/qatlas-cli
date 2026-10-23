@@ -53,6 +53,9 @@ additional depth of defense: the targets of the connection stay the boundary.
   `projects`, or `time_estimate`.
 - Pull requests: `pull-requests.list` takes `base` and `head` (from Forgejo 17) and the pull request carries `flow`;
   Gitea has `base_branch` and `content_version` instead. See [Pull requests](gitea/pull-requests.md).
+- Review comments: `pull-request-review-comments.get`, `.create`, and `.delete` (listed-only) exist on Forgejo only;
+  `reply`, `resolve`, and `unresolve` are Gitea's. `extra_lines_count` needs Forgejo 16. See
+  [Pull request reviews](gitea/pull-request-reviews.md).
 - A release asset may be a link to an external address (`type` `external`). Qatlas never creates one (`external_url`
   is not offered), never changes its address, and `release-assets.download` refuses it. See
   [Releases](gitea/releases.md).
