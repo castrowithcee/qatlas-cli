@@ -202,7 +202,7 @@ var commentsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"comments":{"type":"array","items":{"type":"object","properties":{` + commentProperties + `},` +
+		`"comments":{"type":"array","items":{"type":"object","properties":{` + listedCommentProperties + `},` +
 		commentRequired + `}},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["comments","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -211,12 +211,12 @@ var commentsList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch of the same issue; the first " +
 			"batch when omitted"},
 	},
-	Fields: []capability.Field{
-		{Name: "comments", Description: "Comments with author, body, and times, untrusted data"},
+	Fields: append([]capability.Field{
+		{Name: "comments", Description: "Comments with author, body, times, and state, untrusted data"},
 		commentDatabaseIDField,
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the issue holds further comments"},
-	},
+	}, listedCommentFields...),
 	Examples: []capability.Example{{
 		Description: "Read the first comments of one issue",
 		Arguments:   json.RawMessage(`{"number":42,"limit":10}`),

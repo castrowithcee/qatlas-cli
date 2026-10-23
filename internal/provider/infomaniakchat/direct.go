@@ -107,7 +107,9 @@ var directList = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":` + idSchema + `,` +
 		`"channels":{"type":"array","items":{"type":"object","properties":{"id":` + idSchema + `,` +
 		`"type":{"type":"string"},"display_name":{"type":"string"},"user_ids":{"type":"array","items":` +
-		idSchema + `}},"required":["id","type","user_ids"],"additionalProperties":false}},` +
+		idSchema + `},"name":{"type":"string"},"team_id":{"type":"string"},"header":{"type":"string"},` +
+		`"purpose":{"type":"string"},"created_at":{"type":"string"},` + channelActivityProperties + `},` +
+		`"required":["id","type","user_ids"],"additionalProperties":false}},` +
 		`"page":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["team_id","channels","page","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -116,14 +118,19 @@ var directList = capability.Descriptor{
 		{Name: "limit", Description: "Channels checked per page, 1 to " + itoa(maxDirectListLimit) + "; " +
 			itoa(defaultDirectListLimit) + " when omitted"},
 	},
-	Fields: append(append([]capability.Field{}, openedChannelFields...),
+	Fields: append(append(append([]capability.Field{}, openedChannelFields...),
 		capability.Field{Name: "display_name", Description: "Display name kChat reports, untrusted data"},
-		capability.Field{Name: "team_id", Description: "Team the listing was read through"},
+		capability.Field{Name: "name", Description: "Handle kChat reports for the channel, untrusted data"},
+		capability.Field{Name: "header", Description: "Header text of the channel, untrusted data"},
+		capability.Field{Name: "purpose", Description: "Purpose of the channel, untrusted data"},
+		capability.Field{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC"},
+		capability.Field{Name: "team_id", Description: "On the result, the team the listing was read through; on a " +
+			"channel, the team kChat reports for it, which a direct or group channel has none"},
 		capability.Field{Name: "page", Description: "Page that was read"},
 		capability.Field{Name: "has_more", Description: "True when a further page remains"},
 		capability.Field{Name: "count", Description: "Number of channels reported on this page, after channels " +
 			"outside the bound teams were left out"},
-	),
+	), channelActivityFields...),
 	Examples: []capability.Example{{Description: "List the direct and group channels",
 		Arguments: json.RawMessage(`{"team_id":"abc123team0000000000000000"}`)}},
 }
@@ -141,6 +148,12 @@ type DirectEntry struct {
 	Type        string   `json:"type"`
 	DisplayName string   `json:"display_name,omitempty"`
 	UserIDs     []string `json:"user_ids"`
+	Name        string   `json:"name,omitempty"`
+	TeamID      string   `json:"team_id,omitempty"`
+	Header      string   `json:"header,omitempty"`
+	Purpose     string   `json:"purpose,omitempty"`
+	CreatedAt   string   `json:"created_at,omitempty"`
+	ChannelActivity
 }
 
 // DirectPage is one page of direct and group channels.
@@ -429,7 +442,8 @@ func (c *Client) ListDirect(ctx context.Context, teamID string, page, limit int)
 		}
 		if inScope {
 			entries = append(entries, DirectEntry{ID: ch.ID, Type: ch.Type, DisplayName: bounded(ch.DisplayName),
-				UserIDs: proven[i]})
+				UserIDs: proven[i], Name: cleanText(ch.Name), TeamID: ch.TeamID, Header: cleanText(ch.Header),
+				Purpose: cleanText(ch.Purpose), CreatedAt: msToRFC3339(ch.CreateAt), ChannelActivity: activityOf(&ch)})
 		}
 	}
 	return &DirectPage{TeamID: teamID, Channels: entries, Page: page, HasMore: page < pages, Count: len(entries)}, nil

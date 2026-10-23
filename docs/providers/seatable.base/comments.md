@@ -22,7 +22,9 @@ them is in a profile. `comments.delete` is offered only by a connection whose `t
 - `comments.delete` first lists the comments of the requested row and deletes only a comment found there;
   any other identifier is refused without a delete request.
 - After an uncertain change, list the comments of the row before repeating it.
-- `collaborators.list` reports the people of the whole base, with `has_more`; the avatar address is left out.
+- `collaborators.list` reports the people of the whole base, with `has_more`. `avatar_url` is
+  sent as an address and never fetched; an address with a query, fragment or credentials counts as an access
+  value and is left out.
   It is not bound to the tables of the connection: every connection to the base may read all collaborators,
   so offer it only where that is intended. The sensitivity class `seatable-base-people` covers names and
   mail addresses; values of this class never enter the audit trail or the invoke log.
