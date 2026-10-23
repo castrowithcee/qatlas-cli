@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,13 +52,12 @@ const addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 	`<c:max-resource-size/><c:supported-collation-set/><d:current-user-privilege-set/><d:sync-token/>` +
 	`<oc:invite/></d:prop></d:propfind>`
 
-// contactListProps and contactGetProps name the card properties a read asks the server for. PHOTO, LOGO,
+// contactGetProps names the card properties a read asks the server for. PHOTO, LOGO,
 // SOUND, KEY, and AGENT are never requested: CardDAV cannot filter by VALUE=uri, so the server would send
 // embedded data. Their references are therefore not reported.
 const (
-	contactListProps = `<card:prop name="VERSION"/><card:prop name="UID"/><card:prop name="FN"/>` +
-		`<card:prop name="N"/><card:prop name="ORG"/><card:prop name="EMAIL"/>`
-	contactGetProps = contactListProps + `<card:prop name="TEL"/><card:prop name="ADR"/>` +
+	contactGetProps = `<card:prop name="VERSION"/><card:prop name="UID"/><card:prop name="FN"/>` +
+		`<card:prop name="N"/><card:prop name="ORG"/><card:prop name="EMAIL"/><card:prop name="TEL"/><card:prop name="ADR"/>` +
 		`<card:prop name="TITLE"/><card:prop name="BDAY"/><card:prop name="NOTE"/><card:prop name="URL"/>` +
 		`<card:prop name="NICKNAME"/><card:prop name="MAILER"/><card:prop name="TZ"/><card:prop name="GEO"/>` +
 		`<card:prop name="ROLE"/><card:prop name="LABEL"/><card:prop name="CATEGORIES"/><card:prop name="CLASS"/>` +
@@ -114,17 +114,17 @@ var contactFields = append([]capability.Field{
 	{Name: "id", Description: "Last path segment of the contact resource, the id argument of the get tool"},
 	{Name: "uid", Description: "vCard UID, untrusted data"},
 	{Name: "name", Description: "Formatted name (FN), untrusted personal data; built from the structured name if absent"},
-	{Name: "email", Description: "First e-mail address, untrusted personal data; only the list tool reports it"},
+	{Name: "email", Description: "First e-mail address, untrusted personal data; the list tool adds it to the full set"},
 	{Name: "organization", Description: "Organization, untrusted data"},
-	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix; only the get tool reports it"},
-	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref; only the get tool reports them"},
-	{Name: "title", Description: "Job title; only the get tool reports it"},
-	{Name: "birthday", Description: "Birthday as the card states it; only the get tool reports it"},
-	{Name: "note", Description: "Note, untrusted data; only the get tool reports it"},
-	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed; only the get tool reports them"},
-	{Name: "truncated", Description: "Names of the members that were cut at their cap; only the get tool reports it"},
+	{Name: "structured_name", Description: "Family, given, additional name, prefix, suffix"},
+	{Name: "emails", Description: "At most 20 e-mail addresses with type and the PREF parameter as pref"},
+	{Name: "phones", Description: "At most 20 phone numbers with type and the PREF parameter as pref"},
+	{Name: "addresses", Description: "At most 20 postal addresses with type and the PREF parameter as pref"},
+	{Name: "title", Description: "Job title"},
+	{Name: "birthday", Description: "Birthday as the card states it"},
+	{Name: "note", Description: "Note, untrusted data"},
+	{Name: "urls", Description: "At most 20 URLs, untrusted data, never followed"},
+	{Name: "truncated", Description: "Names of the members that were cut at their cap"},
 	{Name: "etag", Description: "Entity tag of the current version of the contact"},
 	{Name: "count", Description: "Number of reported contacts"},
 }, dav.ContactValueFields...)
@@ -159,13 +159,14 @@ var addressbooksList = capability.Descriptor{
 var contactsList = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.list", Version: 1, Title: "List Nextcloud contacts",
 	Description: "List the contacts of one bound address book, ordered by name, optionally only those whose " +
-		"formatted name or e-mail address contains a text; the result is limited and compact, and a card " +
+		"formatted name or e-mail address contains a text, and optionally narrowed by structured property " +
+		"filters; the result is limited and carries the fields of the get tool, and a card " +
 		"that is not a valid vCard is left out; photos and other binary data are never returned",
 	Tags: []string{"nextcloud", "contacts", "contact", "list", "search"}, Risk: contactRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + addressbookArgSchema + `,` +
 		`"query":{"type":"string","minLength":1,"maxLength":128},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["addressbook"],` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":200},` + dav.ContactFilterSchema() + `},` +
+		`"required":["addressbook"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"addressbook":{"type":"string"},` +
 		`"contacts":{"type":"array","items":` + contactSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["addressbook","contacts","count"],` +
@@ -174,6 +175,10 @@ var contactsList = capability.Descriptor{
 		addressbookArgument,
 		{Name: "query", Description: "Text the formatted name or an e-mail address contains, case-insensitive"},
 		{Name: "limit", Description: "Maximum number of contacts, 50 by default and at most 200"},
+		{Name: "property_filters", Description: "At most 8 conditions on contact properties; each names a property and " +
+			"exactly one of text (1 to 256 bytes, optionally match_type, negate, and collation) or defined false, and " +
+			"optionally a parameter with the same condition form; a query narrows the answer further"},
+		{Name: "test", Description: "anyof (default) or allof: whether any or all of the property_filters must match"},
 	},
 	Fields: contactFields,
 	Examples: []capability.Example{{
@@ -241,6 +246,9 @@ type contactArguments struct {
 	Query       string `json:"query"`
 	Limit       int    `json:"limit"`
 	ID          string `json:"id"`
+
+	PropertyFilters []dav.ContactPropertyFilter `json:"property_filters"`
+	Test            string                      `json:"test"`
 }
 
 func decodeContactArguments(op string, raw json.RawMessage) (contactArguments, error) {
@@ -340,11 +348,16 @@ func invokeContactsList(ctx context.Context, resolved *config.Resolved, secrets 
 			return nil, providerError(op, "query must be plain text of at most 128 bytes")
 		}
 	}
+	filter := dav.ContactFilter{Properties: input.PropertyFilters, Test: input.Test}
+	body, err := contactListBody(op, query, filter)
+	if err != nil {
+		return nil, err
+	}
 	client, err := openAddressbook(ctx, op, resolved, secrets, red, input.Addressbook)
 	if err != nil {
 		return nil, err
 	}
-	return client.listContacts(ctx, input.Addressbook, query, limit)
+	return client.listContacts(ctx, input.Addressbook, body, query, filter, limit)
 }
 
 func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -353,6 +366,9 @@ func invokeContactsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	input, err := decodeContactArguments(op, raw)
 	if err != nil {
 		return nil, err
+	}
+	if input.PropertyFilters != nil || input.Test != "" {
+		return nil, providerError(op, "the get tool takes no filter arguments")
 	}
 	if !contactChildID(input.ID) {
 		return nil, providerError(op, "the contact id must be one literal path segment as the contacts list reports it")
@@ -430,8 +446,36 @@ func contactQueryBody(query string) string {
 		filter = `<card:filter test="anyof">` + fmt.Sprintf(contactMatch, "FN", text) +
 			fmt.Sprintf(contactMatch, "EMAIL", text) + `</card:filter>`
 	}
-	return contactBodyHead + `<card:addressbook-query` + contactNamespaces + contactProp + contactListProps +
+	return contactBodyHead + `<card:addressbook-query` + contactNamespaces + contactProp + contactGetProps +
 		contactPropEnd + filter + `</card:addressbook-query>`
+}
+
+// contactListBody builds the list request. Without structured filters it is the query body. With them, the body
+// comes from the shared filter builder and only its address-data is narrowed to the get properties; an
+// addressbook-query holds a single filter, so a query text cannot join it and is applied to the answer instead.
+func contactListBody(op, query string, filter dav.ContactFilter) (string, error) {
+	if filter.Zero() {
+		return contactQueryBody(query), nil
+	}
+	body, err := dav.ContactQueryBody(op, filter)
+	if err != nil {
+		return "", err
+	}
+	return strings.Replace(body, `<card:address-data/>`,
+		`<card:address-data>`+contactGetProps+`</card:address-data>`, 1), nil
+}
+
+// containsFold reports whether the contact's name or one of its e-mail addresses contains the lower-cased query.
+func containsFold(contact *dav.Contact, query string) bool {
+	if strings.Contains(strings.ToLower(contact.Name), query) || strings.Contains(strings.ToLower(contact.Email), query) {
+		return true
+	}
+	for _, email := range contact.Emails {
+		if strings.Contains(strings.ToLower(email.Value), query) {
+			return true
+		}
+	}
+	return false
 }
 
 // contactMultigetBody asks for one card by its path.
@@ -480,13 +524,19 @@ func (c *Client) listAddressbooks(ctx context.Context, bound selection) (*Addres
 	return result, nil
 }
 
-func (c *Client) listContacts(ctx context.Context, book, query string, limit int) (*ContactsPage, error) {
+func (c *Client) listContacts(ctx context.Context, book, body, query string, filter dav.ContactFilter, limit int) (*ContactsPage, error) {
 	const op = "list contacts"
 	base := c.addressbookHome(book)
-	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, contactQueryBody(query))
+	data, err := c.contactRequest(ctx, op, "REPORT", base, depthChildren, body)
 	if err != nil {
+		var failure *provider.Error
+		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
+		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+		}
 		return nil, err
 	}
+	query = strings.ToLower(query)
 	resources, err := c.contactServer().ParseMultiStatus(op, data)
 	if err != nil {
 		return nil, err
@@ -499,8 +549,16 @@ func (c *Client) listContacts(ctx context.Context, book, query string, limit int
 			continue
 		}
 		seen[id] = true
-		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
+		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], true)
 		if err != nil {
+			continue
+		}
+		if len(contact.Emails) > 0 {
+			contact.Email = contact.Emails[0].Value
+		}
+		// A server may send these anyway; the output schema has no place for them.
+		contact.PhotoURI, contact.LogoURI, contact.SoundURI, contact.AgentURI, contact.KeyURI = "", "", "", "", ""
+		if !filter.Zero() && query != "" && !containsFold(contact, query) {
 			continue
 		}
 		contact.ID = id

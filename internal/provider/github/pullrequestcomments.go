@@ -33,7 +33,7 @@ var pullRequestCommentsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"comments":{"type":"array","items":{"type":"object","properties":{` + commentProperties + `},` +
+		`"comments":{"type":"array","items":{"type":"object","properties":{` + listedCommentProperties + `},` +
 		commentRequired + `}},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["comments","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -42,12 +42,12 @@ var pullRequestCommentsList = capability.Descriptor{
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch of the same pull request; the " +
 			"first batch when omitted"},
 	},
-	Fields: []capability.Field{
-		{Name: "comments", Description: "Conversation comments with author, body, and times, untrusted data"},
+	Fields: append([]capability.Field{
+		{Name: "comments", Description: "Conversation comments with author, body, times, and state, untrusted data"},
 		commentDatabaseIDField,
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the pull request holds further comments"},
-	},
+	}, listedCommentFields...),
 	Examples: []capability.Example{{
 		Description: "Read the first conversation comments of one pull request",
 		Arguments:   json.RawMessage(`{"number":42,"limit":10}`),
@@ -222,7 +222,7 @@ func (c *Client) checkPullRequestForComment(ctx context.Context, op string, numb
 // issueOrPullRequest, so it never answers for an issue number.
 const pullRequestCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body createdAt updatedAt url}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{` + commentSelection + `}}}}}`
 
 type pullRequestCommentsPageJSON struct {
 	Repository *struct {
@@ -232,17 +232,7 @@ type pullRequestCommentsPageJSON struct {
 					HasNextPage bool   `json:"hasNextPage"`
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
-				Nodes []struct {
-					ID         string `json:"id"`
-					DatabaseID int64  `json:"databaseId"`
-					Author     *struct {
-						Login string `json:"login"`
-					} `json:"author"`
-					Body      string `json:"body"`
-					CreatedAt string `json:"createdAt"`
-					UpdatedAt string `json:"updatedAt"`
-					URL       string `json:"url"`
-				} `json:"nodes"`
+				Nodes []issueCommentNodeJSON `json:"nodes"`
 			} `json:"comments"`
 		} `json:"pullRequest"`
 	} `json:"repository"`
@@ -271,18 +261,13 @@ func (c *Client) listPullRequestComments(ctx context.Context, a *pullRequestComm
 		return nil, notFound(op, subject{in: c.target, what: "pull request #" + strconv.Itoa(a.Number)})
 	}
 	comments := page.Repository.PullRequest.Comments
-	result := &CommentList{Comments: make([]Comment, 0, len(comments.Nodes))}
+	result := &CommentList{Comments: make([]ListedComment, 0, len(comments.Nodes))}
 	for _, node := range comments.Nodes {
 		if node.ID == "" {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub returned a comment without a usable identifier"}
 		}
-		comment := Comment{ID: node.ID, DatabaseID: node.DatabaseID, Body: node.Body, CreatedAt: node.CreatedAt,
-			UpdatedAt: node.UpdatedAt, URL: node.URL}
-		if node.Author != nil {
-			comment.Author = node.Author.Login
-		}
-		result.Comments = append(result.Comments, comment)
+		result.Comments = append(result.Comments, node.project())
 	}
 	if comments.PageInfo.HasNextPage {
 		if comments.PageInfo.EndCursor == "" {

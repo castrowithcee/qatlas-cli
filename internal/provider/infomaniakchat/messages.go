@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -22,13 +24,33 @@ var channelIDArgument = capability.Argument{Name: "channel_id",
 	Description: "Channel identifier; must be inside this connection's channel allow-list when it has one, " +
 		"and is always re-checked live against this connection's bound teams before use", Required: true}
 
+// timeSchema is an RFC 3339 time argument; the value is parsed and bounded before any request.
+var timeSchema = `{"type":"string","minLength":20,"maxLength":40}`
+
 var messageTextSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(maxMessageLength) +
 	`,"pattern":"^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]+$"}`
 
 var messageEntrySchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"channel_id":` + idSchema + `,"user_id":` + idSchema + `,"root_id":` + idSchema + `,` +
-	`"message":{"type":"string"},"type":{"type":"string"},"created_at":{"type":"string"},"edited_at":{"type":"string"}},` +
+	`"message":{"type":"string"},"type":{"type":"string"},"created_at":{"type":"string"},"edited_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"original_id":{"type":"string"},"hashtag":{"type":"string"},` +
+	`"pending_post_id":{"type":"string"},"file_ids":{"type":"array","items":{"type":"string"}},` +
+	`"props":{"type":"object"},"metadata":` + messageMetadataSchema + `,` +
+	`"omitted":{"type":"array","items":{"type":"string"}}},` +
 	`"required":["id","channel_id","user_id","message","type","created_at"],"additionalProperties":false}`
+
+var messageMetadataSchema = `{"type":"object","properties":{` +
+	`"embeds":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},` +
+	`"url":{"type":"string"},"data":{"type":"object"}},"additionalProperties":false}},` +
+	`"emojis":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+	`"creator_id":{"type":"string"},"name":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"deleted_at":{"type":"string"}},"additionalProperties":false}},` +
+	`"files":{"type":"array","items":` + fileEntrySchema + `},` +
+	`"images":{"type":"object","additionalProperties":{"type":"object","properties":{"width":{"type":"integer"},` +
+	`"height":{"type":"integer"}},"additionalProperties":false}},` +
+	`"reactions":{"type":"array","items":{"type":"object","properties":{"user_id":{"type":"string"},` +
+	`"post_id":{"type":"string"},"emoji_name":{"type":"string"},"created_at":{"type":"string"}},` +
+	`"additionalProperties":false}}},"additionalProperties":false}`
 
 var messageEntryFields = []capability.Field{
 	{Name: "id", Description: "Message (post) identifier"},
@@ -39,6 +61,17 @@ var messageEntryFields = []capability.Field{
 	{Name: "type", Description: "Empty for a normal message, or kChat's own system message type"},
 	{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC"},
 	{Name: "edited_at", Description: "Last edit time, normalised to RFC 3339 in UTC, when the message was edited"},
+	{Name: "updated_at", Description: "Last change time of any kind, normalised to RFC 3339 in UTC"},
+	{Name: "original_id", Description: "Identifier of the message this one replaced"},
+	{Name: "hashtag", Description: "Hashtags kChat extracted from the message, untrusted data"},
+	{Name: "pending_post_id", Description: "Client-side identifier kChat kept while the message was pending, untrusted data"},
+	{Name: "file_ids", Description: "Identifiers of the attached files"},
+	{Name: "props", Description: "Free properties of the message, untrusted data; a bounded object, left out and named in omitted when beyond the bound"},
+	{Name: "metadata", Description: "Display information, untrusted data: embeds (type, url, data), emojis, files " +
+		"(file entries without content or preview), images (address to width and height), and reactions; each list " +
+		"holds at most " + itoa(metadataListMax) + " entries and images " + itoa(metadataImagesMax) + ", else the list is left out and named in omitted. " +
+		"Addresses are text and never fetched"},
+	{Name: "omitted", Description: "Paths of parts left out because they exceed a bound, such as props or metadata.embeds[2].data"},
 }
 
 var messagesList = capability.Descriptor{
@@ -46,12 +79,14 @@ var messagesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Infomaniak kChat channel messages",
 	Description: "List the messages of one channel this connection may reach, newest first, one page at a " +
-		"time; never reads a whole channel at once",
+		"time; never reads a whole channel at once. With since it lists the messages changed since a time, " +
+		"oldest change first and at most limit of them; with before or after it reads one page next to a message",
 	Tags:     []string{"infomaniak", "kchat", "messages", "list", "posts"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"channel_id":` + idSchema + `,"page":{"type":"integer","minimum":1},` +
+		`"since":` + timeSchema + `,"before":` + idSchema + `,"after":` + idSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
 		`"required":["channel_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -60,12 +95,20 @@ var messagesList = capability.Descriptor{
 		`"required":["channel_id","messages","page","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		channelIDArgument,
-		{Name: "page", Description: "1-based page of the channel's messages; the first (newest) page when omitted"},
+		{Name: "page", Description: "1-based page of the channel's messages; the first (newest) page when omitted; " +
+			"excludes since, before and after"},
+		{Name: "since", Description: "RFC 3339 time in the past; lists the messages changed since then instead of " +
+			"a page, oldest change first; excludes page, before and after"},
+		{Name: "before", Description: "Message identifier; reads one page of the messages that came before it; " +
+			"excludes page, since and after"},
+		{Name: "after", Description: "Message identifier; reads one page of the messages that came after it; " +
+			"excludes page, since and before"},
 		{Name: "limit", Description: "Messages per page, 1 to " + itoa(maxListLimit) + "; " + itoa(defaultListLimit) + " when omitted"},
 	},
 	Fields: append(append([]capability.Field{}, messageEntryFields...),
-		capability.Field{Name: "page", Description: "Page that was read"},
-		capability.Field{Name: "has_more", Description: "True when an older page remains, so this page is not the whole channel"},
+		capability.Field{Name: "page", Description: "Page that was read; 1 with since, before or after"},
+		capability.Field{Name: "has_more", Description: "True when an older page remains, so this page is not the whole channel; " +
+			"with since, true when more changed messages remain than limit"},
 		capability.Field{Name: "count", Description: "Number of messages reported on this page"},
 	),
 	Examples: []capability.Example{{Description: "List the newest messages of one channel",
@@ -240,6 +283,14 @@ type postJSON struct {
 	RootID    string `json:"root_id"`
 	Message   string `json:"message"`
 	Type      string `json:"type"`
+
+	UpdateAt      flexInt            `json:"update_at"`
+	OriginalID    tolerant[string]   `json:"original_id"`
+	Hashtag       tolerant[string]   `json:"hashtag"`
+	PendingPostID tolerant[string]   `json:"pending_post_id"`
+	FileIDs       tolerant[[]string] `json:"file_ids"`
+	Props         json.RawMessage    `json:"props"`
+	Metadata      json.RawMessage    `json:"metadata"`
 }
 
 // postListJSON is the cursor-ish pagination envelope kChat reports for a channel's posts and for a thread:
@@ -251,17 +302,42 @@ type postListJSON struct {
 	HasNext    bool                `json:"has_next"`
 }
 
-// ordered returns the posts of one postListJSON in its own order, normalised to the stable envelope.
-func (p postListJSON) ordered() []MessageEntry {
+// ordered returns the posts of one postListJSON in its own order, normalised to the stable envelope. A
+// deleted post and a post of another channel than channelID are dropped.
+func (p postListJSON) ordered(channelID string) []MessageEntry {
 	entries := make([]MessageEntry, 0, len(p.Order))
 	for _, id := range p.Order {
 		post, ok := p.Posts[id]
-		if !ok {
+		if !ok || post.DeleteAt > 0 || post.ChannelID != channelID {
 			continue
 		}
 		entries = append(entries, messageEntryOf(post))
 	}
 	return entries
+}
+
+// changed returns the live posts of channelID ordered by change time, oldest first, at most limit of them,
+// and whether more remain. kChat does not order a since answer, so the order is set here; the original
+// sequence breaks ties.
+func (p postListJSON) changed(channelID string, limit int) ([]MessageEntry, bool) {
+	posts := make([]postJSON, 0, len(p.Order))
+	for _, id := range p.Order {
+		post, ok := p.Posts[id]
+		if !ok || post.DeleteAt > 0 || post.ChannelID != channelID {
+			continue
+		}
+		posts = append(posts, post)
+	}
+	sort.SliceStable(posts, func(i, j int) bool { return posts[i].UpdateAt < posts[j].UpdateAt })
+	more := len(posts) > limit
+	if more {
+		posts = posts[:limit]
+	}
+	entries := make([]MessageEntry, 0, len(posts))
+	for _, post := range posts {
+		entries = append(entries, messageEntryOf(post))
+	}
+	return entries, more
 }
 
 func messageEntryOf(p postJSON) MessageEntry {
@@ -272,6 +348,25 @@ func messageEntryOf(p postJSON) MessageEntry {
 	if p.EditAt > 0 {
 		entry.EditedAt = msToRFC3339(p.EditAt)
 	}
+	entry.UpdatedAt = msToRFC3339(int64(p.UpdateAt))
+	entry.OriginalID = cleanText(p.OriginalID.Value)
+	entry.Hashtag = cleanText(p.Hashtag.Value)
+	entry.PendingPostID = cleanText(p.PendingPostID.Value)
+	var omitted []string
+	if ids := p.FileIDs.Value; len(ids) > metadataListMax {
+		omitted = append(omitted, "file_ids")
+	} else {
+		for _, id := range ids {
+			entry.FileIDs = append(entry.FileIDs, cleanText(id))
+		}
+	}
+	props, within := boundedFreeObject(p.Props)
+	if !within {
+		omitted = append(omitted, "props")
+	}
+	entry.Props = props
+	entry.Metadata = metadataOf(p.Metadata, &omitted)
+	entry.Omitted = omitted
 	return entry
 }
 
@@ -285,6 +380,15 @@ type MessageEntry struct {
 	Type      string `json:"type"`
 	CreatedAt string `json:"created_at"`
 	EditedAt  string `json:"edited_at,omitempty"`
+
+	UpdatedAt     string           `json:"updated_at,omitempty"`
+	OriginalID    string           `json:"original_id,omitempty"`
+	Hashtag       string           `json:"hashtag,omitempty"`
+	PendingPostID string           `json:"pending_post_id,omitempty"`
+	FileIDs       []string         `json:"file_ids,omitempty"`
+	Props         map[string]any   `json:"props,omitempty"`
+	Metadata      *MessageMetadata `json:"metadata,omitempty"`
+	Omitted       []string         `json:"omitted,omitempty"`
 }
 
 // MessagesPage is one paginated listing of the messages of one channel.
@@ -317,7 +421,63 @@ type SentMessage struct {
 type messagesListArguments struct {
 	ChannelID string `json:"channel_id"`
 	Page      int    `json:"page"`
+	Since     string `json:"since"`
+	Before    string `json:"before"`
+	After     string `json:"after"`
 	Limit     int    `json:"limit"`
+}
+
+// messagesWindow is the part of a channel one messages.list call reads: a page, the changes since a time, or
+// a page next to a message.
+type messagesWindow struct {
+	page          int
+	sinceMs       int64
+	before, after string
+}
+
+// parseMessagesWindow validates the mutually exclusive selectors locally, so a refused combination never
+// reads a secret or sends a request.
+func parseMessagesWindow(input *messagesListArguments, now time.Time) (messagesWindow, error) {
+	chosen := 0
+	for _, set := range []bool{input.Page != 0, input.Since != "", input.Before != "", input.After != ""} {
+		if set {
+			chosen++
+		}
+	}
+	if chosen > 1 {
+		return messagesWindow{}, invalidRequest("page, since, before and after exclude each other; use only one")
+	}
+	window := messagesWindow{page: input.Page, before: input.Before, after: input.After}
+	if window.page == 0 {
+		window.page = 1
+	}
+	if input.Before != "" && !validMattermostID(input.Before) || input.After != "" && !validMattermostID(input.After) {
+		return messagesWindow{}, invalidRequest("before and after must be kChat-style identifiers")
+	}
+	if input.Since != "" {
+		ms, err := sinceMilliseconds(input.Since, now)
+		if err != nil {
+			return messagesWindow{}, err
+		}
+		window.sinceMs = ms
+	}
+	return window, nil
+}
+
+// sinceMilliseconds reads an RFC 3339 time that lies after the epoch and not in the future. The value is
+// never quoted in an error.
+func sinceMilliseconds(value string, now time.Time) (int64, error) {
+	at, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return 0, invalidRequest("since must be an RFC 3339 time")
+	}
+	if at.After(now) {
+		return 0, invalidRequest("since must not be in the future")
+	}
+	if at.UnixMilli() <= 0 {
+		return 0, invalidRequest("since must be after 1970-01-01T00:00:00Z")
+	}
+	return at.UnixMilli(), nil
 }
 
 func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -330,10 +490,11 @@ func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := selectChannel(resolved, input.ChannelID); err != nil {
 		return nil, err
 	}
-	page, limit := input.Page, input.Limit
-	if page == 0 {
-		page = 1
+	window, err := parseMessagesWindow(&input, time.Now())
+	if err != nil {
+		return nil, err
 	}
+	limit := input.Limit
 	if limit == 0 {
 		limit = defaultListLimit
 	}
@@ -344,21 +505,47 @@ func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
-	return client.ListMessages(ctx, input.ChannelID, page, limit)
+	return client.ListMessages(ctx, input.ChannelID, window, limit)
 }
 
-// ListMessages reads one page of a channel's messages, newest first, exactly as kChat paginates its own
-// GetPostsForChannel endpoint: it never follows a further page itself.
-func (c *Client) ListMessages(ctx context.Context, channelID string, page, limit int) (*MessagesPage, error) {
+// ListMessages reads one window of a channel's messages exactly as kChat answers its own GetPostsForChannel
+// endpoint and never follows a further page itself. Without since, before or after the window is the
+// newest-first page; with since kChat answers every change without paging, so the answer is ordered by
+// change time and cut to limit here.
+func (c *Client) ListMessages(ctx context.Context, channelID string, window messagesWindow, limit int) (*MessagesPage, error) {
 	const op = "list messages"
-	query := url.Values{"page": {strconv.Itoa(page - 1)}, "per_page": {strconv.Itoa(limit)}}
+	query := url.Values{}
+	switch {
+	case window.sinceMs > 0:
+		query.Set("since", strconv.FormatInt(window.sinceMs, 10))
+	case window.before != "" || window.after != "":
+		query.Set("page", "0")
+		query.Set("per_page", strconv.Itoa(limit))
+		if window.before != "" {
+			query.Set("before", window.before)
+		} else {
+			query.Set("after", window.after)
+		}
+	default:
+		query.Set("page", strconv.Itoa(window.page-1))
+		query.Set("per_page", strconv.Itoa(limit))
+	}
 	var list postListJSON
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/channels/"+url.PathEscape(channelID)+"/posts", query, nil,
 		&list, false); err != nil {
 		return nil, err
 	}
-	entries := list.ordered()
-	return &MessagesPage{ChannelID: channelID, Messages: entries, Page: page, HasMore: list.HasNext, Count: len(entries)}, nil
+	if window.sinceMs > 0 {
+		entries, more := list.changed(channelID, limit)
+		return &MessagesPage{ChannelID: channelID, Messages: entries, Page: 1, HasMore: more, Count: len(entries)}, nil
+	}
+	entries := list.ordered(channelID)
+	if window.before != "" || window.after != "" {
+		return &MessagesPage{ChannelID: channelID, Messages: entries, Page: 1,
+			HasMore: list.HasNext || len(list.Order) >= limit, Count: len(entries)}, nil
+	}
+	return &MessagesPage{ChannelID: channelID, Messages: entries, Page: window.page, HasMore: list.HasNext,
+		Count: len(entries)}, nil
 }
 
 type messagesThreadArguments struct {
@@ -436,7 +623,7 @@ func (c *Client) ReadThread(ctx context.Context, postID, channelID, cursor strin
 		false); err != nil {
 		return nil, err
 	}
-	entries := list.ordered()
+	entries := list.ordered(channelID)
 	thread := &Thread{PostID: postID, ChannelID: channelID, Messages: entries, HasMore: list.HasNext, Count: len(entries)}
 	if list.HasNext && list.NextPostID != "" {
 		thread.Cursor = list.NextPostID

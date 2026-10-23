@@ -68,6 +68,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".issue-times.reset", p.id+".issue-stopwatches.delete", p.id+".issue-stopwatches.start",
 			p.id+".issue-stopwatches.stop", p.id+".my-stopwatches.list", p.id+".my-times.list",
 			p.id+".repository-times.list", p.id+".user-times.list")
+		want = append(want, p.id+".issue-attachments.delete", p.id+".issue-attachments.download",
+			p.id+".issue-attachments.get", p.id+".issue-attachments.list", p.id+".issue-attachments.update",
+			p.id+".issue-attachments.upload", p.id+".comment-attachments.delete", p.id+".comment-attachments.download",
+			p.id+".comment-attachments.get", p.id+".comment-attachments.list", p.id+".comment-attachments.update",
+			p.id+".comment-attachments.upload")
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
