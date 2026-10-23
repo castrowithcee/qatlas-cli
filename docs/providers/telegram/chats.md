@@ -11,12 +11,11 @@ updated: 2026-10-22
 
 ## Reading chats
 
-The four chat read tools address a bound chat through [`chat`](README.md#chat-argument). `pinned_message_id` is
-only a number, never the message. `personal_chat`, `parent_chat`, and `linked_chat_id` name chats outside the
-target binding; they appear as data and never become a target. `telegram.chats.member` shows one member by
-`user_id`. An invite link grants access without sign-in, so `telegram.chats.get` never returns it; it is reachable
-only through the [invite link tools](invite-links.md). Strings are length-capped. Member data is classified
-`telegram-member-data`.
+The four chat read tools address a bound chat through [`chat`](README.md#chat-argument). `personal_chat`,
+`parent_chat`, and `linked_chat_id` name chats outside the target binding; they appear as data and never become a
+target. `telegram.chats.member` shows one member by `user_id`. An invite link grants access without sign-in, so
+`telegram.chats.get` never returns it; it is reachable only through the [invite link tools](invite-links.md).
+Strings are length-capped. Member data is classified `telegram-member-data`.
 
 ## Changing chat settings
 
