@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Forgejo
@@ -56,3 +56,6 @@ additional depth of defense: the targets of the connection stay the boundary.
 - A release asset may be a link to an external address (`type` `external`). Qatlas never creates one (`external_url`
   is not offered), never changes its address, and `release-assets.download` refuses it. See
   [Releases](gitea/releases.md).
+- Attachments of issues and comments carry `type` and allow `browser_download_url` in the edit; the latter is not
+  offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
+  `*-attachments.download`. See [Attachments](gitea/attachments.md).
