@@ -92,7 +92,7 @@ func TestHooksNeverRevealTriggerSecretsExceptURLTool(t *testing.T) {
 			t.Fatalf("%s: %v", c.op, err)
 		}
 		for _, secret := range []string{canaryUDID, canaryHookURL, canaryMailAddr, "mailcanary5d2b8e", canaryHeader,
-			"hook.example.com", "udids", "parser"} {
+			"hook.example.com", "udids"} {
 			if strings.Contains(result, secret) {
 				t.Fatalf("%s leaked %q: %s", c.op, secret, result)
 			}
@@ -208,5 +208,191 @@ func TestHooksBoundStringsAndSizes(t *testing.T) {
 	result, err = env.invoke(hooksLogs.ID, "open", `{"hook_id":77}`)
 	if err != nil || strings.Contains(result, long) || strings.Count(result, `"k`) > maxHookLogSizes {
 		t.Fatalf("logs = %s, %v", result, err)
+	}
+}
+
+const hookDocExample = `{"id":58,"name":"Test 1","teamId":4,"udid":"` + canaryUDID + `","type":"web","packageName":null,` +
+	`"theme":"#c73a63","flags":{"form":true},"editable":false,"queueCount":0,"queueLimit":10000,"enabled":true,` +
+	`"gone":false,"typeName":"gateway-webhook","data":{"ip":"2001:db8::1","udt":12,"headers":true,"method":false,` +
+	`"stringify":false,"teamId":4,"secretKey":"` + canaryHeader + `"},"scenarioId":112,"url":"` + canaryHookURL + `"}`
+
+func TestHooksListAndGetReportSettings(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		doc := strings.Replace(strings.Replace(hookDocExample, `"teamId":4,"udid"`, `"teamId":`+itoa64(ownTeam)+`,"udid"`, 1),
+			`"scenarioId":112`, `"scenarioId":`+itoa64(ownScenario), 1)
+		if r.URL.Path == apiPath+"/hooks" {
+			return jsonResponse(200, `{"hooks":[`+doc+`]}`), nil
+		}
+		return jsonResponse(200, `{"hook":`+doc+`}`), nil
+	})
+	want := []string{`"theme":"#c73a63"`, `"flags":{"form":true}`, `"editable":false`,
+		`"data":{"headers":true,"ip":"2001:db8::1","method":false,"stringify":false,"team_id":4,"udt":12}`}
+	for _, c := range []struct{ op, args string }{{hooksList.ID, `{}`}, {hooksGet.ID, `{"hook_id":58}`}} {
+		out, err := env.invoke(c.op, "open", c.args)
+		if err != nil {
+			t.Fatalf("%s: %v", c.op, err)
+		}
+		compact := strings.NewReplacer(" ", "").Replace(out)
+		for _, w := range want {
+			if !strings.Contains(compact, w) {
+				t.Errorf("%s lacks %s: %s", c.op, w, out)
+			}
+		}
+		for _, bad := range []string{"secretKey", canaryHeader, canaryUDID, canaryHookURL} {
+			if strings.Contains(out, bad) {
+				t.Errorf("%s leaked %q: %s", c.op, bad, out)
+			}
+		}
+		assertOutputDeclared(t, c.op, []byte(out))
+	}
+}
+
+func TestHooksWithoutSettingsKeepTheirOutput(t *testing.T) {
+	var calls []call
+	env := hookEnv(t, &calls, ownTeam, ownScenario)
+	out, err := env.invoke(hooksGet.ID, "open", `{"hook_id":77}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"theme"`, `"flags"`, `"editable"`, `"data"`} {
+		if strings.Contains(out, key) {
+			t.Fatalf("output holds %s without Make reporting it: %s", key, out)
+		}
+	}
+}
+
+func TestHooksMaskTriggerPartsInNewTexts(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/ping"):
+			return jsonResponse(200, fmt.Sprintf(`{"address":%q,"teamId":%d,"attached":true,"dataStructure":[`+
+				`{"name":"id-%s","type":"text"},{"name":"b","type":"%s\u0007"},{}]}`, canaryHookURL, ownTeam,
+				canaryUDID, canaryHookURL)), nil
+		case strings.HasSuffix(r.URL.Path, "/logs"):
+			return jsonResponse(200, `{"hookLogs":[{"id":5,"statusId":1,"imtId":"imt-`+canaryUDID+`","parser":"p `+
+				canaryHookURL+`","appParser":"app\u0007x","udids":["`+canaryMailAddr+`"]}]}`), nil
+		}
+		doc := strings.Replace(hookDocExample, `"teamId":4,"udid"`, `"teamId":`+itoa64(ownTeam)+`,"udid"`, 1)
+		doc = strings.Replace(doc, `"scenarioId":112`, `"scenarioId":`+itoa64(ownScenario), 1)
+		doc = strings.Replace(doc, `"#c73a63"`, `"x `+canaryUDID+`"`, 1)
+		doc = strings.Replace(doc, `"2001:db8::1"`, `"`+canaryHookURL+`"`, 1)
+		return jsonResponse(200, `{"hook":`+doc+`}`), nil
+	})
+	for _, c := range []struct{ op, args string }{{hooksGet.ID, `{"hook_id":58}`},
+		{hooksPing.ID, `{"hook_id":58}`}, {hooksLogs.ID, `{"hook_id":58}`}} {
+		out, err := env.invoke(c.op, "open", c.args)
+		if err != nil {
+			t.Fatalf("%s: %v", c.op, err)
+		}
+		for _, bad := range []string{canaryUDID, canaryHookURL, canaryMailAddr, "\\u0007"} {
+			if strings.Contains(out, bad) {
+				t.Errorf("%s leaked %q: %s", c.op, bad, out)
+			}
+		}
+		if !strings.Contains(out, redactedMarker) {
+			t.Errorf("%s masked nothing: %s", c.op, out)
+		}
+		assertOutputDeclared(t, c.op, []byte(out))
+	}
+}
+
+func TestHooksPingReportsDataStructureAndLogsReportParsers(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/ping"):
+			return jsonResponse(200, fmt.Sprintf(`{"address":%q,"teamId":%d,"attached":false,"learning":false,`+
+				`"gone":false,"dataStructure":[{"name":"email","type":"text"},{"name":"n","type":"number"}]}`,
+				canaryHookURL, ownTeam)), nil
+		case strings.HasSuffix(r.URL.Path, "/logs"):
+			return jsonResponse(200, `{"hookLogs":[{"id":5,"statusId":1,"imtId":"abc","parser":"json","appParser":"app"}]}`), nil
+		}
+		return jsonResponse(200, `{"hook":`+hookJSONOf(hookID, ownTeam, ownScenario, "Hook")+`}`), nil
+	})
+	out, err := env.invoke(hooksPing.ID, "open", `{"hook_id":77}`)
+	if err != nil || !strings.Contains(out, `"data_structure":[{"name":"email","type":"text"},{"name":"n","type":"number"}]`) {
+		t.Fatalf("ping = %s, %v", out, err)
+	}
+	out, err = env.invoke(hooksLogs.ID, "open", `{"hook_id":77}`)
+	if err != nil || !strings.Contains(out, `"imt_id":"abc"`) || !strings.Contains(out, `"parser":"json"`) ||
+		!strings.Contains(out, `"app_parser":"app"`) {
+		t.Fatalf("logs = %s, %v", out, err)
+	}
+}
+
+func TestHooksPingBoundsDataStructure(t *testing.T) {
+	var calls []call
+	var fields []string
+	for i := 0; i < maxDataStructureEntries+5; i++ {
+		fields = append(fields, `{"name":"f`+strconv.Itoa(i)+`","type":"text"}`)
+	}
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/ping") {
+			return jsonResponse(200, fmt.Sprintf(`{"teamId":%d,"dataStructure":[%s]}`, ownTeam, strings.Join(fields, ","))), nil
+		}
+		return jsonResponse(200, `{"hook":`+hookJSONOf(hookID, ownTeam, ownScenario, "Hook")+`}`), nil
+	})
+	out, err := env.invoke(hooksPing.ID, "open", `{"hook_id":77}`)
+	if err != nil || strings.Count(out, `"type":"text"`) != maxDataStructureEntries ||
+		!strings.Contains(out, `"data_structure_truncated":true`) {
+		t.Fatalf("ping = %d bytes, %v", len(out), err)
+	}
+}
+
+func TestHooksListNewFiltersReachTheRequest(t *testing.T) {
+	var calls []call
+	env := hookEnv(t, &calls, ownTeam, ownScenario)
+	if _, err := env.invoke(hooksList.ID, "open", `{"view_for_scenario_id":`+itoa64(ownScenario)+
+		`,"sort_by":"hookName","sort_dir":"desc"}`); err != nil {
+		t.Fatal(err)
+	}
+	q := calls[0].query
+	if q.Get("viewForScenarioId") != itoa64(ownScenario) || q.Get("pg[sortBy]") != "hookName" || q.Get("pg[sortDir]") != "desc" {
+		t.Fatalf("list query = %v", q)
+	}
+	calls = nil
+	if _, err := env.invoke(hooksList.ID, "open", `{}`); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"viewForScenarioId", "pg[sortBy]", "pg[sortDir]"} {
+		if _, ok := calls[0].query[key]; ok {
+			t.Fatalf("%s sent without a filter: %v", key, calls[0].query)
+		}
+	}
+	calls = nil
+	if _, err := env.invoke(hooksLogs.ID, "open", `{"hook_id":77,"sort_dir":"asc"}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls[len(calls)-1].query.Get("pg[sortDir]"); got != "asc" {
+		t.Fatalf("logs sort = %q", got)
+	}
+}
+
+func TestHooksListRefusesBadFiltersBeforeAnyRequest(t *testing.T) {
+	var calls []call
+	env := hookEnv(t, &calls, ownTeam, ownScenario)
+	for _, args := range []string{`{"view_for_scenario_id":0}`, `{"view_for_scenario_id":-1}`,
+		`{"view_for_scenario_id":"7"}`, `{"sort_by":"id"}`, `{"sort_dir":"up"}`} {
+		if _, err := env.invoke(hooksList.ID, "open", args); err == nil {
+			t.Fatalf("%s accepted", args)
+		}
+	}
+	if _, err := env.invoke(hooksLogs.ID, "open", `{"hook_id":77,"sort_dir":"up"}`); err == nil {
+		t.Fatal("logs accepted a bad sort_dir")
+	}
+	if len(calls) != 0 {
+		t.Fatalf("calls = %+v, want none", calls)
+	}
+	// The scenario allow-list admits only its own scenario as a view filter.
+	if _, err := env.invoke(hooksList.ID, "scenario", `{"view_for_scenario_id":`+itoa64(foreignScenario)+`}`); !isInvalidRequest(err) {
+		t.Fatalf("err = %v, want a refusal for an unlisted scenario", err)
+	}
+	if len(calls) != 0 {
+		t.Fatalf("calls = %+v, want none", calls)
+	}
+	if _, err := env.invoke(hooksList.ID, "scenario", `{"view_for_scenario_id":`+itoa64(ownScenario)+`}`); err != nil {
+		t.Fatalf("listed scenario: %v", err)
 	}
 }
