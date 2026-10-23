@@ -48,9 +48,14 @@ func TestBlameSatisfiesItsContractThroughTheApplicationCore(t *testing.T) {
 		{StartLine: 1, EndLine: 10, SHA: "aaaa", Author: "ada", Date: "2026-01-01T00:00:00Z"},
 		{StartLine: 11, EndLine: 50, SHA: "bbbb", Author: "Bob", Date: "2026-01-05T00:00:00Z"},
 	}
-	if err != nil || json.Unmarshal(result, &blame) != nil || len(blame.Ranges) != 2 ||
-		blame.Ranges[0] != want[0] || blame.Ranges[1] != want[1] {
+	if err != nil || json.Unmarshal(result, &blame) != nil || len(blame.Ranges) != 2 {
 		t.Fatalf("%s = %s, %v", blameGet.ID, result, err)
+	}
+	for i, r := range blame.Ranges {
+		r.Age, r.AuthorDetail, r.Commit = nil, nil, nil
+		if r != want[i] {
+			t.Fatalf("%s range %d = %+v, want %+v", blameGet.ID, i, r, want[i])
+		}
 	}
 
 	// An explicit range clips GitHub's own ranges to it on both sides.

@@ -39,13 +39,12 @@ func changing(calls []call) int {
 	return countMethod(calls, http.MethodPost) + countMethod(calls, http.MethodPut) + countMethod(calls, http.MethodDelete)
 }
 
-func TestChannelsUnreadReturnsOnlyTheCountsOfTheBoundChannel(t *testing.T) {
+func TestChannelsUnreadReturnsTheTeamAndCountsOfTheBoundChannel(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, readStateServer(t, nil))
 	result, err := env.invoke(channelsUnread.ID, "team", `{"channel_id":"`+chanA+`"}`)
 	var got ChannelUnread
-	if err != nil || json.Unmarshal([]byte(result), &got) != nil || got != (ChannelUnread{chanA, 4, 2}) ||
-		strings.Contains(result, teamA) {
+	if err != nil || json.Unmarshal([]byte(result), &got) != nil || got != (ChannelUnread{ChannelID: chanA, TeamID: teamA, MsgCount: 4, MentionCount: 2}) {
 		t.Fatalf("result = %s, %v", result, err)
 	}
 	last := calls[len(calls)-1]

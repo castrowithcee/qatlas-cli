@@ -17,11 +17,6 @@ import (
 var teamIDArgument = capability.Argument{Name: "team_id",
 	Description: "Team identifier; must be inside this connection's team targets", Required: true}
 
-var channelEntrySchema = `{"type":"object","properties":{` +
-	`"id":` + idSchema + `,"team_id":` + idSchema + `,"name":{"type":"string"},"display_name":{"type":"string"},` +
-	`"type":{"type":"string"},"purpose":{"type":"string"}},` +
-	`"required":["id","team_id","name","display_name","type"],"additionalProperties":false}`
-
 var channelEntryFields = []capability.Field{
 	{Name: "id", Description: "Channel identifier, used as channel_id by every message tool of this provider"},
 	{Name: "team_id", Description: "Team this channel belongs to"},
@@ -30,6 +25,30 @@ var channelEntryFields = []capability.Field{
 	{Name: "type", Description: "kChat's own channel type, for example O (public) or P (private)"},
 	{Name: "purpose", Description: "Short description of the channel's purpose, untrusted data"},
 }
+
+// channelActivityProperties are the schema members that channel entries carry besides the identity members;
+// created_at and header differ between the entry and the detail.
+const channelActivityProperties = `"updated_at":{"type":"string"},"deleted_at":{"type":"string"},` +
+	`"last_post_at":{"type":"string"},"total_msg_count":{"type":"integer"},"creator_id":{"type":"string"}`
+
+var channelListEntrySchema = `{"type":"object","properties":{` +
+	`"id":` + idSchema + `,"team_id":` + idSchema + `,"name":{"type":"string"},"display_name":{"type":"string"},` +
+	`"type":{"type":"string"},"purpose":{"type":"string"},"header":{"type":"string"},"created_at":{"type":"string"},` +
+	channelActivityProperties + `},"required":["id","team_id","name","display_name","type"],` +
+	`"additionalProperties":false}`
+
+var channelActivityFields = []capability.Field{
+	{Name: "updated_at", Description: "Time of the last change of the channel, normalised to RFC 3339 in UTC"},
+	{Name: "deleted_at", Description: "Time the channel was archived, normalised to RFC 3339 in UTC"},
+	{Name: "last_post_at", Description: "Time of the last message in the channel, normalised to RFC 3339 in UTC"},
+	{Name: "total_msg_count", Description: "Number of messages ever posted in the channel"},
+	{Name: "creator_id", Description: "User identifier of the channel's creator"},
+}
+
+var channelListEntryFields = append(append(append([]capability.Field{}, channelEntryFields...),
+	capability.Field{Name: "header", Description: "Header text of the channel, untrusted data"},
+	capability.Field{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC"}),
+	channelActivityFields...)
 
 var channelsList = capability.Descriptor{
 	ID:      Provider + ".channels.list",
@@ -45,7 +64,7 @@ var channelsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
 		`"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelEntrySchema + `},` +
+		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelListEntrySchema + `},` +
 		`"page":{"type":"integer"},"pages":{"type":"integer"},"total":{"type":"integer"},"count":{"type":"integer"}},` +
 		`"required":["team_id","channels","page","pages","total","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -53,7 +72,7 @@ var channelsList = capability.Descriptor{
 		{Name: "page", Description: "1-based page of this team's channels; the first page when omitted"},
 		{Name: "limit", Description: "Channels per page, 1 to " + itoa(maxListLimit) + "; " + itoa(defaultListLimit) + " when omitted"},
 	},
-	Fields: append(append([]capability.Field{}, channelEntryFields...),
+	Fields: append(append([]capability.Field{}, channelListEntryFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
 		capability.Field{Name: "pages", Description: "Total number of pages of this listing"},
 		capability.Field{Name: "total", Description: "Total number of channels reported after the allow-list was applied"},
@@ -74,6 +93,11 @@ type channelJSON struct {
 	Header      string `json:"header"`
 	CreateAt    int64  `json:"create_at"`
 	DeleteAt    int64  `json:"delete_at"`
+
+	UpdateAt      flexInt          `json:"update_at"`
+	LastPostAt    flexInt          `json:"last_post_at"`
+	TotalMsgCount flexInt          `json:"total_msg_count"`
+	CreatorID     tolerant[string] `json:"creator_id"`
 }
 
 // ChannelEntry is the stable Qatlas view of one kChat channel.
@@ -86,14 +110,31 @@ type ChannelEntry struct {
 	Purpose     string `json:"purpose,omitempty"`
 }
 
+// ChannelActivity is what kChat reports about the life of a channel; a value kChat leaves out stays out.
+type ChannelActivity struct {
+	UpdatedAt     string `json:"updated_at,omitempty"`
+	DeletedAt     string `json:"deleted_at,omitempty"`
+	LastPostAt    string `json:"last_post_at,omitempty"`
+	TotalMsgCount int64  `json:"total_msg_count,omitempty"`
+	CreatorID     string `json:"creator_id,omitempty"`
+}
+
+// ChannelListEntry is the view of one channel in a listing or search.
+type ChannelListEntry struct {
+	ChannelEntry
+	Header    string `json:"header,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	ChannelActivity
+}
+
 // ChannelsPage is one paginated, allow-list-filtered listing of the channels of one team.
 type ChannelsPage struct {
-	TeamID   string         `json:"team_id"`
-	Channels []ChannelEntry `json:"channels"`
-	Page     int            `json:"page"`
-	Pages    int            `json:"pages"`
-	Total    int            `json:"total"`
-	Count    int            `json:"count"`
+	TeamID   string             `json:"team_id"`
+	Channels []ChannelListEntry `json:"channels"`
+	Page     int                `json:"page"`
+	Pages    int                `json:"pages"`
+	Total    int                `json:"total"`
+	Count    int                `json:"count"`
 }
 
 type channelsListArguments struct {
@@ -134,13 +175,13 @@ func (c *Client) ListChannels(ctx context.Context, teamID string, page, limit in
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]ChannelEntry, 0, len(channels))
+	entries := make([]ChannelListEntry, 0, len(channels))
 	for i := range channels {
 		ch := &channels[i]
 		if ch.TeamID != teamID || ch.DeleteAt != 0 || !c.scope.allowsChannel(ch.ID) {
 			continue
 		}
-		entries = append(entries, entryOf(ch))
+		entries = append(entries, listEntryOf(ch))
 	}
 	window, pages, total := windowOf(entries, page, limit)
 	return &ChannelsPage{TeamID: teamID, Channels: window, Page: page, Pages: pages, Total: total, Count: len(window)}, nil
@@ -181,16 +222,17 @@ func (c *Client) reachableChannels(ctx context.Context, op, teamID string) (map[
 var channelDetailSchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"team_id":` + idSchema + `,"name":{"type":"string"},"display_name":{"type":"string"},` +
 	`"type":{"type":"string"},"purpose":{"type":"string"},"header":{"type":"string"},` +
-	`"member_count":{"type":"integer"},"created_at":{"type":"string"},"archived":{"type":"boolean"}},` +
+	`"member_count":{"type":"integer"},"created_at":{"type":"string"},"archived":{"type":"boolean"},` +
+	channelActivityProperties + `},` +
 	`"required":["id","team_id","name","display_name","type","member_count","archived"],` +
 	`"additionalProperties":false}`
 
-var channelDetailFields = append(append([]capability.Field{}, channelEntryFields...),
+var channelDetailFields = append(append(append([]capability.Field{}, channelEntryFields...),
 	capability.Field{Name: "header", Description: "Header text of the channel, untrusted data"},
 	capability.Field{Name: "member_count", Description: "Number of members of the channel"},
 	capability.Field{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC"},
-	capability.Field{Name: "archived", Description: "True when the channel is archived"},
-)
+	capability.Field{Name: "archived", Description: "True when the channel is archived"}),
+	channelActivityFields...)
 
 var channelsGet = capability.Descriptor{
 	ID:      Provider + ".channels.get",
@@ -202,12 +244,15 @@ var channelsGet = capability.Descriptor{
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"channel_id":` + idSchema + `,"team_id":` +
-		idSchema + `,"name":` + channelNameSchema + `},"additionalProperties":false}`),
+		idSchema + `,"name":` + channelNameSchema + `,"include_deleted":{"type":"boolean"}},` +
+		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(channelDetailSchema),
 	Arguments: []capability.Argument{
 		{Name: "channel_id", Description: "Channel identifier; either this alone or team_id with name"},
 		{Name: "team_id", Description: "Team identifier inside this connection's team targets; with name"},
 		{Name: "name", Description: "URL-safe channel handle inside team_id; with team_id"},
+		{Name: "include_deleted", Description: "With team_id and name only: also find an archived channel; refused " +
+			"with channel_id, which reads archived channels anyway"},
 	},
 	Fields: channelDetailFields,
 	Examples: []capability.Example{{Description: "Read one channel by its handle",
@@ -228,7 +273,7 @@ var channelsBrowse = capability.Descriptor{
 		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
 		`"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelEntrySchema + `},` +
+		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelListEntrySchema + `},` +
 		`"page":{"type":"integer"},"per_page":{"type":"integer"},"count":{"type":"integer"},` +
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["team_id","channels","page","per_page","count","has_more"],"additionalProperties":false}`),
@@ -238,7 +283,7 @@ var channelsBrowse = capability.Descriptor{
 		{Name: "per_page", Description: "Channels per kChat page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
 	},
-	Fields: append(append([]capability.Field{}, channelEntryFields...),
+	Fields: append(append([]capability.Field{}, channelListEntryFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
 		capability.Field{Name: "per_page", Description: "Page size that was requested"},
 		capability.Field{Name: "count", Description: "Number of channels reported on this page, after the allow-list"},
@@ -256,22 +301,25 @@ type ChannelDetail struct {
 	MemberCount int    `json:"member_count"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	Archived    bool   `json:"archived"`
+	ChannelActivity
 }
 
 // ChannelsBrowsePage is one kChat page of the public channels of one team, filtered by the allow-list.
 type ChannelsBrowsePage struct {
-	TeamID   string         `json:"team_id"`
-	Channels []ChannelEntry `json:"channels"`
-	Page     int            `json:"page"`
-	PerPage  int            `json:"per_page"`
-	Count    int            `json:"count"`
-	HasMore  bool           `json:"has_more"`
+	TeamID   string             `json:"team_id"`
+	Channels []ChannelListEntry `json:"channels"`
+	Page     int                `json:"page"`
+	PerPage  int                `json:"per_page"`
+	Count    int                `json:"count"`
+	HasMore  bool               `json:"has_more"`
 }
 
 type channelsGetArguments struct {
 	ChannelID string `json:"channel_id"`
 	TeamID    string `json:"team_id"`
 	Name      string `json:"name"`
+	// IncludeDeleted is a pointer so that a given false is told apart from an omitted value.
+	IncludeDeleted *bool `json:"include_deleted"`
 }
 
 func entryOf(ch *channelJSON) ChannelEntry {
@@ -279,6 +327,18 @@ func entryOf(ch *channelJSON) ChannelEntry {
 		ID: ch.ID, TeamID: ch.TeamID, Name: bounded(ch.Name), DisplayName: bounded(ch.DisplayName),
 		Type: bounded(ch.Type), Purpose: bounded(ch.Purpose),
 	}
+}
+
+// activityOf reports the activity members of a channel; absent values stay empty.
+func activityOf(ch *channelJSON) ChannelActivity {
+	return ChannelActivity{UpdatedAt: msToRFC3339(int64(ch.UpdateAt)), DeletedAt: msToRFC3339(ch.DeleteAt),
+		LastPostAt: msToRFC3339(int64(ch.LastPostAt)), TotalMsgCount: int64(ch.TotalMsgCount),
+		CreatorID: cleanText(ch.CreatorID.Value)}
+}
+
+func listEntryOf(ch *channelJSON) ChannelListEntry {
+	return ChannelListEntry{ChannelEntry: entryOf(ch), Header: cleanText(ch.Header),
+		CreatedAt: msToRFC3339(ch.CreateAt), ChannelActivity: activityOf(ch)}
 }
 
 func invokeChannelsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -291,6 +351,9 @@ func invokeChannelsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	byName := input.TeamID != "" || input.Name != ""
 	if byID == byName || (byName && (input.TeamID == "" || input.Name == "")) {
 		return nil, invalidRequest("give exactly one of channel_id, or team_id together with name")
+	}
+	if byID && input.IncludeDeleted != nil {
+		return nil, invalidRequest("include_deleted needs team_id together with name; a channel_id reads archived channels anyway")
 	}
 	if byID {
 		if err := selectChannel(resolved, input.ChannelID); err != nil {
@@ -308,19 +371,24 @@ func invokeChannelsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return client.GetChannel(ctx, input.ChannelID, input.TeamID, input.Name)
+	return client.GetChannel(ctx, input.ChannelID, input.TeamID, input.Name, input.IncludeDeleted != nil && *input.IncludeDeleted)
 }
 
 // GetChannel reads one channel and its statistics. Whatever form named it, the channel kChat answers with
-// must belong to a bound team and be inside the channel allow-list before anything is returned.
-func (c *Client) GetChannel(ctx context.Context, channelID, teamID, name string) (*ChannelDetail, error) {
+// must belong to a bound team and be inside the channel allow-list before anything is returned, an archived
+// one included. includeDeleted applies to the handle form only.
+func (c *Client) GetChannel(ctx context.Context, channelID, teamID, name string, includeDeleted bool) (*ChannelDetail, error) {
 	const op = "get channel"
 	var ch channelJSON
+	var query url.Values
 	path := "/api/v4/channels/" + url.PathEscape(channelID)
 	if channelID == "" {
 		path = "/api/v4/teams/" + url.PathEscape(teamID) + "/channels/name/" + url.PathEscape(name)
+		if includeDeleted {
+			query = url.Values{"include_deleted": {"true"}}
+		}
 	}
-	if err := c.do(ctx, op, http.MethodGet, path, nil, nil, &ch, false); err != nil {
+	if err := c.do(ctx, op, http.MethodGet, path, query, nil, &ch, false); err != nil {
 		return nil, err
 	}
 	if !validMattermostID(ch.ID) || (channelID != "" && ch.ID != channelID) || (teamID != "" && ch.TeamID != teamID) ||
@@ -338,8 +406,8 @@ func (c *Client) GetChannel(ctx context.Context, channelID, teamID, name string)
 	if stats.ChannelID != ch.ID {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "kChat returned an invalid response"}
 	}
-	return &ChannelDetail{ChannelEntry: entryOf(&ch), Header: bounded(ch.Header), MemberCount: stats.MemberCount,
-		CreatedAt: msToRFC3339(ch.CreateAt), Archived: ch.DeleteAt != 0}, nil
+	return &ChannelDetail{ChannelEntry: entryOf(&ch), Header: cleanText(ch.Header), MemberCount: stats.MemberCount,
+		CreatedAt: msToRFC3339(ch.CreateAt), Archived: ch.DeleteAt != 0, ChannelActivity: activityOf(&ch)}, nil
 }
 
 type channelsBrowseArguments struct {
@@ -380,14 +448,14 @@ func (c *Client) BrowseChannels(ctx context.Context, teamID string, page, perPag
 		nil, &channels, false); err != nil {
 		return nil, err
 	}
-	entries := make([]ChannelEntry, 0, len(channels))
+	entries := make([]ChannelListEntry, 0, len(channels))
 	for i := range channels {
 		ch := &channels[i]
 		if ch.TeamID != teamID || ch.Type != "O" || ch.DeleteAt != 0 || !validMattermostID(ch.ID) ||
 			!c.scope.allowsChannel(ch.ID) {
 			continue
 		}
-		entries = append(entries, entryOf(ch))
+		entries = append(entries, listEntryOf(ch))
 	}
 	return &ChannelsBrowsePage{TeamID: teamID, Channels: entries, Page: page, PerPage: perPage, Count: len(entries),
 		HasMore: len(channels) >= perPage}, nil
