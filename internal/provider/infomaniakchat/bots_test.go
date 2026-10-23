@@ -111,14 +111,14 @@ func TestBotsListGetReturnOnlyTheAllowedFields(t *testing.T) {
 	env := newEnvironment(t, &calls, botHandler(t, bothTeams, nil))
 	result, err := env.invoke(botsList.ID, "botall", `{"page":3,"per_page":2}`)
 	if err != nil || strings.Contains(result, "bad") || strings.Contains(result, "leak-canary") ||
-		strings.Contains(result, "create_at") || !strings.Contains(result, `"count":1`) ||
+		strings.Contains(result, "last_icon_update") || !strings.Contains(result, `"count":1`) ||
 		!strings.Contains(result, `"has_more":true`) || len(calls) != 2 || calls[1].path != "/api/v4/bots" ||
 		calls[1].query.Get("page") != "2" || calls[1].query.Get("per_page") != "2" {
 		t.Fatalf("result = %s, err = %v, calls = %+v", result, err, calls)
 	}
 	result, err = env.invoke(botsGet.ID, "botall", `{"bot_user_id":"`+botA+`"}`)
 	var got map[string]any
-	if err != nil || json.Unmarshal([]byte(result), &got) != nil || len(got) != 6 || got["deleted"] != false ||
+	if err != nil || json.Unmarshal([]byte(result), &got) != nil || len(got) != 8 || got["deleted"] != false || got["created_at"] != "1970-01-01T00:00:00Z" ||
 		got["username"] != "deploy" || got["owner_id"] == "" {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
@@ -237,8 +237,8 @@ func TestBotStateToolsSendOneBodylessPost(t *testing.T) {
 		result, err := env.confirmed(c.id, "botall", args)
 		var got map[string]any
 		last := calls[len(calls)-1]
-		if err != nil || json.Unmarshal([]byte(result), &got) != nil || len(got) != 6 ||
-			got["deleted"] != (c.deleteAt != 0) || strings.Contains(result, "leak-canary") ||
+		if err != nil || json.Unmarshal([]byte(result), &got) != nil ||
+			(got["deleted_at"] != nil) != (c.deleteAt != 0) || got["deleted"] != (c.deleteAt != 0) || strings.Contains(result, "leak-canary") ||
 			changeCount(calls) != 1 || last.method != http.MethodPost ||
 			last.path != "/api/v4/bots/"+botA+"/"+c.action || last.body != "" {
 			t.Fatalf("%s: result = %s, err = %v, calls = %+v", c.id, result, err, calls)
