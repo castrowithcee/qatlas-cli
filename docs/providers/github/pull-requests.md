@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub pull requests
@@ -28,10 +28,10 @@ below the chosen repository; no tool accepts an owner or a free REST path.
 
 | Tool | Does |
 | --- | --- |
-| `github.pull-requests.list` | lists compact pull requests |
-| `github.pull-requests.get` | reads one pull request with its body, merge state, and requested reviewers |
+| `github.pull-requests.list` | lists pull requests |
+| `github.pull-requests.get` | reads one pull request with its body, merge state, and reviewers |
 | `github.pull-request-files.list` | lists its changed files with a bounded patch excerpt |
-| `github.pull-request-commits.list` | lists its commits |
+| `github.pull-request-commits.list` | lists its commits with their git commit data |
 | `github.pull-request-diffs.get` | reads its unified diff, cut to at most 65536 bytes from its start |
 | `github.pull-request-checks.list` | reads the check runs and the combined commit status at its head commit |
 
@@ -45,14 +45,29 @@ connections:
       github.pull-request-commits.list, github.pull-request-diffs.get, github.pull-request-checks.list]
 ```
 
-`github.pull-requests.list` filters by `state`, `base`, and `head` (a branch name, or `LOGIN:branch` for a fork), in
-GitHub's own order. Title, body, branch names, and commit messages are untrusted data.
-`github.pull-requests.get` reports `mergeable` as absent while GitHub is still computing it.
+`github.pull-requests.list` filters by `state`, `base`, and `head` (a branch name, or `LOGIN:branch` for a fork)
+and orders by `sort` and `direction`; without them it keeps GitHub's own order. `sort` and `direction` are
+part of the cursor binding, so a continuation never pages in another order. Title, body, branch names, and
+commit messages are untrusted data, and a list entry carries its body cut, with `body_truncated`.
+`github.pull-requests.get` reports `mergeable` and `rebaseable` as absent while GitHub is still computing them.
+
+The pull request tools report the object behind a flat member as described under
+[result objects](README.md#result-objects). The repositories of head and base are reported in full only where the
+connection's targets admit them; a head from a fork outside the targets keeps only `id`, `node_id`, and
+`full_name`. The repository's `temp_clone_token` is an access value and is never reported. Left out, with the
+reason:
+
+- `_links`: "`_links` repeats the addresses of the `*_url` members as `href` objects; those addresses are reported
+  once, in `links`."
+- Rendered body variants: "Rendered variants repeat the text field in another format and add no content."
+- Accounts: "An account inside another object carries the fields GitHub's own REST answers give it; the full
+  profile is read with the account tools."
 
 `github.pull-request-files.list` reads the changed files with a patch excerpt of at most 4096 bytes, cut at a valid
 character boundary, with `patch_truncated` when GitHub's patch held more; a file GitHub sends no patch for, such
 as a binary file, carries none. `github.pull-request-commits.list` reports a commit's author as the linked
-GitHub login when GitHub reports one, otherwise the commit's author name; the message is untrusted data.
+GitHub login when GitHub reports one, otherwise the commit's author name; the message is untrusted data. The git
+commit's message, verification payload, and signature are cut at 4096 characters, each with a marker.
 `github.pull-request-diffs.get` reads the unified diff through GitHub's diff media type, from its start, up to
 the hard limit of 65536 bytes; `truncated` says when the diff held more. None of the three is ever read
 unbounded.
@@ -239,7 +254,13 @@ requested, one not requested, and the pull request's own author are all left as 
 ## Pull request search
 
 `github.pull-requests.search` searches pull requests, never plain issues: it forces `is:pr` ahead of `terms`, next
-to the target qualifiers described under [Search](README.md#search).
+to the target qualifiers described under [Search](README.md#search). It takes the filters of
+[issue search](issues.md#issue-search) as arguments of their own, never part of `terms`, and binds them to the
+cursor. With `advanced_search` or `search_type` set, GitHub reads the query differently, so every match is also
+checked against the connection's targets, and an answer outside them is refused as an invalid response. With
+`text_matches` set, GitHub reports where the terms matched; those fragments are untrusted data, cut and never
+fetched. A match reports the members of an issue search match, and the pull request's merge time and its diff and
+patch addresses in `links`.
 
 ## Copilot reviews
 

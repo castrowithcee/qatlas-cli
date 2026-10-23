@@ -42,9 +42,9 @@ var pullRequestReviewersRequest = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"reviewers":`+reviewersSchema+`,"team_reviewers":`+
 		teamReviewersSchema, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments:    reviewerArgumentDescriptors,
-	Fields:       pullsGet.Fields,
+	Fields:       pullBaseFields,
 	Examples: []capability.Example{{
 		Description: "Request a reviewer",
 		Arguments:   json.RawMessage(`{"number":42,"reviewers":["hubot"]}`),
@@ -62,9 +62,9 @@ var pullRequestReviewersRemove = capability.Descriptor{
 	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"reviewers":`+reviewersSchema+`,"team_reviewers":`+
 		teamReviewersSchema, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments:    reviewerArgumentDescriptors,
-	Fields:       pullsGet.Fields,
+	Fields:       pullBaseFields,
 	Examples: []capability.Example{{
 		Description: "Remove a requested reviewer",
 		Arguments:   json.RawMessage(`{"number":42,"reviewers":["hubot"]}`),
