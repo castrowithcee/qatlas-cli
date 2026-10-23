@@ -111,7 +111,7 @@ of the allow-list exists or is reachable.
 - `status.set`, `custom-status.set`, `.clear`, `profile.update`, reactions, flags, categories, notifications,
   and thread following always address the token's own user, read from `GET /api/v4/users/me` or `users/me` in
   the path and never from an argument; the status and profile act for it in every team of the instance (for
-  the bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, `position`.
+  the bot with a bot token). `profile.update` sends only the profile fields its arguments name.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
   afterwards. The term is never part of an error.
 
@@ -162,20 +162,18 @@ and `channel-members.add`. `profile.update`, the integration, bot, and emoji-wri
 Every list is bounded and paginated, and Qatlas never follows a further page on its own:
 
 - `teams.list`, `channels.list`, `reactions.list`, `pins.list`, and `commands.list` read kChat's complete
-  array, which has no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a
-  window of the already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
+  array, which has no pagination of its own, and page it themselves over the already scope-filtered result.
 - `channels.browse`, `archived-channels.list`, the webhook lists, `bots.list`, `emoji.list`,
   `channel-members.list`, `team-members.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
   true for a full page; dropped entries can lower `count`. `users.search` takes only `limit`, one page.
 - `messages.list` (`GetPostsForChannel`, newest first) and `insights.top`: `has_more` is kChat's `has_next`.
-- `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass `page` and `limit` (at most 100)
-  to kChat's own paging and read no further page; `has_more` is true when kChat's page was full, and `count`
-  may be lower because hits outside the reachable channels are dropped. kChat documents search paging as
-  Elasticsearch-only. `channels.search` has no paging; searches never include archived channels.
-- `direct.list` reads kChat's complete channel array of the team, keeps the direct and group channels inside
-  the allow-list, and proves only the requested window (`limit` at most 50). A failing channel is left out,
-  so `count` may be lower; `has_more` reports a further window. A channel kChat lists under no team stays
-  reachable by its `channel_id`.
+- `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass their paging arguments to kChat's
+  own paging and read no further page; `has_more` is true when kChat's page was full, and `count` may be lower
+  because hits outside the reachable channels are dropped. kChat documents search paging as Elasticsearch-only.
+  `channels.search` has no paging; searches never include archived channels.
+- `direct.list` reads kChat's complete channel array of the team, keeps the direct and group channels inside the
+  allow-list, and proves only the requested window. A failing channel is left out, so `count` may be lower;
+  `has_more` reports a further window. A channel kChat lists under no team stays reachable by its `channel_id`.
 - `messages.thread` pages kChat's `GetPostThread` pagination with an opaque `cursor`, kChat's `next_post_id`
   passed back unchanged; the answer reports `has_more` and, while it is true, the next `cursor`.
 
@@ -209,6 +207,10 @@ provider error. It names no refused target or hook ID and carries no message tex
 Team, channel, message, category, user, bot, webhook, and command content is untrusted data: Qatlas normalises
 it and never renders it, follows a link in it, or executes anything derived from it.
 
+Link and image addresses come from the message content every channel member sees; they are output as untrusted,
+bounded text and never fetched. `props` and `metadata.embeds[].data` are bounded free objects; one beyond the
+bound is left out and named in `omitted`, never cut.
+
 ## Boundary
 
 This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate products with
@@ -220,6 +222,10 @@ fields, no profile picture, no preview or thumbnail, no custom emoji image, no r
 reaction, no read state of another user, no new webhook, command, bot, or bot token, no command execution, and
 no change of a webhook or command beyond its texts. An edit changes only a message's text, never its
 attachments, pin state, or properties.
+
+Deleted messages never appear in a read tool; an entry kChat reports with a deletion time is dropped.
+`has_preview_image` only says that kChat holds a preview; no preview, thumbnail, or embedded binary content is
+returned.
 
 ## Live test scenario
 
