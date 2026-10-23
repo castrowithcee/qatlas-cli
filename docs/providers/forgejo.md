@@ -59,6 +59,9 @@ additional depth of defense: the targets of the connection stay the boundary.
 - A release asset may be a link to an external address (`type` `external`). Qatlas never creates one (`external_url`
   is not offered), never changes its address, and `release-assets.download` refuses it. See
   [Releases](gitea/releases.md).
+- Commits and Git objects: `git-blobs.list`, `git-notes.set`, and `git-notes.delete` exist only on Forgejo;
+  `commits.list` has no `since` and `until`, a commit status has no `skipped`, the comparison switches need Forgejo 17,
+  and comparison and annotated tag objects carry Forgejo members. See [Commits](gitea/commits.md).
 - Attachments of issues and comments carry `type` and allow `browser_download_url` in the edit; the latter is not
   offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
