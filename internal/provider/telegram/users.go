@@ -71,14 +71,15 @@ var usersPersonalChatMessages = capability.Descriptor{
 	Tags:        []string{"telegram", "users", "read"}, Risk: readRisk(memberDataSensitivity), Provider: Provider, Group: groupUsers,
 	InputSchema: json.RawMessage(userMessagesInput), OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"messages":{"type":"array","items":{"type":"object","properties":{` +
-		`"message_id":{"type":"integer"},"date":{"type":"integer"},"text":{"type":"string"},` +
+		`"message_id":{"type":"integer"},"date":{"type":"integer"},"message_thread_id":{"type":"integer"},` +
+		`"from":` + userSchema + `,"text":{"type":"string"},` +
 		`"caption":{"type":"string"},"media_kind":{"type":"string"},` +
 		`"file_ref":{"type":"string"},` +
 		`"media_items":{"type":"array","items":{"type":"object"},"description":"Media objects of the message: the Bot API types Animation, Audio, Document, LivePhoto, PhotoSize (one entry per size), Sticker, Video, VideoNote and Voice, each with kind and its members; every file_id is a file_ref"},` +
-		`"omitted_fields":{"type":"array","items":{"type":"string"}}}}}},"additionalProperties":false}`),
+		`"omitted_fields":{"type":"array","items":{"type":"string"}}` + messageHeadSchema + `}}}},"additionalProperties":false}`),
 	Arguments: []capability.Argument{chatArgument, userIDArgument,
 		{Name: "limit", Description: "Maximum recent messages, 1 through 20; defaults to 20"}},
-	Fields: []capability.Field{{Name: "messages", Description: "Recent message text, captions and media objects from the user's personal chat; media_items lists the media objects with their Bot API members and chat-bound signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member>, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB"}},
+	Fields: []capability.Field{{Name: "messages", Description: "Recent message text, captions and media objects from the user's personal chat; media_items lists the media objects with their Bot API members and chat-bound signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member>, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB; messages also carry from, message_thread_id and " + messageHeadText}},
 }
 
 type userArgs struct {
@@ -317,6 +318,10 @@ func (c *Client) PersonalChatMessages(ctx context.Context, userID int64, _, limi
 
 		MediaItems    []any    `json:"media_items,omitempty"`
 		OmittedFields []string `json:"omitted_fields,omitempty"`
+
+		MessageThreadID int64      `json:"message_thread_id,omitempty"`
+		From            *senderOut `json:"from,omitempty"`
+		messageHeadOut
 	}
 	out := make([]message, 0, min(len(messages), maxUserItems))
 	for _, m := range messages[:min(len(messages), maxUserItems)] {
@@ -325,13 +330,17 @@ func (c *Client) PersonalChatMessages(ctx context.Context, userID int64, _, limi
 		if file != nil {
 			ref = signRef(c.token, refFile, c.target, file.FileID)
 		}
-		refs := c.fileRefs(c.target)
+		scope := messageScope{binding: c.target, chatID: m.Chat.ID, refs: c.fileRefs(c.target)}
 		if m.BusinessConnectionID != "" {
-			refs = nil
+			// A business message names its connection, not a bound chat: no file reference, no guest reference.
+			scope = messageScope{chatID: m.Chat.ID, business: true}
 		}
-		items, omitted := mediaItems(&m, refs)
-		out = append(out, message{m.MessageID, m.Date, capText(m.Text, maxMessageLength),
-			capText(m.Caption, maxCaptionRunes), kind, ref, items, omitted})
+		items, omitted := mediaItems(&m, scope.refs)
+		head, headOmitted := c.messageHead(&m, scope, false)
+		out = append(out, message{MessageID: m.MessageID, Date: m.Date, Text: capText(m.Text, maxMessageLength),
+			Caption: capText(m.Caption, maxCaptionRunes), MediaKind: kind, FileRef: ref, MediaItems: items,
+			OmittedFields: append(omitted, headOmitted...), MessageThreadID: m.MessageThreadID,
+			From: sender(m.From), messageHeadOut: head})
 	}
 	return struct {
 		Messages []message `json:"messages"`
