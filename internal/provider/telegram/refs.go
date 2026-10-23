@@ -36,6 +36,9 @@ const (
 	refGuestQuery
 	// refInlineMessage names the inline message of a chosen inline result or callback.
 	refInlineMessage
+	// refShippingQuery and refPreCheckoutQuery name payment queries, which belong to no chat; their binding is bot.
+	refShippingQuery
+	refPreCheckoutQuery
 )
 
 const (
@@ -55,7 +58,7 @@ type parsedRef struct {
 	tag     []byte
 }
 
-func (k refKind) valid() bool { return k >= refFile && k <= refInlineMessage && k != refRetired }
+func (k refKind) valid() bool { return k >= refFile && k <= refPreCheckoutQuery && k != refRetired }
 
 func refKey(token string) []byte {
 	// HKDF-SHA256 with a 32-byte output cannot fail.

@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Telegram
@@ -93,11 +93,11 @@ tool that accepts one checks format and target before the credential is read and
 
 ## Nested types
 
-Telegram types nested in an output, such as users and media objects, carry their documented members. An invite
-link is dropped from every nested type; only the [invite link tools](invite-links.md) return one. Telegram
-Passport data is encrypted identity data and is always dropped. A nested object beyond the depth, list, or size
-bound that the tool describes is left out, not shortened, and named in `omitted_fields` of the entry that contains
-it.
+Telegram types nested in an output, such as users and media objects, carry their documented members. The link
+string of an invite link is dropped from every nested type; only the [invite link tools](invite-links.md) return
+it. Telegram Passport data is encrypted identity data and is always dropped. A nested object beyond the depth,
+list, or size bound that the tool describes is left out, not shortened, and named in `omitted_fields` of the entry
+that contains it.
 
 ## Setup profiles
 
