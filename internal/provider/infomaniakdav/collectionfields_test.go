@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 )
 
 const calendarProps = `<c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/>` +
@@ -56,12 +57,13 @@ func TestCalendarsReportEveryCollectionProperty(t *testing.T) {
 	}
 	size, instances, attendees := uint64(102400), uint64(100), uint64(25)
 	want := Collection{ID: "work", Name: "Work", Description: "desc Work", Color: "#FF8800FF",
-		Components:      []string{"VEVENT", "VTODO"},
-		CalendarData:    []DataFormat{{ContentType: "text/calendar", Version: "2.0"}},
-		MaxResourceSize: &size, MinDateTime: "1900-01-01T00:00:00Z", MaxDateTime: "2049-12-31T23:59:59Z",
-		MaxInstances: &instances, MaxAttendeesPerInstance: &attendees, Timezone: "Europe/Zurich",
-		Collations: []string{"i;ascii-casemap", "i;octet"}, Privileges: []string{"read", "write"},
-		SyncToken: "http://example.com/ns/sync/1234"}
+		Components: []string{"VEVENT", "VTODO"},
+		CollectionProperties: dav.CollectionProperties{
+			CalendarData:    []DataFormat{{ContentType: "text/calendar", Version: "2.0"}},
+			MaxResourceSize: &size, MinDateTime: "1900-01-01T00:00:00Z", MaxDateTime: "2049-12-31T23:59:59Z",
+			MaxInstances: &instances, MaxAttendeesPerInstance: &attendees, Timezone: "Europe/Zurich",
+			Collations: []string{"i;ascii-casemap", "i;octet"}, Privileges: []string{"read", "write"},
+			SyncToken: "http://example.com/ns/sync/1234"}}
 	if got := page.Collections[0]; !reflect.DeepEqual(got, want) {
 		t.Errorf("collection = %+v\nwant %+v", got, want)
 	}
@@ -76,9 +78,10 @@ func TestAddressbooksReportEveryCollectionProperty(t *testing.T) {
 	}
 	size := uint64(102400)
 	want := Collection{ID: "work", Name: "Work", Description: "desc Work",
-		AddressData:     []DataFormat{{ContentType: "text/vcard", Version: "3.0"}},
-		MaxResourceSize: &size, Collations: []string{"i;unicode-casemap"}, Privileges: []string{"read"},
-		SyncToken: "urn:example:token-7"}
+		CollectionProperties: dav.CollectionProperties{
+			AddressData:     []DataFormat{{ContentType: "text/vcard", Version: "3.0"}},
+			MaxResourceSize: &size, Collations: []string{"i;unicode-casemap"}, Privileges: []string{"read"},
+			SyncToken: "urn:example:token-7"}}
 	if got := page.Collections[0]; !reflect.DeepEqual(got, want) {
 		t.Errorf("collection = %+v\nwant %+v", got, want)
 	}
@@ -179,8 +182,8 @@ func TestTimezoneFromCutValueNeedsCompleteTZIDLine(t *testing.T) {
 		"outside zone":  {"TZID:Nowhere\nBEGIN:VTIMEZONE\nEND:VTIMEZONE", ""},
 		"after the end": {"BEGIN:VTIMEZONE\nEND:VTIMEZONE\nTZID:Late\nx", ""},
 	} {
-		if got := tzidOf(tc.in); got != tc.want {
-			t.Errorf("%s: tzidOf = %q, want %q", name, got, tc.want)
+		if got := dav.TimezoneID(tc.in); got != tc.want {
+			t.Errorf("%s: TimezoneID = %q, want %q", name, got, tc.want)
 		}
 	}
 }
