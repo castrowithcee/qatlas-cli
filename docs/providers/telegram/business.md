@@ -26,4 +26,4 @@ Only a `business_chat_ref` addresses a chat: `telegram.business.mark-read` marks
 a checklist in it; none takes topic or keyboard, and a repeated send can post twice. A `tools` list is needed for
 `telegram.business.delete-messages`, which does not report skipped messages, `.set-username`, as the old name can be
 lost, and `.remove-photo`. `telegram.business.set-photo` (a static JPEG) takes media only from `local_path`;
-`telegram.business.gifts` and `.star-balance` only read, with no identifier to move or convert a gift.
+`telegram.business.gifts` and `.star-balance` only read, and a sticker of a business gift has no `file_ref`.

@@ -87,9 +87,9 @@ var copilotReviewsRequest = capability.Descriptor{
 	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:     Provider,
 	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema: pullsGet.OutputSchema,
+	OutputSchema: pullBaseOutput,
 	Arguments:    []capability.Argument{{Name: "number", Description: "Pull request number in the repository", Required: true}},
-	Fields:       pullsGet.Fields,
+	Fields:       pullBaseFields,
 	Examples: []capability.Example{{
 		Description: "Request a Copilot review",
 		Arguments:   json.RawMessage(`{"number":42}`),

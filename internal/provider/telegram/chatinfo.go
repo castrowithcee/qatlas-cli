@@ -281,13 +281,7 @@ func cleanChatInfo(in chatInfoOut, refs fileRefFunc) chatInfoOut {
 		}
 		out.FirstProfileAudio = bounded(&omitted, "first_profile_audio", &cleaned)
 	}
-	if c := in.UniqueGiftColors; c != nil {
-		out.UniqueGiftColors = bounded(&omitted, "unique_gift_colors", &uniqueGiftColorsOut{
-			ModelCustomEmojiID:  cleanText(c.ModelCustomEmojiID, maxNameRunes),
-			SymbolCustomEmojiID: cleanText(c.SymbolCustomEmojiID, maxNameRunes),
-			LightThemeMainColor: c.LightThemeMainColor, LightThemeOtherColor: c.LightThemeOtherColor,
-			DarkThemeMainColor: c.DarkThemeMainColor, DarkThemeOtherColor: c.DarkThemeOtherColor})
-	}
+	out.UniqueGiftColors = bounded(&omitted, "unique_gift_colors", cleanUniqueGiftColors(in.UniqueGiftColors))
 	out.GuardBot = bounded(&omitted, "guard_bot", sender(in.GuardBot))
 	if c := in.Community; c != nil && c.ID != 0 {
 		out.Community = bounded(&omitted, "community",

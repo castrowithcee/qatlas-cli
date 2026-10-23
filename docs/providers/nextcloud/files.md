@@ -56,8 +56,9 @@ needs `confirm` and the `update` effect. All three work on the bound folder only
 hit and cannot be marked.
 
 The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
-literal, case-insensitive substring with wildcards masked; no caller XML, sorting, or offset exists. The server
-picks which matches a limit keeps, `truncated` says when it was reached, and the result is sorted by path.
+literal, case-insensitive substring with wildcards masked; no caller XML or offset exists, and `order_by` is
+no filter. The server picks which matches a limit keeps and `truncated` says when it was reached. With
+`order_by` the result keeps the server's order; without it the result is sorted by path.
 Search returns only the properties Nextcloud documents as selectable; other entry fields stay absent there.
 
 Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
