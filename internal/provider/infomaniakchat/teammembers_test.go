@@ -24,8 +24,8 @@ type teamFixture struct {
 func (f *teamFixture) handle(r *http.Request) (*http.Response, error) {
 	teamBody := func(id string) string {
 		return `{"id":"` + id + `","name":"` + id + `","display_name":"Team","description":"About","type":"I",` +
-			`"invite_id":"` + inviteCanary + `","email":"` + inviteCanary + `@example.invalid",` +
-			`"allowed_domains":"` + inviteCanary + `.invalid"}`
+			`"invite_id":"` + inviteCanary + `","email":"team@example.invalid",` +
+			`"allowed_domains":"example.invalid"}`
 	}
 	if r.Method == http.MethodGet {
 		switch r.URL.Path {
@@ -65,20 +65,20 @@ func teamFixtureWith(t *testing.T, mutate func(*http.Request) (*http.Response, e
 	return &teamFixture{t: t, mutate: mutate}
 }
 
-func TestTeamsGetOutputsOnlyTheAllowListAndChecksTheTeamID(t *testing.T) {
+func TestTeamsGetNeverReturnsTheInvitationIDAndChecksTheTeamID(t *testing.T) {
 	var calls []call
 	env := teamFixtureWith(t, nil).env(&calls)
 	result, err := env.invoke(teamsGet.ID, "team", `{"team_id":"`+teamA+`"}`)
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
-	if strings.Contains(result, inviteCanary) || strings.Contains(result, "invite_id") ||
-		strings.Contains(result, "allowed_domains") || strings.Contains(result, "email") {
-		t.Fatalf("result = %s, want no invitation, email, or domain data", result)
+	if strings.Contains(result, inviteCanary) || strings.Contains(result, "invite") {
+		t.Fatalf("result = %s, want no invitation ID", result)
 	}
 	var detail TeamDetail
 	if err := json.Unmarshal([]byte(result), &detail); err != nil || detail != (TeamDetail{ID: teamA, Name: teamA,
-		DisplayName: "Team", Description: "About", Type: "I", MemberCount: 5, ActiveMemberCount: 4}) {
+		DisplayName: "Team", Description: "About", Type: "I", MemberCount: 5, ActiveMemberCount: 4,
+		TeamSettings: TeamSettings{Email: "team@example.invalid", AllowedDomains: "example.invalid"}}) {
 		t.Fatalf("detail = %+v, %v", detail, err)
 	}
 	if len(calls) != 2 || calls[0].path != "/api/v4/teams/"+teamA || calls[1].path != "/api/v4/teams/"+teamA+"/stats" {
@@ -99,7 +99,7 @@ func TestTeamsGetOutputsOnlyTheAllowListAndChecksTheTeamID(t *testing.T) {
 	}
 }
 
-func TestTeamMembersListOutputsOnlyTheFieldsAndDropsForeignEntries(t *testing.T) {
+func TestTeamMembersListDropsForeignEntriesAndUnknownFields(t *testing.T) {
 	var calls []call
 	env := teamFixtureWith(t, nil).env(&calls)
 	result, err := env.invoke(teamMembersList.ID, "team", `{"team_id":"`+teamA+`","page":2,"limit":3}`)

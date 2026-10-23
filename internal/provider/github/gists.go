@@ -62,24 +62,17 @@ const gistsReadPermission = "GitHub refused this token its gists; a secret gist 
 const gistsChangePermission = "GitHub refused this change of a gist; it needs the gist scope on a classic token, " +
 	"or the user permission Gists: read and write on a fine-grained token"
 
-const gistSummaryProperties = `"id":{"type":"string"},"description":{"type":"string"},` +
+const gistHeadProperties = `"id":{"type":"string"},"description":{"type":"string"},` +
 	`"description_truncated":{"type":"boolean"},"public":{"type":"boolean"},"owner":{"type":"string"},` +
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},` +
-	`"file_count":{"type":"integer"},"files_truncated":{"type":"boolean"},` +
+	`"file_count":{"type":"integer"},"files_truncated":{"type":"boolean"}`
+
+const gistSummaryProperties = gistHeadProperties + `,` +
 	`"files":{"type":"array","items":{"type":"object","properties":{"filename":{"type":"string"},` +
 	`"type":{"type":"string"},"language":{"type":"string"},"size":{"type":"integer"}},` +
 	`"required":["filename","size"],"additionalProperties":false}}`
 
 const gistSummaryRequired = `"required":["id","public","file_count","files"],"additionalProperties":false`
-
-const gistDetailProperties = `"id":{"type":"string"},"description":{"type":"string"},` +
-	`"description_truncated":{"type":"boolean"},"public":{"type":"boolean"},"owner":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},` +
-	`"file_count":{"type":"integer"},"files_truncated":{"type":"boolean"},` +
-	`"files":{"type":"array","items":{"type":"object","properties":{"filename":{"type":"string"},` +
-	`"type":{"type":"string"},"language":{"type":"string"},"size":{"type":"integer"},` +
-	`"binary":{"type":"boolean"},"content":{"type":"string"},"content_truncated":{"type":"boolean"}},` +
-	`"required":["filename","size"],"additionalProperties":false}}`
 
 var gistSummaryFields = []capability.Field{
 	{Name: "id", Description: "Gist id, the value the gist_id argument of the other gist tools takes"},
@@ -116,7 +109,7 @@ var gistsList = capability.Descriptor{
 	InputSchema: inputSchema(`"username":` + gistLoginSchema + `,"since":` + timeSchema + `,"limit":` +
 		limitSchema + `,"cursor":` + cursorSchema),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"gists":{"type":"array","items":` +
-		`{"type":"object","properties":{` + gistSummaryProperties + `},` + gistSummaryRequired + `}},` +
+		`{"type":"object","properties":{` + gistListProperties + `},` + gistSummaryRequired + `}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},"required":["gists","has_more"],` +
 		`"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
@@ -124,10 +117,11 @@ var gistsList = capability.Descriptor{
 			"token, with its secret gists, when omitted; with targets it must be a user target"},
 		{Name: "since", Description: "Only gists updated at or after this date (YYYY-MM-DD, midnight UTC) or UTC time"},
 	}, gistLimitArguments...),
-	Fields: append([]capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "gists", Description: "Gists of one batch: id, description (untrusted data), visibility, owner, " +
-			"times, address, and file metadata"},
-	}, pagingFields...),
+			"times, address, and file metadata with encoding and the raw address; the account members, the " +
+			"fork origin, the addresses, and at most 10 forks and 10 history entries are listed below"},
+	}, gistWideFields...), append(slices.Clone(gistListWideFields), pagingFields...)...),
 	Examples: []capability.Example{{
 		Description: "List the gists of a user",
 		Arguments:   json.RawMessage(`{"username":"octocat","limit":10}`),
@@ -145,15 +139,16 @@ var gistsGet = capability.Descriptor{
 	Risk:        readRisk,
 	Provider:    Provider,
 	InputSchema: inputSchema(`"gist_id":`+gistIDSchema, "gist_id"),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + gistDetailProperties + `},` +
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + gistReadProperties + `},` +
 		gistSummaryRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "gist_id", Description: "Gist id, as github.gists.list reports it", Required: true},
 	},
-	Fields: append(slices.Clone(gistSummaryFields[:len(gistSummaryFields)-1]),
-		capability.Field{Name: "files", Description: "Files with name, media type, language, size, and content; " +
-			"content is untrusted data and absent for a binary file (binary), cut at 20000 characters per file and " +
-			"100000 in total (content_truncated says so); at most 50 files (files_truncated says so)"}),
+	Fields: append(append(slices.Clone(gistSummaryFields[:len(gistSummaryFields)-1]),
+		capability.Field{Name: "files", Description: "Files with name, media type, language, size, encoding, the " +
+			"raw address in links, and content; content is untrusted data and absent for a binary file (binary), " +
+			"cut at 20000 characters per file and 100000 in total (content_truncated says so); at most 50 files " +
+			"(files_truncated says so)"}), gistWideFields...),
 	Examples: []capability.Example{{
 		Description: "Read one gist",
 		Arguments:   json.RawMessage(`{"gist_id":"aa5a315d61ae9438b18d"}`),
@@ -287,9 +282,9 @@ type Gist struct {
 
 // GistList is one batch of gists.
 type GistList struct {
-	Gists      []Gist `json:"gists"`
-	NextCursor string `json:"next_cursor,omitempty"`
-	HasMore    bool   `json:"has_more"`
+	Gists      []GistDetail `json:"gists"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+	HasMore    bool         `json:"has_more"`
 }
 
 // GistDeleted is the answer of github.gists.delete.
@@ -298,32 +293,51 @@ type GistDeleted struct {
 	Deleted bool   `json:"deleted"`
 }
 
+type gistFileRaw struct {
+	Filename  string  `json:"filename"`
+	Type      string  `json:"type"`
+	Language  string  `json:"language"`
+	Size      int     `json:"size"`
+	Encoding  string  `json:"encoding"`
+	Content   string  `json:"content"`
+	Truncated bool    `json:"truncated"`
+	RawURL    *string `json:"raw_url"`
+}
+
 type gistJSON struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	Public      bool   `json:"public"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-	HTMLURL     string `json:"html_url"`
-	Owner       *struct {
-		Login string `json:"login"`
-	} `json:"owner"`
-	Files map[string]struct {
-		Filename  string `json:"filename"`
-		Type      string `json:"type"`
-		Language  string `json:"language"`
-		Size      int    `json:"size"`
-		Encoding  string `json:"encoding"`
-		Content   string `json:"content"`
-		Truncated bool   `json:"truncated"`
-	} `json:"files"`
+	ID              string                 `json:"id"`
+	NodeID          *string                `json:"node_id"`
+	Description     string                 `json:"description"`
+	Public          bool                   `json:"public"`
+	CreatedAt       string                 `json:"created_at"`
+	UpdatedAt       string                 `json:"updated_at"`
+	HTMLURL         string                 `json:"html_url"`
+	Comments        *int64                 `json:"comments"`
+	CommentsEnabled *bool                  `json:"comments_enabled"`
+	Truncated       *bool                  `json:"truncated"`
+	Owner           *accountRaw            `json:"owner"`
+	User            json.RawMessage        `json:"user"`
+	ForkOf          *gistJSON              `json:"fork_of"`
+	Forks           []gistForkRaw          `json:"forks"`
+	History         []gistHistoryRaw       `json:"history"`
+	Files           map[string]gistFileRaw `json:"files"`
+	links           Links
+}
+
+func (g *gistJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain gistJSON
+	if err = json.Unmarshal(data, (*plain)(g)); err != nil {
+		return err
+	}
+	g.links, err = readLinks(data, gistLinkKeys)
+	return err
 }
 
 func (g gistJSON) owner() string {
 	if g.Owner == nil {
 		return ""
 	}
-	return g.Owner.Login
+	return valueOr(g.Owner.Login)
 }
 
 func binaryFile(mediaType, encoding, content string) bool {
@@ -499,9 +513,9 @@ func (c *Client) listGists(ctx context.Context, o *gistListOptions) (*GistList, 
 	if err != nil {
 		return nil, actionsFailure(err, gistsReadPermission)
 	}
-	result := &GistList{Gists: make([]Gist, 0, len(raw))}
+	result := &GistList{Gists: make([]GistDetail, 0, len(raw))}
 	for _, entry := range raw {
-		view, err := entry.view(op, false)
+		view, err := entry.detail(op, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -566,7 +580,7 @@ func invokeGistsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return g.view(op, true)
+	return g.detail(op, true, false)
 }
 
 type gistWriteFile struct {

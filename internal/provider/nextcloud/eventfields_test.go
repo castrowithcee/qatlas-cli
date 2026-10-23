@@ -3,6 +3,7 @@ package nextcloud
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -108,4 +109,74 @@ func TestEventsGetEveryMemberIsInSchemaAndFields(t *testing.T) {
 	if len(problems) > 0 {
 		t.Errorf("problems: %v", problems)
 	}
+}
+
+func TestEventsListReportsTheMembersOfGet(t *testing.T) {
+	serve(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method == "REPORT" {
+			return xmlResponse(http.StatusMultiStatus, calMultistatus(
+				eventNode(calHome+"personal/a.ics", "e1", richEvent))), nil
+		}
+		response := xmlResponse(http.StatusOK, richEvent)
+		response.Header = http.Header{"Etag": []string{`"e1"`}}
+		return response, nil
+	})
+	listed, err := listEvents(t, `{"calendar":"personal",`+filterRange+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := calInvoke(t, []string{"calendar/personal"}, "nextcloud.calendar.events.get",
+		`{"calendar":"personal","id":"a.ics"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		Events []map[string]any `json:"events"`
+	}
+	var get struct {
+		Event map[string]any `json:"event"`
+	}
+	if err := json.Unmarshal(listed, &list); err != nil || json.Unmarshal(got, &get) != nil || len(list.Events) != 1 {
+		t.Fatalf("list = %s, get = %s, %v", listed, got, err)
+	}
+	if !reflect.DeepEqual(list.Events[0], get.Event) {
+		t.Errorf("list = %v, get = %v", list.Events[0], get.Event)
+	}
+	for _, key := range []string{"description", "organizer", "attendees", "overrides"} {
+		if _, ok := get.Event[key]; !ok {
+			t.Errorf("example carries no %s", key)
+		}
+	}
+	checkEventMembersDeclared(t, listed)
+}
+
+func TestEventsListExpandedOccurrencesCarryTheFullFields(t *testing.T) {
+	data := calICS(
+		calVEvent("UID:s@example.com", "RECURRENCE-ID:20260303T100000Z", "DTSTART:20260303T100000Z", "SUMMARY:Daily",
+			"DESCRIPTION:Agenda", "LOCATION:Room 1", "ORGANIZER;CN=Boss:mailto:boss@example.com",
+			"ATTENDEE;CN=Ada;PARTSTAT=ACCEPTED:mailto:ada@example.com"),
+		calVEvent("UID:s@example.com", "RECURRENCE-ID:20260304T100000Z", "DTSTART:20260304T100000Z", "SUMMARY:Daily",
+			"DESCRIPTION:Agenda", "LOCATION:Room 1", "ORGANIZER;CN=Boss:mailto:boss@example.com",
+			"ATTENDEE;CN=Ada;PARTSTAT=ACCEPTED:mailto:ada@example.com"))
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return xmlResponse(http.StatusMultiStatus, calMultistatus(eventNode(calHome+"personal/s.ics", "e1", data))), nil
+	})
+	result, err := listEvents(t, `{"calendar":"personal",`+filterRange+`,"expand":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Events []map[string]any `json:"events"`
+	}
+	if err := json.Unmarshal(result, &out); err != nil || len(out.Events) != 2 {
+		t.Fatalf("result = %s, %v", result, err)
+	}
+	for _, event := range out.Events {
+		for _, key := range []string{"description", "organizer", "attendees", "recurrence_id"} {
+			if _, ok := event[key]; !ok {
+				t.Errorf("occurrence lacks %s: %v", key, event)
+			}
+		}
+	}
+	checkEventMembersDeclared(t, result)
 }

@@ -50,30 +50,30 @@ const ContactFullProperties = ContactValueProperties + `,` + ContactReferencePro
 
 // ContactValueFields describes ContactValueProperties for the capability descriptors.
 var ContactValueFields = []capability.Field{
-	{Name: "nicknames", Description: "At most 20 nicknames, untrusted data; only the get tool reports them"},
-	{Name: "mailer", Description: "Mailer (MAILER), untrusted data; only the get tool reports it"},
-	{Name: "timezone", Description: "Time zone (TZ) as the card states it, untrusted data; only the get tool reports it"},
-	{Name: "geo", Description: "Position (GEO) as the card states it, \"latitude;longitude\", untrusted data; only the get tool reports it"},
-	{Name: "role", Description: "Role (ROLE), untrusted data; only the get tool reports it"},
-	{Name: "class", Description: "Classification (CLASS), untrusted data; only the get tool reports it"},
-	{Name: "sort_string", Description: "Sort string (SORT-STRING), untrusted data; only the get tool reports it"},
-	{Name: "revision", Description: "Revision (REV) as the card states it, untrusted data; only the get tool reports it"},
-	{Name: "product_id", Description: "Product identifier (PRODID), untrusted data; only the get tool reports it"},
-	{Name: "name_source", Description: "Source name (NAME), untrusted data; only the get tool reports it"},
-	{Name: "profile", Description: "Profile (PROFILE), untrusted data; only the get tool reports it"},
-	{Name: "source", Description: "At most 20 http or https source addresses (SOURCE), untrusted data, never followed; only the get tool reports them"},
-	{Name: "labels", Description: "At most 20 delivery labels with type, untrusted data; only the get tool reports them"},
-	{Name: "categories", Description: "At most 20 categories, untrusted data; only the get tool reports them"},
-	{Name: "organization_units", Description: "At most 20 organizational units after the organization name, untrusted data; only the get tool reports them"},
+	{Name: "nicknames", Description: "At most 20 nicknames, untrusted data"},
+	{Name: "mailer", Description: "Mailer (MAILER), untrusted data"},
+	{Name: "timezone", Description: "Time zone (TZ) as the card states it, untrusted data"},
+	{Name: "geo", Description: "Position (GEO) as the card states it, \"latitude;longitude\", untrusted data"},
+	{Name: "role", Description: "Role (ROLE), untrusted data"},
+	{Name: "class", Description: "Classification (CLASS), untrusted data"},
+	{Name: "sort_string", Description: "Sort string (SORT-STRING), untrusted data"},
+	{Name: "revision", Description: "Revision (REV) as the card states it, untrusted data"},
+	{Name: "product_id", Description: "Product identifier (PRODID), untrusted data"},
+	{Name: "name_source", Description: "Source name (NAME), untrusted data"},
+	{Name: "profile", Description: "Profile (PROFILE), untrusted data"},
+	{Name: "source", Description: "At most 20 http or https source addresses (SOURCE), untrusted data, never followed"},
+	{Name: "labels", Description: "At most 20 delivery labels with type, untrusted data"},
+	{Name: "categories", Description: "At most 20 categories, untrusted data"},
+	{Name: "organization_units", Description: "At most 20 organizational units after the organization name, untrusted data"},
 }
 
 // ContactReferenceFields describes ContactReferenceProperties for the capability descriptors.
 var ContactReferenceFields = []capability.Field{
-	{Name: "photo_uri", Description: "http or https address of the photo, untrusted data, never followed; only the get tool reports it"},
-	{Name: "logo_uri", Description: "http or https address of the logo, untrusted data, never followed; only the get tool reports it"},
-	{Name: "sound_uri", Description: "http or https address of the sound, untrusted data, never followed; only the get tool reports it"},
-	{Name: "agent_uri", Description: "http or https address of the agent card, untrusted data, never followed; only the get tool reports it"},
-	{Name: "key_uri", Description: "http or https address of the public key, untrusted data, never followed; only the get tool reports it"},
+	{Name: "photo_uri", Description: "http or https address of the photo, untrusted data, never followed"},
+	{Name: "logo_uri", Description: "http or https address of the logo, untrusted data, never followed"},
+	{Name: "sound_uri", Description: "http or https address of the sound, untrusted data, never followed"},
+	{Name: "agent_uri", Description: "http or https address of the agent card, untrusted data, never followed"},
+	{Name: "key_uri", Description: "http or https address of the public key, untrusted data, never followed"},
 }
 
 // ContactFullFields describes ContactFullProperties for the capability descriptors.
