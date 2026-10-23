@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Twenty CRM: workflows
@@ -13,7 +13,11 @@ updated: 2026-10-22
 
 `workflows.list`, `workflows.get`, and `workflow-runs.list` (`read`) are workspace-wide.
 
-- Step and trigger settings, run outputs, context, state, and error texts are never read out.
+- Step and trigger settings, outputs, context, state, step logs, and error texts of workflows and runs are not
+  documented in their kind and can hold credentials (headers, tokens, webhook addresses). They count as
+  credentials and are never read out.
+- `workflows.list` filters by a name part, matched as plain text: `%`, `_`, and `"` are masked, and a backslash is
+  refused. A cursor continues only the list of the same filters.
 - A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
 
 ## Controlling workflows

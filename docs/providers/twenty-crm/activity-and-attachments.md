@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Twenty CRM: notes, tasks, and attachments
@@ -33,6 +33,8 @@ workspace schema, never from an argument. `list` counts attachments without a fi
 reachable target in `omitted`. Labels and content are untrusted.
 
 - `get` needs exactly one target on a reachable object, else it answers as if the attachment did not exist.
+- Deprecated attachment fields (`name`, `fullPath`, `type`, `fileCategory`, `author`) are not read, and the file
+  address (`file[].url`) carries a token and is never reported.
 - `upload` takes `local_path` in a directory released for reading, or inline content up to 4 MiB; 1 byte to
   100 MiB. It reads the record first, needs the Upload File right and create rights on attachments, sends each
   step once, and names the file id from the upload on. Twenty drops unfinished uploads after 24 hours; a
