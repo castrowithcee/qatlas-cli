@@ -47,6 +47,15 @@ func TestSearchBodyPerFilter(t *testing.T) {
 		{"modified", `{"modified_after":"2026-01-02T03:04:05+01:00","modified_before":"2026-02-01T00:00:00Z"}`,
 			`<d:and><d:gt><d:prop><d:getlastmodified/></d:prop><d:literal>Fri, 02 Jan 2026 02:04:05 GMT</d:literal></d:gt>` +
 				`<d:lt><d:prop><d:getlastmodified/></d:prop><d:literal>Sun, 01 Feb 2026 00:00:00 GMT</d:literal></d:lt></d:and>`, "50"},
+		{"created", `{"created_after":"2026-01-02T03:04:05+01:00","created_before":"2026-02-01T00:00:00Z"}`,
+			`<d:and><d:gt><d:prop><d:creationdate/></d:prop><d:literal>2026-01-02T02:04:05Z</d:literal></d:gt>` +
+				`<d:lt><d:prop><d:creationdate/></d:prop><d:literal>2026-02-01T00:00:00Z</d:literal></d:lt></d:and>`, "50"},
+		{"uploaded", `{"uploaded_after":"2026-01-02T03:04:05+01:00","uploaded_before":"2026-02-01T00:00:00Z"}`,
+			`<d:and><d:gt><d:prop><nc:upload_time/></d:prop><d:literal>2026-01-02T02:04:05Z</d:literal></d:gt>` +
+				`<d:lt><d:prop><nc:upload_time/></d:prop><d:literal>2026-02-01T00:00:00Z</d:literal></d:lt></d:and>`, "50"},
+		{"file id and name", `{"file_id":"12345678901234567890","name_contains":"a"}`,
+			`<d:and><d:like><d:prop><d:displayname/></d:prop><d:literal>%a%</d:literal></d:like>` +
+				`<d:eq><d:prop><oc:fileid/></d:prop><d:literal>12345678901234567890</d:literal></d:eq></d:and>`, "50"},
 		{"size", `{"size_min":0,"size_max":2048}`,
 			`<d:and><d:gte><d:prop><oc:size/></d:prop><d:literal>0</d:literal></d:gte>` +
 				`<d:lte><d:prop><oc:size/></d:prop><d:literal>2048</d:literal></d:lte></d:and>`, "50"},
@@ -95,6 +104,11 @@ func TestSearchFiltersAndPathsAreRefusedBeforeIO(t *testing.T) {
 	bad := []string{
 		`{}`, `{"limit":50}`, `{"name_contains":"a\u0001"}`, `{"content_type_prefix":"a b"}`,
 		`{"modified_after":"yesterday"}`, `{"modified_after":"2026-02-01T00:00:00Z","modified_before":"2026-01-01T00:00:00Z"}`,
+		`{"created_after":"x"}`, `{"created_after":"2026-02-01T00:00:00Z","created_before":"2026-02-01T00:00:00Z"}`,
+		`{"uploaded_before":"x"}`, `{"uploaded_after":"2026-02-02T00:00:00Z","uploaded_before":"2026-02-01T00:00:00Z"}`,
+		`{"file_id":"12a"}`, `{"file_id":"123456789012345678901"}`, `{"file_id":"-1"}`,
+		`{"type":"file","order_by":"path"}`, `{"type":"file","order_by":"name","order":"up"}`, `{"type":"file","order":"asc"}`,
+		`{"order_by":"name"}`, `{"order_by":"name","order":"desc"}`,
 		`{"size_min":-1}`, `{"size_min":5,"size_max":4}`, `{"type":"link"}`, `{"type":"file","limit":201}`, `{"type":"file","limit":-1}`,
 	}
 	for _, args := range bad {
@@ -328,5 +342,62 @@ func TestSearchToolsRisksAndProfiles(t *testing.T) {
 			strings.Contains(got, "nextcloud.files.files.favorite") {
 			t.Errorf("profile %s = %s", p.ID, got)
 		}
+	}
+}
+
+func TestSearchOrderBodyAndServerOrder(t *testing.T) {
+	keys := map[string]string{
+		"name": "d:displayname", "content_type": "d:getcontenttype", "modified": "d:getlastmodified", "created": "d:creationdate",
+		"uploaded": "nc:upload_time", "last_activity": "nc:last_activity", "size": "oc:size", "favorite": "oc:favorite",
+	}
+	for by, prop := range keys {
+		for _, order := range []string{"", "asc", "desc"} {
+			args := `{"type":"folder","order_by":"` + by + `"`
+			direction := "<d:ascending/>"
+			if order != "" {
+				args += `,"order":"` + order + `"`
+			}
+			if order == "desc" {
+				direction = "<d:descending/>"
+			}
+			calls := serve(t, func(*http.Request) (*http.Response, error) { return emptyMultistatus(), nil })
+			if _, err := invokeSearch(args + `}`); err != nil {
+				t.Fatal(err)
+			}
+			want := searchPrefix + `<d:is-collection/></d:where><d:orderby><d:order><d:prop><` + prop + `/></d:prop>` + direction +
+				`</d:order></d:orderby><d:limit><d:nresults>50</d:nresults></d:limit></d:basicsearch></d:searchrequest>`
+			if got := (*calls)[0].body; len(*calls) != 1 || got != want {
+				t.Errorf("%s/%s body =\n%s\nwant\n%s", by, order, got, want)
+			}
+		}
+	}
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return searchAnswer(
+			fileXML(aliceRoot+"/z.pdf", "z.pdf", "2", "10"),
+			fileXML("/remote.php/dav/files/alice/Other/x.pdf", "x.pdf", "4", "12"),
+			folderXML(aliceRoot+"/", "Reports", "1", "9"),
+			fileXML(aliceRoot+"/a/b.pdf", "b.pdf", "3", "11"),
+		), nil
+	})
+	got, err := invokeSearch(`{"name_contains":"pdf","order_by":"size","order":"desc"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := got.(*entryListResult); r.Count != 2 || r.Entries[0].Path != "z.pdf" || r.Entries[1].Path != "a/b.pdf" {
+		t.Errorf("result = %+v", r)
+	}
+}
+
+func TestSearchNewFiltersCombineWithAndAndOrderIsNoFilter(t *testing.T) {
+	calls := serve(t, func(*http.Request) (*http.Response, error) { return emptyMultistatus(), nil })
+	if _, err := invokeSearch(`{"file_id":"7","favorite":true,"order_by":"name"}`); err != nil {
+		t.Fatal(err)
+	}
+	want := searchPrefix + `<d:and><d:eq><d:prop><oc:fileid/></d:prop><d:literal>7</d:literal></d:eq>` +
+		`<d:eq><d:prop><oc:favorite/></d:prop><d:literal>1</d:literal></d:eq></d:and></d:where>` +
+		`<d:orderby><d:order><d:prop><d:displayname/></d:prop><d:ascending/></d:order></d:orderby>` +
+		`<d:limit><d:nresults>50</d:nresults></d:limit></d:basicsearch></d:searchrequest>`
+	if len(*calls) != 1 || (*calls)[0].body != want {
+		t.Errorf("calls = %+v", *calls)
 	}
 }
