@@ -41,7 +41,7 @@ func text(s string) string {
 
 // ---- Run members
 
-type commitIdentityRaw struct {
+type runCommitIdentityRaw struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
@@ -52,7 +52,7 @@ type CommitIdentity struct {
 	Email string `json:"email,omitempty"`
 }
 
-func (r *commitIdentityRaw) project() *CommitIdentity {
+func (r *runCommitIdentityRaw) project() *CommitIdentity {
 	if r == nil || (r.Name == "" && r.Email == "") {
 		return nil
 	}
@@ -60,12 +60,12 @@ func (r *commitIdentityRaw) project() *CommitIdentity {
 }
 
 type runCommitRaw struct {
-	ID        string             `json:"id"`
-	TreeID    string             `json:"tree_id"`
-	Message   *string            `json:"message"`
-	Timestamp string             `json:"timestamp"`
-	Author    *commitIdentityRaw `json:"author"`
-	Committer *commitIdentityRaw `json:"committer"`
+	ID        string                `json:"id"`
+	TreeID    string                `json:"tree_id"`
+	Message   *string               `json:"message"`
+	Timestamp string                `json:"timestamp"`
+	Author    *runCommitIdentityRaw `json:"author"`
+	Committer *runCommitIdentityRaw `json:"committer"`
 }
 
 // RunHeadCommit is the head commit of a run. The message is untrusted data, cut with a marker.
