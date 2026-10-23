@@ -514,3 +514,72 @@ func TestCommentTextNeverReachesTheAuditStream(t *testing.T) {
 		t.Errorf("the audit stream holds the comment text or the path: %s", audit.String())
 	}
 }
+
+func TestCommentsListReportsThreadFieldsAndOmitsMissingOnes(t *testing.T) {
+	full := strings.Replace(commentXML("12", "alice", "hi"), `<oc:message>`,
+		`<oc:parentId>11</oc:parentId><oc:topmostParentId>10</oc:topmostParentId><oc:childrenCount>3</oc:childrenCount>`+
+			`<oc:latestChildDateTime>Tue, 03 Mar 2026 08:00:00 GMT</oc:latestChildDateTime><oc:message>`, 1)
+	top := strings.Replace(commentXML("11", "bobby", "plain"), `<oc:message>`,
+		`<oc:parentId>0</oc:parentId><oc:topmostParentId>0</oc:topmostParentId><oc:message>`, 1)
+	commentServer(t, func(request *http.Request) (*http.Response, error) {
+		return xmlResponse(http.StatusMultiStatus, multistatus(full, top)), nil
+	})
+	got, err := invokeComment(t, invokeCommentsList, `{"path":"note.txt"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := got.(*FileCommentList)
+	c := list.Comments[0]
+	if c.ParentID != "11" || c.TopmostParentID != "10" || c.ChildrenCount == nil || *c.ChildrenCount != 3 ||
+		c.Verb != "comment" || c.LatestChildAt != "Tue, 03 Mar 2026 08:00:00 GMT" || c.ObjectType != "files" || c.ObjectID != "1003" {
+		t.Errorf("comment = %+v", c)
+	}
+	raw, _ := json.Marshal(list.Comments[1])
+	for _, key := range []string{"parent_id", "topmost_parent_id", "children_count", "latest_child_at"} {
+		if strings.Contains(string(raw), key) {
+			t.Errorf("%s reported without a value: %s", key, raw)
+		}
+	}
+	checkOutputDeclared(t, commentsList, "comments", mustMarshal(t, list))
+}
+
+func mustMarshal(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestCommentsListSinceIsSentInUTC(t *testing.T) {
+	calls := commentServer(t, func(request *http.Request) (*http.Response, error) {
+		return xmlResponse(http.StatusMultiStatus, multistatus(commentXML("12", "alice", "hi"))), nil
+	})
+	if _, err := invokeComment(t, invokeCommentsList, `{"path":"note.txt","since":"2026-03-02T13:15:07+02:00"}`); err != nil {
+		t.Fatal(err)
+	}
+	body := commentRequests(calls)[0].body
+	if !strings.Contains(body, `<oc:offset>0</oc:offset><oc:datetime>2026-03-02 11:15:07</oc:datetime></oc:filter-comments>`) {
+		t.Errorf("body = %s", body)
+	}
+}
+
+func TestCommentsListWithoutSinceKeepsTheBody(t *testing.T) {
+	want := xmlHeader + `<oc:filter-comments xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">` +
+		`<oc:limit>21</oc:limit><oc:offset>0</oc:offset></oc:filter-comments>`
+	if got := commentFilterBody(21, 0, nil); got != want {
+		t.Errorf("body = %s", got)
+	}
+}
+
+func TestCommentsListRefusesInvalidSinceWithoutRequest(t *testing.T) {
+	refuse(t)
+	red := &redact.Redactor{}
+	secrets := secret.NewWith(func(string) string { t.Error("secret read"); return "x" }, nil, nil, red)
+	_, err := folderBound(invokeCommentsList)(capability.WithConfirmed(context.Background()), localConnection("", ""), secrets, red,
+		json.RawMessage(`{"path":"note.txt","since":"2026-03-02 11:15:07"}`))
+	if err == nil {
+		t.Error("invalid since accepted")
+	}
+}
