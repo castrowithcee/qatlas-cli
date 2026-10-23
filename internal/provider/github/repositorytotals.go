@@ -7,7 +7,10 @@ import "github.com/castrowithcee/qatlas-cli/internal/capability"
 // suggestedActors a capability to be asked at all; refs counts every branch and tag, suggestedActors the
 // actors that can be assigned.
 
-const repositoryTotalsSelection = `issues{totalCount} pullRequests{totalCount} discussions{totalCount} releases{totalCount} labels{totalCount} milestones{totalCount} refs(refPrefix:"refs/"){totalCount} collaborators{totalCount} assignableUsers{totalCount} mentionableUsers{totalCount} stargazers{totalCount} watchers{totalCount} forks{totalCount} languages{totalCount} environments{totalCount} deployments{totalCount} deployKeys{totalCount} branchProtectionRules{totalCount} rulesets{totalCount} packages{totalCount} projectsV2{totalCount} commitComments{totalCount} vulnerabilityAlerts{totalCount} dependencyGraphManifests{totalCount} discussionCategories{totalCount} issueTypes{totalCount} issueFields{totalCount} repositoryCustomPropertyValues{totalCount} suggestedActors(capabilities:[CAN_BE_ASSIGNED]){totalCount}`
+const repositoryTotalsSelection = `issues{totalCount} pullRequests{totalCount} discussions{totalCount} releases{totalCount} labels{totalCount} milestones{totalCount} refs(refPrefix:"refs/"){totalCount} stargazers{totalCount} watchers{totalCount} forks{totalCount} languages{totalCount} commitComments{totalCount} discussionCategories{totalCount} issueTypes{totalCount} issueFields{totalCount} repositoryCustomPropertyValues{totalCount}`
+
+// repositoryAdminTotalsSelection are the counts that need rights beyond reading the repository.
+const repositoryAdminTotalsSelection = `collaborators{totalCount} assignableUsers{totalCount} mentionableUsers{totalCount} environments{totalCount} deployments{totalCount} deployKeys{totalCount} branchProtectionRules{totalCount} rulesets{totalCount} packages{totalCount} projectsV2{totalCount} vulnerabilityAlerts{totalCount} dependencyGraphManifests{totalCount} suggestedActors(capabilities:[CAN_BE_ASSIGNED]){totalCount}`
 
 type repositoryTotalsRaw struct {
 	Issues                         *gqlTotal `json:"issues"`
@@ -118,28 +121,28 @@ var repositoryTotalsFields = []capability.Field{
 	{Name: "labels_total_count", Description: "Number of labels"},
 	{Name: "milestones_total_count", Description: "Number of milestones"},
 	{Name: "refs_total_count", Description: "Number of branches and tags"},
-	{Name: "collaborators_total_count", Description: "Number of collaborators"},
-	{Name: "assignable_users_total_count", Description: "Number of assignable users"},
-	{Name: "mentionable_users_total_count", Description: "Number of mentionable users"},
+	{Name: "collaborators_total_count", Description: "Number of collaborators; only with admin_counts"},
+	{Name: "assignable_users_total_count", Description: "Number of assignable users; only with admin_counts"},
+	{Name: "mentionable_users_total_count", Description: "Number of mentionable users; only with admin_counts"},
 	{Name: "stargazers_total_count", Description: "Number of stargazers"},
 	{Name: "watchers_total_count", Description: "Number of watchers"},
 	{Name: "forks_total_count", Description: "Number of forks"},
 	{Name: "languages_total_count", Description: "Number of languages"},
-	{Name: "environments_total_count", Description: "Number of environments"},
-	{Name: "deployments_total_count", Description: "Number of deployments"},
-	{Name: "deploy_keys_total_count", Description: "Number of deploy keys; the keys themselves are never reported"},
-	{Name: "branch_protection_rules_total_count", Description: "Number of branch protection rules"},
-	{Name: "rulesets_total_count", Description: "Number of rulesets"},
-	{Name: "packages_total_count", Description: "Number of packages"},
-	{Name: "projects_v2_total_count", Description: "Number of projects the repository is linked to"},
+	{Name: "environments_total_count", Description: "Number of environments; only with admin_counts"},
+	{Name: "deployments_total_count", Description: "Number of deployments; only with admin_counts"},
+	{Name: "deploy_keys_total_count", Description: "Number of deploy keys; the keys themselves are never reported; only with admin_counts"},
+	{Name: "branch_protection_rules_total_count", Description: "Number of branch protection rules; only with admin_counts"},
+	{Name: "rulesets_total_count", Description: "Number of rulesets; only with admin_counts"},
+	{Name: "packages_total_count", Description: "Number of packages; only with admin_counts"},
+	{Name: "projects_v2_total_count", Description: "Number of projects the repository is linked to; only with admin_counts"},
 	{Name: "commit_comments_total_count", Description: "Number of commit comments"},
-	{Name: "vulnerability_alerts_total_count", Description: "Number of vulnerability alerts"},
-	{Name: "dependency_graph_manifests_total_count", Description: "Number of dependency graph manifests"},
+	{Name: "vulnerability_alerts_total_count", Description: "Number of vulnerability alerts; only with admin_counts"},
+	{Name: "dependency_graph_manifests_total_count", Description: "Number of dependency graph manifests; only with admin_counts"},
 	{Name: "discussion_categories_total_count", Description: "Number of discussion categories"},
 	{Name: "issue_types_total_count", Description: "Number of issue types"},
 	{Name: "issue_fields_total_count", Description: "Number of issue fields"},
 	{Name: "repository_custom_property_values_total_count", Description: "Number of custom property values"},
-	{Name: "suggested_actors_total_count", Description: "Number of actors that can be assigned to issues and pull requests"},
+	{Name: "suggested_actors_total_count", Description: "Number of actors that can be assigned to issues and pull requests; only with admin_counts"},
 }
 
 // repositoryTotalMembers are the GraphQL members the list reads as a count.

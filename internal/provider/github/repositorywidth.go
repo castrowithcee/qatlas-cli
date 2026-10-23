@@ -86,6 +86,27 @@ const gqlNestedRepositorySelection = `id databaseId fullDatabaseId name nameWith
 const gqlLicenseRuleLists = `conditions{key label description} limitations{key label description} ` +
 	`permissions{key label description}`
 
+// repositoryAdminSelection holds the members that can need rights beyond reading the repository: the
+// commit emails of the viewer, the interaction limit, the pull request creation cap, the pinned environments,
+// the recent projects, and the counts of connections with their own access rules. GitHub refuses them with an
+// error for a token without the right, and a refused member of a non-null type empties the whole repository
+// node, so they are asked for only when admin_counts is set.
+const repositoryAdminSelection = `viewerDefaultCommitEmail viewerPossibleCommitEmails ` +
+	`interactionAbility{expiresAt limit origin} pullRequestCreationCapConfig{bypassedUsers{totalCount}} ` +
+	`pinnedEnvironments(first:10){totalCount nodes{id databaseId createdAt position ` +
+	`environment{id databaseId name isPinned pinnedPosition}}} ` +
+	`recentProjects(first:10){totalCount nodes{id fullDatabaseId number title shortDescription readme closed ` +
+	`closedAt createdAt updatedAt public template viewerCanClose viewerCanReopen viewerCanUpdate url ` +
+	`resourcePath creator{` + gqlAccountSelection + `}}} ` + repositoryAdminTotalsSelection
+
+// repositorySelection is the repository node of the list.
+func repositorySelection(adminCounts bool) string {
+	if adminCounts {
+		return repositoryWidthSelection + " " + repositoryAdminSelection
+	}
+	return repositoryWidthSelection
+}
+
 const repositoryWidthSelection = `id databaseId fullDatabaseId repositoryName:name nameWithOwner description url createdAt ` +
 	`updatedAt pushedAt archivedAt isFork isPrivate isTemplate isMirror isLocked lockReason isDisabled isEmpty ` +
 	`isInOrganization isBlankIssuesEnabled isSecurityPolicyEnabled isUserConfigurationRepository forkCount ` +
@@ -96,7 +117,7 @@ const repositoryWidthSelection = `id databaseId fullDatabaseId repositoryName:na
 	`webCommitSignoffRequired issueCreationPolicy pullRequestCreationPolicy usesCustomOpenGraphImage ` +
 	`viewerCanAdminister viewerCanCreateIssues viewerCanSeeIssueFields viewerCanSubscribe viewerCanUpdateTopics ` +
 	`viewerContentWarning{category customSubCategory subCategory subTitle title type} ` +
-	`viewerDefaultCommitEmail viewerPossibleCommitEmails viewerDefaultMergeMethod viewerHasStarred ` +
+	`viewerDefaultMergeMethod viewerHasStarred ` +
 	`viewerPermission viewerSubscription ` +
 	`homepageUrl mirrorUrl openGraphImageUrl projectsUrl securityPolicyUrl sshUrl resourcePath projectsResourcePath ` +
 	`parent{` + gqlNestedRepositorySelection + `} ` +
@@ -107,9 +128,7 @@ const repositoryWidthSelection = `id databaseId fullDatabaseId repositoryName:na
 	`defaultBranchRef{id name prefix} ` +
 	`latestRelease{id databaseId name tagName description createdAt publishedAt updatedAt immutable isDraft ` +
 	`isLatest isPrerelease viewerCanReact author{` + gqlUserSelection + `} url resourcePath} ` +
-	`interactionAbility{expiresAt limit origin} ` +
 	`planFeatures{codeowners draftPullRequests maximumAssignees maximumManualReviewRequests teamReviewRequests} ` +
-	`pullRequestCreationCapConfig{bypassedUsers{totalCount}} ` +
 	`contactLinks{about name url} fundingLinks{platform url} ` +
 	`issueTemplates{about body filename name title type{` + gqlIssueTypeSelection + `}} ` +
 	`pullRequestTemplates{body filename} ` +
@@ -118,11 +137,6 @@ const repositoryWidthSelection = `id databaseId fullDatabaseId repositoryName:na
 	`pinnedBy{` + gqlAccountSelection + `}}} ` +
 	`pinnedDiscussions(first:10){totalCount nodes{id databaseId createdAt updatedAt gradientStopColors pattern ` +
 	`preconfiguredGradient discussion{id number title url} pinnedBy{` + gqlAccountSelection + `}}} ` +
-	`pinnedEnvironments(first:10){totalCount nodes{id databaseId createdAt position ` +
-	`environment{id databaseId name isPinned pinnedPosition}}} ` +
-	`recentProjects(first:10){totalCount nodes{id fullDatabaseId number title shortDescription readme closed ` +
-	`closedAt createdAt updatedAt public template viewerCanClose viewerCanReopen viewerCanUpdate url ` +
-	`resourcePath creator{` + gqlAccountSelection + `}}} ` +
 	`submodules(first:10){totalCount nodes{branch gitUrl name nameRaw path pathRaw subprojectCommitOid}} ` +
 	repositoryTotalsSelection
 

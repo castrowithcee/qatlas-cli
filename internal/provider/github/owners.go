@@ -28,7 +28,8 @@ const repositoryListInput = `{"type":"object","properties":{"limit":{"type":"int
 	`"visibility":{"type":"string","enum":["PUBLIC","PRIVATE","INTERNAL"]},"is_archived":{"type":"boolean"},` +
 	`"is_fork":{"type":"boolean"},"is_locked":{"type":"boolean"},"has_issues_enabled":{"type":"boolean"},` +
 	`"order_by":{"type":"string","enum":["CREATED_AT","NAME","PUSHED_AT","STARGAZERS","UPDATED_AT"]},` +
-	`"direction":{"type":"string","enum":["ASC","DESC"]}},"additionalProperties":false}`
+	`"direction":{"type":"string","enum":["ASC","DESC"]},"admin_counts":{"type":"boolean"}},` +
+	`"additionalProperties":false}`
 
 var repositoryListArguments = append(append([]capability.Argument(nil), ownerListArguments...),
 	capability.Argument{Name: "privacy", Description: "Only PUBLIC or only PRIVATE repositories (internal ones " +
@@ -45,7 +46,10 @@ var repositoryListArguments = append(append([]capability.Argument(nil), ownerLis
 		"enabled, false for only those without; both when omitted"},
 	capability.Argument{Name: "order_by", Description: "CREATED_AT, NAME, PUSHED_AT, STARGAZERS, or UPDATED_AT; " +
 		"NAME when omitted"},
-	capability.Argument{Name: "direction", Description: "ASC or DESC; ASC when omitted"})
+	capability.Argument{Name: "direction", Description: "ASC or DESC; ASC when omitted"},
+	capability.Argument{Name: "admin_counts", Description: "true to also read the members that can need " +
+		"push or admin rights, such as collaborators, deploy keys, branch protection rules, and vulnerability " +
+		"alerts; a member GitHub refuses the token is then absent and named in unreadable. false when omitted"})
 
 var ownerListArguments = []capability.Argument{
 	{Name: "limit", Description: "Entries per batch, from 1 through 100; 30 when omitted"},
@@ -164,10 +168,12 @@ const (
 	repositoriesArguments = `(login:$owner){repositories(first:$first,after:$after,ownerAffiliations:[OWNER],` +
 		`privacy:$privacy,visibility:$visibility,isArchived:$isArchived,isFork:$isFork,isLocked:$isLocked,` +
 		`hasIssuesEnabled:$hasIssuesEnabled,orderBy:$orderBy){pageInfo{hasNextPage endCursor} edges{cursor node{`
-	repositoriesCompact   = repositoriesArguments + `name visibility isArchived}}}}}`
-	repositoriesSelection = repositoriesArguments + `name visibility isArchived ` + repositoryWidthSelection +
-		`}}}}}`
+	repositoriesCompact = repositoriesArguments + `name visibility isArchived}}}}}`
 )
+
+func repositoriesSelection(adminCounts bool) string {
+	return repositoriesArguments + `name visibility isArchived ` + repositorySelection(adminCounts) + `}}}}}`
+}
 
 type pageInfoJSON struct {
 	HasNextPage bool   `json:"hasNextPage"`
@@ -217,6 +223,7 @@ type repositoryListOptions struct {
 	HasIssuesEnabled *bool  `json:"has_issues_enabled"`
 	OrderBy          string `json:"order_by"`
 	Direction        string `json:"direction"`
+	AdminCounts      bool   `json:"admin_counts"`
 	// compact asks for the compact view only, as the target browser needs it.
 	compact bool
 }
@@ -263,6 +270,9 @@ func (o *repositoryListOptions) normalize(owner target) ([]byte, string, error) 
 	if filters := o.filters(); o.Privacy != "" || o.Visibility != "" || len(filters) > 1 || o.OrderBy != "" ||
 		o.Direction != "" {
 		parts = append(parts, filters)
+	}
+	if o.AdminCounts {
+		parts = append(parts, "admin_counts")
 	}
 	binding := fingerprint(parts...)
 	after, err := decodeCursor(binding, o.Cursor)
@@ -424,7 +434,7 @@ func (c *Client) listRepositories(ctx context.Context, options repositoryListOpt
 	shown := func(node repositoryNodeJSON) target {
 		return target{kind: kindRepository, owner: owner.owner, repo: node.Name}
 	}
-	selection := repositoriesSelection
+	selection := repositoriesSelection(options.AdminCounts)
 	if options.compact {
 		selection = repositoriesCompact
 	}

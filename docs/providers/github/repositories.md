@@ -34,9 +34,11 @@ report only their count: a connection GitHub also serves as a list of its own is
 - **Owner:** the entry does not repeat the owner, since the object a call names is fixed by the call.
 - **Deploy keys:** only their number is reported, since deploy keys are public keys that grant access.
 - **Clone token:** `tempCloneToken` is never read, since it grants clone access without a sign-in.
-- **Refused members:** a member GitHub refuses the token inside one repository, such as the collaborators of a
-  repository the token cannot push to, is left out of that entry and named in `unreadable`, so one refusal
-  does not fail the whole list; a refusal of the list itself still fails it.
+- **Privileged members:** members that can need push or admin rights (collaborators, deploy keys, branch
+  protection rules, vulnerability alerts, and the like) are read only with `admin_counts`, since GitHub refuses
+  them with an error and a refused member of a non-null type empties the whole repository, which would fail a
+  list that works without them. With `admin_counts`, a member refused inside one repository is left out of that
+  entry and named in `unreadable`; a refusal of the list itself still fails it.
 - **Left out:** deprecated members, rendered variants that repeat a text in another format, and members that
   need a lookup argument.
 

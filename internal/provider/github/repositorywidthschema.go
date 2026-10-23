@@ -195,10 +195,10 @@ func repositoryWidthList() []rwMember {
 		rwObject("unreadable", `{"type":"array","maxItems":100,"items":{"type":"string"}}`, "Members GitHub refused "+
 			"this token in this repository and that are therefore absent, such as collaborators_total_count; "+
 			"absent when none was refused"),
-		rwString("viewer_default_commit_email", "Default commit email of the authenticated user here, untrusted data"),
+		rwString("viewer_default_commit_email", "Default commit email of the authenticated user here, untrusted data; only with admin_counts"),
 	}
 	m = append(m, rwMember{"viewer_possible_commit_emails", `{"type":"array","maxItems":10,"items":{"type":"string"}}`,
-		"Commit emails the authenticated user can use here, at most 10, untrusted data"},
+		"Commit emails the authenticated user can use here, at most 10, untrusted data; only with admin_counts"},
 		rwFlag("viewer_possible_commit_emails_truncated", "True when the authenticated user has more commit emails than shown"),
 		rwString("viewer_default_merge_method", "Default merge method of the authenticated user: MERGE, REBASE, or SQUASH"),
 		rwFlag("viewer_has_starred", "True when the authenticated user starred the repository"),
@@ -223,11 +223,11 @@ func repositoryWidthList() []rwMember {
 		rwObject("latest_release", releaseSchema, "Latest release with id, database_id, name, tag_name, description "+
 			"(cut at 4000 characters), created_at, published_at, updated_at, immutable, is_draft, is_latest, "+
 			"is_prerelease, viewer_can_react, author (an account), url, and links (resource_path); untrusted data"),
-		rwObject("interaction_ability", interactionSchema, "Interaction limit with expires_at, limit, and origin"),
+		rwObject("interaction_ability", interactionSchema, "Interaction limit with expires_at, limit, and origin; only with admin_counts"),
 		rwObject("plan_features", planSchema, "Features the plan allows: codeowners, draft_pull_requests, "+
 			"maximum_assignees, maximum_manual_review_requests, and team_review_requests"),
 		rwObject("pull_request_creation_cap_config", capConfigSchema, "bypassed_users_total_count of the pull "+
-			"request creation cap"))
+			"request creation cap; only with admin_counts"))
 	m = append(m, rwList("contact_links", contactLinkSchema, "Contact links of the issue chooser, at most 10, "+
 		"with about, name, and url; untrusted data", false)...)
 	m = append(m, rwList("funding_links", fundingLinkSchema, "Funding links, at most 10, with platform and url; "+
@@ -246,11 +246,11 @@ func repositoryWidthList() []rwMember {
 		"(id, number, title, url), and pinned_by (an account); untrusted data", true)...)
 	m = append(m, rwList("pinned_environments", pinnedEnvironmentSchema, "Pinned environments, at most 10, with "+
 		"id, database_id, created_at, position, and environment (id, database_id, name, is_pinned, "+
-		"pinned_position); untrusted data", true)...)
+		"pinned_position); untrusted data; only with admin_counts", true)...)
 	m = append(m, rwList("recent_projects", recentProjectSchema, "Projects recently used with the repository, at "+
 		"most 10, with id, full_database_id, number, title, short_description, readme (cut at 4000 characters), "+
 		"closed, closed_at, created_at, updated_at, public, template, viewer_can_close, viewer_can_reopen, "+
-		"viewer_can_update, creator (an account), url, and links (resource_path); untrusted data", true)...)
+		"viewer_can_update, creator (an account), url, and links (resource_path); untrusted data; only with admin_counts", true)...)
 	m = append(m, rwList("submodules", submoduleSchema, "Submodules, at most 10, with branch, name, name_raw, "+
 		"path, path_raw, subproject_commit_oid, and links (git_url); untrusted data, addresses never fetched",
 		true)...)

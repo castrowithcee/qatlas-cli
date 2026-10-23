@@ -259,7 +259,7 @@ func TestRepositoryListReportsTheWholeWidth(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), ownersConfig(base), resolver(red, nil), red)
 
-	result, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org"}`, false)
+	result, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","admin_counts":true}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestRepositoryListRefusesPrivacyWithVisibility(t *testing.T) {
 // The list asks for no member that is deprecated, rendered, a lookup, or a secret, and a page of 100 repositories
 // stays far below GitHub's node limit of 500000.
 func TestRepositoryListQueryStaysWithinTheNodeLimit(t *testing.T) {
-	selection := repositoryWidthSelection
+	selection := repositorySelection(true)
 	for _, forbidden := range []string{"tempCloneToken", "deployKeys{totalCount nodes", "descriptionHTML",
 		"shortDescriptionHTML", "squashPrTitleUsedAsDefault", "viewerCanCreateProjects", " projects(", " project(",
 		"codeowners(", "mergeQueue", "issue(", "pullRequest(", "discussion(", "release(", "ruleset(", "object(",
@@ -511,7 +511,7 @@ func TestRepositoryListToleratesRefusedMembers(t *testing.T) {
 
 	answerWithErrors(f, `[{"type":"FORBIDDEN","path":["owner","repositories","edges",0,"node","collaborators"],"message":"x"},`+
 		`{"type":"INSUFFICIENT_SCOPES","path":["owner","repositories","edges",0,"node","viewerDefaultCommitEmail"],"message":"x"}]`)
-	result, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org"}`, false)
+	result, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","admin_counts":true}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -545,5 +545,71 @@ func TestRepositoryListToleratesRefusedMembers(t *testing.T) {
 		if _, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org"}`, false); err == nil {
 			t.Errorf("%s: the list succeeded, want the failure it had before", tt.name)
 		}
+	}
+}
+
+// Without admin_counts the query asks for none of the members that can need push or admin rights; the node
+// count of a full page is then 100 + 100 * 4 * 10 = 4100.
+func TestRepositoryListWithoutAdminCountsAsksForNoPrivilegedMember(t *testing.T) {
+	f := &fakeGitHub{ownerRepos: []string{"a"}}
+	base := serve(t, f)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), ownersConfig(base), resolver(red, nil), red)
+	if _, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org"}`, false); err != nil {
+		t.Fatal(err)
+	}
+	requests := f.recorded()
+	document := requests[len(requests)-1].document
+	for _, member := range append(append([]string(nil), repositoryTotalMembers...), "viewerDefaultCommitEmail",
+		"viewerPossibleCommitEmails", "interactionAbility", "pullRequestCreationCapConfig", "pinnedEnvironments",
+		"recentProjects") {
+		privileged := strings.Contains(repositoryAdminSelection, member)
+		if privileged && strings.Contains(document, member+"{") || privileged && strings.Contains(document, member+" ") ||
+			privileged && strings.Contains(document, member+"(") {
+			t.Errorf("the query asks for %s without admin_counts", member)
+		}
+	}
+	for _, member := range []string{"collaborators{", "deployKeys{", "branchProtectionRules{", "vulnerabilityAlerts{",
+		"environments{", "rulesets{"} {
+		if strings.Contains(document, member) {
+			t.Errorf("the query asks for %s without admin_counts", member)
+		}
+	}
+	if !strings.Contains(document, "issues{totalCount}") {
+		t.Error("the ordinary counts are missing")
+	}
+	if pages := strings.Count(repositorySelection(false), "first:10"); pages != 4 {
+		t.Errorf("pages without admin_counts = %d, want 4 (100 + 100 * 40 = 4100 nodes)", pages)
+	}
+	if pages := strings.Count(repositorySelection(true), "first:10"); pages != 6 {
+		t.Errorf("pages with admin_counts = %d, want 6 (6100 nodes)", pages)
+	}
+}
+
+// admin_counts binds the cursor only when it is set.
+func TestRepositoryListAdminCountsBindsTheCursor(t *testing.T) {
+	f := &fakeGitHub{ownerRepos: []string{"a", "b", "c"}}
+	base := serve(t, f)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), ownersConfig(base), resolver(red, nil), red)
+	plain, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","limit":1}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","limit":1,"admin_counts":true}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicit, _ := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","limit":1,"admin_counts":false}`, false)
+	if nextCursorOf(plain) != nextCursorOf(explicit) || nextCursorOf(plain) == nextCursorOf(admin) {
+		t.Error("admin_counts false must keep the unfiltered binding and true must change it")
+	}
+	if _, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","limit":1,"cursor":"`+
+		nextCursorOf(admin)+`"}`, false); !isInvalidRequest(err) {
+		t.Errorf("a cursor of an admin_counts list on a list without it = %v, want an invalid request", err)
+	}
+	if _, err := invoke(t, core, repositoriesList.ID, "open", `{"owner":"orgs/octo-org","limit":1,"admin_counts":true,"cursor":"`+
+		nextCursorOf(admin)+`"}`, false); err != nil {
+		t.Errorf("the cursor with the same admin_counts = %v", err)
 	}
 }
