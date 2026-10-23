@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -38,6 +40,8 @@ const (
 )
 
 const (
+	rulesetTargetsSchema = `{"type":"array","minItems":1,"maxItems":3,"uniqueItems":true,"items":` +
+		`{"type":"string","enum":["branch","tag","push"]}}`
 	rulesetNameSchema        = `{"type":"string","minLength":1,"maxLength":100}`
 	rulesetTargetSchema      = `{"type":"string","enum":["branch","tag","push","repository"]}`
 	rulesetEnforcementSchema = `{"type":"string","enum":["disabled","active","evaluate"]}`
@@ -92,20 +96,41 @@ var rulesetFields = []capability.Field{
 	{Name: "name", Description: "Name of the ruleset"},
 	{Name: "target", Description: "branch, tag, push, or repository"},
 	{Name: "enforcement", Description: "disabled, active, or evaluate"},
+	{Name: "source", Description: "Repository or organization the ruleset is configured on, as GitHub names it, " +
+		"untrusted data"},
+	{Name: "source_type", Description: "Repository, Organization, or Enterprise"},
+	{Name: "node_id", Description: "GraphQL node id of the ruleset"},
+	{Name: "current_user_can_bypass", Description: "Whether the token's user can bypass the ruleset: always, " +
+		"pull_requests_only, never, or exempt"},
+	{Name: "created_at", Description: "Creation time"},
+	{Name: "updated_at", Description: "Time of the last change"},
+	{Name: "url", Description: "Web address of the ruleset, untrusted data, never fetched"},
+	{Name: "links", Description: "REST url of the ruleset by its GitHub name, untrusted data, never fetched"},
 	{Name: "conditions", Description: "Conditions the ruleset applies under, GitHub's own shape, untrusted data"},
 	{Name: "rules", Description: "Rules the ruleset enforces, GitHub's own shape, untrusted data"},
 	{Name: "bypass_actors", Description: "Actors that may bypass the ruleset, GitHub's own shape, untrusted data"},
 }
 
-const rulesetListOutput = `{"type":"object","properties":{"rulesets":{"type":"array","items":{"type":"object",` +
+var rulesetLinkKeys = []string{"url"}
+
+// rulesetWidthProperties are the schema members of the ruleset views beyond the compact ones.
+var rulesetWidthProperties = `"node_id":{"type":"string"},"source_type":{"type":"string"},` +
+	`"current_user_can_bypass":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
+	`"url":{"type":"string"},"links":` + linksSchema(rulesetLinkKeys)
+
+var rulesetListOutput = `{"type":"object","properties":{"rulesets":{"type":"array","items":{"type":"object",` +
 	`"properties":{"id":{"type":"integer"},"name":{"type":"string"},"target":{"type":"string"},` +
-	`"enforcement":{"type":"string"},"source":{"type":"string"}},` +
+	`"enforcement":{"type":"string"},"source":{"type":"string"},"source_name":{"type":"string"},` +
+	rulesetWidthProperties + `,"conditions":{"type":"object"},"conditions_omitted":{"type":"boolean"},` +
+	`"rules":{"type":"array"},"rules_omitted":{"type":"boolean"},"bypass_actors":{"type":"array"},` +
+	`"bypass_actors_omitted":{"type":"boolean"}},` +
 	`"required":["id","name","target","enforcement","source"],"additionalProperties":false}},` +
 	`"repository":{"type":"string"},"organization":{"type":"string"},"next_cursor":{"type":"string"},` +
 	`"has_more":{"type":"boolean"}},"required":["rulesets","has_more"],"additionalProperties":false}`
 
-const rulesetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
-	`"target":{"type":"string"},"enforcement":{"type":"string"},"conditions":{"type":"object"},` +
+var rulesetOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
+	`"target":{"type":"string"},"enforcement":{"type":"string"},"source":{"type":"string"},` +
+	rulesetWidthProperties + `,"conditions":{"type":"object"},` +
 	`"rules":{"type":"array"},"bypass_actors":{"type":"array"},"repository":{"type":"string"},` +
 	`"organization":{"type":"string"}},` +
 	`"required":["id","name","target","enforcement","conditions","rules","bypass_actors"],` +
@@ -120,21 +145,27 @@ var rulesetsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub rulesets",
 	Description: "List one bounded batch of the rulesets of a repository or, with organization instead, an " +
-		"organization a connection allows, compactly: identifier, name, target, enforcement, and " +
-		"source; exactly one of repository or organization is required",
+		"organization a connection allows, in GitHub's list form; exactly one of repository or organization " +
+		"is required",
 	Tags:     []string{"github", "rulesets", "governance", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema +
-		`,"includes_parents":{"type":"boolean"},` + pagingKeys),
+		`,"includes_parents":{"type":"boolean"},"targets":` + rulesetTargetsSchema + `,` + pagingKeys),
 	OutputSchema: json.RawMessage(rulesetListOutput),
 	Arguments: append([]capability.Argument{rulesetRepositoryArgument, rulesetOrganizationArgument, {
 		Name: "includes_parents", Description: "For a repository, true (the default) also lists rulesets " +
 			"inherited from its organization; ignored for an organization, which has none to inherit",
+	}, {
+		Name: "targets", Description: "Only rulesets that apply to these targets: a list of branch, tag, " +
+			"and push without repetition",
 	}}, pagingArguments...),
 	Fields: append([]capability.Field{
 		{Name: "rulesets", Description: "Rulesets: id, name, target, enforcement, and source (the repository " +
-			"or organization they were read from, as OWNER/REPO or orgs/LOGIN)"},
+			"or organization they were read from, as OWNER/REPO or orgs/LOGIN), source_name and source_type " +
+			"(where GitHub configures the ruleset), the members of github.rulesets.get, and, where GitHub " +
+			"lists them, bypass_actors, conditions, and rules; a free-form member beyond the bounds is left " +
+			"out and its *_omitted member says so; untrusted data"},
 		rulesetRepositoryField, rulesetOrganizationField,
 	}, pagingFields...),
 	Examples: []capability.Example{{
@@ -156,12 +187,14 @@ var rulesetsGet = capability.Descriptor{
 	Tags:     []string{"github", "rulesets", "governance", "get"},
 	Risk:     readRisk,
 	Provider: Provider,
-	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"id":`+rulesetIDSchema,
-		"id"),
+	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"id":`+rulesetIDSchema+
+		`,"includes_parents":{"type":"boolean"}`, "id"),
 	OutputSchema: json.RawMessage(rulesetOutput),
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "Numeric ruleset identifier, as github.rulesets.list reports it", Required: true},
 		rulesetRepositoryArgument, rulesetOrganizationArgument,
+		{Name: "includes_parents", Description: "For a repository, whether a ruleset inherited from its " +
+			"organization may be read, true being GitHub's default; refused for an organization"},
 	},
 	Fields: append(append([]capability.Field{}, rulesetFields...), rulesetRepositoryField, rulesetOrganizationField),
 	Examples: []capability.Example{{
@@ -404,15 +437,48 @@ func rulesetBody(def *rulesetDefinition) map[string]any {
 	return body
 }
 
-// rulesetJSON is the ruleset GitHub answers with, decoded once and turned into Ruleset by view.
+// rulesetJSON is the ruleset GitHub answers with, decoded once and turned into Ruleset by view. links holds
+// the REST address and the web address GitHub names in _links.
 type rulesetJSON struct {
-	ID           int64           `json:"id"`
-	Name         string          `json:"name"`
-	Target       string          `json:"target"`
-	Enforcement  string          `json:"enforcement"`
-	Conditions   json.RawMessage `json:"conditions"`
-	Rules        json.RawMessage `json:"rules"`
-	BypassActors json.RawMessage `json:"bypass_actors"`
+	ID                   int64           `json:"id"`
+	Name                 string          `json:"name"`
+	Target               string          `json:"target"`
+	Enforcement          string          `json:"enforcement"`
+	NodeID               *string         `json:"node_id"`
+	SourceType           *string         `json:"source_type"`
+	Source               *string         `json:"source"`
+	CurrentUserCanBypass *string         `json:"current_user_can_bypass"`
+	CreatedAt            *string         `json:"created_at"`
+	UpdatedAt            *string         `json:"updated_at"`
+	Conditions           json.RawMessage `json:"conditions"`
+	Rules                json.RawMessage `json:"rules"`
+	BypassActors         json.RawMessage `json:"bypass_actors"`
+	Links                *struct {
+		Self *struct {
+			Href *string `json:"href"`
+		} `json:"self"`
+		HTML *struct {
+			Href *string `json:"href"`
+		} `json:"html"`
+	} `json:"_links"`
+}
+
+// width projects the members beyond the compact ones.
+func (a rulesetJSON) width() RulesetWidth {
+	width := RulesetWidth{NodeID: nameText(a.NodeID), SourceType: nameText(a.SourceType),
+		CurrentUserCanBypass: nameText(a.CurrentUserCanBypass), CreatedAt: nameText(a.CreatedAt),
+		UpdatedAt: nameText(a.UpdatedAt)}
+	if a.Links != nil {
+		if a.Links.HTML != nil {
+			width.URL = address(a.Links.HTML.Href)
+		}
+		if a.Links.Self != nil {
+			if self := address(a.Links.Self.Href); self != nil {
+				width.Links = Links{"url": *self}
+			}
+		}
+	}
+	return width
 }
 
 // normalizedJSONObject reports the object GitHub sent, or {} in its place while it left the field out or
@@ -460,17 +526,39 @@ func (a rulesetJSON) view(op string, change bool) (*Ruleset, error) {
 	if !ok {
 		return nil, invalidResponse(op, change)
 	}
-	return &Ruleset{ID: a.ID, Name: a.Name, Target: a.Target, Enforcement: a.Enforcement, Conditions: conditions,
-		Rules: rules, BypassActors: bypassActors}, nil
+	return &Ruleset{ID: a.ID, Name: a.Name, Target: a.Target, Enforcement: a.Enforcement, Source: nameText(a.Source),
+		RulesetWidth: a.width(), Conditions: conditions, Rules: rules, BypassActors: bypassActors}, nil
 }
 
-// RulesetSummary is one compact entry of github.rulesets.list.
+// RulesetWidth holds the members of GitHub's ruleset beyond the compact ones. Missing and null values stay
+// out.
+type RulesetWidth struct {
+	NodeID               *string `json:"node_id,omitempty"`
+	SourceType           *string `json:"source_type,omitempty"`
+	CurrentUserCanBypass *string `json:"current_user_can_bypass,omitempty"`
+	CreatedAt            *string `json:"created_at,omitempty"`
+	UpdatedAt            *string `json:"updated_at,omitempty"`
+	URL                  *string `json:"url,omitempty"`
+	Links                Links   `json:"links,omitempty"`
+}
+
+// RulesetSummary is one entry of github.rulesets.list. Source is where the list was read from; SourceName is
+// where GitHub configures the ruleset, which differs for a ruleset inherited from an organization. The
+// free-form members are bounded: one beyond the bounds is left out and marked, never cut.
 type RulesetSummary struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Target      string `json:"target"`
-	Enforcement string `json:"enforcement"`
-	Source      string `json:"source"`
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	Target      string  `json:"target"`
+	Enforcement string  `json:"enforcement"`
+	Source      string  `json:"source"`
+	SourceName  *string `json:"source_name,omitempty"`
+	RulesetWidth
+	Conditions          any  `json:"conditions,omitempty"`
+	ConditionsOmitted   bool `json:"conditions_omitted,omitempty"`
+	Rules               any  `json:"rules,omitempty"`
+	RulesOmitted        bool `json:"rules_omitted,omitempty"`
+	BypassActors        any  `json:"bypass_actors,omitempty"`
+	BypassActorsOmitted bool `json:"bypass_actors_omitted,omitempty"`
 }
 
 // RulesetList is one batch of the rulesets of a repository or an organization.
@@ -482,10 +570,12 @@ type RulesetList struct {
 
 // Ruleset is the full ruleset github.rulesets.get, .create, and .update return.
 type Ruleset struct {
-	ID           int64           `json:"id"`
-	Name         string          `json:"name"`
-	Target       string          `json:"target"`
-	Enforcement  string          `json:"enforcement"`
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	Target      string  `json:"target"`
+	Enforcement string  `json:"enforcement"`
+	Source      *string `json:"source,omitempty"`
+	RulesetWidth
 	Conditions   json.RawMessage `json:"conditions"`
 	Rules        json.RawMessage `json:"rules"`
 	BypassActors json.RawMessage `json:"bypass_actors"`
@@ -496,14 +586,19 @@ type RulesetDeleted struct {
 	Deleted bool `json:"deleted"`
 }
 
+// rulesetTargets are the values the targets filter accepts, in the order the request and the cursor use.
+var rulesetTargets = []string{"branch", "tag", "push"}
+
 // rulesetListOptions are the filters and paging of github.rulesets.list.
 type rulesetListOptions struct {
-	IncludesParents *bool  `json:"includes_parents"`
-	Limit           int    `json:"limit"`
-	Cursor          string `json:"cursor"`
+	IncludesParents *bool    `json:"includes_parents"`
+	Targets         []string `json:"targets"`
+	Limit           int      `json:"limit"`
+	Cursor          string   `json:"cursor"`
 
 	page, perPage int
 	binding       []byte
+	targets       string
 }
 
 // query is the REST query of one ruleset list page; includes_parents applies only to a repository, since an
@@ -517,18 +612,56 @@ func (o *rulesetListOptions) query(bound target) url.Values {
 		}
 		values.Set("includes_parents", strconv.FormatBool(includesParents))
 	}
+	if o.targets != "" {
+		values.Set("targets", o.targets)
+	}
 	return values
 }
 
+// checkRulesetTargets validates the targets filter and returns it in the fixed order, comma-separated.
+func checkRulesetTargets(given []string) (string, error) {
+	if given == nil {
+		return "", nil
+	}
+	if len(given) == 0 || len(given) > len(rulesetTargets) {
+		return "", invalidRequest("targets must hold one to three of branch, tag, and push")
+	}
+	seen := map[string]bool{}
+	for _, value := range given {
+		if !slices.Contains(rulesetTargets, value) {
+			return "", invalidRequest("targets accepts only branch, tag, and push")
+		}
+		if seen[value] {
+			return "", invalidRequest("targets must not repeat a value")
+		}
+		seen[value] = true
+	}
+	ordered := make([]string, 0, len(given))
+	for _, value := range rulesetTargets {
+		if seen[value] {
+			ordered = append(ordered, value)
+		}
+	}
+	return strings.Join(ordered, ","), nil
+}
+
 // normalize applies the bounds of one ruleset list request and resolves the REST page its cursor continues
-// at, bound to the target and its filters.
+// at, bound to the target and its filters. The targets filter joins the binding only when given, so a cursor
+// of an unfiltered list stays valid.
 func (o *rulesetListOptions) normalize(bound target) error {
 	limit, err := normalizeLimit(o.Limit)
 	if err != nil {
 		return err
 	}
+	if o.targets, err = checkRulesetTargets(o.Targets); err != nil {
+		return err
+	}
 	includesParents := bound.kind == kindRepository && (o.IncludesParents == nil || *o.IncludesParents)
-	o.binding = fingerprint("rulesets", "list", bound.String(), includesParents)
+	parts := []any{"rulesets", "list", bound.String(), includesParents}
+	if o.targets != "" {
+		parts = append(parts, o.targets)
+	}
+	o.binding = fingerprint(parts...)
 	o.page, o.perPage, err = pageOf(o.binding, o.Cursor, limit)
 	return err
 }
@@ -555,12 +688,7 @@ func invokeRulesetsList(ctx context.Context, resolved *config.Resolved, secrets 
 
 func (c *Client) listRulesets(ctx context.Context, o *rulesetListOptions) (*RulesetList, error) {
 	const op = "list rulesets"
-	var raw []struct {
-		ID          int64  `json:"id"`
-		Name        string `json:"name"`
-		Target      string `json:"target"`
-		Enforcement string `json:"enforcement"`
-	}
+	var raw []rulesetJSON
 	hasNext, err := c.restPage(ctx, op, c.rulesetsPath("rulesets"), o.query(c.target), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, rulesetReadPermission(c.target))
@@ -571,17 +699,112 @@ func (c *Client) listRulesets(ctx context.Context, o *rulesetListOptions) (*Rule
 		if entry.ID <= 0 || entry.Name == "" {
 			return nil, invalidEntry(op, "a ruleset")
 		}
-		result.Rulesets = append(result.Rulesets, RulesetSummary{ID: entry.ID, Name: entry.Name,
-			Target: entry.Target, Enforcement: entry.Enforcement, Source: source})
+		summary := RulesetSummary{ID: entry.ID, Name: entry.Name, Target: entry.Target,
+			Enforcement: entry.Enforcement, Source: source, SourceName: nameText(entry.Source),
+			RulesetWidth: entry.width()}
+		var ok bool
+		if summary.Conditions, summary.ConditionsOmitted, ok = boundedRulesetMember[map[string]any](entry.Conditions); !ok {
+			return nil, invalidEntry(op, "a ruleset")
+		}
+		if summary.Rules, summary.RulesOmitted, ok = boundedRulesetMember[[]any](entry.Rules); !ok {
+			return nil, invalidEntry(op, "a ruleset")
+		}
+		if summary.BypassActors, summary.BypassActorsOmitted, ok = boundedRulesetMember[[]any](entry.BypassActors); !ok {
+			return nil, invalidEntry(op, "a ruleset")
+		}
+		result.Rulesets = append(result.Rulesets, summary)
 	}
 	result.HasMore, result.NextCursor = morePage(o.binding, o.page, o.perPage, hasNext)
 	return result, nil
 }
 
+// Bounds of a free-form ruleset member of a list entry. Beyond any of them it is left out and marked, never
+// cut, since a cut rule would state a different rule.
+const (
+	rulesetMemberDepth   = 8
+	rulesetMemberNodes   = 2000
+	rulesetMemberText    = 1000
+	rulesetMemberKeySize = 200
+)
+
+// boundedRulesetMember decodes a free-form member of the type T within the bounds. Null and empty values stay
+// out; a value beyond the bounds is left out and reported as omitted; ok is false for a value of another type.
+func boundedRulesetMember[T map[string]any | []any](raw json.RawMessage) (value any, omitted, ok bool) {
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, false, true
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var decoded any
+	if decoder.Decode(&decoded) != nil {
+		return nil, false, false
+	}
+	typed, isType := decoded.(T)
+	if !isType {
+		return nil, false, false
+	}
+	nodes := 0
+	cleaned, within := boundedRulesetValue(typed, 1, &nodes)
+	if !within {
+		return nil, true, true
+	}
+	if empty, _ := cleaned.(T); len(empty) == 0 {
+		return nil, false, true
+	}
+	return cleaned, false, true
+}
+
+// boundedRulesetValue copies a decoded JSON value with control characters of its texts replaced and null
+// members dropped, and reports false when it exceeds the depth, node, or text bounds.
+func boundedRulesetValue(value any, depth int, nodes *int) (any, bool) {
+	*nodes++
+	if depth > rulesetMemberDepth || *nodes > rulesetMemberNodes {
+		return nil, false
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			if item == nil {
+				continue
+			}
+			if utf8.RuneCountInString(key) > rulesetMemberKeySize {
+				return nil, false
+			}
+			clean, ok := boundedRulesetValue(item, depth+1, nodes)
+			if !ok {
+				return nil, false
+			}
+			out[*mustClean(&key, rulesetMemberKeySize)] = clean
+		}
+		return out, true
+	case []any:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			if item == nil {
+				continue
+			}
+			clean, ok := boundedRulesetValue(item, depth+1, nodes)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, clean)
+		}
+		return out, true
+	case string:
+		if utf8.RuneCountInString(v) > rulesetMemberText {
+			return nil, false
+		}
+		return *mustClean(&v, rulesetMemberText), true
+	}
+	return value, true
+}
+
 func invokeRulesetsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		ID int64 `json:"id"`
+		ID              int64 `json:"id"`
+		IncludesParents *bool `json:"includes_parents"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable(rulesetsGet.ID)
@@ -590,17 +813,24 @@ func invokeRulesetsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
+	if arguments.IncludesParents != nil && bound.kind != kindRepository {
+		return nil, invalidRequest("includes_parents applies only to a repository")
+	}
 	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
-	return bound.rulesetLocate(client.getRuleset(ctx, arguments.ID))
+	return bound.rulesetLocate(client.getRuleset(ctx, arguments.ID, arguments.IncludesParents))
 }
 
-func (c *Client) getRuleset(ctx context.Context, id int64) (*Ruleset, error) {
+func (c *Client) getRuleset(ctx context.Context, id int64, includesParents *bool) (*Ruleset, error) {
 	const op = "get ruleset"
 	var answer rulesetJSON
-	if err := c.rest(ctx, op, c.rulesetsPath("rulesets/"+strconv.FormatInt(id, 10)), &answer); err != nil {
+	path := c.rulesetsPath("rulesets/" + strconv.FormatInt(id, 10))
+	if includesParents != nil {
+		path += "?includes_parents=" + strconv.FormatBool(*includesParents)
+	}
+	if err := c.rest(ctx, op, path, &answer); err != nil {
 		return nil, actionsFailure(err, rulesetReadPermission(c.target))
 	}
 	return answer.view(op, false)

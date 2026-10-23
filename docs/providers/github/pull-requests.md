@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub pull requests
@@ -31,7 +31,7 @@ below the chosen repository; no tool accepts an owner or a free REST path.
 | `github.pull-requests.list` | lists compact pull requests |
 | `github.pull-requests.get` | reads one pull request with its body, merge state, and requested reviewers |
 | `github.pull-request-files.list` | lists its changed files with a bounded patch excerpt |
-| `github.pull-request-commits.list` | lists its commits |
+| `github.pull-request-commits.list` | lists its commits with their git commit data |
 | `github.pull-request-diffs.get` | reads its unified diff, cut to at most 65536 bytes from its start |
 | `github.pull-request-checks.list` | reads the check runs and the combined commit status at its head commit |
 
@@ -52,7 +52,8 @@ GitHub's own order. Title, body, branch names, and commit messages are untrusted
 `github.pull-request-files.list` reads the changed files with a patch excerpt of at most 4096 bytes, cut at a valid
 character boundary, with `patch_truncated` when GitHub's patch held more; a file GitHub sends no patch for, such
 as a binary file, carries none. `github.pull-request-commits.list` reports a commit's author as the linked
-GitHub login when GitHub reports one, otherwise the commit's author name; the message is untrusted data.
+GitHub login when GitHub reports one, otherwise the commit's author name; the message is untrusted data. The git
+commit's message, verification payload, and signature are cut at 4096 characters, each with a marker.
 `github.pull-request-diffs.get` reads the unified diff through GitHub's diff media type, from its start, up to
 the hard limit of 65536 bytes; `truncated` says when the diff held more. None of the three is ever read
 unbounded.

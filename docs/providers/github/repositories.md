@@ -75,8 +75,8 @@ it is not the recommended profile, which stays `read`, unchanged.
 
 | Tool | Does |
 | --- | --- |
-| `github.rulesets.list` | lists the rulesets of a repository or an organization, compactly |
-| `github.rulesets.get` | reads one ruleset with its conditions, rules, and bypass actors |
+| `github.rulesets.list` | lists the rulesets of a repository or an organization |
+| `github.rulesets.get` | reads one ruleset |
 | `github.rulesets.create` | creates one new ruleset; offered only where a connection's `tools` list names it |
 | `github.rulesets.update` | replaces one ruleset as a whole; offered only where a connection's `tools` list names it |
 | `github.rulesets.delete` | deletes one ruleset permanently; offered only where a connection's `tools` list names it |
@@ -93,9 +93,14 @@ ruleset identifier from one target is unknown under another: `github.rulesets.ge
 answer `not-found` for an `id` GitHub does not hold under the given repository or organization, whichever
 GitHub does not distinguish from one it merely does not show to this token.
 
-`github.rulesets.list` also takes `includes_parents` (true by default for a repository, also listing rulesets
-it inherits from its organization; ignored for an organization, which has none to inherit) and the paging
-arguments, a cursor bound to the target and `includes_parents`.
+`includes_parents` applies to a repository only: the list ignores it for an organization, which has none to
+inherit from, while the single read refuses it there, since dropping it silently would hide a mistaken call.
+A list cursor is bound to the target and to every filter, so a cursor of other filters is refused.
+
+In a list entry, `source` stays the repository or organization the list was read from and `source_name` is
+where GitHub configures the ruleset, which differs for a ruleset inherited from an organization. GitHub's list
+may omit the conditions, rules, and bypass actors; the list reports them where GitHub sends them and leaves
+one out, marked, when it exceeds a bound, because a cut rule would state another rule.
 
 `github.rulesets.create` and `github.rulesets.update` take a ruleset definition. `target` `repository`
 selects repositories instead of refs for an organization ruleset. Every field is GitHub's own shape, passed
