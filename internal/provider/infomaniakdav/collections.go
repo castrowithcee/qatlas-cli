@@ -6,9 +6,6 @@ import (
 	"encoding/xml"
 	"regexp"
 	"sort"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -20,10 +17,8 @@ import (
 const (
 	maxNameLength        = 256
 	maxDescriptionLength = 1024
-	maxTokenLength       = 512
-	maxLabelLength       = 64
+	maxTokenLength       = dav.MaxSyncTokenLength
 	maxNameListed        = 32
-	maxCollationsListed  = 16
 )
 
 var readRisk = capability.Risk{
@@ -94,25 +89,12 @@ type Collection struct {
 	Description string `json:"description,omitempty"`
 	Color       string `json:"color,omitempty"`
 
-	Components              []string     `json:"components,omitempty"`
-	CalendarData            []DataFormat `json:"calendar_data,omitempty"`
-	AddressData             []DataFormat `json:"address_data,omitempty"`
-	MaxResourceSize         *uint64      `json:"max_resource_size,omitempty"`
-	MinDateTime             string       `json:"min_date_time,omitempty"`
-	MaxDateTime             string       `json:"max_date_time,omitempty"`
-	MaxInstances            *uint64      `json:"max_instances,omitempty"`
-	MaxAttendeesPerInstance *uint64      `json:"max_attendees_per_instance,omitempty"`
-	Timezone                string       `json:"timezone,omitempty"`
-	Collations              []string     `json:"collations,omitempty"`
-	Privileges              []string     `json:"privileges,omitempty"`
-	SyncToken               string       `json:"sync_token,omitempty"`
+	Components []string `json:"components,omitempty"`
+	dav.CollectionProperties
 }
 
 // DataFormat is one supported data format of a collection.
-type DataFormat struct {
-	ContentType string `json:"content_type,omitempty"`
-	Version     string `json:"version,omitempty"`
-}
+type DataFormat = dav.CollectionFormat
 
 // CollectionsPage is the result of one list operation.
 type CollectionsPage struct {
@@ -269,99 +251,14 @@ func colorOf(value string, calendars bool) string {
 // one that is absent or unreadable is left out, never guessed.
 func collectionOf(id string, r *dav.Resource, calendars bool) Collection {
 	c := Collection{
-		ID:              id,
-		Name:            dav.Clean(r.Text[dav.KeyName], maxNameLength),
-		Description:     dav.Clean(r.Text[dav.KeyDescription], maxDescriptionLength),
-		Color:           colorOf(r.Text[dav.KeyColor], calendars),
-		Collations:      names(r.Collations, maxCollationsListed),
-		Privileges:      names(r.Privileges, maxNameListed),
-		MaxResourceSize: numberOf(r.Text[dav.KeyMaxSize]),
-		SyncToken:       dav.Clean(r.Text[dav.KeySyncToken], maxTokenLength),
+		ID:                   id,
+		Name:                 dav.Clean(r.Text[dav.KeyName], maxNameLength),
+		Description:          dav.Clean(r.Text[dav.KeyDescription], maxDescriptionLength),
+		Color:                colorOf(r.Text[dav.KeyColor], calendars),
+		CollectionProperties: dav.CollectionPropertiesOf(r, calendars),
 	}
-	if !calendars {
-		c.AddressData = formats(r.AddressData)
-		return c
+	if calendars {
+		c.Components = dav.Names(r.Components, maxNameListed)
 	}
-	c.Components = names(r.Components, maxNameListed)
-	c.CalendarData = formats(r.CalendarData)
-	c.MinDateTime = stampOf(r.Text[dav.KeyMinDate])
-	c.MaxDateTime = stampOf(r.Text[dav.KeyMaxDate])
-	c.MaxInstances = numberOf(r.Text[dav.KeyMaxInstances])
-	c.MaxAttendeesPerInstance = numberOf(r.Text[dav.KeyMaxAttendees])
-	c.Timezone = tzidOf(r.Text[dav.KeyTimezone])
 	return c
-}
-
-func names(values []string, limit int) []string {
-	var out []string
-	for _, value := range values {
-		if value = dav.Clean(value, maxLabelLength); value != "" && len(out) < limit {
-			out = append(out, value)
-		}
-	}
-	return out
-}
-
-func formats(values []dav.DataFormat) []DataFormat {
-	var out []DataFormat
-	for _, value := range values {
-		format := DataFormat{ContentType: dav.Clean(value.ContentType, maxLabelLength),
-			Version: dav.Clean(value.Version, maxLabelLength)}
-		if format != (DataFormat{}) && len(out) < 8 {
-			out = append(out, format)
-		}
-	}
-	return out
-}
-
-// numberOf accepts only plain decimal digits that fit an unsigned 64-bit integer.
-func numberOf(value string) *uint64 {
-	n, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return nil
-	}
-	return &n
-}
-
-// stampOf rewrites the CalDAV UTC form (20060102T150405Z) to RFC 3339; anything else is dropped.
-func stampOf(value string) string {
-	t, err := time.Parse("20060102T150405Z", value)
-	if err != nil {
-		return ""
-	}
-	return t.UTC().Format(time.RFC3339)
-}
-
-// tzidOf returns the TZID of the first VTIMEZONE in a calendar-timezone value. The value may be cut at the
-// parser's text limit, so a TZID line counts only when a complete line follows it: a cut line never yields a
-// partial name.
-func tzidOf(value string) string {
-	value = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(value)
-	var lines []string
-	for _, line := range strings.Split(value, "\n") {
-		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if len(lines) > 0 {
-				lines[len(lines)-1] += line[1:]
-			}
-			continue
-		}
-		lines = append(lines, line)
-	}
-	inZone := false
-	for i, line := range lines {
-		upper := strings.ToUpper(line)
-		switch {
-		case upper == "BEGIN:VTIMEZONE":
-			inZone = true
-		case upper == "END:VTIMEZONE":
-			return ""
-		case inZone && (strings.HasPrefix(upper, "TZID:") || strings.HasPrefix(upper, "TZID;")):
-			colon := strings.Index(line, ":")
-			if i == len(lines)-1 || colon < 0 {
-				return ""
-			}
-			return dav.Clean(line[colon+1:], maxLabelLength)
-		}
-	}
-	return ""
 }
