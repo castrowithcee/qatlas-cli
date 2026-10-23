@@ -183,6 +183,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Labels](labels.md): repository and organization labels
 - [Issue labels](issue-labels.md): the labels of an issue or pull request
 - [Milestones](milestones.md): the milestones of a repository
+- [Time tracking](time-tracking.md): tracked times and stopwatches of issues and pull requests
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository

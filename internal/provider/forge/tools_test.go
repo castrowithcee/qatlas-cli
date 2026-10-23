@@ -64,6 +64,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 				p.id+".issue-assignees.remove")
 			slices.Sort(want)
 		}
+		want = append(want, p.id+".issue-times.add", p.id+".issue-times.delete", p.id+".issue-times.list",
+			p.id+".issue-times.reset", p.id+".issue-stopwatches.delete", p.id+".issue-stopwatches.start",
+			p.id+".issue-stopwatches.stop", p.id+".my-stopwatches.list", p.id+".my-times.list",
+			p.id+".repository-times.list", p.id+".user-times.list")
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
