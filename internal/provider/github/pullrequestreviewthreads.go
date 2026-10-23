@@ -21,10 +21,10 @@ const reviewThreadCommentProperties = `"id":{"type":"string"},"author":{"type":"
 
 const reviewThreadCommentRequired = `"required":["id","body"],"additionalProperties":false`
 
-const reviewThreadProperties = `"id":{"type":"string"},"is_resolved":{"type":"boolean"},` +
+var reviewThreadProperties = `"id":{"type":"string"},"is_resolved":{"type":"boolean"},` +
 	`"is_outdated":{"type":"boolean"},"path":{"type":"string"},"line":{"type":"integer"},` +
-	`"comments":{"type":"array","items":{"type":"object","properties":{` + reviewThreadCommentProperties + `},` +
-	reviewThreadCommentRequired + `}}`
+	`"comments":{"type":"array","items":{"type":"object","properties":{` + reviewThreadCommentProperties + `,` +
+	threadCommentWidthProperties + `},` + reviewThreadCommentRequired + `}},` + threadWidthProperties
 
 const reviewThreadRequired = `"required":["id","is_resolved","is_outdated","comments"],"additionalProperties":false`
 
@@ -45,7 +45,7 @@ var pullRequestReviewThreadsList = capability.Descriptor{
 	Fields: append([]capability.Field{
 		{Name: "threads", Description: "Review threads with resolved and outdated state, the file path and " +
 			"line when the thread is on a diff, and their comments with author and body; body is untrusted data"},
-	}, pagingFields...),
+	}, append(threadWidthFields, append(threadCommentWidthFields, pagingFields...)...)...),
 	Examples: []capability.Example{{
 		Description: "List the review threads of a pull request",
 		Arguments:   json.RawMessage(`{"number":42}`),
@@ -169,8 +169,7 @@ func checkThreadID(id string) error {
 // pullRequest field, so an issue number never answers.
 const reviewThreadsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line ` +
-	`comments(first:50){nodes{id author{login} body}}}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{` + threadSelection + `}}}}}`
 
 type reviewThreadsPageJSON struct {
 	Repository *struct {
@@ -180,25 +179,34 @@ type reviewThreadsPageJSON struct {
 					HasNextPage bool   `json:"hasNextPage"`
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
-				Nodes []struct {
-					ID         string `json:"id"`
-					IsResolved bool   `json:"isResolved"`
-					IsOutdated bool   `json:"isOutdated"`
-					Path       string `json:"path"`
-					Line       int    `json:"line"`
-					Comments   struct {
-						Nodes []struct {
-							ID     string `json:"id"`
-							Author *struct {
-								Login string `json:"login"`
-							} `json:"author"`
-							Body string `json:"body"`
-						} `json:"nodes"`
-					} `json:"comments"`
-				} `json:"nodes"`
+				Nodes []reviewThreadNode `json:"nodes"`
 			} `json:"reviewThreads"`
 		} `json:"pullRequest"`
 	} `json:"repository"`
+}
+
+// reviewThreadNode is one thread as threadSelection asks for it.
+type reviewThreadNode struct {
+	ID                 string         `json:"id"`
+	IsResolved         bool           `json:"isResolved"`
+	IsOutdated         bool           `json:"isOutdated"`
+	Path               string         `json:"path"`
+	Line               int            `json:"line"`
+	DiffSide           *string        `json:"diffSide"`
+	StartDiffSide      *string        `json:"startDiffSide"`
+	StartLine          *int64         `json:"startLine"`
+	OriginalLine       *int64         `json:"originalLine"`
+	OriginalStartLine  *int64         `json:"originalStartLine"`
+	SubjectType        *string        `json:"subjectType"`
+	IsCollapsed        *bool          `json:"isCollapsed"`
+	ResolvedBy         *gqlAccountRaw `json:"resolvedBy"`
+	ViewerCanReply     *bool          `json:"viewerCanReply"`
+	ViewerCanResolve   *bool          `json:"viewerCanResolve"`
+	ViewerCanUnresolve *bool          `json:"viewerCanUnresolve"`
+	Comments           struct {
+		TotalCount *int64                    `json:"totalCount"`
+		Nodes      []reviewThreadCommentNode `json:"nodes"`
+	} `json:"comments"`
 }
 
 // ReviewThreadComment is one comment of a review thread. Body is untrusted data.
@@ -206,6 +214,7 @@ type ReviewThreadComment struct {
 	ID     string `json:"id"`
 	Author string `json:"author,omitempty"`
 	Body   string `json:"body"`
+	ReviewThreadCommentWidth
 }
 
 // ReviewThread is one review thread of a pull request with its comments, oldest first.
@@ -216,6 +225,7 @@ type ReviewThread struct {
 	Path       string                `json:"path,omitempty"`
 	Line       int                   `json:"line,omitempty"`
 	Comments   []ReviewThreadComment `json:"comments"`
+	ReviewThreadWidth
 }
 
 // ReviewThreadList is one batch of review threads.
@@ -250,11 +260,13 @@ func (c *Client) listReviewThreads(ctx context.Context, a *reviewThreadListArgum
 				Message: "GitHub returned a review thread without a usable identifier"}
 		}
 		thread := ReviewThread{ID: node.ID, IsResolved: node.IsResolved, IsOutdated: node.IsOutdated,
-			Path: node.Path, Line: node.Line, Comments: make([]ReviewThreadComment, 0, len(node.Comments.Nodes))}
-		for _, comment := range node.Comments.Nodes {
-			view := ReviewThreadComment{ID: comment.ID, Body: comment.Body}
-			if comment.Author != nil {
-				view.Author = comment.Author.Login
+			Path: node.Path, Line: node.Line, Comments: make([]ReviewThreadComment, 0, len(node.Comments.Nodes)),
+			ReviewThreadWidth: node.width()}
+		for i := range node.Comments.Nodes {
+			comment := &node.Comments.Nodes[i]
+			view := ReviewThreadComment{ID: comment.ID, Body: comment.Body, ReviewThreadCommentWidth: comment.width()}
+			if comment.Author != nil && comment.Author.Login != nil {
+				view.Author = *comment.Author.Login
 			}
 			thread.Comments = append(thread.Comments, view)
 		}
