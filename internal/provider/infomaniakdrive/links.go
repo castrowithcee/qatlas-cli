@@ -42,14 +42,10 @@ const linkProperties = `"file_id":{"type":"integer"},"url":{"type":"string"},"ri
 	`"valid_until":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
 	`"access_blocked":{"type":"boolean"},"can_download":{"type":"boolean"},"can_edit":{"type":"boolean"},` +
 	`"can_comment":{"type":"boolean"},"can_see_info":{"type":"boolean"},"can_see_stats":{"type":"boolean"},` +
-	`"can_request_access":{"type":"boolean"}`
+	`"can_request_access":{"type":"boolean"},"created_by":{"type":"integer"},"views":{"type":"integer"}`
 
 var linkSchema = `{"type":"object","properties":{` + linkProperties +
 	`},"required":["file_id","right"],"additionalProperties":false}`
-
-// listedLinkSchema is a share link of links.list, which also carries what with=sharelink loads.
-var listedLinkSchema = `{"type":"object","properties":{` + linkProperties +
-	`,"created_by":{"type":"integer"},"views":{"type":"integer"}},"required":["file_id","right"],"additionalProperties":false}`
 
 var linkResultSchema = `{"type":"object","properties":{` +
 	`"drive_id":{"type":"integer"},"file_id":{"type":"integer"},` +
@@ -58,7 +54,7 @@ var linkResultSchema = `{"type":"object","properties":{` +
 
 // linkEntrySchema is one entry of links.list: its share link is link, so it has no sharelink member.
 var linkEntrySchema = `{"type":"object","properties":{` + fileEntryProperties("sharelink") + `,"link":` +
-	listedLinkSchema + `},"required":["id","name","type","parent_id"],"additionalProperties":false}`
+	linkSchema + `},"required":["id","name","type","parent_id"],"additionalProperties":false}`
 
 var linkFields = []capability.Field{
 	{Name: "file_id", Description: "File or folder the link belongs to"},
@@ -76,6 +72,10 @@ var linkFields = []capability.Field{
 	{Name: "can_see_info", Description: "Whether holders of the link may see information about the content"},
 	{Name: "can_see_stats", Description: "Whether holders of the link may see statistics"},
 	{Name: "can_request_access", Description: "Whether holders of the link may request access to a folder"},
+	{Name: "created_by", Description: "Identifier of the user who created the link; on links.list only with " +
+		"sharelink or sharelink.views"},
+	{Name: "views", Description: "Number of views of the last 180 days; only with with views (links.list: " +
+		"sharelink.views)"},
 }
 
 var linkResultFields = append([]capability.Field{
@@ -112,10 +112,11 @@ var linksGet = capability.Descriptor{
 	Provider:              Provider,
 	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
-		objectIDSchema + `},"required":["drive_id","file_id"],"additionalProperties":false}`),
+		objectIDSchema + `,` + withInputSchema(linkWithValues) + `},"required":["drive_id","file_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(linkResultSchema),
-	Arguments:    []capability.Argument{driveIDArgument, linkFileArgument},
-	Fields:       linkResultFields,
+	Arguments: []capability.Argument{driveIDArgument, linkFileArgument,
+		{Name: "with", Description: "Related data to load; views adds the number of views of the last 180 days"}},
+	Fields: linkResultFields,
 	Examples: []capability.Example{{Description: "Read the share link of one file",
 		Arguments: json.RawMessage(`{"drive_id":1,"file_id":43}`)}},
 }
@@ -216,7 +217,8 @@ type Link struct {
 	CanSeeInfo       bool   `json:"can_see_info"`
 	CanSeeStats      bool   `json:"can_see_stats"`
 	CanRequestAccess bool   `json:"can_request_access"`
-	// CreatedBy and Views are set only by links.list, when its with values ask for them.
+	// CreatedBy is the creator; links.list reports it only when its with values ask for the link's details.
+	// Views exists only when views were asked for.
 	CreatedBy int64  `json:"created_by,omitempty"`
 	Views     *int64 `json:"views,omitempty"`
 }
@@ -246,6 +248,11 @@ type LinkPage struct {
 	ResponseAt string `json:"response_at,omitempty"`
 }
 
+// linkWithViews is the one with value of links.get.
+const linkWithViews = "views"
+
+var linkWithValues = []string{linkWithViews}
+
 func validRight(right string) bool {
 	return right == rightInherit || right == rightPassword || right == rightPublic
 }
@@ -268,7 +275,7 @@ func linkOf(raw shareLinkJSON) (*Link, bool) {
 	if !validRight(raw.Right) {
 		return nil, false
 	}
-	link := &Link{FileID: raw.FileID, URL: safeLinkURL(raw.URL), Right: raw.Right,
+	link := &Link{FileID: raw.FileID, URL: safeLinkURL(raw.URL), Right: raw.Right, CreatedBy: optionalID(raw.CreatedBy),
 		AccessBlocked: raw.AccessBlocked, CanDownload: raw.Capabilities.CanDownload, CanEdit: raw.Capabilities.CanEdit,
 		CanComment: raw.Capabilities.CanComment, CanSeeInfo: raw.Capabilities.CanSeeInfo,
 		CanSeeStats: raw.Capabilities.CanSeeStats, CanRequestAccess: raw.Capabilities.CanRequestAccess}
@@ -289,30 +296,46 @@ const linkFileReason = "file_id must be a positive integer other than the drive'
 func invokeLinksGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "get share link"
-	var input fileArguments
+	var input struct {
+		fileArguments
+		With []string `json:"with"`
+	}
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	if !validObjectID(input.FileID) || input.FileID == rootFileID {
 		return nil, invalidRequest(linkFileReason)
 	}
+	if err := checkValues(input.With, linkWithValues, "with"); err != nil {
+		return nil, err
+	}
 	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
 	}
-	return client.GetLink(ctx, input.DriveID, input.FileID)
+	return client.GetLink(ctx, input.DriveID, input.FileID, input.With)
 }
 
-// GetLink reads the share link of exactly one file or folder.
-func (c *Client) GetLink(ctx context.Context, driveID, fileID int64) (*LinkResult, error) {
+// GetLink reads the share link of exactly one file or folder; with loads related data.
+func (c *Client) GetLink(ctx context.Context, driveID, fileID int64, with []string) (*LinkResult, error) {
 	const op = "get share link"
+	if err := checkValues(with, linkWithValues, "with"); err != nil {
+		return nil, err
+	}
+	var query url.Values
+	if len(with) > 0 {
+		query = url.Values{"with": {strings.Join(with, ",")}}
+	}
 	var raw shareLinkJSON
-	if err := c.do(ctx, op, linkPath(driveID, fileID), nil, &raw); err != nil {
+	if err := c.do(ctx, op, linkPath(driveID, fileID), query, &raw); err != nil {
 		return nil, err
 	}
 	link, ok := linkOf(raw)
 	if !ok || raw.FileID != fileID {
 		return nil, invalidResponse(op, "Infomaniak returned an invalid response")
+	}
+	if slices.Contains(with, linkWithViews) {
+		link.Views = valuePointer(raw.Views)
 	}
 	return &LinkResult{DriveID: driveID, FileID: fileID, Link: link}, nil
 }
@@ -394,8 +417,8 @@ func (c *Client) listLinks(ctx context.Context, driveID int64, cursor string, li
 		entry := LinkEntry{Entry: c.entryWith(driveID, item.fileJSON, entryWith)}
 		if item.Sharelink != nil && item.Sharelink.FileID == item.ID {
 			if link, ok := linkOf(*item.Sharelink); ok {
-				if slices.Contains(with, "sharelink") || slices.Contains(with, "sharelink.views") {
-					link.CreatedBy = optionalID(item.Sharelink.CreatedBy)
+				if !slices.Contains(with, "sharelink") && !slices.Contains(with, "sharelink.views") {
+					link.CreatedBy = 0
 				}
 				if slices.Contains(with, "sharelink.views") {
 					link.Views = valuePointer(item.Sharelink.Views)

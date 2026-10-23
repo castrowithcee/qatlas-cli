@@ -112,7 +112,8 @@ func xmlResponse(status int, body string) *http.Response {
 
 func multistatus(entries ...string) string {
 	return `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" ` +
-		`xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">` +
+		`xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns" ` +
+		`xmlns:ocs="http://open-collaboration-services.org/ns" xmlns:ocm="http://open-cloud-mesh.org/ns">` +
 		strings.Join(entries, "") + `</d:multistatus>`
 }
 
@@ -513,8 +514,8 @@ func TestListFilesSendsOneDepthOnePropfindAndReportsOnlyChildren(t *testing.T) {
 	if request.url.String() != mainInstance+aliceRoot {
 		t.Errorf("request URL = %q, want the connection root", request.url)
 	}
-	if request.body != propfindBody {
-		t.Errorf("request body = %q, want the fixed property set", request.body)
+	if request.body != filePropfindBody {
+		t.Errorf("request body = %q, want the full property set", request.body)
 	}
 	if request.auth != basicAuth(aliceUser, aliceToken) {
 		t.Error("the request did not carry the identity of the connection")
@@ -527,15 +528,17 @@ func TestListFilesSendsOneDepthOnePropfindAndReportsOnlyChildren(t *testing.T) {
 		{
 			Path: "2026", Name: "2026", Type: typeFolder, Size: 2048,
 			ModifiedAt: "2026-03-02T11:15:00Z", ETag: "60f1c8a2e4b19", FileID: "1002", Readable: true,
+			Permissions: "RGDNVCK", HasPreview: boolPtr(false),
 		},
 		{
 			Path: nameCanary + ".txt", Name: nameCanary + ".txt", Type: typeFile,
 			ContentType: "application/pdf", Size: 12, ModifiedAt: "2026-04-01T07:05:00Z",
-			ETag: "3a71bd0c1", FileID: "1004", Readable: true,
+			ETag: "3a71bd0c1", FileID: "1004", Readable: true, Permissions: "RGDNVW",
 		},
 		{
 			Path: "q1.pdf", Name: "q1.pdf", Type: typeFile, ContentType: "application/pdf", Size: 5120,
 			ModifiedAt: "2026-04-01T07:05:00Z", ETag: "3a71bd0c1", FileID: "1003", Readable: true,
+			Permissions: "RGDNVW",
 		},
 	}
 	if !reflect.DeepEqual(result.Entries, want) {
@@ -584,6 +587,7 @@ func TestStatFileSendsOneDepthZeroPropfind(t *testing.T) {
 	want := &Entry{
 		Path: "2026/q1.pdf", Name: "q1.pdf", Type: typeFile, ContentType: "application/pdf",
 		Size: 5120, ModifiedAt: "2026-04-01T07:05:00Z", ETag: "3a71bd0c1", FileID: "1003", Readable: true,
+		Permissions: "RGDNVW",
 	}
 	if !reflect.DeepEqual(entry, want) {
 		t.Errorf("entry = %+v, want %+v", entry, want)
@@ -1247,3 +1251,5 @@ func coreConfig() *config.Config {
 		},
 	}
 }
+
+func boolPtr(value bool) *bool { return &value }

@@ -84,6 +84,35 @@ var wantedProps = map[xml.Name]string{
 	{Space: ocNS, Local: "message"}:                    propCommentMessage,
 	{Space: ocNS, Local: "objectType"}:                 propCommentObjType,
 	{Space: ocNS, Local: "objectId"}:                   propCommentObjID,
+	{Space: davNS, Local: "creationdate"}:              propCreationDate,
+	{Space: davNS, Local: "getcontentlanguage"}:        propContentLanguage,
+	{Space: davNS, Local: "quota-used-bytes"}:          propQuotaUsed,
+	{Space: davNS, Local: "quota-available-bytes"}:     propQuotaAvailable,
+	{Space: ocNS, Local: "favorite"}:                   propFavorite,
+	{Space: ocsNS, Local: "share-permissions"}:         propSharePerms,
+	{Space: ocmNS, Local: "share-permissions"}:         propOCMPerms,
+	{Space: ocNS, Local: "owner-id"}:                   propOwnerID,
+	{Space: ocNS, Local: "owner-display-name"}:         propOwnerName,
+	{Space: ocNS, Local: "comments-count"}:             propCommentsCount,
+	{Space: ocNS, Local: "comments-unread"}:            propCommentsUnread,
+	{Space: ocNS, Local: "comments-href"}:              propCommentsHref,
+	{Space: ocNS, Local: "data-fingerprint"}:           propFingerprint,
+	{Space: ncNS, Local: "data-fingerprint"}:           propFingerprint,
+	{Space: ncNS, Local: "creation_time"}:              propCreationTime,
+	{Space: ncNS, Local: "upload_time"}:                propUploadTime,
+	{Space: ncNS, Local: "last_activity"}:              propLastActivity,
+	{Space: ncNS, Local: "note"}:                       propNote,
+	{Space: ncNS, Local: "share-attributes"}:           propShareAttrs,
+	{Space: ncNS, Local: "hide-download"}:              propHideDownload,
+	{Space: ncNS, Local: "mount-type"}:                 propMountType,
+	{Space: ncNS, Local: "is-mount-root"}:              propIsMountRoot,
+	{Space: ncNS, Local: "is-federated"}:               propIsFederated,
+	{Space: ncNS, Local: "is-encrypted"}:               propIsEncrypted,
+	{Space: ncNS, Local: "has-preview"}:                propHasPreview,
+	{Space: ncNS, Local: "hidden"}:                     propHidden,
+	{Space: ncNS, Local: "metadata_etag"}:              propMetadataETag,
+	{Space: ncNS, Local: "contained-file-count"}:       propContainedFiles,
+	{Space: ncNS, Local: "contained-folder-count"}:     propContainedDirs,
 	{Space: ncNS, Local: "trashbin-filename"}:          propTrashName,
 	{Space: ncNS, Local: "trashbin-original-location"}: propTrashOrigin,
 	{Space: ncNS, Local: "trashbin-deletion-time"}:     propTrashDeleted,
@@ -93,9 +122,12 @@ var wantedProps = map[xml.Name]string{
 // is, whether it is a collection, the properties a successful propstat reported, and the resource-level
 // status a server uses to refuse one node of many.
 type resource struct {
-	href       string
-	status     string
-	props      map[string]string
+	href   string
+	status string
+	props  map[string]string
+	// trees holds the nested properties and over those a bound dropped; see treeProps.
+	trees      map[string]*propNode
+	over       map[string]bool
 	collection bool
 	// read records that at least one propstat of this resource answered with a 2xx status.
 	read bool
@@ -138,6 +170,9 @@ func parseMultiStatusBounded(op string, body []byte, limit int, allowEmpty bool)
 		resources []resource
 		current   *resource
 		pending   map[string]string
+		pendTrees map[string]*propNode
+		pendOver  map[string]bool
+		capture   *treeCapture
 		collected bool
 		status    string
 		text      strings.Builder
@@ -167,15 +202,27 @@ func parseMultiStatusBounded(op string, body []byte, limit int, allowEmpty bool)
 					return nil, invalidResponse(op,
 						"this Nextcloud folder holds more entries than one read may report")
 				}
-				current = &resource{props: map[string]string{}}
+				current = &resource{props: map[string]string{}, trees: map[string]*propNode{}, over: map[string]bool{}}
 			case len(stack) == 3 && current != nil && element.Name == elemPropstat:
 				pending, collected, status = map[string]string{}, false, ""
+				pendTrees, pendOver = map[string]*propNode{}, map[string]bool{}
 			case len(stack) == 6 && pending != nil && stack[4] == elemResourceType &&
 				element.Name == elemCollection:
 				collected = true
 			}
+			if capture == nil && len(stack) == 5 && pending != nil && stack[3] == elemProp {
+				if key, ok := treeProps[element.Name]; ok {
+					capture = &treeCapture{key: key}
+				}
+			}
+			if capture != nil {
+				capture.start(element.Name)
+			}
 
 		case xml.CharData:
+			if capture != nil {
+				capture.text(element)
+			}
 			if text.Len()+len(element) <= maxTextBytes {
 				text.Write(element)
 			}
@@ -195,17 +242,37 @@ func parseMultiStatusBounded(op string, body []byte, limit int, allowEmpty bool)
 					for key, value := range pending {
 						current.props[key] = value
 					}
+					for key, node := range pendTrees {
+						current.trees[key] = node
+					}
+					for key := range pendOver {
+						current.over[key] = true
+					}
 				}
-				pending = nil
+				pending, pendTrees, pendOver = nil, nil, nil
 			case len(stack) == 4 && pending != nil && element.Name == elemStatus:
 				status = text.String()
 			case len(stack) == 5 && pending != nil && stack[3] == elemProp:
 				if key, ok := wantedProps[element.Name]; ok {
 					pending[key] = strings.TrimSpace(text.String())
+					if extra, ok := extraProps[element.Name]; ok {
+						pending[extra] = pending[key]
+					}
 				}
 			case len(stack) == 2 && current != nil && element.Name == elemResponse:
 				resources = append(resources, *current)
 				current = nil
+			}
+			if capture != nil {
+				capture.path = capture.path[:len(capture.path)-1]
+				if len(capture.path) == 0 {
+					if capture.over {
+						pendOver[capture.key] = true
+					} else if pending != nil {
+						pendTrees[capture.key] = capture.root
+					}
+					capture = nil
+				}
 			}
 			text.Reset()
 			stack = stack[:len(stack)-1]

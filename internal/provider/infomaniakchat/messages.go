@@ -27,8 +27,25 @@ var messageTextSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(max
 
 var messageEntrySchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"channel_id":` + idSchema + `,"user_id":` + idSchema + `,"root_id":` + idSchema + `,` +
-	`"message":{"type":"string"},"type":{"type":"string"},"created_at":{"type":"string"},"edited_at":{"type":"string"}},` +
+	`"message":{"type":"string"},"type":{"type":"string"},"created_at":{"type":"string"},"edited_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"original_id":{"type":"string"},"hashtag":{"type":"string"},` +
+	`"pending_post_id":{"type":"string"},"file_ids":{"type":"array","items":{"type":"string"}},` +
+	`"props":{"type":"object"},"metadata":` + messageMetadataSchema + `,` +
+	`"omitted":{"type":"array","items":{"type":"string"}}},` +
 	`"required":["id","channel_id","user_id","message","type","created_at"],"additionalProperties":false}`
+
+var messageMetadataSchema = `{"type":"object","properties":{` +
+	`"embeds":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},` +
+	`"url":{"type":"string"},"data":{"type":"object"}},"additionalProperties":false}},` +
+	`"emojis":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+	`"creator_id":{"type":"string"},"name":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"deleted_at":{"type":"string"}},"additionalProperties":false}},` +
+	`"files":{"type":"array","items":` + fileEntrySchema + `},` +
+	`"images":{"type":"object","additionalProperties":{"type":"object","properties":{"width":{"type":"integer"},` +
+	`"height":{"type":"integer"}},"additionalProperties":false}},` +
+	`"reactions":{"type":"array","items":{"type":"object","properties":{"user_id":{"type":"string"},` +
+	`"post_id":{"type":"string"},"emoji_name":{"type":"string"},"created_at":{"type":"string"}},` +
+	`"additionalProperties":false}}},"additionalProperties":false}`
 
 var messageEntryFields = []capability.Field{
 	{Name: "id", Description: "Message (post) identifier"},
@@ -39,6 +56,17 @@ var messageEntryFields = []capability.Field{
 	{Name: "type", Description: "Empty for a normal message, or kChat's own system message type"},
 	{Name: "created_at", Description: "Creation time, normalised to RFC 3339 in UTC"},
 	{Name: "edited_at", Description: "Last edit time, normalised to RFC 3339 in UTC, when the message was edited"},
+	{Name: "updated_at", Description: "Last change time of any kind, normalised to RFC 3339 in UTC"},
+	{Name: "original_id", Description: "Identifier of the message this one replaced"},
+	{Name: "hashtag", Description: "Hashtags kChat extracted from the message, untrusted data"},
+	{Name: "pending_post_id", Description: "Client-side identifier kChat kept while the message was pending, untrusted data"},
+	{Name: "file_ids", Description: "Identifiers of the attached files"},
+	{Name: "props", Description: "Free properties of the message, untrusted data; a bounded object, left out and named in omitted when beyond the bound"},
+	{Name: "metadata", Description: "Display information, untrusted data: embeds (type, url, data), emojis, files " +
+		"(file entries without content or preview), images (address to width and height), and reactions; each list " +
+		"holds at most " + itoa(metadataListMax) + " entries and images " + itoa(metadataImagesMax) + ", else the list is left out and named in omitted. " +
+		"Addresses are text and never fetched"},
+	{Name: "omitted", Description: "Paths of parts left out because they exceed a bound, such as props or metadata.embeds[2].data"},
 }
 
 var messagesList = capability.Descriptor{
@@ -240,6 +268,14 @@ type postJSON struct {
 	RootID    string `json:"root_id"`
 	Message   string `json:"message"`
 	Type      string `json:"type"`
+
+	UpdateAt      flexInt            `json:"update_at"`
+	OriginalID    tolerant[string]   `json:"original_id"`
+	Hashtag       tolerant[string]   `json:"hashtag"`
+	PendingPostID tolerant[string]   `json:"pending_post_id"`
+	FileIDs       tolerant[[]string] `json:"file_ids"`
+	Props         json.RawMessage    `json:"props"`
+	Metadata      json.RawMessage    `json:"metadata"`
 }
 
 // postListJSON is the cursor-ish pagination envelope kChat reports for a channel's posts and for a thread:
@@ -251,12 +287,13 @@ type postListJSON struct {
 	HasNext    bool                `json:"has_next"`
 }
 
-// ordered returns the posts of one postListJSON in its own order, normalised to the stable envelope.
-func (p postListJSON) ordered() []MessageEntry {
+// ordered returns the posts of one postListJSON in its own order, normalised to the stable envelope. A
+// deleted post and a post of another channel than channelID are dropped.
+func (p postListJSON) ordered(channelID string) []MessageEntry {
 	entries := make([]MessageEntry, 0, len(p.Order))
 	for _, id := range p.Order {
 		post, ok := p.Posts[id]
-		if !ok {
+		if !ok || post.DeleteAt > 0 || post.ChannelID != channelID {
 			continue
 		}
 		entries = append(entries, messageEntryOf(post))
@@ -272,6 +309,25 @@ func messageEntryOf(p postJSON) MessageEntry {
 	if p.EditAt > 0 {
 		entry.EditedAt = msToRFC3339(p.EditAt)
 	}
+	entry.UpdatedAt = msToRFC3339(int64(p.UpdateAt))
+	entry.OriginalID = cleanText(p.OriginalID.Value)
+	entry.Hashtag = cleanText(p.Hashtag.Value)
+	entry.PendingPostID = cleanText(p.PendingPostID.Value)
+	var omitted []string
+	if ids := p.FileIDs.Value; len(ids) > metadataListMax {
+		omitted = append(omitted, "file_ids")
+	} else {
+		for _, id := range ids {
+			entry.FileIDs = append(entry.FileIDs, cleanText(id))
+		}
+	}
+	props, within := boundedFreeObject(p.Props)
+	if !within {
+		omitted = append(omitted, "props")
+	}
+	entry.Props = props
+	entry.Metadata = metadataOf(p.Metadata, &omitted)
+	entry.Omitted = omitted
 	return entry
 }
 
@@ -285,6 +341,15 @@ type MessageEntry struct {
 	Type      string `json:"type"`
 	CreatedAt string `json:"created_at"`
 	EditedAt  string `json:"edited_at,omitempty"`
+
+	UpdatedAt     string           `json:"updated_at,omitempty"`
+	OriginalID    string           `json:"original_id,omitempty"`
+	Hashtag       string           `json:"hashtag,omitempty"`
+	PendingPostID string           `json:"pending_post_id,omitempty"`
+	FileIDs       []string         `json:"file_ids,omitempty"`
+	Props         map[string]any   `json:"props,omitempty"`
+	Metadata      *MessageMetadata `json:"metadata,omitempty"`
+	Omitted       []string         `json:"omitted,omitempty"`
 }
 
 // MessagesPage is one paginated listing of the messages of one channel.
@@ -357,7 +422,7 @@ func (c *Client) ListMessages(ctx context.Context, channelID string, page, limit
 		&list, false); err != nil {
 		return nil, err
 	}
-	entries := list.ordered()
+	entries := list.ordered(channelID)
 	return &MessagesPage{ChannelID: channelID, Messages: entries, Page: page, HasMore: list.HasNext, Count: len(entries)}, nil
 }
 
@@ -436,7 +501,7 @@ func (c *Client) ReadThread(ctx context.Context, postID, channelID, cursor strin
 		false); err != nil {
 		return nil, err
 	}
-	entries := list.ordered()
+	entries := list.ordered(channelID)
 	thread := &Thread{PostID: postID, ChannelID: channelID, Messages: entries, HasMore: list.HasNext, Count: len(entries)}
 	if list.HasNext && list.NextPostID != "" {
 		thread.Cursor = list.NextPostID
