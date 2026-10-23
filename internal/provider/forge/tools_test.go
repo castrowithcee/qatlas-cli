@@ -125,6 +125,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == forgejo {
 			want = append(want, p.id+".git-blobs.list", p.id+".git-notes.set", p.id+".git-notes.delete")
 		}
+		want = append(want, p.id+".pull-request-reviewers.list", p.id+".pull-request-reviewers.request",
+			p.id+".pull-request-reviewers.remove")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
