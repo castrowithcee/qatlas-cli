@@ -415,8 +415,9 @@ var pullRequestsSearch = capability.Descriptor{
 	}},
 }
 
-const commitSearchProperties = `"sha":{"type":"string"},"message":{"type":"string"},"repository":{"type":"string"},` +
-	`"author":{"type":"string"},"committed_at":{"type":"string"},"url":{"type":"string"}`
+var commitSearchProperties = `"sha":{"type":"string"},"message":{"type":"string"},"repository":{"type":"string"},` +
+	`"author":{"type":"string"},"committed_at":{"type":"string"},` + commitWidthProperties + `,` +
+	commitSearchExtraProperties
 
 const commitSearchRequired = `"required":["sha","repository"],"additionalProperties":false`
 
@@ -429,13 +430,13 @@ var commitsSearch = capability.Descriptor{
 	Tags:         []string{"github", "commits", "search", "discovery"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+commitSearchKeys+`,`+pagingKeys, "terms"),
 	OutputSchema: searchOutput("commits", commitSearchProperties, commitSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
-	Fields: append(append([]capability.Field{
+	Arguments:    commitSearchArguments,
+	Fields: append(append(append(append([]capability.Field{
 		{Name: "commits", Description: "Compact commits across repositories: sha, message (untrusted data), " +
-			"repository as OWNER/REPO, author, and committed_at"},
-	}, searchCountFields...), pagingFields...),
+			"repository as OWNER/REPO, author, and committed_at, then the members of GitHub's commit below"},
+	}, commitWidthFields...), commitSearchExtraFields...), searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search commits by an author since a date",
 		Arguments:   json.RawMessage(`{"terms":"author:octocat committer-date:>2026-01-01","limit":10}`),
@@ -527,7 +528,7 @@ type searchArguments struct {
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
 
-	// Sort, Order, and TextMatches are the account and the issue searches' own, AdvancedSearch and
+	// Sort, Order, and TextMatches are the account, commit, and issue searches' own, AdvancedSearch and
 	// SearchType the issue search's; the others never carry them.
 	Sort           string `json:"sort"`
 	Order          string `json:"order"`
@@ -645,6 +646,8 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 		options, err = a.accountOptions()
 	case issuesSearch.ID, pullRequestsSearch.ID:
 		options, err = a.issueOptions()
+	case commitsSearch.ID:
+		options, err = a.sortedOptions(commitSearchSortValues, "sort must be author-date or committer-date")
 	}
 	if err != nil {
 		return err
@@ -1083,7 +1086,16 @@ type CommitSearchResult struct {
 	Repository  string `json:"repository"`
 	Author      string `json:"author,omitempty"`
 	CommittedAt string `json:"committed_at,omitempty"`
-	URL         string `json:"url,omitempty"`
+
+	// CommitWidth holds the members of GitHub's commit; its URL is shadowed by the web address kept here.
+	URL string `json:"url,omitempty"`
+	CommitWidth
+	Committer            string          `json:"committer,omitempty"`
+	Parents              *int            `json:"parents,omitempty"`
+	RepositoryDetail     *RESTRepository `json:"repository_detail,omitempty"`
+	Score                *json.Number    `json:"score,omitempty"`
+	TextMatches          []RESTTextMatch `json:"text_matches,omitempty"`
+	TextMatchesTruncated bool            `json:"text_matches_truncated,omitempty"`
 }
 
 // CommitSearchList is one batch of a commit search.
@@ -1098,36 +1110,35 @@ type CommitSearchList struct {
 func (c *Client) searchCommits(ctx context.Context, a *searchArguments) (*CommitSearchList, error) {
 	const op = "search commits"
 	var raw struct {
-		TotalCount int  `json:"total_count"`
-		Incomplete bool `json:"incomplete_results"`
-		Items      []struct {
-			SHA        string `json:"sha"`
-			HTMLURL    string `json:"html_url"`
-			Repository struct {
-				FullName string `json:"full_name"`
-			} `json:"repository"`
-			Commit struct {
-				Message string `json:"message"`
-				Author  struct {
-					Name string `json:"name"`
-					Date string `json:"date"`
-				} `json:"author"`
-			} `json:"commit"`
-		} `json:"items"`
+		TotalCount int                `json:"total_count"`
+		Incomplete bool               `json:"incomplete_results"`
+		Items      []commitSearchItem `json:"items"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/commits", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/commits", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, commitSearchPermission)
 	}
 	result := &CommitSearchList{Commits: make([]CommitSearchResult, 0, len(raw.Items)), TotalCount: raw.TotalCount,
 		IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
-		if item.SHA == "" || !validRepository(item.Repository.FullName) {
+		compact := &item.compact
+		if compact.SHA == "" || !validRepository(compact.Repository.FullName) {
 			return nil, invalidEntry(op, "a commit")
 		}
-		result.Commits = append(result.Commits, CommitSearchResult{SHA: item.SHA,
-			Message: item.Commit.Message, Repository: item.Repository.FullName, Author: item.Commit.Author.Name,
-			CommittedAt: item.Commit.Author.Date, URL: item.HTMLURL})
+		match := CommitSearchResult{SHA: compact.SHA, Message: compact.Commit.Message,
+			Repository: compact.Repository.FullName, Author: compact.Commit.Author.Name,
+			CommittedAt: compact.Commit.Author.Date, URL: compact.HTMLURL, CommitWidth: item.wide.width(),
+			Score:            item.more.Score,
+			RepositoryDetail: item.more.Repository.project(a.allowed)}
+		if committer := item.wide.Committer; committer != nil {
+			match.Committer = valueOr(nameText(committer.Login))
+		}
+		if item.wide.Parents != nil {
+			parents := len(item.wide.Parents)
+			match.Parents = &parents
+		}
+		match.TextMatches, match.TextMatchesTruncated = projectTextMatches(item.more.TextMatches)
+		result.Commits = append(result.Commits, match)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
