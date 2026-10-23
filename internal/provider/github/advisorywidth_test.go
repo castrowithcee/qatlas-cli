@@ -154,6 +154,9 @@ func TestGlobalAdvisoryWidthCarriesEveryDocumentedMember(t *testing.T) {
 		wantMember(t, got, "identifiers", []any{
 			map[string]any{"type": "GHSA", "value": "GHSA-abcd-1234-efgh"},
 			map[string]any{"type": "CVE", "value": "CVE-2050-00000"}})
+		wantMember(t, got, "description", "This bug allows an attacker to read memory.")
+		wantMember(t, got, "references", []any{"https://nvd.nist.gov/vuln/detail/CVE-2050-00000"})
+		wantMember(t, got, "source_code_location", "https://github.com/project/a-package")
 		wantMember(t, got, "cwes", []any{"CWE-400"})
 		wantMember(t, got, "cwes_details", []any{map[string]any{"cwe_id": "CWE-400", "name": "Uncontrolled Resource Consumption"}})
 		wantMember(t, got, "links", map[string]any{"url": "https://api.github.com/advisories/GHSA-abcd-1234-efgh",
