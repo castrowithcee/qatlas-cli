@@ -58,6 +58,7 @@ type (
 // output do not already carry, so all three tools gain every member together.
 type messageHeadOut struct {
 	messageContentOut
+	messageServiceOut
 	DirectMessagesTopic    *directMessagesTopicOut `json:"direct_messages_topic,omitempty"`
 	SenderChat             *chatRefOut             `json:"sender_chat,omitempty"`
 	SenderBoostCount       int64                   `json:"sender_boost_count,omitempty"`
@@ -162,6 +163,8 @@ func (c *Client) messageHead(m *tgMessage, s messageScope, nested bool) (head me
 	}
 	head.messageContentOut, contentOmitted = s.messageContent(m)
 	omitted = append(omitted, contentOmitted...)
+	head.messageServiceOut, contentOmitted = c.messageService(m, s, nested)
+	omitted = append(omitted, contentOmitted...)
 	head.SenderChat = bounded(&omitted, "sender_chat", s.headChat(m.SenderChat))
 	head.SenderBusinessBot = bounded(&omitted, "sender_business_bot", headUser(m.SenderBusinessBot))
 	head.ReceiverUser = bounded(&omitted, "receiver_user", headUser(m.ReceiverUser))
@@ -252,6 +255,9 @@ var messageHeadSchema = func() string {
 	} {
 		b.WriteString(chatInfoProperty(p.name, p.schema))
 	}
+	for _, p := range serviceSchema {
+		b.WriteString(chatInfoProperty(p.name, p.schema))
+	}
 	return b.String()
 }()
 
@@ -267,7 +273,7 @@ const messageHeadText = "the Bot API Message header members direct_messages_topi
 	"checklist, contact, dice, game, poll, venue, location, invoice, reply_markup, giveaway and giveaway_winners " +
 	"(each text bounded and entities at most 100; every file_id is a file_ref; addresses are untrusted text and " +
 	"never fetched), each only when Telegram sent it; chats named there are data only and never targets, and a " +
-	"business message shows no chat of its connection"
+	"business message shows no chat of its connection; " + messageServiceText
 
 var messageHeadFields = []capability.Field{
 	{Name: "pinned_message", Description: "Pinned message as an object with message_id, message_thread_id, date, from, text, caption, media_items, omitted_fields and " + messageHeadText},

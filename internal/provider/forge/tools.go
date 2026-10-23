@@ -64,9 +64,12 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	issuePinsUnpin, issuePinsMove, projectsList, projectsGet, projectsCreate, projectsUpdate, projectsDelete,
 	projectColumnsList, projectColumnsGet, projectColumnsCreate, projectColumnsUpdate, projectColumnsDelete,
 	projectColumnsMove, projectColumnsSetDefault, projectIssuesList, projectIssuesAdd, projectIssuesRemove,
-	projectIssuesMove, reviewsList, reviewsGet, reviewsCreate, reviewsSubmit, reviewsApprove, reviewsDelete,
-	reviewsDismiss, reviewsUndismiss, reviewCommentsList, reviewCommentsGet, reviewCommentsCreate,
-	reviewCommentsDelete, reviewCommentsReply, reviewCommentsResolve, reviewCommentsUnresolve}
+	projectIssuesMove, issueSubscriptionsList, issueSubscriptionsCheck, issueSubscriptionsAdd,
+	issueSubscriptionsRemove, issueLocksLock, issueLocksUnlock, branchesList, branchesGet, branchesCreate,
+	branchesRename, branchesUpdateRef, branchesDelete, reviewsList, reviewsGet, reviewsCreate, reviewsSubmit,
+	reviewsApprove, reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList, reviewCommentsGet,
+	reviewCommentsCreate, reviewCommentsDelete, reviewCommentsReply, reviewCommentsResolve,
+	reviewCommentsUnresolve}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

@@ -47,7 +47,7 @@ func TestEmojiListReturnsOnlyTheAllowedFieldsAndPages(t *testing.T) {
 	env := newEnvironment(t, &calls, emojiHandler(t, bothTeams))
 	result, err := env.invoke(emojiList.ID, "botall", `{"page":3,"per_page":2}`)
 	if err != nil || strings.Contains(result, "bad") || strings.Contains(result, "leak-canary") ||
-		strings.Contains(result, "update_at") || !strings.Contains(result, `"count":1`) ||
+		!strings.Contains(result, `"updated_at":"1970-01-01T00:00:00Z"`) || !strings.Contains(result, `"count":1`) ||
 		!strings.Contains(result, `"created_at":"2025-01-01T00:00:00Z"`) ||
 		!strings.Contains(result, `"has_more":true`) || len(calls) != 2 || calls[1].path != "/api/v4/emoji" ||
 		calls[1].query.Get("page") != "2" || calls[1].query.Get("per_page") != "2" ||

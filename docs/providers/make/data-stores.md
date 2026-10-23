@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Make: data stores and records
@@ -42,10 +42,14 @@ Fields are typed and bounded: `name` 1 to 128 characters without control charact
 `max_size_mb` an integer from 1 to 1048576 (the upper bound is a local ceiling, Make documents none), and an
 update needs at least one of `name`, `datastructure_id`, `max_size_mb`. Only allow-listed fields are returned
 (`id`, `name`, `team_id`, `records`, `size`, `max_size`, `datastructure_id`; strings capped at 256 characters;
-size values are decoded as text or number). A structure's specification is returned as name, type, label,
-required, multiline, sequence, codepage, and nested spec, at most 200 fields and 4 levels, 128 characters per
-string, without default values; `spec_truncated` marks a cut. All of it is untrusted data. Lists return at most
-200 entries per page, sorted by name.
+size values are decoded as text or number). A structure's specification is returned by `data-structures.list`,
+`data-structures.get`, and `data-store-records.list` with at most 200 fields and 4 levels and 128 characters per
+string. The default of a boolean, text, or number field is returned as a value of that type, numbers as the exact
+literal Make sent. A default that has another type than its field, cannot be read, or is longer than 256
+characters is left out, never cut, and `spec_truncated` marks it like any other omitted part; the other field
+types have no documented default. All of it is untrusted data. Lists return at most 200 entries per page, sorted
+by name; `sort_dir` only sets the direction (`asc` when omitted), because `name` is the one sort column Make
+documents.
 
 `make.data-stores.delete` reads and binds the store, then sends one `DELETE /data-stores` with the bound `teamId`
 and exactly one id; the delete-all form is never used. Make requires `confirmed=true` when a scenario includes
@@ -67,6 +71,10 @@ store of the bound team. Every
 list or the one changing request; a store of another team is refused without naming it. A connection with a scenario
 allow-list reaches none of them. Make scopes: `datastores:read` for `list`; `datastores:write` and `datastores:read`
 for create, replace, update, and delete.
+
+Make reports the store's specification and `strict` flag with every page of records, and both are returned like
+those of a data structure. `total_count` is Make's own count of the records in the store and `count` stays the
+number of records on the page. Records have no sorting argument: Make documents no sorting for records.
 
 Source: developers.make.com API reference, Data stores, Data (checked against the published reference, not a
 live account). Record contents are untrusted user data and likely personal data (sensitivity

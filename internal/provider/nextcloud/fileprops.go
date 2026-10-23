@@ -30,12 +30,16 @@ const (
 	maxJSONString  = 256
 	maxPermItems   = 32
 	maxShortValue  = 256
+	maxACLRules    = 50
+	maxACLMembers  = 10
 	fieldSharees   = "sharees"
 	fieldShareType = "share_types"
 	fieldTags      = "tags"
 	fieldChecksums = "checksums"
 	fieldShareAttr = "share_attributes"
 	fieldOCMPerms  = "ocm_share_permissions"
+	fieldACLList   = "acl_list"
+	fieldInhACL    = "inherited_acl_list"
 )
 
 // The keys of the file properties added to the normalised entry.
@@ -74,6 +78,26 @@ const (
 	treeShareType = "sharetypes"
 	treeTags      = "tags"
 	treeChecksums = "checksums"
+	treeACLList   = "acllist"
+	treeInhACL    = "inheritedacllist"
+)
+
+// The keys of the app and server feature properties.
+const (
+	propGroupFolderID     = "groupfolderid"
+	propACLEnabled        = "aclenabled"
+	propACLCanManage      = "aclcanmanage"
+	propLock              = "lock"
+	propLockOwnerType     = "lockownertype"
+	propLockOwner         = "lockowner"
+	propLockOwnerName     = "lockownername"
+	propLockOwnerEditor   = "lockowneditor"
+	propLockTime          = "locktime"
+	propLockTimeout       = "locktimeout"
+	propRichWorkspaceFile = "richworkspacefile"
+	propReminderDue       = "reminderdue"
+	propVersionLabel      = "versionlabel"
+	propVersionAuthor     = "versionauthor"
 )
 
 // extraProps are properties stored under a second key besides the one in wantedProps. oc:id is the tag
@@ -85,10 +109,12 @@ var extraProps = map[xml.Name]string{
 // treeProps are the properties whose value is a nested or repeated element structure rather than text.
 // Supporting another one of this kind needs an entry here and a mapper in fileProps.
 var treeProps = map[xml.Name]string{
-	{Space: ncNS, Local: "sharees"}:     treeSharees,
-	{Space: ocNS, Local: "share-types"}: treeShareType,
-	{Space: ocNS, Local: "tags"}:        treeTags,
-	{Space: ocNS, Local: "checksums"}:   treeChecksums,
+	{Space: ncNS, Local: "sharees"}:            treeSharees,
+	{Space: ocNS, Local: "share-types"}:        treeShareType,
+	{Space: ocNS, Local: "tags"}:               treeTags,
+	{Space: ocNS, Local: "checksums"}:          treeChecksums,
+	{Space: ncNS, Local: "acl-list"}:           treeACLList,
+	{Space: ncNS, Local: "inherited-acl-list"}: treeInhACL,
 }
 
 // propNode is one element of a nested property value, reduced to its name, its text, and its children.
@@ -264,6 +290,54 @@ var fileProps = []fileProp{
 	}},
 	{xml: "<nc:contained-folder-count/>", folder: true, set: func(e *Entry, r *resource, _ *omissions) {
 		e.ContainedFolderCount = integer(r.props[propContainedDirs], 0)
+	}},
+	{xml: "<nc:group-folder-id/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.GroupFolderID = integer(r.props[propGroupFolderID], 0)
+	}},
+	{xml: "<nc:acl-enabled/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.ACLEnabled = flag(r.props[propACLEnabled])
+	}},
+	{xml: "<nc:acl-can-manage/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.ACLCanManage = flag(r.props[propACLCanManage])
+	}},
+	{xml: "<nc:acl-list/>", set: func(e *Entry, r *resource, o *omissions) {
+		e.ACLList = aclRules(r, treeACLList, fieldACLList, o)
+	}},
+	{xml: "<nc:inherited-acl-list/>", set: func(e *Entry, r *resource, o *omissions) {
+		e.InheritedACLList = aclRules(r, treeInhACL, fieldInhACL, o)
+	}},
+	{xml: "<nc:lock/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.Locked = flag(r.props[propLock])
+	}},
+	{xml: "<nc:lock-owner-type/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockOwnerType = integer(r.props[propLockOwnerType], 0)
+	}},
+	{xml: "<nc:lock-owner/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockOwner = cleanText(r.props[propLockOwner], maxShortValue)
+	}},
+	{xml: "<nc:lock-owner-displayname/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockOwnerDisplayName = cleanText(r.props[propLockOwnerName], maxShortValue)
+	}},
+	{xml: "<nc:lock-owner-editor/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockOwnerEditor = cleanText(r.props[propLockOwnerEditor], maxShortValue)
+	}},
+	{xml: "<nc:lock-time/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockTime = positive(r.props[propLockTime])
+	}},
+	{xml: "<nc:lock-timeout/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.LockTimeout = integer(r.props[propLockTimeout], 0)
+	}},
+	{xml: "<nc:rich-workspace-file/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.RichWorkspaceFile = cleanText(r.props[propRichWorkspaceFile], maxShortValue)
+	}},
+	{xml: "<nc:reminder-due-date/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.ReminderDueDate = timeText(r.props[propReminderDue])
+	}},
+	{xml: "<nc:version-label/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.VersionLabel = cleanText(r.props[propVersionLabel], maxShortValue)
+	}},
+	{xml: "<nc:version-author/>", set: func(e *Entry, r *resource, _ *omissions) {
+		e.VersionAuthor = cleanText(r.props[propVersionAuthor], maxShortValue)
 	}},
 	{xml: "<nc:last_activity/>", search: true, searchOnly: true, set: func(e *Entry, r *resource, _ *omissions) {
 		e.LastActivity = cleanText(r.props[propLastActivity], maxShortValue)
@@ -464,6 +538,40 @@ func sharees(r *resource, o *omissions) []FileSharee {
 	return out
 }
 
+// aclRules reads the rules of a group folder ACL list. Each rule is an nc:acl element whose children
+// become keys (the local name in snake_case) with their cleaned text. A list over the rule bound, or a
+// rule over the member bound, is left out as a whole and named.
+func aclRules(r *resource, tree, field string, o *omissions) []map[string]string {
+	var out []map[string]string
+	for _, n := range children(r, tree, field, o) {
+		if n.name.Local != "acl" {
+			continue
+		}
+		if len(n.children) > maxACLMembers {
+			o.add(field)
+			return nil
+		}
+		rule := map[string]string{}
+		for _, c := range n.children {
+			key := strings.ReplaceAll(c.name.Local, "-", "_")
+			if _, seen := rule[key]; seen {
+				continue
+			}
+			if value := cleanText(c.text, maxShortValue); value != "" {
+				rule[key] = value
+			}
+		}
+		if len(rule) > 0 {
+			out = append(out, rule)
+		}
+	}
+	if len(out) > maxACLRules {
+		o.add(field)
+		return nil
+	}
+	return out
+}
+
 // decodeJSON reads one JSON document without a floating point step and refuses trailing data.
 func decodeJSON(raw string) (any, bool) {
 	decoder := json.NewDecoder(strings.NewReader(raw))
@@ -581,6 +689,9 @@ func (c *Client) fileEntryOf(relative []string, res *resource, search bool) *Ent
 	return entry
 }
 
+// aclSchema is one ACL rule list: objects of text values keyed by the child element names.
+const aclSchema = `{"type":"array","items":{"type":"object","additionalProperties":{"type":"string"}}}`
+
 // entryExtraSchema is the schema of the properties beyond the fixed nine; it ends the property list of
 // entrySchema.
 const entryExtraSchema = `"created_at":{"type":"string"},"creation_time":{"type":"integer"},` +
@@ -600,6 +711,12 @@ const entryExtraSchema = `"created_at":{"type":"string"},"creation_time":{"type"
 	`"data_fingerprint":{"type":"string"},"quota_used_bytes":{"type":"integer"},` +
 	`"quota_available_bytes":{"type":"integer"},"contained_file_count":{"type":"integer"},` +
 	`"contained_folder_count":{"type":"integer"},"last_activity":{"type":"string"},` +
+	`"group_folder_id":{"type":"integer"},"acl_enabled":{"type":"boolean"},"acl_can_manage":{"type":"boolean"},` +
+	`"acl_list":` + aclSchema + `,"inherited_acl_list":` + aclSchema + `,` +
+	`"locked":{"type":"boolean"},"lock_owner_type":{"type":"integer"},"lock_owner":{"type":"string"},` +
+	`"lock_owner_display_name":{"type":"string"},"lock_owner_editor":{"type":"string"},` +
+	`"lock_time":{"type":"integer"},"lock_timeout":{"type":"integer"},"rich_workspace_file":{"type":"string"},` +
+	`"reminder_due_date":{"type":"string"},"version_label":{"type":"string"},"version_author":{"type":"string"},` +
 	`"omitted_fields":{"type":"array","items":{"type":"string"}}`
 
 // entryExtraFields describes the properties beyond the fixed nine.
@@ -638,5 +755,21 @@ var entryExtraFields = []capability.Field{
 	{Name: "contained_file_count", Description: "Folders only: number of files in the subtree"},
 	{Name: "contained_folder_count", Description: "Folders only: number of folders in the subtree"},
 	{Name: "last_activity", Description: "Search only: last activity of the node as Nextcloud reports it, untrusted data"},
+	{Name: "group_folder_id", Description: "Group folder identifier of the node, absent outside a group folder"},
+	{Name: "acl_enabled", Description: "True when advanced permissions (ACL) are enabled on the group folder"},
+	{Name: "acl_can_manage", Description: "True when the identity may manage the ACL rules of the group folder"},
+	{Name: "acl_list", Description: "ACL rules of the node, each an object of the rule elements such as acl_mapping_type, acl_mapping_id, acl_mapping_display_name, acl_mask and acl_permissions; at most 50 rules of 10 members, otherwise left out; untrusted data"},
+	{Name: "inherited_acl_list", Description: "ACL rules the node inherits, in the form of acl_list; untrusted data"},
+	{Name: "locked", Description: "True when the file is locked"},
+	{Name: "lock_owner_type", Description: "Kind of the lock owner: 0 user, 1 app such as Office or Text, 2 WebDAV"},
+	{Name: "lock_owner", Description: "User ID or app that holds the lock, untrusted data"},
+	{Name: "lock_owner_display_name", Description: "Display name of the lock owner, untrusted data"},
+	{Name: "lock_owner_editor", Description: "Editor or app through which the lock was taken, untrusted data"},
+	{Name: "lock_time", Description: "Lock time in Unix seconds, absent when unknown"},
+	{Name: "lock_timeout", Description: "Lock lifetime in seconds; 0 means no expiry"},
+	{Name: "rich_workspace_file", Description: "File ID of the workspace file of the folder; its text is never read"},
+	{Name: "reminder_due_date", Description: "Due date of the reminder of the identity, normalised to RFC 3339 in UTC"},
+	{Name: "version_label", Description: "Label of the file version, untrusted data"},
+	{Name: "version_author", Description: "User ID of the author of the file version, untrusted data"},
 	{Name: "omitted_fields", Description: "Fields left out because their value exceeded a bound"},
 }

@@ -179,6 +179,12 @@ var outputFieldCases = []struct {
 	{workflowsGet.ID, "open", `{"workflow_id":"` + ownWorkflow + `"}`, "/workflows/" + ownWorkflow, richWorkflow(), 100},
 	{executionsGet.ID, "open", `{"execution_id":1}`, "/executions/1", richExecutionDetail, 21},
 	{dataTablesList.ID, "open", `{}`, "/data-tables", `{"data":[` + richDataTable + `],"nextCursor":"c"}`, 19},
+	{credentialsList.ID, "open", `{}`, "/credentials", `{"data":[` + richSharedCredential() + `],"nextCursor":"c"}`, 17},
+	{credentialsGet.ID, "open", `{"credential_id":"` + ownCredential + `"}`, "/credentials/" + ownCredential,
+		`{"id":"` + ownCredential + `","name":"n","type":"t","isManaged":false,"isGlobal":false,"isResolvable":false,` +
+			`"resolvableAllowFallback":false,"resolverId":"r","description":"d","createdAt":"c","updatedAt":"u"}`, 11},
+	{usersList.ID, "pdelete-open", `{}`, "/users", `{"data":[` + userBody + `],"nextCursor":"c"}`, 12},
+	{usersGet.ID, "pdelete-open", `{"user_id":"` + ownUser + `"}`, "/users/" + ownUser, userBody, 8},
 	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},
 }
 

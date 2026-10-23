@@ -78,6 +78,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".issue-attachments.upload", p.id+".comment-attachments.delete", p.id+".comment-attachments.download",
 			p.id+".comment-attachments.get", p.id+".comment-attachments.list", p.id+".comment-attachments.update",
 			p.id+".comment-attachments.upload")
+		want = append(want, p.id+".branches.create", p.id+".branches.delete", p.id+".branches.get",
+			p.id+".branches.list", p.id+".branches.rename")
+		if p == gitea {
+			want = append(want, p.id+".branches.update-ref")
+		}
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
@@ -85,7 +90,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
 			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
 		want = append(want, p.id+".issue-pins.list", p.id+".issue-pins.check-allowed", p.id+".issue-pins.pin",
-			p.id+".issue-pins.unpin", p.id+".issue-pins.move")
+			p.id+".issue-pins.unpin", p.id+".issue-pins.move", p.id+".issue-subscriptions.list",
+			p.id+".issue-subscriptions.check", p.id+".issue-subscriptions.add", p.id+".issue-subscriptions.remove")
+		want = append(want, p.id+".issue-locks.lock", p.id+".issue-locks.unlock")
 		want = append(want, p.id+".pull-request-reviews.list", p.id+".pull-request-reviews.get",
 			p.id+".pull-request-reviews.create", p.id+".pull-request-reviews.submit",
 			p.id+".pull-request-reviews.approve", p.id+".pull-request-reviews.delete",

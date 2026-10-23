@@ -28,7 +28,8 @@ list.
 ## Users
 
 A user's id, email, names, instance role, pending status, and times are personal data (`data_sensitivity`
-`n8n-users-personal`) and returned capped, as untrusted data. MFA state is not returned. Qatlas creates no
+`n8n-users-personal`) and returned capped, as untrusted data. The MFA status of other users is an account
+security detail and is not returned, for security reasons. Qatlas creates no
 permanent access or data paths to the outside (webhooks, invitations, public links); reading, pausing,
 revoking, and deleting remain, so no tool invites a user.
 
@@ -37,7 +38,8 @@ revoking, and deleting remain, so no tool invites a user.
   locally on a connection with any `project/` or `workflow/` target (`requireInstanceScope`), before a secret
   is read and before any request.
 - **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
-  not. `n8n.users.list` does not forward n8n's `projectId` filter.
+  not. `n8n.users.list` can filter by project; the `project_id` is checked locally and an unknown project is
+  answered as not found by n8n. The filter does not lift the instance-wide gate.
 - **Roles.** Only `global:admin`, `global:member`, and `global:chatUser` can be assigned, as `role` of
   `n8n.users.set-role` (sent as `newRoleName`). `global:owner` and free-form role names are never sent.
 - **Delete** cannot be undone. It needs exactly one choice for the user's workflows and credentials:

@@ -34,7 +34,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type call struct {
-	method, path, query, auth, contentType, body string
+	method, path, query, auth, contentType, body, escaped string
 }
 
 // serve answers every request with handler and records it. A request to another host, with a Sudo header, a
@@ -43,8 +43,8 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 	t.Helper()
 	previous := transport
 	transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		entry := call{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
-			contentType: r.Header.Get("Content-Type")}
+		entry := call{method: r.Method, path: r.URL.Path, escaped: r.URL.EscapedPath(), query: r.URL.RawQuery,
+			auth: r.Header.Get("Authorization"), contentType: r.Header.Get("Content-Type")}
 		if r.Body != nil {
 			data, _ := io.ReadAll(r.Body)
 			entry.body = string(data)

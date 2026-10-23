@@ -178,7 +178,8 @@ func (c *Client) CreateEmoji(ctx context.Context, name, fileName, fileType strin
 
 func emojiEntryOf(e *emojiJSON) *EmojiEntry {
 	return &EmojiEntry{ID: e.ID, Name: bounded(e.Name), CreatorID: bounded(e.CreatorID),
-		CreatedAt: msToRFC3339(e.CreateAt)}
+		CreatedAt: msToRFC3339(e.CreateAt), UpdatedAt: msToRFC3339(int64(e.UpdateAt)),
+		DeletedAt: msToRFC3339(int64(e.DeleteAt))}
 }
 
 func invokeEmojiDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

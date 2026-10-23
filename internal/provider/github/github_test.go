@@ -50,6 +50,8 @@ type fakeItem struct {
 	number                              int
 	assignees, labels                   []string
 	archived                            bool
+	// node replaces the answered item node with this JSON object, to give a test members the fake does not model.
+	node string
 }
 
 type fakeIssue struct {
@@ -256,7 +258,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user/starred":
 		repos := []string{}
 		for _, star := range f.starList {
-			repos = append(repos, fmt.Sprintf(`{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}`,
+			repos = append(repos, fmt.Sprintf(`{"repo":{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}}`,
 				star.fullName, star.visibility, star.archived, star.owner))
 		}
 		fmt.Fprint(w, "["+strings.Join(repos, ",")+"]")
@@ -340,6 +342,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.blame(w, document, variables):
 	case f.issueFieldsChange(w, document, variables):
 	case f.issueFieldsPage(w, document, variables):
+	case strings.Contains(document, "issues(first:$first,after:$after,orderBy:$orderBy"):
+		f.issuesPage(w, variables)
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -398,6 +402,13 @@ func (f *fakeGitHub) projectJSON() string {
 }
 
 func itemNodeJSON(item fakeItem, project string, withBody bool) string {
+	if item.node != "" {
+		node := strings.TrimSuffix(item.node, "}")
+		if project != "" {
+			node += `,"project":{"id":"` + project + `"}`
+		}
+		return node + "}"
+	}
 	values := []string{`{"text":"` + item.title + `","field":{"id":"F_title"}}`,
 		`{"name":"P1","field":{"id":"F_prio"}}`, `{"number":3,"field":{"id":"F_est"}}`,
 		`{"date":"2026-10-01","field":{"id":"F_due"}}`, `{"title":"Sprint 4","field":{"id":"F_sprint"}}`,
@@ -1077,8 +1088,8 @@ func TestDefaultRosterIsBoundedFilteredAndGapless(t *testing.T) {
 			request.accept != "application/vnd.github+json" {
 			t.Errorf("request = %+v, want an authenticated, versioned GraphQL call", request)
 		}
-		if strings.Contains(request.document, "body") || strings.Contains(request.document, "comments") {
-			t.Errorf("the list asked for bodies or comments: %s", request.document)
+		if strings.Contains(request.document, "comments(") || strings.Contains(request.document, "bodyHTML") {
+			t.Errorf("the list asked for comments or a rendered body: %s", request.document)
 		}
 	}
 	item := first.Items[0]
@@ -1331,7 +1342,7 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 	filter, _ := vars["filter"].(map[string]any)
 	if fmt.Sprint(filter["states"]) != "[OPEN]" || fmt.Sprint(filter["labels"]) != "[bug]" || filter["assignee"] != "octocat" ||
 		vars["owner"] != "octo-org" || vars["name"] != "example" || vars["first"] != float64(30) ||
-		strings.Contains(request.document, "body") || strings.Contains(request.document, "comments") {
+		strings.Contains(request.document, "bodyHTML") || strings.Contains(request.document, "comments(") {
 		t.Errorf("request = %+v", request)
 	}
 	all, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Limit: 100})
@@ -1512,8 +1523,8 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	// The list tools of contract version 2 leave out the URL of each entry, derivable from the repository
-	// and the number or identifier; the detail tools, still at version 1, keep it. A repository-bound list
+	// The issue lists leave out the URL of each entry, derivable from the repository and the number; the item
+	// list and the detail tools keep it. A repository-bound list
 	// also names the repository once at the result level, through the target argument every tool adds.
 	for _, tt := range []struct {
 		request  application.InvokeRequest
@@ -1557,8 +1568,11 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		}
 		for _, entry := range entries {
 			if fields, ok := entry.(map[string]any); ok {
-				if _, ok := fields["url"]; ok {
-					t.Errorf("%s entry carries a url: %v", tt.request.Operation, fields)
+				// Issue and item lists carry each entry's url; a draft issue has none.
+				_, ok := fields["url"]
+				want := tt.request.Operation == "github.issues.list" || tt.request.Operation == "github.project-items.list"
+				if fields["type"] != "draft_issue" && ok != want {
+					t.Errorf("%s entry url = %v: %v", tt.request.Operation, ok, fields)
 				}
 			}
 		}

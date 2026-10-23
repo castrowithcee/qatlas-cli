@@ -177,7 +177,7 @@ func TestOutgoingWebhooksListFiltersAndShowsOnlyCallbackOrigins(t *testing.T) {
 	}
 	if !strings.Contains(result, `"callback_origins":["https://hooks.example.invalid:8443","http://plain.example.invalid"]`) ||
 		!strings.Contains(result, `"count":3`) || !strings.Contains(result, `"has_more":false`) ||
-		strings.Contains(result, "creator_id") || calls[0].query.Get("team_id") != teamA ||
+		!strings.Contains(result, `"creator_id":"u1"`) || calls[0].query.Get("team_id") != teamA ||
 		calls[0].query.Get("page") != "2" || calls[0].query.Get("per_page") != "9" ||
 		calls[0].query.Has("channel_id") || len(calls) != 2 {
 		t.Fatalf("result = %s, calls = %+v", result, calls)
@@ -218,7 +218,7 @@ func TestOutgoingWebhooksGetBindsTheHookAndHidesSecrets(t *testing.T) {
 	noSecrets(t, "get", result)
 	if err != nil || !strings.Contains(result, `"channel_id":"`+chanA+`"`) || strings.Contains(result, ohookA) ||
 		!strings.Contains(result, `"trigger_words":["deploy","ship it"]`) || !strings.Contains(result, `"trigger_when":1`) ||
-		strings.Contains(result, "creator_id") || len(calls) != 2 {
+		!strings.Contains(result, `"creator_id":"u1"`) || len(calls) != 2 {
 		t.Fatalf("result = %s, err = %v, calls = %+v", result, err, calls)
 	}
 

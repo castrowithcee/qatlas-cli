@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const insightCanary = "insight-message-canary"
+const insightText = "insight-message-text"
 
 // insightsServer answers the insights path with answer (or the given status when status is not 200) and
 // serves the channel and user reads the filters need.
@@ -38,8 +38,8 @@ func channelItem(id string) string {
 
 func threadItem(post, channel string, participants ...string) string {
 	return `{"post":{"id":"` + post + `","channel_id":"` + channel + `","user_id":"` + userInA + `","reply_count":4,` +
-		`"message":"` + insightCanary + `"},"channel_id":"` + channel + `","channel_display_name":"` + insightCanary +
-		`","participants":["` + strings.Join(participants, `","`) + `"],"user_information":[{"id":"x"}]}`
+		`"message":"` + insightText + `","extra":"canary"},"channel_id":"` + channel + `","channel_display_name":"` +
+		insightText + `","participants":["` + strings.Join(participants, `","`) + `"],"user_information":[{"id":"x"}]}`
 }
 
 func TestInsightsTopReadsEachKindFromItsFixedPath(t *testing.T) {

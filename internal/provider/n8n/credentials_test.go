@@ -271,3 +271,135 @@ func TestCredentialSharedOnlyIsReadableButNotChangeable(t *testing.T) {
 		t.Fatalf("test: %v", err)
 	}
 }
+
+// richSharedCredential is a listed credential shared into an allowed and a foreign project.
+func richSharedCredential() string {
+	return fmt.Sprintf(`{"id":%q,"name":"n","type":"httpBasicAuth","createdAt":"2026-01-01T00:00:00Z",`+
+		`"updatedAt":"2026-01-02T00:00:00Z","shared":[`+
+		`{"id":%q,"name":"Own project","role":"credential:owner","createdAt":"2026-02-01T00:00:00Z","updatedAt":"2026-02-02T00:00:00Z"},`+
+		`{"id":%q,"name":"Foreign secret name","role":"credential:user","createdAt":"2026-03-01T00:00:00Z","updatedAt":"2026-03-02T00:00:00Z"}]}`,
+		ownCredential, ownProject, foreignProject)
+}
+
+func TestCredentialsListShowsSharesAndHidesForeignProjectDetails(t *testing.T) {
+	body := `{"data":[` + richSharedCredential() + `],"nextCursor":null}`
+	for connection, foreignFull := range map[string]bool{"open": true, "project": false} {
+		var calls []call
+		env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+		result, err := env.invoke(credentialsList.ID, connection, `{}`)
+		if err != nil || !strings.Contains(result, `{"created_at":"2026-02-01T00:00:00Z","id":"`+ownProject+
+			`","name":"Own project","role":"credential:owner","updated_at":"2026-02-02T00:00:00Z"}`) {
+			t.Fatalf("%s: %s, %v", connection, result, err)
+		}
+		if got := strings.Contains(result, "Foreign secret name"); got != foreignFull {
+			t.Fatalf("%s: foreign name shown = %v: %s", connection, got, result)
+		}
+		if !strings.Contains(result, `"id":"`+foreignProject+`"`) || !strings.Contains(result, `"role":"credential:user"`) {
+			t.Fatalf("%s: foreign share lost its id and role: %s", connection, result)
+		}
+		if !foreignFull && (strings.Contains(result, "2026-03-01") || strings.Contains(result, "2026-03-02")) {
+			t.Fatalf("%s: foreign share times shown: %s", connection, result)
+		}
+	}
+}
+
+func TestCredentialsListCapsShares(t *testing.T) {
+	var shares []string
+	for i := 0; i < maxCredentialShares+5; i++ {
+		shares = append(shares, fmt.Sprintf(`{"id":"P%d","name":"p","role":"credential:user"}`, i))
+	}
+	body := `{"data":[{"id":"c","name":"n","type":"t","shared":[` + strings.Join(shares, ",") + `]}],"nextCursor":null}`
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(credentialsList.ID, "open", `{}`)
+	if err != nil || strings.Count(result, `"role":"credential:user"`) != maxCredentialShares ||
+		!strings.Contains(result, `"shared_truncated":true`) {
+		t.Fatalf("%s, %v", result, err)
+	}
+}
+
+func TestCredentialsGetShowsManagementAttributes(t *testing.T) {
+	body := fmt.Sprintf(`{"id":%q,"name":"n","type":"httpBasicAuth","isManaged":false,"isGlobal":true,`+
+		`"isResolvable":false,"resolvableAllowFallback":true,"resolverId":"res-1",`+
+		`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","description":"Read-only\u0007 key"}`, ownCredential)
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(credentialsGet.ID, "open", fmt.Sprintf(`{"credential_id":%q}`, ownCredential))
+	if err != nil || len(calls) != 1 {
+		t.Fatalf("%s, %v, %d calls", result, err, len(calls))
+	}
+	for _, want := range []string{`"is_managed":false`, `"is_global":true`, `"is_resolvable":false`,
+		`"resolvable_allow_fallback":true`, `"resolver_id":"res-1"`, `"description":"Read-only  key"`} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("missing %s in %s", want, result)
+		}
+	}
+	assertOutputDeclared(t, credentialsGet.ID, []byte(result))
+	// A read without the attributes (and a null resolver) reports none of them.
+	env = newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"id":"c","name":"n","type":"t","resolverId":null,"description":null}`), nil
+	})
+	result, err = env.invoke(credentialsGet.ID, "open", `{"credential_id":"c"}`)
+	if err != nil || result != `{"id":"c","name":"n","type":"t"}` {
+		t.Fatalf("%s, %v", result, err)
+	}
+}
+
+func schemaResult(t *testing.T, body string) string {
+	t.Helper()
+	var calls []call
+	env := newEnvironment(t, &calls, func(*http.Request) (*http.Response, error) { return jsonResponse(200, body), nil })
+	result, err := env.invoke(credentialsSchema.ID, "open", `{"credential_type":"httpBasicAuth"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestCredentialsSchemaShowsEnumAndAllOf(t *testing.T) {
+	result := schemaResult(t, `{"additionalProperties":false,"type":"object","properties":{`+
+		`"authType":{"type":"string","enum":["basic","oauth\u0007",42,9007199254740993,true,{"x":1},null]},`+
+		`"user":{"type":"string"},"token":{"type":"string"}},"required":["authType"],"allOf":[`+
+		`{"if":{"properties":{"authType":{"enum":["oauth"]}},"required":["authType"]},`+
+		`"then":{"allOf":[{"required":["token"]}]}}]}`)
+	for _, want := range []string{`"enum":["basic","oauth ",42,9007199254740993,true]`,
+		`"all_of":[{"if":{"properties":{"authType":{"enum":["oauth"]}},"required":["authType"]},` +
+			`"then":{"allOf":[{"required":["token"]}]}}]`} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("missing %s in %s", want, result)
+		}
+	}
+	if strings.Contains(result, "additionalProperties") || strings.Contains(result, `"type":"object"`) ||
+		strings.Contains(result, "all_of_omitted") {
+		t.Fatalf("constants or marker in %s", result)
+	}
+	assertOutputDeclared(t, credentialsSchema.ID, []byte(result))
+}
+
+func TestCredentialsSchemaBoundsEnumAndOmitsOversizedAllOf(t *testing.T) {
+	values := make([]string, maxSchemaEnumValues+3)
+	for i := range values {
+		values[i] = fmt.Sprintf("%d", i)
+	}
+	rules := make([]string, maxSchemaAllOfEntries)
+	for i := range rules {
+		rules[i] = `{"required":["a"]}`
+	}
+	deep := `{"a":` + strings.Repeat(`[`, maxSchemaAllOfDepth+1) + `1` + strings.Repeat(`]`, maxSchemaAllOfDepth+1) + `}`
+	for name, allOf := range map[string]string{"count": `[` + strings.Join(rules, ",") + `]`, "depth": `[` + deep + `]`} {
+		result := schemaResult(t, `{"properties":{"o":{"type":"string","enum":[`+strings.Join(values, ",")+
+			`]}},"required":[],"allOf":`+allOf+`}`)
+		if !strings.Contains(result, `"all_of_omitted":true`) || strings.Contains(result, `"all_of":`) {
+			t.Fatalf("%s: %s", name, result)
+		}
+		if strings.Count(result, ",")+1 < maxSchemaEnumValues || strings.Contains(result, `,200,`) ||
+			!strings.Contains(result, `"enum_truncated":true`) || !strings.Contains(result, `,199]`) {
+			t.Fatalf("%s: enum not capped: %s", name, result)
+		}
+	}
+	// Exactly at the bounds the rules are kept.
+	result := schemaResult(t, `{"properties":{},"required":[],"allOf":[{"a":[[[[[1]]]]]}]}`)
+	if !strings.Contains(result, `"all_of":[{"a":[[[[[1]]]]]}]`) {
+		t.Fatalf("%s", result)
+	}
+}

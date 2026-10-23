@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Stickers
@@ -12,8 +12,8 @@ updated: 2026-10-22
 `telegram.stickers.send` sends one sticker to a bound chat from a `local_path` (a `.webp`, `.tgs`, or `.webm` file
 of at most 512 KB) or a `file_ref` bound to the selected chat or to `bot`, never from a URL.
 `telegram.sticker-sets.get`, `telegram.stickers.custom-emoji`, and `telegram.topics.icon-stickers` read public
-catalog data on every connection and return fixed fields per sticker, with a `bot`-bound `file_ref` only on a
-connection that binds the `bot` target.
+catalog data on every connection. The sticker file, `thumbnail`, and `premium_animation` appear only as `bot`-bound
+`file_ref`, and only on a connection that binds the `bot` target; without it they are left out whole.
 
 ## Managing sticker sets
 
