@@ -16,16 +16,20 @@ import (
 // The five tools of this file read the webhooks and mailhooks of the bound team. A hook's trigger URL (or a
 // mailhook's address) is a trigger secret: whoever knows it can start the hook's scenario. Only hooks.url
 // ever returns it; list, get, ping, and logs omit it and mask every part of it in the strings they do
-// return. Hook logs are reduced to metadata, never to the request headers or bodies they may hold.
-// API: GET /hooks (teamId required; typeName, assigned, pg[...]), GET /hooks/{hookId}, GET
-// /hooks/{hookId}/ping, and GET /hooks/{hookId}/logs (from, to, pg[...]), all hooks:read, checked 2026-10-04
-// against developers.make.com's published API reference, not a live account.
+// return. Hook logs never carry the request headers or bodies they may hold.
+// API: GET /hooks (teamId required; typeName, assigned, viewForScenarioId, pg[sortBy] name or hookName,
+// pg[sortDir], pg[...]), GET /hooks/{hookId}, GET /hooks/{hookId}/ping, and GET /hooks/{hookId}/logs (from, to,
+// pg[sortDir], pg[...]), all hooks:read, checked 2026-10-22 against developers.make.com's published API
+// reference, not a live account. Make documents no values for the logs' pg[sortBy], so only the direction is
+// offered.
 
 const (
 	// maxHookLogSizes bounds the entries of one log's sizes object.
 	maxHookLogSizes = 8
 	// maxHookSizeKeyLength bounds one key of a log's sizes object.
 	maxHookSizeKeyLength = 32
+	// maxDataStructureEntries bounds the fields of one ping's data structure.
+	maxDataStructureEntries = 100
 	// maxTriggerURLLength bounds the trigger URL hooks.url returns.
 	maxTriggerURLLength = 1024
 	// minMaskLength is the shortest trigger-secret part that is masked inside other strings.
@@ -40,12 +44,23 @@ var hookIDArgument = capability.Argument{Name: "hook_id", Required: true,
 		"against Make's own report, and a connection with a scenario allow-list reaches only hooks " +
 		"assigned to a scenario on that list"}
 
-var hookSummarySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"name":{"type":"string"},"team_id":{"type":"integer"},` +
+const hookSummaryProperties = `"id":{"type":"integer"},"name":{"type":"string"},"team_id":{"type":"integer"},` +
 	`"type":{"type":"string"},"type_name":{"type":"string"},"package_name":{"type":"string"},` +
 	`"enabled":{"type":"boolean"},"gone":{"type":"boolean"},"queue_count":{"type":"integer"},` +
-	`"queue_limit":{"type":"integer"},"scenario_id":{"type":"integer"}},` +
-	`"required":["id","name","team_id","enabled","gone"],"additionalProperties":false}`
+	`"queue_limit":{"type":"integer"},"scenario_id":{"type":"integer"}`
+
+const hookSummaryRequired = `"required":["id","name","team_id","enabled","gone"],"additionalProperties":false}`
+
+// hookSummarySchema is the summary the change tools return; hookReadSchema adds what list and get report on
+// top of it.
+var hookSummarySchema = `{"type":"object","properties":{` + hookSummaryProperties + `},` + hookSummaryRequired
+
+var hookReadSchema = `{"type":"object","properties":{` + hookSummaryProperties + `,` +
+	`"theme":{"type":"string"},"flags":{"type":"object","properties":{"form":{"type":"boolean"}},` +
+	`"additionalProperties":false},"editable":{"type":"boolean"},"data":{"type":"object","properties":{` +
+	`"headers":{"type":"boolean"},"method":{"type":"boolean"},"stringify":{"type":"boolean"},` +
+	`"team_id":{"type":"integer"},"ip":{"type":"string"},"udt":{"type":"integer"}},` +
+	`"additionalProperties":false}},` + hookSummaryRequired
 
 var hookSummaryFields = []capability.Field{
 	{Name: "id", Description: "Hook identifier, used as hook_id by the other hook tools"},
@@ -61,6 +76,23 @@ var hookSummaryFields = []capability.Field{
 	{Name: "scenario_id", Description: "Scenario the hook is assigned to, when Make reports one"},
 }
 
+var hookReadFields = append(append([]capability.Field{}, hookSummaryFields...),
+	capability.Field{Name: "theme", Description: "Hook color as Make reports it, untrusted data; any part of the " +
+		"trigger URL is masked"},
+	capability.Field{Name: "flags", Description: "Hook flags as Make reports them"},
+	capability.Field{Name: "form", Description: "In flags: true when the hook belongs to a form"},
+	capability.Field{Name: "editable", Description: "True when the hook can be edited"},
+	capability.Field{Name: "data", Description: "Settings of the hook; only the documented keys below are " +
+		"reported, further keys Make may add are left out"},
+	capability.Field{Name: "headers", Description: "In data: true when the request headers are added to the " +
+		"received data"},
+	capability.Field{Name: "method", Description: "In data: true when the HTTP method is added to the received data"},
+	capability.Field{Name: "stringify", Description: "In data: true when JSON payloads are returned as strings"},
+	capability.Field{Name: "ip", Description: "In data: IP restriction as Make reports it, untrusted data, any " +
+		"part of the trigger URL masked"},
+	capability.Field{Name: "udt", Description: "In data: data structure identifier as Make reports it"},
+)
+
 var hooksList = capability.Descriptor{
 	ID: Provider + ".hooks.list", Version: 1, Title: "List Make hooks",
 	Description: "List the webhooks and mailhooks of the bound team, page by page with a numeric offset; the " +
@@ -70,9 +102,12 @@ var hooksList = capability.Descriptor{
 		`"offset":{"type":"integer","minimum":0},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
 		`"type_name":{"type":"string","pattern":"^[A-Za-z0-9_.-]{1,64}$"},` +
-		`"assigned":{"type":"boolean"}},"additionalProperties":false}`),
+		`"assigned":{"type":"boolean"},` +
+		`"view_for_scenario_id":{"type":"integer","minimum":1},` +
+		`"sort_by":{"type":"string","enum":["name","hookName"]},` +
+		`"sort_dir":{"type":"string","enum":["asc","desc"]}},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"hooks":{"type":"array","items":` + hookSummarySchema + `},` +
+		`"hooks":{"type":"array","items":` + hookReadSchema + `},` +
 		`"offset":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["hooks","offset","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -82,8 +117,14 @@ var hooksList = capability.Descriptor{
 		{Name: "type_name", Description: "When set, list only hooks of this Make hook type name"},
 		{Name: "assigned", Description: "When set, list only hooks that are (true) or are not (false) " +
 			"assigned to a scenario"},
+		{Name: "view_for_scenario_id", Description: "When set, list only the hooks this scenario can use: " +
+			"hooks not yet assigned to another scenario and the hook assigned to this one; assigned is then " +
+			"ignored. With a scenario allow-list the scenario must be on it, and hooks assigned to no " +
+			"scenario stay unreachable"},
+		{Name: "sort_by", Description: "name or hookName; by id when omitted"},
+		{Name: "sort_dir", Description: "asc or desc; Make's default when omitted"},
 	},
-	Fields: append(append([]capability.Field{}, hookSummaryFields...),
+	Fields: append(append([]capability.Field{}, hookReadFields...),
 		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
 		capability.Field{Name: "has_more", Description: "True when a further page likely remains; Make " +
 			"reports no total count, so this is true whenever this page was full"},
@@ -99,49 +140,61 @@ var hooksGet = capability.Descriptor{
 	Tags:        []string{"make", "hooks", "get", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"hook_id":` + hookIDSchema + `},` +
 		`"required":["hook_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(hookSummarySchema),
+	OutputSchema: json.RawMessage(hookReadSchema),
 	Arguments:    []capability.Argument{hookIDArgument},
-	Fields:       hookSummaryFields,
+	Fields:       hookReadFields,
 	Examples:     []capability.Example{{Description: "Read one hook", Arguments: json.RawMessage(`{"hook_id":1}`)}},
 }
 
 var hooksPing = capability.Descriptor{
 	ID: Provider + ".hooks.ping", Version: 1, Title: "Ping a Make hook",
 	Description: "Read a hook's live status (attached to a scenario, learning, gone) through Make's ping " +
-		"endpoint, which only reports state and sends no data to the hook; the address it reports is never returned",
+		"endpoint, which only reports state and the detected data structure and sends no data to the hook; the " +
+		"address it reports is never returned",
 	Tags: []string{"make", "hooks", "ping", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"hook_id":` + hookIDSchema + `},` +
 		`"required":["hook_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},` +
 		`"team_id":{"type":"integer"},"name":{"type":"string"},"attached":{"type":"boolean"},` +
-		`"learning":{"type":"boolean"},"gone":{"type":"boolean"}},` +
+		`"learning":{"type":"boolean"},"gone":{"type":"boolean"},` +
+		`"data_structure":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},` +
+		`"type":{"type":"string"}},"additionalProperties":false}},"data_structure_truncated":{"type":"boolean"}},` +
 		`"required":["id","team_id","attached","learning","gone"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{hookIDArgument},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Hook identifier"},
 		{Name: "team_id", Description: "Team of the hook; always the connection's bound team"},
-		{Name: "name", Description: "Hook name as the ping reports it, untrusted data, trigger URL masked"},
+		{Name: "name", Description: "Hook name as the ping reports it, untrusted data, trigger URL masked; in " +
+			"data_structure entries, the field name"},
 		{Name: "attached", Description: "True when a scenario is attached to the hook"},
 		{Name: "learning", Description: "True when the hook is learning its data structure"},
 		{Name: "gone", Description: "True when Make reports the hook as gone"},
+		{Name: "data_structure", Description: "Fields parsed from the last received sample, untrusted data, at " +
+			"most " + strconv.Itoa(maxDataStructureEntries) + " entries; absent while the payload is not yet " +
+			"determined or the hook is learning"},
+		{Name: "type", Description: "In data_structure entries: the field type as Make reports it, untrusted data"},
+		{Name: "data_structure_truncated", Description: "True when the data structure held more entries than " +
+			"are returned"},
 	},
 	Examples: []capability.Example{{Description: "Ping one hook", Arguments: json.RawMessage(`{"hook_id":1}`)}},
 }
 
 var hookLogSchema = `{"type":"object","properties":{"id":{"type":"integer"},` +
 	`"status_id":{"type":"integer"},"logged_at":{"type":"string"},"replayable":{"type":"boolean"},` +
-	`"type_id":{"type":"integer"},"sizes":{"type":"object","additionalProperties":{"type":"integer"}}},` +
+	`"type_id":{"type":"integer"},"sizes":{"type":"object","additionalProperties":{"type":"integer"}},` +
+	`"imt_id":{"type":"string"},"parser":{"type":"string"},"app_parser":{"type":"string"}},` +
 	`"required":["id","status_id"],"additionalProperties":false}`
 
 var hooksLogs = capability.Descriptor{
 	ID: Provider + ".hooks.logs", Version: 1, Title: "List Make hook logs",
-	Description: "List a hook's incoming-data log entries as metadata only (time, status, sizes); never the " +
-		"request headers or bodies, the parser details, or anything that could hold the trigger URL",
+	Description: "List a hook's incoming-data log entries (time, status, sizes, parsers, execution identifier); " +
+		"never the request headers or bodies or the hook's udids; any part of the trigger URL is masked",
 	Tags: []string{"make", "hooks", "logs", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"hook_id":` + hookIDSchema + `,` +
 		`"offset":{"type":"integer","minimum":0},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
-		`"from_ms":{"type":"integer","minimum":0},"to_ms":{"type":"integer","minimum":0}},` +
+		`"from_ms":{"type":"integer","minimum":0},"to_ms":{"type":"integer","minimum":0},` +
+		`"sort_dir":{"type":"string","enum":["asc","desc"]}},` +
 		`"required":["hook_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"hook_id":{"type":"integer"},` +
 		`"logs":{"type":"array","items":` + hookLogSchema + `},"offset":{"type":"integer"},` +
@@ -153,6 +206,7 @@ var hooksLogs = capability.Descriptor{
 			strconv.Itoa(defaultListLimit) + " when omitted"},
 		{Name: "from_ms", Description: "When set, only entries at or after this time, Unix epoch milliseconds"},
 		{Name: "to_ms", Description: "When set, only entries at or before this time, Unix epoch milliseconds"},
+		{Name: "sort_dir", Description: "asc or desc; Make's default when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Log entry identifier"},
@@ -162,6 +216,9 @@ var hooksLogs = capability.Descriptor{
 		{Name: "type_id", Description: "Entry type as Make reports it"},
 		{Name: "sizes", Description: "Payload sizes in bytes as Make reports them, at most " +
 			strconv.Itoa(maxHookLogSizes) + " entries"},
+		{Name: "imt_id", Description: "Execution identifier the entry started, untrusted data"},
+		{Name: "parser", Description: "Parser that handled the entry, untrusted data, trigger URL masked"},
+		{Name: "app_parser", Description: "App parser that handled the entry, untrusted data, trigger URL masked"},
 		{Name: "hook_id", Description: "Hook the entries belong to"},
 		{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
 		{Name: "has_more", Description: "True when a further page likely remains (this page was full)"},
@@ -208,6 +265,11 @@ type hookJSON struct {
 	QueueLimit  int64  `json:"queueLimit"`
 	ScenarioID  int64  `json:"scenarioId"`
 	URL         string `json:"url"`
+	// The members below are read leniently and only reported by list and get.
+	Theme    json.RawMessage `json:"theme"`
+	Flags    json.RawMessage `json:"flags"`
+	Editable json.RawMessage `json:"editable"`
+	Data     json.RawMessage `json:"data"`
 }
 
 // HookSummary is the stable, scope-checked view of one hook. It never carries the trigger URL or its udid.
@@ -223,6 +285,26 @@ type HookSummary struct {
 	QueueCount  int64  `json:"queue_count,omitempty"`
 	QueueLimit  int64  `json:"queue_limit,omitempty"`
 	ScenarioID  int64  `json:"scenario_id,omitempty"`
+	// The members below are set by list and get only.
+	Theme    string     `json:"theme,omitempty"`
+	Flags    *HookFlags `json:"flags,omitempty"`
+	Editable *bool      `json:"editable,omitempty"`
+	Data     *HookData  `json:"data,omitempty"`
+}
+
+// HookFlags holds the documented flags of a hook.
+type HookFlags struct {
+	Form *bool `json:"form,omitempty"`
+}
+
+// HookData holds the documented keys of a hook's data object; any other key is never read.
+type HookData struct {
+	Headers   *bool  `json:"headers,omitempty"`
+	Method    *bool  `json:"method,omitempty"`
+	Stringify *bool  `json:"stringify,omitempty"`
+	TeamID    *int64 `json:"team_id,omitempty"`
+	IP        string `json:"ip,omitempty"`
+	UDT       *int64 `json:"udt,omitempty"`
 }
 
 // secretParts lists the strings that identify a hook's trigger: the URL or address, the udid, the last path
@@ -268,6 +350,49 @@ func hookSummaryOf(h hookJSON) HookSummary {
 	}
 }
 
+// hookDetailOf is the summary plus the settings list and get report. Every text goes through the same masking
+// as the summary's.
+func hookDetailOf(h hookJSON) HookSummary {
+	summary := hookSummaryOf(h)
+	parts := secretParts(h)
+	summary.Theme = rawMaskedText(h.Theme, parts)
+	summary.Editable = rawBool(h.Editable)
+	if flags := (HookFlags{Form: rawBool(rawObject(h.Flags)["form"])}); flags != (HookFlags{}) {
+		summary.Flags = &flags
+	}
+	object := rawObject(h.Data)
+	data := HookData{Headers: rawBool(object["headers"]), Method: rawBool(object["method"]),
+		Stringify: rawBool(object["stringify"]), TeamID: rawInt(object["teamId"]),
+		IP: rawMaskedText(object["ip"], parts), UDT: rawInt(object["udt"])}
+	if data != (HookData{}) {
+		summary.Data = &data
+	}
+	return summary
+}
+
+// rawMaskedText reads a JSON string, masks every trigger-secret part, then cleans and caps it. Masking comes
+// first so that a cut can never leave a fragment of a secret unmasked.
+func rawMaskedText(raw json.RawMessage, parts []string) string {
+	var text string
+	if json.Unmarshal(raw, &text) != nil {
+		return ""
+	}
+	return maskedText(text, parts)
+}
+
+func maskedText(text string, parts []string) string {
+	return cleanText(maskSecrets(text, parts), maxTextLength)
+}
+
+// rawBool reads a JSON boolean and drops everything else.
+func rawBool(raw json.RawMessage) *bool {
+	var value bool
+	if string(raw) == "null" || json.Unmarshal(raw, &value) != nil {
+		return nil
+	}
+	return &value
+}
+
 // allowsHook applies the bound team and, narrower than the scenario tools, the scenario allow-list: with a
 // list configured, only a hook assigned to a listed scenario is reachable, never an unassigned one. A hook
 // names no folder, so a folder target reaches no hook at all.
@@ -283,6 +408,18 @@ type hooksListArguments struct {
 	Limit    int    `json:"limit"`
 	TypeName string `json:"type_name"`
 	Assigned *bool  `json:"assigned"`
+	// ViewForScenarioID, SortBy, and SortDir are optional filters, empty when omitted.
+	ViewForScenarioID int64  `json:"view_for_scenario_id"`
+	SortBy            string `json:"sort_by"`
+	SortDir           string `json:"sort_dir"`
+}
+
+// HooksFilter holds the optional filters of one hook listing.
+type HooksFilter struct {
+	TypeName          string
+	Assigned          *bool
+	ViewForScenarioID int64
+	SortBy, SortDir   string
 }
 
 // HooksPage is one offset-paginated, scope-filtered listing of hooks.
@@ -307,23 +444,42 @@ func invokeHooksList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListHooks(ctx, input.Offset, limit, input.TypeName, input.Assigned)
+	return client.ListHooks(ctx, input.Offset, limit, HooksFilter{TypeName: input.TypeName, Assigned: input.Assigned,
+		ViewForScenarioID: input.ViewForScenarioID, SortBy: input.SortBy, SortDir: input.SortDir})
 }
 
 // ListHooks reads one page of hooks of the bound team, always sending the bound team as teamId, and
-// re-applies the team and scenario boundary to the answer.
-func (c *Client) ListHooks(ctx context.Context, offset, limit int, typeName string, assigned *bool) (*HooksPage, error) {
+// re-applies the team and scenario boundary to the answer. A scenario filter outside the scenario allow-list is
+// refused before any request.
+func (c *Client) ListHooks(ctx context.Context, offset, limit int, filter HooksFilter) (*HooksPage, error) {
 	const op = "list hooks"
+	if filter.ViewForScenarioID != 0 && (filter.ViewForScenarioID < 0 ||
+		(len(c.scope.scenarios) > 0 && !c.scope.listsScenario(filter.ViewForScenarioID))) {
+		return nil, invalidRequest("view_for_scenario_id must be a positive scenario id inside the targets of this connection")
+	}
+	if (filter.SortBy != "" && filter.SortBy != "name" && filter.SortBy != "hookName") ||
+		(filter.SortDir != "" && filter.SortDir != "asc" && filter.SortDir != "desc") {
+		return nil, invalidRequest("sort_by must be name or hookName and sort_dir asc or desc")
+	}
 	query := url.Values{
 		"teamId":     {strconv.FormatInt(c.scope.teamID, 10)},
 		"pg[offset]": {strconv.Itoa(offset)},
 		"pg[limit]":  {strconv.Itoa(limit)},
 	}
-	if typeName != "" {
-		query.Set("typeName", typeName)
+	if filter.TypeName != "" {
+		query.Set("typeName", filter.TypeName)
 	}
-	if assigned != nil {
-		query.Set("assigned", strconv.FormatBool(*assigned))
+	if filter.Assigned != nil {
+		query.Set("assigned", strconv.FormatBool(*filter.Assigned))
+	}
+	if filter.ViewForScenarioID != 0 {
+		query.Set("viewForScenarioId", strconv.FormatInt(filter.ViewForScenarioID, 10))
+	}
+	if filter.SortBy != "" {
+		query.Set("pg[sortBy]", filter.SortBy)
+	}
+	if filter.SortDir != "" {
+		query.Set("pg[sortDir]", filter.SortDir)
 	}
 	var page struct {
 		Hooks []hookJSON `json:"hooks"`
@@ -334,7 +490,7 @@ func (c *Client) ListHooks(ctx context.Context, offset, limit int, typeName stri
 	hooks := make([]HookSummary, 0, len(page.Hooks))
 	for _, h := range page.Hooks {
 		if c.allowsHook(h) {
-			hooks = append(hooks, hookSummaryOf(h))
+			hooks = append(hooks, hookDetailOf(h))
 		}
 	}
 	return &HooksPage{Hooks: hooks, Offset: offset, HasMore: len(page.Hooks) == limit, Count: len(hooks)}, nil
@@ -398,7 +554,7 @@ func invokeHooksGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return hookSummaryOf(*hook), nil
+	return hookDetailOf(*hook), nil
 }
 
 // HookPing is the masked live status of one hook; the address Make reports is never part of it.
@@ -409,6 +565,15 @@ type HookPing struct {
 	Attached bool   `json:"attached"`
 	Learning bool   `json:"learning"`
 	Gone     bool   `json:"gone"`
+	// DataStructure lists the fields of the last received sample, cut to maxDataStructureEntries.
+	DataStructure          []HookDataField `json:"data_structure,omitempty"`
+	DataStructureTruncated bool            `json:"data_structure_truncated,omitempty"`
+}
+
+// HookDataField is one field of a hook's detected data structure.
+type HookDataField struct {
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 func invokeHooksPing(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -426,6 +591,8 @@ func invokeHooksPing(ctx context.Context, resolved *config.Resolved, secrets *se
 		Attached bool   `json:"attached"`
 		Learning bool   `json:"learning"`
 		Gone     bool   `json:"gone"`
+		// DataStructure is read leniently: anything but an array of objects is dropped.
+		DataStructure json.RawMessage `json:"dataStructure"`
 	}
 	if err := client.get(ctx, op, "/hooks/"+strconv.FormatInt(id, 10)+"/ping", nil, &answer, needHooksRead); err != nil {
 		return nil, err
@@ -434,8 +601,22 @@ func invokeHooksPing(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, invalidRequest("hook_id is outside the targets of this connection")
 	}
 	parts := secretParts(*hook, answer.URL, answer.Address)
-	return &HookPing{ID: id, TeamID: hook.TeamID, Name: maskSecrets(answer.Name, parts),
-		Attached: answer.Attached, Learning: answer.Learning, Gone: answer.Gone || hook.Gone}, nil
+	ping := &HookPing{ID: id, TeamID: hook.TeamID, Name: maskSecrets(answer.Name, parts),
+		Attached: answer.Attached, Learning: answer.Learning, Gone: answer.Gone || hook.Gone}
+	var fields []map[string]json.RawMessage
+	if json.Unmarshal(answer.DataStructure, &fields) == nil {
+		for _, field := range fields {
+			if len(ping.DataStructure) == maxDataStructureEntries {
+				ping.DataStructureTruncated = true
+				break
+			}
+			entry := HookDataField{Name: rawMaskedText(field["name"], parts), Type: rawMaskedText(field["type"], parts)}
+			if entry != (HookDataField{}) {
+				ping.DataStructure = append(ping.DataStructure, entry)
+			}
+		}
+	}
+	return ping, nil
 }
 
 type hookLogsArguments struct {
@@ -444,9 +625,11 @@ type hookLogsArguments struct {
 	Limit  int   `json:"limit"`
 	FromMS int64 `json:"from_ms"`
 	ToMS   int64 `json:"to_ms"`
+	// SortDir is asc or desc, empty for Make's default.
+	SortDir string `json:"sort_dir"`
 }
 
-// HookLog is the metadata of one hook log entry; headers, bodies, parsers, and udids are never read.
+// HookLog is the metadata of one hook log entry; headers, bodies, and udids are never returned.
 type HookLog struct {
 	ID         int64            `json:"id"`
 	StatusID   int              `json:"status_id"`
@@ -454,6 +637,9 @@ type HookLog struct {
 	Replayable bool             `json:"replayable,omitempty"`
 	TypeID     int64            `json:"type_id,omitempty"`
 	Sizes      map[string]int64 `json:"sizes,omitempty"`
+	IMTID      string           `json:"imt_id,omitempty"`
+	Parser     string           `json:"parser,omitempty"`
+	AppParser  string           `json:"app_parser,omitempty"`
 }
 
 // HookLogsPage is one offset-paginated listing of a hook's log metadata.
@@ -469,9 +655,12 @@ func invokeHooksLogs(ctx context.Context, resolved *config.Resolved, secrets *se
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "list hook logs"
 	var input hookLogsArguments
-	client, id, _, err := openHook(ctx, op, resolved, secrets, red, raw, &input)
+	client, id, hook, err := openHook(ctx, op, resolved, secrets, red, raw, &input)
 	if err != nil {
 		return nil, err
+	}
+	if input.SortDir != "" && input.SortDir != "asc" && input.SortDir != "desc" {
+		return nil, invalidRequest("sort_dir must be asc or desc")
 	}
 	limit := input.Limit
 	if limit == 0 {
@@ -484,6 +673,9 @@ func invokeHooksLogs(ctx context.Context, resolved *config.Resolved, secrets *se
 	if input.ToMS > 0 {
 		query.Set("to", strconv.FormatInt(input.ToMS, 10))
 	}
+	if input.SortDir != "" {
+		query.Set("pg[sortDir]", input.SortDir)
+	}
 	var page struct {
 		HookLogs []struct {
 			ID         int64                      `json:"id"`
@@ -492,6 +684,10 @@ func invokeHooksLogs(ctx context.Context, resolved *config.Resolved, secrets *se
 			Replayable bool                       `json:"replayable"`
 			TypeID     int64                      `json:"typeId"`
 			Sizes      map[string]json.RawMessage `json:"sizes"`
+			IMTID      string                     `json:"imtId"`
+			Parser     string                     `json:"parser"`
+			AppParser  string                     `json:"appParser"`
+			UDIDs      []string                   `json:"udids"`
 		} `json:"hookLogs"`
 	}
 	if err := client.get(ctx, op, "/hooks/"+strconv.FormatInt(id, 10)+"/logs", query, &page, needHooksRead); err != nil {
@@ -499,8 +695,11 @@ func invokeHooksLogs(ctx context.Context, resolved *config.Resolved, secrets *se
 	}
 	logs := make([]HookLog, 0, len(page.HookLogs))
 	for _, entry := range page.HookLogs {
+		parts := secretParts(*hook, entry.UDIDs...)
 		logs = append(logs, HookLog{ID: entry.ID, StatusID: entry.StatusID, LoggedAt: bounded(entry.LoggedAt),
-			Replayable: entry.Replayable, TypeID: entry.TypeID, Sizes: hookSizes(entry.Sizes)})
+			Replayable: entry.Replayable, TypeID: entry.TypeID, Sizes: hookSizes(entry.Sizes),
+			IMTID: maskedText(entry.IMTID, parts), Parser: maskedText(entry.Parser, parts),
+			AppParser: maskedText(entry.AppParser, parts)})
 	}
 	return &HookLogsPage{HookID: id, Logs: logs, Offset: input.Offset, HasMore: len(page.HookLogs) == limit,
 		Count: len(logs)}, nil

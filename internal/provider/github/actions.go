@@ -102,32 +102,26 @@ func inputSchema(properties string, required ...string) json.RawMessage {
 		strings.Join(names, ",") + `],"additionalProperties":false}`)
 }
 
-const workflowProperties = `"id":{"type":"integer"},"name":{"type":"string"},"path":{"type":"string"},` +
-	`"state":{"type":"string"},"url":{"type":"string"}`
+var workflowProperties = `"id":{"type":"integer"},"name":{"type":"string"},"path":{"type":"string"},` +
+	`"state":{"type":"string"},"url":{"type":"string"},` + workflowWidthProperties
 
 const workflowRequired = `"required":["id","name","path","state"],"additionalProperties":false`
 
-// runPropertiesCommon is the compact run projection of the list. The list omits the URL because it is
-// derivable from the repository and the identifier; the detail below adds it back.
-const runPropertiesCommon = `"id":{"type":"integer"},"name":{"type":"string"},"title":{"type":"string"},` +
+// runProperties is the run projection of the list and the detail.
+var runProperties = `"id":{"type":"integer"},"name":{"type":"string"},"title":{"type":"string"},` +
 	`"workflow_id":{"type":"integer"},"run_number":{"type":"integer"},"attempt":{"type":"integer"},` +
 	`"event":{"type":"string"},"status":{"type":"string"},"conclusion":{"type":"string"},` +
 	`"branch":{"type":"string"},"head_sha":{"type":"string"},"actor":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"started_at":{"type":"string"}`
-
-// runProperties is the run projection of the detail: runPropertiesCommon plus the URL.
-const runProperties = runPropertiesCommon + `,"url":{"type":"string"}`
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"started_at":{"type":"string"},` +
+	`"url":{"type":"string"},` + runWidthProperties
 
 const runRequired = `"required":["id","status"],"additionalProperties":false`
 
-// jobPropertiesCommon is the compact job projection of the list. The list omits the URL because it is
-// derivable from the repository and the identifier; the detail below adds it back.
-const jobPropertiesCommon = `"id":{"type":"integer"},"run_id":{"type":"integer"},"name":{"type":"string"},` +
+// jobProperties is the job projection of the list and the detail.
+var jobProperties = `"id":{"type":"integer"},"run_id":{"type":"integer"},"name":{"type":"string"},` +
 	`"status":{"type":"string"},"conclusion":{"type":"string"},"attempt":{"type":"integer"},` +
-	`"started_at":{"type":"string"},"completed_at":{"type":"string"}`
-
-// jobProperties is the job projection of the detail: jobPropertiesCommon plus the URL.
-const jobProperties = jobPropertiesCommon + `,"url":{"type":"string"}`
+	`"started_at":{"type":"string"},"completed_at":{"type":"string"},"url":{"type":"string"},` +
+	jobWidthProperties
 
 const jobRequired = `"required":["id","name","status"],"additionalProperties":false`
 
@@ -136,9 +130,9 @@ const stepsProperty = `"steps":{"type":"array","items":{"type":"object","propert
 	`"conclusion":{"type":"string"},"started_at":{"type":"string"},"completed_at":{"type":"string"}},` +
 	`"required":["number","name","status"],"additionalProperties":false}}`
 
-const artifactProperties = `"id":{"type":"integer"},"name":{"type":"string"},"size_bytes":{"type":"integer"},` +
+var artifactProperties = `"id":{"type":"integer"},"name":{"type":"string"},"size_bytes":{"type":"integer"},` +
 	`"expired":{"type":"boolean"},"created_at":{"type":"string"},"expires_at":{"type":"string"},` +
-	`"digest":{"type":"string"}`
+	`"digest":{"type":"string"},` + artifactWidthProperties
 
 const artifactRequired = `"required":["id","name","size_bytes","expired"],"additionalProperties":false`
 
@@ -154,9 +148,10 @@ var workflowsList = capability.Descriptor{
 	InputSchema:  inputSchema(pagingKeys),
 	OutputSchema: listOutput("workflows", workflowProperties, workflowRequired),
 	Arguments:    pagingArguments,
-	Fields: append([]capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "workflows", Description: "Workflows with identifier, name, file path, and state"},
-	}, pagingFields...),
+		{Name: "url", Description: "Web address of the workflow"},
+	}, workflowWidthFields...), pagingFields...),
 	Examples: []capability.Example{{Description: "List the workflows", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -173,13 +168,13 @@ var workflowsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "workflow", Description: "Workflow identifier or file name such as ci.yml", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "Workflow identifier"},
 		{Name: "path", Description: "Path of the workflow file"},
 		{Name: "state", Description: "active, or why GitHub does not run the workflow"},
 		{Name: "name", Description: "Workflow name"},
 		{Name: "url", Description: "Web address of the workflow"},
-	},
+	}, workflowWidthFields...),
 	Examples: []capability.Example{{Description: "Read one workflow", Arguments: json.RawMessage(`{"workflow":"ci.yml"}`)}},
 }
 
@@ -196,8 +191,8 @@ var runsList = capability.Descriptor{
 		`"status":{"type":"string","enum":["` + strings.Join(runStatuses, `","`) + `"]},` +
 		`"branch":` + refSchema + `,"event":{"type":"string","maxLength":50,"pattern":"` + eventPattern + `"},` +
 		`"actor":{"type":"string","maxLength":105,"pattern":"` + actorPattern + `"},` +
-		`"created_from":` + timeSchema + `,"created_to":` + timeSchema + `,` + pagingKeys),
-	OutputSchema: listOutput("runs", runPropertiesCommon, runRequired),
+		`"created_from":` + timeSchema + `,"created_to":` + timeSchema + `,` + runFilterSchemas + `,` + pagingKeys),
+	OutputSchema: listOutput("runs", runProperties, runRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "workflow", Description: "Return only runs of this workflow, by identifier or file name"},
 		{Name: "status", Description: "Return only runs with this status or conclusion: " + strings.Join(runStatuses, ", ")},
@@ -207,11 +202,12 @@ var runsList = capability.Descriptor{
 		{Name: "created_from", Description: "Return only runs created at or after this date (YYYY-MM-DD) or UTC " +
 			"time (YYYY-MM-DDTHH:MM:SSZ)"},
 		{Name: "created_to", Description: "Return only runs created at or before this date or UTC time"},
-	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "runs", Description: "Compact runs with status, conclusion, branch, commit, and actor; title is " +
-			"untrusted data"},
-	}, pagingFields...),
+	}, append(runFilterArguments, pagingArguments...)...),
+	Fields: append(append([]capability.Field{
+		{Name: "runs", Description: "Runs with status, conclusion, branch, commit, actor, and the members of " +
+			"github.workflow-runs.get; title is untrusted data"},
+		{Name: "url", Description: "Web address of the run"},
+	}, runWidthFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the failed runs of one branch",
 		Arguments:   json.RawMessage(`{"status":"failure","branch":"main","limit":10}`),
@@ -229,7 +225,7 @@ var runsGet = capability.Descriptor{
 	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + runProperties + `},` + runRequired + `}`),
 	Arguments:    []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "status", Description: "queued, in_progress, completed, or another GitHub run status"},
 		{Name: "conclusion", Description: "Outcome of a completed run, such as success or failure"},
 		{Name: "attempt", Description: "Number of the latest attempt"},
@@ -246,7 +242,7 @@ var runsGet = capability.Descriptor{
 		{Name: "url", Description: "Web address of the run"},
 		{Name: "created_at", Description: "When the run was created"},
 		{Name: "updated_at", Description: "When the run last changed"},
-	},
+	}, runWidthFields...),
 	Examples: []capability.Example{{Description: "Read one run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
 
@@ -254,22 +250,25 @@ var jobsList = capability.Descriptor{
 	ID:      Provider + ".workflow-jobs.list",
 	Version: 2,
 	Title:   "List GitHub Actions jobs of a run",
-	Description: "List one bounded batch of compact jobs of one workflow run of " +
-		"a repository a connection allows, without steps or logs",
+	Description: "List one bounded batch of jobs of one workflow run of " +
+		"a repository a connection allows, with their steps, without logs",
 	Tags:     []string{"github", "actions", "jobs", "list"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"run_id":`+actionsIDSchema+`,"filter":{"type":"string","enum":["latest","all"]},`+
 		pagingKeys, "run_id"),
-	OutputSchema: listOutput("jobs", jobPropertiesCommon, jobRequired),
+	OutputSchema: listOutput("jobs", jobProperties+`,`+stepsProperty, jobRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "run_id", Description: "Workflow run identifier", Required: true},
 		{Name: "filter", Description: "latest for the jobs of the latest attempt, all for every attempt; latest " +
 			"when omitted"},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "jobs", Description: "Compact jobs with status, conclusion, attempt, and times"},
-	}, pagingFields...),
+	Fields: append(append([]capability.Field{
+		{Name: "jobs", Description: "Jobs with status, conclusion, attempt, times, and the members of " +
+			"github.workflow-jobs.get"},
+		{Name: "steps", Description: "Steps with number, name, status, conclusion, and times"},
+		{Name: "url", Description: "Web address of the job"},
+	}, jobWidthFields...), pagingFields...),
 	Examples: []capability.Example{{Description: "List the jobs of a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
 
@@ -287,7 +286,7 @@ var jobsGet = capability.Descriptor{
 		jobRequired + `}`),
 	Arguments: []capability.Argument{{Name: "job_id", Description: "Job identifier, as github.workflow-jobs.list reports it",
 		Required: true}},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "steps", Description: "Steps with number, name, status, conclusion, and times"},
 		{Name: "id", Description: "Job identifier"},
 		{Name: "run_id", Description: "Identifier of the run the job belongs to"},
@@ -298,7 +297,7 @@ var jobsGet = capability.Descriptor{
 		{Name: "started_at", Description: "When the job started"},
 		{Name: "completed_at", Description: "When the job completed"},
 		{Name: "url", Description: "Web address of the job"},
-	},
+	}, jobWidthFields...),
 	Examples: []capability.Example{{Description: "Read one job", Arguments: json.RawMessage(`{"job_id":399444496}`)}},
 }
 
@@ -344,14 +343,15 @@ var artifactsList = capability.Descriptor{
 	Tags:         []string{"github", "actions", "artifacts", "list"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema+`,`+pagingKeys, "run_id"),
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema+`,`+artifactFilterSchemas+`,`+pagingKeys, "run_id"),
 	OutputSchema: listOutput("artifacts", artifactProperties, artifactRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "run_id", Description: "Workflow run identifier", Required: true},
-	}, pagingArguments...),
-	Fields: append([]capability.Field{
-		{Name: "artifacts", Description: "Artifacts with name, size in bytes, expiry, and digest"},
-	}, pagingFields...),
+	}, append(artifactFilterArguments, pagingArguments...)...),
+	Fields: append(append([]capability.Field{
+		{Name: "artifacts", Description: "Artifacts with name, size in bytes, expiry, digest, and run; the download " +
+			"address is never answered, since it grants access without sign-in"},
+	}, artifactWidthFields...), pagingFields...),
 	Examples: []capability.Example{{Description: "List the artifacts of a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
 
@@ -486,7 +486,7 @@ func actionsOperations() []capability.Operation {
 			if err != nil {
 				return nil, err
 			}
-			view := raw.view()
+			view := raw.view(c.allowed, true)
 			return &view, nil
 		}),
 		bind(jobsList, listCheck("jobs"), func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
@@ -541,6 +541,13 @@ type actionsArguments struct {
 	MaxBytes    int            `json:"max_bytes"`
 	Limit       int            `json:"limit"`
 	Cursor      string         `json:"cursor"`
+
+	// The filters of the run and artifact lists. A pointer keeps an explicit zero apart from a value left out.
+	CheckSuiteID        *int64 `json:"check_suite_id"`
+	HeadSHA             string `json:"head_sha"`
+	IncludePullRequests bool   `json:"include_pull_requests"`
+	Name                string `json:"name"`
+	Direction           string `json:"direction"`
 
 	// The arguments of the maintainer and administrator tools. A boolean is a pointer, so a value left out
 	// stays apart from false.
@@ -705,8 +712,12 @@ func listCheck(list string) func(*actionsArguments, target) error {
 		if err := checkCreated(a.CreatedFrom, a.CreatedTo); err != nil {
 			return err
 		}
-		a.binding = fingerprint("actions", list, bound.String(), a.RunID, a.Filter, a.Workflow,
-			strings.ToLower(a.Status), a.Branch, a.Event, strings.ToLower(a.Actor), a.CreatedFrom, a.CreatedTo)
+		if err := checkWidthFilters(a); err != nil {
+			return err
+		}
+		a.binding = fingerprint(append([]any{"actions", list, bound.String(), a.RunID, a.Filter, a.Workflow,
+			strings.ToLower(a.Status), a.Branch, a.Event, strings.ToLower(a.Actor), a.CreatedFrom, a.CreatedTo},
+			a.widthFilters()...)...)
 		a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 		return err
 	}
@@ -884,18 +895,39 @@ type Workflow struct {
 	Path  string `json:"path"`
 	State string `json:"state"`
 	URL   string `json:"url,omitempty"`
+
+	NodeID    string `json:"node_id,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	DeletedAt string `json:"deleted_at,omitempty"`
+	Links     Links  `json:"links,omitempty"`
 }
 
 type workflowJSON struct {
-	ID      int64  `json:"id"`
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	State   string `json:"state"`
-	HTMLURL string `json:"html_url"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	State     string `json:"state"`
+	HTMLURL   string `json:"html_url"`
+	NodeID    string `json:"node_id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	DeletedAt string `json:"deleted_at"`
+	links     Links
+}
+
+func (w *workflowJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain workflowJSON
+	if err = json.Unmarshal(data, (*plain)(w)); err != nil {
+		return err
+	}
+	w.links, err = readLinks(data, workflowLinkKeys)
+	return err
 }
 
 func (w workflowJSON) view() Workflow {
-	return Workflow{ID: w.ID, Name: w.Name, Path: w.Path, State: w.State, URL: w.HTMLURL}
+	return Workflow{ID: w.ID, Name: w.Name, Path: w.Path, State: w.State, URL: w.HTMLURL, NodeID: text(w.NodeID),
+		CreatedAt: text(w.CreatedAt), UpdatedAt: text(w.UpdatedAt), DeletedAt: text(w.DeletedAt), Links: w.links}
 }
 
 func invalidEntry(op, what string) error {
@@ -942,7 +974,7 @@ type RunList struct {
 	HasMore    bool          `json:"has_more"`
 }
 
-// WorkflowRun is the compact view of one workflow run. Title is untrusted data.
+// WorkflowRun is the view of one workflow run. Title is untrusted data.
 type WorkflowRun struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name,omitempty"`
@@ -960,50 +992,78 @@ type WorkflowRun struct {
 	UpdatedAt  string `json:"updated_at,omitempty"`
 	StartedAt  string `json:"started_at,omitempty"`
 	URL        string `json:"url,omitempty"`
+	RunWidth
 }
 
 // runJSON is the part of a REST run this provider reads; a null value leaves its field empty.
 type runJSON struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	DisplayTitle string `json:"display_title"`
-	WorkflowID   int64  `json:"workflow_id"`
-	RunNumber    int    `json:"run_number"`
-	RunAttempt   int    `json:"run_attempt"`
-	Event        string `json:"event"`
-	Status       string `json:"status"`
-	Conclusion   string `json:"conclusion"`
-	HeadBranch   string `json:"head_branch"`
-	HeadSHA      string `json:"head_sha"`
-	Actor        *struct {
-		Login string `json:"login"`
-	} `json:"actor"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
-	RunStartedAt string `json:"run_started_at"`
-	HTMLURL      string `json:"html_url"`
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	DisplayTitle string      `json:"display_title"`
+	WorkflowID   int64       `json:"workflow_id"`
+	RunNumber    int         `json:"run_number"`
+	RunAttempt   int         `json:"run_attempt"`
+	Event        string      `json:"event"`
+	Status       string      `json:"status"`
+	Conclusion   string      `json:"conclusion"`
+	HeadBranch   string      `json:"head_branch"`
+	HeadSHA      string      `json:"head_sha"`
+	Actor        *accountRaw `json:"actor"`
+	CreatedAt    string      `json:"created_at"`
+	UpdatedAt    string      `json:"updated_at"`
+	RunStartedAt string      `json:"run_started_at"`
+	HTMLURL      string      `json:"html_url"`
+
+	// The members beyond the compact view. The repository of a run is the repository of the call and is
+	// never read; logs_url is never read either.
+	NodeID              string                   `json:"node_id"`
+	CheckSuiteID        int64                    `json:"check_suite_id"`
+	CheckSuiteNodeID    string                   `json:"check_suite_node_id"`
+	Path                string                   `json:"path"`
+	ReferencedWorkflows []*referencedWorkflowRaw `json:"referenced_workflows"`
+	TriggeringActor     *accountRaw              `json:"triggering_actor"`
+	HeadCommit          *runCommitRaw            `json:"head_commit"`
+	HeadRepository      *repositoryRaw           `json:"head_repository"`
+	HeadRepositoryID    int64                    `json:"head_repository_id"`
+	PullRequests        []*runPullRaw            `json:"pull_requests"`
+	links               Links
 }
 
-func (r runJSON) view() WorkflowRun {
+func (r *runJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain runJSON
+	if err = json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	r.links, err = readLinks(data, runLinkKeys)
+	return err
+}
+
+// view projects the run. The pull requests belong to the view only when the read asked for them.
+func (r *runJSON) view(allowed allowlist, pulls bool) WorkflowRun {
 	run := WorkflowRun{ID: r.ID, Name: r.Name, Title: r.DisplayTitle, WorkflowID: r.WorkflowID,
 		RunNumber: r.RunNumber, Attempt: r.RunAttempt, Event: r.Event, Status: r.Status, Conclusion: r.Conclusion,
 		Branch: r.HeadBranch, HeadSHA: r.HeadSHA, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-		StartedAt: r.RunStartedAt, URL: r.HTMLURL}
+		StartedAt: r.RunStartedAt, URL: r.HTMLURL, RunWidth: r.width(allowed, pulls)}
 	if r.Actor != nil {
-		run.Actor = r.Actor.Login
+		run.Actor = valueOr(r.Actor.Login)
 	}
 	return run
 }
 
-// listRuns reads one page of runs, newest first. Pull requests are left out of every run, and GitHub
-// answers at most maxFilteredRuns runs of a filtered list.
+// listRuns reads one page of runs, newest first. Pull requests are left out of every run unless the request
+// asked for them, and GitHub answers at most maxFilteredRuns runs of a filtered list.
 func (c *Client) listRuns(ctx context.Context, a *actionsArguments) (*RunList, error) {
 	const op = "list workflow runs"
 	query := a.query()
-	query.Set("exclude_pull_requests", "true")
+	query.Set("exclude_pull_requests", strconv.FormatBool(!a.IncludePullRequests))
 	filtered := false
-	for key, value := range map[string]string{"status": strings.ToLower(a.Status), "branch": a.Branch,
-		"event": a.Event, "actor": a.Actor, "created": createdRange(a.CreatedFrom, a.CreatedTo)} {
+	filters := map[string]string{"status": strings.ToLower(a.Status), "branch": a.Branch,
+		"event": a.Event, "actor": a.Actor, "created": createdRange(a.CreatedFrom, a.CreatedTo),
+		"head_sha": strings.ToLower(a.HeadSHA)}
+	if a.CheckSuiteID != nil {
+		filters["check_suite_id"] = strconv.FormatInt(*a.CheckSuiteID, 10)
+	}
+	for key, value := range filters {
 		if value != "" {
 			query.Set(key, value)
 			filtered = true
@@ -1025,11 +1085,7 @@ func (c *Client) listRuns(ctx context.Context, a *actionsArguments) (*RunList, e
 		if run.ID < 1 || run.Status == "" {
 			return nil, invalidEntry(op, "a run")
 		}
-		// The list leaves out the URL, derivable from the repository and the identifier; only the detail
-		// read adds it back.
-		view := run.view()
-		view.URL = ""
-		result.Runs = append(result.Runs, view)
+		result.Runs = append(result.Runs, run.view(c.allowed, a.IncludePullRequests))
 	}
 	total := raw.TotalCount
 	if filtered {
@@ -1059,7 +1115,7 @@ type JobList struct {
 	HasMore    bool          `json:"has_more"`
 }
 
-// WorkflowJob is the compact view of one job; Steps is filled only for one job read on its own.
+// WorkflowJob is the view of one job.
 type WorkflowJob struct {
 	ID          int64     `json:"id"`
 	RunID       int64     `json:"run_id,omitempty"`
@@ -1071,6 +1127,7 @@ type WorkflowJob struct {
 	CompletedAt string    `json:"completed_at,omitempty"`
 	URL         string    `json:"url,omitempty"`
 	Steps       []JobStep `json:"steps,omitempty"`
+	JobWidth
 }
 
 // JobStep is the compact view of one step of a job.
@@ -1094,11 +1151,33 @@ type jobJSON struct {
 	CompletedAt string    `json:"completed_at"`
 	HTMLURL     string    `json:"html_url"`
 	Steps       []JobStep `json:"steps"`
+
+	NodeID          string   `json:"node_id"`
+	HeadSHA         string   `json:"head_sha"`
+	HeadBranch      string   `json:"head_branch"`
+	CreatedAt       string   `json:"created_at"`
+	Labels          []string `json:"labels"`
+	RunnerID        int64    `json:"runner_id"`
+	RunnerName      string   `json:"runner_name"`
+	RunnerGroupID   int64    `json:"runner_group_id"`
+	RunnerGroupName string   `json:"runner_group_name"`
+	WorkflowName    string   `json:"workflow_name"`
+	links           Links
+}
+
+func (j *jobJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain jobJSON
+	if err = json.Unmarshal(data, (*plain)(j)); err != nil {
+		return err
+	}
+	j.links, err = readLinks(data, jobLinkKeys)
+	return err
 }
 
 func (j jobJSON) view() WorkflowJob {
 	return WorkflowJob{ID: j.ID, RunID: j.RunID, Name: j.Name, Status: j.Status, Conclusion: j.Conclusion,
-		Attempt: j.RunAttempt, StartedAt: j.StartedAt, CompletedAt: j.CompletedAt, URL: j.HTMLURL}
+		Attempt: j.RunAttempt, StartedAt: j.StartedAt, CompletedAt: j.CompletedAt, URL: j.HTMLURL,
+		Steps: j.Steps, JobWidth: j.width()}
 }
 
 func (c *Client) listJobs(ctx context.Context, a *actionsArguments) (*JobList, error) {
@@ -1117,11 +1196,7 @@ func (c *Client) listJobs(ctx context.Context, a *actionsArguments) (*JobList, e
 		if job.ID < 1 {
 			return nil, invalidEntry(op, "a job")
 		}
-		// The list leaves out the URL, derivable from the repository and the identifier; only the detail
-		// read adds it back.
-		view := job.view()
-		view.URL = ""
-		result.Jobs = append(result.Jobs, view)
+		result.Jobs = append(result.Jobs, job.view())
 	}
 	result.HasMore, result.NextCursor = a.more(len(raw.Jobs), raw.TotalCount)
 	return result, nil
@@ -1139,7 +1214,6 @@ func (c *Client) job(ctx context.Context, id int64) (*WorkflowJob, error) {
 			Message: "GitHub answered with a different job than the requested one"}
 	}
 	job := raw.view()
-	job.Steps = raw.Steps
 	return &job, nil
 }
 
@@ -1159,23 +1233,27 @@ type Artifact struct {
 	CreatedAt string `json:"created_at,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
 	Digest    string `json:"digest,omitempty"`
+
+	NodeID      string       `json:"node_id,omitempty"`
+	UpdatedAt   string       `json:"updated_at,omitempty"`
+	WorkflowRun *ArtifactRun `json:"workflow_run,omitempty"`
+	Links       Links        `json:"links,omitempty"`
 }
 
 func (c *Client) listArtifacts(ctx context.Context, a *actionsArguments) (*ArtifactList, error) {
 	const op = "list workflow artifacts"
 	var raw struct {
-		TotalCount int `json:"total_count"`
-		Artifacts  []struct {
-			ID          int64  `json:"id"`
-			Name        string `json:"name"`
-			SizeInBytes int64  `json:"size_in_bytes"`
-			Expired     bool   `json:"expired"`
-			CreatedAt   string `json:"created_at"`
-			ExpiresAt   string `json:"expires_at"`
-			Digest      string `json:"digest"`
-		} `json:"artifacts"`
+		TotalCount int            `json:"total_count"`
+		Artifacts  []artifactJSON `json:"artifacts"`
 	}
-	if err := c.actionsRead(ctx, op, "runs/"+strconv.FormatInt(a.RunID, 10)+"/artifacts", a.query(), &raw); err != nil {
+	query := a.query()
+	if a.Name != "" {
+		query.Set("name", a.Name)
+	}
+	if a.Direction != "" {
+		query.Set("direction", a.Direction)
+	}
+	if err := c.actionsRead(ctx, op, "runs/"+strconv.FormatInt(a.RunID, 10)+"/artifacts", query, &raw); err != nil {
 		return nil, err
 	}
 	result := &ArtifactList{Artifacts: make([]Artifact, 0, len(raw.Artifacts))}
@@ -1183,9 +1261,7 @@ func (c *Client) listArtifacts(ctx context.Context, a *actionsArguments) (*Artif
 		if artifact.ID < 1 {
 			return nil, invalidEntry(op, "an artifact")
 		}
-		result.Artifacts = append(result.Artifacts, Artifact{ID: artifact.ID, Name: artifact.Name,
-			SizeBytes: artifact.SizeInBytes, Expired: artifact.Expired, CreatedAt: artifact.CreatedAt,
-			ExpiresAt: artifact.ExpiresAt, Digest: artifact.Digest})
+		result.Artifacts = append(result.Artifacts, artifact.view())
 	}
 	result.HasMore, result.NextCursor = a.more(len(raw.Artifacts), raw.TotalCount)
 	return result, nil

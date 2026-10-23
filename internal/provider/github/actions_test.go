@@ -438,7 +438,7 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 		if err := json.Unmarshal(result, &top); err != nil || string(top["repository"]) != `"octo-org/example"` {
 			t.Fatalf("a run list names repository %s, want octo-org/example", top["repository"])
 		}
-		for _, forbidden := range []string{"pull_requests", "repository", "head_commit", bodyCanary, "url"} {
+		for _, forbidden := range []string{"pull_requests", "repository", "logs_url"} {
 			if strings.Contains(string(top["runs"]), forbidden) {
 				t.Fatalf("a run list carries %q: %s", forbidden, result)
 			}
@@ -532,8 +532,8 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 	}
 }
 
-// Workflows, jobs, and artifacts are listed and read as compact metadata; only a job read on its own
-// carries its steps, and an artifact never its download address.
+// Workflows, jobs, and artifacts are listed and read as metadata; an artifact never carries its download
+// address.
 func TestActionsMetadataIsCompact(t *testing.T) {
 	_, _, base := serveActions(t)
 	red := &redact.Redactor{}
@@ -547,14 +547,17 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 			nil},
 		{"github.workflows.get", `{"workflow":"release.yml"}`, []string{`"id":2`, `"state":"active"`}, nil},
 		{"github.workflow-runs.get", `{"run_id":5000}`,
-			[]string{`"conclusion":"failure"`, `"actor":"octocat"`, `"url":"https://github.com/octo-org/example/actions/runs/5000"`},
-			[]string{"pull_requests", bodyCanary}},
+			[]string{`"conclusion":"failure"`, `"actor":"octocat"`, `"url":"https://github.com/octo-org/example/actions/runs/5000"`,
+				`"pull_requests":[{"number":1}]`, `"head_commit":{"message":"` + bodyCanary + `"}`},
+			[]string{"logs_url", `"repository":{`}},
 		{"github.workflow-jobs.list", `{"run_id":5000}`,
-			[]string{`"name":"build 0"`, `"has_more":false`, `"repository":"octo-org/example"`},
-			[]string{"steps", "runner_name", "url"}},
+			[]string{`"name":"build 0"`, `"has_more":false`, `"repository":"octo-org/example"`, `"steps":[`,
+				`"runner_name":"r"`, `"url":"https://github.com/j/0"`},
+			nil},
 		{"github.workflow-jobs.get", `{"job_id":7001}`,
-			[]string{`"steps":[`, `"name":"test"`, `"attempt":2`, `"url":"https://github.com/j/1"`},
-			[]string{"labels"}},
+			[]string{`"steps":[`, `"name":"test"`, `"attempt":2`, `"url":"https://github.com/j/1"`,
+				`"labels":["ubuntu-latest"]`},
+			nil},
 		{"github.workflow-artifacts.list", `{"run_id":5000}`, []string{`"size_bytes":99999999`, `"expired":true`},
 			[]string{"archive_download_url", "/zip"}},
 	} {
