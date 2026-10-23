@@ -14,11 +14,17 @@ The channels tools of the [Infomaniak kChat provider](README.md). The effects an
 [tool overview](README.md#tools); the target checks are described under [Scope](README.md#scope).
 
 - `channels.get` takes `channel_id` or `team_id` with `name`; the channel kChat answers with must belong to a
-  bound team and be inside the allow-list. `channels.browse` drops channels outside the allow-list.
+  bound team and be inside the allow-list, an archived one included. `include_deleted` reads an archived channel
+  by its handle and is refused with `channel_id`, which reads archived channels anyway. `channels.browse` drops
+  channels outside the allow-list.
+- `channels.list` and `direct.list` show live channels only; `include_deleted` and `last_delete_at` are not
+  offered because `archived-channels.list` reads archived channels.
 - `channels.update`, `.archive`, `.restore`, `.privacy`, and the `channel-members` tools bind their channel
   with the live check and refuse direct and group channels; `channels.update`, `.archive`, and `.privacy`
   also refuse archived channels, and `.restore` accepts only archived ones. `channel-members.add` proves each
   user a current member of the channel's own team, not merely of some bound team.
+- `channel-members.list` binds its channel like the other member tools. Read state and notification settings
+  of other members are returned for reachable channels only, like every member field.
 - `archived-channels.list` takes a bound `team_id`, checked locally, and drops channels of other teams,
   outside the allow-list, and direct and group channels.
 - The `categories` tools take a bound `team_id`, checked locally, and address the own user. A category
@@ -35,5 +41,5 @@ The channels tools of the [Infomaniak kChat provider](README.md). The effects an
   only `custom` ones. Category order is not offered.
 - `channel-notifications.update` sends only the given fields and no direct or group channel.
 - Read state is always the token's own, never an argument, and the marks are idempotent. `channels.unread`
-  returns only the counts of the bound channel. `channels.mark-read` is kChat's channel view, so it also
+  reads only the bound channel. `channels.mark-read` is kChat's channel view, so it also
   clears push notifications for the channel; its body holds `channel_id` only.
