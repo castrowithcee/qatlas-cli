@@ -19,10 +19,11 @@ const (
 func connectionJSONOf(id, teamID int64, name string) string {
 	return fmt.Sprintf(`{"id":%d,"name":%q,"accountName":"google","accountType":"oauth","packageName":"google",`+
 		`"expire":"2030-01-01T00:00:00Z","scoped":true,"teamId":%d,"organizationId":%d,"editable":true,`+
-		`"accountLabel":"label","metadata":{"value":%q,"type":"email"},"uid":%q,"token":%q,`+
-		`"scopes":[{"id":%q}],"data":{"clientSecret":%q}}`,
-		id, name, teamID, ownOrg, canaryConnSecret, canaryConnSecret, canaryConnSecret, canaryConnSecret,
-		canaryConnSecret)
+		`"accountLabel":"label","metadata":{"value":"acct@example.test","type":"email","token":%q},`+
+		`"theme":"#ff0000","upgradeable":false,"scopesCnt":1,"uid":"uid-1","connectedSystemId":"sys-1",`+
+		`"token":%q,"scopes":[{"id":"read","name":"Read","account":"acct","token":%q}],`+
+		`"data":{"clientSecret":%q}}`,
+		id, name, teamID, ownOrg, canaryConnSecret, canaryConnSecret, canaryConnSecret, canaryConnSecret)
 }
 
 func connectionEnv(t *testing.T, calls *[]call, teamID int64) *environment {
@@ -65,7 +66,7 @@ func TestConnectionsRequestsUseDocumentedPathsAndQueries(t *testing.T) {
 	calls = nil
 	_, _ = env.invoke(connectionsList.ID, "open", `{"type":"google"}`)
 	q := calls[0].query
-	if q.Get("teamId") != itoa64(ownTeam) || q.Get("type[]") != "google" || len(q["cols[]"]) != len(connectionCols) {
+	if q.Get("teamId") != itoa64(ownTeam) || q.Get("type[]") != "google" || len(q["cols[]"]) != len(readConnectionCols) {
 		t.Fatalf("list query = %v", q)
 	}
 	calls = nil
@@ -100,7 +101,7 @@ func TestConnectionsOnlyAllowListedFieldsLeave(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", c.op, err)
 		}
-		for _, leaked := range []string{canaryConnSecret, "metadata", "scopes", "token", "clientSecret", "accountLabel"} {
+		for _, leaked := range []string{canaryConnSecret, "metadata\"", "token", "clientSecret", "accountLabel", "\"data\""} {
 			if strings.Contains(result, leaked) {
 				t.Fatalf("%s leaked %q: %s", c.op, leaked, result)
 			}

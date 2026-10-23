@@ -61,9 +61,12 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	issueAttachmentsUpload, issueAttachmentsUpdate, issueAttachmentsDelete, issueAttachmentsDownload,
 	commentAttachmentsList, commentAttachmentsGet, commentAttachmentsUpload, commentAttachmentsUpdate,
 	commentAttachmentsDelete, commentAttachmentsDownload, issuePinsList, issuePinsCheckAllowed, issuePinsPin,
-	issuePinsUnpin, issuePinsMove, commitsList, commitsGet, commitDiffsGet, compareGet, commitStatusesList,
-	commitStatusesGetCombined, commitStatusesCreate, gitBlobsGet, gitBlobsList, gitTreesGet, gitRefsList, gitTagsGet,
-	gitNotesGet, gitNotesSet, gitNotesDelete}
+	issuePinsUnpin, issuePinsMove, projectsList, projectsGet, projectsCreate, projectsUpdate, projectsDelete,
+	projectColumnsList, projectColumnsGet, projectColumnsCreate, projectColumnsUpdate, projectColumnsDelete,
+	projectColumnsMove, projectColumnsSetDefault, projectIssuesList, projectIssuesAdd, projectIssuesRemove,
+	projectIssuesMove, commitsList, commitsGet, commitDiffsGet, compareGet, commitStatusesList,
+	commitStatusesGetCombined, commitStatusesCreate, gitBlobsGet, gitBlobsList, gitTreesGet, gitRefsList,
+	gitTagsGet, gitNotesGet, gitNotesSet, gitNotesDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

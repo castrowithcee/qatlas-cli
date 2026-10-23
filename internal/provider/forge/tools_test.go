@@ -61,7 +61,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		if p == gitea {
 			want = append(want, p.id+".assignees.check", p.id+".issue-assignees.add", p.id+".issue-assignees.check",
-				p.id+".issue-assignees.remove")
+				p.id+".issue-assignees.remove", p.id+".projects.list", p.id+".projects.get", p.id+".projects.create",
+				p.id+".projects.update", p.id+".projects.delete", p.id+".project-columns.list",
+				p.id+".project-columns.get", p.id+".project-columns.create", p.id+".project-columns.update",
+				p.id+".project-columns.delete", p.id+".project-columns.move", p.id+".project-columns.set-default",
+				p.id+".project-issues.list", p.id+".project-issues.add", p.id+".project-issues.remove",
+				p.id+".project-issues.move")
 			slices.Sort(want)
 		}
 		want = append(want, p.id+".issue-times.add", p.id+".issue-times.delete", p.id+".issue-times.list",

@@ -17,6 +17,8 @@ const (
 	// financialDataSensitivity classifies Star balances, Star transactions, and gifts, which carry a Star value.
 	financialDataSensitivity = "telegram-financial"
 	maxTransactionOffset     = 1 << 20
+	// starTransactionsResponseMax bounds the answer of one page of transactions with full partners.
+	starTransactionsResponseMax = 2 << 20
 )
 
 const (
@@ -48,7 +50,8 @@ var paymentsStarBalance = capability.Descriptor{
 var paymentsStarTransactions = capability.Descriptor{
 	ID: Provider + ".payments.star-transactions", Version: 1, Title: "List the Star transactions of the Telegram bot",
 	Description: "List Star transactions of the bot read-only, from 1 through 100 per page; needs the bot target. " +
-		"Counterparties show only their type and numeric identifier",
+		"Partners, sponsors, and affiliates show only a numeric identifier, never a name; payloads are untrusted text " +
+		"and a withdrawal url is only an address; an answer of Telegram over 2 MiB is refused",
 	Tags: []string{"telegram", "payments", "stars", "read"}, Risk: paymentsRisk(), Provider: Provider,
 	Group: groupPayments,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"offset":{"type":"integer","minimum":0},` +
@@ -60,13 +63,10 @@ var paymentsStarTransactions = capability.Descriptor{
 		`"required":["transactions"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "offset", Description: "Number of transactions to skip, starting at zero"}, limitArgument},
-	Fields: []capability.Field{{Name: "transactions",
-		Description: "Transactions with id, amount, nanostar_amount, date, and the source and receiver partner"}},
+	Fields: []capability.Field{{Name: "transactions", Description: "Transactions with id, amount, nanostar_amount, date, " +
+		"and the source and receiver partner: " + partnerText}},
 	Examples: []capability.Example{{Description: "List the latest transactions", Arguments: json.RawMessage(`{"limit":20}`)}},
 }
-
-const partnerSchema = `{"type":"object","properties":{"type":{"type":"string"},"id":{"type":"integer"}},` +
-	`"required":["type"],"additionalProperties":false}`
 
 var giftsAvailable = capability.Descriptor{
 	ID: Provider + ".gifts.available", Version: 1, Title: "List the gifts Telegram offers for sale",
@@ -107,11 +107,6 @@ var giftsUser = capability.Descriptor{
 	Examples: []capability.Example{{Description: "List the first gifts", Arguments: json.RawMessage(`{"user_id":123,"limit":20}`)}},
 }
 
-type partnerOut struct {
-	Type string `json:"type"`
-	ID   int64  `json:"id,omitempty"`
-}
-
 type transactionOut struct {
 	ID             string      `json:"id"`
 	Amount         int64       `json:"amount"`
@@ -119,32 +114,6 @@ type transactionOut struct {
 	Date           int64       `json:"date"`
 	Source         *partnerOut `json:"source,omitempty"`
 	Receiver       *partnerOut `json:"receiver,omitempty"`
-}
-
-type tgPartner struct {
-	Type string `json:"type"`
-	User *struct {
-		ID int64 `json:"id"`
-	} `json:"user"`
-	Chat *struct {
-		ID int64 `json:"id"`
-	} `json:"chat"`
-}
-
-// partner keeps only the partner type and, for a user or chat partner, its numeric identifier; names, payloads,
-// and every other field of the partner are dropped.
-func partner(p *tgPartner) *partnerOut {
-	if p == nil || p.Type == "" {
-		return nil
-	}
-	out := &partnerOut{Type: capText(p.Type, maxNameRunes)}
-	switch {
-	case p.Type == "user" && p.User != nil:
-		out.ID = p.User.ID
-	case p.Type == "chat" && p.Chat != nil:
-		out.ID = p.Chat.ID
-	}
-	return out
 }
 
 func invokePaymentsStarBalance(ctx context.Context, r *config.Resolved, s *secret.Resolver, red *redact.Redactor,
@@ -337,7 +306,7 @@ func (c *Client) GetStarBalance(ctx context.Context) (map[string]any, error) {
 // ListStarTransactions performs one getStarTransactions request.
 func (c *Client) ListStarTransactions(ctx context.Context, offset, limit *int) (any, error) {
 	const op = "list star transactions"
-	raw, err := c.call(ctx, spec{op: op, method: "getStarTransactions", limit: giftsResponseMax, readOnly: true},
+	raw, err := c.call(ctx, spec{op: op, method: "getStarTransactions", limit: starTransactionsResponseMax, readOnly: true},
 		struct {
 			Offset *int `json:"offset,omitempty"`
 			Limit  *int `json:"limit,omitempty"`
@@ -358,13 +327,14 @@ func (c *Client) ListStarTransactions(ctx context.Context, offset, limit *int) (
 	if json.Unmarshal(raw, &got) != nil {
 		return nil, invalidResponse(op)
 	}
+	refs := c.fileRefs(botTarget)
 	out := make([]transactionOut, 0, min(len(got.Transactions), maxGiftsLimit))
 	for _, t := range got.Transactions {
 		if len(out) == maxGiftsLimit {
 			break
 		}
 		out = append(out, transactionOut{capText(t.ID, maxNameRunes), t.Amount, t.NanostarAmount, t.Date,
-			partner(t.Source), partner(t.Receiver)})
+			refs.partner(t.Source), refs.partner(t.Receiver)})
 	}
 	return struct {
 		Transactions []transactionOut `json:"transactions"`
