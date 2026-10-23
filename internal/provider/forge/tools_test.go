@@ -79,6 +79,18 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".pull-requests.list-pinned", p.id+".pull-request-branches.update",
 			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
 			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
+		want = append(want, p.id+".pull-request-reviews.list", p.id+".pull-request-reviews.get",
+			p.id+".pull-request-reviews.create", p.id+".pull-request-reviews.submit",
+			p.id+".pull-request-reviews.approve", p.id+".pull-request-reviews.delete",
+			p.id+".pull-request-reviews.dismiss", p.id+".pull-request-reviews.undismiss",
+			p.id+".pull-request-review-comments.list")
+		if p == forgejo {
+			want = append(want, p.id+".pull-request-review-comments.get", p.id+".pull-request-review-comments.create",
+				p.id+".pull-request-review-comments.delete")
+		} else {
+			want = append(want, p.id+".pull-request-review-comments.reply", p.id+".pull-request-review-comments.resolve",
+				p.id+".pull-request-review-comments.unresolve")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -143,6 +155,34 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
 			}
+		}
+	}
+}
+
+func TestReviewCommentToolsRegisterOnlyForTheirProduct(t *testing.T) {
+	reg := registry(t)
+	for _, shared := range []*tool{reviewsList, reviewsGet, reviewsCreate, reviewsSubmit, reviewsApprove,
+		reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList} {
+		for _, p := range products {
+			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
+				t.Errorf("%s is missing", p.toolID(shared))
+			}
+		}
+	}
+	for _, only := range []*tool{reviewCommentsGet, reviewCommentsCreate, reviewCommentsDelete} {
+		if _, _, ok := reg.Lookup(gitea.toolID(only)); ok {
+			t.Errorf("%s is registered for Gitea", gitea.toolID(only))
+		}
+		if _, _, ok := reg.Lookup(forgejo.toolID(only)); !ok {
+			t.Errorf("%s is missing", forgejo.toolID(only))
+		}
+	}
+	for _, only := range []*tool{reviewCommentsReply, reviewCommentsResolve, reviewCommentsUnresolve} {
+		if _, _, ok := reg.Lookup(forgejo.toolID(only)); ok {
+			t.Errorf("%s is registered for Forgejo", forgejo.toolID(only))
+		}
+		if _, _, ok := reg.Lookup(gitea.toolID(only)); !ok {
+			t.Errorf("%s is missing", gitea.toolID(only))
 		}
 	}
 }

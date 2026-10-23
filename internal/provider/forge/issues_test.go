@@ -315,7 +315,7 @@ func TestIssueDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 		}
 		for _, other := range reg.Provider(p.id) {
 			if other.ID != d.ID && other.RequiresToolAllowList && !strings.Contains(other.ID, ".delete") &&
-				other.ID != p.toolID(pullRequestsMerge) && other.ID != p.toolID(pullRequestBranchesUpdate) &&
+				other.ID != p.toolID(pullRequestsMerge) && other.ID != p.toolID(pullRequestBranchesUpdate) && other.ID != p.toolID(reviewsApprove) &&
 				other.ID != p.toolID(issueTimesReset) {
 				t.Errorf("%s is listed-only too", other.ID)
 			}
