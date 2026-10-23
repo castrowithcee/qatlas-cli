@@ -83,6 +83,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == gitea {
 			want = append(want, p.id+".branches.update-ref")
 		}
+		want = append(want, p.id+".contents.list", p.id+".contents.get", p.id+".contents.get-raw",
+			p.id+".archives.get", p.id+".editorconfig.get")
+		if p == gitea {
+			want = append(want, p.id+".contents.get-ext", p.id+".contents.get-many")
+		}
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
@@ -108,8 +113,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".workflow-runs.list", p.id+".workflow-runs.get", p.id+".workflow-runs.delete",
 			p.id+".workflow-runs.cancel", p.id+".workflow-runs.rerun", p.id+".workflow-run-logs.get",
 			p.id+".workflow-jobs.list", p.id+".workflow-jobs.get", p.id+".workflow-jobs.rerun",
-			p.id+".workflow-job-logs.get", p.id+".actions-tasks.list")
+			p.id+".workflow-job-logs.get", p.id+".actions-tasks.list", p.id+".workflow-artifacts.list",
+			p.id+".workflow-artifacts.get", p.id+".workflow-artifacts.download", p.id+".workflow-artifacts.delete",
+			p.id+".workflows.dispatch")
 		if p == gitea {
+			want = append(want, p.id+".workflows.list", p.id+".workflows.get")
 			want = append(want, p.id+".workflow-runs.force-cancel", p.id+".workflow-runs.rerun-failed",
 				p.id+".workflow-runs.approve", p.id+".workflow-run-attempts.get", p.id+".workflow-run-attempts.list-jobs")
 		}
@@ -121,6 +129,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == forgejo {
 			want = append(want, p.id+".git-blobs.list", p.id+".git-notes.set", p.id+".git-notes.delete")
 		}
+		want = append(want, p.id+".pull-request-reviewers.list", p.id+".pull-request-reviewers.request",
+			p.id+".pull-request-reviewers.remove")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

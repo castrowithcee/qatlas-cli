@@ -68,6 +68,9 @@ additional depth of defense: the targets of the connection stay the boundary.
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
+- Contents: `contents.get-ext` and `contents.get-many` do not exist, `archives.get` has no `paths`, and entries carry
+  `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. See
+  [Contents](gitea/contents.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
@@ -76,7 +79,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
 not registered. See [Projects](gitea/projects.md).
-- Actions: the API grew in steps, so most run tools need Forgejo 16 or 17; runs and tasks are read from 15. Runs,
-  jobs, and filters have Forgejo's own forms, there is no owner level, no attempts, no `force-cancel`, `rerun-failed`,
-  or `approve`, and `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See
-  [Actions runs](gitea/actions.md).
+- Actions: the API grew in steps, so most run tools need Forgejo 16 or 17; runs, tasks, and dispatch are available
+  from 15, artifacts from 16. Runs, jobs, artifacts, and filters have Forgejo's own forms, there is no owner level,
+  no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
+  `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See [Actions](gitea/actions.md).

@@ -21,6 +21,7 @@ package forge
 
 import (
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -140,9 +141,44 @@ func metadata(p *product) config.ProviderMetadata {
 				"instance settings and version; changes nothing",
 			Tools: []string{p.toolID(accountsMe), p.toolID(repositoriesList), p.toolID(repositoriesGet),
 				p.toolID(settingsGet), p.toolID(versionGet)},
+		}, {
+			ID: "actions-observer", Title: "Actions observer",
+			Description: "reads the workflow runs, attempts, jobs, tasks, workflows, artifact metadata, the end of " +
+				"job logs, and downloads the log archive of a run and the archive of an artifact of a repository " +
+				"and starts nothing",
+			Tools: p.profileTools(actionsObserverTools),
+		}, {
+			ID: "actions-operator", Title: "Actions operator",
+			Description: "observes the Actions of a repository and dispatches workflows, re-runs runs or jobs, " +
+				"cancels and force-cancels runs, and approves waiting runs; every execution needs its own " +
+				"confirmation, and deleting runs or artifacts stays unticked, since it is offered only where a " +
+				"connection's tools list names it",
+			Tools: p.profileTools(append(slices.Clone(actionsObserverTools), actionsOperatorTools...)),
 		}},
 	}
 }
+
+// profileTools keeps the tools the product registers, in the given order.
+func (p *product) profileTools(list []*tool) []string {
+	var ids []string
+	for _, t := range list {
+		if _, ok := t.since[p.id]; ok {
+			ids = append(ids, p.toolID(t))
+		}
+	}
+	return ids
+}
+
+// The Actions tools of the two setup profiles: every reading tool, and the tools that start or stop work. The
+// deleting tools are in neither.
+var (
+	actionsObserverTools = []*tool{workflowRunsList, workflowRunsGet, workflowRunAttemptsGet,
+		workflowRunAttemptsListJobs, workflowRunLogsGet, workflowJobsList, workflowJobsGet, workflowJobLogsGet,
+		actionsTasksList, workflowArtifactsList, workflowArtifactsGet, workflowArtifactsDownload, workflowsList,
+		workflowsGet}
+	actionsOperatorTools = []*tool{workflowRunsCancel, workflowRunsForceCancel, workflowRunsRerun,
+		workflowRunsRerunFailed, workflowRunsApprove, workflowJobsRerun, workflowsDispatch}
+)
 
 // tokenNote adds what only one product's tokens can do.
 func tokenNote(p *product) string {
