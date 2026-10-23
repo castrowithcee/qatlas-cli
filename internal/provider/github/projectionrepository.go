@@ -3,6 +3,7 @@ package github
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -473,7 +474,11 @@ func mustClean(p *string, limit int) *string {
 	return text
 }
 
-var restRepositoryProperties = func() string {
+var restRepositoryProperties = restRepositoryPropertiesExcept()
+
+// restRepositoryPropertiesExcept is the schema properties of the repository without the named ones, for a
+// view that already carries them under the same name.
+func restRepositoryPropertiesExcept(skip ...string) string {
 	str := `{"type":"string"}`
 	integer := `{"type":"integer"}`
 	boolean := `{"type":"boolean"}`
@@ -514,12 +519,14 @@ var restRepositoryProperties = func() string {
 		{"code_search_index_status", objectSchema(`"lexical_search_ok":` + boolean + `,"lexical_commit_sha":` + str)},
 		{"links", linksSchema(restRepositoryLinkKeys)},
 	}
-	parts := make([]string, len(names))
-	for i, n := range names {
-		parts[i] = `"` + n.name + `":` + n.schema
+	var parts []string
+	for _, n := range names {
+		if !slices.Contains(skip, n.name) {
+			parts = append(parts, `"`+n.name+`":`+n.schema)
+		}
 	}
 	return strings.Join(parts, ",")
-}()
+}
 
 var restRepositorySchema = objectSchema(restRepositoryProperties)
 
