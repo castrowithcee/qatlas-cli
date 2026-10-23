@@ -17,3 +17,4 @@ embedded. The system address book needs its own `addressbook/URI` target and is 
 no profile; deleting and sharing need a tools list. A contact update replaces by `etag`, refusing a card it cannot write
 whole. A new address book needs the general `addressbook` target; changing, deleting (with all contacts), or sharing one
 needs it bound and owned. Sharing: one user or group, never link, e-mail, or team; unknown ones are ignored (`shares`).
+Vendor properties of an address book are not standards and are not read; only `oc:invite` is, as `shares`.
