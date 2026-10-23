@@ -38,7 +38,11 @@ func memberChangeRisk(effect capability.Effect, idempotency capability.Idempoten
 }
 
 var memberEntrySchema = `{"type":"object","properties":{` +
-	`"user_id":` + idSchema + `,"roles":{"type":"string"},"scheme_admin":{"type":"boolean"}},` +
+	`"user_id":` + idSchema + `,"roles":{"type":"string"},"scheme_admin":{"type":"boolean"},` +
+	`"last_viewed_at":{"type":"string"},"msg_count":{"type":"integer"},"mention_count":{"type":"integer"},` +
+	`"notify_props":{"type":"object","properties":{"email":{"type":"string"},"push":{"type":"string"},` +
+	`"desktop":{"type":"string"},"mark_unread":{"type":"string"}},"additionalProperties":false},` +
+	`"last_update_at":{"type":"string"}},` +
 	`"required":["user_id","roles","scheme_admin"],"additionalProperties":false}`
 
 var channelsMembersList = capability.Descriptor{
@@ -67,6 +71,11 @@ var channelsMembersList = capability.Descriptor{
 		{Name: "user_id", Description: "Member user identifier"},
 		{Name: "roles", Description: "Channel roles of the member, for example channel_user or channel_user channel_admin"},
 		{Name: "scheme_admin", Description: "True when the member is a channel administrator by the channel's permission scheme"},
+		{Name: "last_viewed_at", Description: "Time the member last viewed the channel, normalised to RFC 3339 in UTC"},
+		{Name: "msg_count", Description: "Number of messages in the channel the member has read"},
+		{Name: "mention_count", Description: "Number of unread mentions of the member in the channel"},
+		{Name: "notify_props", Description: "Notification settings of the member for the channel (email, push, desktop, mark_unread), untrusted data"},
+		{Name: "last_update_at", Description: "Time the membership was last changed, normalised to RFC 3339 in UTC"},
 		{Name: "channel_id", Description: "Channel that was read"},
 		{Name: "page", Description: "Page that was read"},
 		{Name: "has_more", Description: "True when the page is full, so a further page may remain"},
@@ -164,14 +173,50 @@ type memberJSON struct {
 	UserID      string `json:"user_id"`
 	Roles       string `json:"roles"`
 	SchemeAdmin bool   `json:"scheme_admin"`
+
+	LastViewedAt flexInt                   `json:"last_viewed_at"`
+	MsgCount     flexInt                   `json:"msg_count"`
+	MentionCount flexInt                   `json:"mention_count"`
+	NotifyProps  tolerant[notifyPropsJSON] `json:"notify_props"`
+	LastUpdateAt flexInt                   `json:"last_update_at"`
 }
 
-// MemberEntry is the stable Qatlas view of one channel member; notification settings and counters are
-// never passed on.
+type notifyPropsJSON struct {
+	Email      tolerant[string] `json:"email"`
+	Push       tolerant[string] `json:"push"`
+	Desktop    tolerant[string] `json:"desktop"`
+	MarkUnread tolerant[string] `json:"mark_unread"`
+}
+
+// NotifyProps is the notification setting of a member for one channel. The values are kChat's own words,
+// such as all, mention, none, or default, and untrusted data.
+type NotifyProps struct {
+	Email      string `json:"email,omitempty"`
+	Push       string `json:"push,omitempty"`
+	Desktop    string `json:"desktop,omitempty"`
+	MarkUnread string `json:"mark_unread,omitempty"`
+}
+
+// MemberEntry is the stable Qatlas view of one channel member, including the read state and notification
+// settings kChat reports for the channel the connection may reach. A value kChat leaves out stays out.
 type MemberEntry struct {
-	UserID      string `json:"user_id"`
-	Roles       string `json:"roles"`
-	SchemeAdmin bool   `json:"scheme_admin"`
+	UserID       string       `json:"user_id"`
+	Roles        string       `json:"roles"`
+	SchemeAdmin  bool         `json:"scheme_admin"`
+	LastViewedAt string       `json:"last_viewed_at,omitempty"`
+	MsgCount     int64        `json:"msg_count,omitempty"`
+	MentionCount int64        `json:"mention_count,omitempty"`
+	NotifyProps  *NotifyProps `json:"notify_props,omitempty"`
+	LastUpdateAt string       `json:"last_update_at,omitempty"`
+}
+
+func notifyPropsOf(raw *notifyPropsJSON) *NotifyProps {
+	props := NotifyProps{Email: cleanText(raw.Email.Value), Push: cleanText(raw.Push.Value),
+		Desktop: cleanText(raw.Desktop.Value), MarkUnread: cleanText(raw.MarkUnread.Value)}
+	if props == (NotifyProps{}) {
+		return nil
+	}
+	return &props
 }
 
 // MembersPage is one paginated listing of the members of one channel.
@@ -278,7 +323,10 @@ func (c *Client) ListMembers(ctx context.Context, channelID string, page, limit 
 		if m.ChannelID != channelID || !validMattermostID(m.UserID) {
 			continue
 		}
-		entries = append(entries, MemberEntry{UserID: m.UserID, Roles: bounded(m.Roles), SchemeAdmin: m.SchemeAdmin})
+		entries = append(entries, MemberEntry{UserID: m.UserID, Roles: bounded(m.Roles), SchemeAdmin: m.SchemeAdmin,
+			LastViewedAt: msToRFC3339(int64(m.LastViewedAt)), MsgCount: int64(m.MsgCount),
+			MentionCount: int64(m.MentionCount), NotifyProps: notifyPropsOf(&m.NotifyProps.Value),
+			LastUpdateAt: msToRFC3339(int64(m.LastUpdateAt))})
 	}
 	return &MembersPage{ChannelID: channelID, Members: entries, Page: page, HasMore: len(members) >= limit,
 		Count: len(entries)}, nil
