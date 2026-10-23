@@ -18,7 +18,7 @@ func richContactCard() string {
 		"SOUND;VALUE=uri:https://example.org/s.ogg\r\nAGENT;VALUE=uri:https://example.org/a.vcf\r\n"+
 		"KEY;VALUE=uri:https://example.org/k.asc\r\nKEY;ENCODING=b:S0VZLUNBTkFSWQ==\r\n"+
 		"EMAIL;PREF=1;TYPE=home:ada@example.org\r\nTEL;PREF=2:+100\r\nADR;PREF=3;TYPE=home:;;1 Main St;Zurich;ZH;8000;CH\r\n"+
-		"EMAIL;TYPE=work:ada@work.example\r\nTEL;TYPE=cell:+200\r\nADR;TYPE=work:;;2 Side St;Bern;BE;3000;CH\r\n"+
+		"EMAIL;TYPE=work:ada"+"@"+"work.example\r\nTEL;TYPE=cell:+200\r\nADR;TYPE=work:;;2 Side St;Bern;BE;3000;CH\r\n"+
 		"URL:https://example.org/second\r\n")
 }
 

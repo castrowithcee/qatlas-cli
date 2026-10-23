@@ -19,6 +19,13 @@ const (
 	maxSearchRunes = 512
 	// maxHitLimit is the largest page a message or file search asks kChat for.
 	maxHitLimit = 100
+	// The offsets of the zones from UTC-12:00 to UTC+14:00, in seconds.
+	minTimeZoneOffset = -43200
+	maxTimeZoneOffset = 50400
+
+	// maxMatchTerms and maxMatchTermBytes bound the matched terms reported for one message.
+	maxMatchTerms     = 20
+	maxMatchTermBytes = 256
 )
 
 // searchTermSchema is a search term of 1 to 512 characters without control characters.
@@ -34,10 +41,15 @@ var searchPagingArguments = []capability.Argument{
 	{Name: "page", Description: "1-based page of kChat's own search result; the first page when omitted"},
 	{Name: "limit", Description: "Hits per kChat page, 1 to " + itoa(maxHitLimit) + "; " + itoa(defaultListLimit) +
 		" when omitted"},
+	{Name: "time_zone_offset", Description: "Offset of the caller's time zone from UTC in whole seconds, " +
+		itoa(minTimeZoneOffset) + " to " + itoa(maxTimeZoneOffset) + "; kChat reads dates in the terms in that zone, " +
+		"UTC when omitted"},
 }
 
 var searchPagingSchema = `"is_or_search":{"type":"boolean"},"page":{"type":"integer","minimum":1},` +
-	`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxHitLimit) + `}`
+	`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxHitLimit) + `},` +
+	`"time_zone_offset":{"type":"integer","minimum":` + itoa(minTimeZoneOffset) + `,"maximum":` +
+	itoa(maxTimeZoneOffset) + `}`
 
 var searchPagingFields = []capability.Field{
 	{Name: "team_id", Description: "Team that was searched"},
@@ -60,10 +72,15 @@ var messagesSearch = capability.Descriptor{
 		searchTermSchema + `,` + searchPagingSchema + `},"required":["team_id","terms"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"team_id":` + idSchema + `,"messages":{"type":"array","items":` + messageEntrySchema + `},` +
+		`"matches":{"type":"object","additionalProperties":{"type":"array","maxItems":` + itoa(maxMatchTerms) +
+		`,"items":{"type":"string"}}},` +
 		`"page":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["team_id","messages","page","has_more","count"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{teamIDArgument, searchTermsArgument}, searchPagingArguments...),
-	Fields:    append(append([]capability.Field{}, messageEntryFields...), searchPagingFields...),
+	Fields: append(append(append([]capability.Field{}, messageEntryFields...), searchPagingFields...),
+		capability.Field{Name: "matches", Description: "Terms kChat matched, by message identifier, untrusted data; " +
+			"only for the messages reported, at most " + itoa(maxMatchTerms) + " terms of at most " +
+			itoa(maxMatchTermBytes) + " bytes each per message, without control characters"}),
 	Examples: []capability.Example{{Description: "Search the messages of one bound team",
 		Arguments: json.RawMessage(`{"team_id":"abc123team0000000000000000","terms":"deploy in:town-square"}`)}},
 }
@@ -116,9 +133,11 @@ var channelsSearch = capability.Descriptor{
 type SearchedMessages struct {
 	TeamID   string         `json:"team_id"`
 	Messages []MessageEntry `json:"messages"`
-	Page     int            `json:"page"`
-	HasMore  bool           `json:"has_more"`
-	Count    int            `json:"count"`
+	// Matches maps a reported message to the terms kChat matched in it.
+	Matches map[string][]string `json:"matches,omitempty"`
+	Page    int                 `json:"page"`
+	HasMore bool                `json:"has_more"`
+	Count   int                 `json:"count"`
 }
 
 // SearchedFiles is one kChat page of file hits, reduced to the reachable channels.
@@ -144,6 +163,8 @@ type searchArguments struct {
 	IsOrSearch bool   `json:"is_or_search"`
 	Page       int    `json:"page"`
 	Limit      int    `json:"limit"`
+	// TimeZoneOffset stays nil when the caller gave none, so the request body then omits it.
+	TimeZoneOffset *int `json:"time_zone_offset"`
 }
 
 // searchBody is the typed request body of the post and file searches. include_deleted_channels is
@@ -153,6 +174,8 @@ type searchBody struct {
 	IsOrSearch bool   `json:"is_or_search"`
 	Page       int    `json:"page"`
 	PerPage    int    `json:"per_page"`
+
+	TimeZoneOffset *int `json:"time_zone_offset,omitempty"`
 }
 
 // validSearchTerm checks a search term's shape; the term is never quoted in an error.
@@ -188,6 +211,10 @@ func prepareSearch(ctx context.Context, op string, resolved *config.Resolved, se
 	if input.Page < 1 || input.Limit < 1 || input.Limit > maxHitLimit {
 		return nil, nil, invalidRequest("page must be at least 1 and limit 1 to " + itoa(maxHitLimit))
 	}
+	if z := input.TimeZoneOffset; z != nil && (*z < minTimeZoneOffset || *z > maxTimeZoneOffset) {
+		return nil, nil, invalidRequest("time_zone_offset must be " + itoa(minTimeZoneOffset) + " to " +
+			itoa(maxTimeZoneOffset) + " seconds")
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, nil, err
@@ -196,7 +223,8 @@ func prepareSearch(ctx context.Context, op string, resolved *config.Resolved, se
 }
 
 func (a *searchArguments) body() searchBody {
-	return searchBody{Terms: a.Terms, IsOrSearch: a.IsOrSearch, Page: a.Page - 1, PerPage: a.Limit}
+	return searchBody{Terms: a.Terms, IsOrSearch: a.IsOrSearch, Page: a.Page - 1, PerPage: a.Limit,
+		TimeZoneOffset: a.TimeZoneOffset}
 }
 
 func invokeMessagesSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -216,21 +244,55 @@ func (c *Client) SearchMessages(ctx context.Context, input *searchArguments) (*S
 	if err != nil {
 		return nil, err
 	}
-	var list postListJSON
+	var list struct {
+		postListJSON
+		Matches map[string][]string `json:"matches"`
+	}
 	path := "/api/v4/teams/" + url.PathEscape(input.TeamID) + "/posts/search"
 	if err := c.do(ctx, op, http.MethodPost, path, nil, input.body(), &list, false); err != nil {
 		return nil, err
 	}
 	entries := make([]MessageEntry, 0, len(list.Order))
+	var matches map[string][]string
 	for _, id := range list.Order {
 		post, ok := list.Posts[id]
 		if !ok || post.ID != id || post.DeleteAt != 0 || reachable[post.ChannelID] == nil {
 			continue
 		}
 		entries = append(entries, messageEntryOf(post))
+		if terms := cleanMatches(list.Matches[id]); len(terms) > 0 {
+			if matches == nil {
+				matches = map[string][]string{}
+			}
+			matches[id] = terms
+		}
 	}
-	return &SearchedMessages{TeamID: input.TeamID, Messages: entries, Page: input.Page,
+	return &SearchedMessages{TeamID: input.TeamID, Messages: entries, Matches: matches, Page: input.Page,
 		HasMore: len(list.Order) >= input.Limit, Count: len(entries)}, nil
+}
+
+// cleanMatches keeps at most maxMatchTerms non-empty terms, each without control characters and cut to
+// maxMatchTermBytes at a character boundary.
+func cleanMatches(terms []string) []string {
+	var kept []string
+	for _, term := range terms {
+		term = stripControls(term)
+		if len(term) > maxMatchTermBytes {
+			end := maxMatchTermBytes
+			for end > 0 && !utf8.RuneStart(term[end]) {
+				end--
+			}
+			term = term[:end]
+		}
+		if term == "" {
+			continue
+		}
+		if len(kept) == maxMatchTerms {
+			break
+		}
+		kept = append(kept, term)
+	}
+	return kept
 }
 
 func invokeFilesSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

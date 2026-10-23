@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub security
@@ -71,9 +71,10 @@ created, edited, published, nor closed.
 | `github.organization-advisories.list` | lists the security advisories of an organization's repositories |
 | `github.code-quality-findings.get` | reads one code quality finding |
 
-`github.global-advisories.list` reads the GitHub Advisory Database, GitHub-wide; GitHub answers the type
-`reviewed` when `type` is omitted, and `is_withdrawn` false adds no filter. `github.code-quality-findings.get`
-reads one finding by `finding_number`; GitHub also lists findings, and that list is not offered.
+`github.global-advisories.list` reads the GitHub Advisory Database, GitHub-wide, and gives each entry every
+member `.get` does; GitHub answers the type `reviewed` when `type` is omitted, and `is_withdrawn` false
+adds no filter. `github.code-quality-findings.get` reads one finding by `finding_number`; GitHub also lists
+findings, and that list is not offered.
 
 The global tools name no repository: a connection without targets, or one whose targets name only owners, may
 use them, and a connection whose targets name a repository or a project is refused as `invalid-request`
@@ -87,10 +88,17 @@ with the batch size of the first batch and belongs to the tool, the target, and 
 
 Advisory summaries, descriptions, references, package names, and finding messages come from other accounts and
 are untrusted data. Summaries, rule descriptions, and messages are cut at 500 characters, a global advisory
-description of a `.get` and a rule help at 4000, and the description of a repository advisory in a list at
-2000; vulnerabilities are capped at 20 per advisory, functions at 10 per vulnerability, references at 20, and
-`truncated` says so. Draft and triage advisories hold non-public vulnerability details; they reach only a
-token whose account GitHub allows to see them.
+description and a rule help at 4000, and the description of a repository advisory in a list at
+2000, and the Markdown of a finding message at 2000; vulnerabilities are capped at 20 per advisory, functions
+at 10 per vulnerability, references at 20, and `truncated` says so. The lists an advisory carries beyond these
+(identifiers, credits, collaborators) are capped at 100 and say so in their own `*_truncated` member, never in
+`truncated`. Draft and triage advisories hold non-public vulnerability details; they reach only a token whose
+account GitHub allows to see them.
+
+An account inside an advisory carries the fields GitHub's own REST answers give it; the full profile is read
+with the account tools. The temporary private fork of a repository advisory is a repository: one outside the
+connection's targets keeps only its identifiers (`id`, `node_id`, `full_name`), and the clone token GitHub
+sends with it is never shown.
 
 | Tool | Classic token | Fine-grained token |
 | --- | --- | --- |
