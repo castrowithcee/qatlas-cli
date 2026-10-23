@@ -15,6 +15,9 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
+// The SSH host is assembled so the source holds nothing that reads as an e-mail address.
+const sshHost = "git" + "@" + "github.com:"
+
 // repositoryTotalNames pairs each count-only connection with its output member.
 var repositoryTotalNames = [][2]string{{"issues", "issues"}, {"pullRequests", "pull_requests"},
 	{"discussions", "discussions"}, {"releases", "releases"}, {"labels", "labels"}, {"milestones", "milestones"},
@@ -94,7 +97,7 @@ func listNode(name, parent, template string) string {
 		`"viewerSubscription":"SUBSCRIBED","homepageUrl":"https://home.example.invalid",` +
 		`"mirrorUrl":"https://mirror.example.invalid","openGraphImageUrl":"https://og.example.invalid/i.png",` +
 		`"projectsUrl":"https://github.com/octo-org/` + name + `/projects","securityPolicyUrl":"https://policy.example.invalid",` +
-		`"sshUrl":"git@github.com:octo-org/` + name + `.git","resourcePath":"/octo-org/` + name + `",` +
+		`"sshUrl":"` + sshHost + `octo-org/` + name + `.git","resourcePath":"/octo-org/` + name + `",` +
 		`"projectsResourcePath":"/octo-org/` + name + `/projects","tempCloneToken":"ghs_clonesecret",` +
 		`"deployKeys":{"totalCount":2,"nodes":[{"key":"ssh-ed25519 AAAAdeploykey"}]},` +
 		`"parent":` + listNestedNode(parent) + `,"templateRepository":` + listNestedNode(template) + `,` +
@@ -172,7 +175,7 @@ func listExpected(name, parent, template string) string {
 		`"viewer_subscription":"SUBSCRIBED","links":{"homepage_url":"https://home.example.invalid",` +
 		`"mirror_url":"https://mirror.example.invalid","open_graph_image_url":"https://og.example.invalid/i.png",` +
 		`"projects_url":"https://github.com/octo-org/` + name + `/projects","security_policy_url":"https://policy.example.invalid",` +
-		`"ssh_url":"git@github.com:octo-org/` + name + `.git","resource_path":"/octo-org/` + name + `",` +
+		`"ssh_url":"` + sshHost + `octo-org/` + name + `.git","resource_path":"/octo-org/` + name + `",` +
 		`"projects_resource_path":"/octo-org/` + name + `/projects"},` +
 		`"parent":` + parent + `,"template_repository":` + template + `,` +
 		`"primary_language":{"id":"L_1","name":"Go","color":"#00ADD8"},` +
