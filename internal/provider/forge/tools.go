@@ -76,7 +76,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	commitStatusesList, commitStatusesGetCombined, commitStatusesCreate, gitBlobsGet, gitBlobsList, gitTreesGet,
 	gitRefsList, gitTagsGet, gitNotesGet, gitNotesSet, gitNotesDelete, contentsList, contentsGet, contentsGetExt,
 	contentsGetMany, contentsGetRaw, archivesGet, editorconfigGet, reviewersList, reviewersRequest,
-	reviewersRemove}
+	reviewersRemove, workflowArtifactsList, workflowArtifactsGet, workflowArtifactsDownload,
+	workflowArtifactsDelete, workflowsList, workflowsGet, workflowsDispatch}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

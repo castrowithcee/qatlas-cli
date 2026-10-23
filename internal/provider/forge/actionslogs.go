@@ -227,12 +227,14 @@ var workflowJobLogsGet = &tool{
 type cappedDownload struct {
 	download *localfile.Download
 	limit    int64
+	op       string
+	subject  string
 }
 
 func (c cappedDownload) ReadFrom(r io.Reader) (int64, error) {
 	n, err := c.download.ReadFrom(io.LimitReader(r, c.limit+1))
 	if err == nil && n > c.limit {
-		return n, provider.InvalidResponse("download run logs", "the run logs are larger than the limit of "+
+		return n, provider.InvalidResponse(c.op, c.subject+" larger than the limit of "+
 			itoa(int(c.limit>>20))+" MiB")
 	}
 	return n, err
@@ -293,7 +295,8 @@ var workflowRunLogsGet = &tool{
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "download run logs"
 			if err := c.fetchFile(ctx, op, apiPrefix+runPath(repo, a.RunID)+"/logs", -1,
-				cappedDownload{download: download, limit: maxRunLogsBytes}); err != nil {
+				cappedDownload{download: download, limit: maxRunLogsBytes, op: op,
+					subject: "the run logs are"}); err != nil {
 				return nil, err
 			}
 			if err := download.Commit(); err != nil {
