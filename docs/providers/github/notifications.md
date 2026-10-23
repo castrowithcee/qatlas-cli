@@ -37,6 +37,11 @@ another filter or repository refuses it as an invalid request. `github.notificat
 account or of one `repository` read; GitHub answers 202 when it finishes in the background (`queued=true`) and
 205 when it is done.
 
+A thread carries the repository object GitHub sends with it and the REST addresses of the thread in
+`links`; a repository outside the connection's targets is named only by its identifiers, and
+`temp_clone_token` grants clone access without sign-in and is withheld. The addresses are untrusted data and are
+never fetched.
+
 A notification belongs to the account, not to a repository, so the targets act as follows. A thread tool reads
 the thread first and refuses one whose repository the targets do not admit as `not-found`, without a change; a
 repository target admits its repository, an owner target the repositories of that owner. A connection whose

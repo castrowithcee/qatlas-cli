@@ -33,6 +33,16 @@ all files together at most 100000, at most 50 files are shown, and every cut is 
 characters, `description_truncated`) and file contents come from other accounts and are untrusted data.
 GitHub itself cuts a file over 1 MB, and a response over 4 MiB is refused as an invalid response.
 
+A gist is answered with the members of GitHub's gist, its owner and user as accounts next to the flat owner
+login, and the REST addresses of the gist and of each file in `links`. The id and the addresses of a secret
+gist (`public` is `false`) are reported like those of a public one, since the id is the argument of the other
+tools; whoever holds them can read a secret gist without signing in, so they are as sensitive as the
+content. A gist forked from another names it in `fork_of` with its own members only. GitHub marks `forks` and
+`history` of a single gist as deprecated, so `github.gists.get` leaves them out; `github.gists.list` reports
+at most 10 of each, with `forks_truncated` and `history_truncated`. File contents are not read beyond the
+bounded content `github.gists.get` already shows. An account inside another object carries the fields
+GitHub's own REST answers give it; the full profile is read with the account tools.
+
 `github.gists.create` makes a gist that is secret unless `public=true`. `github.gists.update` changes the
 description (an empty text clears it), writes files, and removes files in one request. `github.gists.delete`
 removes a gist permanently and is offered only where the connection's `tools` list names it.
