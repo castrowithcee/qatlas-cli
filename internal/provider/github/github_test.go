@@ -258,7 +258,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user/starred":
 		repos := []string{}
 		for _, star := range f.starList {
-			repos = append(repos, fmt.Sprintf(`{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}`,
+			repos = append(repos, fmt.Sprintf(`{"repo":{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}}`,
 				star.fullName, star.visibility, star.archived, star.owner))
 		}
 		fmt.Fprint(w, "["+strings.Join(repos, ",")+"]")
