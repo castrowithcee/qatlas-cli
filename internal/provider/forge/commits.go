@@ -94,6 +94,9 @@ func cutText(answer *textAnswer) string {
 func readDescriptor(p *product, sensitivity, group, action, title, text, properties string, required []string,
 	arguments []capability.Argument, output json.RawMessage, fields []capability.Field,
 	example string) capability.Descriptor {
+	if example != "" {
+		example = "," + example
+	}
 	return capability.Descriptor{
 		Title:        title,
 		Description:  text,
@@ -104,7 +107,7 @@ func readDescriptor(p *product, sensitivity, group, action, title, text, propert
 		Arguments:    append([]capability.Argument{repositoryArgument}, arguments...),
 		Fields:       fields,
 		Examples: []capability.Example{{Description: title,
-			Arguments: json.RawMessage(`{"repository":"example/project",` + example + `}`)}},
+			Arguments: json.RawMessage(`{"repository":"example/project"` + example + `}`)}},
 	}
 }
 

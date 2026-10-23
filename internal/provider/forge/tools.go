@@ -74,7 +74,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	workflowRunAttemptsGet, workflowRunAttemptsListJobs, workflowRunLogsGet, workflowJobsList, workflowJobsGet,
 	workflowJobsRerun, workflowJobLogsGet, actionsTasksList, commitsList, commitsGet, commitDiffsGet, compareGet,
 	commitStatusesList, commitStatusesGetCombined, commitStatusesCreate, gitBlobsGet, gitBlobsList, gitTreesGet,
-	gitRefsList, gitTagsGet, gitNotesGet, gitNotesSet, gitNotesDelete}
+	gitRefsList, gitTagsGet, gitNotesGet, gitNotesSet, gitNotesDelete, repositoriesSearch,
+	repositoryLanguagesList, repositoryActivitiesList, repositorySigningKeysGet}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

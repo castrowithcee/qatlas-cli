@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Gitea
@@ -67,6 +67,7 @@ names its scopes.
 | `accounts.me` | `read:user` |
 | `repositories.get` | `read:repository` |
 | `repositories.list` | `read:repository`; the token's own repositories and a user's also `read:user`, an organization's also `read:organization` |
+| `repositories.search` | `read:repository` |
 | `version.get` | none |
 | target selection | `read:user` for the account, `read:organization` for its organizations |
 
@@ -92,8 +93,8 @@ owner of every answer, not the spelling the caller used, and refuses what lies o
 - A target argument outside the allow-list is refused before the token is read and before any request, and the
   refusal does not name it.
 - `repositories.get` by numeric ID reads the repository once and returns it only when its canonical name lies inside
-  the targets. `repositories.list` checks every row; rows outside the targets are dropped, a server-side filter is
-  only an optimization.
+  the targets. `repositories.list` and `repositories.search` check every row; rows outside the targets are dropped,
+  a server-side filter is only an optimization.
 - `accounts.me` is not offered by a connection whose targets name a repository: such a connection is scoped to it,
   and the account may belong to another customer.
 - Target selection lists the owners from `GET /user` and `GET /user/orgs`, and the repositories from
@@ -170,7 +171,7 @@ Members only one product documents appear only there; the descriptor of each too
 | Tool | Effect | Provider |
 | --- | --- | --- |
 | `accounts.me` | read | both |
-| `repositories.list`, `repositories.get` | read | both |
+| `repositories.list`, `repositories.get`, `repositories.search` | read | both |
 | `version.get` | read | both |
 
 Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The other tools are described by group:
