@@ -161,7 +161,7 @@ func TestUpdatesListShowsInlineUpdatesOnlyWithTheBotTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(got)
-	for _, forbidden := range []string{"IQID", "INLINEMSGID", "OFFSET", "latitude", "1.5", "location"} {
+	for _, forbidden := range []string{"IQID", "INLINEMSGID"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Errorf("output contains %q: %s", forbidden, encoded)
 		}

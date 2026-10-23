@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Queries
@@ -16,3 +16,6 @@ respectively. Both references are [signed references](README.md#signed-reference
 
 `telegram.inline.answer` (`create`, `tools` list) needs `bot` and an `inline_ref` and sends text articles only,
 never a URL, media, or keyboard.
+
+The `callback_ref` of a callback on an inline message has no chat and is bound to `bot`, like the
+[chatless references of updates](updates.md).
