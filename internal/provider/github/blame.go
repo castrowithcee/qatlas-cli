@@ -27,12 +27,20 @@ const lineSchema = `{"type":"integer","minimum":1,"maximum":100000000}`
 // blameQuery asks for every range GitHub's blame reports for a file at a ref; checkBlameArguments bounds the
 // range this tool answers with, clipping GitHub's ranges to it after the request, since blame carries no
 // line-range argument of its own.
-const blameQuery = `query($owner:String!,$name:String!,$ref:String!,$path:String!){` +
-	`repository(owner:$owner,name:$name){object(expression:$ref){... on Commit{` +
-	`blame(path:$path){ranges{startingLine endingLine commit{oid message author{name date user{login}}}}}}}}}`
+func blameQueryOf(commit string) string {
+	return `query($owner:String!,$name:String!,$ref:String!,$path:String!){` +
+		`repository(owner:$owner,name:$name){object(expression:$ref){... on Commit{` +
+		`blame(path:$path){ranges{startingLine endingLine age commit{` + commit + `}}}}}}}`
+}
 
-const blameRangeProperties = `"start_line":{"type":"integer"},"end_line":{"type":"integer"},` +
-	`"sha":{"type":"string"},"author":{"type":"string"},"date":{"type":"string"}`
+// The compact query is the default; the detail query adds the commit members that grow every range.
+var (
+	blameQuery       = blameQueryOf(blameCompactCommitSelection)
+	blameDetailQuery = blameQueryOf(blameCommitSelection)
+)
+
+var blameRangeProperties = `"start_line":{"type":"integer"},"end_line":{"type":"integer"},` +
+	`"sha":{"type":"string"},"author":{"type":"string"},"date":{"type":"string"},` + blameRangeWidthProperties
 
 const blameRangeRequired = `"required":["start_line","end_line","sha"],"additionalProperties":false`
 
@@ -41,13 +49,13 @@ var blameGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get the GitHub blame of a file",
 	Description: "Read, over a bounded line range, the commit that last changed each line of one file of a " +
-		"repository a connection allows at a ref, with the commit's SHA, author, and date; carries " +
+		"repository a connection allows at a ref, with the range's age and its commit, compact or on request in full; carries " +
 		"no file content beyond, or even within, the range, since GitHub's blame never returns one",
 	Tags:     []string{"github", "blame", "contents", "repository", "get"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"path":`+contentsPathSchema+`,"ref":`+refSchema+`,"start_line":`+lineSchema+
-		`,"end_line":`+lineSchema, "path"),
+		`,"end_line":`+lineSchema+`,"commit_details":{"type":"boolean"}`, "path"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"ranges":{"type":"array","items":{` +
 		`"type":"object","properties":{` + blameRangeProperties + `},` + blameRangeRequired + `}},` +
 		`"start_line":{"type":"integer"},"end_line":{"type":"integer"}},` +
@@ -56,15 +64,18 @@ var blameGet = capability.Descriptor{
 		{Name: "path", Description: "File inside the repository", Required: true},
 		{Name: "ref", Description: "Branch, tag, or commit SHA; the default branch's tip when omitted"},
 		{Name: "start_line", Description: "First line to blame, from 1; 1 when omitted"},
+		{Name: "commit_details", Description: "true to read the commit of each range in full: body, stats, " +
+			"signature, status, tree, and links; false (default) reads a compact commit, since GitHub answers " +
+			"every range of the file and the full commit multiplies the answer"},
 		{Name: "end_line", Description: fmt.Sprintf("Last line to blame; start_line+%d-1 when omitted, at "+
 			"most %d lines from start_line", defaultBlameLines, maxBlameLines)},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "ranges", Description: "Commit ranges clipped to start_line..end_line, each with its commit " +
-			"sha, author, and date, without file content"},
+			"sha, author, and date, its age, and its commit, without file content"},
 		{Name: "start_line", Description: "First line this batch covers"},
 		{Name: "end_line", Description: "Last line this batch covers"},
-	},
+	}, blameWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Blame the first 50 lines of a file",
 		Arguments:   json.RawMessage(`{"path":"internal/app.go","start_line":1,"end_line":50}`),
@@ -83,6 +94,8 @@ type blameArguments struct {
 	Ref       string `json:"ref"`
 	StartLine int    `json:"start_line"`
 	EndLine   int    `json:"end_line"`
+
+	CommitDetails bool `json:"commit_details"`
 }
 
 // checkBlameArguments applies the path and ref checks and the default and bound of the line range before a
@@ -143,6 +156,10 @@ type BlameRange struct {
 	SHA       string `json:"sha"`
 	Author    string `json:"author,omitempty"`
 	Date      string `json:"date,omitempty"`
+
+	Age          *int64           `json:"age,omitempty"`
+	AuthorDetail *GraphQLGitActor `json:"author_detail,omitempty"`
+	Commit       *BlameCommit     `json:"commit,omitempty"`
 }
 
 // BlameResult is the blame of one file over one line range.
@@ -158,18 +175,10 @@ type blamePageJSON struct {
 			Typename string `json:"__typename"`
 			Blame    *struct {
 				Ranges []struct {
-					StartingLine int `json:"startingLine"`
-					EndingLine   int `json:"endingLine"`
-					Commit       struct {
-						OID    string `json:"oid"`
-						Author struct {
-							Name string `json:"name"`
-							Date string `json:"date"`
-							User *struct {
-								Login string `json:"login"`
-							} `json:"user"`
-						} `json:"author"`
-					} `json:"commit"`
+					StartingLine int            `json:"startingLine"`
+					EndingLine   int            `json:"endingLine"`
+					Age          *int64         `json:"age"`
+					Commit       blameCommitRaw `json:"commit"`
 				} `json:"ranges"`
 			} `json:"blame"`
 		} `json:"object"`
@@ -185,9 +194,13 @@ func (c *Client) getBlame(ctx context.Context, a blameArguments) (*BlameResult, 
 	if ref == "" {
 		ref = "HEAD"
 	}
+	query := blameQuery
+	if a.CommitDetails {
+		query = blameDetailQuery
+	}
 	variables := map[string]any{"owner": c.target.owner, "name": c.target.repo, "ref": ref, "path": a.Path}
 	var page blamePageJSON
-	if err := c.graphql(ctx, op, blameQuery, variables, &page); err != nil {
+	if err := c.graphql(ctx, op, query, variables, &page); err != nil {
 		return nil, actionsFailure(err, blameReadPermission)
 	}
 	if page.Repository == nil {
@@ -208,10 +221,18 @@ func (c *Client) getBlame(ctx context.Context, a blameArguments) (*BlameResult, 
 		if r.Commit.OID == "" {
 			return nil, invalidEntry(op, "a blame range")
 		}
-		entry := BlameRange{StartLine: start, EndLine: end, SHA: r.Commit.OID, Author: r.Commit.Author.Name,
-			Date: r.Commit.Author.Date}
-		if r.Commit.Author.User != nil && r.Commit.Author.User.Login != "" {
-			entry.Author = r.Commit.Author.User.Login
+		entry := BlameRange{StartLine: start, EndLine: end, SHA: r.Commit.OID, Age: r.Age,
+			AuthorDetail: r.Commit.Author.project(), Commit: r.Commit.project()}
+		if actor := r.Commit.Author; actor != nil {
+			if actor.Name != nil {
+				entry.Author = *actor.Name
+			}
+			if actor.Date != nil {
+				entry.Date = *actor.Date
+			}
+			if actor.User != nil && actor.User.Login != nil && *actor.User.Login != "" {
+				entry.Author = *actor.User.Login
+			}
 		}
 		result.Ranges = append(result.Ranges, entry)
 	}
