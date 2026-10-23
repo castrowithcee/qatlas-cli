@@ -67,6 +67,9 @@ additional depth of defense: the targets of the connection stay the boundary.
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
+- Contents: `contents.get-ext` and `contents.get-many` do not exist, `archives.get` has no `paths`, and entries carry
+  `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. See
+  [Contents](gitea/contents.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).

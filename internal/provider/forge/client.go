@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -191,13 +192,28 @@ func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values
 // means the length is not known beforehand. The token goes to that origin only. A redirect is refused, never
 // followed: the instance answers with one when it serves the file from another address.
 func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
+	return c.fetch(ctx, op, path, nil, size, to)
+}
+
+// fetch is fetchFile with validated query values and a size that may be unknown: a negative size accepts any
+// length the destination itself bounds.
+func (c *Client) fetch(ctx context.Context, op, path string, query url.Values, size int64, to io.ReaderFrom) error {
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#") {
 		return provider.Fail(op, "the request path is not one of this provider")
+	}
+	for key := range query {
+		if slices.ContainsFunc(forbiddenQuery, func(f string) bool { return strings.EqualFold(key, f) }) {
+			return provider.Fail(op, "the request carries a parameter this provider never sends")
+		}
 	}
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, c.product.name, err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin+path, nil)
+	target := c.origin + path
+	if len(query) > 0 {
+		target += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return provider.Fail(op, "the request could not be built")
 	}
@@ -218,14 +234,18 @@ func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to 
 	case response.StatusCode != http.StatusOK:
 		return refusal(op, c.product, c.limiter, response)
 	case size >= 0 && response.ContentLength >= 0 && response.ContentLength != size:
-		return provider.InvalidResponse(op, c.product.name+" announced another size than the asset has")
+		return provider.InvalidResponse(op, c.product.name+" announced another size than the file has")
 	}
 	body := &trackedReader{Reader: response.Body}
-	if _, err := to.ReadFrom(body); err != nil {
+	n, err := to.ReadFrom(body)
+	if err != nil {
 		if body.err != nil {
 			return provider.Transport(op, c.product.name, body.err)
 		}
 		return err
+	}
+	if size < 0 && response.ContentLength >= 0 && n != response.ContentLength {
+		return provider.InvalidResponse(op, c.product.name+" announced another size than the file has")
 	}
 	return nil
 }
