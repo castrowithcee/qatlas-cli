@@ -183,6 +183,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Labels](labels.md): repository and organization labels
 - [Issue labels](issue-labels.md): the labels of an issue or pull request
 - [Milestones](milestones.md): the milestones of a repository
+- [Projects](projects.md): project boards, their columns, and their issues (Gitea 28 and later)
 - [Time tracking](time-tracking.md): tracked times and stopwatches of issues and pull requests
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Releases](releases.md): releases and their attached assets
@@ -206,7 +207,8 @@ restrict agent use and traffic; check their terms before pointing a connection a
 
 ## Gitea
 
-- Gitea 1.27 and the numbering from 28 serve the same fields for the tools here.
+- Gitea 1.27 and the numbering from 28 serve the same fields for the tools here, except the project tools, which
+  need Gitea 28.
 - Tokens cannot be bound to repositories, so the targets are the only narrowing besides the scopes.
 - The user object carries `type`.
 - `repositories.list` has no `order_by`.
