@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -27,6 +28,7 @@ const (
 	searchSchemaMode = `{"type":"string","enum":["fork","source","mirror","collaborative"]}`
 	searchSchemaSort = `{"type":"string","enum":["alpha","created","updated","size","git_size","lfs_size","id",` +
 		`"stars","forks"]}`
+	searchSchemaID   = `{"type":"integer","minimum":1,"maximum":9007199254740991}`
 	searchSchemaOrd  = `{"type":"string","enum":["asc","desc"]}`
 	activitySchemaDt = `{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}`
 )
@@ -50,12 +52,11 @@ var activityMembers = []member{
 var repositoriesSearch = &tool{
 	group: "repositories", action: "search", since: everywhere,
 	describe: func(p *product) capability.Descriptor {
-		// uid, team_id, priority_owner_id, starredBy, and exclusive name accounts or teams that may lie outside
-		// the targets, so their relations to repositories would show through; they are not offered.
 		properties := `"q":` + searchSchemaQ + `,"topic":` + searchSchemaFlag + `,"include_description":` +
 			searchSchemaFlag + `,"private":` + searchSchemaFlag + `,"is_private":` + searchSchemaFlag +
 			`,"template":` + searchSchemaFlag + `,"archived":` + searchSchemaFlag + `,"mode":` + searchSchemaMode +
-			`,"sort":` + searchSchemaSort + `,"order":` + searchSchemaOrd + `,` + pagingKeys
+			`,"uid":` + searchSchemaID + `,"team_id":` + searchSchemaID + `,"priority_owner_id":` + searchSchemaID +
+			`,"starredBy":` + searchSchemaID + `,"exclusive":` + searchSchemaFlag + `,"sort":` + searchSchemaSort + `,"order":` + searchSchemaOrd + `,` + pagingKeys
 		return capability.Descriptor{
 			Title: "Search " + p.name + " repositories",
 			Description: "Search the repositories the token sees on the whole instance and return one batch with " +
@@ -75,6 +76,11 @@ var repositoriesSearch = &tool{
 				{Name: "is_private", Description: "True shows private repositories only, false public ones only"},
 				{Name: "template", Description: "False leaves template repositories out"},
 				{Name: "archived", Description: "True shows archived repositories only, false the others only"},
+				{Name: "uid", Description: "Only repositories the user with this numeric ID owns or contributes to"},
+				{Name: "team_id", Description: "Only repositories of the team with this numeric ID"},
+				{Name: "priority_owner_id", Description: "Numeric ID of the owner whose repositories come first"},
+				{Name: "starredBy", Description: "Only repositories the user with this numeric ID has starred"},
+				{Name: "exclusive", Description: "True with uid: only repositories the user owns"},
 				{Name: "mode", Description: "fork, source, mirror, or collaborative"},
 				{Name: "sort", Description: "alpha (default), created, updated, size, git_size, lfs_size, id, stars, " +
 					"or forks"},
@@ -96,6 +102,11 @@ var repositoriesSearch = &tool{
 			IsPrivate          *bool  `json:"is_private"`
 			Template           *bool  `json:"template"`
 			Archived           *bool  `json:"archived"`
+			UID                int64  `json:"uid"`
+			TeamID             int64  `json:"team_id"`
+			PriorityOwnerID    int64  `json:"priority_owner_id"`
+			StarredBy          int64  `json:"starredBy"`
+			Exclusive          *bool  `json:"exclusive"`
 			Mode               string `json:"mode"`
 			Sort               string `json:"sort"`
 			Order              string `json:"order"`
@@ -118,6 +129,13 @@ var repositoriesSearch = &tool{
 		boolQuery(filters, "is_private", a.IsPrivate)
 		boolQuery(filters, "template", a.Template)
 		boolQuery(filters, "archived", a.Archived)
+		for name, value := range map[string]int64{"uid": a.UID, "team_id": a.TeamID,
+			"priority_owner_id": a.PriorityOwnerID, "starredBy": a.StarredBy} {
+			if value != 0 {
+				filters.Set(name, strconv.FormatInt(value, 10))
+			}
+		}
+		boolQuery(filters, "exclusive", a.Exclusive)
 		for name, value := range map[string]string{"mode": a.Mode, "sort": a.Sort, "order": a.Order} {
 			if value != "" {
 				filters.Set(name, value)

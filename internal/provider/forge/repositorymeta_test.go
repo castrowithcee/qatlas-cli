@@ -34,7 +34,7 @@ func TestRepositoriesSearchWrapperRowsAndFilters(t *testing.T) {
 	for _, p := range products {
 		e := newEnvironment(t, p, metaServer(`{"ok":true,"data":[`+metaRepo("acme/widget")+`,`+metaRepo("other/place")+`]}`))
 		result, err := e.invoke(t, repositoriesSearch, "repo",
-			`{"q":"w","topic":true,"include_description":true,"mode":"source","sort":"stars","order":"desc","limit":5}`)
+			`{"q":"w","topic":true,"include_description":true,"mode":"source","uid":7,"team_id":8,"priority_owner_id":9,"starredBy":10,"exclusive":true,"sort":"stars","order":"desc","limit":5}`)
 		rows, _ := result["repositories"].([]any)
 		if err != nil || len(rows) != 1 || rows[0].(map[string]any)["full_name"] != "acme/widget" ||
 			result["has_more"] != true {
@@ -42,7 +42,8 @@ func TestRepositoriesSearchWrapperRowsAndFilters(t *testing.T) {
 		}
 		q, _ := url.ParseQuery((*e.calls)[0].query)
 		if q.Get("q") != "w" || q.Get("topic") != "true" || q.Get("includeDesc") != "true" || q.Get("mode") != "source" ||
-			q.Get("sort") != "stars" || q.Get("order") != "desc" || q.Get("limit") != "5" || q.Get("uid") != "" {
+			q.Get("sort") != "stars" || q.Get("order") != "desc" || q.Get("limit") != "5" || q.Get("uid") != "7" || q.Get("team_id") != "8" || q.Get("priority_owner_id") != "9" ||
+			q.Get("starredBy") != "10" || q.Get("exclusive") != "true" {
 			t.Errorf("%s query = %v", p.id, q)
 		}
 		failed := newEnvironment(t, p, metaServer(`{"ok":false,"data":[]}`))
@@ -50,7 +51,7 @@ func TestRepositoriesSearchWrapperRowsAndFilters(t *testing.T) {
 			strings.Contains(err.Error(), "false") {
 			t.Errorf("%s: ok false gave %v", p.id, err)
 		}
-		for _, bad := range []string{`{"uid":1}`, `{"team_id":1}`, `{"starredBy":1}`, `{"priority_owner_id":1}`,
+		for _, bad := range []string{`{"uid":0}`, `{"team_id":-1}`,
 			`{"mode":"x"}`, `{"sort":"x"}`} {
 			if _, err := e.invoke(t, repositoriesSearch, "repo", bad); !isInvalidRequest(err) {
 				t.Errorf("%s accepted %s: %v", p.id, bad, err)

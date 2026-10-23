@@ -75,10 +75,7 @@ identifier of its own, so the instance binds it to the repository and no evidenc
 
 - `repositories.search` reads the whole instance, so every row is checked against the targets by its canonical name
   and rows outside them are dropped; a batch can therefore be short or empty while `has_more` is true. A search the
-  instance reports as failed (`ok` not true) is a provider error without the instance's text. The filters naming
-  accounts or teams (`uid`, `team_id`, `priority_owner_id`, `starredBy`, `exclusive`) are not offered: they would
-  show which repositories a user outside the targets owns, stars, or belongs to. The server-side filters are only an
-  optimization.
+  instance reports as failed (`ok` not true) is a provider error without the instance's text.
 - `repository-languages.list` and `repository-activities.list` take a repository chosen against the targets before
   the token is read. The activity feed names the users who acted and carries comment and free texts, all untrusted
   data and personal data; it has its own sensitivity class, and an activity whose repository is not the chosen one
