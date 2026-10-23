@@ -31,7 +31,7 @@ func TestChatsGetReturnsOnlyAllowListedFields(t *testing.T) {
 		`"is_forum":true,"description":"About","invite_link":"` + inviteCanary + `",` +
 		`"permissions":{"can_send_messages":true,"can_pin_messages":false,"EXTRA":true},` +
 		`"slow_mode_delay":10,"linked_chat_id":-1002,` +
-		`"pinned_message":{"message_id":55,"text":"PINNEDCANARY"},"photo":{"x":1},"EXTRA":"LEAK"}}`
+		`"pinned_message":{"message_id":55},"photo":{"x":1},"EXTRA":"LEAK"}}`
 	client, _ := multiClient(t, testToken, chatsFake(&calls, 200, body), "-1001")
 	got, err := client.GetChat(context.Background())
 	if err != nil {
@@ -43,7 +43,7 @@ func TestChatsGetReturnsOnlyAllowListedFields(t *testing.T) {
 	encoded, _ := json.Marshal(got)
 	want := `{"id":-1001,"type":"supergroup","title":"Team","username":"team","is_forum":true,` +
 		`"description":"About","permissions":{"can_send_messages":true,"can_pin_messages":false},` +
-		`"slow_mode_delay":10,"pinned_message_id":55,"linked_chat_id":-1002}`
+		`"slow_mode_delay":10,"pinned_message_id":55,"pinned_message":{"message_id":55},"linked_chat_id":-1002}`
 	if string(encoded) != want {
 		t.Errorf("output = %s", encoded)
 	}

@@ -20,8 +20,9 @@ const (
 	defaultUpdateLimit = 20
 	maxUpdateLimit     = 100
 	maxWaitSeconds     = 10
-	// updatesResponseBytes bounds a getUpdates response; an update with media metadata is far smaller.
-	updatesResponseBytes = 2 << 20
+	// updatesResponseBytes bounds a getUpdates response; a page of 100 messages that all carry content members at
+	// realistic maximum size needs just under 4 MiB.
+	updatesResponseBytes = 4 << 20
 
 	// maxConfirmUpdateID keeps update_id+1 exactly representable in JSON numbers of any client.
 	maxConfirmUpdateID = 1<<53 - 1
@@ -63,16 +64,16 @@ var updatesList = capability.Descriptor{
 		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"},` +
 		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"},` +
 		`"business_chat_ref":{"type":"string"},"message_ids":{"type":"array","items":{"type":"integer"}},` +
-		`"is_enabled":{"type":"boolean"}},` +
+		`"is_enabled":{"type":"boolean"}` + messageHeadSchema + `},` +
 		`"required":["update_id","type","chat"]}},` +
 		`"skipped":{"type":"integer"},"last_update_id":{"type":"integer"}},` +
 		`"required":["updates","skipped"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "limit", Description: "Maximum number of pending updates to fetch, from 1 through 100; default 20"},
+		{Name: "limit", Description: "Maximum number of pending updates to fetch, from 1 through 100; default 20; a Telegram answer over " + strconv.Itoa(updatesResponseBytes>>20) + " MiB fails as an invalid response, and a smaller limit avoids it"},
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
 	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText + "; media_items lists the media objects of a message with their Bot API members and signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member>, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB"},
+		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText + "; media_items lists the media objects of a message with their Bot API members and signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member> or as a header or content member, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB; messages also carry " + messageHeadText},
 		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or business connection or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
 	},
@@ -227,13 +228,14 @@ type updateOut struct {
 	BusinessChatRef  string     `json:"business_chat_ref,omitempty"`
 	MessageIDs       []int64    `json:"message_ids,omitempty"`
 	IsEnabled        *bool      `json:"is_enabled,omitempty"`
+
+	messageHeadOut
 }
 
 // Only the fields below are decoded, so nothing else of an update can reach the output.
 
-type tgChat struct {
-	ID int64 `json:"id"`
-}
+// tgChat is the decoded Chat; chats named by a message are printed from it as data only.
+type tgChat = chatRefOut
 
 // tgFile is the summary behind the media member: the identifier and the few members every file kind shares.
 type tgFile struct {
@@ -246,25 +248,72 @@ type tgFile struct {
 type tgMessage struct {
 	MessageID int64 `json:"message_id"`
 	// BusinessConnectionID is set on the messages of a business connection only.
-	BusinessConnectionID string  `json:"business_connection_id"`
-	MessageThreadID      int64   `json:"message_thread_id"`
-	Date                 int64   `json:"date"`
-	Chat                 tgChat  `json:"chat"`
-	From                 *tgUser `json:"from"`
-	Text                 string  `json:"text"`
-	Caption              string  `json:"caption"`
-	ReplyTo              *struct {
-		MessageID int64 `json:"message_id"`
-	} `json:"reply_to_message"`
-	Photo     []photoSize `json:"photo"`
-	Document  *document   `json:"document"`
-	Audio     *audio      `json:"audio"`
-	Video     *video      `json:"video"`
-	Voice     *voice      `json:"voice"`
-	VideoNote *videoNote  `json:"video_note"`
-	Animation *animation  `json:"animation"`
-	Sticker   *sticker    `json:"sticker"`
-	LivePhoto *livePhoto  `json:"live_photo"`
+	BusinessConnectionID string      `json:"business_connection_id"`
+	MessageThreadID      int64       `json:"message_thread_id"`
+	Date                 int64       `json:"date"`
+	Chat                 tgChat      `json:"chat"`
+	From                 *tgUser     `json:"from"`
+	Text                 string      `json:"text"`
+	Caption              string      `json:"caption"`
+	ReplyTo              *tgMessage  `json:"reply_to_message"`
+	Photo                []photoSize `json:"photo"`
+	Document             *document   `json:"document"`
+	Audio                *audio      `json:"audio"`
+	Video                *video      `json:"video"`
+	Voice                *voice      `json:"voice"`
+	VideoNote            *videoNote  `json:"video_note"`
+	Animation            *animation  `json:"animation"`
+	Sticker              *sticker    `json:"sticker"`
+	LivePhoto            *livePhoto  `json:"live_photo"`
+
+	DirectMessagesTopic    *tgDirectTopic   `json:"direct_messages_topic"`
+	SenderChat             *tgChat          `json:"sender_chat"`
+	SenderBoostCount       int64            `json:"sender_boost_count"`
+	SenderBusinessBot      *tgUser          `json:"sender_business_bot"`
+	SenderTag              string           `json:"sender_tag"`
+	ReceiverUser           *tgUser          `json:"receiver_user"`
+	EphemeralMessageID     int64            `json:"ephemeral_message_id"`
+	GuestQueryID           string           `json:"guest_query_id"`
+	ForwardOrigin          *tgOrigin        `json:"forward_origin"`
+	IsTopicMessage         bool             `json:"is_topic_message"`
+	IsAutomaticForward     bool             `json:"is_automatic_forward"`
+	ExternalReply          *tgExternalReply `json:"external_reply"`
+	Quote                  *tgQuote         `json:"quote"`
+	ReplyToStory           *tgStory         `json:"reply_to_story"`
+	ReplyToChecklistTaskID int64            `json:"reply_to_checklist_task_id"`
+	ReplyToPollOptionID    string           `json:"reply_to_poll_option_id"`
+	ViaBot                 *tgUser          `json:"via_bot"`
+	GuestBotCallerUser     *tgUser          `json:"guest_bot_caller_user"`
+	GuestBotCallerChat     *tgChat          `json:"guest_bot_caller_chat"`
+	EditDate               int64            `json:"edit_date"`
+	HasProtectedContent    bool             `json:"has_protected_content"`
+	IsFromOffline          bool             `json:"is_from_offline"`
+	IsPaidPost             bool             `json:"is_paid_post"`
+	MediaGroupID           string           `json:"media_group_id"`
+	AuthorSignature        string           `json:"author_signature"`
+	PaidStarCount          int64            `json:"paid_star_count"`
+
+	Entities              []entityOut           `json:"entities"`
+	LinkPreviewOptions    *linkPreviewOut       `json:"link_preview_options"`
+	SuggestedPostInfo     *suggestedPostInfoOut `json:"suggested_post_info"`
+	EffectID              string                `json:"effect_id"`
+	RichMessage           json.RawMessage       `json:"rich_message"`
+	PaidMedia             *paidMediaInfoOut     `json:"paid_media"`
+	Story                 *tgStory              `json:"story"`
+	CaptionEntities       []entityOut           `json:"caption_entities"`
+	ShowCaptionAboveMedia bool                  `json:"show_caption_above_media"`
+	HasMediaSpoiler       bool                  `json:"has_media_spoiler"`
+	Checklist             *checklistOut         `json:"checklist"`
+	Contact               *contactOut           `json:"contact"`
+	Dice                  *diceOut              `json:"dice"`
+	Game                  *gameOut              `json:"game"`
+	Poll                  *pollOut              `json:"poll"`
+	Venue                 *venueOut             `json:"venue"`
+	Location              *messageLocationOut   `json:"location"`
+	Invoice               *invoiceOut           `json:"invoice"`
+	ReplyMarkup           *inlineKeyboardOut    `json:"reply_markup"`
+	Giveaway              *giveawayOut          `json:"giveaway"`
+	GiveawayWinners       *giveawayWinnersOut   `json:"giveaway_winners"`
 }
 
 // tgEvent covers the chat events that carry a chat, an actor, and a date.
@@ -589,7 +638,7 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 			cand.out.Chat = businessBinding(cand.business)
 			cand.out.BusinessChatRef = c.businessChatRef(cand.business, cand.chat)
 			if cand.msg != nil {
-				cand.out.MediaItems, cand.out.OmittedFields = mediaItems(cand.msg, nil)
+				c.mapMessage(&cand.out, cand.msg, messageScope{binding: cand.out.Chat, chatID: cand.chat, business: true})
 			}
 			updates = append(updates, cand.out)
 			continue
@@ -606,7 +655,7 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 		}
 		cand.out.Chat = binding
 		if cand.msg != nil {
-			cand.out.MediaItems, cand.out.OmittedFields = mediaItems(cand.msg, c.fileRefs(binding))
+			c.mapMessage(&cand.out, cand.msg, messageScope{binding: binding, chatID: cand.chat, refs: c.fileRefs(binding)})
 		}
 		if cand.fileID != "" && cand.out.Media != nil {
 			cand.out.Media.FileRef = signRef(c.token, refFile, binding, cand.fileID)
@@ -642,4 +691,12 @@ func (c *Client) resolveChat(ctx context.Context, username string) (int64, error
 		return 0, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Telegram returned an invalid response"}
 	}
 	return chat.ID, nil
+}
+
+// mapMessage adds the media objects and the header members of a message to its update.
+func (c *Client) mapMessage(out *updateOut, m *tgMessage, s messageScope) {
+	var omitted []string
+	out.MediaItems, out.OmittedFields = mediaItems(m, s.refs)
+	out.messageHeadOut, omitted = c.messageHead(m, s, false)
+	out.OmittedFields = append(out.OmittedFields, omitted...)
 }
