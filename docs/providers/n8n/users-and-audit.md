@@ -56,6 +56,10 @@ target, before a secret is read) and needs the owner or admin role; a 403 is rep
 role error without telling which. It only reads and computes, so it is effect `read`, safe, and needs no
 confirmation. `days_abandoned_workflow` is limited to 1 to 3650, and `categories` to distinct values of
 `credentials`, `database`, `nodes`, `filesystem`, `instance`; no other audit parameter exists. The result
-holds at most 5 reports, each with at most 50 sections and at most 50 locations per section; `settings` and
-`nextVersions` are dropped. All of it is untrusted data, capped per value, and `truncated` flags what was cut.
+holds at most 5 reports, each with at most 50 sections and at most 50 locations per section. A section's
+`settings` is a free object: it is passed on only within fixed bounds (scalars and lists of scalars, limited
+depth and key count) and otherwise left out whole and flagged, never cut. Newer versions per section are
+limited, and their nodes are counted and named, nothing more of them. `documentationUrl` of a version is an
+address Qatlas never fetches; it is untrusted text. All of it is untrusted data, capped per value, and
+`truncated` flags what was cut.
 The audit may be slow on a large instance; an error is never retried.

@@ -187,6 +187,9 @@ var outputFieldCases = []struct {
 	{usersGet.ID, "pdelete-open", `{"user_id":"` + ownUser + `"}`, "/users/" + ownUser, userBody, 8},
 	{sourceControlStatus.ID, "open", `{"direction":"pull"}`, "/source-control/status",
 		`{"data":[` + richStatusFile + `]}`, 25},
+	{auditGenerate.ID, "open", `{}`, "/audit", auditBody(richAuditSettings, `[{"name":"1.2.3","nodes":[{"name":"N"}],`+
+		`"createdAt":"c","description":"d","documentationUrl":"u","hasBreakingChange":true,"hasSecurityFix":true,`+
+		`"hasSecurityIssue":false,"securityIssueFixVersion":"1.2.4"}]`), 20},
 	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},
 }
 
