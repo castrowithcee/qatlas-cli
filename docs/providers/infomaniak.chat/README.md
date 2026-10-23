@@ -94,7 +94,7 @@ the token's channels of that team (`GET /api/v4/users/me/teams/{team_id}/channel
 inside the allow-list and never direct or group channels, sends one request, and drops every hit or thread
 outside that set, including a file hit without a `channel_id` and a thread whose root is deleted. Because the
 set comes from the token's own channels, a public channel the token has not joined yields no hit.
-`insights.top` applies it to ranked channels and threads and drops unreachable users; no thread text shows.
+`insights.top` applies it to ranked channels and threads; its limits for people are on [teams](teams.md).
 
 The `bots`, `emoji`, and `roles` tools need an instance-wide connection: all token teams bound, no `channel/`
 target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`

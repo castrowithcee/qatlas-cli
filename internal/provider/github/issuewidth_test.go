@@ -613,13 +613,14 @@ func TestIssuesListNamesTheIssueType(t *testing.T) {
 		`"labels":{"nodes":[]},"issueType":null}]}}}}`
 	f, core := cannedCore(t, page, false, func(base string) *config.Config { return coreConfig(base) })
 	got, err := invoke(t, core, issuesList.ID, "repo", `{}`, false)
-	const want = `{"has_more":false,"issues":[{"issue_type":"Bug","number":2,"state":"open",` +
+	const want = `{"has_more":false,"issues":[{"issue_type":"Bug","issue_type_detail":{"name":"Bug"},` +
+		`"number":2,"state":"open",` +
 		`"title":"B","updated_at":"2026-01-02T00:00:00Z"},{"number":1,"state":"open",` +
 		`"title":"A","updated_at":"2026-01-01T00:00:00Z"}],"repository":"octo-org/example"}`
 	if err != nil || string(got) != want {
 		t.Errorf("issues.list = %s, %v, want %s", got, err, want)
 	}
-	if requests := f.recorded(); len(requests) != 1 || !strings.Contains(requests[0].document, "issueType{name}") {
+	if requests := f.recorded(); len(requests) != 1 || !strings.Contains(requests[0].document, "issueType{"+gqlIssueTypeSelection+"}") {
 		t.Errorf("requests = %+v, want one query naming issueType", requests)
 	}
 }
