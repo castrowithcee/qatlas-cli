@@ -69,13 +69,17 @@ const customPropertyValueOutput = `{"type":"object","properties":{"property_name
 	`"value":{"anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}},{"type":"null"}]}},` +
 	`"required":["property_name","value"],"additionalProperties":false}`
 
-const customPropertyDefinitionOutput = `{"type":"object","properties":{"property_name":{"type":"string"},` +
-	`"value_type":{"type":"string"},"required":{"type":"boolean"},"default_value":{"anyOf":[{"type":"string"},` +
+var customPropertyLinkKeys = []string{"url"}
+
+var customPropertyDefinitionOutput = `{"type":"object","properties":{"property_name":{"type":"string"},` +
+	`"source_type":{"type":"string"},"value_type":{"type":"string"},"required":{"type":"boolean"},` +
+	`"default_value":{"anyOf":[{"type":"string"},` +
 	`{"type":"array","items":{"type":"string"}},{"type":"null"}]},"description":{"type":"string"},` +
-	`"allowed_values":{"type":"array","items":{"type":"string"}},"values_editable_by":{"type":"string"}},` +
+	`"allowed_values":{"type":"array","items":{"type":"string"}},"values_editable_by":{"type":"string"},` +
+	`"require_explicit_values":{"type":"boolean"},"links":` + linksSchema(customPropertyLinkKeys) + `},` +
 	`"required":["property_name","value_type"],"additionalProperties":false}`
 
-const customPropertiesOutput = `{"type":"object","properties":{"properties":{"type":"array","items":` +
+var customPropertiesOutput = `{"type":"object","properties":{"properties":{"type":"array","items":` +
 	customPropertyValueOutput + `},"schema":{"type":"array","items":` + customPropertyDefinitionOutput + `},` +
 	`"repository":{"type":"string"},"organization":{"type":"string"}},"additionalProperties":false}`
 
@@ -99,8 +103,10 @@ var customPropertiesFields = []capability.Field{
 	{Name: "properties", Description: "Property values of the repository: property_name and value (a string, " +
 		"an array of strings for a multi-select property, or null while unset); present only for a repository call"},
 	{Name: "schema", Description: "Property definitions the organization declares: property_name, value_type " +
-		"(string, single_select, multi_select, or true_false), required, default_value, description, " +
-		"allowed_values, and values_editable_by; present only for an organization call"},
+		"(string, single_select, multi_select, true_false, or url), required, default_value, description, " +
+		"allowed_values, values_editable_by, source_type (where the property is defined), " +
+		"require_explicit_values, and links (the REST url, never fetched); description and the values are " +
+		"untrusted data; present only for an organization call"},
 	customPropertiesRepositoryField, customPropertiesOrganizationField,
 }
 
@@ -275,6 +281,12 @@ type CustomPropertyDefinition struct {
 	Description      string          `json:"description,omitempty"`
 	AllowedValues    []string        `json:"allowed_values,omitempty"`
 	ValuesEditableBy string          `json:"values_editable_by,omitempty"`
+
+	// Members GitHub reports with a definition; a definition sent to github.custom-properties.set never
+	// carries them.
+	SourceType            *string `json:"source_type,omitempty"`
+	RequireExplicitValues *bool   `json:"require_explicit_values,omitempty"`
+	Links                 Links   `json:"links,omitempty"`
 }
 
 // CustomPropertiesResult is the answer of both custom properties tools: properties for a repository call, or
@@ -318,6 +330,19 @@ type customPropertyDefinitionJSON struct {
 	Description      string          `json:"description"`
 	AllowedValues    []string        `json:"allowed_values"`
 	ValuesEditableBy string          `json:"values_editable_by"`
+
+	SourceType            *string `json:"source_type"`
+	RequireExplicitValues *bool   `json:"require_explicit_values"`
+	links                 Links
+}
+
+func (a *customPropertyDefinitionJSON) UnmarshalJSON(data []byte) (err error) {
+	type plain customPropertyDefinitionJSON
+	if err = json.Unmarshal(data, (*plain)(a)); err != nil {
+		return err
+	}
+	a.links, err = readLinks(data, customPropertyLinkKeys)
+	return err
 }
 
 func (a customPropertyDefinitionJSON) view() (CustomPropertyDefinition, bool) {
@@ -333,7 +358,8 @@ func (a customPropertyDefinitionJSON) view() (CustomPropertyDefinition, bool) {
 	}
 	return CustomPropertyDefinition{PropertyName: a.PropertyName, ValueType: a.ValueType, Required: a.Required,
 		DefaultValue: defaultValue, Description: a.Description, AllowedValues: a.AllowedValues,
-		ValuesEditableBy: a.ValuesEditableBy}, true
+		ValuesEditableBy: a.ValuesEditableBy, SourceType: nameText(a.SourceType),
+		RequireExplicitValues: a.RequireExplicitValues, Links: a.links}, true
 }
 
 func invokeCustomPropertiesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
