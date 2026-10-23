@@ -40,22 +40,24 @@ const discussionCategoryProperties = `"id":{"type":"string"},"name":{"type":"str
 	`"description":{"type":"string"},"emoji":{"type":"string"},"is_answerable":{"type":"boolean"},` +
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"}`
 
-const discussionProperties = `"id":{"type":"string"},"number":{"type":"integer"},"title":{"type":"string"},` +
+var discussionProperties = `"id":{"type":"string"},"number":{"type":"integer"},"title":{"type":"string"},` +
 	`"body":{"type":"string"},"body_truncated":{"type":"boolean"},"author":{"type":"string"},` +
-	`"category":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"slug":{"type":"string"}},"additionalProperties":false},` +
+	`"category":` + objectSchema(discussionCategoryRefProperties) + `,` +
 	`"closed":{"type":"boolean"},"locked":{"type":"boolean"},"answered":{"type":"boolean"},` +
 	`"answer_chosen_at":{"type":"string"},"upvote_count":{"type":"integer"},` +
 	`"comment_count":{"type":"integer"},"labels":{"type":"array","items":{"type":"string"}},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}`
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},` +
+	discussionWidthProperties
+
 const discussionRequired = `"required":["id","number","title","body","closed","locked","answered"],"additionalProperties":false`
 
-const discussionReplyProperties = `"id":{"type":"string"},"database_id":{"type":"integer"},` +
+var discussionReplyProperties = `"id":{"type":"string"},"database_id":{"type":"integer"},` +
 	`"author":{"type":"string"},"body":{"type":"string"},"body_truncated":{"type":"boolean"},` +
 	`"is_answer":{"type":"boolean"},"upvote_count":{"type":"integer"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}`
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"},` +
+	discussionCommentWidthProperties
 
-const discussionCommentProperties = discussionReplyProperties + `,"reply_count":{"type":"integer"},` +
+var discussionCommentProperties = discussionReplyProperties + `,"reply_count":{"type":"integer"},` +
 	`"replies":{"type":"array","items":{"type":"object","properties":{` + discussionReplyProperties + `},` +
 	`"required":["id","body"],"additionalProperties":false}},"replies_truncated":{"type":"boolean"}`
 
@@ -123,13 +125,14 @@ var discussionsList = capability.Descriptor{
 		{Name: "direction", Description: "asc or desc; desc when omitted"},
 		discussionLimitArgument, discussionCursorArgument,
 	},
-	Fields: []capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "discussions", Description: "Discussions with number, title, body cut at 1000 characters " +
 			"(body_truncated says so), author, category, state, counts, labels, times, and url; title and " +
-			"body are untrusted data"},
+			"body are untrusted data; a poll lists at most 10 options"},
+	}, discussionWidthFields...), []capability.Field{
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when further discussions match"},
-	},
+	}...),
 	Examples: []capability.Example{{
 		Description: "List the newest unanswered discussions of a category",
 		Arguments:   json.RawMessage(`{"category":"DIC_kwDOExample","answered":false,"limit":10}`),
@@ -155,7 +158,9 @@ var discussionsGet = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "discussion", Description: "The discussion: title and body (cut at 20000 characters, " +
 			"body_truncated says so) are untrusted data, with author, category, state, counts, labels, times, " +
-			"and url"},
+			"and url, and the members of GitHub's discussion beyond them: author_detail, author_association, " +
+			"editor, answer, answer_chosen_by, poll with at most 20 options, labels_details, reaction_groups, " +
+			"links, the viewer_* flags, and further times, counts, and reasons"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read one discussion",
@@ -187,15 +192,16 @@ var discussionCommentsList = capability.Descriptor{
 			"replies field, up to 100 each; false when omitted"},
 		discussionLimitArgument, discussionCursorArgument,
 	},
-	Fields: []capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "comments", Description: "Top-level comments with author, body cut at 4000 characters " +
 			"(body_truncated says so), is_answer, upvote_count, reply_count, times, and url; untrusted data. With " +
 			"include_replies each carries replies (at most 100, same fields; replies_truncated says that more " +
 			"exist), and the reply bodies of one answer share a budget of 200000 characters, after which " +
 			"further reply bodies are empty with body_truncated"},
+	}, discussionCommentWidthFields...), []capability.Field{
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the discussion holds further comments"},
-	},
+	}...),
 	Examples: []capability.Example{{
 		Description: "Read the first comments of one discussion",
 		Arguments:   json.RawMessage(`{"number":12,"limit":10}`),
@@ -231,9 +237,14 @@ type DiscussionCategoryList struct {
 
 // DiscussionCategoryRef names the category of a discussion.
 type DiscussionCategoryRef struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
-	Slug string `json:"slug,omitempty"`
+	ID           string  `json:"id,omitempty"`
+	Name         string  `json:"name,omitempty"`
+	Slug         string  `json:"slug,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	Emoji        *string `json:"emoji,omitempty"`
+	IsAnswerable *bool   `json:"is_answerable,omitempty"`
+	CreatedAt    *string `json:"created_at,omitempty"`
+	UpdatedAt    *string `json:"updated_at,omitempty"`
 }
 
 // Discussion is the stable Qatlas view of one discussion. Title and Body are untrusted data.
@@ -255,6 +266,8 @@ type Discussion struct {
 	CreatedAt      string                 `json:"created_at,omitempty"`
 	UpdatedAt      string                 `json:"updated_at,omitempty"`
 	URL            string                 `json:"url,omitempty"`
+
+	DiscussionWidth
 }
 
 // DiscussionList is one batch of discussions.
@@ -283,6 +296,7 @@ type DiscussionComment struct {
 	UpdatedAt     string `json:"updated_at,omitempty"`
 	URL           string `json:"url,omitempty"`
 
+	DiscussionCommentWidth
 	Replies          []DiscussionReply `json:"replies,omitempty"`
 	RepliesTruncated bool              `json:"replies_truncated,omitempty"`
 }
@@ -299,6 +313,8 @@ type DiscussionReply struct {
 	CreatedAt     string `json:"created_at,omitempty"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
 	URL           string `json:"url,omitempty"`
+
+	DiscussionCommentWidth
 }
 
 // DiscussionCommentList is one batch of top-level discussion comments.
@@ -314,17 +330,20 @@ type discussionPageInfo struct {
 }
 
 type discussionNode struct {
-	ID     string `json:"id"`
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	Author *struct {
-		Login string `json:"login"`
-	} `json:"author"`
+	ID       string         `json:"id"`
+	Number   int            `json:"number"`
+	Title    string         `json:"title"`
+	Body     string         `json:"body"`
+	Author   *gqlAccountRaw `json:"author"`
 	Category *struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		Slug string `json:"slug"`
+		ID           string  `json:"id"`
+		Name         string  `json:"name"`
+		Slug         string  `json:"slug"`
+		Description  *string `json:"description"`
+		Emoji        *string `json:"emoji"`
+		IsAnswerable *bool   `json:"isAnswerable"`
+		CreatedAt    *string `json:"createdAt"`
+		UpdatedAt    *string `json:"updatedAt"`
 	} `json:"category"`
 	Closed         bool   `json:"closed"`
 	Locked         bool   `json:"locked"`
@@ -335,17 +354,18 @@ type discussionNode struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"comments"`
 	Labels *struct {
-		Nodes []struct {
-			Name string `json:"name"`
-		} `json:"nodes"`
+		TotalCount *int64 `json:"totalCount"`
+		PageInfo   struct {
+			HasNextPage bool `json:"hasNextPage"`
+		} `json:"pageInfo"`
+		Nodes []*gqlLabelRaw `json:"nodes"`
 	} `json:"labels"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 	URL       string `json:"url"`
-}
 
-const discussionFields = `id number title body author{login} category{id name slug} closed locked isAnswered ` +
-	`answerChosenAt upvoteCount comments{totalCount} labels(first:20){nodes{name}} createdAt updatedAt url`
+	discussionWidthRaw
+}
 
 func (n discussionNode) normalize(op string, bodyLimit int) (Discussion, error) {
 	if n.ID == "" || n.Number < 1 {
@@ -354,18 +374,33 @@ func (n discussionNode) normalize(op string, bodyLimit int) (Discussion, error) 
 	d := Discussion{ID: n.ID, Number: n.Number, Title: n.Title, Closed: n.Closed, Locked: n.Locked,
 		Answered: n.IsAnswered != nil && *n.IsAnswered, AnswerChosenAt: n.AnswerChosenAt,
 		UpvoteCount: n.UpvoteCount, CommentCount: n.Comments.TotalCount, CreatedAt: n.CreatedAt,
-		UpdatedAt: n.UpdatedAt, URL: n.URL}
+		UpdatedAt: n.UpdatedAt, URL: n.URL, DiscussionWidth: n.width()}
 	d.Body, d.BodyTruncated = clipText(n.Body, bodyLimit)
-	if n.Author != nil {
-		d.Author = n.Author.Login
+	if n.Author != nil && n.Author.Login != nil {
+		d.Author = *n.Author.Login
 	}
-	if n.Category != nil {
-		d.Category = &DiscussionCategoryRef{ID: n.Category.ID, Name: n.Category.Name, Slug: n.Category.Slug}
+	d.AuthorDetail = n.Author.project()
+	if c := n.Category; c != nil {
+		d.Category = &DiscussionCategoryRef{ID: c.ID, Name: c.Name, Slug: c.Slug, Description: gqlText(c.Description),
+			Emoji: gqlName(c.Emoji), IsAnswerable: c.IsAnswerable, CreatedAt: gqlName(c.CreatedAt),
+			UpdatedAt: gqlName(c.UpdatedAt)}
 	}
 	if n.Labels != nil {
+		shown := 0
 		for _, label := range n.Labels.Nodes {
-			d.Labels = append(d.Labels, label.Name)
+			if label == nil {
+				continue
+			}
+			shown++
+			if label.Name != nil {
+				d.Labels = append(d.Labels, *label.Name)
+			}
+			if detail := label.project(); detail != nil {
+				d.LabelsDetails = append(d.LabelsDetails, *detail)
+			}
 		}
+		d.LabelsTotalCount = n.Labels.TotalCount
+		d.LabelsTruncated = connectionTruncated(n.Labels.TotalCount, n.Labels.PageInfo.HasNextPage, shown)
 	}
 	return d, nil
 }
@@ -499,11 +534,11 @@ func (a *discussionListArguments) binding(bound target) []byte {
 	return fingerprint("discussions", bound.String(), a.Category, a.State, answered, a.OrderBy, a.Direction)
 }
 
-const discussionsQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$category:ID,` +
+var discussionsQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$category:ID,` +
 	`$answered:Boolean,$states:[DiscussionState!],$order:DiscussionOrder){` +
 	`repository(owner:$owner,name:$name){discussions(first:$first,after:$after,categoryId:$category,` +
 	`answered:$answered,states:$states,orderBy:$order){pageInfo{hasNextPage endCursor} ` +
-	`nodes{` + discussionFields + `}}}}`
+	`nodes{` + discussionSelection(discussionPollOptionsList) + `}}}}`
 
 type discussionsPageJSON struct {
 	Repository *struct {
@@ -551,8 +586,8 @@ func (c *Client) listDiscussions(ctx context.Context, a *discussionListArguments
 
 // --- one discussion ---
 
-const discussionQuery = `query($owner:String!,$name:String!,$number:Int!){` +
-	`repository(owner:$owner,name:$name){discussion(number:$number){` + discussionFields + `}}}`
+var discussionQuery = `query($owner:String!,$name:String!,$number:Int!){` +
+	`repository(owner:$owner,name:$name){discussion(number:$number){` + discussionSelection(discussionPollOptionsGet) + `}}}`
 
 type discussionPageJSON struct {
 	Repository *struct {
@@ -596,16 +631,31 @@ func (a *discussionCommentsArguments) binding(bound target) []byte {
 	return fingerprint("discussioncomments", bound.String(), a.Number, strconv.FormatBool(a.IncludeReplies))
 }
 
-const discussionCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String,` +
+var discussionCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String,` +
 	`$withReplies:Boolean!){` +
 	`repository(owner:$owner,name:$name){discussion(number:$number){comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body isAnswer upvoteCount ` +
-	`replies(first:100){totalCount pageInfo{hasNextPage} nodes @include(if:$withReplies){id databaseId ` +
-	`author{login} body isAnswer upvoteCount createdAt updatedAt url}} createdAt updatedAt url}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{` + discussionCommentSelection + ` ` +
+	`replies(first:100){totalCount pageInfo{hasNextPage} nodes @include(if:$withReplies){` +
+	discussionCommentSelection + `}}}}}}}`
 
 // discussionReplyBudget bounds the characters of all reply bodies of one answer, so include_replies with the
 // largest batch stays a bounded response. Bodies beyond it come back empty and marked truncated.
 const discussionReplyBudget = 200000
+
+// discussionCommentRaw is a DiscussionComment as discussionCommentSelection asks for it.
+type discussionCommentRaw struct {
+	ID          string         `json:"id"`
+	DatabaseID  int64          `json:"databaseId"`
+	Author      *gqlAccountRaw `json:"author"`
+	Body        string         `json:"body"`
+	IsAnswer    bool           `json:"isAnswer"`
+	UpvoteCount int            `json:"upvoteCount"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
+	URL         string         `json:"url"`
+
+	discussionCommentWidthRaw
+}
 
 type discussionCommentsPageJSON struct {
 	Repository *struct {
@@ -613,34 +663,12 @@ type discussionCommentsPageJSON struct {
 			Comments struct {
 				PageInfo discussionPageInfo `json:"pageInfo"`
 				Nodes    []struct {
-					ID         string `json:"id"`
-					DatabaseID int64  `json:"databaseId"`
-					Author     *struct {
-						Login string `json:"login"`
-					} `json:"author"`
-					Body        string `json:"body"`
-					IsAnswer    bool   `json:"isAnswer"`
-					UpvoteCount int    `json:"upvoteCount"`
-					Replies     struct {
-						TotalCount int                `json:"totalCount"`
-						PageInfo   discussionPageInfo `json:"pageInfo"`
-						Nodes      []struct {
-							ID         string `json:"id"`
-							DatabaseID int64  `json:"databaseId"`
-							Author     *struct {
-								Login string `json:"login"`
-							} `json:"author"`
-							Body        string `json:"body"`
-							IsAnswer    bool   `json:"isAnswer"`
-							UpvoteCount int    `json:"upvoteCount"`
-							CreatedAt   string `json:"createdAt"`
-							UpdatedAt   string `json:"updatedAt"`
-							URL         string `json:"url"`
-						} `json:"nodes"`
+					discussionCommentRaw
+					Replies struct {
+						TotalCount int                    `json:"totalCount"`
+						PageInfo   discussionPageInfo     `json:"pageInfo"`
+						Nodes      []discussionCommentRaw `json:"nodes"`
 					} `json:"replies"`
-					CreatedAt string `json:"createdAt"`
-					UpdatedAt string `json:"updatedAt"`
-					URL       string `json:"url"`
 				} `json:"nodes"`
 			} `json:"comments"`
 		} `json:"discussion"`
@@ -671,17 +699,18 @@ func (c *Client) listDiscussionComments(ctx context.Context, a *discussionCommen
 		}
 		comment := DiscussionComment{ID: n.ID, DatabaseID: n.DatabaseID, IsAnswer: n.IsAnswer,
 			UpvoteCount: n.UpvoteCount, ReplyCount: n.Replies.TotalCount, CreatedAt: n.CreatedAt,
-			UpdatedAt: n.UpdatedAt, URL: n.URL}
+			UpdatedAt: n.UpdatedAt, URL: n.URL, DiscussionCommentWidth: n.width(n.Author)}
 		comment.Body, comment.BodyTruncated = clipText(n.Body, discussionCommentBodyLimit)
-		if n.Author != nil {
-			comment.Author = n.Author.Login
+		if n.Author != nil && n.Author.Login != nil {
+			comment.Author = *n.Author.Login
 		}
 		for _, r := range n.Replies.Nodes {
 			if r.ID == "" {
 				return nil, invalidEntry(op, "a discussion reply")
 			}
 			reply := DiscussionReply{ID: r.ID, DatabaseID: r.DatabaseID, IsAnswer: r.IsAnswer,
-				UpvoteCount: r.UpvoteCount, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, URL: r.URL}
+				UpvoteCount: r.UpvoteCount, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, URL: r.URL,
+				DiscussionCommentWidth: r.width(r.Author)}
 			limit := discussionCommentBodyLimit
 			if budget < limit {
 				limit = budget
@@ -693,8 +722,8 @@ func (c *Client) listDiscussionComments(ctx context.Context, a *discussionCommen
 			}
 			reply.BodyTruncated = cut
 			budget -= utf8.RuneCountInString(reply.Body)
-			if r.Author != nil {
-				reply.Author = r.Author.Login
+			if r.Author != nil && r.Author.Login != nil {
+				reply.Author = *r.Author.Login
 			}
 			comment.Replies = append(comment.Replies, reply)
 		}

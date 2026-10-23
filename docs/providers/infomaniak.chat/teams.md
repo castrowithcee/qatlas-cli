@@ -12,8 +12,10 @@ updated: 2026-10-23
 The teams tools of the [Infomaniak kChat provider](README.md). The effects and tool lists are in the
 [tool overview](README.md#tools); the target checks are described under [Scope](README.md#scope).
 
-- `teams.get` and `team-members.*` take a bound `team_id`, checked locally. `teams.get` never returns the
-  invitation ID, email, or allowed domains; `team-members.roles` changes only a live member of that team.
+- `teams.get` and `team-members.*` take a bound `team_id`, checked locally. A team's invitation ID lets
+  anyone join the team without an invitation and no read tool that a connection must name in `tools` exists for
+  teams, so it is never returned. Email and allowed domains come as kChat reports them to the token; kChat masks
+  them for non-administrators. `team-members.roles` changes only a live member of that team.
 - `insights.top` with `team_members` ranks nothing: it lists the team members who joined in the time range,
   and its `total` is kChat's count before unreachable users are left out. Ranked channels carry no `team_id`;
   the envelope's `team_id` names the one team read.

@@ -61,7 +61,7 @@ func addedAnswer(channelID string, users ...string) string {
 	return "[" + strings.Join(out, ",") + "]"
 }
 
-func TestMembersListOutputsOnlyTheThreeFieldsAndRefusesForeignChannels(t *testing.T) {
+func TestMembersListOutputsReadStateAndRefusesForeignChannels(t *testing.T) {
 	f := memberFixtureWith(t, nil)
 	f.members = `[{"channel_id":"` + chanA + `","user_id":"` + userInA + `","roles":"channel_user channel_admin",` +
 		`"scheme_admin":true,"msg_count":3,"notify_props":{"desktop":"` + sensitive + `"}},` +
@@ -73,12 +73,14 @@ func TestMembersListOutputsOnlyTheThreeFieldsAndRefusesForeignChannels(t *testin
 	if err != nil {
 		t.Fatalf("invoke() = %v", err)
 	}
-	if strings.Contains(result, sensitive) || strings.Contains(result, "msg_count") || strings.Contains(result, userInB) {
-		t.Fatalf("result = %s, want only the three fields of members of this channel", result)
+	if strings.Contains(result, userInB) {
+		t.Fatalf("result = %s, want only members of this channel", result)
 	}
 	var page MembersPage
 	if err := json.Unmarshal([]byte(result), &page); err != nil || page.Count != 1 || page.Page != 2 || !page.HasMore ||
-		page.Members[0] != (MemberEntry{UserID: userInA, Roles: "channel_user channel_admin", SchemeAdmin: true}) {
+		page.Members[0].NotifyProps == nil || *page.Members[0].NotifyProps != (NotifyProps{Desktop: sensitive}) ||
+		page.Members[0] != (MemberEntry{UserID: userInA, Roles: "channel_user channel_admin", SchemeAdmin: true,
+			MsgCount: 3, NotifyProps: page.Members[0].NotifyProps}) {
 		t.Fatalf("page = %+v, %v", page, err)
 	}
 	last := calls[len(calls)-1]

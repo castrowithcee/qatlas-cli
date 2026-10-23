@@ -66,6 +66,7 @@ type call struct {
 	depth  string
 	auth   string
 	body   string
+	header http.Header
 }
 
 // serve replaces the package transport for one test and records every request. Production keeps Go's
@@ -82,7 +83,7 @@ func serve(t *testing.T, handler func(*http.Request) (*http.Response, error)) *[
 		}
 		*calls = append(*calls, call{
 			method: request.Method, url: request.URL, depth: request.Header.Get("Depth"),
-			auth: request.Header.Get("Authorization"), body: body,
+			auth: request.Header.Get("Authorization"), body: body, header: request.Header.Clone(),
 		})
 		return handler(request)
 	})

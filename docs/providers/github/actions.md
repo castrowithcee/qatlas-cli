@@ -224,7 +224,9 @@ content. `github.workflow-files.create` takes no `sha` and never replaces an exi
 
 Qatlas does not generate, repair, or interpret workflows; GitHub decides whether a file is a valid workflow.
 `github.workflow-files.get` refuses a file larger than 512 KiB or one that is not text, and returns the content
-as untrusted data only on that explicit read.
+as untrusted data only on that explicit read. The `download_url` of a workflow file is never answered: "For a
+private repository GitHub answers `download_url` with a temporary token; it grants access without sign-in and is
+withheld."
 
 A change answers with metadata only. It never echoes the content or the commit message, and the audit event of
 a change names only the request, tool, connection, confirmation, result, and time.
