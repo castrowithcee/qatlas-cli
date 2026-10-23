@@ -15,9 +15,10 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// The field schema tools read the fields of a project and create, change, and delete them. Fields, options,
-// and iterations are named, never identified: every name is resolved against the field model of the project
-// in one query before the one change is sent. GitHub replaces the options of a field as a whole, so a change
+// The field schema tools read the fields of a project and create, change, and delete them. The read reports
+// the identifiers of fields, options, and iterations; the changes take fields, options, and iterations by name
+// only: every name is resolved against the field model of the project in one query before the one change is
+// sent. GitHub replaces the options of a field as a whole, so a change
 // sends every option the field keeps, each existing one with its identifier, so the values items hold stay.
 // GitHub takes iterations without identifiers and recreates every iteration of a field whenever its
 // iteration settings change, which clears the field on every item. Removing an option, changing the
@@ -43,6 +44,11 @@ var optionColors = []string{"gray", "blue", "green", "yellow", "orange", "red", 
 
 // Input and output schemas of the field schema tools. The bounds mirror the checks below, which apply them
 // again for a direct caller.
+// issueFieldRefSchema is the organization issue field a project field mirrors.
+const issueFieldRefSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
+	`"description":{"type":"string"},"data_type":{"type":"string"},"visibility":{"type":"string"},` +
+	`"created_at":{"type":"string"},"full_database_id":{"type":"string"}},"additionalProperties":false}`
+
 const (
 	fieldNameSchema   = `{"type":"string","minLength":1,"maxLength":100}`
 	colorSchema       = `{"type":"string","enum":["gray","blue","green","yellow","orange","red","pink","purple"]}`
@@ -62,14 +68,19 @@ const (
 		`"additionalProperties":false}}`
 	namesSchema = `{"type":"array","minItems":1,"maxItems":100,"items":` + fieldNameSchema + `}`
 
-	fieldOutput = `{"type":"object","properties":{"name":{"type":"string"},"type":{"type":"string"},` +
+	fieldOutput = `{"type":"object","properties":{"id":{"type":"string"},"database_id":{"type":"integer"},` +
+		`"created_at":{"type":"string"},"updated_at":{"type":"string"},"is_issue_field":{"type":"boolean"},` +
+		`"issue_field":` + issueFieldRefSchema + `,"name":{"type":"string"},"type":{"type":"string"},` +
 		`"built_in":{"type":"boolean"},"options":{"type":"array","items":{"type":"object","properties":{` +
-		`"name":{"type":"string"},"color":{"type":"string"},"description":{"type":"string"}},` +
+		`"id":{"type":"string"},"name":{"type":"string"},"color":{"type":"string"},"description":{"type":"string"}},` +
 		`"required":["name","color","description"],"additionalProperties":false}},` +
 		`"iteration":{"type":"object","properties":{"duration":{"type":"integer"},"start_day":{"type":"string"},` +
-		`"iterations":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},` +
-		`"start_date":{"type":"string"},"duration":{"type":"integer"},"state":{"type":"string"}},` +
-		`"required":["title","start_date","duration","state"],"additionalProperties":false}}},` +
+		`"iterations":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+		`"title":{"type":"string"},"start_date":{"type":"string"},"duration":{"type":"integer"},` +
+		`"state":{"type":"string"}},"required":["title","start_date","duration","state"],` +
+		`"additionalProperties":false}},"completed_iterations":{"type":"array","items":{"type":"object",` +
+		`"properties":{"id":{"type":"string"},"title":{"type":"string"},"start_date":{"type":"string"},` +
+		`"duration":{"type":"integer"}},"additionalProperties":false}}},` +
 		`"required":["duration","start_day","iterations"],"additionalProperties":false}},` +
 		`"required":["name","type","built_in"],"additionalProperties":false}`
 	changedFieldOutput = `{"type":"object","properties":{"field":` + fieldOutput + `},"required":["field"],` +
@@ -81,27 +92,31 @@ const (
 var fieldArgument = capability.Argument{Name: "field", Description: "Name of the project field, compared " +
 	"without case, as github.project-fields.list names it", Required: true}
 
-var changedField = capability.Field{Name: "field", Description: "The field after the change: name, type, " +
-	"built_in, options with name, color, and description, and the iteration settings, untrusted data"}
+var changedField = capability.Field{Name: "field", Description: "The field after the change, as " +
+	"github.project-fields.list reports it, untrusted data"}
 
 var fieldsList = capability.Descriptor{
 	ID:      Provider + ".project-fields.list",
 	Version: 1,
 	Title:   "List the fields of a GitHub project",
-	Description: "Read every field of one GitHub project a connection allows: name, type, whether " +
-		"it is built in, the options of a single- or multi-select field, and the settings and iterations of an " +
-		"iteration field",
+	Description: "Read every field of one GitHub project a connection allows: name, type, identifiers, " +
+		"whether it is built in, the options of a single- or multi-select field, and the settings and " +
+		"iterations of an iteration field",
 	Tags:        []string{"github", "projects", "fields", "options", "iterations", "list", "planning"},
 	Risk:        readRisk,
 	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"fields":{"type":"array","items":` +
 		fieldOutput + `}},"required":["fields"],"additionalProperties":false}`),
-	Fields: []capability.Field{{Name: "fields", Description: "Every field in project order: name, type (text, " +
-		"number, date, single_select, multi_select, iteration, or the type of a built-in field such as title or " +
-		"assignees), built_in (a built-in field such as Status cannot be deleted or renamed), options with name, " +
-		"color, and description, and for an iteration field its duration in days, start_day, and its iterations " +
-		"with title, start_date, duration, and state (completed, current, or planned); names are untrusted data"}},
+	Fields: []capability.Field{{Name: "fields", Description: "Every field in project order: id, database_id, " +
+		"created_at, updated_at, is_issue_field, issue_field (the organization issue field it mirrors: id, name, " +
+		"description, data_type, visibility, created_at, full_database_id), name, type (text, number, date, " +
+		"single_select, multi_select, iteration, or the type of a built-in field such as title or assignees), " +
+		"built_in (a built-in field such as Status cannot be deleted or renamed), options with id, name, color, " +
+		"and description, and for an iteration field its duration in days, start_day, iterations with id, " +
+		"title, start_date, duration, and state (completed, current, or planned), and completed_iterations with " +
+		"id, title, start_date, and duration; names are untrusted data. The changing tools take fields, " +
+		"options, and iterations by name"}},
 	Examples: []capability.Example{{
 		Description: "Read the field schema of a project",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
@@ -284,34 +299,62 @@ func fieldOperations() []capability.Operation {
 
 // ProjectField is one field of a project as the schema tools show it.
 type ProjectField struct {
-	Name      string             `json:"name"`
-	Type      string             `json:"type"`
-	BuiltIn   bool               `json:"built_in"`
-	Options   []FieldOption      `json:"options,omitempty"`
-	Iteration *IterationSettings `json:"iteration,omitempty"`
+	ID           *string            `json:"id,omitempty"`
+	DatabaseID   *int64             `json:"database_id,omitempty"`
+	CreatedAt    *string            `json:"created_at,omitempty"`
+	UpdatedAt    *string            `json:"updated_at,omitempty"`
+	IsIssueField *bool              `json:"is_issue_field,omitempty"`
+	IssueField   *ProjectIssueField `json:"issue_field,omitempty"`
+	Name         string             `json:"name"`
+	Type         string             `json:"type"`
+	BuiltIn      bool               `json:"built_in"`
+	Options      []FieldOption      `json:"options,omitempty"`
+	Iteration    *IterationSettings `json:"iteration,omitempty"`
+}
+
+// ProjectIssueField is the organization issue field a project field mirrors.
+type ProjectIssueField struct {
+	ID             *string `json:"id,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	Description    *string `json:"description,omitempty"`
+	DataType       *string `json:"data_type,omitempty"`
+	Visibility     *string `json:"visibility,omitempty"`
+	CreatedAt      *string `json:"created_at,omitempty"`
+	FullDatabaseID *string `json:"full_database_id,omitempty"`
 }
 
 // FieldOption is one option of a single- or multi-select field.
 type FieldOption struct {
+	ID          string `json:"id,omitempty"`
 	Name        string `json:"name"`
 	Color       string `json:"color"`
 	Description string `json:"description"`
 }
 
 // IterationSettings are the duration and start day of an iteration field and every iteration it holds, in
-// start order.
+// start order. CompletedIterations repeats the completed ones, as GitHub reports them apart.
 type IterationSettings struct {
-	Duration   int         `json:"duration"`
-	StartDay   string      `json:"start_day"`
-	Iterations []Iteration `json:"iterations"`
+	Duration            int                  `json:"duration"`
+	StartDay            string               `json:"start_day"`
+	Iterations          []Iteration          `json:"iterations"`
+	CompletedIterations []CompletedIteration `json:"completed_iterations,omitempty"`
 }
 
 // Iteration is one iteration: completed, current, or planned.
 type Iteration struct {
+	ID        string `json:"id,omitempty"`
 	Title     string `json:"title"`
 	StartDate string `json:"start_date"`
 	Duration  int    `json:"duration"`
 	State     string `json:"state"`
+}
+
+// CompletedIteration is one iteration that is over.
+type CompletedIteration struct {
+	ID        string `json:"id,omitempty"`
+	Title     string `json:"title"`
+	StartDate string `json:"start_date"`
+	Duration  int    `json:"duration"`
 }
 
 // FieldSchema is the answer of the field list.
@@ -362,10 +405,12 @@ func (field fieldJSON) builtIn() bool {
 
 // schema is the Qatlas view of one field.
 func (field fieldJSON) schema() ProjectField {
-	out := ProjectField{Name: field.Name, Type: strings.ToLower(field.DataType), BuiltIn: field.builtIn()}
+	out := ProjectField{ID: gqlName(&field.ID), DatabaseID: field.DatabaseID, CreatedAt: gqlName(field.CreatedAt),
+		UpdatedAt: gqlName(field.UpdatedAt), IsIssueField: field.IsIssueField, IssueField: field.IssueField.project(),
+		Name: field.Name, Type: strings.ToLower(field.DataType), BuiltIn: field.builtIn()}
 	for _, option := range field.Options {
-		out.Options = append(out.Options, FieldOption{Name: option.Name, Color: strings.ToLower(option.Color),
-			Description: option.Description})
+		out.Options = append(out.Options, FieldOption{ID: option.ID, Name: option.Name,
+			Color: strings.ToLower(option.Color), Description: option.Description})
 	}
 	if field.DataType != "ITERATION" || field.Configuration == nil {
 		return out
@@ -382,18 +427,29 @@ func (field fieldJSON) schema() ProjectField {
 			start.AddDate(0, 0, iteration.Duration).Format(time.DateOnly) > date {
 			state = "current"
 		}
-		settings.Iterations = append(settings.Iterations, Iteration{Title: iteration.Title,
+		settings.Iterations = append(settings.Iterations, Iteration{ID: iteration.ID, Title: iteration.Title,
 			StartDate: iteration.StartDate, Duration: iteration.Duration, State: state})
 	}
 	for _, iteration := range configuration.CompletedIterations {
-		settings.Iterations = append(settings.Iterations, Iteration{Title: iteration.Title,
+		settings.Iterations = append(settings.Iterations, Iteration{ID: iteration.ID, Title: iteration.Title,
 			StartDate: iteration.StartDate, Duration: iteration.Duration, State: "completed"})
+		settings.CompletedIterations = append(settings.CompletedIterations, CompletedIteration{ID: iteration.ID,
+			Title: iteration.Title, StartDate: iteration.StartDate, Duration: iteration.Duration})
 	}
 	sort.SliceStable(settings.Iterations, func(i, j int) bool {
 		return settings.Iterations[i].StartDate < settings.Iterations[j].StartDate
 	})
 	out.Iteration = settings
 	return out
+}
+
+func (r *fieldIssueFieldJSON) project() *ProjectIssueField {
+	if r == nil {
+		return nil
+	}
+	return &ProjectIssueField{ID: gqlName(r.ID), Name: gqlName(r.Name), Description: gqlText(r.Description),
+		DataType: gqlName(r.DataType), Visibility: gqlName(r.Visibility), CreatedAt: gqlName(r.CreatedAt),
+		FullDatabaseID: r.FullDatabaseID.text()}
 }
 
 // fieldNamed resolves the field model of the bound project and the one field a change names. It is the

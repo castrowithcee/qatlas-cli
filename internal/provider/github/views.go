@@ -38,11 +38,20 @@ const (
 	layoutSchema        = `{"type":"string","enum":["table","board","roadmap"]}`
 	viewFilterSchema    = `{"type":"string","maxLength":512}`
 	visibleFieldsSchema = `{"type":"array","maxItems":50,"items":` + fieldNameSchema + `}`
-	viewOutput          = `{"type":"object","properties":{"number":{"type":"integer"},"name":{"type":"string"},` +
-		`"layout":{"type":"string"},"filter":{"type":"string"},"fields":` + stringListSchema + `,` +
-		`"group_by":` + stringListSchema + `,"column_by":` + stringListSchema + `,"sort_by":{"type":"array",` +
-		`"items":{"type":"object","properties":{"field":{"type":"string"},"direction":{"type":"string"}},` +
-		`"required":["field","direction"],"additionalProperties":false}}},` +
+	viewFieldSchema     = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"}},` +
+		`"additionalProperties":false}`
+	viewFieldsSchema = `{"type":"array","items":` + viewFieldSchema + `}`
+	viewOutput       = `{"type":"object","properties":{"id":{"type":"string"},"full_database_id":{"type":"string"},` +
+		`"created_at":{"type":"string"},"updated_at":{"type":"string"},"number":{"type":"integer"},` +
+		`"name":{"type":"string"},"layout":{"type":"string"},"filter":{"type":"string"},` +
+		`"fields":` + stringListSchema + `,"fields_details":` + viewFieldsSchema + `,` +
+		`"configuration":{"type":"object","properties":{"visible_fields":` + viewFieldsSchema + `},` +
+		`"additionalProperties":false},"group_by":` + stringListSchema + `,"group_by_fields":` + viewFieldsSchema + `,` +
+		`"column_by":` + stringListSchema + `,"vertical_group_by_fields":` + viewFieldsSchema + `,` +
+		`"sort_by":{"type":"array","items":{"type":"object","properties":{"field":{"type":"string"},` +
+		`"direction":{"type":"string"}},"required":["field","direction"],"additionalProperties":false}},` +
+		`"sort_by_fields":{"type":"array","items":{"type":"object","properties":{"direction":{"type":"string"},` +
+		`"field":` + viewFieldSchema + `},"additionalProperties":false}}},` +
 		`"required":["number","name","layout","filter","fields","group_by","column_by","sort_by"],` +
 		`"additionalProperties":false}`
 )
@@ -50,8 +59,8 @@ const (
 var viewArgument = capability.Argument{Name: "view", Description: "Number of the view in the project, as " +
 	"github.project-views.list names it", Required: true}
 
-var changedView = capability.Field{Name: "view", Description: "The view after the change: number, name, " +
-	"layout, filter, visible fields, and the grouping, board columns, and sorting set in GitHub, untrusted data"}
+var changedView = capability.Field{Name: "view", Description: "The view after the change, as " +
+	"github.project-views.list reports it, untrusted data"}
 
 var viewsList = capability.Descriptor{
 	ID:      Provider + ".project-views.list",
@@ -65,10 +74,13 @@ var viewsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"views":{"type":"array","items":` +
 		viewOutput + `}},"required":["views"],"additionalProperties":false}`),
-	Fields: []capability.Field{{Name: "views", Description: "Every view in project order, at most 100: number, " +
-		"name, layout (table, board, or roadmap), filter (empty without one), fields (the visible fields in the " +
-		"view's order, the title included), group_by and column_by (field names), and sort_by (field " +
-		"and direction, asc or desc); names and filters are untrusted data"}},
+	Fields: []capability.Field{{Name: "views", Description: "Every view in project order, at most 100: id, " +
+		"full_database_id, created_at, updated_at, number, name, layout (table, board, or roadmap), filter " +
+		"(empty without one), fields (the visible fields in the view's order, the title included, as names), " +
+		"fields_details and configuration.visible_fields (the same fields, each with id and name), group_by and " +
+		"column_by (field names) with group_by_fields and vertical_group_by_fields (the same fields, each with " +
+		"id and name), and sort_by (field and direction, asc or desc) with sort_by_fields (direction and the " +
+		"field with id and name); names and filters are untrusted data"}},
 	Examples: []capability.Example{{
 		Description: "Read the views of a project",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
@@ -179,14 +191,40 @@ func viewOperations() []capability.Operation {
 
 // ProjectView is one view of a project as the view tools show it.
 type ProjectView struct {
-	Number   int        `json:"number"`
-	Name     string     `json:"name"`
-	Layout   string     `json:"layout"`
-	Filter   string     `json:"filter"`
-	Fields   []string   `json:"fields"`
-	GroupBy  []string   `json:"group_by"`
-	ColumnBy []string   `json:"column_by"`
-	SortBy   []ViewSort `json:"sort_by"`
+	ID                    *string            `json:"id,omitempty"`
+	FullDatabaseID        *string            `json:"full_database_id,omitempty"`
+	CreatedAt             *string            `json:"created_at,omitempty"`
+	UpdatedAt             *string            `json:"updated_at,omitempty"`
+	Number                int                `json:"number"`
+	Name                  string             `json:"name"`
+	Layout                string             `json:"layout"`
+	Filter                string             `json:"filter"`
+	Fields                []string           `json:"fields"`
+	FieldsDetails         []ViewField        `json:"fields_details,omitempty"`
+	Configuration         *ViewConfiguration `json:"configuration,omitempty"`
+	GroupBy               []string           `json:"group_by"`
+	GroupByFields         []ViewField        `json:"group_by_fields,omitempty"`
+	ColumnBy              []string           `json:"column_by"`
+	VerticalGroupByFields []ViewField        `json:"vertical_group_by_fields,omitempty"`
+	SortBy                []ViewSort         `json:"sort_by"`
+	SortByFields          []ViewSortField    `json:"sort_by_fields,omitempty"`
+}
+
+// ViewField names a field a view shows, groups by, or sorts by.
+type ViewField struct {
+	ID   *string `json:"id,omitempty"`
+	Name *string `json:"name,omitempty"`
+}
+
+// ViewConfiguration is the configuration of a view.
+type ViewConfiguration struct {
+	VisibleFields []ViewField `json:"visible_fields,omitempty"`
+}
+
+// ViewSortField is one sort field of a view with the field's identifier.
+type ViewSortField struct {
+	Direction *string   `json:"direction,omitempty"`
+	Field     ViewField `json:"field"`
 }
 
 // ViewSort is one sort field of a view.
@@ -222,9 +260,13 @@ type DeletedView struct {
 
 // The selection of one view. A visible, grouping, or sorting field is named; the union of field types is
 // read through the members every field has.
+//
+// A project holds at most 50 fields, so a connection of at most 100 field references reads them all; a page of
+// 100 views then asks for 100 * (1 + 100 + 100 + 20 + 20 + 20) nodes, far below GitHub's limit of 500000.
 const (
 	viewFieldNames = `nodes{... on ProjectV2FieldCommon{id name}}`
-	viewSelection  = `id number name layout filter configuration{visibleFields(first:100){` + viewFieldNames + `}} ` +
+	viewSelection  = `id fullDatabaseId createdAt updatedAt number name layout filter ` +
+		`configuration{visibleFields(first:100){` + viewFieldNames + `}} fields(first:100){` + viewFieldNames + `} ` +
 		`groupByFields(first:20){` + viewFieldNames + `} verticalGroupByFields(first:20){` + viewFieldNames + `} ` +
 		`sortByFields(first:20){nodes{direction field{... on ProjectV2FieldCommon{id name}}}}`
 	viewsSelection = `views(first:100){nodes{` + viewSelection + `}}`
@@ -232,7 +274,8 @@ const (
 
 type namedFieldsJSON struct {
 	Nodes []struct {
-		Name string `json:"name"`
+		ID   *string `json:"id"`
+		Name string  `json:"name"`
 	} `json:"nodes"`
 }
 
@@ -246,22 +289,46 @@ func (fields namedFieldsJSON) names() []string {
 	return names
 }
 
+// details lists the fields with their identifiers; it is nil when GitHub sent none.
+func (fields namedFieldsJSON) details() []ViewField {
+	var details []ViewField
+	for _, node := range fields.Nodes {
+		if field := viewFieldOf(node.ID, &node.Name); field != nil {
+			details = append(details, *field)
+		}
+	}
+	return details
+}
+
+func viewFieldOf(id, name *string) *ViewField {
+	field := &ViewField{ID: gqlName(id), Name: gqlName(name)}
+	if field.ID == nil && field.Name == nil {
+		return nil
+	}
+	return field
+}
+
 type viewJSON struct {
-	ID     string  `json:"id"`
-	Number int     `json:"number"`
-	Name   string  `json:"name"`
-	Layout string  `json:"layout"`
-	Filter *string `json:"filter"`
-	Config struct {
+	ID             string     `json:"id"`
+	FullDatabaseID *gqlBigInt `json:"fullDatabaseId"`
+	CreatedAt      *string    `json:"createdAt"`
+	UpdatedAt      *string    `json:"updatedAt"`
+	Number         int        `json:"number"`
+	Name           string     `json:"name"`
+	Layout         string     `json:"layout"`
+	Filter         *string    `json:"filter"`
+	Config         struct {
 		Fields namedFieldsJSON `json:"visibleFields"`
 	} `json:"configuration"`
+	Fields   namedFieldsJSON `json:"fields"`
 	GroupBy  namedFieldsJSON `json:"groupByFields"`
 	ColumnBy namedFieldsJSON `json:"verticalGroupByFields"`
 	SortBy   struct {
 		Nodes []struct {
 			Direction string `json:"direction"`
 			Field     struct {
-				Name string `json:"name"`
+				ID   *string `json:"id"`
+				Name string  `json:"name"`
 			} `json:"field"`
 		} `json:"nodes"`
 	} `json:"sortByFields"`
@@ -279,6 +346,16 @@ func (view viewJSON) schema() ProjectView {
 		if node.Field.Name != "" {
 			out.SortBy = append(out.SortBy, ViewSort{Field: node.Field.Name, Direction: strings.ToLower(node.Direction)})
 		}
+		if field := viewFieldOf(node.Field.ID, &node.Field.Name); field != nil {
+			out.SortByFields = append(out.SortByFields, ViewSortField{Direction: gqlName(&node.Direction), Field: *field})
+		}
+	}
+	out.ID, out.FullDatabaseID = gqlName(&view.ID), view.FullDatabaseID.text()
+	out.CreatedAt, out.UpdatedAt = gqlName(view.CreatedAt), gqlName(view.UpdatedAt)
+	out.FieldsDetails, out.GroupByFields = view.Fields.details(), view.GroupBy.details()
+	out.VerticalGroupByFields = view.ColumnBy.details()
+	if visible := view.Config.Fields.details(); visible != nil {
+		out.Configuration = &ViewConfiguration{VisibleFields: visible}
 	}
 	return out
 }

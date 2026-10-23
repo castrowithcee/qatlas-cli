@@ -83,6 +83,11 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == gitea {
 			want = append(want, p.id+".branches.update-ref")
 		}
+		want = append(want, p.id+".contents.list", p.id+".contents.get", p.id+".contents.get-raw",
+			p.id+".archives.get", p.id+".editorconfig.get")
+		if p == gitea {
+			want = append(want, p.id+".contents.get-ext", p.id+".contents.get-many")
+		}
 		want = append(want, p.id+".commit-pull-requests.get", p.id+".pull-request-commits.list",
 			p.id+".pull-request-diffs.get", p.id+".pull-request-files.list", p.id+".pull-requests.check-merged",
 			p.id+".pull-requests.get", p.id+".pull-requests.get-by-branches", p.id+".pull-requests.list",
@@ -116,6 +121,15 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".workflow-runs.force-cancel", p.id+".workflow-runs.rerun-failed",
 				p.id+".workflow-runs.approve", p.id+".workflow-run-attempts.get", p.id+".workflow-run-attempts.list-jobs")
 		}
+		want = append(want, p.id+".commits.list", p.id+".commits.get", p.id+".commits.get-diff", p.id+".compare.get",
+			p.id+".commit-statuses.list", p.id+".commit-statuses.get-combined", p.id+".commit-statuses.create",
+			p.id+".git-blobs.get", p.id+".git-trees.get", p.id+".git-refs.list", p.id+".git-tags.get",
+			p.id+".git-notes.get")
+		if p == forgejo {
+			want = append(want, p.id+".git-blobs.list", p.id+".git-notes.set", p.id+".git-notes.delete")
+		}
+		want = append(want, p.id+".pull-request-reviewers.list", p.id+".pull-request-reviewers.request",
+			p.id+".pull-request-reviewers.remove")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

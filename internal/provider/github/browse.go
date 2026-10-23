@@ -218,7 +218,7 @@ func (c *Client) browseProjects(ctx context.Context, owner target, cursor string
 	if err != nil {
 		return config.TargetPage{}, err
 	}
-	list, err := c.listProjects(ctx, options, binding, after)
+	list, err := c.listProjects(ctx, projectListOptions{ownerListOptions: options, compact: true}, binding, after)
 	if err != nil {
 		return config.TargetPage{}, err
 	}

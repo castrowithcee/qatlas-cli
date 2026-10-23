@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -191,29 +192,49 @@ func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values
 // means the length is not known beforehand. The token goes to that origin only. A redirect is refused, never
 // followed: the instance answers with one when it serves the file from another address.
 func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
-	return c.fetchFileVia(ctx, op, path, size, to, "")
+	return c.fetch(ctx, op, path, nil, size, to)
 }
 
-// fetchFileVia is fetchFile for an instance that answers with one redirect to a signed address of its own: when
-// signedPath is not empty, exactly one redirect is followed, and only to the instance's origin, that exact path,
-// and a query of sig and expires alone. The second request carries no token, and a redirect answered to it is
-// refused. Every other redirect is refused.
+// fetch is fetchFile with validated query values and a size that may be unknown: a negative size accepts any
+// length the destination itself bounds.
+func (c *Client) fetch(ctx context.Context, op, path string, query url.Values, size int64, to io.ReaderFrom) error {
+	return c.fetchVia(ctx, op, path, query, size, to, "")
+}
+
+// fetchFileVia is fetchFile for an instance that answers with one redirect to a signed address of its own.
 func (c *Client) fetchFileVia(ctx context.Context, op, path string, size int64, to io.ReaderFrom,
+	signedPath string) error {
+	return c.fetchVia(ctx, op, path, nil, size, to, signedPath)
+}
+
+// fetchVia is fetch that, when signedPath is not empty, follows exactly one redirect, and only to the instance's
+// origin, that exact path, and a query of sig and expires alone. The second request carries no token, and a
+// redirect answered to it is refused. Every other redirect is refused.
+func (c *Client) fetchVia(ctx context.Context, op, path string, query url.Values, size int64, to io.ReaderFrom,
 	signedPath string) error {
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#") {
 		return provider.Fail(op, "the request path is not one of this provider")
 	}
-	response, err := c.fetchOnce(ctx, op, c.origin+path, c.auth)
+	for key := range query {
+		if slices.ContainsFunc(forbiddenQuery, func(f string) bool { return strings.EqualFold(key, f) }) {
+			return provider.Fail(op, "the request carries a parameter this provider never sends")
+		}
+	}
+	target := c.origin + path
+	if len(query) > 0 {
+		target += "?" + query.Encode()
+	}
+	response, err := c.fetchOnce(ctx, op, target, c.auth)
 	if err != nil {
 		return err
 	}
 	defer func() { response.Body.Close() }()
 	if signedPath != "" && response.StatusCode >= 300 && response.StatusCode < 400 {
-		target, ok := c.signedTarget(response, signedPath)
+		signed, ok := c.signedTarget(response, signedPath)
 		if ok {
 			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 			response.Body.Close()
-			if response, err = c.fetchOnce(ctx, op, target, ""); err != nil {
+			if response, err = c.fetchOnce(ctx, op, signed, ""); err != nil {
 				return err
 			}
 		}
@@ -226,14 +247,18 @@ func (c *Client) fetchFileVia(ctx context.Context, op, path string, size int64, 
 	case response.StatusCode != http.StatusOK:
 		return refusal(op, c.product, c.limiter, response)
 	case size >= 0 && response.ContentLength >= 0 && response.ContentLength != size:
-		return provider.InvalidResponse(op, c.product.name+" announced another size than the asset has")
+		return provider.InvalidResponse(op, c.product.name+" announced another size than the file has")
 	}
 	body := &trackedReader{Reader: response.Body}
-	if _, err := to.ReadFrom(body); err != nil {
+	n, err := to.ReadFrom(body)
+	if err != nil {
 		if body.err != nil {
 			return provider.Transport(op, c.product.name, body.err)
 		}
 		return err
+	}
+	if size < 0 && response.ContentLength >= 0 && n != response.ContentLength {
+		return provider.InvalidResponse(op, c.product.name+" announced another size than the file has")
 	}
 	return nil
 }

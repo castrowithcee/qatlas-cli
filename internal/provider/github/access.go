@@ -49,26 +49,27 @@ var teamsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List the teams of a GitHub project",
 	Description: "Read one bounded batch of the teams one GitHub project a connection allows is " +
-		"linked to, in name order, with slug and name",
+		"linked to, in name order, with slug, name, and the members of GitHub's team; ancestors, member " +
+		"statuses, and projects are cut at 10 per team, with their total count and a truncated marker",
 	Tags:     []string{"github", "projects", "teams", "access", "list", "planning"},
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":1,` +
 		`"maximum":100},"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"teams":{"type":"array","items":{` +
-		`"type":"object","properties":{"team":{"type":"string"},"name":{"type":"string"}},` +
+		`"type":"object","properties":{"team":{"type":"string"},"name":{"type":"string"},` + teamWidthProperties + `},` +
 		`"required":["team","name"],"additionalProperties":false}},"next_cursor":{"type":"string"},` +
 		`"has_more":{"type":"boolean"}},"required":["teams","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "limit", Description: "Teams per batch, from 1 through 100; 30 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch; the first batch when omitted"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "teams", Description: "Linked teams in name order: team (the slug github.projects.link-team " +
-			"takes) and name, untrusted data; empty for a project of a user"},
+			"takes) and name, untrusted data, and the members described below; empty for a project of a user"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the project is linked to further teams"},
-	},
+	}, teamWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read the teams a project is linked to",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
@@ -190,6 +191,7 @@ type TeamLink struct {
 type LinkedTeam struct {
 	Team string `json:"team"`
 	Name string `json:"name"`
+	TeamWidth
 }
 
 // TeamList is one batch of the teams a project is linked to.
@@ -319,12 +321,17 @@ func (c *Client) ListTeams(ctx context.Context, options TeamListOptions) (*TeamL
 	return c.listTeams(ctx, options, after)
 }
 
+// teamsQuery reads one page of the teams of a project of the owner kind.
+func teamsQuery(ownerField string) string {
+	return `query($owner:String!,$number:Int!,$first:Int!,$after:String){owner:` + ownerField +
+		`(login:$owner){projectV2(number:$number){teams(first:$first,after:$after,` +
+		`orderBy:{field:NAME,direction:ASC}){pageInfo{hasNextPage endCursor} nodes{` + teamNodeSelection + `}}}}}`
+}
+
 // listTeams reads exactly one server page of the teams of the bound project.
 func (c *Client) listTeams(ctx context.Context, options TeamListOptions, after string) (*TeamList, error) {
 	const op = "list project teams"
-	query := `query($owner:String!,$number:Int!,$first:Int!,$after:String){owner:` + c.target.ownerField() +
-		`(login:$owner){projectV2(number:$number){teams(first:$first,after:$after,` +
-		`orderBy:{field:NAME,direction:ASC}){pageInfo{hasNextPage endCursor} nodes{slug name}}}}}`
+	query := teamsQuery(c.target.ownerField())
 	variables := c.projectVariables()
 	variables["first"], variables["after"] = options.Limit, nil
 	if after != "" {
@@ -338,22 +345,42 @@ func (c *Client) listTeams(ctx context.Context, options TeamListOptions, after s
 						HasNextPage bool   `json:"hasNextPage"`
 						EndCursor   string `json:"endCursor"`
 					} `json:"pageInfo"`
-					Nodes []struct {
-						Slug string `json:"slug"`
-						Name string `json:"name"`
-					} `json:"nodes"`
+					Nodes []teamNodeRaw `json:"nodes"`
 				} `json:"teams"`
 			} `json:"projectV2"`
 		} `json:"owner"`
 	}
-	if err := c.graphql(ctx, op, query, variables, &page); err != nil {
-		// GitHub shows teams only to a token that may read the organizations, even for a project of a user.
+	// GitHub shows teams only to a token that may read the organizations, even for a project of a user.
+	refused := func(err error) error {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) && providerErr.Class == provider.ClassPermission {
 			providerErr.Message += "; reading teams needs read:org on a classic token, or Members: read of " +
 				"the organization on a fine-grained one"
 		}
+		return err
+	}
+	envelope, err := c.post(ctx, op, query, variables, false)
+	if err != nil {
 		return nil, err
+	}
+	// A member GitHub refuses this token drops out of its team and is named there; any other error fails.
+	rest, unreadable := splitUnreadable(envelope.Errors, teamRules())
+	if len(rest) > 0 {
+		return nil, refused(c.graphQLFailure(op, rest, variables, false))
+	}
+	if len(envelope.Data) == 0 || string(envelope.Data) == "null" || json.Unmarshal(envelope.Data, &page) != nil {
+		return nil, invalidResponse(op, false)
+	}
+	if page.Owner != nil && page.Owner.Project != nil {
+		nodes := page.Owner.Project.Teams.Nodes
+		for index, members := range unreadable {
+			// A refused member that GitHub cannot null on its own empties the whole team; the team is then
+			// unknown, and the list fails like a refusal instead of dropping the team silently.
+			if index >= len(nodes) || nodes[index].Slug == nil {
+				return nil, refused(c.graphQLFailure(op, []graphQLError{{Type: "FORBIDDEN"}}, variables, false))
+			}
+			nodes[index].unreadable = members
+		}
 	}
 	if page.Owner == nil || page.Owner.Project == nil {
 		return nil, notFound(op, subject{in: c.target})
@@ -361,11 +388,15 @@ func (c *Client) listTeams(ctx context.Context, options TeamListOptions, after s
 	teams := page.Owner.Project.Teams
 	result := &TeamList{Teams: make([]LinkedTeam, 0, len(teams.Nodes))}
 	for _, node := range teams.Nodes {
-		if node.Slug == "" {
+		if node.Slug == nil || *node.Slug == "" {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub returned a team without a slug"}
 		}
-		result.Teams = append(result.Teams, LinkedTeam{Team: node.Slug, Name: node.Name})
+		linked := LinkedTeam{Team: *node.Slug, TeamWidth: node.width()}
+		if node.Name != nil {
+			linked.Name = *node.Name
+		}
+		result.Teams = append(result.Teams, linked)
 	}
 	if teams.PageInfo.HasNextPage {
 		if teams.PageInfo.EndCursor == "" {
