@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -16,10 +17,14 @@ import (
 
 const linkCanary = "https://cloud.example.org/index.php/apps/secret/link-canary"
 
+const shareCanary = "https://cloud.example.org/s/tok-canary"
+
 const notificationsJSON = `[{"notification_id":7,"app":"spreed","user":"alice","datetime":"2026-10-01T08:00:00+00:00",
 "object_type":"call","object_id":"abc","subject":"Call from Bob","message":"Join now","link":"` + linkCanary + `","icon":"` + linkCanary + `",
 "subjectRich":"{u}","subjectRichParameters":{"u":{"type":"user","id":"bob","name":"Bob","link":"` + linkCanary + `"}},
-"actions":[{"label":"Accept","link":"` + linkCanary + `/a","type":"POST","primary":true},{"label":"Open","link":"` + linkCanary + `/w","type":"WEB"},{"label":"Odd","link":"x","type":"TRACE"}]},
+"messageRich":"Join {c}","messageRichParameters":{"c":{"type":"call","id":"abcd1234","name":"Room","token":"tok-canary","link":"` + shareCanary + `"}},
+"shouldNotify":true,
+"actions":[{"label":"Accept","link":"` + linkCanary + `/a","type":"POST","primary":true},{"label":"Open","link":"` + shareCanary + `","type":"WEB","primary":false},{"label":"Odd","link":"x","type":"TRACE"}]},
 {"notification_id":"x1","app":"bad","subject":"skipped"}]`
 
 type tool func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error)
@@ -45,7 +50,7 @@ func TestAccountToolsRefuseWithoutAccountTargetBeforeSecretAccess(t *testing.T) 
 	}
 }
 
-func TestNotificationsListReportsNoLinksAndReducesActions(t *testing.T) {
+func TestNotificationsListReportsEveryDocumentedFieldAndNeverAccessValues(t *testing.T) {
 	calls := serve(t, func(r *http.Request) (*http.Response, error) {
 		resp := ocsResponse(200, ocsData(notificationsJSON))
 		resp.Header.Set("ETag", `"abc123"`)
@@ -60,14 +65,25 @@ func TestNotificationsListReportsNoLinksAndReducesActions(t *testing.T) {
 		t.Fatalf("list = %+v", list)
 	}
 	n := list.Notifications[0]
-	if n.ID != "7" || n.Time != "2026-10-01T08:00:00Z" || n.Subject != "Call from Bob" ||
-		n.Actions[0] != (NotificationAction{"Accept", "POST"}) || n.Actions[1].Method != "WEB" || n.Actions[2].Method != "UNKNOWN" {
+	yes, no := true, false
+	if n.ID != "7" || n.Time != "2026-10-01T08:00:00Z" || n.Subject != "Call from Bob" || n.User != "alice" ||
+		n.Link != linkCanary || n.Icon != linkCanary || n.SubjectRich != "{u}" || n.MessageRich != "Join {c}" ||
+		n.ShouldNotify == nil || !*n.ShouldNotify {
 		t.Errorf("notification = %+v", n)
 	}
-	out, _ := json.Marshal(got)
-	if strings.Contains(string(out), "canary") || strings.Contains(string(out), "http") {
-		t.Errorf("output carries a URL: %s", out)
+	if !reflect.DeepEqual(n.Actions, []NotificationAction{{"Accept", "POST", linkCanary + "/a", &yes},
+		{"Open", "WEB", "", &no}, {"Odd", "UNKNOWN", "x", nil}}) {
+		t.Errorf("actions = %+v", n.Actions)
 	}
+	if !reflect.DeepEqual(n.SubjectObjects, []MessageObject{{Key: "u", Type: "user", ID: "bob", Name: "Bob", Details: map[string]any{"link": linkCanary}}}) ||
+		len(n.MessageObjects) != 1 || n.MessageObjects[0].ID != "" || n.MessageObjects[0].Name != "Room" || n.MessageObjects[0].Details != nil {
+		t.Errorf("objects = %+v / %+v", n.SubjectObjects, n.MessageObjects)
+	}
+	out, _ := json.Marshal(got)
+	if strings.Contains(string(out), "tok-canary") || strings.Contains(string(out), "abcd1234") {
+		t.Errorf("output carries an access value: %s", out)
+	}
+	checkDeclared(t, notificationsList, out, notificationsList.OutputSchema)
 	if len(*calls) != 1 || (*calls)[0].method != http.MethodGet ||
 		!strings.HasSuffix((*calls)[0].url.Path, "/ocs/v2.php/apps/notifications/api/v2/notifications") {
 		t.Errorf("calls = %+v", *calls)

@@ -19,29 +19,47 @@ const (
 )
 
 var accountJSON = `{"id":"alice","enabled":true,"storageLocation":"` + locationCanary + `","backend":"` + backendCanary + `",
-"displayname":"Alice A","email":"` + "alice" + "@" + "example.invalid" + `","phone":"` + phoneCanary + `","address":"canary street",
-"language":"de","locale":"de_DE","backendCapabilities":{"setDisplayName":true},"subadmin":["canary-admin"],
-"groups":["staff","dev"],"quota":{"free":900,"used":100,"total":1000,"relative":10.5,"quota":"1000 B","path":"` + locationCanary + `"}}`
+"lastLogin":1700000000000,"displayname":"Alice A","display-name":"Alice A","email":"` + "alice" + "@" + "example.invalid" + `",
+"phone":"` + phoneCanary + `","address":"canary street","website":"https://example.org","twitter":"@alice",
+"language":"de","locale":"de_DE","backendCapabilities":{"setDisplayName":true,"setPassword":true},"subadmin":["canary-admin"],
+"groups":["staff","dev"],"quota":{"free":900,"used":100,"total":1000,"relative":10.5,"quota":1000.5,"path":"` + locationCanary + `"}}`
 
-func TestAccountGetReportsOnlyAllowedFields(t *testing.T) {
+func TestAccountGetReportsEveryDocumentedFieldButTheStorageLocation(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) { return ocsResponse(200, ocsData(accountJSON)), nil })
 	got, err := runAccount(invokeAccountGet, `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	account := got.(*Account)
-	if account.ID != "alice" || account.DisplayName != "Alice A" || account.Language != "de" || account.Locale != "de_DE" ||
-		len(account.Groups) != 2 || account.Quota == nil || *account.Quota != (Quota{100, 1000, 10.5}) || account.Truncated {
-		t.Errorf("account = %+v", account)
-	}
 	out := marshal(got)
-	for _, canary := range []string{backendCanary, locationCanary, phoneCanary, "canary", "enabled", "free", "1000 B"} {
+	want := `{"id":"alice","display_name":"Alice A","email":"alice@example.invalid","enabled":true,"language":"de","locale":"de_DE",` +
+		`"last_login":"2023-11-14T22:13:20Z","groups":["staff","dev"],"subadmin_groups":["canary-admin"],"phone":"` + phoneCanary + `",` +
+		`"address":"canary street","website":"https://example.org","twitter":"@alice","backend":"` + backendCanary + `",` +
+		`"backend_capabilities":{"set_display_name":true,"set_password":true},` +
+		`"quota":{"used":100,"total":1000,"relative":10.5,"free":900}}`
+	if out != want {
+		t.Errorf("account = %s\nwant      %s", out, want)
+	}
+	for _, canary := range []string{locationCanary, "display-name", "storageLocation"} {
 		if strings.Contains(out, canary) {
 			t.Errorf("output carries %q: %s", canary, out)
 		}
 	}
+	raw, _ := json.Marshal(got)
+	checkDeclared(t, accountGet, raw, accountGet.OutputSchema)
 	if len(*calls) != 1 || (*calls)[0].method != http.MethodGet || !strings.HasSuffix((*calls)[0].url.Path, "/ocs/v2.php/cloud/user") {
 		t.Errorf("calls = %+v", *calls)
+	}
+}
+
+func TestAccountGetWithoutNewMembersKeepsTheOutput(t *testing.T) {
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return ocsResponse(200, ocsData(`{"id":"alice","displayname":"Alice A","language":"de","locale":"de_DE","groups":["staff"],`+
+			`"phone":"","website":null,"backendCapabilities":[],"subadmin":[],"lastLogin":0,"quota":{"used":1,"total":-3,"relative":0}}`)), nil
+	})
+	got, err := runAccount(invokeAccountGet, `{}`)
+	want := `{"id":"alice","display_name":"Alice A","language":"de","locale":"de_DE","groups":["staff"],"quota":{"used":1,"total":-3,"relative":0}}`
+	if err != nil || marshal(got) != want {
+		t.Errorf("account = %s, %v", marshal(got), err)
 	}
 }
 

@@ -223,7 +223,7 @@ var unemittedMembers = map[string][]string{
 	"github.issue-dependencies.add":    {"removed"},
 	"github.sub-issues.add":            {"removed"},
 	"github.sub-issues.reprioritize":   {"removed", "sub_issues_summary"},
-	"github.project-items.list":        {"items[].body", "items[].url"},
+	"github.project-items.list":        {"items[].body"},
 	// The repository search match carries the repository's members beside its compact ones, which already
 	// hold the full name and the star count.
 	"github.repositories.search": {"repositories[].full_name", "repositories[].stargazers_count"},
