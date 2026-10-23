@@ -11,12 +11,17 @@ updated: 2026-10-23
 
 Group `deck`: boards, stacks, cards, comments, and attachments.
 
-The tool group `deck` reads boards (labels, sharing, members), stacks with cards, card comments, and attachments, and
-changes all of them; setup profile `deck-read` holds four board reads, and no profile holds a change. A `deck` target
-binds every board, `deck/BOARD_ID` one board; an unbound board is refused locally, unnamed, before any credential access
-or request, and listings drop unbound and deleted boards. A stack, card, label, sharing entry, or target counts only if
-a read of the bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut. Only
-`deck_file` attachments are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
+The tool group `deck` reads boards, stacks with cards, card comments, and attachments, and changes all of them; setup
+profile `deck-read` holds four board reads, and no profile holds a change. A `deck` target binds every board,
+`deck/BOARD_ID` one board; an unbound board is refused locally, unnamed, before any credential access or request, and
+listings drop unbound and deleted boards. A stack, card, label, sharing entry, or target counts only if a read of the
+bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut. Only `deck_file` attachments
+are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
+
+`modified_since` and `etag` of the board and stack lists become `If-Modified-Since` and `If-None-Match`; Deck's
+answer `304` is reported as an empty list with `unchanged`, and every board of any other answer, also with `details`,
+is checked against the targets again. Deleted boards, stacks, and cards are never listed, so their deletion time is
+not reported.
 
 Every change needs `confirm` and sends one request after at most two reads. `deck.boards.create` needs the general
 `deck` target. Board, stack, label, and sharing changes refuse without the manage right; card changes leave the edit
