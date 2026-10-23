@@ -187,9 +187,9 @@ func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values
 }
 
 // fetchFile sends one GET of a fixed path of the instance's own origin outside the API, built by the caller
-// from constants and validated segments, and streams the answer of exactly size bytes into to. The token goes
-// to that origin only. A redirect is refused, never followed: the instance answers with one when it serves
-// the file from another address.
+// from constants and validated segments, and streams the answer of exactly size bytes into to; a negative size
+// means the length is not known beforehand. The token goes to that origin only. A redirect is refused, never
+// followed: the instance answers with one when it serves the file from another address.
 func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#") {
 		return provider.Fail(op, "the request path is not one of this provider")
@@ -217,7 +217,7 @@ func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to 
 			" serves this file from another address, such as external storage; Qatlas does not follow it"}
 	case response.StatusCode != http.StatusOK:
 		return refusal(op, c.product, c.limiter, response)
-	case response.ContentLength >= 0 && response.ContentLength != size:
+	case size >= 0 && response.ContentLength >= 0 && response.ContentLength != size:
 		return provider.InvalidResponse(op, c.product.name+" announced another size than the asset has")
 	}
 	body := &trackedReader{Reader: response.Body}

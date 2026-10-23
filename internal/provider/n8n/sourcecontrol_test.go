@@ -1,7 +1,9 @@
 package n8n
 
 import (
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -47,7 +49,7 @@ func TestSourceControlToolsSendTheDocumentedRequests(t *testing.T) {
 	}
 	result, err = env.invoke(sourceControlStatus.ID, "open", `{"direction":"push"}`)
 	if err != nil || calls[2].method != http.MethodGet || calls[2].path != apiPath+"/source-control/status" ||
-		calls[2].query.Get("direction") != "push" || strings.Contains(result, "workflows/W1.json") ||
+		calls[2].query.Get("direction") != "push" || !strings.Contains(result, `"file":"workflows/W1.json"`) ||
 		!strings.Contains(result, `"conflict":true`) {
 		t.Fatalf("status: %s, %v, %+v", result, err, calls[2])
 	}
@@ -196,6 +198,78 @@ func TestSourceControlForbiddenIsNeutral(t *testing.T) {
 		if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), foreignCanary) ||
 			!strings.Contains(err.Error(), "cannot tell which") {
 			t.Fatalf("%s: %v", operation, err)
+		}
+	}
+}
+
+const richStatusFile = `{"file":"workflows/W1.json","id":"W1","name":"Flow","type":"workflow","status":"modified",` +
+	`"location":"local","conflict":false,"updatedAt":"2026-01-02T00:00:00.000Z","pushed":false,` +
+	`"isLocalPublished":true,"isRemoteArchived":false,"parentFolderId":"F1","folderPath":["A","B\u0007"],` +
+	`"remoteFolderPath":["A"],"owner":{"type":"team","projectId":"P1","projectName":"Marketing"},` +
+	`"publishingError":"PUBERR","publishingErrorDetails":{"reason":"review_pending",` +
+	`"workflowReviewRequestId":"RR1","versionId":"V1"},"contentImportPolicy":{"violations":[{"kind":"k",` +
+	`"checkId":"c1","message":"POLICYMSG","subject":"S","subjectType":"node","scope":"workflow",` +
+	`"matchedRuleId":"R1"}],"checkErrors":[{"checkId":"c2","correlationId":"corr-1"},{"checkId":"c3",` +
+	`"correlationId":"corr-2"}]}}`
+
+func TestSourceControlStatusReportsEveryDocumentedMember(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"data":[`+richStatusFile+`,{"file":"x","id":"N","name":"n","type":"tags",`+
+			`"status":"new","location":"remote","conflict":false,"updatedAt":"u","parentFolderId":null}]}`), nil
+	})
+	out, err := env.invoke(sourceControlStatus.ID, "open", `{"direction":"push"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		Files []json.RawMessage `json:"files"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil || len(result.Files) != 2 {
+		t.Fatalf("%s, %v", out, err)
+	}
+	want := `{"id":"W1","name":"Flow","type":"workflow","status":"modified","location":"local",` +
+		`"publishing_error":"PUBERR","publishing_error_reason":"review_pending",` +
+		`"policy_violations":[{"kind":"k","check_id":"c1","message":"POLICYMSG","subject":"S",` +
+		`"subject_type":"node","scope":"workflow","matched_rule_id":"R1"}],"policy_check_errors":2,` +
+		`"file":"workflows/W1.json","updated_at":"2026-01-02T00:00:00.000Z","pushed":false,` +
+		`"is_local_published":true,"is_remote_archived":false,"parent_folder_id":"F1","folder_path":["A","B "],` +
+		`"remote_folder_path":["A"],"owner":{"type":"team","project_id":"P1","project_name":"Marketing"},` +
+		`"publishing_error_review_request_id":"RR1","publishing_error_version_id":"V1",` +
+		`"check_errors":[{"check_id":"c2","correlation_id":"corr-1"},{"check_id":"c3","correlation_id":"corr-2"}]}`
+	var got, wanted map[string]any
+	if err := json.Unmarshal(result.Files[0], &got); err != nil || json.Unmarshal([]byte(want), &wanted) != nil ||
+		!reflect.DeepEqual(got, wanted) {
+		t.Errorf("file = %s\nwant   %s", result.Files[0], want)
+	}
+	if got := string(result.Files[1]); strings.Contains(got, "parent_folder_id") || strings.Contains(got, "owner") ||
+		strings.Contains(got, "pushed") {
+		t.Errorf("absent members must stay out: %s", got)
+	}
+	if seen := assertOutputDeclared(t, sourceControlStatus.ID, []byte(out)); seen < 20 {
+		t.Errorf("checked %d members: %s", seen, out)
+	}
+}
+
+func TestSourceControlPullAndPushOutputIgnoreTheStatusOnlyMembers(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/push") {
+			return jsonResponse(200, `{"data":[`+richStatusFile+`]}`), nil
+		}
+		return jsonResponse(200, `[`+richStatusFile+`]`), nil
+	})
+	for tool, args := range map[string]string{sourceControlPull.ID: `{}`,
+		sourceControlPush.ID: `{"commit_message":"m","files":[{"id":"W1","type":"workflow"}]}`} {
+		out, err := env.confirmed(tool, "pdelete-open", args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := `"files":[{"id":"W1","location":"local","name":"Flow","policy_check_errors":2,` +
+			`"policy_violations":[{"check_id":"c1","kind":"k","message":"POLICYMSG"}],"publishing_error":"PUBERR",` +
+			`"publishing_error_reason":"review_pending","status":"modified","type":"workflow"}]`
+		if !strings.Contains(out, want) {
+			t.Errorf("%s: %s", tool, out)
 		}
 	}
 }

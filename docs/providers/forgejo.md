@@ -53,12 +53,17 @@ additional depth of defense: the targets of the connection stay the boundary.
   `projects`, or `time_estimate`.
 - Pull requests: `pull-requests.list` takes `base` and `head` (from Forgejo 17) and the pull request carries `flow`;
   Gitea has `base_branch` and `content_version` instead. See [Pull requests](gitea/pull-requests.md).
+- Review comments: `pull-request-review-comments.get`, `.create`, and `.delete` (listed-only) exist on Forgejo only;
+  `reply`, `resolve`, and `unresolve` are Gitea's. `extra_lines_count` needs Forgejo 16. See
+  [Pull request reviews](gitea/pull-request-reviews.md).
 - A release asset may be a link to an external address (`type` `external`). Qatlas never creates one (`external_url`
   is not offered), never changes its address, and `release-assets.download` refuses it. See
   [Releases](gitea/releases.md).
 - Attachments of issues and comments carry `type` and allow `browser_download_url` in the edit; the latter is not
   offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
+- Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
+  [Branches](gitea/branches.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
@@ -67,3 +72,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
 not registered. See [Projects](gitea/projects.md).
+- Actions: the API grew in steps, so most run tools need Forgejo 16 or 17; runs and tasks are read from 15. Runs,
+  jobs, and filters have Forgejo's own forms, there is no owner level, no attempts, no `force-cancel`, `rerun-failed`,
+  or `approve`, and `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See
+  [Actions runs](gitea/actions.md).

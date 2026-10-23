@@ -34,7 +34,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type call struct {
-	method, path, query, auth, contentType, body string
+	method, path, query, auth, contentType, body, escaped string
 }
 
 // serve answers every request with handler and records it. A request to another host, with a Sudo header, a
@@ -43,8 +43,8 @@ func serve(t *testing.T, calls *[]call, handler func(call) *http.Response) {
 	t.Helper()
 	previous := transport
 	transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		entry := call{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
-			contentType: r.Header.Get("Content-Type")}
+		entry := call{method: r.Method, path: r.URL.Path, escaped: r.URL.EscapedPath(), query: r.URL.RawQuery,
+			auth: r.Header.Get("Authorization"), contentType: r.Header.Get("Content-Type")}
 		if r.Body != nil {
 			data, _ := io.ReadAll(r.Body)
 			entry.body = string(data)
@@ -177,7 +177,24 @@ func testConfig(p *product) *config.Config {
 	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".milestones.delete", p.id + ".milestones.get",
-			p.id + ".pull-requests.merge", p.id + ".pull-request-branches.update", p.id + ".pull-requests.get"}}
+			p.id + ".pull-requests.merge", p.id + ".pull-request-branches.update", p.id + ".pull-requests.get",
+		}}
+	// The review connection lists every review tool of the product, the listed-only ones among them.
+	reviewTools := []string{"pull-request-reviews.list", "pull-request-reviews.get", "pull-request-reviews.create",
+		"pull-request-reviews.submit", "pull-request-reviews.approve", "pull-request-reviews.delete",
+		"pull-request-reviews.dismiss", "pull-request-reviews.undismiss", "pull-request-review-comments.list"}
+	if p == forgejo {
+		reviewTools = append(reviewTools, "pull-request-review-comments.get", "pull-request-review-comments.create",
+			"pull-request-review-comments.delete")
+	} else {
+		reviewTools = append(reviewTools, "pull-request-review-comments.reply", "pull-request-review-comments.resolve",
+			"pull-request-review-comments.unresolve")
+	}
+	for i := range reviewTools {
+		reviewTools[i] = p.id + "." + reviewTools[i]
+	}
+	cfg.Connections["reviews"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: reviewTools}
 	cfg.Connections["release-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
