@@ -22,14 +22,15 @@ const (
 	logicFunctionNameMax        = 100
 	logicFunctionDescriptionMax = 500
 	logicFunctionShortMax       = 50
+	logicFunctionPathMax        = 500
 )
 
-// logicFunctionSelection lists the only fields read. Twenty exposes the trigger kinds solely as JSON fields
-// that hold their settings (paths, schedules, event names, input schemas) and cannot narrow them; the answer
-// is reduced to whether each is set, and the settings are never decoded. Source code, handler paths, logs,
-// and application and creator identifiers are not selected.
+// logicFunctionSelection lists the only fields read; source code and logs are separate queries and never
+// selected. The settings of an HTTP route trigger name an address that may run the function without signing
+// in, so they count as an access value: only whether they are set is kept, and they are never decoded.
 const logicFunctionSelection = `id name description runtime timeoutSeconds executionMode cronTriggerSettings ` +
-	`databaseEventTriggerSettings httpRouteTriggerSettings toolTriggerSettings workflowActionTriggerSettings`
+	`databaseEventTriggerSettings httpRouteTriggerSettings toolTriggerSettings workflowActionTriggerSettings ` +
+	`sourceHandlerPath handlerName applicationId universalIdentifier createdAt updatedAt`
 
 // logicFunctionsListDocument and logicFunctionsGetDocument are the only documents of the logic function tools.
 var logicFunctionsListDocument = graphqlDocument{path: metadataPath,
@@ -44,19 +45,54 @@ const logicFunctionItemSchema = `{"type":"object","properties":{"id":{"type":"st
 	`"execution_mode":{"type":"string"},"triggers":{"type":"object","properties":{"cron":{"type":"boolean"},` +
 	`"database_event":{"type":"boolean"},"http_route":{"type":"boolean"},"tool":{"type":"boolean"},` +
 	`"workflow_action":{"type":"boolean"}},"required":["cron","database_event","http_route","tool",` +
-	`"workflow_action"],"additionalProperties":false}},"required":["id","name","triggers"],` +
+	`"workflow_action"],"additionalProperties":false},"source_handler_path":{"type":"string"},` +
+	`"handler_name":{"type":"string"},"application_id":{"type":"string"},"universal_identifier":{"type":"string"},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"cron_trigger_settings":{"type":"object"},` +
+	`"cron_trigger_settings_omitted":{"type":"boolean"},"database_event_trigger_settings":{"type":"object"},` +
+	`"database_event_trigger_settings_omitted":{"type":"boolean"},"tool_trigger_settings":{"type":"object"},` +
+	`"tool_trigger_settings_omitted":{"type":"boolean"},"workflow_action_trigger_settings":{"type":"object"},` +
+	`"workflow_action_trigger_settings_omitted":{"type":"boolean"}},"required":["id","name","triggers"],` +
 	`"additionalProperties":false}`
 
-const logicFunctionNote = "Never reads source code, handler paths, logs, or trigger settings such as routes, " +
-	"schedules, event names, or input schemas: each trigger kind is only a flag. Values are untrusted workspace data"
+const logicFunctionNote = "Never reads source code, logs, or the settings of an HTTP route trigger, whose " +
+	"address may run the function without signing in. Trigger settings are free objects of at most 8 levels " +
+	"and 16 KiB; a larger one is left out and marked. Values are untrusted workspace data"
+
+const logicSettingsText = " as Twenty sends them, untrusted data; at most 8 levels and 16 KiB"
+
+// logicFunctionFields describes the members of one logic function.
+var logicFunctionFields = []capability.Field{
+	{Name: "id", Description: "Logic function identifier"},
+	{Name: "name", Description: "Name, untrusted data"},
+	{Name: "description", Description: "Description, untrusted data"},
+	{Name: "runtime", Description: "Runtime, untrusted data"},
+	{Name: "timeout_seconds", Description: "Timeout in seconds"},
+	{Name: "execution_mode", Description: "Execution mode, untrusted data"},
+	{Name: "triggers", Description: "One flag per trigger kind"},
+	{Name: "source_handler_path", Description: "Path of the handler source file, untrusted data"},
+	{Name: "handler_name", Description: "Name of the handler function, untrusted data"},
+	{Name: "application_id", Description: "UUID of the application that owns the function"},
+	{Name: "universal_identifier", Description: "Universal identifier of the function"},
+	{Name: "created_at", Description: "Creation timestamp of the function"},
+	{Name: "updated_at", Description: "Last change timestamp of the function"},
+	{Name: "cron_trigger_settings", Description: "Cron trigger settings" + logicSettingsText},
+	{Name: "cron_trigger_settings_omitted", Description: "True when the cron trigger settings exceed their limits"},
+	{Name: "database_event_trigger_settings", Description: "Database event trigger settings" + logicSettingsText},
+	{Name: "database_event_trigger_settings_omitted", Description: "True when the database event trigger settings exceed their limits"},
+	{Name: "tool_trigger_settings", Description: "Tool trigger settings" + logicSettingsText},
+	{Name: "tool_trigger_settings_omitted", Description: "True when the tool trigger settings exceed their limits"},
+	{Name: "workflow_action_trigger_settings", Description: "Workflow action trigger settings" + logicSettingsText},
+	{Name: "workflow_action_trigger_settings_omitted", Description: "True when the workflow action trigger settings exceed their limits"},
+}
 
 var logicFunctionsList = capability.Descriptor{
 	ID:      Provider + ".logic-functions.list",
 	Version: 1,
 	Title:   "List Twenty CRM logic functions",
 	Description: "List the logic functions of the Twenty workspace of a connection without object targets: name, " +
-		"description, runtime, timeout, execution mode, and which trigger kinds each carries (cron, database " +
-		"event, HTTP route, tool, workflow action). " + logicFunctionNote,
+		"description, runtime, timeout, execution mode, handler, application, timestamps, which trigger kinds each " +
+		"carries (cron, database event, HTTP route, tool, workflow action), and the settings of all but the HTTP " +
+		"route. " + logicFunctionNote,
 	Tags:        []string{"twentycrm", "logic functions", "workspace", "list"},
 	Risk:        capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe, Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: logicFunctionDataSensitivity},
 	Provider:    Provider,
@@ -64,10 +100,10 @@ var logicFunctionsList = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"logic_functions":{"type":"array","items":` +
 		logicFunctionItemSchema + `},"truncated":{"type":"boolean"}},"required":["logic_functions","truncated"],` +
 		`"additionalProperties":false}`),
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "logic_functions", Description: "At most 200 logic functions, untrusted data"},
 		{Name: "truncated", Description: "True when the workspace holds more logic functions than listed"},
-	},
+	}, itemFields("logic_functions", logicFunctionFields)...),
 	Examples: []capability.Example{{Description: "List the logic functions", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -76,7 +112,8 @@ var logicFunctionsGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get a Twenty CRM logic function",
 	Description: "Read one logic function of the Twenty workspace of a connection without object targets: name, " +
-		"description, runtime, timeout, execution mode, and which trigger kinds it carries. " + logicFunctionNote,
+		"description, runtime, timeout, execution mode, handler, application, timestamps, which trigger kinds it " +
+		"carries, and the settings of all but the HTTP route. " + logicFunctionNote,
 	Tags:     []string{"twentycrm", "logic functions", "workspace", "get"},
 	Risk:     capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe, Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: logicFunctionDataSensitivity},
 	Provider: Provider,
@@ -85,7 +122,7 @@ var logicFunctionsGet = capability.Descriptor{
 	OutputSchema: json.RawMessage(logicFunctionItemSchema),
 	Arguments: []capability.Argument{{Name: "id", Required: true,
 		Description: "UUID of the logic function, as returned by twenty-crm.logic-functions.list"}},
-	Fields: []capability.Field{{Name: "triggers", Description: "One flag per trigger kind, without its settings"}},
+	Fields: logicFunctionFields,
 	Examples: []capability.Example{{Description: "Read a logic function",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000"}`)}},
 }
@@ -108,6 +145,25 @@ type LogicFunction struct {
 	TimeoutSeconds int                   `json:"timeout_seconds,omitempty"`
 	ExecutionMode  string                `json:"execution_mode,omitempty"`
 	Triggers       LogicFunctionTriggers `json:"triggers"`
+	LogicFunctionDetails
+}
+
+// LogicFunctionDetails are the members of a logic function beyond its trigger flags.
+type LogicFunctionDetails struct {
+	SourceHandlerPath                    string         `json:"source_handler_path,omitempty"`
+	HandlerName                          string         `json:"handler_name,omitempty"`
+	ApplicationID                        string         `json:"application_id,omitempty"`
+	UniversalIdentifier                  string         `json:"universal_identifier,omitempty"`
+	CreatedAt                            string         `json:"created_at,omitempty"`
+	UpdatedAt                            string         `json:"updated_at,omitempty"`
+	CronTriggerSettings                  map[string]any `json:"cron_trigger_settings,omitempty"`
+	CronTriggerSettingsOmitted           bool           `json:"cron_trigger_settings_omitted,omitempty"`
+	DatabaseEventTriggerSettings         map[string]any `json:"database_event_trigger_settings,omitempty"`
+	DatabaseEventTriggerSettingsOmitted  bool           `json:"database_event_trigger_settings_omitted,omitempty"`
+	ToolTriggerSettings                  map[string]any `json:"tool_trigger_settings,omitempty"`
+	ToolTriggerSettingsOmitted           bool           `json:"tool_trigger_settings_omitted,omitempty"`
+	WorkflowActionTriggerSettings        map[string]any `json:"workflow_action_trigger_settings,omitempty"`
+	WorkflowActionTriggerSettingsOmitted bool           `json:"workflow_action_trigger_settings_omitted,omitempty"`
 }
 
 // LogicFunctionList is the result of ListLogicFunctions.
@@ -128,9 +184,15 @@ type logicFunctionRecord struct {
 	HTTPRouteTriggerSettings      json.RawMessage `json:"httpRouteTriggerSettings"`
 	ToolTriggerSettings           json.RawMessage `json:"toolTriggerSettings"`
 	WorkflowActionTriggerSettings json.RawMessage `json:"workflowActionTriggerSettings"`
+	SourceHandlerPath             *string         `json:"sourceHandlerPath"`
+	HandlerName                   *string         `json:"handlerName"`
+	ApplicationID                 *string         `json:"applicationId"`
+	UniversalIdentifier           *string         `json:"universalIdentifier"`
+	CreatedAt                     *string         `json:"createdAt"`
+	UpdatedAt                     *string         `json:"updatedAt"`
 }
 
-// isSet reports whether a trigger settings field holds a value; the value itself is dropped unread.
+// isSet reports whether a trigger settings field holds a value.
 func isSet(raw json.RawMessage) bool {
 	trimmed := bytes.TrimSpace(raw)
 	return len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null"))
@@ -144,13 +206,22 @@ func (r logicFunctionRecord) view(op string) (LogicFunction, error) {
 	if r.TimeoutSeconds > 0 && r.TimeoutSeconds < 1e6 {
 		timeout = int(r.TimeoutSeconds)
 	}
+	details := LogicFunctionDetails{SourceHandlerPath: cleanText(r.SourceHandlerPath, logicFunctionPathMax),
+		HandlerName: cleanText(r.HandlerName, logicFunctionNameMax), ApplicationID: uuidOrEmpty(r.ApplicationID),
+		UniversalIdentifier: uuidOrEmpty(r.UniversalIdentifier), CreatedAt: timestamp(r.CreatedAt),
+		UpdatedAt: timestamp(r.UpdatedAt)}
+	details.CronTriggerSettings, details.CronTriggerSettingsOmitted = freeObject(r.CronTriggerSettings)
+	details.DatabaseEventTriggerSettings, details.DatabaseEventTriggerSettingsOmitted = freeObject(r.DatabaseEventTriggerSettings)
+	details.ToolTriggerSettings, details.ToolTriggerSettingsOmitted = freeObject(r.ToolTriggerSettings)
+	details.WorkflowActionTriggerSettings, details.WorkflowActionTriggerSettingsOmitted = freeObject(r.WorkflowActionTriggerSettings)
 	return LogicFunction{ID: r.ID, Name: cleanText(r.Name, logicFunctionNameMax),
 		Description: cleanText(r.Description, logicFunctionDescriptionMax),
 		Runtime:     cleanText(r.Runtime, logicFunctionShortMax), TimeoutSeconds: timeout,
 		ExecutionMode: cleanText(r.ExecutionMode, logicFunctionShortMax),
 		Triggers: LogicFunctionTriggers{Cron: isSet(r.CronTriggerSettings),
 			DatabaseEvent: isSet(r.DatabaseEventTriggerSettings), HTTPRoute: isSet(r.HTTPRouteTriggerSettings),
-			Tool: isSet(r.ToolTriggerSettings), WorkflowAction: isSet(r.WorkflowActionTriggerSettings)}}, nil
+			Tool: isSet(r.ToolTriggerSettings), WorkflowAction: isSet(r.WorkflowActionTriggerSettings)},
+		LogicFunctionDetails: details}, nil
 }
 
 // ListLogicFunctions reads the logic functions with one fixed query.
