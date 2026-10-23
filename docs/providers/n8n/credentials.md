@@ -26,24 +26,29 @@ in no profile and offered only by a `tools` list.
 
 ## Reads and tests
 
-The read tools expose metadata only: id, name, type, and creation and update times. Responses are decoded
-into structures without a field for a credential's data, so a stored value never reaches a result or an
-error, whatever n8n sends.
+The read tools expose metadata only, never a credential's data. Responses are decoded into structures
+without a field for it, so a stored value never reaches a result or an error, whatever n8n sends.
 
 - **Binding.** With a project allow-list `list` keeps only credentials shared into those projects. `get` and
   `test` first find the credential in the paged list (at most 20 pages of 250), because the single read has no
   project information; a credential that is not found, is outside the allow-list, or whose search cannot
   finish is refused without any further request and without naming a project. Each `shared` entry of the list
   response carries the project as its `id` (with `name` and `role`); the single read has no `shared`. Only
-  that `id` is read; an entry without one never matches. A connection with a workflow
+  that `id` is read for the binding; an entry without one never matches. A connection with a workflow
   allow-list refuses every credential tool locally, as for data tables and variables.
+- **Sharing.** Shares of a credential in projects outside the project allow-list appear only with id and role,
+  so a credential shared into an allowed project does not disclose the name or times of a foreign one. Without
+  an allow-list every share is complete.
 - **Test.** `credentials.test` makes n8n use the stored secret against the third-party service, so it is
   effect `execute`, idempotent, open-world, and always needs confirmation. It sends exactly one request and is
   never retried. The result is `status` and a capped `message`, untrusted data, never part of an error. It has
   its own profile so it can be granted separately from reading.
 - **Schema.** `credential_type` is letters, digits, `.`, `-`, and `_` (at most 100 characters, starting with a
-  letter or digit) and is sent as one escaped path segment. The result lists at most 200 fields, sorted;
-  defaults and descriptions are not passed on.
+  letter or digit) and is sent as one escaped path segment. The result lists at most 200 fields, sorted.
+  n8n reports per field only the type and, for an options field, its values (at most 200, flagged when cut);
+  descriptions and defaults are not in its answer. The conditional required fields are a free object in
+  `all_of`, bounded in entries and depth; one beyond the bounds is left out whole and flagged, never cut.
+  `type` and `additionalProperties` of n8n's answer are constants per its specification and are not returned.
 
 ## Changes
 

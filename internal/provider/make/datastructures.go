@@ -16,10 +16,12 @@ import (
 // The two tools of this file list and read the data structures (the field layouts data stores follow) of the
 // bound team; creating, changing, or deleting a structure is not offered.
 // API (udts:read, checked 2026-10-04 against developers.make.com's published API reference, not a live
-// account): GET /data-structures (teamId required; cols[], pg[offset], pg[limit], pg[sortBy]=name) answering
+// account): GET /data-structures (teamId required; cols[], pg[offset], pg[limit], pg[sortBy]=name,
+// pg[sortDir]) answering
 // {"dataStructures":[...]} and GET /data-structures/{id} (cols[]) answering {"dataStructure":{...}}. A
 // structure reports id, teamId, name (at most 128 characters), strict, and spec, an array of typed fields
-// (boolean, text, number, date, buffer, collection, array).
+// (boolean, text, number, date, buffer, collection, array); boolean, text, and number fields may carry a
+// default of their own type.
 
 const (
 	// dataStructuresSensitivity labels the field layouts these tools describe.
@@ -30,6 +32,8 @@ const (
 	maxSpecFields = 200
 	maxSpecDepth  = 4
 	maxSpecText   = 128
+	// maxSpecDefault bounds a text default and a number literal; a longer default is left out, never cut.
+	maxSpecDefault = 256
 )
 
 var dataStructureIDSchema = idSchema
@@ -38,9 +42,12 @@ var dataStructureIDArgument = capability.Argument{Name: "datastructure_id", Requ
 	Description: "Make data structure identifier; its team is always re-checked live against Make's own " +
 		"report, and a Qatlas connection with a scenario or folder allow-list reaches no data structures at all"}
 
+// specFieldsSchema describes the fields of a returned specification; their members are named in the spec field.
+const specFieldsSchema = `{"type":"array","items":{"type":"object"}}`
+
 var dataStructureSummarySchema = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},` +
 	`"team_id":{"type":"integer"},"strict":{"type":"boolean"},` +
-	`"spec":{"type":"array","items":{"type":"object"}},"spec_truncated":{"type":"boolean"}},` +
+	`"spec":` + specFieldsSchema + `,"spec_truncated":{"type":"boolean"}},` +
 	`"required":["id","team_id"],"additionalProperties":false}`
 
 var dataStructureSummaryFields = []capability.Field{
@@ -48,11 +55,18 @@ var dataStructureSummaryFields = []capability.Field{
 	{Name: "name", Description: "Data structure name, untrusted data"},
 	{Name: "team_id", Description: "Team of the data structure; always the Qatlas connection's bound team"},
 	{Name: "strict", Description: "True when Make enforces the structure strictly on stored data"},
-	{Name: "spec", Description: "Only on get: the structure's fields as name, type, label, required, " +
-		"multiline, sequence, codepage, and nested spec, untrusted data; default values are not returned; at " +
-		"most " + strconv.Itoa(maxSpecFields) + " fields and " + strconv.Itoa(maxSpecDepth) + " levels"},
-	{Name: "spec_truncated", Description: "True when the specification was cut at the field or depth limit"},
+	{Name: "spec", Description: specFieldsDescription},
+	{Name: "spec_truncated", Description: specTruncatedDescription},
 }
+
+// specFieldsDescription is shared by every tool that returns a specification.
+var specFieldsDescription = "The structure's fields as name, type, label, required, multiline, sequence, " +
+	"codepage, default (a boolean, text, or number matching the field type), and nested spec, untrusted data; " +
+	"at most " + strconv.Itoa(maxSpecFields) + " fields and " + strconv.Itoa(maxSpecDepth) + " levels, a " +
+	"default at most " + strconv.Itoa(maxSpecDefault) + " characters"
+
+const specTruncatedDescription = "True when part of the specification was left out at the field, depth, or " +
+	"default length limit or could not be read, never cut"
 
 var dataStructuresReadRisk = capability.Risk{
 	Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -61,13 +75,12 @@ var dataStructuresReadRisk = capability.Risk{
 
 var dataStructuresList = capability.Descriptor{
 	ID: Provider + ".data-structures.list", Version: 1, Title: "List Make data structures",
-	Description: "List the data structures of the bound team by name, id, and strictness, sorted by name, page by " +
-		"page; the field specification is read with get. Refused on a connection with a scenario or folder allow-list. " +
-		"Needs the udts:read scope",
+	Description: "List the data structures of the bound team with their field specifications, sorted by name, " +
+		"page by page. Refused on a connection with a scenario or folder allow-list. Needs the udts:read scope",
 	Tags: []string{"make", "datastructures", "list", "automation"}, Risk: dataStructuresReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"offset":{"type":"integer","minimum":0},` +
-		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
-		`"additionalProperties":false}`),
+		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
+		sortDirSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"data_structures":{"type":"array","items":` + dataStructureSummarySchema + `},` +
 		`"offset":{"type":"integer"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
@@ -76,21 +89,21 @@ var dataStructuresList = capability.Descriptor{
 		{Name: "offset", Description: "Data structures to skip before this page; 0 when omitted"},
 		{Name: "limit", Description: "Data structures per page, 1 to " + strconv.Itoa(maxListLimit) + "; " +
 			strconv.Itoa(defaultListLimit) + " when omitted"},
+		sortDirArgument,
 	},
-	Fields: []capability.Field{
-		{Name: "data_structures", Description: "The page's structures as id, name, team_id, and strict, untrusted data"},
-		{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
-		{Name: "has_more", Description: "True when a further page likely remains; Make reports no total count, " +
+	Fields: append(append([]capability.Field{}, dataStructureSummaryFields...),
+		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
+		capability.Field{Name: "has_more", Description: "True when a further page likely remains; Make reports no total count, " +
 			"so this is true whenever this page was full"},
-		{Name: "count", Description: "Number of structures returned after the team boundary was re-applied"},
-	},
+		capability.Field{Name: "count", Description: "Number of structures returned after the team boundary was re-applied"},
+	),
 	Examples: []capability.Example{{Description: "List the team's data structures", Arguments: json.RawMessage(`{}`)}},
 }
 
 var dataStructuresGet = capability.Descriptor{
 	ID: Provider + ".data-structures.get", Version: 1, Title: "Get a Make data structure",
-	Description: "Read one data structure of the bound team with its field specification, bounded and without " +
-		"default values. Refused on a connection with a scenario or folder allow-list. Needs the udts:read scope",
+	Description: "Read one data structure of the bound team with its field specification and default values, " +
+		"bounded. Refused on a connection with a scenario or folder allow-list. Needs the udts:read scope",
 	Tags: []string{"make", "datastructures", "get", "automation"}, Risk: dataStructuresReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"datastructure_id":` + dataStructureIDSchema + `},` +
 		`"required":["datastructure_id"],"additionalProperties":false}`),
@@ -101,7 +114,7 @@ var dataStructuresGet = capability.Descriptor{
 		Arguments: json.RawMessage(`{"datastructure_id":1}`)}},
 }
 
-// specJSON is the allow-list of one specification field; defaults and every unknown key are never decoded.
+// specJSON is the allow-list of one specification field; every unknown key is never decoded.
 type specJSON struct {
 	Type      string          `json:"type"`
 	Name      string          `json:"name"`
@@ -110,6 +123,7 @@ type specJSON struct {
 	Multiline bool            `json:"multiline"`
 	Sequence  bool            `json:"sequence"`
 	Codepage  string          `json:"codepage"`
+	Default   json.RawMessage `json:"default"`
 	Spec      json.RawMessage `json:"spec"`
 }
 
@@ -123,14 +137,16 @@ type dataStructureJSON struct {
 
 // SpecField is one field of a data structure's specification.
 type SpecField struct {
-	Name      string      `json:"name,omitempty"`
-	Type      string      `json:"type"`
-	Label     string      `json:"label,omitempty"`
-	Required  bool        `json:"required,omitempty"`
-	Multiline bool        `json:"multiline,omitempty"`
-	Sequence  bool        `json:"sequence,omitempty"`
-	Codepage  string      `json:"codepage,omitempty"`
-	Spec      []SpecField `json:"spec,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Type      string `json:"type"`
+	Label     string `json:"label,omitempty"`
+	Required  bool   `json:"required,omitempty"`
+	Multiline bool   `json:"multiline,omitempty"`
+	Sequence  bool   `json:"sequence,omitempty"`
+	Codepage  string `json:"codepage,omitempty"`
+	// Default keeps the exact JSON literal, so a number never takes a float detour.
+	Default json.RawMessage `json:"default,omitempty"`
+	Spec    []SpecField     `json:"spec,omitempty"`
 }
 
 // DataStructureSummary is the stable, team-checked view of one data structure.
@@ -154,6 +170,44 @@ func specText(value string) string {
 type specBudget struct {
 	left      int
 	truncated bool
+}
+
+// specDefault reads the default of a boolean, text, or number field as a value of exactly that type. A default
+// of another type, an unreadable one, or one over the length limit is left out and marked, never cut; an empty
+// text default and the types without a documented default are simply absent.
+func specDefault(kind string, raw json.RawMessage, budget *specBudget) json.RawMessage {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+	switch kind {
+	case "boolean":
+		if value := rawBool(raw); value != nil {
+			return json.RawMessage(strconv.FormatBool(*value))
+		}
+	case "text":
+		var text string
+		if json.Unmarshal(raw, &text) == nil {
+			if len(text) > maxSpecDefault {
+				break
+			}
+			if text = cleanText(text, maxSpecDefault); text == "" {
+				return nil
+			}
+			if encoded, err := json.Marshal(text); err == nil {
+				return encoded
+			}
+		}
+	case "number":
+		var number json.Number
+		if raw[0] != '"' && len(raw) <= maxSpecDefault && json.Unmarshal(raw, &number) == nil {
+			return json.RawMessage(number.String())
+		}
+	default:
+		return nil
+	}
+	budget.truncated = true
+	return nil
 }
 
 // parseSpec reads an array of fields (a structure or a collection) or, for the array type, one field object,
@@ -191,7 +245,8 @@ func parseSpec(raw json.RawMessage, depth int, budget *specBudget) []SpecField {
 		out = append(out, SpecField{Name: specText(entry.Name), Type: specText(entry.Type),
 			Label: specText(entry.Label), Required: entry.Required, Multiline: entry.Multiline,
 			Sequence: entry.Sequence, Codepage: specText(entry.Codepage),
-			Spec: parseSpec(entry.Spec, depth+1, budget)})
+			Default: specDefault(entry.Type, entry.Default, budget),
+			Spec:    parseSpec(entry.Spec, depth+1, budget)})
 	}
 	return out
 }
@@ -223,11 +278,25 @@ func selectDataStructures(resolved *config.Resolved) error {
 
 var dataStructureColsFull = []string{"id", "name", "teamId", "spec", "strict"}
 var dataStructureColsBinding = []string{"id", "name", "teamId"}
-var dataStructureColsList = []string{"id", "name", "teamId", "strict"}
+var dataStructureColsList = []string{"id", "name", "teamId", "strict", "spec"}
+
+const sortDirSchema = `"sort_dir":{"type":"string","enum":["asc","desc"]}`
+
+var sortDirArgument = capability.Argument{Name: "sort_dir",
+	Description: "Sort direction of the name order, asc or desc; asc when omitted"}
 
 type pagingArguments struct {
-	Offset int `json:"offset"`
-	Limit  int `json:"limit"`
+	Offset  int    `json:"offset"`
+	Limit   int    `json:"limit"`
+	SortDir string `json:"sort_dir"`
+}
+
+// validate refuses a sort direction outside the documented values before any request.
+func (p pagingArguments) validate() error {
+	if p.SortDir != "" && p.SortDir != "asc" && p.SortDir != "desc" {
+		return invalidRequest("sort_dir must be asc or desc")
+	}
+	return nil
 }
 
 func (p pagingArguments) query(teamID int64, cols []string) url.Values {
@@ -235,8 +304,12 @@ func (p pagingArguments) query(teamID int64, cols []string) url.Values {
 	if limit == 0 {
 		limit = defaultListLimit
 	}
+	sortDir := p.SortDir
+	if sortDir == "" {
+		sortDir = "asc"
+	}
 	return url.Values{"teamId": {strconv.FormatInt(teamID, 10)}, "pg[offset]": {strconv.Itoa(p.Offset)},
-		"pg[limit]": {strconv.Itoa(limit)}, "pg[sortBy]": {"name"}, "pg[sortDir]": {"asc"},
+		"pg[limit]": {strconv.Itoa(limit)}, "pg[sortBy]": {"name"}, "pg[sortDir]": {sortDir},
 		"cols[]": append([]string(nil), cols...)}
 }
 
@@ -262,6 +335,9 @@ func invokeDataStructuresList(ctx context.Context, resolved *config.Resolved, se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
+	if err := input.validate(); err != nil {
+		return nil, err
+	}
 	if err := selectDataStructures(resolved); err != nil {
 		return nil, err
 	}
@@ -282,7 +358,7 @@ func invokeDataStructuresList(ctx context.Context, resolved *config.Resolved, se
 		if !client.scope.allowsTeam(s.TeamID) || len(result.DataStructures) >= maxListLimit {
 			continue
 		}
-		result.DataStructures = append(result.DataStructures, dataStructureSummaryOf(s, false))
+		result.DataStructures = append(result.DataStructures, dataStructureSummaryOf(s, true))
 	}
 	result.Count = len(result.DataStructures)
 	return result, nil

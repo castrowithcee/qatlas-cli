@@ -60,6 +60,9 @@ additional depth of defense: the targets of the connection stay the boundary.
   offered, `*-attachments.update` changes only `name`, and an external attachment is refused by
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
 
+- `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
+  versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
+
 ## Not on Forgejo
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are

@@ -219,14 +219,29 @@ func TestConnectionsDeleteConfirmationAndScenarioConflict(t *testing.T) {
 	}
 }
 
-func TestConnectionAccessListReturnsOnlyIDsAndRoles(t *testing.T) {
+func TestConnectionAccessListReturnsUsersAndGroups(t *testing.T) {
 	id := strconv.FormatInt(connectionID, 10)
 	h := newConnChangeEnv(t, ownTeam)
+	h.members = `[{"membershipType":"user","membershipId":7,"role":"entity:entity-member","name":"Pat\u0007 X",` +
+		`"email":"pat@example.test","mfa":"` + canaryConnSecret + `"},` +
+		`{"membershipType":"user","membershipId":8,"role":"entity:entity-admin","name":null,"email":null},` +
+		`{"membershipType":"group","membershipId":9,"role":"entity:entity-admin","name":"Ops"}]`
 	result, err := h.invoke(connectionsAccessList.ID, "open", `{"connection_id":`+id+`}`)
-	if err != nil || !strings.Contains(result, `"user_id":7`) || !strings.Contains(result, `"member"`) ||
-		!strings.Contains(result, `"count":1`) || strings.Contains(result, canaryConnSecret) ||
-		strings.Contains(result, `"email"`) {
+	if err != nil || strings.Contains(result, canaryConnSecret) || strings.Contains(result, "mfa") {
 		t.Fatalf("result = %s, %v", result, err)
+	}
+	for _, want := range []string{`{"email":"pat@example.test","name":"Pat  X","role":"member","user_id":7}`,
+		`{"role":"admin","user_id":8}`, `"groups":[{"membership_id":9,"name":"Ops","role":"admin"}]`,
+		`"count":2`, `"truncated":false`} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("result lacks %s: %s", want, result)
+		}
+	}
+	assertOutputDeclared(t, connectionsAccessList.ID, []byte(result))
+	h.members = `[{"membershipType":"user","membershipId":7,"role":"entity:entity-member"}]`
+	result, _ = h.invoke(connectionsAccessList.ID, "open", `{"connection_id":`+id+`}`)
+	if strings.Contains(result, "groups") || !strings.Contains(result, `"count":1`) {
+		t.Fatalf("without groups = %s", result)
 	}
 	var many []string
 	for i := 1; i <= maxAccessMembers+5; i++ {

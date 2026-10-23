@@ -51,12 +51,27 @@ string is dropped; its other members are shown.
 ## Message members
 
 The messages of updates, `telegram.users.personal-chat-messages`, and the `pinned_message` of
-`telegram.chats.get` share one mapping, and a replied-to message is followed one level. Telegram texts are
-untrusted: they are length-capped and stripped of control characters, and `entities` and `caption_entities` keep
-at most 100 entries.
+`telegram.chats.get` share one mapping of content and service members, and a replied-to message is followed one
+level. Telegram texts are untrusted: they are length-capped and stripped of control characters, and `entities` and
+`caption_entities` keep at most 100 entries.
 
 `chat_info`, `sender_chat`, `forward_origin`, and `external_reply` can name chats outside the target binding; they
 appear as data and never become a target. A chat of a business connection appears only as `business_chat_ref`.
 `guest_query_id` appears only as a signed `guest_query_ref`. Addresses in `entities`, `link_preview_options`,
 `reply_markup`, and `invoice` go out as untrusted text and are never fetched. A button's `callback_data` is shown
 like that of a `callback_query` update.
+
+## Service members
+
+A service message carries every documented service member of `Message`. Chats and people named there are data
+only: `migrate_to_chat_id`, `migrate_from_chat_id`, and the chat of `chat_shared` never become a target. Photos
+appear only as signed `file_ref`, none in business messages. `web_app_data`, `connected_website`, and the names in
+`users_shared` and `chat_shared` are untrusted text.
+
+A member that holds a message (`pinned_message` and the message of checklist, giveaway, poll option, and
+suggested post events) is mapped one level deep, with the same mapper. An inaccessible message appears only with
+`chat_info`, `message_id`, and a `date` of 0. Inside a replied-to or pinned message such a member is left out and
+named in `omitted_fields`.
+
+Payment identifiers such as `telegram_payment_charge_id`, and `owned_gift_id` of gifts, are printed: no tool
+refunds, transfers, or converts with them. `passport_data` is dropped (see [Nested types](README.md#nested-types)).

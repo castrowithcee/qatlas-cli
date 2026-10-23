@@ -315,6 +315,8 @@ type tgMessage struct {
 	ReplyMarkup           *inlineKeyboardOut    `json:"reply_markup"`
 	Giveaway              *giveawayOut          `json:"giveaway"`
 	GiveawayWinners       *giveawayWinnersOut   `json:"giveaway_winners"`
+
+	tgService
 }
 
 // tgEvent covers the chat events that carry a chat, an actor, and a date.

@@ -1,6 +1,7 @@
 package n8n
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -29,6 +30,14 @@ const (
 	maxCredentialSchemaFields = 200
 	// maxCredentialTextLength bounds a name, a test message, or a schema field name, in characters.
 	maxCredentialTextLength = 512
+	// maxCredentialShares bounds the shared entries one listed credential reports.
+	maxCredentialShares = 100
+	// maxSchemaEnumValues bounds the values one schema field reports from its list of options.
+	maxSchemaEnumValues = 200
+	// maxSchemaAllOfEntries and maxSchemaAllOfDepth bound the conditional-required rules of a schema: every
+	// array element and object member counts as an entry, and the all_of array itself is depth 0.
+	maxSchemaAllOfEntries = 100
+	maxSchemaAllOfDepth   = 6
 )
 
 // credentialDataSensitivity marks credentials: metadata only, never stored values.
@@ -48,9 +57,25 @@ var credentialTestRisk = capability.Risk{Effect: capability.EffectExecute, Idemp
 
 const credentialTypeSchema = `{"type":"string","minLength":1,"maxLength":100,"pattern":"^[A-Za-z0-9][A-Za-z0-9._-]*$"}`
 
-var credentialItemSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-	`"type":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
-	`"required":["id","name","type"],"additionalProperties":false}`
+const credentialItemProperties = `"id":{"type":"string"},"name":{"type":"string"},` +
+	`"type":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}`
+
+const credentialItemTail = `},"required":["id","name","type"],"additionalProperties":false}`
+
+var credentialItemSchema = `{"type":"object","properties":{` + credentialItemProperties + credentialItemTail
+
+// credentialListItemSchema adds the sharing entries of a listed credential.
+var credentialListItemSchema = `{"type":"object","properties":{` + credentialItemProperties + `,` +
+	`"shared":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
+	`"name":{"type":"string"},"role":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"}},"required":["id"],"additionalProperties":false}},` +
+	`"shared_truncated":{"type":"boolean"}` + credentialItemTail
+
+// credentialDetailSchema adds the management attributes of a single credential read.
+var credentialDetailSchema = `{"type":"object","properties":{` + credentialItemProperties + `,` +
+	`"is_managed":{"type":"boolean"},"is_global":{"type":"boolean"},"is_resolvable":{"type":"boolean"},` +
+	`"resolvable_allow_fallback":{"type":"boolean"},"resolver_id":{"type":"string"},` +
+	`"description":{"type":"string"}` + credentialItemTail
 
 var credentialIDArgument = capability.Argument{Name: "credential_id",
 	Description: "n8n credential identifier; with a project allow-list the credential must belong to one of its projects",
@@ -69,7 +94,7 @@ const credentialScopeNote = "Metadata only, never a stored value. With a project
 
 var credentialsList = capability.Descriptor{
 	ID: Provider + ".credentials.list", Version: 1, Title: "List n8n credentials",
-	Description: "List the credentials (id, name, type, times) of the bound n8n instance, page by page with an " +
+	Description: "List the credentials (id, name, type, times, sharing) of the bound n8n instance, page by page with an " +
 		"opaque cursor. " + credentialScopeNote,
 	Tags: []string{"n8n", "credentials", "list", "automation"}, Risk: credentialReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -77,32 +102,45 @@ var credentialsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"credentials":{"type":"array","items":` + credentialItemSchema + `},` +
+		`"credentials":{"type":"array","items":` + credentialListItemSchema + `},` +
 		`"cursor":{"type":"string"},"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
 		`"required":["credentials","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "cursor", Description: "Opaque cursor from a previous call's has_more page"},
 		{Name: "limit", Description: "Credentials per page, 1 to 250; 100 when omitted"},
 	},
-	Fields: []capability.Field{
-		{Name: "credentials", Description: "Credentials on this page after the allow-list was applied; id, name " +
-			"(untrusted data), type, created_at, updated_at"},
+	Fields: append(append([]capability.Field{
+		{Name: "credentials", Description: "Credentials on this page after the allow-list was applied"}},
+		credentialFields...), []capability.Field{
+		{Name: "shared", Description: "Projects the credential is shared into, at most 100: id, name (untrusted " +
+			"data), role, created_at, updated_at. A project outside this connection's project allow-list shows " +
+			"id and role only"},
+		{Name: "shared_truncated", Description: "True when the credential is shared into more projects than reported"},
 		{Name: "cursor", Description: "Cursor for the next page; absent when has_more is false"},
 		{Name: "has_more", Description: "True when a further page remains, even when this page is empty after filtering"},
 		{Name: "count", Description: "Number of credentials on this page"},
-	},
+	}...),
 	Examples: []capability.Example{{Description: "List the first page of reachable credentials", Arguments: json.RawMessage(`{}`)}},
 }
 
 var credentialsGet = capability.Descriptor{
 	ID: Provider + ".credentials.get", Version: 1, Title: "Read n8n credential metadata",
-	Description: "Read the metadata (id, name, type, times) of one credential by ID. " + credentialScopeNote,
-	Tags:        []string{"n8n", "credentials", "get", "automation"}, Risk: credentialReadRisk, Provider: Provider,
+	Description: "Read the metadata (id, name, type, times, management attributes, description) of one " +
+		"credential by ID. " + credentialScopeNote,
+	Tags: []string{"n8n", "credentials", "get", "automation"}, Risk: credentialReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"credential_id":` + targetIDSchema + `},` +
 		`"required":["credential_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(credentialItemSchema),
+	OutputSchema: json.RawMessage(credentialDetailSchema),
 	Arguments:    []capability.Argument{credentialIDArgument},
-	Fields:       credentialFields,
+	Fields: append(append([]capability.Field{}, credentialFields...),
+		capability.Field{Name: "is_managed", Description: "True for a credential n8n manages itself"},
+		capability.Field{Name: "is_global", Description: "True when the credential is usable in every project"},
+		capability.Field{Name: "is_resolvable", Description: "True when the credential is resolved dynamically"},
+		capability.Field{Name: "resolvable_allow_fallback", Description: "True when a resolvable credential may " +
+			"fall back to its static data"},
+		capability.Field{Name: "resolver_id", Description: "Identifier of the credential resolver"},
+		capability.Field{Name: "description", Description: "Credential description, untrusted data; n8n sends it " +
+			"only when credential descriptions are enabled"}),
 	Examples: []capability.Example{{Description: "Read a credential's metadata",
 		Arguments: json.RawMessage(`{"credential_id":"R2DjclaysHbqn778"}`)}},
 }
@@ -130,25 +168,35 @@ var credentialsTest = capability.Descriptor{
 
 var credentialsSchema = capability.Descriptor{
 	ID: Provider + ".credentials.schema", Version: 1, Title: "Read an n8n credential type schema",
-	Description: "Read the field schema of one credential type by its type name: field names, types, and which " +
-		"are required, in a bounded view. It holds no credential and is not tied to a project. Refused on a " +
+	Description: "Read the field schema of one credential type by its type name: field names, types, option " +
+		"values, which are required, and the conditional required fields, in a bounded view. It holds no credential and is not tied to a project. Refused on a " +
 		"connection that restricts workflows by an allow-list",
 	Tags: []string{"n8n", "credentials", "schema", "automation"}, Risk: credentialReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"credential_type":` + credentialTypeSchema + `},` +
 		`"required":["credential_type"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"credential_type":{"type":"string"},` +
 		`"fields":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},` +
-		`"type":{"type":"string"},"required":{"type":"boolean"}},"required":["name","required"],` +
-		`"additionalProperties":false}},"truncated":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"type":{"type":"string"},"required":{"type":"boolean"},` +
+		`"enum":{"type":"array","items":{"anyOf":[{"type":"string"},{"type":"number"},{"type":"boolean"}]}},` +
+		`"enum_truncated":{"type":"boolean"}},"required":["name","required"],` +
+		`"additionalProperties":false}},"truncated":{"type":"boolean"},"count":{"type":"integer"},` +
+		`"all_of":{"type":"array"},"all_of_omitted":{"type":"boolean"}},` +
 		`"required":["credential_type","fields","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "credential_type", Required: true,
 		Description: "Credential type name, letters, digits, '.', '_' and '-', at most 100 characters"}},
 	Fields: []capability.Field{
 		{Name: "credential_type", Description: "The type name that was read"},
-		{Name: "fields", Description: "Fields of the type, sorted by name, at most 200; name (untrusted data), " +
-			"type, required"},
+		{Name: "fields", Description: "Fields of the type, sorted by name, at most 200"},
+		{Name: "name", Description: "Field name, untrusted data"},
+		{Name: "type", Description: "Field type as n8n reports it"},
+		{Name: "required", Description: "True when the field must always be given; conditional rules are in all_of"},
+		{Name: "enum", Description: "Values of an options field, at most 200, texts capped, untrusted data"},
+		{Name: "enum_truncated", Description: "True when the options field has more values than reported"},
 		{Name: "truncated", Description: "True when the schema had more fields than reported"},
 		{Name: "count", Description: "Number of fields reported"},
+		{Name: "all_of", Description: "Conditional required fields as n8n reports them, a bounded free object " +
+			"(at most 100 entries, depth 6), untrusted data"},
+		{Name: "all_of_omitted", Description: "True when the conditional rules exceeded the bounds and were left out"},
 	},
 	Examples: []capability.Example{{Description: "Read a credential type's schema",
 		Arguments: json.RawMessage(`{"credential_type":"httpBasicAuth"}`)}},
@@ -157,8 +205,11 @@ var credentialsSchema = capability.Descriptor{
 // credentialShareJSON is one entry of a listed credential's shared array. n8n reports the owning or
 // sharing project as the entry's id (with its name and role); no other field names a project.
 type credentialShareJSON struct {
-	ID   string `json:"id"`
-	Role string `json:"role"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // ownerRole marks the owning project's entry of a shared array.
@@ -176,6 +227,13 @@ type credentialJSON struct {
 	CreatedAt string                `json:"createdAt"`
 	UpdatedAt string                `json:"updatedAt"`
 	Shared    []credentialShareJSON `json:"shared"`
+
+	IsManaged               *bool   `json:"isManaged"`
+	IsGlobal                *bool   `json:"isGlobal"`
+	IsResolvable            *bool   `json:"isResolvable"`
+	ResolvableAllowFallback *bool   `json:"resolvableAllowFallback"`
+	ResolverID              *string `json:"resolverId"`
+	Description             *string `json:"description"`
 }
 
 // CredentialSummary is the stable Qatlas view of one credential's metadata. Name is untrusted data.
@@ -187,12 +245,42 @@ type CredentialSummary struct {
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
+// CredentialShare is one project a listed credential is shared into. Outside the project allow-list of the
+// connection only ID and Role are set. Name is untrusted data.
+type CredentialShare struct {
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	Role      string `json:"role,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// CredentialListItem is a listed credential with its sharing entries. It is separate from CredentialSummary,
+// which the changing tools also return.
+type CredentialListItem struct {
+	CredentialSummary
+	Shared          []CredentialShare `json:"shared,omitempty"`
+	SharedTruncated bool              `json:"shared_truncated,omitempty"`
+}
+
+// CredentialDetail is a single credential read: the summary plus n8n's management attributes. Description is
+// untrusted data.
+type CredentialDetail struct {
+	CredentialSummary
+	IsManaged               *bool  `json:"is_managed,omitempty"`
+	IsGlobal                *bool  `json:"is_global,omitempty"`
+	IsResolvable            *bool  `json:"is_resolvable,omitempty"`
+	ResolvableAllowFallback *bool  `json:"resolvable_allow_fallback,omitempty"`
+	ResolverID              string `json:"resolver_id,omitempty"`
+	Description             string `json:"description,omitempty"`
+}
+
 // CredentialsPage is one paginated, allow-list-filtered listing of credentials.
 type CredentialsPage struct {
-	Credentials []CredentialSummary `json:"credentials"`
-	Cursor      string              `json:"cursor,omitempty"`
-	HasMore     bool                `json:"has_more"`
-	Count       int                 `json:"count"`
+	Credentials []CredentialListItem `json:"credentials"`
+	Cursor      string               `json:"cursor,omitempty"`
+	HasMore     bool                 `json:"has_more"`
+	Count       int                  `json:"count"`
 }
 
 // CredentialTested is what credentials.test reports.
@@ -204,9 +292,11 @@ type CredentialTested struct {
 
 // CredentialSchemaField is one field of a credential type.
 type CredentialSchemaField struct {
-	Name     string `json:"name"`
-	Type     string `json:"type,omitempty"`
-	Required bool   `json:"required"`
+	Name          string `json:"name"`
+	Type          string `json:"type,omitempty"`
+	Required      bool   `json:"required"`
+	Enum          []any  `json:"enum,omitempty"`
+	EnumTruncated bool   `json:"enum_truncated,omitempty"`
 }
 
 // CredentialSchema is the bounded view of a credential type's schema.
@@ -215,6 +305,8 @@ type CredentialSchema struct {
 	Fields         []CredentialSchemaField `json:"fields"`
 	Truncated      bool                    `json:"truncated,omitempty"`
 	Count          int                     `json:"count"`
+	AllOf          []any                   `json:"all_of,omitempty"`
+	AllOfOmitted   bool                    `json:"all_of_omitted,omitempty"`
 }
 
 func credentialError(err error) error {
@@ -293,6 +385,138 @@ func summarizeCredential(c credentialJSON) CredentialSummary {
 		CreatedAt: bounded(c.CreatedAt), UpdatedAt: bounded(c.UpdatedAt)}
 }
 
+// listItemOf maps a listed credential. A sharing entry for a project outside the connection's project
+// allow-list keeps only its id and role, so no foreign project's name or times leave through a credential
+// that is also shared into an allowed project.
+func (s scope) listItemOf(c credentialJSON) CredentialListItem {
+	item := CredentialListItem{CredentialSummary: summarizeCredential(c)}
+	for _, entry := range c.Shared {
+		if entry.ID == "" {
+			continue
+		}
+		if len(item.Shared) >= maxCredentialShares {
+			item.SharedTruncated = true
+			break
+		}
+		share := CredentialShare{ID: bounded(entry.ID), Role: cappedText(entry.Role)}
+		if len(s.projects) == 0 || contains(s.projects, entry.ID) {
+			share.Name, share.CreatedAt, share.UpdatedAt = cappedText(entry.Name), bounded(entry.CreatedAt),
+				bounded(entry.UpdatedAt)
+		}
+		item.Shared = append(item.Shared, share)
+	}
+	return item
+}
+
+func detailOfCredential(c credentialJSON) CredentialDetail {
+	detail := CredentialDetail{CredentialSummary: summarizeCredential(c), IsManaged: c.IsManaged,
+		IsGlobal: c.IsGlobal, IsResolvable: c.IsResolvable, ResolvableAllowFallback: c.ResolvableAllowFallback}
+	if c.ResolverID != nil {
+		detail.ResolverID = bounded(*c.ResolverID)
+	}
+	if c.Description != nil {
+		detail.Description = cappedLongText(*c.Description)
+	}
+	return detail
+}
+
+// schemaScalar keeps a string (capped), number (as written), or boolean and drops any other JSON value.
+func schemaScalar(value any) (any, bool) {
+	switch typed := value.(type) {
+	case string:
+		return cappedText(typed), true
+	case json.Number, bool:
+		return typed, true
+	}
+	return nil, false
+}
+
+// schemaEnumOf reads the list of option values of a schema field: scalars only, at most
+// maxSchemaEnumValues; truncated reports that more were present.
+func schemaEnumOf(raw json.RawMessage) (values []any, truncated bool) {
+	var list []any
+	if len(raw) == 0 || decodeNumbers(raw, &list) != nil {
+		return nil, false
+	}
+	for _, item := range list {
+		value, ok := schemaScalar(item)
+		if !ok {
+			continue
+		}
+		if len(values) >= maxSchemaEnumValues {
+			return values, true
+		}
+		values = append(values, value)
+	}
+	return values, false
+}
+
+// decodeNumbers decodes JSON keeping numbers as written, so none passes through a float.
+func decodeNumbers(raw json.RawMessage, out any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	return decoder.Decode(out)
+}
+
+// schemaAllOfOf reads the conditional required fields as a bounded free object. A value beyond the bounds
+// makes the whole object unusable: it is reported as omitted, never cut. Text keys are not shortened either.
+func schemaAllOfOf(raw json.RawMessage) (rules []any, omitted bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, false
+	}
+	var list []any
+	if decodeNumbers(raw, &list) != nil || len(list) == 0 {
+		return nil, false
+	}
+	entries := 0
+	cleaned, ok := cleanSchemaValue(list, 0, &entries)
+	if !ok {
+		return nil, true
+	}
+	return cleaned.([]any), false
+}
+
+func cleanSchemaValue(value any, depth int, entries *int) (any, bool) {
+	switch typed := value.(type) {
+	case []any:
+		if depth > maxSchemaAllOfDepth {
+			return nil, false
+		}
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			if *entries++; *entries > maxSchemaAllOfEntries {
+				return nil, false
+			}
+			cleaned, ok := cleanSchemaValue(item, depth+1, entries)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, cleaned)
+		}
+		return out, true
+	case map[string]any:
+		if depth > maxSchemaAllOfDepth {
+			return nil, false
+		}
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			if *entries++; *entries > maxSchemaAllOfEntries || utf8.RuneCountInString(key) > maxCredentialTextLength {
+				return nil, false
+			}
+			cleaned, ok := cleanSchemaValue(item, depth+1, entries)
+			if !ok {
+				return nil, false
+			}
+			out[cappedText(key)] = cleaned
+		}
+		return out, true
+	case nil:
+		return nil, true
+	default:
+		return schemaScalar(value)
+	}
+}
+
 // validCredentialType keeps a type name to the characters n8n's own type names use.
 func validCredentialType(name string) error {
 	if name == "" || len(name) > maxCredentialTypeLength {
@@ -352,10 +576,10 @@ func (c *Client) ListCredentials(ctx context.Context, cursor string, limit int) 
 	if err != nil {
 		return nil, err
 	}
-	items := make([]CredentialSummary, 0, len(page.Data))
+	items := make([]CredentialListItem, 0, len(page.Data))
 	for _, item := range page.Data {
 		if c.scope.allowsCredential(item.Shared) {
-			items = append(items, summarizeCredential(item))
+			items = append(items, c.scope.listItemOf(item))
 		}
 	}
 	next := ""
@@ -446,7 +670,7 @@ func invokeCredentialsGet(ctx context.Context, resolved *config.Resolved, secret
 		maxResponseBytes); err != nil {
 		return nil, credentialError(err)
 	}
-	return summarizeCredential(item), nil
+	return detailOfCredential(item), nil
 }
 
 func invokeCredentialsTest(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -500,9 +724,11 @@ func invokeCredentialsSchema(ctx context.Context, resolved *config.Resolved, sec
 	}
 	var schema struct {
 		Properties map[string]struct {
-			Type any `json:"type"`
+			Type any             `json:"type"`
+			Enum json.RawMessage `json:"enum"`
 		} `json:"properties"`
-		Required []string `json:"required"`
+		Required []string        `json:"required"`
+		AllOf    json.RawMessage `json:"allOf"`
 	}
 	if err := client.get(ctx, op, "/credentials/schema/"+url.PathEscape(input.CredentialType), nil, &schema,
 		maxResponseBytes); err != nil {
@@ -524,9 +750,11 @@ func invokeCredentialsSchema(ctx context.Context, resolved *config.Resolved, sec
 			break
 		}
 		kind, _ := schema.Properties[name].Type.(string)
-		out.Fields = append(out.Fields, CredentialSchemaField{Name: cappedText(name), Type: cappedText(kind),
-			Required: required[name]})
+		field := CredentialSchemaField{Name: cappedText(name), Type: cappedText(kind), Required: required[name]}
+		field.Enum, field.EnumTruncated = schemaEnumOf(schema.Properties[name].Enum)
+		out.Fields = append(out.Fields, field)
 	}
+	out.AllOf, out.AllOfOmitted = schemaAllOfOf(schema.AllOf)
 	out.Count = len(out.Fields)
 	return out, nil
 }

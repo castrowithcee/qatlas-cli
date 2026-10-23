@@ -18,5 +18,10 @@ The integrations tools of the [Infomaniak kChat provider](README.md). The effect
   inside the allow-list. An outgoing webhook without a channel watches every public channel of its team, and
   a `command_id` is bound through its team only; both are refused with a channel allow-list.
 - The webhook and slash command tools, reads included, need a tools list because an incoming webhook's ID is
-  the secret of its post URL and a command carries a token; their IDs are redacted from every error, `.update`
-  writes the object back as read, no token ever appears, and a callback URL only as scheme and host.
+  the secret of its post URL and a command carries a token; their IDs are redacted from every error and
+  `.update` writes the object back as read.
+- A command's token authenticates kChat to the callback server, and a callback URL may carry that server's
+  credentials; both are access values for a system outside kChat. The token is never returned, a callback URL
+  only as its origin.
+- Deleted webhooks and commands are never returned, so their deletion time is not offered.
+- `commands.list` lists the team's custom commands only, the purpose of the tool.

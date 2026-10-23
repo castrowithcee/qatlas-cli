@@ -316,6 +316,25 @@ type messageContentOut struct {
 	GiveawayWinners       *giveawayWinnersOut   `json:"giveaway_winners,omitempty"`
 }
 
+// paidMediaItems maps the PaidMedia list; members of a video or live photo over the bounds are named in inner.
+func (r fileRefFunc) paidMediaItems(list []paidMediaOut, inner *[]string) []paidMediaOut {
+	var out []paidMediaOut
+	for _, item := range list {
+		e := paidMediaOut{Type: txtName(item.Type), Width: item.Width, Height: item.Height, Duration: item.Duration,
+			Photo: r.photoSizes(item.Photo)}
+		if item.Video != nil {
+			v := r.video(*item.Video, inner)
+			e.Video = &v
+		}
+		if item.LivePhoto != nil {
+			l := r.livePhoto(*item.LivePhoto, inner)
+			e.LivePhoto = &l
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // scoped names what a media mapper left out of a member, as <member>.<kind>.<member>.
 func scoped(omitted *[]string, member string, inner []string) {
 	for _, n := range inner {
@@ -560,19 +579,7 @@ func (s messageScope) messageContent(m *tgMessage) (out messageContentOut, omitt
 	if p := m.PaidMedia; p != nil {
 		info := &paidMediaInfoOut{StarCount: p.StarCount}
 		var inner []string
-		for _, item := range p.PaidMedia {
-			e := paidMediaOut{Type: txtName(item.Type), Width: item.Width, Height: item.Height, Duration: item.Duration,
-				Photo: s.refs.photoSizes(item.Photo)}
-			if item.Video != nil {
-				v := s.refs.video(*item.Video, &inner)
-				e.Video = &v
-			}
-			if item.LivePhoto != nil {
-				l := s.refs.livePhoto(*item.LivePhoto, &inner)
-				e.LivePhoto = &l
-			}
-			info.PaidMedia = append(info.PaidMedia, e)
-		}
+		info.PaidMedia = s.refs.paidMediaItems(p.PaidMedia, &inner)
 		scoped(&omitted, "paid_media", inner)
 		out.PaidMedia = bounded(&omitted, "paid_media", info)
 	}
@@ -582,11 +589,7 @@ func (s messageScope) messageContent(m *tgMessage) (out messageContentOut, omitt
 	if c := m.Checklist; c != nil {
 		list := &checklistOut{Title: txtBody(c.Title), TitleEntities: entities(c.TitleEntities),
 			OthersCanAddTasks: c.OthersCanAddTasks, OthersCanMarkTasksAsDone: c.OthersCanMarkTasksAsDone}
-		for _, t := range c.Tasks {
-			list.Tasks = append(list.Tasks, checklistTaskOut{ID: t.ID, Text: txtBody(t.Text), TextEntities: entities(t.TextEntities),
-				CompletedByUser: headUser(t.CompletedByUser), CompletedByChat: s.headChat(t.CompletedByChat),
-				CompletionDate: t.CompletionDate})
-		}
+		list.Tasks = s.checklistTasks(c.Tasks)
 		out.Checklist = bounded(&omitted, "checklist", list)
 	}
 	if c := m.Contact; c != nil {

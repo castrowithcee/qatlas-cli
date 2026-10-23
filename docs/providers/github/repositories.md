@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub repositories
@@ -16,10 +16,31 @@ confirmation described under [confirmed changes](README.md#confirmed-changes).
 ## Owners: repositories
 
 `github.repositories.list` lists the repositories the owner owns (`users/LOGIN` or `orgs/LOGIN`), in name
-order, archived ones included. A user's repositories are the ones the user owns, not those the user
-collaborates on. What the list shows depends on the targets, see [owner lists](README.md#owner-lists). The
-repositories need no scope for public ones, `repo` on a classic token for private ones, or access to the
-repositories on a fine-grained token.
+order unless `order_by` says otherwise, archived ones included. A user's repositories are the ones the user
+owns, not those the user collaborates on: the tool's purpose fixes that binding, so there is no
+`affiliations` or `ownerAffiliations` argument. What the list shows depends on the targets, see
+[owner lists](README.md#owner-lists). The repositories need no scope for public ones, `repo` on a classic
+token for private ones, or access to the repositories on a fine-grained token. `privacy` and `visibility`
+cannot be combined, as GitHub refuses the pair; every filter binds the cursor.
+
+Each entry carries the members of GitHub's GraphQL repository in the one request a call sends. A list or a
+connection is read with its first page, at most 10 entries per repository, together with its total count and
+a truncated marker; a page of 100 repositories then asks for 6100 nodes, far below GitHub's limit of 500000.
+Connections that have a list of their own (issues, pull requests, releases, collaborators, and the like)
+report only their count: a connection GitHub also serves as a list of its own is read with that list. The
+`viewer_*` members describe the authenticated user, not the repository.
+
+- **Parent and template:** a repository outside the connection's targets appears only with its identifiers.
+- **Owner:** the entry does not repeat the owner, since the object a call names is fixed by the call.
+- **Deploy keys:** only their number is reported, since deploy keys are public keys that grant access.
+- **Clone token:** `tempCloneToken` is never read, since it grants clone access without a sign-in.
+- **Privileged members:** members that can need push or admin rights (collaborators, deploy keys, branch
+  protection rules, vulnerability alerts, and the like) are read only with `admin_counts`, since GitHub refuses
+  them with an error and a refused member of a non-null type empties the whole repository, which would fail a
+  list that works without them. With `admin_counts`, a member refused inside one repository is left out of that
+  entry and named in `unreadable`; a refusal of the list itself still fails it.
+- **Left out:** deprecated members, rendered variants that repeat a text in another format, and members that
+  need a lookup argument.
 
 ## Repository lifecycle and collaborators
 
@@ -211,13 +232,16 @@ its token requirements are left to GitHub's decision per request, classic or fin
 
 | Tool | Does |
 | --- | --- |
-| `github.stars.list` | lists the repositories the account has starred, in batches |
+| `github.stars.list` | lists the repositories the account has starred, in batches, with the time each was starred and the repository in full |
 | `github.stars.add` | stars one repository; a repository already starred is left as it is |
 | `github.stars.remove` | unstars one repository; a repository that is not starred is left as it is |
 
 `github.stars.list` reads data of the account behind the token as a whole and follows the
 [account-wide rule](accounts.md#account-wide-tools); on a connection without repository or project targets, it
-narrows its answer to the starred repositories of the owners the targets name, when it names any.
+narrows its answer to the starred repositories of the owners the targets name, when it names any. It asks
+GitHub for the star media type, which is what carries the star time; `sort` and `direction` reach GitHub only
+when set, so the order stays GitHub's own by star time otherwise, and bind the cursor only while set. The
+repository follows the [result object rules](README.md#result-objects).
 `github.stars.add` and `github.stars.remove` take `repository` like every other repository tool and check it
 against the targets before a secret is read.
 
@@ -238,8 +262,11 @@ which stays `read`, unchanged. The profile `discovery` is described under [accou
 
 | Tool | Searches |
 | --- | --- |
-| `github.repositories.search` | repositories |
+| `github.repositories.search` | repositories, optionally sorted by `sort` and `order`, with `text_matches` on request |
 
 It reads GitHub's own search index with `terms`, under the rules described in [Search](README.md#search), and
-forces the [target qualifiers](README.md#target-scoping). The code and commit search are described with the
-[code](code.md#search), the user and organization search with the [accounts](accounts.md#search).
+forces the [target qualifiers](README.md#target-scoping). `sort` and `order` are arguments of their own, never
+part of `terms`, and GitHub's best match order stays when they are omitted. A match carries the repository
+under the [result object rules](README.md#result-objects), beside its compact members. The code and commit
+search are described with the [code](code.md#search), the user and organization search with the
+[accounts](accounts.md#search).

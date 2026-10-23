@@ -85,7 +85,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
 			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
 		want = append(want, p.id+".issue-pins.list", p.id+".issue-pins.check-allowed", p.id+".issue-pins.pin",
-			p.id+".issue-pins.unpin", p.id+".issue-pins.move")
+			p.id+".issue-pins.unpin", p.id+".issue-pins.move", p.id+".issue-subscriptions.list",
+			p.id+".issue-subscriptions.check", p.id+".issue-subscriptions.add", p.id+".issue-subscriptions.remove")
+		want = append(want, p.id+".issue-locks.lock", p.id+".issue-locks.unlock")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

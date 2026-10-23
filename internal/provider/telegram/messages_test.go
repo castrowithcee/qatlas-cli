@@ -253,7 +253,10 @@ func TestMessageTextsAreCleaned(t *testing.T) {
 // Every printed member of a message is in the output schema, and the tool fields name it.
 func TestMessageMembersAreInSchemaAndFields(t *testing.T) {
 	var calls []recorded
-	updates := `[{"update_id":1,"message":{"message_id":9,"date":100,"chat":` + headTeam + `,` + headJSON + `,` + contentJSON + `}}]`
+	service, _ := svcFixtures()
+	events, _ := svcEventFixtures()
+	service += "," + events
+	updates := `[{"update_id":1,"message":{"message_id":9,"date":100,"chat":` + headTeam + `,` + headJSON + `,` + contentJSON + `,` + service + `}}]`
 	client, _ := multiClient(t, testToken, fakeTelegram(&calls, updates, "0"), "-1001")
 	got, err := client.ListUpdates(context.Background(), 20, 0)
 	if err != nil {
