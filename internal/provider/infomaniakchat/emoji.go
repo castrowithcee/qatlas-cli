@@ -16,7 +16,8 @@ import (
 const emojiCatalog = "the kChat custom emoji catalog"
 
 var emojiSchema = `{"type":"object","properties":{` +
-	`"id":` + idSchema + `,"name":{"type":"string"},"creator_id":{"type":"string"},"created_at":{"type":"string"}},` +
+	`"id":` + idSchema + `,"name":{"type":"string"},"creator_id":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"deleted_at":{"type":"string"}},` +
 	`"required":["id","name","creator_id"],"additionalProperties":false}`
 
 var emojiFields = []capability.Field{
@@ -24,21 +25,24 @@ var emojiFields = []capability.Field{
 	{Name: "name", Description: "Emoji name, untrusted data"},
 	{Name: "creator_id", Description: "User identifier of the creator"},
 	{Name: "created_at", Description: "Creation time in RFC 3339, when kChat reports one"},
+	{Name: "updated_at", Description: "Last change time in RFC 3339, when kChat reports one"},
+	{Name: "deleted_at", Description: "Deletion time in RFC 3339, when kChat reports one"},
 }
 
 var emojiList = capability.Descriptor{
 	ID:      Provider + ".emoji.list",
 	Version: 1,
 	Title:   "List Infomaniak kChat custom emoji",
-	Description: "List the custom emoji of the kChat instance sorted by name, one kChat page at a time, with ID, " +
-		"name, creator, and creation time; no images. Instance-wide: only on a connection that binds every team " +
+	Description: "List the custom emoji of the kChat instance sorted by name unless sort is none, one kChat page at a time, with ID, " +
+		"name, creator, and creation, change, and deletion time; no images. Instance-wide: only on a connection that binds every team " +
 		"of its token and has no channel target.",
 	Tags:     []string{"infomaniak", "kchat", "emoji", "administration", "list"},
 	Risk:     botRisk(capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone),
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"page":{"type":"integer","minimum":1},` +
-		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
+		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `},` +
+		`"sort":{"type":"string","enum":["name","none"]}},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"emoji":{"type":"array","items":` + emojiSchema + `},` +
@@ -49,6 +53,7 @@ var emojiList = capability.Descriptor{
 		{Name: "page", Description: "1-based page of kChat's own listing; the first page when omitted"},
 		{Name: "per_page", Description: "Emoji per kChat page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
+		{Name: "sort", Description: "name to sort by emoji name, none for kChat's own order; name when omitted"},
 	},
 	Fields: append(append([]capability.Field{}, emojiFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
@@ -62,10 +67,12 @@ var emojiList = capability.Descriptor{
 
 // emojiJSON is the subset of the kChat Emoji resource this provider reads.
 type emojiJSON struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	CreatorID string `json:"creator_id"`
-	CreateAt  int64  `json:"create_at"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	CreatorID string  `json:"creator_id"`
+	CreateAt  int64   `json:"create_at"`
+	UpdateAt  flexInt `json:"update_at"`
+	DeleteAt  flexInt `json:"delete_at"`
 }
 
 // EmojiEntry is the stable Qatlas view of one custom emoji.
@@ -74,6 +81,8 @@ type EmojiEntry struct {
 	Name      string `json:"name"`
 	CreatorID string `json:"creator_id"`
 	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	DeletedAt string `json:"deleted_at,omitempty"`
 }
 
 // EmojiPage is one page of the custom emoji of the instance.
@@ -102,13 +111,23 @@ func invokeEmojiList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.ListEmoji(ctx, input.Page, input.PerPage)
+	if input.Sort == "" {
+		input.Sort = "name"
+	}
+	if input.Sort != "name" && input.Sort != "none" {
+		return nil, invalidRequest("sort must be name or none")
+	}
+	return client.ListEmoji(ctx, input.Page, input.PerPage, input.Sort)
 }
 
-// ListEmoji reads exactly one name-sorted page of kChat's custom emoji and never reads on by itself.
-func (c *Client) ListEmoji(ctx context.Context, page, perPage int) (*EmojiPage, error) {
+// ListEmoji reads exactly one page of kChat's custom emoji, sorted by name or, for sort none, in kChat's own
+// order, and never reads on by itself.
+func (c *Client) ListEmoji(ctx context.Context, page, perPage int, sort string) (*EmojiPage, error) {
 	const op = "list emoji"
-	query := url.Values{"page": {strconv.Itoa(page - 1)}, "per_page": {strconv.Itoa(perPage)}, "sort": {"name"}}
+	if sort == "none" {
+		sort = ""
+	}
+	query := url.Values{"page": {strconv.Itoa(page - 1)}, "per_page": {strconv.Itoa(perPage)}, "sort": {sort}}
 	var emoji []emojiJSON
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/emoji", query, nil, &emoji, false); err != nil {
 		return nil, err

@@ -19,7 +19,7 @@ import (
 // the list or the one changing request. Record contents are untrusted user data, often personal data of third parties.
 // API (checked 2026-10-04 against developers.make.com's published API reference, not a live account):
 //   - GET /data-stores/{id}/data (pg[offset], pg[limit]), datastores:read, answering {"records":[{key,data}],
-//     "spec","strict","count","pg"}; spec and strict are ignored.
+//     "spec","strict","count","pg"}; Make documents no sorting for records, so none is offered.
 //   - POST /data-stores/{id}/data, datastores:write, body key (optional, generated when absent) and data,
 //     answering {"key","data"}.
 //   - DELETE /data-stores/{id}/data, datastores:write, body {"keys":[...]}, answering {"keys":[...]}. The
@@ -89,7 +89,8 @@ var dataStoreRecordsList = capability.Descriptor{
 		strconv.Itoa(maxRecordsLimit) + `}},"required":["datastore_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"datastore_id":{"type":"integer"},` +
 		`"records":{"type":"array","items":` + recordSchema + `},"offset":{"type":"integer"},` +
-		`"has_more":{"type":"boolean"},"count":{"type":"integer"}},` +
+		`"has_more":{"type":"boolean"},"count":{"type":"integer"},"spec":` + specFieldsSchema + `,` +
+		`"spec_truncated":{"type":"boolean"},"strict":{"type":"boolean"},"total_count":{"type":"integer"}},` +
 		`"required":["datastore_id","records","offset","has_more","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{dataStoreIDArgument,
 		{Name: "offset", Description: "Records to skip before this page; 0 when omitted"},
@@ -100,7 +101,13 @@ var dataStoreRecordsList = capability.Descriptor{
 		capability.Field{Name: "offset", Description: "Offset of this page, for computing the next call's offset"},
 		capability.Field{Name: "has_more", Description: "True when a further page likely remains; true whenever " +
 			"this page was full"},
-		capability.Field{Name: "count", Description: "Number of records returned"}),
+		capability.Field{Name: "count", Description: "Number of records returned"},
+		capability.Field{Name: "spec", Description: "The data store's structure as Make reports it with the " +
+			"records: " + specFieldsDescription},
+		capability.Field{Name: "spec_truncated", Description: specTruncatedDescription},
+		capability.Field{Name: "strict", Description: "True when Make enforces the structure strictly on stored data"},
+		capability.Field{Name: "total_count", Description: "Number of records in the data store as Make reports " +
+			"it, not the number returned on this page"}),
 	Examples: []capability.Example{{Description: "List the first records of a store",
 		Arguments: json.RawMessage(`{"datastore_id":1,"limit":10}`)}},
 }
@@ -187,6 +194,12 @@ type DataStoreRecordsPage struct {
 	Offset      int          `json:"offset"`
 	HasMore     bool         `json:"has_more"`
 	Count       int          `json:"count"`
+	// Spec, SpecTruncated, Strict, and TotalCount are what Make reports besides the records; TotalCount is
+	// Make's own count, so it does not replace Count.
+	Spec          []SpecField `json:"spec,omitempty"`
+	SpecTruncated bool        `json:"spec_truncated,omitempty"`
+	Strict        *bool       `json:"strict,omitempty"`
+	TotalCount    *int64      `json:"total_count,omitempty"`
 }
 
 type recordJSON struct {
@@ -218,14 +231,21 @@ func invokeDataStoreRecordsList(ctx context.Context, resolved *config.Resolved, 
 		return nil, err
 	}
 	var page struct {
-		Records []recordJSON `json:"records"`
+		Records []recordJSON    `json:"records"`
+		Spec    json.RawMessage `json:"spec"`
+		Strict  json.RawMessage `json:"strict"`
+		Count   json.RawMessage `json:"count"`
 	}
 	query := url.Values{"pg[offset]": {strconv.Itoa(input.Offset)}, "pg[limit]": {strconv.Itoa(limit)}}
 	if err := client.get(ctx, op, recordsPath(input.DataStoreID), query, &page, needRecordsRead); err != nil {
 		return nil, err
 	}
 	result := &DataStoreRecordsPage{DataStoreID: input.DataStoreID, Records: make([]RecordView, 0, len(page.Records)),
-		Offset: input.Offset, HasMore: len(page.Records) >= limit}
+		Offset: input.Offset, HasMore: len(page.Records) >= limit, Strict: rawBool(page.Strict),
+		TotalCount: rawInt(page.Count)}
+	budget := &specBudget{left: maxSpecFields}
+	result.Spec = parseSpec(page.Spec, 0, budget)
+	result.SpecTruncated = budget.truncated
 	for _, r := range page.Records {
 		if len(result.Records) >= limit {
 			break

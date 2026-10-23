@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -15,9 +17,9 @@ import (
 
 // The four tools of this file list, read, and test the connections (stored third-party credentials) of the
 // bound team. A connection's secrets never leave Qatlas: every answer is decoded into a struct that holds
-// only the allow-listed fields below, so tokens, metadata, scope lists, and anything else Make may add are
-// dropped before they could be returned. Make's connection answer is not documented field by field beyond
-// its property names, which is why the allow-list, not a deny-list, decides.
+// only the allow-listed fields below, so tokens, data, and anything else Make may add are dropped before
+// they could be returned. Make's connection answer is not documented field by field beyond its property
+// names, which is why the allow-list, not a deny-list, decides.
 // API: GET /connections (teamId required; type[], cols[]), GET /connections/{id} (cols[]), and GET
 // /connections/{id}/editable-data-schema, all connections:read, and POST /connections/{id}/test,
 // connections:write, answering {"verified":boolean}; checked 2026-10-04 against developers.make.com's
@@ -30,6 +32,13 @@ const (
 	maxConnectionText = 256
 	// maxConnectionList bounds the connections one list answers with.
 	maxConnectionList = maxListLimit
+	// maxConnectionTypes, maxScopeCheckTypes, maxScopeCheckScopes, and maxScopeLength bound the list filters.
+	maxConnectionTypes  = 20
+	maxScopeCheckTypes  = 10
+	maxScopeCheckScopes = 50
+	maxScopeLength      = 256
+	// maxReadScopes bounds the scopes one connection read returns.
+	maxReadScopes = 200
 	// maxEditableParameters and maxEditableParameterLength bound the editable-schema field names.
 	maxEditableParameters      = 64
 	maxEditableParameterLength = 128
@@ -43,6 +52,17 @@ const (
 var connectionCols = []string{"id", "name", "accountName", "accountType", "packageName", "expire", "scoped",
 	"teamId", "organizationId", "editable"}
 
+// readConnectionCols is what the two read tools ask Make for: the allow-list plus the documented descriptive
+// fields. The write tools keep asking for connectionCols only.
+var readConnectionCols = append(append([]string{}, connectionCols...), "accountLabel", "metadata", "theme",
+	"upgradeable", "scopesCnt", "uid", "connectedSystemId")
+
+// listTypePattern is the shape of a connection type (account_name), shared by type, types, and the
+// keys of scope_check.
+const listTypePattern = `^[A-Za-z0-9_.-]{1,64}$`
+
+var listTypeRegexp = regexp.MustCompile(listTypePattern)
+
 var connectionIDSchema = idSchema
 
 var connectionIDArgument = capability.Argument{Name: "connection_id", Required: true,
@@ -50,11 +70,30 @@ var connectionIDArgument = capability.Argument{Name: "connection_id", Required: 
 		"against Make's own report, and a Qatlas connection with a scenario or folder allow-list reaches no Make " +
 		"connections at all, since they belong to no scenario"}
 
-var connectionSummarySchema = `{"type":"object","properties":{` +
-	`"id":{"type":"integer"},"name":{"type":"string"},"account_name":{"type":"string"},` +
+const connectionSummaryProperties = `"id":{"type":"integer"},"name":{"type":"string"},"account_name":{"type":"string"},` +
 	`"account_type":{"type":"string"},"package_name":{"type":"string"},"expire":{"type":"string"},` +
 	`"scoped":{"type":"boolean"},"team_id":{"type":"integer"},"organization_id":{"type":"integer"},` +
-	`"editable":{"type":"boolean"}},"required":["id","team_id"],"additionalProperties":false}`
+	`"editable":{"type":"boolean"}`
+
+var connectionSummarySchema = `{"type":"object","properties":{` + connectionSummaryProperties +
+	`},"required":["id","team_id"],"additionalProperties":false}`
+
+const connectionReadProperties = connectionSummaryProperties + `,` +
+	`"account_label":{"type":"string"},"metadata_value":{"type":"string"},"metadata_type":{"type":"string"},` +
+	`"theme":{"type":"string"},"upgradeable":{"type":"boolean"},"scopes_count":{"type":"integer"},` +
+	`"uid":{"type":"string"},"connected_system_id":{"type":"string"}`
+
+const connectionScopesProperties = `"scopes":{"type":"array","items":{"type":"object","properties":{` +
+	`"id":{"type":"string"},"name":{"type":"string"},"account":{"type":"string"}},"additionalProperties":false}},` +
+	`"scopes_truncated":{"type":"boolean"}`
+
+// connectionListItemSchema and connectionGetSchema differ by the scopes, which Make allows in cols[] only on
+// the single read.
+var connectionListItemSchema = `{"type":"object","properties":{` + connectionReadProperties +
+	`},"required":["id","team_id"],"additionalProperties":false}`
+
+var connectionGetSchema = `{"type":"object","properties":{` + connectionReadProperties + `,` +
+	connectionScopesProperties + `},"required":["id","team_id"],"additionalProperties":false}`
 
 var connectionSummaryFields = []capability.Field{
 	{Name: "id", Description: "Make connection identifier, used as connection_id by the other connection tools"},
@@ -69,22 +108,56 @@ var connectionSummaryFields = []capability.Field{
 	{Name: "editable", Description: "True when Make reports the connection's data as editable"},
 }
 
+var connectionReadFields = []capability.Field{
+	{Name: "account_label", Description: "Account label Make shows for the connection, untrusted data"},
+	{Name: "metadata_value", Description: "Account metadata value (for example an email address of the " +
+		"connected account), untrusted data"},
+	{Name: "metadata_type", Description: "Kind of the metadata value as Make reports it, string or email"},
+	{Name: "theme", Description: "Color of the connection's app as Make reports it, untrusted data"},
+	{Name: "upgradeable", Description: "True when Make reports the connection as upgradeable"},
+	{Name: "scopes_count", Description: "Number of scopes Make reports for the connection"},
+	{Name: "uid", Description: "Connection uid as Make reports it, untrusted data"},
+	{Name: "connected_system_id", Description: "Identifier of the connected third-party account as Make " +
+		"reports it, untrusted data"},
+}
+
+var connectionScopeFields = []capability.Field{
+	{Name: "scopes", Description: "Scopes granted to the connection, each with id, name, and account, " +
+		"untrusted data, at most " + strconv.Itoa(maxReadScopes) + "; never a token or stored value"},
+	{Name: "account", Description: "Account a scope entry belongs to, untrusted data"},
+	{Name: "scopes_truncated", Description: "True when more scopes were reported than are returned"},
+}
+
 var connectionsList = capability.Descriptor{
 	ID: Provider + ".connections.list", Version: 1, Title: "List Make connections",
 	Description: "List the Make connections (stored third-party credentials) of the bound team by allow-listed " +
-		"metadata only; never a token, secret, scope list, or other stored value. Refused on a connection " +
-		"with a scenario or folder allow-list",
+		"metadata only; never a token, secret, or other stored value. Refused on a connection " +
+		"with a scenario or folder allow-list. scope_check asks Make whether the connections of the named " +
+		"types hold the given scopes and fills scoped",
 	Tags: []string{"make", "connections", "list", "automation"}, Risk: connectionsReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"type":{"type":"string","pattern":"^[A-Za-z0-9_.-]{1,64}$"}},"additionalProperties":false}`),
+		`"type":{"type":"string","pattern":"` + listTypePattern + `"},` +
+		`"types":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(maxConnectionTypes) +
+		`,"items":{"type":"string","pattern":"` + listTypePattern + `"}},` +
+		`"scope_check":{"type":"object","minProperties":1,"maxProperties":` + strconv.Itoa(maxScopeCheckTypes) +
+		`,"additionalProperties":{"type":"array","minItems":1,"maxItems":` + strconv.Itoa(maxScopeCheckScopes) +
+		`,"items":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxScopeLength) + `}}}},` +
+		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"connections":{"type":"array","items":` + connectionSummarySchema + `},` +
+		`"connections":{"type":"array","items":` + connectionListItemSchema + `},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["connections","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "type", Description: "When set, list only connections of this Make connection type (account_name)"},
+		{Name: "type", Description: "When set, list only connections of this Make connection type (account_name); " +
+			"not together with types"},
+		{Name: "types", Description: "1 to " + strconv.Itoa(maxConnectionTypes) + " Make connection types " +
+			"(account_name); not together with type"},
+		{Name: "scope_check", Description: "Object of connection type to 1 to " + strconv.Itoa(maxScopeCheckScopes) +
+			" scopes of 1 to " + strconv.Itoa(maxScopeLength) + " characters, for at most " +
+			strconv.Itoa(maxScopeCheckTypes) + " types; every type must be named in type or types. Make then " +
+			"reports in scoped whether the connection of that type holds those scopes"},
 	},
-	Fields: append(append([]capability.Field{}, connectionSummaryFields...),
+	Fields: append(append(append([]capability.Field{}, connectionSummaryFields...), connectionReadFields...),
 		capability.Field{Name: "count", Description: "Number of connections returned, after the team boundary " +
 			"was re-applied"},
 		capability.Field{Name: "truncated", Description: "True when more than " + strconv.Itoa(maxConnectionList) +
@@ -95,15 +168,16 @@ var connectionsList = capability.Descriptor{
 
 var connectionsGet = capability.Descriptor{
 	ID: Provider + ".connections.get", Version: 1, Title: "Get a Make connection",
-	Description: "Read one Make connection of the bound team by allow-listed metadata only; never a token, " +
-		"secret, scope list, or other stored value",
+	Description: "Read one Make connection of the bound team by allow-listed metadata and the scopes granted to " +
+		"it; never a token, secret, or other stored value",
 	Tags: []string{"make", "connections", "get", "automation"}, Risk: connectionsReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"connection_id":` + connectionIDSchema + `},` +
 		`"required":["connection_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(connectionSummarySchema),
+	OutputSchema: json.RawMessage(connectionGetSchema),
 	Arguments:    []capability.Argument{connectionIDArgument},
-	Fields:       connectionSummaryFields,
-	Examples:     []capability.Example{{Description: "Read one connection", Arguments: json.RawMessage(`{"connection_id":1}`)}},
+	Fields: append(append(append([]capability.Field{}, connectionSummaryFields...), connectionReadFields...),
+		connectionScopeFields...),
+	Examples: []capability.Example{{Description: "Read one connection", Arguments: json.RawMessage(`{"connection_id":1}`)}},
 }
 
 var connectionsEditableSchema = capability.Descriptor{
@@ -175,6 +249,20 @@ type connectionJSON struct {
 	Editable       bool   `json:"editable"`
 }
 
+// connectionDetailJSON adds the documented descriptive fields to the allow-list. Their JSON types are not
+// guaranteed, so each is read tolerantly instead of failing the whole call.
+type connectionDetailJSON struct {
+	connectionJSON
+	AccountLabel      json.RawMessage `json:"accountLabel"`
+	Metadata          json.RawMessage `json:"metadata"`
+	Theme             json.RawMessage `json:"theme"`
+	Upgradeable       json.RawMessage `json:"upgradeable"`
+	ScopesCnt         json.RawMessage `json:"scopesCnt"`
+	UID               json.RawMessage `json:"uid"`
+	ConnectedSystemID json.RawMessage `json:"connectedSystemId"`
+	Scopes            json.RawMessage `json:"scopes"`
+}
+
 // ConnectionSummary is the stable, scope-checked view of one Make connection.
 type ConnectionSummary struct {
 	ID             int64  `json:"id"`
@@ -187,6 +275,54 @@ type ConnectionSummary struct {
 	TeamID         int64  `json:"team_id"`
 	OrganizationID int64  `json:"organization_id,omitempty"`
 	Editable       bool   `json:"editable"`
+}
+
+// ConnectionScope is one scope granted to a connection.
+type ConnectionScope struct {
+	ID      string `json:"id,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Account string `json:"account,omitempty"`
+}
+
+// ConnectionRead is the summary plus the descriptive fields of the read tools. The write tools keep returning
+// ConnectionSummary.
+type ConnectionRead struct {
+	ConnectionSummary
+	AccountLabel      string            `json:"account_label,omitempty"`
+	MetadataValue     string            `json:"metadata_value,omitempty"`
+	MetadataType      string            `json:"metadata_type,omitempty"`
+	Theme             string            `json:"theme,omitempty"`
+	Upgradeable       *bool             `json:"upgradeable,omitempty"`
+	ScopesCount       *int64            `json:"scopes_count,omitempty"`
+	UID               string            `json:"uid,omitempty"`
+	ConnectedSystemID string            `json:"connected_system_id,omitempty"`
+	Scopes            []ConnectionScope `json:"scopes,omitempty"`
+	ScopesTruncated   bool              `json:"scopes_truncated,omitempty"`
+}
+
+func connectionReadOf(c connectionDetailJSON) ConnectionRead {
+	read := ConnectionRead{ConnectionSummary: connectionSummaryOf(c.connectionJSON),
+		AccountLabel: rawText(c.AccountLabel), Theme: rawText(c.Theme), UID: rawText(c.UID),
+		ConnectedSystemID: rawText(c.ConnectedSystemID), Upgradeable: rawBool(c.Upgradeable),
+		ScopesCount: rawInt(c.ScopesCnt)}
+	if metadata := rawObject(c.Metadata); metadata != nil {
+		read.MetadataValue, read.MetadataType = rawText(metadata["value"]), rawText(metadata["type"])
+	}
+	var scopes []map[string]json.RawMessage
+	if json.Unmarshal(c.Scopes, &scopes) == nil {
+		for _, scope := range scopes {
+			if len(read.Scopes) >= maxReadScopes {
+				read.ScopesTruncated = true
+				break
+			}
+			entry := ConnectionScope{ID: rawText(scope["id"]), Name: rawText(scope["name"]),
+				Account: rawText(scope["account"])}
+			if entry != (ConnectionScope{}) {
+				read.Scopes = append(read.Scopes, entry)
+			}
+		}
+	}
+	return read
 }
 
 func boundText(value string) string {
@@ -223,19 +359,87 @@ func selectConnections(resolved *config.Resolved) error {
 }
 
 func colsQuery(query url.Values) url.Values {
-	query["cols[]"] = append([]string(nil), connectionCols...)
+	return colsOf(connectionCols, query)
+}
+
+func colsOf(cols []string, query url.Values) url.Values {
+	query["cols[]"] = append([]string(nil), cols...)
 	return query
 }
 
 type connectionsListArguments struct {
-	Type string `json:"type"`
+	Type       string              `json:"type"`
+	Types      []string            `json:"types"`
+	ScopeCheck map[string][]string `json:"scope_check"`
+}
+
+// listFilters validates type, types, and scope_check locally, before any request, and returns the query
+// parameters they stand for. scope_check keys become "<type>[]" parameters, so a type that would collide with
+// another parameter of the request is refused.
+func (a connectionsListArguments) listFilters() (types []string, check url.Values, err error) {
+	if a.Type != "" && a.Types != nil {
+		return nil, nil, invalidRequest("type and types cannot be combined")
+	}
+	if a.Type != "" {
+		if !listTypeRegexp.MatchString(a.Type) {
+			return nil, nil, invalidRequest("type must be a Make connection type")
+		}
+		types = []string{a.Type}
+	}
+	if a.Types != nil {
+		if len(a.Types) == 0 || len(a.Types) > maxConnectionTypes {
+			return nil, nil, invalidRequest("types needs 1 to " + strconv.Itoa(maxConnectionTypes) + " entries")
+		}
+		seen := map[string]bool{}
+		for _, t := range a.Types {
+			if !listTypeRegexp.MatchString(t) {
+				return nil, nil, invalidRequest("types may hold only Make connection types")
+			}
+			if !seen[t] {
+				seen[t] = true
+				types = append(types, t)
+			}
+		}
+	}
+	if a.ScopeCheck == nil {
+		return types, nil, nil
+	}
+	if len(a.ScopeCheck) == 0 || len(a.ScopeCheck) > maxScopeCheckTypes {
+		return nil, nil, invalidRequest("scope_check needs 1 to " + strconv.Itoa(maxScopeCheckTypes) + " types")
+	}
+	check = url.Values{}
+	for connType, scopes := range a.ScopeCheck {
+		known := false
+		for _, t := range types {
+			known = known || t == connType
+		}
+		if !known {
+			return nil, nil, invalidRequest("every scope_check type must be named in type or types")
+		}
+		if connType == "type" || connType == "cols" {
+			return nil, nil, invalidRequest("scope_check cannot check a connection type that Make's own " +
+				"parameters share a name with")
+		}
+		if len(scopes) == 0 || len(scopes) > maxScopeCheckScopes {
+			return nil, nil, invalidRequest("scope_check needs 1 to " + strconv.Itoa(maxScopeCheckScopes) +
+				" scopes per type")
+		}
+		for _, scope := range scopes {
+			if n := utf8.RuneCountInString(scope); n == 0 || n > maxScopeLength || !utf8.ValidString(scope) || !noControl(scope) {
+				return nil, nil, invalidRequest("a scope must be 1 to " + strconv.Itoa(maxScopeLength) +
+					" characters without control characters")
+			}
+		}
+		check[connType+"[]"] = append([]string(nil), scopes...)
+	}
+	return types, check, nil
 }
 
 // ConnectionsPage is one scope-filtered listing of connections.
 type ConnectionsPage struct {
-	Connections []ConnectionSummary `json:"connections"`
-	Count       int                 `json:"count"`
-	Truncated   bool                `json:"truncated"`
+	Connections []ConnectionRead `json:"connections"`
+	Count       int              `json:"count"`
+	Truncated   bool             `json:"truncated"`
 }
 
 func invokeConnectionsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -245,6 +449,10 @@ func invokeConnectionsList(ctx context.Context, resolved *config.Resolved, secre
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
+	types, check, err := input.listFilters()
+	if err != nil {
+		return nil, err
+	}
 	if err := selectConnections(resolved); err != nil {
 		return nil, err
 	}
@@ -252,26 +460,30 @@ func invokeConnectionsList(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	query := colsQuery(url.Values{"teamId": {strconv.FormatInt(client.scope.teamID, 10)}})
-	if input.Type != "" {
-		query.Set("type[]", input.Type)
+	query := colsOf(readConnectionCols, url.Values{"teamId": {strconv.FormatInt(client.scope.teamID, 10)}})
+	if len(types) > 0 {
+		query["type[]"] = types
+	}
+	for key, scopes := range check {
+		query[key] = scopes
 	}
 	var page struct {
-		Connections []connectionJSON `json:"connections"`
+		Connections []connectionDetailJSON `json:"connections"`
 	}
 	if err := client.get(ctx, op, "/connections", query, &page, needConnectionsRead); err != nil {
 		return nil, err
 	}
-	result := &ConnectionsPage{Connections: make([]ConnectionSummary, 0, len(page.Connections))}
+	result := &ConnectionsPage{Connections: make([]ConnectionRead, 0, len(page.Connections))}
 	for _, conn := range page.Connections {
-		if !client.allowsConnection(conn) {
+		if !client.allowsConnection(conn.connectionJSON) {
 			continue
 		}
 		if len(result.Connections) >= maxConnectionList {
 			result.Truncated = true
 			break
 		}
-		result.Connections = append(result.Connections, connectionSummaryOf(conn))
+		conn.Scopes = nil // not asked for in a list; whatever Make adds anyway is never returned
+		result.Connections = append(result.Connections, connectionReadOf(conn))
 	}
 	result.Count = len(result.Connections)
 	return result, nil
@@ -284,14 +496,22 @@ type connectionArguments struct {
 // fetchConnection reads one connection and binds it back to this connection's team: a connection of another
 // team (or organization) is refused without naming whatever it belongs to.
 func (c *Client) fetchConnection(ctx context.Context, op string, id int64) (*connectionJSON, error) {
-	var wrapper struct {
-		Connection connectionJSON `json:"connection"`
-	}
-	path := "/connections/" + strconv.FormatInt(id, 10)
-	if err := c.get(ctx, op, path, colsQuery(url.Values{}), &wrapper, needConnectionsRead); err != nil {
+	detail, err := c.fetchConnectionCols(ctx, op, id, connectionCols)
+	if err != nil {
 		return nil, err
 	}
-	if wrapper.Connection.ID != id || !c.allowsConnection(wrapper.Connection) {
+	return &detail.connectionJSON, nil
+}
+
+func (c *Client) fetchConnectionCols(ctx context.Context, op string, id int64, cols []string) (*connectionDetailJSON, error) {
+	var wrapper struct {
+		Connection connectionDetailJSON `json:"connection"`
+	}
+	path := "/connections/" + strconv.FormatInt(id, 10)
+	if err := c.get(ctx, op, path, colsOf(cols, url.Values{}), &wrapper, needConnectionsRead); err != nil {
+		return nil, err
+	}
+	if wrapper.Connection.ID != id || !c.allowsConnection(wrapper.Connection.connectionJSON) {
 		return nil, invalidRequest("connection_id is outside the targets of this connection")
 	}
 	return &wrapper.Connection, nil
@@ -300,6 +520,15 @@ func (c *Client) fetchConnection(ctx context.Context, op string, id int64) (*con
 // openConnection validates the id locally, then opens the client and binds the connection.
 func openConnection(ctx context.Context, op string, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (*Client, int64, *connectionJSON, error) {
+	client, id, conn, err := openConnectionCols(ctx, op, resolved, secrets, red, raw, connectionCols)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	return client, id, &conn.connectionJSON, nil
+}
+
+func openConnectionCols(ctx context.Context, op string, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage, cols []string) (*Client, int64, *connectionDetailJSON, error) {
 	var input connectionArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, 0, nil, providerError(op, "the validated arguments could not be read")
@@ -314,7 +543,7 @@ func openConnection(ctx context.Context, op string, resolved *config.Resolved, s
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	conn, err := client.fetchConnection(ctx, op, input.ConnectionID)
+	conn, err := client.fetchConnectionCols(ctx, op, input.ConnectionID, cols)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -323,11 +552,13 @@ func openConnection(ctx context.Context, op string, resolved *config.Resolved, s
 
 func invokeConnectionsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	_, _, conn, err := openConnection(ctx, "get connection", resolved, secrets, red, raw)
+	// scopes is allowed in cols[] only on this single read.
+	cols := append(append([]string{}, readConnectionCols...), "scopes")
+	_, _, conn, err := openConnectionCols(ctx, "get connection", resolved, secrets, red, raw, cols)
 	if err != nil {
 		return nil, err
 	}
-	return connectionSummaryOf(*conn), nil
+	return connectionReadOf(*conn), nil
 }
 
 // ConnectionEditableSchema lists only the names of the parameters Make allows to be edited.

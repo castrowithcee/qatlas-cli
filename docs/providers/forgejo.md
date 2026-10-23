@@ -62,6 +62,9 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
 
+- `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
+  versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
+
 ## Not on Forgejo
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are

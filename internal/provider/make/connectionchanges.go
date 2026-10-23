@@ -60,7 +60,12 @@ var connectionNameArgument = capability.Argument{Name: "name", Required: true,
 var userIDSchema = idSchema
 
 var accessMemberSchema = `{"type":"object","properties":{"user_id":{"type":"integer"},` +
-	`"role":{"type":"string"}},"required":["user_id","role"],"additionalProperties":false}`
+	`"role":{"type":"string"},"name":{"type":"string"},"email":{"type":"string"}},` +
+	`"required":["user_id","role"],"additionalProperties":false}`
+
+var accessGroupSchema = `{"type":"object","properties":{"membership_id":{"type":"integer"},` +
+	`"role":{"type":"string"},"name":{"type":"string"}},"required":["membership_id","role"],` +
+	`"additionalProperties":false}`
 
 var affectedScenariosSchema = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},` +
 	`"name":{"type":"string"}},"required":["id"],"additionalProperties":false}}`
@@ -115,8 +120,9 @@ var connectionsDelete = capability.Descriptor{
 
 var connectionsAccessList = capability.Descriptor{
 	ID: Provider + ".connection-access.list", Version: 1, Title: "List a Make connection's access list",
-	Description: "List the members of one locked connection's access list in the bound team as user ids and " +
-		"roles only, never a name or email. Make answers only when its locked connections feature is " +
+	Description: "List the users of one locked connection's access list in the bound team with user id, role, " +
+		"name, and email, and the groups on it separately. Names and emails are personal data of other people " +
+		"and untrusted text. Make answers only when its locked connections feature is " +
 		"enabled for the organization. Needs the connections:read scope",
 	Tags: []string{"make", "connectionaccess", "list", "automation"}, Risk: connectionsReadRisk,
 	Provider: Provider,
@@ -124,6 +130,7 @@ var connectionsAccessList = capability.Descriptor{
 		`"required":["connection_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"connection_id":{"type":"integer"},` +
 		`"team_id":{"type":"integer"},"members":{"type":"array","items":` + accessMemberSchema + `},` +
+		`"groups":{"type":"array","items":` + accessGroupSchema + `},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["connection_id","team_id","members","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{connectionIDArgument},
@@ -131,10 +138,17 @@ var connectionsAccessList = capability.Descriptor{
 		{Name: "connection_id", Description: "The connection the access list belongs to"},
 		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
 		{Name: "members", Description: "Users on the list as user_id and role (admin, member, or the role " +
-			"as Make names it, untrusted data); other principal kinds are skipped"},
-		{Name: "count", Description: "Number of members returned"},
+			"as Make names it, untrusted data), with name and email when Make reports them, untrusted data"},
+		{Name: "groups", Description: "Groups on the list as membership_id, role, and name, untrusted data"},
+		{Name: "user_id", Description: "Make user id of a user on the list"},
+		{Name: "role", Description: "Role of a user or group on the list: admin, member, or the role as Make " +
+			"names it, untrusted data"},
+		{Name: "membership_id", Description: "Identifier of a group on the list"},
+		{Name: "name", Description: "Display name of a user or group on the list, untrusted data"},
+		{Name: "email", Description: "Email address of a user on the list, untrusted data; never followed"},
+		{Name: "count", Description: "Number of users returned"},
 		{Name: "truncated", Description: "True when more than " + strconv.Itoa(maxAccessMembers) +
-			" members were reported and the rest was dropped"},
+			" users or groups were reported and the rest was dropped"},
 	},
 	Examples: []capability.Example{{Description: "Read one connection's access list",
 		Arguments: json.RawMessage(`{"connection_id":1}`)}},
@@ -317,12 +331,25 @@ type accessMemberJSON struct {
 	MembershipType string `json:"membershipType"`
 	MembershipID   int64  `json:"membershipId"`
 	Role           string `json:"role"`
+	// Name and Email are read tolerantly: Make documents them as nullable.
+	Name  json.RawMessage `json:"name"`
+	Email json.RawMessage `json:"email"`
 }
 
-// AccessMember is one user of an access list; name and email are never returned.
+// AccessMember is one user of an access list. Name and email are personal data of another person; only the
+// list read returns them.
 type AccessMember struct {
 	UserID int64  `json:"user_id"`
 	Role   string `json:"role"`
+	Name   string `json:"name,omitempty"`
+	Email  string `json:"email,omitempty"`
+}
+
+// AccessGroup is one group on an access list.
+type AccessGroup struct {
+	MembershipID int64  `json:"membership_id"`
+	Role         string `json:"role"`
+	Name         string `json:"name,omitempty"`
 }
 
 func accessRoleName(apiRole string) string {
@@ -340,6 +367,7 @@ type ConnectionAccessList struct {
 	ConnectionID int64          `json:"connection_id"`
 	TeamID       int64          `json:"team_id"`
 	Members      []AccessMember `json:"members"`
+	Groups       []AccessGroup  `json:"groups,omitempty"`
 	Count        int            `json:"count"`
 	Truncated    bool           `json:"truncated"`
 }
@@ -367,14 +395,25 @@ func invokeConnectionsAccessList(ctx context.Context, resolved *config.Resolved,
 	}
 	result := &ConnectionAccessList{ConnectionID: id, TeamID: conn.TeamID, Members: make([]AccessMember, 0, len(list))}
 	for _, member := range list {
-		if member.MembershipType != "user" || member.MembershipID <= 0 {
+		if member.MembershipID <= 0 {
 			continue
 		}
-		if len(result.Members) >= maxAccessMembers {
-			result.Truncated = true
-			break
+		switch member.MembershipType {
+		case "user":
+			if len(result.Members) >= maxAccessMembers {
+				result.Truncated = true
+				continue
+			}
+			result.Members = append(result.Members, AccessMember{UserID: member.MembershipID,
+				Role: accessRoleName(member.Role), Name: rawText(member.Name), Email: rawText(member.Email)})
+		case "group":
+			if len(result.Groups) >= maxAccessMembers {
+				result.Truncated = true
+				continue
+			}
+			result.Groups = append(result.Groups, AccessGroup{MembershipID: member.MembershipID,
+				Role: accessRoleName(member.Role), Name: rawText(member.Name)})
 		}
-		result.Members = append(result.Members, AccessMember{UserID: member.MembershipID, Role: accessRoleName(member.Role)})
 	}
 	result.Count = len(result.Members)
 	return result, nil

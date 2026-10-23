@@ -228,7 +228,7 @@ func (c *Client) addressbookChoices(ctx context.Context) ([]config.TargetEntry, 
 }
 
 func (c *Client) talkChoices(ctx context.Context) ([]config.TargetEntry, error) {
-	listed, err := c.ListRooms(ctx, selection{all: true})
+	listed, err := c.ListRooms(ctx, selection{all: true}, nil, false)
 	if err != nil {
 		return nil, err
 	}
