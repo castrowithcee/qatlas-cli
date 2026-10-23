@@ -185,6 +185,8 @@ var outputFieldCases = []struct {
 			`"resolvableAllowFallback":false,"resolverId":"r","description":"d","createdAt":"c","updatedAt":"u"}`, 11},
 	{usersList.ID, "pdelete-open", `{}`, "/users", `{"data":[` + userBody + `],"nextCursor":"c"}`, 12},
 	{usersGet.ID, "pdelete-open", `{"user_id":"` + ownUser + `"}`, "/users/" + ownUser, userBody, 8},
+	{sourceControlStatus.ID, "open", `{"direction":"pull"}`, "/source-control/status",
+		`{"data":[` + richStatusFile + `]}`, 25},
 	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},
 }
 
