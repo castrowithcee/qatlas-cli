@@ -57,13 +57,12 @@ func validContentsPath(value string) bool {
 	return true
 }
 
-const contentsProperties = `"path":{"type":"string"},"type":{"type":"string"},"size":{"type":"integer"},` +
+var contentsProperties = `"path":{"type":"string"},"type":{"type":"string"},"size":{"type":"integer"},` +
 	`"sha":{"type":"string"},"content":{"type":"string"},"bytes":{"type":"integer"},` +
 	`"truncated":{"type":"boolean"},"omitted":{"type":"string"},"target":{"type":"string"},` +
-	`"entries":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},` +
-	`"path":{"type":"string"},"type":{"type":"string"},"size":{"type":"integer"},"sha":{"type":"string"}},` +
+	`"entries":{"type":"array","items":{"type":"object","properties":{` + contentEntryProperties + `},` +
 	`"required":["name","path","type"],"additionalProperties":false}},` +
-	`"entries_truncated":{"type":"boolean"}`
+	`"entries_truncated":{"type":"boolean"},` + contentWidthProperties
 
 var contentsGet = capability.Descriptor{
 	ID:      Provider + ".contents.get",
@@ -83,7 +82,7 @@ var contentsGet = capability.Descriptor{
 		{Name: "path", Description: "Path inside the repository; the repository root, a directory listing, when omitted"},
 		{Name: "ref", Description: "Branch, tag, or commit SHA; the default branch when omitted"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "path", Description: "Path this call read"},
 		{Name: "type", Description: "file, dir, symlink, or submodule"},
 		{Name: "size", Description: "Size in bytes GitHub reports; absent for a directory"},
@@ -95,19 +94,20 @@ var contentsGet = capability.Descriptor{
 		{Name: "omitted", Description: "binary or too_large when a file's content was withheld; absent otherwise"},
 		{Name: "target", Description: "Symlink target path, or the commit a submodule points at; present only " +
 			"for those types"},
-		{Name: "entries", Description: "Directory entries, bounded: name, path, type, size, and sha"},
+		{Name: "entries", Description: "Directory entries, bounded, each with its url (the web address) and " +
+			"links (the REST url and git_url)"},
 		{Name: "entries_truncated", Description: "True when a directory held more entries than were returned"},
-	},
+	}, contentWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read one file",
 		Arguments:   json.RawMessage(`{"path":"README.md"}`),
 	}},
 }
 
-const treesProperties = `"sha":{"type":"string"},"ref":{"type":"string"},"recursive":{"type":"boolean"},` +
-	`"entries":{"type":"array","items":{"type":"object","properties":{"path":{"type":"string"},` +
-	`"type":{"type":"string"},"sha":{"type":"string"},"size":{"type":"integer"}},` +
-	`"required":["path","type","sha"],"additionalProperties":false}},"truncated":{"type":"boolean"}`
+var treesProperties = `"sha":{"type":"string"},"ref":{"type":"string"},"recursive":{"type":"boolean"},` +
+	`"entries":{"type":"array","items":{"type":"object","properties":{` + treeEntryProperties + `},` +
+	`"required":["path","type","sha"],"additionalProperties":false}},"truncated":{"type":"boolean"},` +
+	treeWidthProperties
 
 var treesGet = capability.Descriptor{
 	ID:      Provider + ".trees.get",
@@ -127,15 +127,15 @@ var treesGet = capability.Descriptor{
 		{Name: "recursive", Description: "True to read every entry below every directory, not only the top " +
 			"level; false when omitted"},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "sha", Description: "SHA of the tree GitHub read"},
 		{Name: "entries", Description: "Tree entries: path, type (blob, tree, or commit for a submodule), " +
-			"sha, and size for a blob"},
+			"sha, size for a blob, mode, and links (the REST url)"},
 		{Name: "truncated", Description: "True when GitHub's own tree was too large to return in full, or " +
 			"Qatlas cut it at its own bound"},
 		{Name: "ref", Description: "Branch, tag, or commit SHA the tree was read at"},
 		{Name: "recursive", Description: "True when every entry below every directory was read"},
-	},
+	}, treeWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read the top-level tree of the default branch",
 		Arguments:   json.RawMessage(`{"ref":"main"}`),
@@ -247,11 +247,13 @@ func (c *Client) contentsRoute(path string, query url.Values) string {
 
 // ContentsEntry is one entry of a GitHub directory listing.
 type ContentsEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Type string `json:"type"`
-	Size int    `json:"size,omitempty"`
-	SHA  string `json:"sha,omitempty"`
+	Name  string  `json:"name"`
+	Path  string  `json:"path"`
+	Type  string  `json:"type"`
+	Size  int     `json:"size,omitempty"`
+	SHA   string  `json:"sha,omitempty"`
+	URL   *string `json:"url,omitempty"`
+	Links Links   `json:"links,omitempty"`
 }
 
 // ContentsResult is a file, a directory, a symlink, or a submodule of a GitHub repository at one ref.
@@ -267,6 +269,10 @@ type ContentsResult struct {
 	Target           string          `json:"target,omitempty"`
 	Entries          []ContentsEntry `json:"entries,omitempty"`
 	EntriesTruncated bool            `json:"entries_truncated,omitempty"`
+	Name             *string         `json:"name,omitempty"`
+	Encoding         *string         `json:"encoding,omitempty"`
+	URL              *string         `json:"url,omitempty"`
+	Links            Links           `json:"links,omitempty"`
 }
 
 // getContents reads one file or one directory listing of the bound repository at one ref. GitHub answers a
@@ -294,7 +300,7 @@ type contentsDirEntryJSON struct {
 
 // contentsDirectory decodes a directory listing, bounded to maxContentsEntries entries.
 func contentsDirectory(op, path string, raw json.RawMessage) (*ContentsResult, error) {
-	var entries []contentsDirEntryJSON
+	var entries []withAddress[contentsDirEntryJSON]
 	if err := json.Unmarshal(raw, &entries); err != nil {
 		return nil, invalidResponse(op, false)
 	}
@@ -304,25 +310,27 @@ func contentsDirectory(op, path string, raw json.RawMessage) (*ContentsResult, e
 	}
 	result := &ContentsResult{Path: path, Type: "dir", Entries: make([]ContentsEntry, 0, len(entries)),
 		EntriesTruncated: truncated}
-	for _, entry := range entries {
+	for _, item := range entries {
+		entry := item.Value
 		if entry.Path == "" || entry.Type == "" {
 			return nil, invalidEntry(op, "a directory entry")
 		}
 		result.Entries = append(result.Entries, ContentsEntry{Name: entry.Name, Path: entry.Path,
-			Type: entry.Type, Size: entry.Size, SHA: entry.SHA})
+			Type: entry.Type, Size: entry.Size, SHA: entry.SHA, URL: item.Address.URL, Links: item.Address.Links})
 	}
 	return result, nil
 }
 
 type contentsItemJSON struct {
-	Type            string `json:"type"`
-	Path            string `json:"path"`
-	SHA             string `json:"sha"`
-	Size            int    `json:"size"`
-	Encoding        string `json:"encoding"`
-	Content         string `json:"content"`
-	Target          string `json:"target"`
-	SubmoduleGitURL string `json:"submodule_git_url"`
+	Type            string  `json:"type"`
+	Path            string  `json:"path"`
+	SHA             string  `json:"sha"`
+	Size            int     `json:"size"`
+	Encoding        string  `json:"encoding"`
+	Content         string  `json:"content"`
+	Target          string  `json:"target"`
+	SubmoduleGitURL string  `json:"submodule_git_url"`
+	Name            *string `json:"name"`
 }
 
 // contentsEntry decodes a file, a symlink, or a submodule. GitHub is asked for wantPath exactly, so an
@@ -332,7 +340,13 @@ func contentsEntry(op, wantPath string, raw json.RawMessage) (*ContentsResult, e
 	if err := json.Unmarshal(raw, &item); err != nil || item.Path == "" || item.Path != wantPath {
 		return nil, invalidResponse(op, false)
 	}
-	result := &ContentsResult{Path: item.Path, Type: item.Type, Size: item.Size, SHA: item.SHA}
+	result := &ContentsResult{Path: item.Path, Type: item.Type, Size: item.Size, SHA: item.SHA,
+		Name: shortText(item.Name)}
+	if item.Encoding != "" {
+		result.Encoding = shortText(&item.Encoding)
+	}
+	addresses := readContentAddress(raw, contentLinkKeys)
+	result.URL, result.Links = addresses.URL, addresses.Links
 	switch item.Type {
 	case "file":
 		if err := fillFileContent(op, result, &item); err != nil {
@@ -382,10 +396,12 @@ func fillFileContent(op string, result *ContentsResult, item *contentsItemJSON) 
 
 // TreeEntry is one entry of a GitHub Git tree.
 type TreeEntry struct {
-	Path string `json:"path"`
-	Type string `json:"type"`
-	SHA  string `json:"sha"`
-	Size int    `json:"size,omitempty"`
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+	SHA   string `json:"sha"`
+	Size  int    `json:"size,omitempty"`
+	Mode  string `json:"mode,omitempty"`
+	Links Links  `json:"links,omitempty"`
 }
 
 // TreeResult is the Git tree of one ref of a GitHub repository, bounded to maxTreeEntries entries.
@@ -395,13 +411,16 @@ type TreeResult struct {
 	Recursive bool        `json:"recursive"`
 	Entries   []TreeEntry `json:"entries"`
 	Truncated bool        `json:"truncated"`
+	Links     Links       `json:"links,omitempty"`
 }
 
 type treeEntryJSON struct {
-	Path string `json:"path"`
-	Type string `json:"type"`
-	SHA  string `json:"sha"`
-	Size int    `json:"size"`
+	Path string  `json:"path"`
+	Type string  `json:"type"`
+	SHA  string  `json:"sha"`
+	Size int     `json:"size"`
+	Mode string  `json:"mode"`
+	URL  *string `json:"url"`
 }
 
 // getTree reads the Git tree of one ref of the bound repository, recursively when asked, bounded to
@@ -418,6 +437,7 @@ func (c *Client) getTree(ctx context.Context, ref string, recursive bool) (*Tree
 	}
 	var raw struct {
 		SHA       string          `json:"sha"`
+		URL       *string         `json:"url"`
 		Tree      []treeEntryJSON `json:"tree"`
 		Truncated bool            `json:"truncated"`
 	}
@@ -433,13 +453,13 @@ func (c *Client) getTree(ctx context.Context, ref string, recursive bool) (*Tree
 		truncated = true
 	}
 	result := &TreeResult{SHA: raw.SHA, Ref: ref, Recursive: recursive, Truncated: truncated,
-		Entries: make([]TreeEntry, 0, len(entries))}
+		Entries: make([]TreeEntry, 0, len(entries)), Links: linkOf("url", raw.URL)}
 	for _, entry := range entries {
 		if entry.Path == "" || entry.Type == "" || entry.SHA == "" {
 			return nil, invalidEntry(op, "a tree entry")
 		}
 		result.Entries = append(result.Entries, TreeEntry{Path: entry.Path, Type: entry.Type, SHA: entry.SHA,
-			Size: entry.Size})
+			Size: entry.Size, Mode: valueOr(nameText(&entry.Mode)), Links: linkOf("url", entry.URL)})
 	}
 	return result, nil
 }
