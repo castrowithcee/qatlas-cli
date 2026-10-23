@@ -100,7 +100,12 @@ func TestTalkRoomAndParticipantReads(t *testing.T) {
 	response, err = talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talk.participants.list", talkArgs(boundRoom, ""))
 	var result ParticipantsResult
 	if err := json.Unmarshal(response.Result, &result); err != nil || result.Count != 2 ||
-		result.Participants[0] != (Participant{AttendeeID: "12", ActorType: "users", ActorID: "bob", DisplayName: "Bob", ParticipantType: "owner"}) ||
+		result.Participants[0].InCallFlags == nil || *result.Participants[0].InCallFlags != 0 {
+		t.Fatalf("participants = %s, %v", response.Result, err)
+	}
+	result.Participants[0].InCallFlags = nil
+	if result.Participants[0] != (Participant{AttendeeID: "12", ActorType: "users", ActorID: "bob", DisplayName: "Bob",
+		ParticipantType: "owner", PhoneNumber: "+49"}) ||
 		!result.Participants[1].InCall || strings.Contains(string(response.Result), textCanary) {
 		t.Errorf("participants = %s, %v", response.Result, err)
 	}
