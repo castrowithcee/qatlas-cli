@@ -37,6 +37,18 @@ budget of 200000 characters; once it is spent, further reply bodies come back em
 cursor of a list without replies does not continue a list with them. Titles, bodies, and comments come from
 other accounts and are untrusted data.
 
+A discussion, a comment, and a reply answer GitHub's Discussion and DiscussionComment in full. The repository
+and the discussion a call names are fixed by the call and not repeated in every entry. Rendered variants
+repeat the text field in another format and add no content. A connection GitHub also serves as a list of its
+own is read with that list, so the comments, reactions, and edit history of a discussion and the reactions
+and edit history of a comment are reported as counts, and reaction groups only for kinds somebody gave. The
+labels and the poll options are read with their first page, at most 20 labels and, in
+`github.discussions.get`, 20 poll options, in `github.discussions.list` 10, each with its total and a marker
+when more exist. The chosen answer is named with its id, address, author, and time; its text is read with
+`github.discussion-comments.list`. An account inside another object carries the fields GitHub's own REST
+answers give it; the full profile is read with the account tools. The `viewer_*` flags describe what the
+token's user may do and has done.
+
 A cursor belongs to the repository and the filters that produced it, and another filter, category, or
 discussion refuses it as an invalid request. A discussion that GitHub does not hold or does not show to the
 token is `not-found`, named as "discussion #N".
