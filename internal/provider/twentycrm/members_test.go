@@ -215,7 +215,7 @@ func TestMemberAndRoleToolsDeclareTheirRiskAndProfiles(t *testing.T) {
 		d           capability.Descriptor
 		sensitivity string
 	}{
-		{membersList, "twentycrm-member-data"}, {membersGet, "twentycrm-member-data"}, {rolesList, "twentycrm-role-data"},
+		{membersList, "twentycrm-member-data"}, {membersGet, "twentycrm-member-data"}, {rolesList, "twentycrm-member-data"},
 	} {
 		d, sensitivity := test.d, test.sensitivity
 		if d.Risk.DataSensitivity != sensitivity || d.Risk.Effect != capability.EffectRead ||
