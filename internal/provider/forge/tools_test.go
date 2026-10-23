@@ -61,7 +61,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		if p == gitea {
 			want = append(want, p.id+".assignees.check", p.id+".issue-assignees.add", p.id+".issue-assignees.check",
-				p.id+".issue-assignees.remove")
+				p.id+".issue-assignees.remove", p.id+".projects.list", p.id+".projects.get", p.id+".projects.create",
+				p.id+".projects.update", p.id+".projects.delete", p.id+".project-columns.list",
+				p.id+".project-columns.get", p.id+".project-columns.create", p.id+".project-columns.update",
+				p.id+".project-columns.delete", p.id+".project-columns.move", p.id+".project-columns.set-default",
+				p.id+".project-issues.list", p.id+".project-issues.add", p.id+".project-issues.remove",
+				p.id+".project-issues.move")
 			slices.Sort(want)
 		}
 		want = append(want, p.id+".issue-times.add", p.id+".issue-times.delete", p.id+".issue-times.list",
@@ -80,7 +85,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".pull-requests.cancel-auto-merge", p.id+".pull-requests.close", p.id+".pull-requests.create",
 			p.id+".pull-requests.merge", p.id+".pull-requests.reopen", p.id+".pull-requests.update")
 		want = append(want, p.id+".issue-pins.list", p.id+".issue-pins.check-allowed", p.id+".issue-pins.pin",
-			p.id+".issue-pins.unpin", p.id+".issue-pins.move")
+			p.id+".issue-pins.unpin", p.id+".issue-pins.move", p.id+".issue-subscriptions.list",
+			p.id+".issue-subscriptions.check", p.id+".issue-subscriptions.add", p.id+".issue-subscriptions.remove")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

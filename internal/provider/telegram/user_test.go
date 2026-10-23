@@ -84,6 +84,15 @@ func outputCases() []outputCase {
 				`"is_enabled":true,"rights":{"can_reply":true}}`}, []string{"user"}},
 		{"telegram.business.gifts", []string{"business/b1"}, `{"business":"b1"}`,
 			map[string]string{"getBusinessAccountGifts": gift}, []string{"gifts", "[]", "sender"}},
+		{"telegram.payments.star-transactions", []string{"bot"}, `{}`,
+			map[string]string{"getStarTransactions": `{"transactions":[{"id":"t","amount":1,"date":2,"source":{"type":"user",` +
+				`"transaction_type":"paid_media_payment","user":{"id":4},"invoice_payload":"p","subscription_period":3,` +
+				`"paid_media":[{"type":"preview","width":1}],"paid_media_payload":"q","gift":{"id":"g","star_count":1},` +
+				`"premium_subscription_duration":6,"affiliate":{"affiliate_user":{"id":5},"affiliate_chat":{"id":-6},` +
+				`"commission_per_mille":7,"amount":8,"nanostar_amount":9}},"receiver":{"type":"fragment",` +
+				`"withdrawal_state":{"type":"succeeded","date":1,"url":"https://example.invalid/x"}}},` +
+				`{"id":"u","amount":1,"date":2,"source":{"type":"affiliate_program","sponsor_user":{"id":3},` +
+				`"commission_per_mille":4},"receiver":{"type":"telegram_api","request_count":5}}]}`}, nil},
 		{"telegram.gifts.chat", []string{"-1001"}, `{}`,
 			map[string]string{"getChatGifts": gift}, []string{"gifts", "[]", "sender"}},
 		{"telegram.gifts.user", []string{"-1001"}, `{"user_id":7}`,

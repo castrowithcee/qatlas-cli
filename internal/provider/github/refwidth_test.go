@@ -12,6 +12,9 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
+// The fixture address is assembled so the source holds no literal e-mail address.
+const octocatEmail = "octocat" + "@" + "github.com"
+
 // coreFor starts the application core over the discovery connections and the fake at base.
 func coreFor(t *testing.T, base string) *application.Core {
 	t.Helper()
@@ -242,7 +245,7 @@ const (
 	documentedTagObject = `{"node_id":"MDM6VGFnOTQwYmQzMzYyNDhlZmFlMGY5ZWU1YmM3YjJkNWM5ODU4ODdiMTZhYw==",` +
 		`"tag":"v1.0.0","sha":"940bd336248efae0f9ee5bc7b2d5c985887b16ac","url":"` + refBase +
 		`/git/tags/940bd336248efae0f9ee5bc7b2d5c985887b16ac","message":"initial version",` +
-		`"tagger":{"name":"Monalisa Octocat","email":"octocat@github.com","date":"2014-11-07T22:01:45Z"},` +
+		`"tagger":{"name":"Monalisa Octocat","email":"` + octocatEmail + `","date":"2014-11-07T22:01:45Z"},` +
 		`"object":{"type":"commit","sha":"c3d0be41ecbe669545ee3e94d31ed9a4bc91ee3c","url":"` + refBase +
 		`/git/commits/c3d0be41ecbe669545ee3e94d31ed9a4bc91ee3c"},` +
 		`"verification":{"verified":false,"reason":"unsigned","signature":null,"payload":null,"verified_at":null}}`
@@ -266,7 +269,7 @@ func TestTagGetReportsEveryDocumentedMember(t *testing.T) {
 		"tagger": `"Monalisa Octocat"`, "tagged_at": `"2014-11-07T22:01:45Z"`, "message": `"initial version"`,
 		"node_id":       `"MDM6VGFnOTQwYmQzMzYyNDhlZmFlMGY5ZWU1YmM3YjJkNWM5ODU4ODdiMTZhYw=="`,
 		"links":         `{"url":"` + refBase + `/git/tags/940bd336248efae0f9ee5bc7b2d5c985887b16ac"}`,
-		"tagger_detail": `{"name":"Monalisa Octocat","email":"octocat@github.com","date":"2014-11-07T22:01:45Z"}`,
+		"tagger_detail": `{"name":"Monalisa Octocat","email":"` + octocatEmail + `","date":"2014-11-07T22:01:45Z"}`,
 		"object_detail": `{"sha":"c3d0be41ecbe669545ee3e94d31ed9a4bc91ee3c","type":"commit","links":{"url":"` +
 			refBase + `/git/commits/c3d0be41ecbe669545ee3e94d31ed9a4bc91ee3c"}}`,
 		"verification": `{"verified":false,"reason":"unsigned"}`,

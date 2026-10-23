@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # GitHub repositories
@@ -16,10 +16,31 @@ confirmation described under [confirmed changes](README.md#confirmed-changes).
 ## Owners: repositories
 
 `github.repositories.list` lists the repositories the owner owns (`users/LOGIN` or `orgs/LOGIN`), in name
-order, archived ones included. A user's repositories are the ones the user owns, not those the user
-collaborates on. What the list shows depends on the targets, see [owner lists](README.md#owner-lists). The
-repositories need no scope for public ones, `repo` on a classic token for private ones, or access to the
-repositories on a fine-grained token.
+order unless `order_by` says otherwise, archived ones included. A user's repositories are the ones the user
+owns, not those the user collaborates on: the tool's purpose fixes that binding, so there is no
+`affiliations` or `ownerAffiliations` argument. What the list shows depends on the targets, see
+[owner lists](README.md#owner-lists). The repositories need no scope for public ones, `repo` on a classic
+token for private ones, or access to the repositories on a fine-grained token. `privacy` and `visibility`
+cannot be combined, as GitHub refuses the pair; every filter binds the cursor.
+
+Each entry carries the members of GitHub's GraphQL repository in the one request a call sends. A list or a
+connection is read with its first page, at most 10 entries per repository, together with its total count and
+a truncated marker; a page of 100 repositories then asks for 6100 nodes, far below GitHub's limit of 500000.
+Connections that have a list of their own (issues, pull requests, releases, collaborators, and the like)
+report only their count: a connection GitHub also serves as a list of its own is read with that list. The
+`viewer_*` members describe the authenticated user, not the repository.
+
+- **Parent and template:** a repository outside the connection's targets appears only with its identifiers.
+- **Owner:** the entry does not repeat the owner, since the object a call names is fixed by the call.
+- **Deploy keys:** only their number is reported, since deploy keys are public keys that grant access.
+- **Clone token:** `tempCloneToken` is never read, since it grants clone access without a sign-in.
+- **Privileged members:** members that can need push or admin rights (collaborators, deploy keys, branch
+  protection rules, vulnerability alerts, and the like) are read only with `admin_counts`, since GitHub refuses
+  them with an error and a refused member of a non-null type empties the whole repository, which would fail a
+  list that works without them. With `admin_counts`, a member refused inside one repository is left out of that
+  entry and named in `unreadable`; a refusal of the list itself still fails it.
+- **Left out:** deprecated members, rendered variants that repeat a text in another format, and members that
+  need a lookup argument.
 
 ## Repository lifecycle and collaborators
 

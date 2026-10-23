@@ -163,7 +163,7 @@ func TestCommandsGetBindsTheTeamAndHidesSecrets(t *testing.T) {
 	result, err := env.invoke(commandsGet.ID, "cmder", `{"command_id":"`+cmdA+`"}`)
 	noCommandSecrets(t, "get", result)
 	if err != nil || strings.Contains(result, cmdA) || !strings.Contains(result, `"trigger":"deploy"`) ||
-		strings.Contains(result, "creator_id") || len(calls) != 1 {
+		!strings.Contains(result, `"creator_id":"u1"`) || len(calls) != 1 {
 		t.Fatalf("result = %s, err = %v, calls = %+v", result, err, calls)
 	}
 	calls = nil

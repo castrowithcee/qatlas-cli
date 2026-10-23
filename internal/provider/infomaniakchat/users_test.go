@@ -17,13 +17,13 @@ const (
 	sensitive = "sensitive-canary-5e7c"
 )
 
-// userJSONOf carries canary values in every field the provider must never output.
+// userJSONOf carries canary values in every field the provider must never output: the account security
+// fields and a member kChat does not document.
 func userJSONOf(id, username string) string {
 	return `{"id":"` + id + `","username":"` + username + `","first_name":"First","last_name":"Last",` +
 		`"nickname":"Nick","position":"Dev","email":"` + username + `@example.invalid","is_bot":false,` +
-		`"delete_at":0,"roles":"` + sensitive + `","auth_service":"` + sensitive + `",` +
-		`"notify_props":{"email":"` + sensitive + `"},"props":{"k":"` + sensitive + `"},` +
-		`"timezone":{"automaticTimezone":"` + sensitive + `"},"last_password_update":1,"mfa_active":true}`
+		`"delete_at":0,"last_password_update":1,"failed_attempts":7,"mfa_active":true,` +
+		`"unknown_member":"` + sensitive + `"}`
 }
 
 // usersFixture is a fake instance: teamA holds userInA and userBoth, teamB holds userInB and userBoth, and
@@ -31,6 +31,15 @@ func userJSONOf(id, username string) string {
 type usersFixture struct {
 	t        *testing.T
 	statuses string
+	// render builds the JSON of one user; userJSONOf when nil.
+	render func(id, username string) string
+}
+
+func (f *usersFixture) user(id, username string) string {
+	if f.render != nil {
+		return f.render(id, username)
+	}
+	return userJSONOf(id, username)
 }
 
 func (f *usersFixture) members() map[string][]string {
@@ -67,27 +76,27 @@ func (f *usersFixture) handle(r *http.Request) (*http.Response, error) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v4/users":
 		var out []string
 		for id, name := range users {
-			out = append(out, userJSONOf(id, name))
+			out = append(out, f.user(id, name))
 		}
 		return jsonResponse(200, "["+strings.Join(out, ",")+"]"), nil
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/users/username/"):
 		name := strings.TrimPrefix(r.URL.Path, "/api/v4/users/username/")
 		for id, candidate := range users {
 			if candidate == name {
-				return jsonResponse(200, userJSONOf(id, name)), nil
+				return jsonResponse(200, f.user(id, name)), nil
 			}
 		}
 		return jsonResponse(404, `{}`), nil
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/users/"):
 		id := strings.TrimPrefix(r.URL.Path, "/api/v4/users/")
 		if name, ok := users[id]; ok {
-			return jsonResponse(200, userJSONOf(id, name)), nil
+			return jsonResponse(200, f.user(id, name)), nil
 		}
 		return jsonResponse(404, `{}`), nil
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/search":
 		var out []string
 		for id, name := range users {
-			out = append(out, userJSONOf(id, name))
+			out = append(out, f.user(id, name))
 		}
 		return jsonResponse(200, "["+strings.Join(out, ",")+"]"), nil
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/status/ids":

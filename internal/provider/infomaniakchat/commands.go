@@ -35,7 +35,7 @@ var commandSchema = `{"type":"object","properties":{` +
 	`"display_name":{"type":"string"},"description":{"type":"string"},"callback_origin":{"type":"string"},` +
 	`"username":{"type":"string"},"icon_url":{"type":"string"},"auto_complete":{"type":"boolean"},` +
 	`"auto_complete_desc":{"type":"string"},"auto_complete_hint":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"}},` +
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"creator_id":{"type":"string"}},` +
 	`"required":["team_id","trigger","method","display_name","description","auto_complete"],` +
 	`"additionalProperties":false}`
 
@@ -56,6 +56,7 @@ var commandFields = []capability.Field{
 	{Name: "auto_complete_hint", Description: "Argument hint shown with the suggestion, untrusted data"},
 	{Name: "created_at", Description: "Creation time, RFC 3339 in UTC"},
 	{Name: "updated_at", Description: "Last change time, RFC 3339 in UTC"},
+	{Name: "creator_id", Description: "User identifier of the creator"},
 }
 
 var commandsList = capability.Descriptor{
@@ -185,6 +186,7 @@ type commandJSON struct {
 	CreateAt         int64  `json:"create_at"`
 	UpdateAt         int64  `json:"update_at"`
 	DeleteAt         int64  `json:"delete_at"`
+	CreatorID        string `json:"creator_id"`
 }
 
 // SlashCommand is the stable Qatlas view of one custom slash command. The ID is set only by a listing.
@@ -203,6 +205,7 @@ type SlashCommand struct {
 	AutoCompleteHint string `json:"auto_complete_hint,omitempty"`
 	CreatedAt        string `json:"created_at,omitempty"`
 	UpdatedAt        string `json:"updated_at,omitempty"`
+	CreatorID        string `json:"creator_id,omitempty"`
 }
 
 // SlashCommandsPage is one window of the custom slash commands of one team.
@@ -226,7 +229,8 @@ func slashCommandOf(cmd *commandJSON, withID bool) SlashCommand {
 		DisplayName: bounded(cmd.DisplayName), Description: bounded(cmd.Description), CallbackOrigin: origin,
 		Username: bounded(cmd.Username), IconURL: bounded(cmd.IconURL), AutoComplete: cmd.AutoComplete,
 		AutoCompleteDesc: bounded(cmd.AutoCompleteDesc), AutoCompleteHint: bounded(cmd.AutoCompleteHint),
-		CreatedAt: msToRFC3339(cmd.CreateAt), UpdatedAt: msToRFC3339(cmd.UpdateAt)}
+		CreatedAt: msToRFC3339(cmd.CreateAt), UpdatedAt: msToRFC3339(cmd.UpdateAt),
+		CreatorID: bounded(cmd.CreatorID)}
 	if withID {
 		out.ID = cmd.ID
 	}
