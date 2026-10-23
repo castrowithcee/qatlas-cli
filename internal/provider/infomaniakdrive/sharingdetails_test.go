@@ -239,7 +239,7 @@ func TestDropboxGetLoadsOnlyWhatWithAsks(t *testing.T) {
 func TestDropboxGetUnsafeAddressesAndTextsAreDropped(t *testing.T) {
 	long := "https://avatar.example.invalid/" + strings.Repeat("a", 1100)
 	for name, avatar := range map[string]string{"http": "http://avatar.example.invalid/a.png", "javascript": "javascript:alert(1)",
-		"userinfo": "https://u:p@avatar.example.invalid/a.png", "long": long, "empty": ""} {
+		"userinfo": "https://u:p" + "@" + "avatar.example.invalid/a.png", "long": long, "empty": ""} {
 		t.Run(name, func(t *testing.T) {
 			body := strings.Replace(dropboxFullBody(childFileID, `[]`), sharingAvatarURL, avatar, 1)
 			body = strings.Replace(body, `"Ann Example"`, `"Ann\u0007 `+strings.Repeat("é", 300)+`"`, 1)
