@@ -21,6 +21,20 @@ type IssueListOptions struct {
 	Assignee string   `json:"assignee"`
 	Limit    int      `json:"limit"`
 	Cursor   string   `json:"cursor"`
+
+	// The filters and the order beyond state, labels, and assignee. ViewerSubscribed false is the GitHub
+	// default and filters nothing; OrderBy and Direction default to the creation order, newest first.
+	CreatedBy        string             `json:"created_by"`
+	Mentioned        string             `json:"mentioned"`
+	Milestone        string             `json:"milestone"`
+	MilestoneNumber  string             `json:"milestone_number"`
+	Since            string             `json:"since"`
+	Type             string             `json:"type"`
+	IssueFieldValues []IssueFieldFilter `json:"issue_field_values"`
+	ViewerSubscribed bool               `json:"viewer_subscribed"`
+	OrderBy          string             `json:"order_by"`
+	Direction        string             `json:"direction"`
+	ProjectDetails   bool               `json:"project_details"`
 }
 
 // normalize applies the defaults and bounds of one issue list request and returns the GitHub cursor it
@@ -44,21 +58,28 @@ func (o *IssueListOptions) normalize(bound target) (string, error) {
 	if o.Assignee != "" && !validLogin(o.Assignee) {
 		return "", invalidRequest("assignee must be a GitHub login")
 	}
+	if err := o.checkIssueFilters(); err != nil {
+		return "", err
+	}
 	return decodeCursor(o.binding(bound), o.Cursor)
 }
 
 func (o *IssueListOptions) binding(bound target) []byte {
-	return fingerprint("issues", bound.String(), o.State, folded(o.Labels), strings.ToLower(o.Assignee))
+	parts := []any{"issues", bound.String(), o.State, folded(o.Labels), strings.ToLower(o.Assignee)}
+	return fingerprint(append(parts, o.bindingParts()...)...)
 }
 
-// issuesQuery lists issues of one repository. The GraphQL issue connection holds no pull requests, and its
-// cursor pages stay stable because the order is the fixed creation order. The filter carries only the
-// filters that are set, because GitHub reads an explicit null assignee as "no assignee".
-const issuesQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$filter:IssueFilters!){` +
-	`repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
-	`orderBy:{field:CREATED_AT,direction:DESC},filterBy:$filter){` +
-	`pageInfo{hasNextPage endCursor} nodes{number title state updatedAt ` +
-	`assignees(first:10){nodes{login}} labels(first:20){nodes{name}} issueType{name}}}}}`
+// issuesQuery lists issues of one repository. The GraphQL issue connection holds no pull requests. The order
+// is a variable: the creation order, newest first, unless the caller names another, and each order is stable
+// for the cursor of its own filters. The filter carries only the filters that are set, because GitHub reads
+// an explicit null assignee as "no assignee".
+func issuesQuery(projects bool) string {
+	return issuesQueryHead + issueListSelection(projects) + `}}}}`
+}
+
+const issuesQueryHead = `query($owner:String!,$name:String!,$first:Int!,$after:String,$filter:IssueFilters!,` +
+	`$orderBy:IssueOrder!){repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
+	`orderBy:$orderBy,filterBy:$filter){pageInfo{hasNextPage endCursor} nodes{`
 
 // IssueList is the normalised batch of repository issues.
 type IssueList struct {
@@ -67,8 +88,8 @@ type IssueList struct {
 	HasMore    bool           `json:"has_more"`
 }
 
-// IssueSummary is the compact list view of one issue. The URL is left out because it is derivable from the
-// repository and the number; github.issues.get adds it back.
+// IssueSummary is the list view of one issue: the compact members and the width of GitHub's Issue. The
+// compact members keep their treatment; the others pass through the shared GraphQL projections.
 type IssueSummary struct {
 	Number    int      `json:"number"`
 	Title     string   `json:"title"`
@@ -77,6 +98,9 @@ type IssueSummary struct {
 	Labels    []string `json:"labels"`
 	UpdatedAt string   `json:"updated_at,omitempty"`
 	IssueType string   `json:"issue_type,omitempty"`
+	Author    string   `json:"author,omitempty"`
+	Milestone string   `json:"milestone,omitempty"`
+	IssueListWidth
 }
 
 type issuesPageJSON struct {
@@ -86,17 +110,7 @@ type issuesPageJSON struct {
 				HasNextPage bool   `json:"hasNextPage"`
 				EndCursor   string `json:"endCursor"`
 			} `json:"pageInfo"`
-			Nodes []struct {
-				Number    int           `json:"number"`
-				Title     string        `json:"title"`
-				State     string        `json:"state"`
-				UpdatedAt string        `json:"updatedAt"`
-				Assignees countedLogins `json:"assignees"`
-				Labels    countedLabels `json:"labels"`
-				IssueType *struct {
-					Name *string `json:"name"`
-				} `json:"issueType"`
-			} `json:"nodes"`
+			Nodes []issueNodeRaw `json:"nodes"`
 		} `json:"issues"`
 	} `json:"repository"`
 }
@@ -119,6 +133,7 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 	filter := map[string]any{}
 	variables := map[string]any{
 		"owner": c.target.owner, "name": c.target.repo, "first": options.Limit, "after": nil, "filter": filter,
+		"orderBy": map[string]any{"field": options.OrderBy, "direction": options.Direction},
 	}
 	if after != "" {
 		variables["after"] = after
@@ -132,8 +147,9 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 	if options.Assignee != "" {
 		filter["assignee"] = options.Assignee
 	}
+	options.applyIssueFilters(filter)
 	var page issuesPageJSON
-	if err := c.graphql(ctx, op, issuesQuery, variables, &page); err != nil {
+	if err := c.graphql(ctx, op, issuesQuery(options.ProjectDetails), variables, &page); err != nil {
 		return nil, err
 	}
 	if page.Repository == nil || page.Repository.Issues == nil {
@@ -146,12 +162,26 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 				Message: "GitHub returned an issue without a usable number"}
 		}
 		issue := IssueSummary{Number: node.Number, Title: node.Title, State: strings.ToLower(node.State),
-			Assignees: []string{}, Labels: []string{}, UpdatedAt: node.UpdatedAt}
-		for _, assignee := range node.Assignees.Nodes {
-			issue.Assignees = append(issue.Assignees, assignee.Login)
+			Assignees: []string{}, Labels: []string{}, UpdatedAt: node.UpdatedAt, IssueListWidth: node.width()}
+		if node.Assignees != nil {
+			for _, assignee := range node.Assignees.Nodes {
+				if assignee != nil {
+					issue.Assignees = append(issue.Assignees, valueOr(assignee.Login))
+				}
+			}
 		}
-		for _, label := range node.Labels.Nodes {
-			issue.Labels = append(issue.Labels, label.Name)
+		if node.Labels != nil {
+			for _, label := range node.Labels.Nodes {
+				if label != nil {
+					issue.Labels = append(issue.Labels, valueOr(label.Name))
+				}
+			}
+		}
+		if node.Author != nil {
+			issue.Author = valueOr(node.Author.Login)
+		}
+		if node.Milestone != nil {
+			issue.Milestone = valueOr(node.Milestone.Title)
 		}
 		if node.IssueType != nil {
 			issue.IssueType = valueOr(shortText(node.IssueType.Name))
