@@ -35,11 +35,13 @@ var channelsUnread = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"channel_id":` + idSchema + `},` +
 		`"required":["channel_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"channel_id":` + idSchema + `,` +
+		`"team_id":{"type":"string"},` +
 		`"msg_count":{"type":"integer","minimum":0},"mention_count":{"type":"integer","minimum":0}},` +
 		`"required":["channel_id","msg_count","mention_count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{channelIDArgument},
 	Fields: []capability.Field{
 		{Name: "channel_id", Description: "Channel that was read"},
+		{Name: "team_id", Description: "Team of the channel as kChat reports it"},
 		{Name: "msg_count", Description: "Number of unread messages of the token's own user in the channel"},
 		{Name: "mention_count", Description: "Number of unread mentions of the token's own user in the channel"},
 	},
@@ -130,6 +132,7 @@ var threadsMarkRead = capability.Descriptor{
 // ChannelUnread is the unread state of the token's own user in one channel.
 type ChannelUnread struct {
 	ChannelID    string `json:"channel_id"`
+	TeamID       string `json:"team_id,omitempty"`
 	MsgCount     int    `json:"msg_count"`
 	MentionCount int    `json:"mention_count"`
 }
@@ -163,9 +166,10 @@ func invokeChannelsUnread(ctx context.Context, resolved *config.Resolved, secret
 		return nil, err
 	}
 	var answer struct {
-		ChannelID    string `json:"channel_id"`
-		MsgCount     int    `json:"msg_count"`
-		MentionCount int    `json:"mention_count"`
+		ChannelID    string           `json:"channel_id"`
+		TeamID       tolerant[string] `json:"team_id"`
+		MsgCount     int              `json:"msg_count"`
+		MentionCount int              `json:"mention_count"`
 	}
 	path := "/api/v4/users/me/channels/" + url.PathEscape(channelID) + "/unread"
 	if err := client.do(ctx, op, http.MethodGet, path, nil, nil, &answer, false); err != nil {
@@ -175,7 +179,8 @@ func invokeChannelsUnread(ctx context.Context, resolved *config.Resolved, secret
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned unread counts of a different channel than the one requested"}
 	}
-	return ChannelUnread{ChannelID: channelID, MsgCount: answer.MsgCount, MentionCount: answer.MentionCount}, nil
+	return ChannelUnread{ChannelID: channelID, TeamID: cleanText(answer.TeamID.Value), MsgCount: answer.MsgCount,
+		MentionCount: answer.MentionCount}, nil
 }
 
 // channelReadTarget checks channel_id locally before any secret is read, then live against the bound teams.

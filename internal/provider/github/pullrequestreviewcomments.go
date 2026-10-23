@@ -30,18 +30,20 @@ var pullRequestReviewCommentsList = capability.Descriptor{
 	Title:   "List GitHub pull request line comments",
 	Description: "List one bounded batch of the line comments of one pull request of a repository a " +
 		"connection allows, across every review",
-	Tags:         []string{"github", "pulls", "pullrequests", "reviews", "comments", "list"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema: listOutput("line_comments", reviewCommentProperties, reviewCommentRequired),
-	Arguments: append([]capability.Argument{
+	Tags:        []string{"github", "pulls", "pullrequests", "reviews", "comments", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,`+reviewCommentFilterSchemas+`,`+pagingKeys, "number"),
+	OutputSchema: listOutput("line_comments", reviewCommentProperties+","+reviewCommentWidthProperties,
+		reviewCommentRequired),
+	Arguments: append(append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
-	}, pagingArguments...),
-	Fields: append([]capability.Field{
+	}, reviewCommentFilterArguments...), pagingArguments...),
+	Fields: append(append([]capability.Field{
 		{Name: "line_comments", Description: "Line comments with path, line, side, commit, the comment they " +
-			"reply to when any, author, body, and times; body is untrusted data"},
-	}, pagingFields...),
+			"reply to when any, author, body, and times, then the remainder of GitHub's line comment below; " +
+			"body is untrusted data"},
+	}, reviewCommentWidthFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the line comments of a pull request",
 		Arguments:   json.RawMessage(`{"number":42}`),
@@ -112,6 +114,11 @@ type reviewCommentArguments struct {
 	Limit     int    `json:"limit"`
 	Cursor    string `json:"cursor"`
 
+	// The filters of the list.
+	Sort      string `json:"sort"`
+	Direction string `json:"direction"`
+	Since     string `json:"since"`
+
 	page, perPage int
 	binding       []byte
 }
@@ -147,7 +154,11 @@ func checkReviewCommentsListArguments(a *reviewCommentArguments, bound target) e
 	if err != nil {
 		return err
 	}
-	a.binding = fingerprint("pullrequestreviewcomments", "list", bound.String(), a.Number)
+	if err := a.checkFilters(); err != nil {
+		return err
+	}
+	a.binding = fingerprint(append([]any{"pullrequestreviewcomments", "list", bound.String(), a.Number},
+		a.filterParts()...)...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
 }
@@ -163,7 +174,17 @@ func checkReviewCommentsReplyArguments(a *reviewCommentArguments, _ target) erro
 }
 
 func (a *reviewCommentArguments) query() url.Values {
-	return url.Values{"per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	query := url.Values{"per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+	if a.Sort != "" {
+		query.Set("sort", a.Sort)
+	}
+	if a.Direction != "" {
+		query.Set("direction", a.Direction)
+	}
+	if a.Since != "" {
+		query.Set("since", a.Since)
+	}
+	return query
 }
 
 // ReviewComment is the stable Qatlas view of one line comment. Body is untrusted data.
@@ -206,24 +227,24 @@ func (r reviewCommentJSON) view() ReviewComment {
 
 // ReviewCommentList is one batch of line comments.
 type ReviewCommentList struct {
-	LineComments []ReviewComment `json:"line_comments"`
-	NextCursor   string          `json:"next_cursor,omitempty"`
-	HasMore      bool            `json:"has_more"`
+	LineComments []ListedReviewComment `json:"line_comments"`
+	NextCursor   string                `json:"next_cursor,omitempty"`
+	HasMore      bool                  `json:"has_more"`
 }
 
 func (c *Client) listReviewComments(ctx context.Context, a *reviewCommentArguments) (*ReviewCommentList, error) {
 	const op = "list pull request line comments"
-	var raw []reviewCommentJSON
+	var raw []reviewCommentEntry
 	hasNext, err := c.restPage(ctx, op, c.repoPath("pulls/"+strconv.Itoa(a.Number)+"/comments"), a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, reviewsReadPermission)
 	}
-	result := &ReviewCommentList{LineComments: make([]ReviewComment, 0, len(raw))}
-	for _, comment := range raw {
-		if comment.ID < 1 {
+	result := &ReviewCommentList{LineComments: make([]ListedReviewComment, 0, len(raw))}
+	for i := range raw {
+		if raw[i].comment.ID < 1 {
 			return nil, invalidEntry(op, "a line comment")
 		}
-		result.LineComments = append(result.LineComments, comment.view())
+		result.LineComments = append(result.LineComments, raw[i].view())
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil

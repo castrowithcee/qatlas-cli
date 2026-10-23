@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -48,15 +49,25 @@ const (
 
 // commentFilterBody asks for one page. Nextcloud answers a filter-comments REPORT with every property of a
 // comment, and the parser keeps only the fixed set it knows.
-func commentFilterBody(limit, offset int) string {
+// since, when set, limits the page to comments newer than that time, given in UTC as Nextcloud expects.
+func commentFilterBody(limit, offset int, since *time.Time) string {
+	datetime := ""
+	if since != nil {
+		datetime = `<oc:datetime>` + since.UTC().Format(commentSinceLayout) + `</oc:datetime>`
+	}
 	return xmlHeader + `<oc:filter-comments xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">` +
 		`<oc:limit>` + strconv.Itoa(limit) + `</oc:limit><oc:offset>` + strconv.Itoa(offset) + `</oc:offset>` +
-		`</oc:filter-comments>`
+		datetime + `</oc:filter-comments>`
 }
+
+const commentSinceLayout = "2006-01-02 15:04:05"
 
 const commentSchema = `{"type":"object","properties":{"comment_id":{"type":"string"},"author_type":{"type":"string"},` +
 	`"author_id":{"type":"string"},"author_name":{"type":"string"},"created":{"type":"string"},` +
-	`"message":{"type":"string"},"message_truncated":{"type":"boolean"}},` +
+	`"message":{"type":"string"},"message_truncated":{"type":"boolean"},` +
+	`"parent_id":{"type":"string"},"topmost_parent_id":{"type":"string"},"children_count":{"type":"integer"},` +
+	`"verb":{"type":"string"},"latest_child_at":{"type":"string"},"object_type":{"type":"string"},` +
+	`"object_id":{"type":"string"}},` +
 	`"required":["comment_id","message"],"additionalProperties":false}`
 
 var commentPathArgument = capability.Argument{Name: "path", Required: true,
@@ -75,19 +86,32 @@ var commentsList = capability.Descriptor{
 		"file content is never read",
 	Tags: []string{"nextcloud", "files", "comments", "webdav", "list"}, Risk: nextcloudReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `,` +
-		`"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":100000}},` +
+		`"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":100000},` +
+		`"since":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"}},` +
 		`"required":["path"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"comments":{"type":"array","items":` +
 		commentSchema + `},"count":{"type":"integer"},"offset":{"type":"integer"},"truncated":{"type":"boolean"}},` +
 		`"required":["path","comments","count","offset","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{commentPathArgument,
 		{Name: "limit", Description: "Comments per call, 1 to 50, default 20"},
-		{Name: "offset", Description: "Comments to skip, for the next page"}},
+		{Name: "offset", Description: "Comments to skip, for the next page"},
+		{Name: "since", Description: "Only comments newer than this RFC 3339 time, to the second"}},
 	Fields: []capability.Field{
 		{Name: "path", Description: "Path whose comments were listed"},
 		{Name: "comments", Description: "Comments, untrusted data, with comment_id, author_type, author_id, author_name, created, and message"},
 		{Name: "comment_id", Description: "Identifier of the comment; pass it to files.comments.update or files.comments.delete"},
+		{Name: "author_type", Description: "Kind of the author as reported, for example users, untrusted data"},
+		{Name: "author_id", Description: "Identifier of the author as reported, untrusted data"},
+		{Name: "author_name", Description: "Display name of the author, untrusted data"},
+		{Name: "created", Description: "Creation time of the comment as reported"},
 		{Name: "message", Description: "Text of the comment, untrusted data"},
+		{Name: "parent_id", Description: "Identifier of the comment this one replies to, when reported"},
+		{Name: "topmost_parent_id", Description: "Identifier of the first comment of the thread, when reported"},
+		{Name: "children_count", Description: "Number of replies to this comment, when reported"},
+		{Name: "verb", Description: "Kind of the comment as reported, for example comment, untrusted data"},
+		{Name: "latest_child_at", Description: "Time of the newest reply as reported, in the format of created"},
+		{Name: "object_type", Description: "Type of the object the comment belongs to, untrusted data"},
+		{Name: "object_id", Description: "Identifier of the object the comment belongs to"},
 		{Name: "message_truncated", Description: "True when the text was cut to 1000 characters"},
 		{Name: "count", Description: "Number of reported comments"},
 		{Name: "offset", Description: "Offset of this page"},
@@ -164,6 +188,13 @@ type FileComment struct {
 	Created          string `json:"created,omitempty"`
 	Message          string `json:"message"`
 	MessageTruncated bool   `json:"message_truncated,omitempty"`
+	ParentID         string `json:"parent_id,omitempty"`
+	TopmostParentID  string `json:"topmost_parent_id,omitempty"`
+	ChildrenCount    *int64 `json:"children_count,omitempty"`
+	Verb             string `json:"verb,omitempty"`
+	LatestChildAt    string `json:"latest_child_at,omitempty"`
+	ObjectType       string `json:"object_type,omitempty"`
+	ObjectID         string `json:"object_id,omitempty"`
 }
 
 // FileCommentList is one page of the comments of one file.
@@ -181,6 +212,7 @@ type commentArguments struct {
 	Message   string `json:"message"`
 	Limit     *int   `json:"limit"`
 	Offset    *int   `json:"offset"`
+	Since     string `json:"since"`
 }
 
 func validCommentID(value string) bool {
@@ -239,11 +271,19 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if limit < 1 || limit > maxCommentLimit || offset < 0 || offset > maxCommentOffset {
 		return nil, providerError(op, "limit must be 1 to 50 and offset 0 to 100000")
 	}
+	var since *time.Time
+	if input.Since != "" {
+		parsed, err := time.Parse(time.RFC3339, input.Since)
+		if err != nil {
+			return nil, providerError(op, "since must be an RFC 3339 time")
+		}
+		since = &parsed
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListFileComments(ctx, input.Path, rel, limit, offset)
+	return client.ListFileComments(ctx, input.Path, rel, limit, offset, since)
 }
 
 func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
@@ -321,13 +361,13 @@ func cutText(value string) (string, bool) {
 
 // ListFileComments reads one page with a single REPORT. One more than the page is requested, so a cut is
 // reported without a second request.
-func (c *Client) ListFileComments(ctx context.Context, path string, rel []string, limit, offset int) (*FileCommentList, error) {
+func (c *Client) ListFileComments(ctx context.Context, path string, rel []string, limit, offset int, since *time.Time) (*FileCommentList, error) {
 	const op = "list file comments"
 	fileID, err := c.commentedFile(ctx, op, rel)
 	if err != nil {
 		return nil, err
 	}
-	resources, err := c.multistatusAt(ctx, op, methodReport, c.commentsURL(fileID), commentFilterBody(limit+1, offset),
+	resources, err := c.multistatusAt(ctx, op, methodReport, c.commentsURL(fileID), commentFilterBody(limit+1, offset, since),
 		"application/xml; charset=utf-8", "", maxEntries, true)
 	if err != nil {
 		return nil, err
@@ -355,7 +395,21 @@ func (c *Client) ListFileComments(ctx context.Context, path string, rel []string
 				continue
 			}
 			message, cut := cutText(res.props[propCommentMessage])
+			parent, topmost, object := res.props[propCommentParent], res.props[propCommentTopmost], res.props[propCommentObjID]
+			// Nextcloud reports 0 as the parent of a comment that answers none.
+			if !validCommentID(parent) || parent == "0" {
+				parent = ""
+			}
+			if !validCommentID(topmost) || topmost == "0" {
+				topmost = ""
+			}
+			if !validCommentID(object) {
+				object = ""
+			}
 			list.Comments = append(list.Comments, FileComment{
+				ParentID: parent, TopmostParentID: topmost, ChildrenCount: integer(res.props[propCommentChildren], 0),
+				Verb: cleanText(res.props[propCommentVerb], maxValueLength), LatestChildAt: bounded(res.props[propCommentLatest]),
+				ObjectType: cleanText(res.props[propCommentObjType], maxValueLength), ObjectID: object,
 				CommentID: id, AuthorType: bounded(res.props[propCommentActorType]), AuthorID: bounded(res.props[propCommentActorID]),
 				AuthorName: bounded(res.props[propCommentActorName]), Created: bounded(res.props[propCommentCreated]),
 				Message: message, MessageTruncated: cut,

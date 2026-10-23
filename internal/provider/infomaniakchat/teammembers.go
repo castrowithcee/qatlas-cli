@@ -24,15 +24,16 @@ const (
 )
 
 var teamMemberEntrySchema = `{"type":"object","properties":{` +
-	`"user_id":` + idSchema + `,"roles":{"type":"string"},"scheme_admin":{"type":"boolean"},"deleted":{"type":"boolean"}},` +
+	`"user_id":` + idSchema + `,"roles":{"type":"string"},"scheme_admin":{"type":"boolean"},"deleted":{"type":"boolean"},` +
+	`"scheme_user":{"type":"boolean"},"explicit_roles":{"type":"string"},"deleted_at":{"type":"string"}},` +
 	`"required":["user_id","roles","scheme_admin","deleted"],"additionalProperties":false}`
 
 var teamsGet = capability.Descriptor{
 	ID:      Provider + ".teams.get",
 	Version: 1,
 	Title:   "Get an Infomaniak kChat team",
-	Description: "Read the name, display name, description, type, and member counts of one team this " +
-		"connection is bound to. Invitation identifiers, email addresses, and allowed domains are never returned",
+	Description: "Read the name, display name, description, type, settings, and member counts of one team this " +
+		"connection is bound to. The invitation identifier is never returned",
 	Tags:     []string{"infomaniak", "kchat", "teams", "get"},
 	Risk:     readRisk,
 	Provider: Provider,
@@ -40,11 +41,11 @@ var teamsGet = capability.Descriptor{
 		`"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + idSchema + `,"name":{"type":"string"},` +
 		`"display_name":{"type":"string"},"description":{"type":"string"},"type":{"type":"string"},` +
-		`"member_count":{"type":"integer"},"active_member_count":{"type":"integer"}},` +
+		`"member_count":{"type":"integer"},"active_member_count":{"type":"integer"},` + teamSettingsProperties + `},` +
 		`"required":["id","name","display_name","description","type","member_count","active_member_count"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{teamIDArgument},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "id", Description: "Team identifier"},
 		{Name: "name", Description: "URL-safe team handle, untrusted data"},
 		{Name: "display_name", Description: "Display name of the team, untrusted data"},
@@ -52,7 +53,7 @@ var teamsGet = capability.Descriptor{
 		{Name: "type", Description: "kChat's own team type, for example O (open) or I (invite-only)"},
 		{Name: "member_count", Description: "Number of members of the team"},
 		{Name: "active_member_count", Description: "Number of active members of the team"},
-	},
+	}, teamSettingsFields...),
 	Examples: []capability.Example{{Description: "Read one bound team",
 		Arguments: json.RawMessage(`{"team_id":"abc123team0000000000000000"}`)}},
 }
@@ -84,6 +85,9 @@ var teamMembersList = capability.Descriptor{
 		{Name: "roles", Description: "Team roles of the member, for example team_user or team_user team_admin"},
 		{Name: "scheme_admin", Description: "True when the member is a team administrator by the team's permission scheme"},
 		{Name: "deleted", Description: "True when the membership has ended"},
+		{Name: "scheme_user", Description: "Whether the member holds the default user role of the team's permission scheme"},
+		{Name: "explicit_roles", Description: "Roles assigned to the member explicitly, without those the permission scheme grants"},
+		{Name: "deleted_at", Description: "Time the membership ended, normalised to RFC 3339 in UTC"},
 		{Name: "team_id", Description: "Team that was read"},
 		{Name: "page", Description: "Page that was read"},
 		{Name: "has_more", Description: "True when the page is full, so a further page may remain"},
@@ -122,13 +126,14 @@ var teamMembersRoles = capability.Descriptor{
 }
 
 // The subsets of the kChat team resources this provider decodes; every other field, such as the invitation
-// identifier, the email address, and the allowed domains, is never read.
+// identifier, is never read.
 type teamDetailJSON struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	Type        string `json:"type"`
+	teamSettingsJSON
 }
 
 type teamStatsJSON struct {
@@ -143,10 +148,12 @@ type teamMemberJSON struct {
 	Roles       string `json:"roles"`
 	SchemeAdmin bool   `json:"scheme_admin"`
 	DeleteAt    int64  `json:"delete_at"`
+
+	SchemeUser    tolerant[*bool]  `json:"scheme_user"`
+	ExplicitRoles tolerant[string] `json:"explicit_roles"`
 }
 
-// TeamDetail is the stable Qatlas view of one team; the invitation identifier and the team's configuration
-// are never passed on.
+// TeamDetail is the stable Qatlas view of one team; the invitation identifier is never passed on.
 type TeamDetail struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
@@ -155,6 +162,7 @@ type TeamDetail struct {
 	Type              string `json:"type"`
 	MemberCount       int    `json:"member_count"`
 	ActiveMemberCount int    `json:"active_member_count"`
+	TeamSettings
 }
 
 // TeamMemberEntry is the stable Qatlas view of one team member.
@@ -163,6 +171,10 @@ type TeamMemberEntry struct {
 	Roles       string `json:"roles"`
 	SchemeAdmin bool   `json:"scheme_admin"`
 	Deleted     bool   `json:"deleted"`
+
+	SchemeUser    *bool  `json:"scheme_user,omitempty"`
+	ExplicitRoles string `json:"explicit_roles,omitempty"`
+	DeletedAt     string `json:"deleted_at,omitempty"`
 }
 
 // TeamMembersPage is one paginated listing of the members of one team.
@@ -236,8 +248,8 @@ func (c *Client) GetTeam(ctx context.Context, teamID string) (*TeamDetail, error
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "kChat returned an invalid response"}
 	}
 	return &TeamDetail{ID: teamID, Name: bounded(team.Name), DisplayName: bounded(team.DisplayName),
-		Description: bounded(team.Description), Type: bounded(team.Type), MemberCount: stats.TotalCount,
-		ActiveMemberCount: stats.ActiveCount}, nil
+		Description: cleanText(team.Description), Type: bounded(team.Type), MemberCount: stats.TotalCount,
+		ActiveMemberCount: stats.ActiveCount, TeamSettings: team.settings()}, nil
 }
 
 func invokeTeamMembersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -272,7 +284,8 @@ func (c *Client) ListTeamMembers(ctx context.Context, teamID string, page, limit
 			continue
 		}
 		entries = append(entries, TeamMemberEntry{UserID: m.UserID, Roles: bounded(m.Roles),
-			SchemeAdmin: m.SchemeAdmin, Deleted: m.DeleteAt > 0})
+			SchemeAdmin: m.SchemeAdmin, Deleted: m.DeleteAt > 0, SchemeUser: m.SchemeUser.Value,
+			ExplicitRoles: cleanText(m.ExplicitRoles.Value), DeletedAt: msToRFC3339(m.DeleteAt)})
 	}
 	return &TeamMembersPage{TeamID: teamID, Members: entries, Page: page, HasMore: len(members) >= limit,
 		Count: len(entries)}, nil
