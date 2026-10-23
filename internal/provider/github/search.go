@@ -307,9 +307,59 @@ var issueSearchItemProperties = issueSearchProperties + `,` + issueCorePropertie
 	`"text_matches":{"type":"array","maxItems":100,"items":` + textMatchSchema + `},` +
 	`"text_matches_truncated":{"type":"boolean"}`
 
+// pullSearchLinkKeys are the addresses of a pull request search match: those of the issue behind it and the
+// diff and patch addresses of the pull request.
+var pullSearchLinkKeys = append(append([]string(nil), issueLinkKeys...), "diff_url", "patch_url")
+
+// pullSearchItemProperties are the members of one pull request search match: those of an issue search match
+// with the pull request's own links and merge time.
+var pullSearchItemProperties = issueSearchProperties + `,` + issueCoreProperties + `,` + issueWidthLeadProperties +
+	`,"merged_at":{"type":"string"},"links":` + linksSchema(pullSearchLinkKeys) +
+	`,"repository_detail":` + restRepositorySchema + `,"score":{"type":"number"},` +
+	`"text_matches":{"type":"array","maxItems":100,"items":` + textMatchSchema + `},` +
+	`"text_matches_truncated":{"type":"boolean"}`
+
+// withoutField returns fields without the one named name.
+func withoutField(fields []capability.Field, name string) []capability.Field {
+	var out []capability.Field
+	for _, field := range fields {
+		if field.Name != name {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
 const issueSearchExtraProperties = `"search_type":{"type":"string"},` +
 	`"lexical_fallback_reason":{"type":"array","maxItems":100,"items":{"type":"string"}},` +
 	`"lexical_fallback_reason_truncated":{"type":"boolean"}`
+
+// issueSearchArguments are the arguments both searches over GitHub's issue index take besides the terms.
+var issueSearchArguments = append([]capability.Argument{
+	{Name: "sort", Description: strings.Join(issueSearchSortValues, ", ") + "; GitHub's best match order " +
+		"when omitted"},
+	{Name: "order", Description: "asc or desc; applies with sort, desc when omitted"},
+	{Name: "advanced_search", Description: "true or false sends GitHub's advanced_search switch as given; " +
+		"GitHub's default when omitted"},
+	{Name: "search_type", Description: "semantic or hybrid; GitHub's lexical search when omitted; GitHub " +
+		"limits both to 10 requests a minute"},
+	{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
+}, pagingArguments...)
+
+// issueSearchResponseFields describe the members of the answer and of a match that both searches over
+// GitHub's issue index add to their compact view.
+var issueSearchResponseFields = []capability.Field{
+	{Name: "search_type", Description: "Kind of search GitHub performed: lexical, semantic, or hybrid"},
+	{Name: "lexical_fallback_reason", Description: "Why a semantic or hybrid search fell back to lexical " +
+		"search, at most 100 reasons"},
+	{Name: "lexical_fallback_reason_truncated", Description: "True when GitHub gave more reasons than shown"},
+	repositoryDetailField,
+	{Name: "score", Description: "Relevance score GitHub gave the match"},
+	{Name: "text_matches", Description: "Where the terms matched, only when text_matches is set, at most 100: " +
+		"object_type, property, fragment (cut at 1000 characters, fragment_truncated says so), matches (text " +
+		"and indices), and links with the object_url; untrusted data, never fetched"},
+	{Name: "text_matches_truncated", Description: "True when more text matches followed than shown"},
+}
 
 var issuesSearch = capability.Descriptor{
 	ID:      Provider + ".issues.search",
@@ -323,32 +373,13 @@ var issuesSearch = capability.Descriptor{
 	InputSchema: inputSchema(`"terms":`+termsSchema+`,`+issueSearchKeys+`,`+pagingKeys, "terms"),
 	OutputSchema: searchOutputWith("issues", issueSearchItemProperties, issueSearchRequired,
 		issueSearchExtraProperties),
-	Arguments: append([]capability.Argument{searchTermsArgument,
-		{Name: "sort", Description: strings.Join(issueSearchSortValues, ", ") + "; GitHub's best match order " +
-			"when omitted"},
-		{Name: "order", Description: "asc or desc; applies with sort, desc when omitted"},
-		{Name: "advanced_search", Description: "true or false sends GitHub's advanced_search switch as given; " +
-			"GitHub's default when omitted"},
-		{Name: "search_type", Description: "semantic or hybrid; GitHub's lexical search when omitted; GitHub " +
-			"limits both to 10 requests a minute"},
-		{Name: "text_matches", Description: "True adds text_matches, the places the terms matched; false when omitted"},
-	}, pagingArguments...),
-	Fields: append(append(append(append([]capability.Field{
+	Arguments: append([]capability.Argument{searchTermsArgument}, issueSearchArguments...),
+	Fields: append(append(append(append(append([]capability.Field{
 		{Name: "issues", Description: "Issues across repositories: number, title (untrusted data), " +
 			"repository as OWNER/REPO, state, labels, assignees, updated_at, and url, then the remainder of " +
 			"GitHub's issue below"},
-		{Name: "search_type", Description: "Kind of search GitHub performed: lexical, semantic, or hybrid"},
-		{Name: "lexical_fallback_reason", Description: "Why a semantic or hybrid search fell back to lexical " +
-			"search, at most 100 reasons"},
-		{Name: "lexical_fallback_reason_truncated", Description: "True when GitHub gave more reasons than shown"},
-		repositoryDetailField,
-		{Name: "score", Description: "Relevance score GitHub gave the match"},
-		{Name: "text_matches", Description: "Where the terms matched, only when text_matches is set, at most 100: " +
-			"object_type, property, fragment (cut at 1000 characters, fragment_truncated says so), matches (text " +
-			"and indices), and links with the object_url; untrusted data, never fetched"},
-		{Name: "text_matches_truncated", Description: "True when more text matches followed than shown"},
 		issueDraftField,
-	}, issueCoreFields...), issueWidthFields...), searchCountFields...), pagingFields...),
+	}, issueSearchResponseFields...), issueCoreFields...), issueWidthFields...), searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search open issues labeled bug",
 		Arguments:   json.RawMessage(`{"terms":"is:open label:bug","limit":10}`),
@@ -360,17 +391,24 @@ var pullRequestsSearch = capability.Descriptor{
 	Version: 1,
 	Title:   "Search GitHub pull requests",
 	Description: "Search pull requests, never plain issues, GitHub's index covers with terms and qualifiers, " +
-		"narrowed to the repositories and the owners a connection's targets allow when it names any, without bodies",
-	Tags:         []string{"github", "pulls", "pullrequests", "search", "discovery"},
-	Risk:         readRisk,
-	Provider:     Provider,
-	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema: searchOutput("pull_requests", issueSearchProperties, issueSearchRequired),
-	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
-	Fields: append(append([]capability.Field{
-		{Name: "pull_requests", Description: "Compact pull requests across repositories: number, title " +
-			"(untrusted data), repository as OWNER/REPO, state, draft, labels, assignees, and updated_at"},
-	}, searchCountFields...), pagingFields...),
+		"narrowed to the repositories and the owners a connection's targets allow when it names any",
+	Tags:        []string{"github", "pulls", "pullrequests", "search", "discovery"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"terms":`+termsSchema+`,`+issueSearchKeys+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutputWith("pull_requests", pullSearchItemProperties, issueSearchRequired,
+		issueSearchExtraProperties),
+	Arguments: append([]capability.Argument{searchTermsArgument}, issueSearchArguments...),
+	Fields: append(append(append(append(append([]capability.Field{
+		{Name: "pull_requests", Description: "Pull requests across repositories: number, title (untrusted " +
+			"data), repository as OWNER/REPO, state, draft, labels, assignees, updated_at, and url, then the " +
+			"remainder of GitHub's issue below"},
+		{Name: "merged_at", Description: "When the pull request was merged; absent until then"},
+		{Name: "links", Description: "REST url, repository_url, labels_url, comments_url, events_url, " +
+			"timeline_url, parent_issue_url, diff_url, and patch_url by their GitHub names, untrusted data, " +
+			"never fetched"},
+	}, issueSearchResponseFields...), issueCoreFields...), withoutField(issueWidthFields, "links")...),
+		searchCountFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "Search merged pull requests based on main",
 		Arguments:   json.RawMessage(`{"terms":"is:merged base:main","limit":10}`),
@@ -605,7 +643,7 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 	switch tool {
 	case usersSearch.ID, organizationsSearch.ID:
 		options, err = a.accountOptions()
-	case issuesSearch.ID:
+	case issuesSearch.ID, pullRequestsSearch.ID:
 		options, err = a.issueOptions()
 	}
 	if err != nil {
@@ -816,7 +854,12 @@ type issueSearchItemJSON struct {
 		Login string `json:"login"`
 	} `json:"assignees"`
 	RepositoryURL string `json:"repository_url"`
-	width         issueWidthRaw
+	PullRequest   *struct {
+		MergedAt *string `json:"merged_at"`
+		DiffURL  *string `json:"diff_url"`
+		PatchURL *string `json:"patch_url"`
+	} `json:"pull_request"`
+	width issueWidthRaw
 }
 
 func (item *issueSearchItemJSON) UnmarshalJSON(data []byte) error {
@@ -931,7 +974,9 @@ func (c *Client) searchIssues(ctx context.Context, a *searchArguments) (*IssueSe
 	return result, nil
 }
 
-// PullRequestSearchResult is the compact view of one pull request search match, without its body.
+// PullRequestSearchResult is one pull request search match: the compact view, then the remainder of GitHub's
+// issue as the issue search reports it, the merge time, and the search members. Links holds the addresses of
+// the issue and the diff and patch addresses of the pull request.
 type PullRequestSearchResult struct {
 	Number     int      `json:"number"`
 	Title      string   `json:"title"`
@@ -942,41 +987,93 @@ type PullRequestSearchResult struct {
 	Assignees  []string `json:"assignees"`
 	UpdatedAt  string   `json:"updated_at,omitempty"`
 	URL        string   `json:"url,omitempty"`
+
+	IssueCore
+	IssueWidth
+	MergedAt             *string         `json:"merged_at,omitempty"`
+	Links                Links           `json:"links,omitempty"`
+	RepositoryDetail     *RESTRepository `json:"repository_detail,omitempty"`
+	Score                *json.Number    `json:"score,omitempty"`
+	TextMatches          []RESTTextMatch `json:"text_matches,omitempty"`
+	TextMatchesTruncated bool            `json:"text_matches_truncated,omitempty"`
 }
 
 // PullRequestSearchList is one batch of a pull request search.
 type PullRequestSearchList struct {
-	PullRequests      []PullRequestSearchResult `json:"pull_requests"`
-	TotalCount        int                       `json:"total_count"`
-	IncompleteResults bool                      `json:"incomplete_results"`
-	NextCursor        string                    `json:"next_cursor,omitempty"`
-	HasMore           bool                      `json:"has_more"`
+	PullRequests                   []PullRequestSearchResult `json:"pull_requests"`
+	SearchType                     *string                   `json:"search_type,omitempty"`
+	LexicalFallbackReason          []string                  `json:"lexical_fallback_reason,omitempty"`
+	LexicalFallbackReasonTruncated bool                      `json:"lexical_fallback_reason_truncated,omitempty"`
+	TotalCount                     int                       `json:"total_count"`
+	IncompleteResults              bool                      `json:"incomplete_results"`
+	NextCursor                     string                    `json:"next_cursor,omitempty"`
+	HasMore                        bool                      `json:"has_more"`
 }
 
 func (c *Client) searchPullRequests(ctx context.Context, a *searchArguments) (*PullRequestSearchList, error) {
 	const op = "search pull requests"
 	var raw struct {
-		TotalCount int                   `json:"total_count"`
-		Incomplete bool                  `json:"incomplete_results"`
-		Items      []issueSearchItemJSON `json:"items"`
+		TotalCount            int                   `json:"total_count"`
+		Incomplete            bool                  `json:"incomplete_results"`
+		Items                 []issueSearchItemJSON `json:"items"`
+		SearchType            *string               `json:"search_type"`
+		LexicalFallbackReason []*string             `json:"lexical_fallback_reason"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/search/issues", a.query(), &raw)
+	hasNext, err := c.restPage(a.textMatchContext(ctx), op, "/search/issues", a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, pullRequestSearchPermission)
 	}
 	result := &PullRequestSearchList{PullRequests: make([]PullRequestSearchResult, 0, len(raw.Items)),
-		TotalCount: raw.TotalCount, IncompleteResults: raw.Incomplete}
+		TotalCount: raw.TotalCount, IncompleteResults: raw.Incomplete, SearchType: shortText(raw.SearchType)}
+	var reasons []string
+	for _, reason := range raw.LexicalFallbackReason {
+		if text := shortText(reason); text != nil {
+			reasons = append(reasons, *text)
+		}
+	}
+	result.LexicalFallbackReason, result.LexicalFallbackReasonTruncated = capped(reasons)
 	for _, item := range raw.Items {
 		repository, ok := item.repository()
 		if item.Number < 1 || !ok {
 			return nil, invalidEntry(op, "a pull request")
 		}
-		result.PullRequests = append(result.PullRequests, PullRequestSearchResult{Number: item.Number,
-			Title: item.Title, Repository: repository, State: item.State, Draft: item.Draft,
-			Labels: item.labels(), Assignees: item.assignees(), UpdatedAt: item.UpdatedAt, URL: item.HTMLURL})
+		// The forced qualifiers bound the search. advanced_search and search_type change how GitHub reads the
+		// query, so with either set every match is checked against the targets as well, and an answer
+		// outside them is refused rather than shown.
+		owner, name, _ := strings.Cut(repository, "/")
+		if (a.advancedSearch != "" || a.searchType != "") && len(a.allowed) > 0 &&
+			!a.allowed.admitsRepository(target{kind: kindRepository, owner: owner, repo: name}) {
+			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "GitHub answered with a pull request outside the connection's targets"}
+		}
+		width := &item.width
+		match := PullRequestSearchResult{Number: item.Number, Title: item.Title, Repository: repository,
+			State: item.State, Draft: item.Draft, Labels: item.labels(), Assignees: item.assignees(),
+			UpdatedAt: item.UpdatedAt, URL: item.HTMLURL, IssueCore: width.core(), IssueWidth: width.width(),
+			Links: width.links, RepositoryDetail: width.Repository.project(a.allowed), Score: width.Score}
+		if pull := item.PullRequest; pull != nil {
+			match.MergedAt = shortText(pull.MergedAt)
+			if link := address(filled(pull.DiffURL)); link != nil {
+				match.Links = withLink(match.Links, "diff_url", *link)
+			}
+			if link := address(filled(pull.PatchURL)); link != nil {
+				match.Links = withLink(match.Links, "patch_url", *link)
+			}
+		}
+		match.TextMatches, match.TextMatchesTruncated = projectTextMatches(width.TextMatches)
+		result.PullRequests = append(result.PullRequests, match)
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
+}
+
+// withLink returns links with key set; links is copied, never changed.
+func withLink(links Links, key, value string) Links {
+	out := Links{key: value}
+	for k, v := range links {
+		out[k] = v
+	}
+	return out
 }
 
 // CommitSearchResult is the compact view of one commit search match.
