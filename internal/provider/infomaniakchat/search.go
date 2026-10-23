@@ -118,12 +118,12 @@ var channelsSearch = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":` + idSchema + `,"term":` +
 		searchTermSchema + `},"required":["team_id","term"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelEntrySchema + `},` +
+		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelListEntrySchema + `},` +
 		`"count":{"type":"integer"}},"required":["team_id","channels","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{teamIDArgument, {Name: "term", Required: true,
 		Description: "Text matched against the channel name or display name, 1 to " + itoa(maxSearchRunes) +
 			" characters without control characters"}},
-	Fields: append(append([]capability.Field{}, channelEntryFields...),
+	Fields: append(append([]capability.Field{}, channelListEntryFields...),
 		capability.Field{Name: "count", Description: "Number of channels reported, after the reachable-channel filter"}),
 	Examples: []capability.Example{{Description: "Search the channels of one bound team",
 		Arguments: json.RawMessage(`{"team_id":"abc123team0000000000000000","term":"support"}`)}},
@@ -151,9 +151,9 @@ type SearchedFiles struct {
 
 // SearchedChannels is the channel hits of one search, reduced to the reachable public channels.
 type SearchedChannels struct {
-	TeamID   string         `json:"team_id"`
-	Channels []ChannelEntry `json:"channels"`
-	Count    int            `json:"count"`
+	TeamID   string             `json:"team_id"`
+	Channels []ChannelListEntry `json:"channels"`
+	Count    int                `json:"count"`
 }
 
 type searchArguments struct {
@@ -358,14 +358,14 @@ func (c *Client) SearchChannels(ctx context.Context, teamID, term string) (*Sear
 	}{term}, &hits, false); err != nil {
 		return nil, err
 	}
-	entries := make([]ChannelEntry, 0, len(hits))
+	entries := make([]ChannelListEntry, 0, len(hits))
 	for i := range hits {
 		hit := &hits[i]
 		known := reachable[hit.ID]
 		if known == nil || known.Type != "O" || hit.TeamID != teamID || hit.Type != "O" || hit.DeleteAt != 0 {
 			continue
 		}
-		entries = append(entries, entryOf(hit))
+		entries = append(entries, listEntryOf(hit))
 	}
 	return &SearchedChannels{TeamID: teamID, Channels: entries, Count: len(entries)}, nil
 }
