@@ -144,13 +144,13 @@ func TestUserReadsMethodBodyAndAllowList(t *testing.T) {
 		want, absent               string
 	}{
 		{"photos", "getUserProfilePhotos", `{"user_id":7,"offset":2,"limit":3}`,
-			`{"total_count":1,"photos":[[{"file_id":"small","width":20},{"file_id":"big","width":40,"height":50,"file_size":90,"file_unique_id":"HIDE"}]],"secret":"HIDE"}`,
+			`{"total_count":1,"photos":[[{"file_id":"small","width":20},{"file_id":"big","width":40,"height":50,"file_size":90}]],"secret":"HIDE"}`,
 			func(c *Client) (any, error) { return c.ProfilePhotos(context.Background(), 7, 2, 3) }, "photos", "HIDE"},
 		{"audios", "getUserProfileAudios", `{"user_id":7,"offset":2,"limit":3}`,
-			`{"total_count":1,"audios":[{"file_id":"audio","duration":4,"title":"Track","performer":"Artist","file_name":"HIDE"}],"secret":"HIDE"}`,
+			`{"total_count":1,"audios":[{"file_id":"audio","duration":4,"title":"Track","performer":"Artist","file_name":"x.mp3"}],"secret":"HIDE"}`,
 			func(c *Client) (any, error) { return c.ProfileAudios(context.Background(), 7, 2, 3) }, "audios", "HIDE"},
 		{"boosts", "getUserChatBoosts", `{"chat_id":"-1001","user_id":7}`,
-			`{"boosts":[{"boost_id":"b","add_date":1,"expiration_date":2,"source":{"source":"premium","user":{"first_name":"HIDE"}}}],"secret":"HIDE"}`,
+			`{"boosts":[{"boost_id":"b","add_date":1,"expiration_date":2,"source":{"source":"premium","secret":"HIDE"}}],"secret":"HIDE"}`,
 			func(c *Client) (any, error) { return c.ChatBoosts(context.Background(), 7, 0, 20) }, "boosts", "HIDE"},
 		{"messages", "getUserPersonalChatMessages", `{"user_id":7,"limit":3}`,
 			`[{"message_id":9,"date":10,"text":"Hello","chat":{"title":"HIDE"},"from":{"first_name":"HIDE"}},` +

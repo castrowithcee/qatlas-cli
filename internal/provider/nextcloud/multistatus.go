@@ -58,6 +58,10 @@ const (
 	propCommentMessage   = "commentmessage"
 	propCommentObjType   = "commentobjecttype"
 	propCommentObjID     = "commentobjectid"
+	propCommentParent    = "commentparentid"
+	propCommentTopmost   = "commenttopmostparentid"
+	propCommentChildren  = "commentchildrencount"
+	propCommentLatest    = "commentlatestchilddatetime"
 )
 
 // wantedProps maps the requested properties to their keys. Every other property of an answer is dropped,
@@ -84,6 +88,10 @@ var wantedProps = map[xml.Name]string{
 	{Space: ocNS, Local: "message"}:                    propCommentMessage,
 	{Space: ocNS, Local: "objectType"}:                 propCommentObjType,
 	{Space: ocNS, Local: "objectId"}:                   propCommentObjID,
+	{Space: ocNS, Local: "parentId"}:                   propCommentParent,
+	{Space: ocNS, Local: "topmostParentId"}:            propCommentTopmost,
+	{Space: ocNS, Local: "childrenCount"}:              propCommentChildren,
+	{Space: ocNS, Local: "latestChildDateTime"}:        propCommentLatest,
 	{Space: davNS, Local: "creationdate"}:              propCreationDate,
 	{Space: davNS, Local: "getcontentlanguage"}:        propContentLanguage,
 	{Space: davNS, Local: "quota-used-bytes"}:          propQuotaUsed,

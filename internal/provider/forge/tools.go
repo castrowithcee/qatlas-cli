@@ -60,8 +60,12 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	issueBlocksList, issueBlocksAdd, issueBlocksRemove, issueAttachmentsList, issueAttachmentsGet,
 	issueAttachmentsUpload, issueAttachmentsUpdate, issueAttachmentsDelete, issueAttachmentsDownload,
 	commentAttachmentsList, commentAttachmentsGet, commentAttachmentsUpload, commentAttachmentsUpdate,
-	commentAttachmentsDelete, commentAttachmentsDownload, branchesList, branchesGet, branchesCreate,
-	branchesRename, branchesUpdateRef, branchesDelete}
+	commentAttachmentsDelete, commentAttachmentsDownload, issuePinsList, issuePinsCheckAllowed, issuePinsPin,
+	issuePinsUnpin, issuePinsMove, projectsList, projectsGet, projectsCreate, projectsUpdate, projectsDelete,
+	projectColumnsList, projectColumnsGet, projectColumnsCreate, projectColumnsUpdate, projectColumnsDelete,
+	projectColumnsMove, projectColumnsSetDefault, projectIssuesList, projectIssuesAdd, projectIssuesRemove,
+	projectIssuesMove, branchesList, branchesGet, branchesCreate, branchesRename, branchesUpdateRef,
+	branchesDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

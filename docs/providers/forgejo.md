@@ -61,3 +61,8 @@ additional depth of defense: the targets of the connection stay the boundary.
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
+
+## Not on Forgejo
+
+Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
+not registered. See [Projects](gitea/projects.md).

@@ -257,23 +257,24 @@ var pullChecksList = capability.Descriptor{
 	Tags:        []string{"github", "pulls", "pullrequests", "checks", "list"},
 	Risk:        readRisk,
 	Provider:    Provider,
-	InputSchema: inputSchema(`"number":`+numberSchema, "number"),
+	InputSchema: inputSchema(`"number":`+numberSchema+`,`+checkFilterSchemas, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
 		`"head_sha":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{` +
 		checkEntryProperties + `},"required":["name","status"],"additionalProperties":false}},` +
-		`"overall":{"type":"string"},"truncated":{"type":"boolean"}},` +
+		`"overall":{"type":"string"},"truncated":{"type":"boolean"},` + checkWidthProperties + `},` +
 		`"required":["number","head_sha","checks","overall","truncated"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
+	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository; its head commit is resolved " +
 			"automatically", Required: true},
-	},
-	Fields: []capability.Field{
+	}, checkFilterArguments...),
+	Fields: append([]capability.Field{
 		{Name: "head_sha", Description: "Head commit the checks were read at"},
 		{Name: "checks", Description: "Check runs and legacy commit statuses at the head commit, combined"},
-		{Name: "overall", Description: "success, failure, pending, or none when nothing reported a check"},
+		{Name: "overall", Description: "success, failure, pending, or none when nothing reported a check; with a " +
+			"filter set, it covers the filtered check runs and every commit status"},
 		{Name: "truncated", Description: "True when GitHub reported more checks or statuses than were returned"},
 		{Name: "number", Description: "Pull request number"},
-	},
+	}, checkWidthFields...),
 	Examples: []capability.Example{{Description: "List the checks of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
 
@@ -466,8 +467,8 @@ func pullRequestOperations() []capability.Operation {
 		bind(pullDiffsGet, checkPullNumberArgument, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
 			return c.pullRequestDiff(ctx, a.Number)
 		}),
-		bind(pullChecksList, checkPullNumberArgument, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
-			return c.pullRequestChecks(ctx, a.Number)
+		bind(pullChecksList, checkPullChecksArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.pullRequestChecks(ctx, a)
 		}),
 		bind(pullsCreate, checkPullCreateArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
 			return c.createPullRequest(ctx, a)
@@ -505,6 +506,12 @@ type pullArguments struct {
 	// Sort and Direction are the list's own.
 	Sort      string `json:"sort"`
 	Direction string `json:"direction"`
+
+	// The filters of the check run read.
+	CheckName   string `json:"check_name"`
+	CheckStatus string `json:"status"`
+	CheckFilter string `json:"filter"`
+	AppID       *int64 `json:"app_id"`
 
 	// The arguments of the change tools.
 	Title               string  `json:"title"`
@@ -1192,6 +1199,7 @@ type PullRequestChecks struct {
 	Checks    []CheckEntry `json:"checks"`
 	Overall   string       `json:"overall"`
 	Truncated bool         `json:"truncated"`
+	CheckWidth
 }
 
 type checkRunJSON struct {
@@ -1261,8 +1269,9 @@ func overallState(checks []CheckEntry) string {
 
 // pullRequestChecks reads the pull request to resolve its head commit, then the check runs and the combined
 // commit status at that commit, and merges them into one compact, evaluated list.
-func (c *Client) pullRequestChecks(ctx context.Context, number int) (*PullRequestChecks, error) {
+func (c *Client) pullRequestChecks(ctx context.Context, a *pullArguments) (*PullRequestChecks, error) {
 	const op = "list pull request checks"
+	number := a.Number
 	pull, err := c.pullRequest(ctx, op, number)
 	if err != nil {
 		return nil, err
@@ -1272,29 +1281,24 @@ func (c *Client) pullRequestChecks(ctx context.Context, number int) (*PullReques
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "GitHub answered the pull request without a usable head commit"}
 	}
-	var runs struct {
-		TotalCount int            `json:"total_count"`
-		CheckRuns  []checkRunJSON `json:"check_runs"`
-	}
-	if err := c.rest(ctx, op, c.repoPath("commits/"+sha+"/check-runs")+"?per_page=100", &runs); err != nil {
+	var runs checkRunsAnswer
+	if err := c.rest(ctx, op, c.repoPath("commits/"+sha+"/check-runs")+"?"+a.checkRunQuery(), &runs); err != nil {
 		return nil, actionsFailure(err, checksReadPermission)
 	}
-	var combined struct {
-		TotalCount int                `json:"total_count"`
-		Statuses   []commitStatusJSON `json:"statuses"`
-	}
+	var combined combinedStatusAnswer
 	if err := c.rest(ctx, op, c.repoPath("commits/"+sha+"/status")+"?per_page=100", &combined); err != nil {
 		return nil, actionsFailure(err, checksReadPermission)
 	}
 	checks := make([]CheckEntry, 0, len(runs.CheckRuns)+len(combined.Statuses))
 	for _, run := range runs.CheckRuns {
-		checks = append(checks, run.entry())
+		checks = append(checks, run.run.entry())
 	}
 	for _, status := range combined.Statuses {
-		checks = append(checks, status.entry())
+		checks = append(checks, status.status.entry())
 	}
 	return &PullRequestChecks{Number: number, HeadSHA: sha, Checks: checks, Overall: overallState(checks),
-		Truncated: runs.TotalCount > len(runs.CheckRuns) || combined.TotalCount > len(combined.Statuses)}, nil
+		Truncated:  runs.TotalCount > len(runs.CheckRuns) || combined.TotalCount > len(combined.Statuses),
+		CheckWidth: runs.width(&combined)}, nil
 }
 
 // createPullRequest opens one pull request in the bound repository with exactly one request, which is never

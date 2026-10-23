@@ -166,7 +166,16 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `channels.browse`, `archived-channels.list`, the webhook lists, `bots.list`, `emoji.list`,
   `channel-members.list`, `team-members.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
   true for a full page; dropped entries can lower `count`. `users.search` takes only `limit`, one page.
-- `messages.list` (`GetPostsForChannel`, newest first) and `insights.top`: `has_more` is kChat's `has_next`.
+- `insights.top`: `has_more` is kChat's `has_next`.
+- `messages.list`: `since`, `before`, `after`, and `page` exclude each other; `limit` combines with each.
+  - With `since`, kChat answers every message changed since then without paging. Qatlas orders them by
+    `updated_at` ascending and returns at most `limit` of them; `has_more` is true when more remain. The next
+    call passes the `updated_at` of the last entry as `since`; entries may repeat and are told apart by `id`.
+    A channel whose changes exceed the answer limit fails as `invalid-provider-response`; a later `since`
+    narrows it.
+  - `before` and `after` read one page next to the given message; messages of another channel are dropped.
+  - Outside `since`, `has_more` is kChat's `has_next`; with `before` or `after`, a full page before the
+    filtering counts too.
 - `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass their paging arguments to kChat's
   own paging and read no further page; `has_more` is true when kChat's page was full, and `count` may be lower
   because hits outside the reachable channels are dropped. kChat documents search paging as Elasticsearch-only.

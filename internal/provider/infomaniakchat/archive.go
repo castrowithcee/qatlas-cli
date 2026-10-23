@@ -36,7 +36,7 @@ var archivedChannelsList = capability.Descriptor{
 		`"per_page":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
 		`"required":["team_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelEntrySchema + `},` +
+		`"team_id":` + idSchema + `,"channels":{"type":"array","items":` + channelListEntrySchema + `},` +
 		`"page":{"type":"integer"},"per_page":{"type":"integer"},"count":{"type":"integer"},` +
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["team_id","channels","page","per_page","count","has_more"],"additionalProperties":false}`),
@@ -46,7 +46,7 @@ var archivedChannelsList = capability.Descriptor{
 		{Name: "per_page", Description: "Channels per kChat page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
 	},
-	Fields: append(append([]capability.Field{}, channelEntryFields...),
+	Fields: append(append([]capability.Field{}, channelListEntryFields...),
 		capability.Field{Name: "page", Description: "Page that was read"},
 		capability.Field{Name: "per_page", Description: "Page size that was requested"},
 		capability.Field{Name: "count", Description: "Number of channels reported on this page, after the allow-list"},
@@ -163,14 +163,14 @@ func (c *Client) ListArchivedChannels(ctx context.Context, teamID string, page, 
 		query, nil, &channels, false); err != nil {
 		return nil, err
 	}
-	entries := make([]ChannelEntry, 0, len(channels))
+	entries := make([]ChannelListEntry, 0, len(channels))
 	for i := range channels {
 		ch := &channels[i]
 		if ch.TeamID != teamID || ch.DeleteAt == 0 || (ch.Type != "O" && ch.Type != "P") || !validMattermostID(ch.ID) ||
 			!c.scope.allowsChannel(ch.ID) {
 			continue
 		}
-		entries = append(entries, entryOf(ch))
+		entries = append(entries, listEntryOf(ch))
 	}
 	return &ChannelsBrowsePage{TeamID: teamID, Channels: entries, Page: page, PerPage: perPage, Count: len(entries),
 		HasMore: len(channels) >= perPage}, nil
