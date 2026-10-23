@@ -190,6 +190,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
+- [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
+  trees, references, annotated tags, and notes
 
 ## Not offered
 
