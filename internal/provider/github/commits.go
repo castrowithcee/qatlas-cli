@@ -32,8 +32,8 @@ const (
 	maxCommitFiles         = 300  // files kept per github.commits.get; GitHub's own limit is the same
 )
 
-const commitEntryProperties = `"sha":{"type":"string"},"message":{"type":"string"},"author":{"type":"string"},` +
-	`"committer":{"type":"string"},"date":{"type":"string"},"parents":{"type":"integer"}`
+var commitEntryProperties = `"sha":{"type":"string"},"message":{"type":"string"},"author":{"type":"string"},` +
+	`"committer":{"type":"string"},"date":{"type":"string"},"parents":{"type":"integer"},` + commitWidthProperties
 
 const commitEntryRequired = `"required":["sha","message","parents"],"additionalProperties":false`
 
@@ -47,41 +47,45 @@ var commitsList = capability.Descriptor{
 	Risk:     readRisk,
 	Provider: Provider,
 	InputSchema: inputSchema(`"ref":` + refSchema + `,"path":` + contentsPathSchema +
-		`,"author":{"type":"string","maxLength":105,"pattern":"` + actorPattern + `"},"since":` + timeSchema +
-		`,"until":` + timeSchema + `,` + pagingKeys),
+		`,"author":{"type":"string","maxLength":105,"pattern":"` + actorPattern + `"},"committer":{"type":"string",` +
+		`"maxLength":` + strconv.Itoa(maxCommitterLength) + `,"pattern":"` + committerPattern + `"},"since":` +
+		timeSchema + `,"until":` + timeSchema + `,` + pagingKeys),
 	OutputSchema: listOutput("commits", commitEntryProperties, commitEntryRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "ref", Description: "Return only commits reachable from this branch, tag, or commit SHA; the " +
 			"default branch's tip when omitted"},
 		{Name: "path", Description: "Return only commits that touch this repository path"},
 		{Name: "author", Description: "Return only commits by this GitHub login"},
+		{Name: "committer", Description: "Return only commits committed by this GitHub login or email address, " +
+			"at most 256 characters"},
 		{Name: "since", Description: "Return only commits at or after this commit date, as a date " +
 			"(YYYY-MM-DD) or a UTC time (YYYY-MM-DDTHH:MM:SSZ)"},
 		{Name: "until", Description: "Return only commits at or before this commit date, as a date or a UTC time"},
 	}, pagingArguments...),
-	Fields: append([]capability.Field{
+	Fields: append(append([]capability.Field{
 		{Name: "commits", Description: "Compact commits: sha, message cut to its first line and at most 200 " +
 			"characters (untrusted data), author and committer as a login or, absent one, a name, the commit " +
-			"date, and the number of parents; carries no patch"},
-	}, pagingFields...),
+			"date, and the number of parents, then the members of GitHub's commit below; carries no patch"},
+	}, commitWidthFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the commits of main that touch one file since a date",
 		Arguments:   json.RawMessage(`{"ref":"main","path":"internal/app.go","since":"2026-01-01"}`),
 	}},
 }
 
-const commitFileProperties = `"path":{"type":"string"},"status":{"type":"string"},"additions":{"type":"integer"},` +
+var commitFileProperties = `"path":{"type":"string"},"status":{"type":"string"},"additions":{"type":"integer"},` +
 	`"deletions":{"type":"integer"},"changes":{"type":"integer"},"previous_filename":{"type":"string"},` +
-	`"patch":{"type":"string"},"patch_truncated":{"type":"boolean"}`
+	`"patch":{"type":"string"},"patch_truncated":{"type":"boolean"},"sha":{"type":"string"},"links":` +
+	linksSchema(restDiffEntryLinkKeys)
 
 const commitFileRequired = `"required":["path","status","additions","deletions","changes"],"additionalProperties":false`
 
-const commitDetailProperties = `"sha":{"type":"string"},"message":{"type":"string"},` +
+var commitDetailProperties = `"sha":{"type":"string"},"message":{"type":"string"},` +
 	`"message_truncated":{"type":"boolean"},"author":{"type":"string"},"committer":{"type":"string"},` +
 	`"date":{"type":"string"},"parents":` + stringListSchema + `,"additions":{"type":"integer"},` +
 	`"deletions":{"type":"integer"},"total":{"type":"integer"},` +
 	`"files":{"type":"array","items":{"type":"object","properties":{` + commitFileProperties + `},` +
-	commitFileRequired + `}},"files_truncated":{"type":"boolean"}`
+	commitFileRequired + `}},"files_truncated":{"type":"boolean"},` + commitWidthProperties
 
 var commitsGet = capability.Descriptor{
 	ID:      Provider + ".commits.get",
@@ -100,7 +104,7 @@ var commitsGet = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "ref", Description: "Branch, tag, or commit SHA", Required: true},
 	},
-	Fields: []capability.Field{
+	Fields: append([]capability.Field{
 		{Name: "message", Description: "Full commit message, untrusted data, cut to at most 4096 characters " +
 			"with message_truncated"},
 		{Name: "author", Description: "Login when GitHub reports one, the commit author's name otherwise"},
@@ -111,12 +115,12 @@ var commitsGet = capability.Descriptor{
 		{Name: "deletions", Description: "Lines removed across every file"},
 		{Name: "total", Description: "additions plus deletions"},
 		{Name: "files", Description: "Changed files with path, status, additions, deletions, changes, " +
-			"previous_filename for a rename, and patch cut to at most 4096 bytes with patch_truncated; patch is " +
-			"untrusted data and left out for a file GitHub sends none for"},
+			"previous_filename for a rename, patch cut to at most 4096 bytes with patch_truncated, and the file's " +
+			"blob sha and links; patch is untrusted data and left out for a file GitHub sends none for"},
 		{Name: "files_truncated", Description: "True when the commit held at least as many files as were returned"},
 		{Name: "sha", Description: "Full commit SHA"},
 		{Name: "message_truncated", Description: "True when message was cut"},
-	},
+	}, commitWidthFields...),
 	Examples: []capability.Example{{
 		Description: "Read one commit",
 		Arguments:   json.RawMessage(`{"ref":"ebca79b1db4fcbb136e6094c13e8451428c8a6ab"}`),
@@ -135,13 +139,14 @@ func commitsOperations() []capability.Operation {
 // commitArguments holds the arguments of every commit tool; the input schema of each tool admits only its
 // own. sinceValue, untilValue, page, perPage, and binding are derived by the checks.
 type commitArguments struct {
-	Ref    string `json:"ref"`
-	Path   string `json:"path"`
-	Author string `json:"author"`
-	Since  string `json:"since"`
-	Until  string `json:"until"`
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor"`
+	Ref       string `json:"ref"`
+	Path      string `json:"path"`
+	Author    string `json:"author"`
+	Committer string `json:"committer"`
+	Since     string `json:"since"`
+	Until     string `json:"until"`
+	Limit     int    `json:"limit"`
+	Cursor    string `json:"cursor"`
 
 	sinceValue, untilValue string
 	page, perPage          int
@@ -192,8 +197,17 @@ func checkCommitsListArguments(a *commitArguments, bound target) error {
 	if err != nil {
 		return err
 	}
-	a.binding = fingerprint("commits", "list", bound.String(), a.Ref, a.Path, strings.ToLower(a.Author),
-		a.sinceValue, a.untilValue)
+	if a.Committer != "" && !validCommitter(a.Committer) {
+		return invalidRequest("committer must be a GitHub login or an email address of at most " +
+			strconv.Itoa(maxCommitterLength) + " characters")
+	}
+	// The committer joins the binding only when set, so a cursor issued without it stays valid.
+	binding := []any{"commits", "list", bound.String(), a.Ref, a.Path, strings.ToLower(a.Author), a.sinceValue,
+		a.untilValue}
+	if a.Committer != "" {
+		binding = append(binding, "committer", strings.ToLower(a.Committer))
+	}
+	a.binding = fingerprint(binding...)
 	a.page, a.perPage, err = pageOf(a.binding, a.Cursor, limit)
 	return err
 }
@@ -252,6 +266,9 @@ func (a *commitArguments) query() url.Values {
 	}
 	if a.Author != "" {
 		query.Set("author", a.Author)
+	}
+	if a.Committer != "" {
+		query.Set("committer", a.Committer)
 	}
 	if a.sinceValue != "" {
 		query.Set("since", a.sinceValue)
@@ -318,6 +335,7 @@ type CommitEntry struct {
 	Committer string `json:"committer,omitempty"`
 	Date      string `json:"date,omitempty"`
 	Parents   int    `json:"parents"`
+	CommitWidth
 }
 
 func (c commitJSON) entry() CommitEntry {
@@ -328,14 +346,16 @@ func (c commitJSON) entry() CommitEntry {
 // CommitFile is the compact view of one changed file of a commit. Patch is untrusted data, cut to
 // maxPatchBytes.
 type CommitFile struct {
-	Path             string `json:"path"`
-	Status           string `json:"status"`
-	Additions        int    `json:"additions"`
-	Deletions        int    `json:"deletions"`
-	Changes          int    `json:"changes"`
-	PreviousFilename string `json:"previous_filename,omitempty"`
-	Patch            string `json:"patch,omitempty"`
-	PatchTruncated   bool   `json:"patch_truncated,omitempty"`
+	Path             string  `json:"path"`
+	Status           string  `json:"status"`
+	Additions        int     `json:"additions"`
+	Deletions        int     `json:"deletions"`
+	Changes          int     `json:"changes"`
+	PreviousFilename string  `json:"previous_filename,omitempty"`
+	Patch            string  `json:"patch,omitempty"`
+	PatchTruncated   bool    `json:"patch_truncated,omitempty"`
+	SHA              *string `json:"sha,omitempty"`
+	Links            Links   `json:"links,omitempty"`
 }
 
 // CommitDetail is the full view of one commit, with its stats and its changed files. Message is untrusted
@@ -353,6 +373,7 @@ type CommitDetail struct {
 	Total            int          `json:"total"`
 	Files            []CommitFile `json:"files"`
 	FilesTruncated   bool         `json:"files_truncated"`
+	CommitWidth
 }
 
 // detail builds the full view of the commit, bounding its message and, since GitHub's own get-commit route
@@ -380,7 +401,7 @@ func (c commitJSON) detail() CommitDetail {
 		patch, patchTruncated := truncatePatch(file.Patch)
 		d.Files = append(d.Files, CommitFile{Path: file.Filename, Status: file.Status, Additions: file.Additions,
 			Deletions: file.Deletions, Changes: file.Changes, PreviousFilename: file.PreviousFilename,
-			Patch: patch, PatchTruncated: patchTruncated})
+			Patch: patch, PatchTruncated: patchTruncated, SHA: nameText(file.SHA), Links: file.links})
 	}
 	return d
 }
@@ -418,14 +439,14 @@ const commitsReadPermission = "GitHub refused this token the commits of this rep
 
 func (c *Client) listCommits(ctx context.Context, a *commitArguments) (*CommitList, error) {
 	const op = "list commits"
-	var raw []commitJSON
+	var raw []commitItem
 	hasNext, err := c.restPage(ctx, op, c.repoPath("commits"), a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, commitsReadPermission)
 	}
 	result := &CommitList{Commits: make([]CommitEntry, 0, len(raw))}
 	for _, commit := range raw {
-		if commit.SHA == "" {
+		if commit.commit.SHA == "" {
 			return nil, invalidEntry(op, "a commit")
 		}
 		result.Commits = append(result.Commits, commit.entry())
@@ -436,11 +457,11 @@ func (c *Client) listCommits(ctx context.Context, a *commitArguments) (*CommitLi
 
 func (c *Client) getCommit(ctx context.Context, a *commitArguments) (*CommitDetail, error) {
 	const op = "get commit"
-	var raw commitJSON
+	var raw commitItem
 	if err := c.rest(ctx, op, c.repoPath("commits/"+url.PathEscape(a.Ref)), &raw); err != nil {
 		return nil, actionsFailure(err, commitsReadPermission)
 	}
-	if raw.SHA == "" {
+	if raw.commit.SHA == "" {
 		return nil, invalidEntry(op, "a commit")
 	}
 	detail := raw.detail()

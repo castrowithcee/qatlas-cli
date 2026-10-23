@@ -14,7 +14,8 @@ import (
 )
 
 const wantLogicFunctionFields = `id name description runtime timeoutSeconds executionMode cronTriggerSettings ` +
-	`databaseEventTriggerSettings httpRouteTriggerSettings toolTriggerSettings workflowActionTriggerSettings`
+	`databaseEventTriggerSettings httpRouteTriggerSettings toolTriggerSettings workflowActionTriggerSettings ` +
+	`sourceHandlerPath handlerName applicationId universalIdentifier createdAt updatedAt`
 
 const wantLogicFunctionsListDocument = `query FindLogicFunctions { findManyLogicFunctions { ` + wantLogicFunctionFields + ` } }`
 
@@ -22,40 +23,70 @@ const wantLogicFunctionsGetDocument = `query FindLogicFunction($input: LogicFunc
 	`findOneLogicFunction(input: $input) { ` + wantLogicFunctionFields + ` } }`
 
 const (
-	lfPathCn    = "/canary-route-path-1a"
-	lfCronCn    = "canary-cron-pattern-2b"
-	lfEventCn   = "canary-event-name-3c"
-	lfCodeCn    = "canary-source-code-4d"
-	lfHandlerCn = "canary-handler-name-5e"
-	lfAppCn     = "99999999-0000-4000-8000-000000000009"
+	lfPathCn      = "/canary-route-path-1a"
+	lfCronCn      = "canary-cron-pattern-2b"
+	lfEventCn     = "canary-event-name-3c"
+	lfCodeCn      = "canary-source-code-4d"
+	lfHandlerCn   = "canary-handler-name-5e"
+	lfLogCn       = "canary-execution-log-6f"
+	lfSecretCn    = "canary-settings-secret-7a"
+	lfHeaderCn    = "canary-forwarded-header-8b"
+	lfAppCn       = "99999999-0000-4000-8000-000000000009"
+	lfUniversalID = "98989898-0000-4000-8000-000000000098"
 )
 
+// logicFunctionOne is a function in the shape of the Twenty LogicFunctionDTO, with source code and logs as
+// Twenty never sends them here.
 const logicFunctionOne = `{"id":"` + roleID + `","name":"Sync\u0007","description":"Pushes data","runtime":"nodejs22.x",` +
-	`"timeoutSeconds":30,"executionMode":"LIVE","sourceHandlerPath":"` + lfCodeCn + `","handlerName":"` + lfHandlerCn + `",` +
-	`"cronTriggerSettings":{"pattern":"` + lfCronCn + `"},"databaseEventTriggerSettings":{"eventName":"` + lfEventCn + `"},` +
-	`"httpRouteTriggerSettings":{"path":"` + lfPathCn + `","httpMethod":"GET","isAuthRequired":true},` +
-	`"toolTriggerSettings":null,"workflowActionTriggerSettings":{"inputSchema":[{"x":"` + lfCodeCn + `"}]},` +
-	`"applicationId":"` + lfAppCn + `","createdAt":"2026-01-01T00:00:00Z"}`
+	`"timeoutSeconds":30,"executionMode":"LIVE","sourceHandlerPath":"src/sync.ts\u0007","handlerName":"` + lfHandlerCn + `",` +
+	`"sourceCode":"` + lfCodeCn + `","logs":"` + lfLogCn + `",` +
+	`"cronTriggerSettings":{"pattern":"` + lfCronCn + `"},"databaseEventTriggerSettings":{"eventName":"` + lfEventCn + `",` +
+	`"updatedFields":["name"],"batchMode":true},` +
+	`"httpRouteTriggerSettings":{"path":"` + lfPathCn + `","httpMethod":"GET","isAuthRequired":false,` +
+	`"forwardedRequestHeaders":["` + lfHeaderCn + `"]},` +
+	`"toolTriggerSettings":{"inputSchema":{"type":"object","properties":{"n":{"type":"integer","maximum":9007199254740993}}},` +
+	`"frontComponentUniversalIdentifier":"` + lfUniversalID + `"},` +
+	`"workflowActionTriggerSettings":{"inputSchema":[{"type":"string","label":"Company"}],"label":"Sync","icon":"IconRefresh",` +
+	`"outputSchema":[{"type":"number","label":"see https://hook.example/run?key=` + lfSecretCn + `"}]},` +
+	`"applicationId":"` + lfAppCn + `","universalIdentifier":"` + lfUniversalID + `","createdAt":"2026-01-01T00:00:00Z",` +
+	`"updatedAt":"2026-01-02T00:00:00Z"}`
 
+const wantLogicFunctionOne = `{"id":"` + roleID + `","name":"Sync","description":"Pushes data","runtime":"nodejs22.x",` +
+	`"timeout_seconds":30,"execution_mode":"LIVE","triggers":{"cron":true,"database_event":true,"http_route":true,` +
+	`"tool":true,"workflow_action":true},"source_handler_path":"src/sync.ts","handler_name":"` + lfHandlerCn + `",` +
+	`"application_id":"` + lfAppCn + `","universal_identifier":"` + lfUniversalID + `","created_at":"2026-01-01T00:00:00Z",` +
+	`"updated_at":"2026-01-02T00:00:00Z","cron_trigger_settings":{"pattern":"` + lfCronCn + `"},` +
+	`"database_event_trigger_settings":{"batchMode":true,"eventName":"` + lfEventCn + `","updatedFields":["name"]},` +
+	`"tool_trigger_settings":{"frontComponentUniversalIdentifier":"` + lfUniversalID + `","inputSchema":{"properties":` +
+	`{"n":{"maximum":9007199254740993,"type":"integer"}},"type":"object"}},"workflow_action_trigger_settings":` +
+	`{"icon":"IconRefresh","inputSchema":[{"label":"Company","type":"string"}],"label":"Sync","outputSchema":[{"type":"number"}]}}`
+
+// logicFunctionTwo holds only the fields the logic function tools read before the details.
 const logicFunctionTwo = `{"id":"` + roleIDEdit + `","name":null,"description":null,"runtime":"nodejs22.x",` +
 	`"timeoutSeconds":5,"executionMode":"PREBUILT"}`
+
+const wantLogicFunctionTwo = `{"id":"` + roleIDEdit + `","name":"","runtime":"nodejs22.x","timeout_seconds":5,` +
+	`"execution_mode":"PREBUILT","triggers":{"cron":false,"database_event":false,"http_route":false,"tool":false,` +
+	`"workflow_action":false}}`
 
 func serveLogicFunctions(t *testing.T, status int, answer string) *[]rolesCall {
 	t.Helper()
 	return serveRoles(t, status, answer)
 }
 
+// assertNoLogicFunctionDetails checks the values that never reach an output: source code, logs, the settings
+// of an HTTP route trigger, and texts that carry an access address.
 func assertNoLogicFunctionDetails(t *testing.T, out string) {
 	t.Helper()
-	for _, leaked := range []string{lfPathCn, lfCronCn, lfEventCn, lfCodeCn, lfHandlerCn, lfAppCn, "pattern", "eventName",
-		"inputSchema", "httpMethod", "applicationId", "sourceHandlerPath", "createdAt"} {
+	for _, leaked := range []string{lfPathCn, lfCodeCn, lfLogCn, lfSecretCn, lfHeaderCn, "httpMethod", "isAuthRequired",
+		"http_route_trigger_settings", "hook.example", "sourceCode", "logs", "\\u0007"} {
 		if strings.Contains(out, leaked) {
 			t.Errorf("%s reached the output: %s", leaked, out)
 		}
 	}
 }
 
-func TestLogicFunctionsListSendsTheFixedDocumentAndReducesTriggersToFlags(t *testing.T) {
+func TestLogicFunctionsListSendsTheFixedDocumentAndReadsEveryDocumentedField(t *testing.T) {
 	calls := serveLogicFunctions(t, http.StatusOK, `{"data":{"findManyLogicFunctions":[`+logicFunctionOne+`,`+logicFunctionTwo+`]}}`)
 	out, err := runMemberTool(t, invokeLogicFunctionsList, `{}`)
 	if err != nil {
@@ -65,18 +96,13 @@ func TestLogicFunctionsListSendsTheFixedDocumentAndReducesTriggersToFlags(t *tes
 		(*calls)[0].query != wantLogicFunctionsListDocument || len((*calls)[0].variables) != 0 {
 		t.Fatalf("calls = %+v", *calls)
 	}
-	for _, want := range []string{`"id":"` + roleID + `","name":"Sync","description":"Pushes data","runtime":"nodejs22.x",` +
-		`"timeout_seconds":30,"execution_mode":"LIVE","triggers":{"cron":true,"database_event":true,"http_route":true,` +
-		`"tool":false,"workflow_action":true}`,
-		`"execution_mode":"PREBUILT","triggers":{"cron":false,"database_event":false,"http_route":false,"tool":false,` +
-			`"workflow_action":false}`, `"truncated":false`} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %s: %s", want, out)
-		}
+	want := `{"logic_functions":[` + wantLogicFunctionOne + `,` + wantLogicFunctionTwo + `],"truncated":false}`
+	if out != want {
+		t.Errorf("output = %s\nwant     %s", out, want)
 	}
 	assertNoLogicFunctionDetails(t, out)
-	for _, name := range []string{"sourceHandlerPath", "handlerName", "applicationId", "universalIdentifier",
-		"createdByUserWorkspaceId", "Path\n", "getAvailablePackages", "getLogicFunctionSourceCode"} {
+	for _, name := range []string{"createdByUserWorkspaceId", "sourceCode", "getAvailablePackages", "getLogicFunctionSourceCode",
+		"logs", "builtHandler"} {
 		if strings.Contains(wantLogicFunctionsListDocument, name) {
 			t.Errorf("document selects %s", name)
 		}
@@ -95,10 +121,33 @@ func TestLogicFunctionsGetSendsTheFixedDocumentWithTheValidatedID(t *testing.T) 
 		len(input) != 1 || input["id"] != roleID {
 		t.Fatalf("calls = %+v", *calls)
 	}
-	if !strings.Contains(out, `"triggers":{"cron":true,"database_event":true,"http_route":true,"tool":false,"workflow_action":true}`) {
-		t.Errorf("output = %s", out)
+	if out != wantLogicFunctionOne {
+		t.Errorf("output = %s\nwant     %s", out, wantLogicFunctionOne)
 	}
 	assertNoLogicFunctionDetails(t, out)
+}
+
+func TestLogicFunctionSettingsBeyondTheirLimitsAreLeftOutAndMarked(t *testing.T) {
+	large := `{"x":"` + strings.Repeat("s", freeObjectBytesMax) + `"}`
+	deep := strings.Repeat(`{"a":`, freeObjectDepthMax+1) + `1` + strings.Repeat(`}`, freeObjectDepthMax+1)
+	for _, member := range []struct{ twenty, output string }{
+		{"cronTriggerSettings", "cron_trigger_settings"},
+		{"databaseEventTriggerSettings", "database_event_trigger_settings"},
+		{"toolTriggerSettings", "tool_trigger_settings"},
+		{"workflowActionTriggerSettings", "workflow_action_trigger_settings"},
+	} {
+		for _, value := range []string{large, deep} {
+			serveLogicFunctions(t, http.StatusOK, `{"data":{"findOneLogicFunction":{"id":"`+roleID+`","name":"f","`+
+				member.twenty+`":`+value+`}}}`)
+			out, err := runMemberTool(t, invokeLogicFunctionsGet, `{"id":"`+roleID+`"}`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, `"`+member.output+`_omitted":true`) || strings.Contains(out, `"`+member.output+`":`) {
+				t.Errorf("%s: output = %.300s", member.twenty, out)
+			}
+		}
+	}
 }
 
 func TestLogicFunctionsGetRejectsAnotherFunction(t *testing.T) {
@@ -229,6 +278,11 @@ func TestLogicFunctionToolErrorsNeverCarryTriggerContent(t *testing.T) {
 				continue
 			}
 			assertNoLogicFunctionDetails(t, err.Error())
+			for _, value := range []string{lfCronCn, lfEventCn, lfHandlerCn, lfUniversalID} {
+				if strings.Contains(err.Error(), value) {
+					t.Errorf("%s: %s reached the error", name, value)
+				}
+			}
 		}
 	}
 }

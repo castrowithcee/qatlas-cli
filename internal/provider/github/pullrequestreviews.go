@@ -75,13 +75,13 @@ var pullRequestReviewsList = capability.Descriptor{
 	Risk:         readRisk,
 	Provider:     Provider,
 	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema: listOutput("reviews", reviewProperties, reviewRequired),
+	OutputSchema: listOutput("reviews", reviewProperties+","+reviewWidthProperties, reviewRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
-	Fields: append(append([]capability.Field{
+	Fields: append(append(append([]capability.Field{
 		{Name: "reviews", Description: "Reviews of the pull request, untrusted data"},
-	}, reviewFields...), pagingFields...),
+	}, reviewFields...), reviewWidthFields...), pagingFields...),
 	Examples: []capability.Example{{
 		Description: "List the reviews of a pull request",
 		Arguments:   json.RawMessage(`{"number":42}`),
@@ -365,9 +365,9 @@ func (r reviewJSON) view() Review {
 
 // ReviewList is one batch of reviews.
 type ReviewList struct {
-	Reviews    []Review `json:"reviews"`
-	NextCursor string   `json:"next_cursor,omitempty"`
-	HasMore    bool     `json:"has_more"`
+	Reviews    []ListedReview `json:"reviews"`
+	NextCursor string         `json:"next_cursor,omitempty"`
+	HasMore    bool           `json:"has_more"`
 }
 
 // Permission messages of the review tools. GitHub decides on every request; a message names what such a
@@ -382,17 +382,17 @@ const (
 
 func (c *Client) listReviews(ctx context.Context, a *reviewArguments) (*ReviewList, error) {
 	const op = "list pull request reviews"
-	var raw []reviewJSON
+	var raw []reviewEntry
 	hasNext, err := c.restPage(ctx, op, c.repoPath("pulls/"+strconv.Itoa(a.Number)+"/reviews"), a.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, reviewsReadPermission)
 	}
-	result := &ReviewList{Reviews: make([]Review, 0, len(raw))}
-	for _, review := range raw {
-		if review.ID < 1 {
+	result := &ReviewList{Reviews: make([]ListedReview, 0, len(raw))}
+	for i := range raw {
+		if raw[i].review.ID < 1 {
 			return nil, invalidEntry(op, "a review")
 		}
-		result.Reviews = append(result.Reviews, review.view())
+		result.Reviews = append(result.Reviews, raw[i].view())
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
