@@ -13,7 +13,7 @@ import (
 
 // Lists page with page (from 1) and limit. An instance caps limit silently at its max_response_items, 50
 // unless its administrator changed it, so a batch never asks for more. The end of a list comes from the Link
-// header, or without one from X-Total-Count, never from a batch shorter than its limit.
+// header, or without one from X-HasMore (commit lists) or X-Total-Count, never from a batch shorter than its limit.
 const (
 	defaultLimit    = 30
 	maxLimit        = 50
@@ -99,6 +99,9 @@ func hasMore(header http.Header, page, limit, rows int) bool {
 			}
 		}
 		return false
+	}
+	if flag := header.Get("X-HasMore"); flag != "" {
+		return strings.EqualFold(strings.TrimSpace(flag), "true")
 	}
 	total, err := strconv.Atoi(strings.TrimSpace(header.Get("X-Total-Count")))
 	if err != nil || total < 0 {

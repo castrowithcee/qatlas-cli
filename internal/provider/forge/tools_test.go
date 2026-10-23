@@ -98,6 +98,33 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".issue-pins.unpin", p.id+".issue-pins.move", p.id+".issue-subscriptions.list",
 			p.id+".issue-subscriptions.check", p.id+".issue-subscriptions.add", p.id+".issue-subscriptions.remove")
 		want = append(want, p.id+".issue-locks.lock", p.id+".issue-locks.unlock")
+		want = append(want, p.id+".pull-request-reviews.list", p.id+".pull-request-reviews.get",
+			p.id+".pull-request-reviews.create", p.id+".pull-request-reviews.submit",
+			p.id+".pull-request-reviews.approve", p.id+".pull-request-reviews.delete",
+			p.id+".pull-request-reviews.dismiss", p.id+".pull-request-reviews.undismiss",
+			p.id+".pull-request-review-comments.list")
+		if p == forgejo {
+			want = append(want, p.id+".pull-request-review-comments.get", p.id+".pull-request-review-comments.create",
+				p.id+".pull-request-review-comments.delete")
+		} else {
+			want = append(want, p.id+".pull-request-review-comments.reply", p.id+".pull-request-review-comments.resolve",
+				p.id+".pull-request-review-comments.unresolve")
+		}
+		want = append(want, p.id+".workflow-runs.list", p.id+".workflow-runs.get", p.id+".workflow-runs.delete",
+			p.id+".workflow-runs.cancel", p.id+".workflow-runs.rerun", p.id+".workflow-run-logs.get",
+			p.id+".workflow-jobs.list", p.id+".workflow-jobs.get", p.id+".workflow-jobs.rerun",
+			p.id+".workflow-job-logs.get", p.id+".actions-tasks.list")
+		if p == gitea {
+			want = append(want, p.id+".workflow-runs.force-cancel", p.id+".workflow-runs.rerun-failed",
+				p.id+".workflow-runs.approve", p.id+".workflow-run-attempts.get", p.id+".workflow-run-attempts.list-jobs")
+		}
+		want = append(want, p.id+".commits.list", p.id+".commits.get", p.id+".commits.get-diff", p.id+".compare.get",
+			p.id+".commit-statuses.list", p.id+".commit-statuses.get-combined", p.id+".commit-statuses.create",
+			p.id+".git-blobs.get", p.id+".git-trees.get", p.id+".git-refs.list", p.id+".git-tags.get",
+			p.id+".git-notes.get")
+		if p == forgejo {
+			want = append(want, p.id+".git-blobs.list", p.id+".git-notes.set", p.id+".git-notes.delete")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -162,6 +189,34 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
 				t.Errorf("%s is missing", p.toolID(shared))
 			}
+		}
+	}
+}
+
+func TestReviewCommentToolsRegisterOnlyForTheirProduct(t *testing.T) {
+	reg := registry(t)
+	for _, shared := range []*tool{reviewsList, reviewsGet, reviewsCreate, reviewsSubmit, reviewsApprove,
+		reviewsDelete, reviewsDismiss, reviewsUndismiss, reviewCommentsList} {
+		for _, p := range products {
+			if _, _, ok := reg.Lookup(p.toolID(shared)); !ok {
+				t.Errorf("%s is missing", p.toolID(shared))
+			}
+		}
+	}
+	for _, only := range []*tool{reviewCommentsGet, reviewCommentsCreate, reviewCommentsDelete} {
+		if _, _, ok := reg.Lookup(gitea.toolID(only)); ok {
+			t.Errorf("%s is registered for Gitea", gitea.toolID(only))
+		}
+		if _, _, ok := reg.Lookup(forgejo.toolID(only)); !ok {
+			t.Errorf("%s is missing", forgejo.toolID(only))
+		}
+	}
+	for _, only := range []*tool{reviewCommentsReply, reviewCommentsResolve, reviewCommentsUnresolve} {
+		if _, _, ok := reg.Lookup(forgejo.toolID(only)); ok {
+			t.Errorf("%s is registered for Forgejo", forgejo.toolID(only))
+		}
+		if _, _, ok := reg.Lookup(gitea.toolID(only)); !ok {
+			t.Errorf("%s is missing", gitea.toolID(only))
 		}
 	}
 }

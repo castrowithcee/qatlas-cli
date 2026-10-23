@@ -36,7 +36,7 @@ var updatesList = capability.Descriptor{
 	ID:          Provider + ".updates.list",
 	Version:     1,
 	Title:       "List Telegram updates",
-	Description: "Read pending incoming messages and events of the bound chats and business connections, and inline queries with the bot target, without consuming them",
+	Description: "Read pending incoming messages and events of the bound chats and business connections, and chatless updates such as inline, shipping, and payment queries, polls, and subscriptions with the bot target, without consuming them",
 	Tags:        []string{"telegram", "updates", "read"},
 	Risk: capability.Risk{
 		Effect:          capability.EffectRead,
@@ -64,7 +64,7 @@ var updatesList = capability.Descriptor{
 		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"},` +
 		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"},` +
 		`"business_chat_ref":{"type":"string"},"message_ids":{"type":"array","items":{"type":"integer"}},` +
-		`"is_enabled":{"type":"boolean"}` + messageHeadSchema + `},` +
+		`"is_enabled":{"type":"boolean"}` + messageHeadSchema + updateEventSchema + `},` +
 		`"required":["update_id","type","chat"]}},` +
 		`"skipped":{"type":"integer"},"last_update_id":{"type":"integer"}},` +
 		`"required":["updates","skipped"],"additionalProperties":false}`),
@@ -72,11 +72,11 @@ var updatesList = capability.Descriptor{
 		{Name: "limit", Description: "Maximum number of pending updates to fetch, from 1 through 100; default 20; a Telegram answer over " + strconv.Itoa(updatesResponseBytes>>20) + " MiB fails as an invalid response, and a smaller limit avoids it"},
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
-	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref; from is " + userFieldsText + "; media_items lists the media objects of a message with their Bot API members and signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member> or as a header or content member, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB; messages also carry " + messageHeadText},
-		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or business connection or have an unsupported type"},
+	Fields: append([]capability.Field{
+		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, chatless updates (inline queries and chosen results, callbacks of inline messages, shipping and pre-checkout queries, purchased paid media, polls, poll answers, managed bots, subscriptions), oldest first; the event members are listed as fields of their own, and a location or poll is the message member of that name; business updates name their chat only as business_chat_ref; from is " + userFieldsText + "; media_items lists the media objects of a message with their Bot API members and signed file references, and omitted_fields names, as media_items.<kind> or media_items.<kind>.<member> or as a header or content member, a nested object left out for exceeding 8 levels, 100 list elements or 16 KiB; messages also carry " + messageHeadText},
+		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat, business connection, or bot target, or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
-	},
+	}, append(updateBaseFields, updateEventFields...)...),
 	Examples: []capability.Example{{
 		Description: "Read up to 20 pending updates of the bound chats",
 		Arguments:   json.RawMessage(`{}`),
@@ -229,6 +229,7 @@ type updateOut struct {
 	MessageIDs       []int64    `json:"message_ids,omitempty"`
 	IsEnabled        *bool      `json:"is_enabled,omitempty"`
 
+	updateEventOut
 	messageHeadOut
 }
 
@@ -330,42 +331,53 @@ type tgEvent struct {
 }
 
 type tgCallback struct {
-	ID      string  `json:"id"`
-	From    *tgUser `json:"from"`
-	Data    string  `json:"data"`
-	Message *struct {
-		MessageID       int64  `json:"message_id"`
-		MessageThreadID int64  `json:"message_thread_id"`
-		Date            int64  `json:"date"`
-		Chat            tgChat `json:"chat"`
-	} `json:"message"`
+	ID              string     `json:"id"`
+	From            *tgUser    `json:"from"`
+	Data            string     `json:"data"`
+	Message         *tgMessage `json:"message"`
+	InlineMessageID string     `json:"inline_message_id"`
+	ChatInstance    string     `json:"chat_instance"`
+	GameShortName   string     `json:"game_short_name"`
 }
 
-// tgInline covers inline_query and chosen_inline_result. Location, offset, and inline_message_id are not
-// decoded, so they cannot reach the output.
+// tgInline covers inline_query and chosen_inline_result. inline_message_id is read only to be signed.
 type tgInline struct {
-	ID       string  `json:"id"`
-	From     *tgUser `json:"from"`
-	Query    string  `json:"query"`
-	ResultID string  `json:"result_id"`
+	ID              string              `json:"id"`
+	From            *tgUser             `json:"from"`
+	Query           string              `json:"query"`
+	ResultID        string              `json:"result_id"`
+	Offset          string              `json:"offset"`
+	ChatType        string              `json:"chat_type"`
+	Location        *messageLocationOut `json:"location"`
+	InlineMessageID string              `json:"inline_message_id"`
 }
 
 type tgUpdate struct {
-	UpdateID             int64       `json:"update_id"`
-	Message              *tgMessage  `json:"message"`
-	EditedMessage        *tgMessage  `json:"edited_message"`
-	ChannelPost          *tgMessage  `json:"channel_post"`
-	EditedChannelPost    *tgMessage  `json:"edited_channel_post"`
-	MessageReaction      *tgEvent    `json:"message_reaction"`
-	MessageReactionCount *tgEvent    `json:"message_reaction_count"`
-	CallbackQuery        *tgCallback `json:"callback_query"`
-	InlineQuery          *tgInline   `json:"inline_query"`
-	ChosenInlineResult   *tgInline   `json:"chosen_inline_result"`
-	MyChatMember         *tgEvent    `json:"my_chat_member"`
-	ChatMember           *tgEvent    `json:"chat_member"`
-	ChatJoinRequest      *tgEvent    `json:"chat_join_request"`
-	ChatBoost            *tgEvent    `json:"chat_boost"`
-	RemovedChatBoost     *tgEvent    `json:"removed_chat_boost"`
+	UpdateID             int64                 `json:"update_id"`
+	Message              *tgMessage            `json:"message"`
+	EditedMessage        *tgMessage            `json:"edited_message"`
+	ChannelPost          *tgMessage            `json:"channel_post"`
+	EditedChannelPost    *tgMessage            `json:"edited_channel_post"`
+	MessageReaction      *tgReactionEvent      `json:"message_reaction"`
+	MessageReactionCount *tgReactionCountEvent `json:"message_reaction_count"`
+	CallbackQuery        *tgCallback           `json:"callback_query"`
+	InlineQuery          *tgInline             `json:"inline_query"`
+	ChosenInlineResult   *tgInline             `json:"chosen_inline_result"`
+	MyChatMember         *tgMemberEvent        `json:"my_chat_member"`
+	ChatMember           *tgMemberEvent        `json:"chat_member"`
+	ChatJoinRequest      *tgJoinEvent          `json:"chat_join_request"`
+	ChatBoost            *tgBoostEvent         `json:"chat_boost"`
+	RemovedChatBoost     *tgBoostRemovedEvent  `json:"removed_chat_boost"`
+
+	GuestMessage             *tgMessage            `json:"guest_message"`
+	StoppedMessageGeneration *tgStoppedGeneration  `json:"stopped_message_generation"`
+	ShippingQuery            *tgShippingQuery      `json:"shipping_query"`
+	PreCheckoutQuery         *tgPreCheckoutQuery   `json:"pre_checkout_query"`
+	PurchasedPaidMedia       *tgPaidMediaPurchased `json:"purchased_paid_media"`
+	Poll                     *pollOut              `json:"poll"`
+	PollAnswer               *tgPollAnswer         `json:"poll_answer"`
+	ManagedBot               *tgManagedBot         `json:"managed_bot"`
+	Subscription             *tgSubscription       `json:"subscription"`
 
 	BusinessConnection     *tgBusinessConnection `json:"business_connection"`
 	BusinessMessage        *tgMessage            `json:"business_message"`
@@ -391,6 +403,14 @@ type candidate struct {
 	// botOnly marks an update that belongs to no chat; only the bot target binds it.
 	botOnly  bool
 	inlineID string
+	// The identifiers below have no chat; only the bot target signs them.
+	inlineMessageID string
+	shippingID      string
+	preCheckoutID   string
+	// poll is the decoded poll of a poll update, mapped once the bot target binds it.
+	poll *pollOut
+	// callbackMsg is the message a pressed button belongs to.
+	callbackMsg *tgMessage
 	// business is the business connection an update belongs to; only a business/<id> target binds it.
 	business string
 }
@@ -476,21 +496,36 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		return message("channel_post", u.ChannelPost)
 	case u.EditedChannelPost != nil:
 		return message("edited_channel_post", u.EditedChannelPost)
+	case u.GuestMessage != nil:
+		return message("guest_message", u.GuestMessage)
 	case u.MessageReaction != nil:
-		return event("message_reaction", u.MessageReaction)
+		c, _ = event("message_reaction", &u.MessageReaction.tgEvent)
+		c.reactionEvent(u.MessageReaction)
+		return c, true
 	case u.MessageReactionCount != nil:
-		return event("message_reaction_count", u.MessageReactionCount)
+		c, _ = event("message_reaction_count", &u.MessageReactionCount.tgEvent)
+		c.reactionCountEvent(u.MessageReactionCount)
+		return c, true
 	case u.MyChatMember != nil:
-		return event("my_chat_member", u.MyChatMember)
+		c, _ = event("my_chat_member", &u.MyChatMember.tgEvent)
+		c.memberEvent(u.MyChatMember)
+		return c, true
 	case u.ChatMember != nil:
-		return event("chat_member", u.ChatMember)
+		c, _ = event("chat_member", &u.ChatMember.tgEvent)
+		c.memberEvent(u.ChatMember)
+		return c, true
 	case u.ChatBoost != nil:
-		return event("chat_boost", u.ChatBoost)
+		c, _ = event("chat_boost", &u.ChatBoost.tgEvent)
+		c.boostEvent(u.ChatBoost)
+		return c, true
 	case u.RemovedChatBoost != nil:
-		return event("removed_chat_boost", u.RemovedChatBoost)
+		c, _ = event("removed_chat_boost", &u.RemovedChatBoost.tgEvent)
+		c.boostRemovedEvent(u.RemovedChatBoost)
+		return c, true
 	case u.ChatJoinRequest != nil:
-		c, _ = event("chat_join_request", u.ChatJoinRequest)
+		c, _ = event("chat_join_request", &u.ChatJoinRequest.tgEvent)
 		c.joinQuery = u.ChatJoinRequest.QueryID
+		c.joinEvent(u.ChatJoinRequest)
 		return c, true
 	// A business message without a connection ID is unsupported and falls through to the skipped count.
 	case u.BusinessMessage != nil && u.BusinessMessage.BusinessConnectionID != "":
@@ -513,25 +548,35 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		enabled := b.IsEnabled
 		c.out.Type, c.chat, c.business = "business_connection", b.UserChatID, b.ID
 		c.out.Date, c.out.From, c.out.IsEnabled = b.Date, sender(b.User), &enabled
+		c.out.Rights = b.Rights
 		return c, true
 	case u.CallbackQuery != nil:
 		q := u.CallbackQuery
-		if q.Message == nil {
-			// An inline-message callback names no chat.
-			return candidate{}, false
-		}
-		c.out.Type, c.chat = "callback_query", q.Message.Chat.ID
-		c.out.MessageID, c.out.Date = q.Message.MessageID, q.Message.Date
+		c.out.Type = "callback_query"
 		c.out.From = sender(q.From)
 		c.out.CallbackData = capText(q.Data, maxCallbackRunes)
+		c.out.ChatInstance, c.out.GameShortName = txtName(q.ChatInstance), txtName(q.GameShortName)
 		c.callbackID = q.ID
+		if q.Message == nil {
+			// A callback of an inline message names no chat; only the bot target shows it.
+			if q.InlineMessageID == "" {
+				return candidate{}, false
+			}
+			c.botOnly, c.inlineMessageID = true, q.InlineMessageID
+			return c, true
+		}
+		c.chat = q.Message.Chat.ID
+		c.out.MessageID, c.out.Date = q.Message.MessageID, q.Message.Date
 		c.thread = q.Message.MessageThreadID
+		c.callbackMsg = q.Message
 		return c, true
 	case u.InlineQuery != nil:
 		q := u.InlineQuery
 		c.out.Type, c.botOnly, c.inlineID = "inline_query", true, q.ID
 		c.out.From = sender(q.From)
 		c.out.Query = capText(q.Query, maxInlineQueryRunes)
+		c.out.Offset, c.out.ChatType = txtName(q.Offset), txtName(q.ChatType)
+		c.out.Location = cleanLocation(q.Location)
 		return c, true
 	case u.ChosenInlineResult != nil:
 		// It carries no query identifier: the query was answered already, so there is nothing to reference.
@@ -540,13 +585,15 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c.out.From = sender(q.From)
 		c.out.Query = capText(q.Query, maxInlineQueryRunes)
 		c.out.ResultID = capText(q.ResultID, maxInlineResultRunes)
+		c.out.Location = cleanLocation(q.Location)
+		c.inlineMessageID = q.InlineMessageID
 		return c, true
 	}
-	return candidate{}, false
+	return classifyEvent(u, c)
 }
 
 // ListUpdates fetches pending updates with one getUpdates request and returns only those of bound chats,
-// bound business connections, and, with the bot target, chatless inline updates. It sends neither offset nor
+// bound business connections, and, with the bot target, chatless updates. It sends neither offset nor
 // allowed_updates, so Telegram keeps every update; nothing is acknowledged.
 func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]any, error) {
 	const op = "list updates"
@@ -629,10 +676,7 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 	updates := make([]updateOut, 0, len(candidates))
 	for _, cand := range candidates {
 		if cand.botOnly {
-			cand.out.Chat = botTarget
-			if cand.inlineID != "" {
-				cand.out.InlineRef = signRef(c.token, refInlineQuery, botTarget, cand.inlineID)
-			}
+			c.bindBot(&cand)
 			updates = append(updates, cand.out)
 			continue
 		}
@@ -665,6 +709,7 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 		if cand.callbackID != "" {
 			cand.out.CallbackRef = signRef(c.token, refCallback, binding, cand.callbackID)
 		}
+		c.bindMessageOfCallback(&cand, messageScope{binding: binding, chatID: cand.chat, refs: c.fileRefs(binding)})
 		if cand.joinQuery != "" {
 			cand.out.JoinRequestRef = signRef(c.token, refJoinRequestQuery, binding, cand.joinQuery)
 		}

@@ -22,12 +22,17 @@ func rwScalar(name, kind, text string) rwMember {
 func rwObject(name, schema, text string) rwMember { return rwMember{name, schema, text} }
 
 func rwList(name, items, text string, total bool) []rwMember {
+	return rwListOf("repository", name, items, text, total)
+}
+
+// rwListOf describes the first page of a connection of holder, with its truncated marker and total count.
+func rwListOf(holder, name, items, text string, total bool) []rwMember {
 	out := []rwMember{{name, `{"type":"array","maxItems":10,"items":` + items + `}`, text},
-		rwScalar(name+"_truncated", "boolean", "True when the repository holds more "+strings.ReplaceAll(name, "_", " ")+
-			" than shown")}
+		rwScalar(name+"_truncated", "boolean", "True when the "+holder+" holds more "+
+			strings.ReplaceAll(name, "_", " ")+" than shown")}
 	if total {
 		out = append(out, rwScalar(name+"_total_count", "integer", "Number of "+strings.ReplaceAll(name, "_", " ")+
-			" the repository holds"))
+			" the "+holder+" holds"))
 	}
 	return out
 }

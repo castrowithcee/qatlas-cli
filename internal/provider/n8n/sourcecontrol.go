@@ -27,6 +27,8 @@ const (
 	maxCommitMessageLength = 1000
 	maxPolicyViolations    = 10
 	maxProviderTextLength  = 512
+	// maxFolderPathLength bounds the names of a folder path; n8n nests folders far less deeply.
+	maxFolderPathLength = 50
 )
 
 const sourceControlDataSensitivity = "n8n-source-control"
@@ -53,6 +55,26 @@ const sourceControlFileSchema = `{"type":"object","properties":{"id":{"type":"st
 	`"conflict":{"type":"boolean"},"publishing_error":{"type":"string"},` +
 	`"publishing_error_reason":{"type":"string"},"policy_violations":{"type":"array","items":{"type":"object"}},` +
 	`"policy_check_errors":{"type":"integer"}},"required":["id","type"],"additionalProperties":false}`
+
+// sourceControlStatusFileSchema is the preview's file: sourceControlFileSchema with the members only the
+// preview carries. policy_violations stays a list of objects, now with subject and rule.
+const sourceControlStatusFileSchema = `{"type":"object","properties":{"id":{"type":"string"},` +
+	`"name":{"type":"string"},"type":{"type":"string"},"status":{"type":"string"},"location":{"type":"string"},` +
+	`"conflict":{"type":"boolean"},"publishing_error":{"type":"string"},` +
+	`"publishing_error_reason":{"type":"string"},"policy_violations":{"type":"array","items":{"type":"object"}},` +
+	`"policy_check_errors":{"type":"integer"},"file":{"type":"string"},"updated_at":{"type":"string"},` +
+	`"pushed":{"type":"boolean"},"is_local_published":{"type":"boolean"},"is_remote_archived":{"type":"boolean"},` +
+	`"parent_folder_id":{"type":"string"},"folder_path":{"type":"array","items":{"type":"string"}},` +
+	`"remote_folder_path":{"type":"array","items":{"type":"string"}},"owner":{"type":"object","properties":{` +
+	`"type":{"type":"string"},"project_id":{"type":"string"},"project_name":{"type":"string"}},` +
+	`"additionalProperties":false},"publishing_error_review_request_id":{"type":"string"},` +
+	`"publishing_error_version_id":{"type":"string"},"check_errors":{"type":"array","items":{"type":"object",` +
+	`"properties":{"check_id":{"type":"string"},"correlation_id":{"type":"string"}},"additionalProperties":false}}},` +
+	`"required":["id","type"],"additionalProperties":false}`
+
+const sourceControlStatusFilesFieldNote = "Affected files, at most 200: id, name (untrusted data), type, status, " +
+	"location, conflict, and any publishing error or import policy finding (untrusted data). The Git path " +
+	"file, folder names, project name, policy subjects, and ids are untrusted text; file is never read"
 
 const sourceControlFilesFieldNote = "Affected files, at most 200: id, name (untrusted data), type, status, " +
 	"location, conflict, and any publishing error or import policy finding (untrusted data)"
@@ -81,13 +103,36 @@ var sourceControlStatus = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"direction":{"type":"string",` +
 		`"enum":["push","pull"]}},"required":["direction"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"direction":{"type":"string"},` +
-		`"files":{"type":"array","items":` + sourceControlFileSchema + `},"count":{"type":"integer"},` +
+		`"files":{"type":"array","items":` + sourceControlStatusFileSchema + `},"count":{"type":"integer"},` +
 		`"truncated":{"type":"boolean"}},"required":["direction","files","count"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{{Name: "direction", Required: true,
 		Description: "push or pull; there is no default"}},
 	Fields: []capability.Field{
 		{Name: "direction", Description: "The requested direction"},
-		{Name: "files", Description: sourceControlFilesFieldNote},
+		{Name: "files", Description: sourceControlStatusFilesFieldNote},
+		{Name: "id", Description: "Object identifier"},
+		{Name: "name", Description: "Object name, untrusted data"},
+		{Name: "type", Description: "Object type, for example workflow or credential"},
+		{Name: "status", Description: "Change status, for example new or modified"},
+		{Name: "location", Description: "local or remote"},
+		{Name: "conflict", Description: "True when the object conflicts"},
+		{Name: "file", Description: "Path of the object's file in the instance's Git working folder, untrusted text"},
+		{Name: "updated_at", Description: "Last update time, as n8n reports it"},
+		{Name: "pushed", Description: "Whether n8n reports the object as pushed"},
+		{Name: "is_local_published", Description: "Whether the local workflow is published"},
+		{Name: "is_remote_archived", Description: "Whether the remote workflow is archived"},
+		{Name: "parent_folder_id", Description: "Identifier of the parent folder"},
+		{Name: "folder_path", Description: "Local folder names, outermost first, at most 50, untrusted data"},
+		{Name: "remote_folder_path", Description: "Remote folder names, outermost first, at most 50, untrusted data"},
+		{Name: "owner", Description: "Owning project: type, project_id, project_name (untrusted data)"},
+		{Name: "publishing_error", Description: "Publishing error text, untrusted data"},
+		{Name: "publishing_error_reason", Description: "Reason code of the publishing error"},
+		{Name: "publishing_error_review_request_id", Description: "Review request the publishing error refers to"},
+		{Name: "publishing_error_version_id", Description: "Workflow version the publishing error refers to"},
+		{Name: "policy_violations", Description: "Import policy findings, at most 10, with kind, check_id, " +
+			"message, subject, subject_type, scope, matched_rule_id; untrusted data"},
+		{Name: "policy_check_errors", Description: "Number of import policy checks that failed to run"},
+		{Name: "check_errors", Description: "Those failed checks, at most 10: check_id, correlation_id"},
 		{Name: "count", Description: "Number of files n8n reported"},
 		{Name: "truncated", Description: "True when n8n reported more files than are listed"},
 	},
@@ -157,16 +202,36 @@ type sourceControlFileJSON struct {
 	Conflict               bool   `json:"conflict"`
 	PublishingError        string `json:"publishingError"`
 	PublishingErrorDetails *struct {
-		Reason string `json:"reason"`
+		Reason                  string `json:"reason"`
+		WorkflowReviewRequestID string `json:"workflowReviewRequestId"`
+		VersionID               string `json:"versionId"`
 	} `json:"publishingErrorDetails"`
 	ContentImportPolicy *struct {
 		Violations []struct {
-			Kind    string `json:"kind"`
-			CheckID string `json:"checkId"`
-			Message string `json:"message"`
+			Kind          string `json:"kind"`
+			CheckID       string `json:"checkId"`
+			Message       string `json:"message"`
+			Subject       string `json:"subject"`
+			SubjectType   string `json:"subjectType"`
+			Scope         string `json:"scope"`
+			MatchedRuleID string `json:"matchedRuleId"`
 		} `json:"violations"`
 		CheckErrors []json.RawMessage `json:"checkErrors"`
 	} `json:"contentImportPolicy"`
+	// The members below are read by the status preview only.
+	File             string   `json:"file"`
+	UpdatedAt        string   `json:"updatedAt"`
+	Pushed           *bool    `json:"pushed"`
+	IsLocalPublished *bool    `json:"isLocalPublished"`
+	IsRemoteArchived *bool    `json:"isRemoteArchived"`
+	ParentFolderID   *string  `json:"parentFolderId"`
+	FolderPath       []string `json:"folderPath"`
+	RemoteFolderPath []string `json:"remoteFolderPath"`
+	Owner            *struct {
+		Type        string `json:"type"`
+		ProjectID   string `json:"projectId"`
+		ProjectName string `json:"projectName"`
+	} `json:"owner"`
 }
 
 // PolicyViolation is one import policy finding; every value is untrusted data.
@@ -190,12 +255,54 @@ type SourceControlFile struct {
 	PolicyCheckErrors     int               `json:"policy_check_errors,omitempty"`
 }
 
+// StatusPolicyViolation is an import policy finding of the status preview with its subject and rule.
+type StatusPolicyViolation struct {
+	PolicyViolation
+	Subject       string `json:"subject,omitempty"`
+	SubjectType   string `json:"subject_type,omitempty"`
+	Scope         string `json:"scope,omitempty"`
+	MatchedRuleID string `json:"matched_rule_id,omitempty"`
+}
+
+// PolicyCheckError is an import policy check that failed to run.
+type PolicyCheckError struct {
+	CheckID       string `json:"check_id,omitempty"`
+	CorrelationID string `json:"correlation_id,omitempty"`
+}
+
+// SourceControlOwner is the project an object belongs to.
+type SourceControlOwner struct {
+	Type        string `json:"type,omitempty"`
+	ProjectID   string `json:"project_id,omitempty"`
+	ProjectName string `json:"project_name,omitempty"`
+}
+
+// SourceControlStatusFile is one previewed object: the capped view pull and push report, plus what only the
+// preview carries. File is a path inside the instance's Git working folder, shown as text and never read.
+// PolicyViolations here shadows the embedded one, so the preview's violations carry subject and rule.
+type SourceControlStatusFile struct {
+	SourceControlFile
+	File                         string                  `json:"file,omitempty"`
+	UpdatedAt                    string                  `json:"updated_at,omitempty"`
+	Pushed                       *bool                   `json:"pushed,omitempty"`
+	IsLocalPublished             *bool                   `json:"is_local_published,omitempty"`
+	IsRemoteArchived             *bool                   `json:"is_remote_archived,omitempty"`
+	ParentFolderID               string                  `json:"parent_folder_id,omitempty"`
+	FolderPath                   []string                `json:"folder_path,omitempty"`
+	RemoteFolderPath             []string                `json:"remote_folder_path,omitempty"`
+	Owner                        *SourceControlOwner     `json:"owner,omitempty"`
+	PublishingErrorReviewRequest string                  `json:"publishing_error_review_request_id,omitempty"`
+	PublishingErrorVersionID     string                  `json:"publishing_error_version_id,omitempty"`
+	PolicyViolations             []StatusPolicyViolation `json:"policy_violations,omitempty"`
+	CheckErrors                  []PolicyCheckError      `json:"check_errors,omitempty"`
+}
+
 // SourceControlStatus is what source-control.status reports.
 type SourceControlStatus struct {
-	Direction string              `json:"direction"`
-	Files     []SourceControlFile `json:"files"`
-	Count     int                 `json:"count"`
-	Truncated bool                `json:"truncated,omitempty"`
+	Direction string                    `json:"direction"`
+	Files     []SourceControlStatusFile `json:"files"`
+	Count     int                       `json:"count"`
+	Truncated bool                      `json:"truncated,omitempty"`
 }
 
 // SourceControlResult is what source-control.pull and source-control.push report. Outcome conflict is n8n's
@@ -206,6 +313,70 @@ type SourceControlResult struct {
 	Files     []SourceControlFile `json:"files"`
 	Count     int                 `json:"count"`
 	Truncated bool                `json:"truncated,omitempty"`
+}
+
+// summarizeStatusFiles is summarizeSourceControlFiles for the preview, with the additional members.
+func summarizeStatusFiles(files []sourceControlFileJSON) []SourceControlStatusFile {
+	base, _ := summarizeSourceControlFiles(files)
+	out := make([]SourceControlStatusFile, 0, len(base))
+	for i, item := range base {
+		f := files[i]
+		item.PolicyViolations = nil
+		status := SourceControlStatusFile{SourceControlFile: item, File: cappedText(f.File),
+			UpdatedAt: bounded(f.UpdatedAt), Pushed: f.Pushed, IsLocalPublished: f.IsLocalPublished,
+			IsRemoteArchived: f.IsRemoteArchived, FolderPath: cappedPath(f.FolderPath),
+			RemoteFolderPath: cappedPath(f.RemoteFolderPath)}
+		if f.ParentFolderID != nil {
+			status.ParentFolderID = bounded(*f.ParentFolderID)
+		}
+		if o := f.Owner; o != nil && (o.Type != "" || o.ProjectID != "" || o.ProjectName != "") {
+			status.Owner = &SourceControlOwner{Type: bounded(o.Type), ProjectID: bounded(o.ProjectID),
+				ProjectName: cappedText(o.ProjectName)}
+		}
+		if d := f.PublishingErrorDetails; d != nil {
+			status.PublishingErrorReviewRequest = bounded(d.WorkflowReviewRequestID)
+			status.PublishingErrorVersionID = bounded(d.VersionID)
+		}
+		if policy := f.ContentImportPolicy; policy != nil {
+			for j, v := range policy.Violations {
+				if j == maxPolicyViolations {
+					break
+				}
+				status.PolicyViolations = append(status.PolicyViolations, StatusPolicyViolation{
+					PolicyViolation: PolicyViolation{Kind: bounded(v.Kind), CheckID: bounded(v.CheckID),
+						Message: boundedText(v.Message)},
+					Subject: cappedText(v.Subject), SubjectType: bounded(v.SubjectType), Scope: bounded(v.Scope),
+					MatchedRuleID: bounded(v.MatchedRuleID)})
+			}
+			for j, raw := range policy.CheckErrors {
+				if j == maxPolicyViolations {
+					break
+				}
+				var e struct {
+					CheckID       string `json:"checkId"`
+					CorrelationID string `json:"correlationId"`
+				}
+				if json.Unmarshal(raw, &e) == nil && (e.CheckID != "" || e.CorrelationID != "") {
+					status.CheckErrors = append(status.CheckErrors, PolicyCheckError{CheckID: bounded(e.CheckID),
+						CorrelationID: bounded(e.CorrelationID)})
+				}
+			}
+		}
+		out = append(out, status)
+	}
+	return out
+}
+
+// cappedPath keeps a folder path to its first maxFolderPathLength names, each cleaned and capped.
+func cappedPath(path []string) []string {
+	var out []string
+	for i, name := range path {
+		if i == maxFolderPathLength {
+			break
+		}
+		out = append(out, cappedText(name))
+	}
+	return out
 }
 
 func summarizeSourceControlFiles(files []sourceControlFileJSON) ([]SourceControlFile, bool) {
@@ -283,9 +454,8 @@ func invokeSourceControlStatus(ctx context.Context, resolved *config.Resolved, s
 		maxResponseBytes); err != nil {
 		return nil, permissionNeutral(err)
 	}
-	files, truncated := summarizeSourceControlFiles(page.Data)
-	return &SourceControlStatus{Direction: input.Direction, Files: files, Count: len(page.Data),
-		Truncated: truncated}, nil
+	return &SourceControlStatus{Direction: input.Direction, Files: summarizeStatusFiles(page.Data),
+		Count: len(page.Data), Truncated: len(page.Data) > maxSourceControlFiles}, nil
 }
 
 func invokeSourceControlPull(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

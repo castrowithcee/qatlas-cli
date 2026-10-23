@@ -188,9 +188,9 @@ func (c *Client) sendFile(ctx context.Context, op, path string, query url.Values
 }
 
 // fetchFile sends one GET of a fixed path of the instance's own origin outside the API, built by the caller
-// from constants and validated segments, and streams the answer of exactly size bytes into to. The token goes
-// to that origin only. A redirect is refused, never followed: the instance answers with one when it serves
-// the file from another address.
+// from constants and validated segments, and streams the answer of exactly size bytes into to; a negative size
+// means the length is not known beforehand. The token goes to that origin only. A redirect is refused, never
+// followed: the instance answers with one when it serves the file from another address.
 func (c *Client) fetchFile(ctx context.Context, op, path string, size int64, to io.ReaderFrom) error {
 	return c.fetch(ctx, op, path, nil, size, to)
 }

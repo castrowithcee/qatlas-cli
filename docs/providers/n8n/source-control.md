@@ -22,7 +22,8 @@ Profile `sourcecontrol-read` holds `n8n.source-control.status`, in none of the o
 `n8n.source-control.pull` and `n8n.source-control.push` are in no profile and offered only by a `tools` list.
 
 - **Status.** `direction` is required (`push` or `pull`, no default). The result lists at most 200 affected
-  objects; the repository file path is not returned. It changes nothing.
+  objects. `file` is the path of the file in the instance's Git working folder; Qatlas gives it out as text
+  and never reads the file. It changes nothing.
 - **Pull** imports the connected Git branch into the instance and can overwrite workflows, credentials,
   variables, and other objects. It is effect `execute`, non-idempotent, and always needs confirmation.
   `force` (default `false`) discards local changes that would otherwise block the pull. `auto_publish` is
@@ -39,5 +40,6 @@ Profile `sourcecontrol-read` holds `n8n.source-control.status`, in none of the o
   of unresolved conflicts, and changes nothing. This is a result, not an error: `outcome` is `conflict`,
   `conflict` is `true`, and `files` lists the entries n8n reports. Qatlas does not retry and does not set
   `force` by itself; the caller decides.
-- **Results.** Each file may carry n8n's publishing error, its reason, and a capped list of import policy
-  findings; these texts are untrusted data, capped, and never part of an error message.
+- **Results.** Each file may carry n8n's publishing error and a capped list of import policy findings; these
+  texts, folder names, and project names are untrusted data, capped, and never part of an error message. Only
+  the preview adds the Git path, folder, owner, and policy details; pull and push report the shorter view.

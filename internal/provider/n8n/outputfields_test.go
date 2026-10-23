@@ -183,6 +183,13 @@ var outputFieldCases = []struct {
 	{credentialsGet.ID, "open", `{"credential_id":"` + ownCredential + `"}`, "/credentials/" + ownCredential,
 		`{"id":"` + ownCredential + `","name":"n","type":"t","isManaged":false,"isGlobal":false,"isResolvable":false,` +
 			`"resolvableAllowFallback":false,"resolverId":"r","description":"d","createdAt":"c","updatedAt":"u"}`, 11},
+	{usersList.ID, "pdelete-open", `{}`, "/users", `{"data":[` + userBody + `],"nextCursor":"c"}`, 12},
+	{usersGet.ID, "pdelete-open", `{"user_id":"` + ownUser + `"}`, "/users/" + ownUser, userBody, 8},
+	{sourceControlStatus.ID, "open", `{"direction":"pull"}`, "/source-control/status",
+		`{"data":[` + richStatusFile + `]}`, 25},
+	{auditGenerate.ID, "open", `{}`, "/audit", auditBody(richAuditSettings, `[{"name":"1.2.3","nodes":[{"name":"N"}],`+
+		`"createdAt":"c","description":"d","documentationUrl":"u","hasBreakingChange":true,"hasSecurityFix":true,`+
+		`"hasSecurityIssue":false,"securityIssueFixVersion":"1.2.4"}]`), 20},
 	{dataTablesGet.ID, "open", `{"data_table_id":"` + ownTable + `"}`, "/data-tables/" + ownTable, richDataTable, 14},
 }
 

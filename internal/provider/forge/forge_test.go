@@ -177,11 +177,32 @@ func testConfig(p *product) *config.Config {
 	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issues.delete", p.id + ".issues.get",
 			p.id + ".comments.delete", p.id + ".comments.get", p.id + ".milestones.delete", p.id + ".milestones.get",
-			p.id + ".pull-requests.merge", p.id + ".pull-request-branches.update", p.id + ".pull-requests.get"}}
+			p.id + ".pull-requests.merge", p.id + ".pull-request-branches.update", p.id + ".pull-requests.get",
+		}}
+	// The review connection lists every review tool of the product, the listed-only ones among them.
+	reviewTools := []string{"pull-request-reviews.list", "pull-request-reviews.get", "pull-request-reviews.create",
+		"pull-request-reviews.submit", "pull-request-reviews.approve", "pull-request-reviews.delete",
+		"pull-request-reviews.dismiss", "pull-request-reviews.undismiss", "pull-request-review-comments.list"}
+	if p == forgejo {
+		reviewTools = append(reviewTools, "pull-request-review-comments.get", "pull-request-review-comments.create",
+			"pull-request-review-comments.delete")
+	} else {
+		reviewTools = append(reviewTools, "pull-request-review-comments.reply", "pull-request-review-comments.resolve",
+			"pull-request-review-comments.unresolve")
+	}
+	for i := range reviewTools {
+		reviewTools[i] = p.id + "." + reviewTools[i]
+	}
+	cfg.Connections["reviews"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: reviewTools}
 	cfg.Connections["release-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issue-times.delete", p.id + ".issue-times.reset"}}
+	if p == forgejo {
+		cfg.Connections["notes-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+			Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".git-notes.delete"}}
+	}
 	return cfg
 }
 

@@ -28,7 +28,8 @@ list.
 ## Users
 
 A user's id, email, names, instance role, pending status, and times are personal data (`data_sensitivity`
-`n8n-users-personal`) and returned capped, as untrusted data. MFA state is not returned. Qatlas creates no
+`n8n-users-personal`) and returned capped, as untrusted data. The MFA status of other users is an account
+security detail and is not returned, for security reasons. Qatlas creates no
 permanent access or data paths to the outside (webhooks, invitations, public links); reading, pausing,
 revoking, and deleting remain, so no tool invites a user.
 
@@ -37,7 +38,8 @@ revoking, and deleting remain, so no tool invites a user.
   locally on a connection with any `project/` or `workflow/` target (`requireInstanceScope`), before a secret
   is read and before any request.
 - **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
-  not. `n8n.users.list` does not forward n8n's `projectId` filter.
+  not. `n8n.users.list` can filter by project; the `project_id` is checked locally and an unknown project is
+  answered as not found by n8n. The filter does not lift the instance-wide gate.
 - **Roles.** Only `global:admin`, `global:member`, and `global:chatUser` can be assigned, as `role` of
   `n8n.users.set-role` (sent as `newRoleName`). `global:owner` and free-form role names are never sent.
 - **Delete** cannot be undone. It needs exactly one choice for the user's workflows and credentials:
@@ -54,6 +56,10 @@ target, before a secret is read) and needs the owner or admin role; a 403 is rep
 role error without telling which. It only reads and computes, so it is effect `read`, safe, and needs no
 confirmation. `days_abandoned_workflow` is limited to 1 to 3650, and `categories` to distinct values of
 `credentials`, `database`, `nodes`, `filesystem`, `instance`; no other audit parameter exists. The result
-holds at most 5 reports, each with at most 50 sections and at most 50 locations per section; `settings` and
-`nextVersions` are dropped. All of it is untrusted data, capped per value, and `truncated` flags what was cut.
+holds at most 5 reports, each with at most 50 sections and at most 50 locations per section. A section's
+`settings` is a free object: it is passed on only within fixed bounds (scalars and lists of scalars, limited
+depth and key count) and otherwise left out whole and flagged, never cut. Newer versions per section are
+limited, and their nodes are counted and named, nothing more of them. `documentationUrl` of a version is an
+address Qatlas never fetches; it is untrusted text. All of it is untrusted data, capped per value, and
+`truncated` flags what was cut.
 The audit may be slow on a large instance; an error is never retried.
