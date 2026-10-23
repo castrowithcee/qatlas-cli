@@ -13,7 +13,7 @@ updated: 2026-10-23
 The users tools of the [Infomaniak kChat provider](README.md). The effects and tool lists are in the
 [tool overview](README.md#tools); the target checks are described under [Scope](README.md#scope).
 
-- Users are output through a fixed field allow-list; `email` only when kChat reports one to the token. Roles,
-  notification settings, properties, authentication service, and credential or MFA fields are never decoded.
-  `users.list` and `.search` need exactly one of `team_id` or `channel_id`; an instance-wide list is not
-  offered. `users.search` is a `POST` that changes nothing.
+- Users are output through a fixed allow-list: `email` only when kChat reports one to the token, and roles,
+  notification settings, properties, authentication service, and credential or MFA fields never. `users.list` and
+  `.search` need exactly one of `team_id` or `channel_id`; an instance-wide list is not offered. `users.search`
+  is a `POST` that changes nothing.

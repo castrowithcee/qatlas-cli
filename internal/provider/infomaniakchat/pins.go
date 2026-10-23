@@ -127,7 +127,7 @@ func invokePinsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 // ListPins reads the pinned posts of one channel, which kChat answers without pagination, and pages the
-// result itself. A post kChat reports for another channel is dropped.
+// result itself. A post kChat reports for another channel, and a deleted post, is dropped.
 func (c *Client) ListPins(ctx context.Context, channelID string, page, limit int) (*PinsPage, error) {
 	const op = "list pinned messages"
 	var list postListJSON
@@ -135,13 +135,7 @@ func (c *Client) ListPins(ctx context.Context, channelID string, page, limit int
 		&list, false); err != nil {
 		return nil, err
 	}
-	all := list.ordered()
-	entries := make([]MessageEntry, 0, len(all))
-	for _, entry := range all {
-		if entry.ChannelID == channelID {
-			entries = append(entries, entry)
-		}
-	}
+	entries := list.ordered(channelID)
 	window, pages, total := windowOf(entries, page, limit)
 	return &PinsPage{ChannelID: channelID, Messages: window, Page: page, Pages: pages, Total: total,
 		Count: len(window)}, nil

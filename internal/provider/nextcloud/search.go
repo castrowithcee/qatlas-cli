@@ -49,7 +49,7 @@ const searchResultSchema = `{"type":"object","properties":{"entries":{"type":"ar
 	`},"count":{"type":"integer"},"truncated":{"type":"boolean"}},"required":["entries","count"],"additionalProperties":false}`
 
 var entryListFields = append([]capability.Field{
-	{Name: "entries", Description: "Matching files and folders, untrusted data, sorted by path"},
+	{Name: "entries", Description: "Matching files and folders, untrusted data, sorted by path unless the search sets order_by"},
 	{Name: "count", Description: "Number of reported entries"},
 	{Name: "truncated", Description: "True when more matching entries may exist than reported"},
 }, entryFields...)
@@ -59,7 +59,7 @@ var filesSearch = capability.Descriptor{
 	Title: "Search Nextcloud files",
 	Description: "Search the files and folders below the fixed root folder of a connection with structured filters, " +
 		"at least one of which is required; the filters combine with AND and the root itself is never a hit. " +
-		"The server picks which matches a limit keeps; the result is sorted by path",
+		"The server picks which matches a limit keeps; the result is sorted by path, or in the order of the server with order_by",
 	Tags: []string{"nextcloud", "files", "webdav", "search"}, Provider: Provider,
 	Risk: nextcloudReadRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -67,6 +67,13 @@ var filesSearch = capability.Descriptor{
 		`"content_type_prefix":{"type":"string","minLength":1,"maxLength":127,"pattern":"^[A-Za-z0-9!#$&^_.+/*-]+$"},` +
 		`"modified_after":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
 		`"modified_before":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
+		`"created_after":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
+		`"created_before":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
+		`"uploaded_after":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
+		`"uploaded_before":{"type":"string","minLength":20,"maxLength":40,"x-form":"RFC 3339 time"},` +
+		`"file_id":{"type":"string","minLength":1,"maxLength":20,"pattern":"^[0-9]+$"},` +
+		`"order_by":{"type":"string","enum":["name","content_type","modified","created","uploaded","last_activity","size","favorite"]},` +
+		`"order":{"type":"string","enum":["asc","desc"]},` +
 		`"size_min":{"type":"integer","minimum":0},"size_max":{"type":"integer","minimum":0},` +
 		`"type":{"type":"string","enum":["file","folder"]},"favorite":{"type":"boolean"},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":200}},"additionalProperties":false}`),
@@ -76,6 +83,13 @@ var filesSearch = capability.Descriptor{
 		{Name: "content_type_prefix", Description: "Start of the MIME type, for example image/ or application/pdf"},
 		{Name: "modified_after", Description: "Only entries changed after this RFC 3339 time, to the second"},
 		{Name: "modified_before", Description: "Only entries changed before this RFC 3339 time, to the second"},
+		{Name: "created_after", Description: "Only entries created after this RFC 3339 time, to the second"},
+		{Name: "created_before", Description: "Only entries created before this RFC 3339 time, to the second"},
+		{Name: "uploaded_after", Description: "Only entries uploaded after this RFC 3339 time, to the second"},
+		{Name: "uploaded_before", Description: "Only entries uploaded before this RFC 3339 time, to the second"},
+		{Name: "file_id", Description: "Numeric file ID, 1 to 20 digits"},
+		{Name: "order_by", Description: "Sort the result by name, content_type, modified, created, uploaded, last_activity, size or favorite; the order of the server is kept. Not a filter"},
+		{Name: "order", Description: "asc or desc, default asc; only together with order_by"},
 		{Name: "size_min", Description: "Smallest size in bytes, inclusive; a folder counts with the size of its subtree"},
 		{Name: "size_max", Description: "Largest size in bytes, inclusive"},
 		{Name: "type", Description: "Either file or folder"},
@@ -127,6 +141,13 @@ type searchArguments struct {
 	ContentTypePrefix string `json:"content_type_prefix"`
 	ModifiedAfter     string `json:"modified_after"`
 	ModifiedBefore    string `json:"modified_before"`
+	CreatedAfter      string `json:"created_after"`
+	CreatedBefore     string `json:"created_before"`
+	UploadedAfter     string `json:"uploaded_after"`
+	UploadedBefore    string `json:"uploaded_before"`
+	FileID            string `json:"file_id"`
+	OrderBy           string `json:"order_by"`
+	Order             string `json:"order"`
 	SizeMin           *int64 `json:"size_min"`
 	SizeMax           *int64 `json:"size_max"`
 	Type              string `json:"type"`
@@ -166,10 +187,58 @@ func comparison(operator, property, literal string) string {
 	return "<d:" + operator + "><d:prop><" + property + "/></d:prop><d:literal>" + xmlText(literal) + "</d:literal></d:" + operator + ">"
 }
 
-// searchRequest is a checked search: the d:where conditions and the limit.
+// searchOrderProps maps the order_by values to the properties of the sort key.
+var searchOrderProps = map[string]string{
+	"name": "d:displayname", "content_type": "d:getcontenttype", "modified": "d:getlastmodified",
+	"created": "d:creationdate", "uploaded": "nc:upload_time", "last_activity": "nc:last_activity",
+	"size": "oc:size", "favorite": "oc:favorite",
+}
+
+// searchRequest is a checked search: the d:where conditions, the optional sort key and the limit.
 type searchRequest struct {
 	conditions []string
+	orderBy    string
+	descending bool
 	limit      int
+}
+
+// timeRange checks one after/before pair of RFC 3339 times and appends its gt and lt conditions. The format
+// renders a checked time as the literal of the property.
+func (r *searchRequest) timeRange(op, name, property, rawAfter, rawBefore string, format func(time.Time) string) error {
+	var after, before time.Time
+	for _, f := range []struct {
+		raw      string
+		operator string
+		into     *time.Time
+	}{{rawAfter, "gt", &after}, {rawBefore, "lt", &before}} {
+		if f.raw == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, f.raw)
+		if err != nil {
+			return providerError(op, name+"_after and "+name+"_before must be RFC 3339 times")
+		}
+		*f.into = parsed
+		r.conditions = append(r.conditions, comparison(f.operator, property, format(parsed)))
+	}
+	if !after.IsZero() && !before.IsZero() && !after.Before(before) {
+		return providerError(op, name+"_after must be earlier than "+name+"_before")
+	}
+	return nil
+}
+
+func httpDate(t time.Time) string { return t.UTC().Format(http.TimeFormat) }
+
+// searchISOTime is the time form of the Nextcloud search documentation.
+func searchISOTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
+
+func allDigits(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 // checkSearch validates the structured filters locally and turns them into where conditions.
@@ -193,24 +262,23 @@ func checkSearch(op string, input searchArguments) (*searchRequest, error) {
 		}
 		req.conditions = append(req.conditions, comparison("like", "d:getcontenttype", likeEscape(input.ContentTypePrefix)+"%"))
 	}
-	var after, before time.Time
 	for _, f := range []struct {
-		raw      string
-		operator string
-		into     *time.Time
-	}{{input.ModifiedAfter, "gt", &after}, {input.ModifiedBefore, "lt", &before}} {
-		if f.raw == "" {
-			continue
+		name, property, after, before string
+		format                        func(time.Time) string
+	}{
+		{"modified", "d:getlastmodified", input.ModifiedAfter, input.ModifiedBefore, httpDate},
+		{"created", "d:creationdate", input.CreatedAfter, input.CreatedBefore, searchISOTime},
+		{"uploaded", "nc:upload_time", input.UploadedAfter, input.UploadedBefore, searchISOTime},
+	} {
+		if err := req.timeRange(op, f.name, f.property, f.after, f.before, f.format); err != nil {
+			return nil, err
 		}
-		parsed, err := time.Parse(time.RFC3339, f.raw)
-		if err != nil {
-			return nil, providerError(op, "modified_after and modified_before must be RFC 3339 times")
-		}
-		*f.into = parsed
-		req.conditions = append(req.conditions, comparison(f.operator, "d:getlastmodified", parsed.UTC().Format(http.TimeFormat)))
 	}
-	if !after.IsZero() && !before.IsZero() && !after.Before(before) {
-		return nil, providerError(op, "modified_after must be earlier than modified_before")
+	if input.FileID != "" {
+		if len(input.FileID) > 20 || !allDigits(input.FileID) {
+			return nil, providerError(op, "file_id must be 1 to 20 digits")
+		}
+		req.conditions = append(req.conditions, comparison("eq", "oc:fileid", input.FileID))
 	}
 	if input.SizeMin != nil {
 		if *input.SizeMin < 0 {
@@ -240,6 +308,21 @@ func checkSearch(op string, input searchArguments) (*searchRequest, error) {
 		}
 		req.conditions = append(req.conditions, comparison("eq", "oc:favorite", value))
 	}
+	switch input.Order {
+	case "", "asc":
+	case "desc":
+		req.descending = true
+	default:
+		return nil, providerError(op, "order must be asc or desc")
+	}
+	if input.OrderBy != "" {
+		if _, ok := searchOrderProps[input.OrderBy]; !ok {
+			return nil, providerError(op, "order_by must be one of name, content_type, modified, created, uploaded, last_activity, size or favorite")
+		}
+		req.orderBy = input.OrderBy
+	} else if input.Order != "" {
+		return nil, providerError(op, "order requires order_by")
+	}
 	if len(req.conditions) == 0 {
 		return nil, providerError(op, "at least one filter is required")
 	}
@@ -252,11 +335,19 @@ func (c *Client) searchBody(req *searchRequest) string {
 	if len(req.conditions) > 1 {
 		where = "<d:and>" + strings.Join(req.conditions, "") + "</d:and>"
 	}
+	orderby := "<d:orderby/>"
+	if req.orderBy != "" {
+		direction := "<d:ascending/>"
+		if req.descending {
+			direction = "<d:descending/>"
+		}
+		orderby = "<d:orderby><d:order><d:prop><" + searchOrderProps[req.orderBy] + "/></d:prop>" + direction + "</d:order></d:orderby>"
+	}
 	scope := escapePath(append([]string{"files", c.user}, c.root...))
 	return xmlHeader + `<d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:basicsearch>` +
 		`<d:select><d:prop>` + fileSearchProps + `</d:prop></d:select>` +
 		`<d:from><d:scope><d:href>` + xmlText(scope) + `</d:href><d:depth>infinity</d:depth></d:scope></d:from>` +
-		`<d:where>` + where + `</d:where><d:orderby/>` +
+		`<d:where>` + where + `</d:where>` + orderby +
 		`<d:limit><d:nresults>` + strconv.Itoa(req.limit) + `</d:nresults></d:limit>` +
 		`</d:basicsearch></d:searchrequest>`
 }
@@ -295,7 +386,7 @@ func readMultiStatus(op string, response *http.Response, limit int, allowEmpty b
 
 // entriesBelowRoot keeps the answered nodes that lie below the connection root. A node outside it, the
 // root itself, and a node the server refused are dropped, not reported.
-func (c *Client) entriesBelowRoot(op string, resources []resource, limit int, search bool) *entryListResult {
+func (c *Client) entriesBelowRoot(op string, resources []resource, limit int, search, keepOrder bool) *entryListResult {
 	result := &entryListResult{Entries: []Entry{}}
 	for i := range resources {
 		relative, err := c.relativeOf(op, resources[i].href)
@@ -308,7 +399,9 @@ func (c *Client) entriesBelowRoot(op string, resources []resource, limit int, se
 		}
 		result.Entries = append(result.Entries, *c.fileEntryOf(relative, &resources[i], search))
 	}
-	sort.Slice(result.Entries, func(i, j int) bool { return result.Entries[i].Path < result.Entries[j].Path })
+	if !keepOrder {
+		sort.Slice(result.Entries, func(i, j int) bool { return result.Entries[i].Path < result.Entries[j].Path })
+	}
 	result.Count = len(result.Entries)
 	return result
 }
@@ -319,7 +412,7 @@ func (c *Client) SearchFiles(ctx context.Context, op string, req *searchRequest)
 	if err != nil {
 		return nil, err
 	}
-	result := c.entriesBelowRoot(op, resources, req.limit, true)
+	result := c.entriesBelowRoot(op, resources, req.limit, true, req.orderBy != "")
 	result.Truncated = result.Truncated || len(resources) >= req.limit
 	return result, nil
 }
@@ -331,7 +424,7 @@ func (c *Client) ListFavorites(ctx context.Context) (*entryListResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.entriesBelowRoot(op, resources, maxEntries, false), nil
+	return c.entriesBelowRoot(op, resources, maxEntries, false, false), nil
 }
 
 func invokeFilesSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {

@@ -143,7 +143,7 @@ var outputSamples = map[string]any{
 	"github.pull-request-reviews.list":             ReviewList{},
 	"github.pull-requests.close":                   PullRequest{},
 	"github.pull-requests.create":                  PullRequest{},
-	"github.pull-requests.get":                     PullRequest{},
+	"github.pull-requests.get":                     PullRequestDetail{},
 	"github.pull-requests.list":                    PullRequestList{},
 	"github.pull-requests.merge":                   PullRequestMerge{},
 	"github.pull-requests.reopen":                  PullRequest{},

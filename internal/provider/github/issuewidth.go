@@ -270,8 +270,8 @@ const issueFieldValueOutputSchema = `{"type":"object","properties":{"issue_field
 // already, so the search adds the width without it.
 const issueDraftProperty = `"draft":{"type":"boolean"}`
 
-// issueWidthProperties are the schema members of IssueWidth except draft.
-var issueWidthProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},"assignee":` + restAccountSchema +
+// issueWidthLeadProperties are the schema members of IssueWidth except draft and links.
+var issueWidthLeadProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},"assignee":` + restAccountSchema +
 	`,` + detailProperty("assignees", restAccountSchema, true) + `,"assignees_details_truncated":{"type":"boolean"},` +
 	detailProperty("labels", objectSchema(labelProperties), true) + `,"labels_details_truncated":{"type":"boolean"},` +
 	detailProperty("milestone", objectSchema(milestoneProperties), false) + `,` +
@@ -282,7 +282,10 @@ var issueWidthProperties = `"id":{"type":"integer"},"node_id":{"type":"string"},
 	`"sub_issues_summary":` + subIssuesSummaryOutput + `,"issue_dependencies_summary":` +
 	issueDependenciesSummarySchema + `,"issue_field_values":{"type":"array","maxItems":100,"items":` +
 	issueFieldValueOutputSchema + `},"issue_field_values_truncated":{"type":"boolean"},` +
-	`"pinned_comment":` + restIssueCommentSchema + `,"links":` + linksSchema(issueLinkKeys)
+	`"pinned_comment":` + restIssueCommentSchema
+
+// issueWidthProperties are the schema members of IssueWidth except draft.
+var issueWidthProperties = issueWidthLeadProperties + `,"links":` + linksSchema(issueLinkKeys)
 
 // issueCoreProperties are the schema members of IssueCore.
 var issueCoreProperties = `"state_reason":{"type":"string"},"body":{"type":"string"},` +

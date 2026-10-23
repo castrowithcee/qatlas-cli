@@ -33,7 +33,9 @@ var filesRisk = capability.Risk{
 
 var fileEntrySchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"post_id":` + idSchema + `,"user_id":` + idSchema + `,"name":{"type":"string"},` +
-	`"extension":{"type":"string"},"size":{"type":"integer"},"mime_type":{"type":"string"},"created_at":{"type":"string"}},` +
+	`"extension":{"type":"string"},"size":{"type":"integer"},"mime_type":{"type":"string"},"created_at":{"type":"string"},` +
+	`"updated_at":{"type":"string"},"width":{"type":"integer"},"height":{"type":"integer"},` +
+	`"has_preview_image":{"type":"boolean"}},` +
 	`"required":["id","post_id","name","size"],"additionalProperties":false}`
 
 var fileEntryFields = []capability.Field{
@@ -45,6 +47,10 @@ var fileEntryFields = []capability.Field{
 	{Name: "size", Description: "Size in bytes as kChat reports it"},
 	{Name: "mime_type", Description: "Media type as kChat reports it, untrusted data"},
 	{Name: "created_at", Description: "Upload time, normalised to RFC 3339 in UTC"},
+	{Name: "updated_at", Description: "Last change time, normalised to RFC 3339 in UTC"},
+	{Name: "width", Description: "Width in pixels of an image file"},
+	{Name: "height", Description: "Height in pixels of an image file"},
+	{Name: "has_preview_image", Description: "True when kChat holds a preview of the file; the preview itself is never returned"},
 }
 
 var fileIDArgument = capability.Argument{Name: "file_id", Required: true,
@@ -138,6 +144,11 @@ type fileJSON struct {
 	Extension string `json:"extension"`
 	Size      int64  `json:"size"`
 	MimeType  string `json:"mime_type"`
+
+	UpdateAt        flexInt        `json:"update_at"`
+	Width           flexInt        `json:"width"`
+	Height          flexInt        `json:"height"`
+	HasPreviewImage tolerant[bool] `json:"has_preview_image"`
 }
 
 // FileEntry is one attachment as the tools report it.
@@ -150,11 +161,18 @@ type FileEntry struct {
 	Size      int64  `json:"size"`
 	MimeType  string `json:"mime_type,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
+
+	UpdatedAt       string `json:"updated_at,omitempty"`
+	Width           int64  `json:"width,omitempty"`
+	Height          int64  `json:"height,omitempty"`
+	HasPreviewImage bool   `json:"has_preview_image,omitempty"`
 }
 
 func fileEntryOf(f fileJSON) FileEntry {
 	return FileEntry{ID: f.ID, PostID: f.PostID, UserID: bounded(f.UserID), Name: bounded(f.Name),
-		Extension: bounded(f.Extension), Size: f.Size, MimeType: bounded(f.MimeType), CreatedAt: msToRFC3339(f.CreateAt)}
+		Extension: bounded(f.Extension), Size: f.Size, MimeType: bounded(f.MimeType), CreatedAt: msToRFC3339(f.CreateAt),
+		UpdatedAt: msToRFC3339(int64(f.UpdateAt)), Width: int64(f.Width), Height: int64(f.Height),
+		HasPreviewImage: f.HasPreviewImage.Value}
 }
 
 // PostFiles is the answer of messages.files.

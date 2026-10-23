@@ -859,8 +859,9 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
 				descriptor.ID == issueTypesList.ID || descriptor.ID == organizationAdvisoriesList.ID
-			// The issue search sorts by the comment count, which reads no comment.
-			sortsByComments := descriptor.ID == issuesSearch.ID && forbidden == "comments"
+			// The searches over the issue index sort by the comment count, which reads no comment.
+			sortsByComments := (descriptor.ID == issuesSearch.ID || descriptor.ID == pullRequestsSearch.ID) &&
+				forbidden == "comments"
 			if strings.Contains(ownerFiltersStripped(descriptor), forbidden) && !(owners && forbidden == "owner") &&
 				!sortsByComments {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
