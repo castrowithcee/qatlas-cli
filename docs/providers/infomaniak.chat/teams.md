@@ -14,3 +14,8 @@ The teams tools of the [Infomaniak kChat provider](README.md). The effects and t
 
 - `teams.get` and `team-members.*` take a bound `team_id`, checked locally. `teams.get` never returns the
   invitation ID, email, or allowed domains; `team-members.roles` changes only a live member of that team.
+- `insights.top` with `team_members` ranks nothing: it lists the team members who joined in the time range,
+  and its `total` is kChat's count before unreachable users are left out. Ranked channels carry no `team_id`;
+  the envelope's `team_id` names the one team read.
+- Thread authors and new members outside the bound teams are dropped, or reduced to their ID where the thread
+  itself stays. A thread shows its root message only while that message is not deleted.
