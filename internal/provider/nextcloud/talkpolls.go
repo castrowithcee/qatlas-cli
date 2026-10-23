@@ -94,6 +94,7 @@ type Poll struct {
 	Status     string       `json:"status"`
 	ResultMode string       `json:"result_mode"`
 	MaxVotes   int          `json:"max_votes"`
+	AuthorType string       `json:"author_type,omitempty"`
 	AuthorID   string       `json:"author_id,omitempty"`
 	AuthorName string       `json:"author_name,omitempty"`
 	VotedSelf  []int        `json:"voted_self,omitempty"`
@@ -107,6 +108,7 @@ type rawPoll struct {
 	Question         string          `json:"question"`
 	Options          []string        `json:"options"`
 	Votes            json.RawMessage `json:"votes"`
+	ActorType        string          `json:"actorType"`
 	ActorID          string          `json:"actorId"`
 	ActorDisplayName string          `json:"actorDisplayName"`
 	Status           json.Number     `json:"status"`
@@ -191,6 +193,7 @@ func pollOf(raw rawPoll) (*Poll, bool) {
 	}
 	votes, _ := raw.MaxVotes.Int64()
 	poll.MaxVotes = int(votes)
+	poll.AuthorType = bounded(raw.ActorType)
 	poll.AuthorID, poll.AuthorName = bounded(raw.ActorID), bounded(raw.ActorDisplayName)
 	// Talk reports the counts as a map "option-<id>" => number, or as an empty list while they are hidden.
 	var counts map[string]json.Number
@@ -349,7 +352,7 @@ const (
 		`"options":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"text":{"type":"string"},` +
 		`"votes":{"type":"integer"}},"required":["id","text"],"additionalProperties":false}},` +
 		`"status":{"type":"string","enum":["open","closed","other"]},"result_mode":{"type":"string","enum":["public","hidden"]},` +
-		`"max_votes":{"type":"integer"},"author_id":{"type":"string"},"author_name":{"type":"string"},` +
+		`"max_votes":{"type":"integer"},"author_type":{"type":"string"},"author_id":{"type":"string"},"author_name":{"type":"string"},` +
 		`"voted_self":{"type":"array","items":{"type":"integer"}},"num_voters":{"type":"integer"},` +
 		`"voters":{"type":"array","items":{"type":"object","properties":{"actor_type":{"type":"string"},` +
 		`"actor_id":{"type":"string"},"actor_name":{"type":"string"},"option_id":{"type":"integer"}},` +
@@ -367,6 +370,7 @@ var pollFields = []capability.Field{
 	{Name: "status", Description: "open or closed; other for a state Qatlas does not know"},
 	{Name: "result_mode", Description: "public shows the result at once, hidden only after the poll is closed"},
 	{Name: "max_votes", Description: "Options one voter may choose; 0 means any number"},
+	{Name: "author_type", Description: "Actor type of the author, untrusted data"},
 	{Name: "author_id", Description: "ID of the author"},
 	{Name: "author_name", Description: "Display name of the author, untrusted data"},
 	{Name: "voted_self", Description: "Option IDs this identity voted for"},
