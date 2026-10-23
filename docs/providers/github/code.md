@@ -20,9 +20,9 @@ The code tools of the [GitHub provider](README.md). Every tool takes `repository
 | `github.contents.get` | reads one file or one directory listing of a repository at a ref |
 | `github.trees.get` | reads the Git tree of a repository at a ref, optionally every entry below every directory |
 | `github.blame.get` | reads the commit behind each line of one file over a bounded line range |
-| `github.commits.list` | lists the commits of a repository, filtered by ref, path, author, and a commit date range |
+| `github.commits.list` | lists the commits of a repository, filtered by ref, path, author, committer, and a commit date range |
 | `github.commits.get` | reads one commit by branch, tag, or commit SHA, with its stats and its changed files |
-| `github.branches.list` | lists the branches of a repository with their protection status and their latest commit SHA |
+| `github.branches.list` | lists the branches of a repository with their protection status and their latest commit SHA, optionally only protected or only unprotected ones |
 | `github.tags.list` | lists the tags of a repository with the commit SHA each points at |
 | `github.tags.get` | reads one tag, lightweight or annotated, resolved through the Git refs and Git tags APIs |
 
@@ -41,7 +41,15 @@ start to 256 KiB with `truncated: true`, `bytes` naming what was kept and `size`
 binary file, detected by a NUL byte or invalid UTF-8 once its content is decoded, and a file past GitHub's own
 inline content limit of about 1 MiB are metadata only, with `omitted` naming which: `binary` or `too_large`.
 A symlink and a submodule are metadata only as well, with `target` naming the symlink's target path or the
-commit a submodule points at.
+commit a submodule points at. The tools of this page report the object behind a flat member as described under
+[result objects](README.md#result-objects). Left out, with the reason:
+
+- `download_url` of a file, a directory entry, and a workflow file: "For a private repository GitHub answers
+  `download_url` with a temporary token; it grants access without sign-in and is withheld."
+- `_links`: "`_links` repeats the addresses of the `*_url` members as `href` objects; those addresses are reported
+  once, in `links`."
+- Accounts: "An account inside another object carries the fields GitHub's own REST answers give it; the full
+  profile is read with the account tools."
 
 `github.trees.get` with `recursive: true` reads every entry below every directory, not only the top level.
 GitHub itself may truncate a very large recursive tree, and Qatlas cuts one past 2000 entries on its own;
@@ -54,28 +62,35 @@ range on both sides. `author` is the login when GitHub reports one, the commit a
 GitHub cannot resolve, and a path with no blame at that ref, both answer `not-found`.
 
 `github.commits.list` filters by `ref` (a branch, a tag, or a commit SHA, GitHub's `sha` parameter), `path`
-(a repository path commits must touch), `author` (a GitHub login), and `since`/`until` (a commit date, as
+(a repository path commits must touch), `author` (a GitHub login), `committer` (a GitHub login or an email
+address, at most 256 characters), and `since`/`until` (a commit date, as
 `YYYY-MM-DD` or a UTC time as `YYYY-MM-DDTHH:MM:SSZ`; a date becomes midnight UTC for `since` or the last
 second of that day for `until`); `since` must not lie after `until`. It pages by GitHub's Link header since
 the plain array route carries no total count, a cursor bound to the repository and every filter. A commit
 `message` is untrusted data, cut to its first line and at most 200 characters; `date` is the commit date
-`since` and `until` filter by, and `parents` the number of parent commits. An entry carries no patch.
+`since` and `until` filter by, and `parents` the number of parent commits. An entry carries no patch. The git
+commit's message, verification payload, and signature are cut at 4096 characters, each with a marker.
 
 `github.commits.get` reads one commit by `ref` (a branch, a tag, or a commit SHA). Its full `message` is
 untrusted data, cut to at most 4096 characters with `message_truncated`; each changed file's `patch` is
 untrusted data as well, cut to at most 4096 bytes with `patch_truncated`, and a file GitHub sends no patch for
 carries none. GitHub's own route already caps the files it returns at 300 without ever saying whether more
-exist, so Qatlas treats a batch that reaches the same bound as cut as well, with `files_truncated` visible.
+exist, so Qatlas treats a batch that reaches the same bound as cut as well, with `files_truncated` visible. The
+`stats` of the commit are covered by `additions`, `deletions`, and `total`.
 
 `github.branches.list` and `github.tags.list` page the same way, by GitHub's Link header with a cursor bound
-to the repository; neither takes a filter. A tag's `sha` is the commit it points at, since GitHub's plain tags
-list already dereferences an annotated tag to the commit it tags.
+to the repository; only `github.branches.list` takes a filter, `protected`. A branch's `protection` is reported
+only where GitHub sends it with the branch in the list; Qatlas sends no further request for it. A tag's `sha` is
+the commit it points at, since GitHub's plain tags list already dereferences an annotated tag to the commit it
+tags.
 
 `github.tags.get` takes `tag`, the tag name, and resolves it through the Git refs API rather than the plain
 tags list, since only the Git refs and Git tags APIs name a lightweight tag's own object type and an
 annotated tag's tagger and message. `sha` is the commit a lightweight tag points at, or an annotated tag's own
 tag object SHA; an annotated tag also names the object, usually a commit, its tag object points at. The
-annotated tag's `message` is untrusted data, cut to at most 4096 characters with `message_truncated`.
+annotated tag's `message` is untrusted data, cut to at most 4096 characters with `message_truncated`. The tag
+object's own members, its tagger and its verification, exist only for an annotated tag; a lightweight tag
+reports its Git ref.
 
 Reading contents, a tree, a file's blame, commits, branches, or tags needs no scope for a public repository,
 or the following for a private one:
@@ -157,10 +172,11 @@ profile, offered only where a connection's `tools` list names them, like
 | Tool | Searches |
 | --- | --- |
 | `github.code.search` | code, without file bodies or fragments |
-| `github.commits.search` | commits |
+| `github.commits.search` | commits, optionally sorted by `sort` and `order`, with `text_matches` on request |
 
 Both read GitHub's own search index with `terms`, under the rules described in [Search](README.md#search); they
-force the [target qualifiers](README.md#target-scoping). `github.code.search` shares GitHub's separate, lower
+force the [target qualifiers](README.md#target-scoping). `sort` and `order` are arguments of their own, never part
+of `terms`. `github.code.search` shares GitHub's separate, lower
 search rate limit, see [errors and rate limits](README.md#errors-and-rate-limits). The repository search is
 described with the [repositories](repositories.md#search), the user and organization search with the
 [accounts](accounts.md#search).

@@ -68,8 +68,9 @@ func guardedRisk(effect capability.Effect, idempotency capability.Idempotency, s
 		DataSensitivity: sensitivity}
 }
 
-const workflowFileProperties = `"name":{"type":"string"},"path":{"type":"string"},"sha":{"type":"string"},` +
-	`"size":{"type":"integer"}`
+var workflowFileProperties = `"name":{"type":"string"},"path":{"type":"string"},"sha":{"type":"string"},` +
+	`"size":{"type":"integer"},"type":{"type":"string"},"url":{"type":"string"},"links":` +
+	linksSchema(contentEntryLinkKeys)
 
 var workflowFilesList = capability.Descriptor{
 	ID:      Provider + ".workflow-files.list",
@@ -89,7 +90,8 @@ var workflowFilesList = capability.Descriptor{
 		{Name: "ref", Description: "Branch or tag to read; the default branch when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "files", Description: "Workflow files ending in .yml or .yaml with name, path, blob SHA, and size in bytes"},
+		{Name: "files", Description: "Workflow files ending in .yml or .yaml with name, path, blob SHA, size in " +
+			"bytes, type, url (the web address), and links (the REST url and git_url)"},
 	},
 	Examples: []capability.Example{{Description: "List the workflow files", Arguments: json.RawMessage(`{}`)}},
 }
@@ -106,7 +108,9 @@ var workflowFilesGet = capability.Descriptor{
 	RequiresToolAllowList: true,
 	InputSchema:           inputSchema(`"path":`+workflowFileSchema+`,"ref":`+refSchema, "path"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"sha":{"type":"string"},` +
-		`"size":{"type":"integer"},"content":{"type":"string"}},"required":["path","sha","size","content"],` +
+		`"size":{"type":"integer"},"content":{"type":"string"},"name":{"type":"string"},` +
+		`"type":{"type":"string"},"encoding":{"type":"string"},"url":{"type":"string"},"links":` +
+		linksSchema(contentEntryLinkKeys) + `},"required":["path","sha","size","content"],` +
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "path", Description: "Workflow file such as .github/workflows/ci.yml; no other directory", Required: true},
@@ -117,6 +121,11 @@ var workflowFilesGet = capability.Descriptor{
 		{Name: "content", Description: "Content of the file as text, untrusted data"},
 		{Name: "path", Description: "Path of the workflow file"},
 		{Name: "size", Description: "Size of the file in bytes"},
+		{Name: "name", Description: "Name of the file, untrusted data"},
+		{Name: "type", Description: "Type GitHub reports for the path, file"},
+		{Name: "encoding", Description: "Encoding GitHub reports for the content, base64"},
+		{Name: "url", Description: "Web address of the file, untrusted data, never fetched"},
+		{Name: "links", Description: "REST url and git_url by their GitHub names, untrusted data, never fetched"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the CI workflow",
@@ -564,28 +573,26 @@ type WorkflowFiles struct {
 
 // WorkflowFileEntry is one workflow file without its content.
 type WorkflowFileEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	SHA  string `json:"sha"`
-	Size int    `json:"size"`
+	Name  string  `json:"name"`
+	Path  string  `json:"path"`
+	SHA   string  `json:"sha"`
+	Size  int     `json:"size"`
+	Type  string  `json:"type,omitempty"`
+	URL   *string `json:"url,omitempty"`
+	Links Links   `json:"links,omitempty"`
 }
 
 // listWorkflowFiles reads the directory .github/workflows/ and keeps the files a maintainer tool may name;
 // subdirectories and other files are left out.
 func (c *Client) listWorkflowFiles(ctx context.Context, ref string) (*WorkflowFiles, error) {
 	const op = "list workflow files"
-	var entries []struct {
-		Type string `json:"type"`
-		Name string `json:"name"`
-		Path string `json:"path"`
-		SHA  string `json:"sha"`
-		Size int    `json:"size"`
-	}
+	var entries []withAddress[workflowEntryJSON]
 	if err := c.rest(ctx, op, c.contentsPath(strings.TrimSuffix(workflowsDir, "/"), refQuery(ref)), &entries); err != nil {
 		return nil, actionsFailure(err, workflowFileReadPermission)
 	}
 	result := &WorkflowFiles{Files: []WorkflowFileEntry{}}
-	for _, entry := range entries {
+	for _, item := range entries {
+		entry := item.Value
 		if entry.Type != "file" || !validWorkflowFile(entry.Path) {
 			continue
 		}
@@ -593,34 +600,50 @@ func (c *Client) listWorkflowFiles(ctx context.Context, ref string) (*WorkflowFi
 			return nil, invalidEntry(op, "a workflow file")
 		}
 		result.Files = append(result.Files, WorkflowFileEntry{Name: entry.Name, Path: entry.Path, SHA: entry.SHA,
-			Size: entry.Size})
+			Size: entry.Size, Type: entry.Type, URL: item.Address.URL, Links: item.Address.Links})
 	}
 	return result, nil
 }
 
+// workflowEntryJSON is one entry of the workflow directory.
+type workflowEntryJSON struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+	SHA  string `json:"sha"`
+	Size int    `json:"size"`
+}
+
 // WorkflowFile is one workflow file with its content.
 type WorkflowFile struct {
-	Path    string `json:"path"`
-	SHA     string `json:"sha"`
-	Size    int    `json:"size"`
-	Content string `json:"content"`
+	Path     string  `json:"path"`
+	SHA      string  `json:"sha"`
+	Size     int     `json:"size"`
+	Content  string  `json:"content"`
+	Name     *string `json:"name,omitempty"`
+	Type     string  `json:"type,omitempty"`
+	Encoding string  `json:"encoding,omitempty"`
+	URL      *string `json:"url,omitempty"`
+	Links    Links   `json:"links,omitempty"`
 }
 
 // workflowFile reads one workflow file. Anything but a text file of at most maxWorkflowFile bytes at exactly
 // the requested path is refused.
 func (c *Client) workflowFile(ctx context.Context, path, ref string) (*WorkflowFile, error) {
 	const op = "get workflow file"
-	var file struct {
-		Type     string `json:"type"`
-		Path     string `json:"path"`
-		SHA      string `json:"sha"`
-		Size     int    `json:"size"`
-		Encoding string `json:"encoding"`
-		Content  string `json:"content"`
-	}
-	if err := c.rest(ctx, op, c.contentsPath(path, refQuery(ref)), &file); err != nil {
+	var answer withAddress[struct {
+		Type     string  `json:"type"`
+		Name     *string `json:"name"`
+		Path     string  `json:"path"`
+		SHA      string  `json:"sha"`
+		Size     int     `json:"size"`
+		Encoding string  `json:"encoding"`
+		Content  string  `json:"content"`
+	}]
+	if err := c.rest(ctx, op, c.contentsPath(path, refQuery(ref)), &answer); err != nil {
 		return nil, actionsFailure(err, workflowFileReadPermission)
 	}
+	file := answer.Value
 	if file.Type != "file" || file.Path != path || file.Size > maxWorkflowFile {
 		return nil, providerError(op, fmt.Sprintf("the path is no workflow file of at most %d KiB", maxWorkflowFile>>10))
 	}
@@ -631,7 +654,9 @@ func (c *Client) workflowFile(ctx context.Context, path, ref string) (*WorkflowF
 	if checkText("content", string(data)) != nil {
 		return nil, providerError(op, "the workflow file is not text")
 	}
-	return &WorkflowFile{Path: file.Path, SHA: file.SHA, Size: file.Size, Content: string(data)}, nil
+	return &WorkflowFile{Path: file.Path, SHA: file.SHA, Size: file.Size, Content: string(data),
+		Name: shortText(file.Name), Type: file.Type, Encoding: file.Encoding, URL: answer.Address.URL,
+		Links: answer.Address.Links}, nil
 }
 
 // WorkflowFileChange describes a written workflow file without its content.
