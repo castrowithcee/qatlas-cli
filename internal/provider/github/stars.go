@@ -28,8 +28,19 @@ import (
 // than the one its targets name. A connection whose targets name only owners still lists the account's
 // stars, narrowed to the repositories of those owners.
 
-const starredRepositoryProperties = `"repository":{"type":"string"},"visibility":{"type":"string"},` +
-	`"archived":{"type":"boolean"}`
+var starredRepositoryProperties = `"repository":{"type":"string"},"visibility":{"type":"string"},` +
+	`"archived":{"type":"boolean"},"starred_at":{"type":"string"},"repository_detail":` + restRepositorySchema
+
+// starsMediaType makes GitHub wrap each starred repository with the time it was starred.
+const starsMediaType = "application/vnd.github.star+json"
+
+const starsKeys = `"sort":{"type":"string","enum":["created","updated"]},` +
+	`"direction":{"type":"string","enum":["asc","desc"]}`
+
+var (
+	starSortValues      = []string{"created", "updated"}
+	starDirectionValues = []string{"asc", "desc"}
+)
 
 const starredRepositoryRequired = `"required":["repository","visibility","archived"],"additionalProperties":false`
 
@@ -44,11 +55,18 @@ var starsList = capability.Descriptor{
 	Tags:         []string{"github", "stars", "discovery", "list"},
 	Risk:         readRisk,
 	Provider:     Provider,
-	InputSchema:  inputSchema(pagingKeys),
+	InputSchema:  inputSchema(starsKeys + `,` + pagingKeys),
 	OutputSchema: listOutput("starred", starredRepositoryProperties, starredRepositoryRequired),
-	Arguments:    pagingArguments,
+	Arguments: append([]capability.Argument{
+		{Name: "sort", Description: "created (when the repository was starred) or updated (when it last " +
+			"changed); GitHub's order, by star time, when omitted"},
+		{Name: "direction", Description: "asc or desc; applies with sort, desc when omitted"},
+	}, pagingArguments...),
 	Fields: append([]capability.Field{
-		{Name: "starred", Description: "Starred repositories: repository as OWNER/REPO, visibility, and archived"},
+		{Name: "starred", Description: "Starred repositories: repository as OWNER/REPO, visibility, archived, " +
+			"starred_at (the time the account starred it), and repository_detail with the members of GitHub's " +
+			"repository, untrusted data, addresses never fetched; a repository outside the connection's " +
+			"targets keeps only id, node_id, and full_name"},
 	}, pagingFields...),
 	Examples: []capability.Example{{Description: "List the account's starred repositories", Arguments: json.RawMessage(`{}`)}},
 }
@@ -107,18 +125,28 @@ func starOperations() []capability.Operation {
 	}
 }
 
-// starListOptions are the paging of the star list; its cursor is bound to no filter, since the list takes
-// none.
+// starListOptions are the filters and the paging of the star list. The cursor is bound to a filter only
+// while it is set, so a cursor issued without one stays valid without it.
 type starListOptions struct {
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor"`
+	Sort      string `json:"sort"`
+	Direction string `json:"direction"`
+	Limit     int    `json:"limit"`
+	Cursor    string `json:"cursor"`
 
-	page, perPage int
-	binding       []byte
+	sort, direction string
+	page, perPage   int
+	binding         []byte
 }
 
 func (o *starListOptions) query() url.Values {
-	return url.Values{"per_page": {strconv.Itoa(o.perPage)}, "page": {strconv.Itoa(o.page)}}
+	values := url.Values{"per_page": {strconv.Itoa(o.perPage)}, "page": {strconv.Itoa(o.page)}}
+	if o.sort != "" {
+		values.Set("sort", o.sort)
+	}
+	if o.direction != "" {
+		values.Set("direction", o.direction)
+	}
+	return values
 }
 
 func (o *starListOptions) normalize() error {
@@ -126,7 +154,22 @@ func (o *starListOptions) normalize() error {
 	if err != nil {
 		return err
 	}
-	o.binding = fingerprint("stars", "list")
+	binding := []any{"stars", "list"}
+	if o.Sort != "" {
+		if !containsFold(starSortValues, o.Sort) {
+			return invalidRequest("sort must be created or updated")
+		}
+		o.sort = strings.ToLower(o.Sort)
+		binding = append(binding, "sort", o.sort)
+	}
+	if o.Direction != "" {
+		if !containsFold(starDirectionValues, o.Direction) {
+			return invalidRequest("direction must be asc or desc")
+		}
+		o.direction = strings.ToLower(o.Direction)
+		binding = append(binding, "direction", o.direction)
+	}
+	o.binding = fingerprint(binding...)
 	o.page, o.perPage, err = pageOf(o.binding, o.Cursor, limit)
 	return err
 }
@@ -176,9 +219,17 @@ func invokeStarChange(add bool) func(context.Context, *config.Resolved, *secret.
 	}
 }
 
+// StarredRepository is one starred repository: the compact view, the time it was starred, and the
+// repository in full.
+type StarredRepository struct {
+	RepositorySummary
+	StarredAt        *string         `json:"starred_at,omitempty"`
+	RepositoryDetail *RESTRepository `json:"repository_detail,omitempty"`
+}
+
 // StarredRepositoryList is one batch of the account's starred repositories.
 type StarredRepositoryList struct {
-	Starred    []RepositorySummary `json:"starred"`
+	Starred    []StarredRepository `json:"starred"`
 	NextCursor string              `json:"next_cursor,omitempty"`
 	HasMore    bool                `json:"has_more"`
 }
@@ -200,9 +251,16 @@ const (
 		"fine-grained token"
 )
 
-func (c *Client) listStars(ctx context.Context, o *starListOptions) (*StarredRepositoryList, error) {
-	const op = "list starred repositories"
-	var raw []struct {
+// starsContext asks for the media type that wraps each repository with its star time.
+func starsContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, acceptKey{}, starsMediaType)
+}
+
+// starItem decodes one entry of the star list twice from the same object: the compact view and the full
+// repository. A member the full view cannot read is left out rather than failing the compact view.
+type starItem struct {
+	StarredAt *string `json:"starred_at"`
+	compact   struct {
 		FullName   string `json:"full_name"`
 		Visibility string `json:"visibility"`
 		Archived   bool   `json:"archived"`
@@ -210,20 +268,45 @@ func (c *Client) listStars(ctx context.Context, o *starListOptions) (*StarredRep
 			Login string `json:"login"`
 		} `json:"owner"`
 	}
-	hasNext, err := c.restPage(ctx, op, "/user/starred", o.query(), &raw)
+	wide *repositoryRaw
+}
+
+func (e *starItem) UnmarshalJSON(data []byte) error {
+	var entry struct {
+		StarredAt *string         `json:"starred_at"`
+		Repo      json.RawMessage `json:"repo"`
+	}
+	if err := json.Unmarshal(data, &entry); err != nil {
+		return err
+	}
+	e.StarredAt = entry.StarredAt
+	if err := json.Unmarshal(entry.Repo, &e.compact); err != nil {
+		return err
+	}
+	_ = json.Unmarshal(entry.Repo, &e.wide)
+	return nil
+}
+
+func (c *Client) listStars(ctx context.Context, o *starListOptions) (*StarredRepositoryList, error) {
+	const op = "list starred repositories"
+	var raw []starItem
+	hasNext, err := c.restPage(starsContext(ctx), op, "/user/starred", o.query(), &raw)
 	if err != nil {
 		return nil, actionsFailure(err, starsReadPermission)
 	}
-	result := &StarredRepositoryList{Starred: make([]RepositorySummary, 0, len(raw))}
-	for _, repo := range raw {
+	result := &StarredRepositoryList{Starred: make([]StarredRepository, 0, len(raw))}
+	for _, item := range raw {
+		repo := &item.compact
 		if repo.FullName == "" {
 			return nil, invalidEntry(op, "a starred repository")
 		}
 		if !c.allowed.ownerNames(repo.Owner.Login) {
 			continue
 		}
-		result.Starred = append(result.Starred, RepositorySummary{Repository: repo.FullName,
-			Visibility: strings.ToLower(repo.Visibility), Archived: repo.Archived})
+		result.Starred = append(result.Starred, StarredRepository{
+			RepositorySummary: RepositorySummary{Repository: repo.FullName,
+				Visibility: strings.ToLower(repo.Visibility), Archived: repo.Archived},
+			StarredAt: shortText(item.StarredAt), RepositoryDetail: item.wide.project(c.allowed)})
 	}
 	result.HasMore, result.NextCursor = morePage(o.binding, o.page, o.perPage, hasNext)
 	return result, nil
