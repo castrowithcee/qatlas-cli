@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -113,11 +114,11 @@ var collaboratorsList = capability.Descriptor{
 		Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: peopleSensitivity},
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"collaborators":{"type":"array","items":{"type":"object",` +
-		`"properties":{"name":{"type":"string"},"email":{"type":"string"},"contact_email":{"type":"string"}},` +
+		`"properties":{"name":{"type":"string"},"email":{"type":"string"},"contact_email":{"type":"string"},"avatar_url":{"type":"string"}},` +
 		`"additionalProperties":false}},"has_more":{"type":"boolean"}},` +
 		`"required":["collaborators","has_more"],"additionalProperties":false}`),
 	Fields: []capability.Field{
-		{Name: "collaborators", Description: "Collaborators of the base with name, email and contact email, personal data and untrusted; at most 500 per call"},
+		{Name: "collaborators", Description: "Collaborators of the base with name, email, contact email and avatar address, personal data and untrusted; at most 500 per call"},
 		{Name: "has_more", Description: "True when collaborators were left out because of the size limit"},
 	},
 	Examples: []capability.Example{{Description: "List the collaborators of the base", Arguments: json.RawMessage(`{}`)}},
@@ -152,6 +153,7 @@ type Collaborator struct {
 	Name         string `json:"name,omitempty"`
 	Email        string `json:"email,omitempty"`
 	ContactEmail string `json:"contact_email,omitempty"`
+	AvatarURL    string `json:"avatar_url,omitempty"`
 }
 
 // CollaboratorsResult is one bounded list of the collaborators of a base.
@@ -368,8 +370,8 @@ func (c *Client) DeleteComment(ctx context.Context, input CommentInput) error {
 	return c.changeOnce(ctx, op, http.MethodDelete, path, access.token, nil, commentUncertain)
 }
 
-// ListCollaborators reads the collaborators of the whole base. Only name and mail addresses are reported;
-// the avatar address is left out.
+// ListCollaborators reads the collaborators of the whole base. The avatar address is reported as text and
+// never fetched.
 func (c *Client) ListCollaborators(ctx context.Context) (*CollaboratorsResult, error) {
 	const op = "list collaborators"
 	access, err := c.access(ctx, op)
@@ -381,6 +383,7 @@ func (c *Client) ListCollaborators(ctx context.Context) (*CollaboratorsResult, e
 			Name         string `json:"name"`
 			Email        string `json:"email"`
 			ContactEmail string `json:"contact_email"`
+			AvatarURL    string `json:"avatar_url"`
 		} `json:"user_list"`
 	}
 	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+collaboratorsPath, nil,
@@ -394,7 +397,22 @@ func (c *Client) ListCollaborators(ctx context.Context) (*CollaboratorsResult, e
 	out := make([]Collaborator, 0, len(body.Users))
 	for _, user := range body.Users {
 		out = append(out, Collaborator{Name: clipString(user.Name), Email: clipString(user.Email),
-			ContactEmail: clipString(user.ContactEmail)})
+			ContactEmail: clipString(user.ContactEmail), AvatarURL: plainAddress(user.AvatarURL)})
 	}
 	return &CollaboratorsResult{Collaborators: out, HasMore: more}, nil
+}
+
+// plainAddress returns an http(s) address that carries no query, fragment or credentials, since those can
+// grant access without a sign-in; anything else yields an empty string.
+func plainAddress(value string) string {
+	if value == "" || len(value) > maxDisplayBytes || strings.ContainsAny(value, "?#") ||
+		strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) >= 0 {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return ""
+	}
+	return value
 }
