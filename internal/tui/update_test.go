@@ -350,3 +350,30 @@ func TestUpdateWaitsForRunningWork(t *testing.T) {
 		})
 	}
 }
+
+// progressFake reports half of the archive before it installs, the way the real updater reports its
+// download.
+type progressFake struct{ *fakeUpdater }
+
+func (p progressFake) UpdateProgress(ctx context.Context, progress func(done, total int64)) (selfupdate.Result, error) {
+	progress(50, 100)
+	return p.Update(ctx)
+}
+
+func TestTheBannerShowsTheDownloadProgress(t *testing.T) {
+	fake := progressFake{newerRelease()}
+	m := startedWith(t, fake)
+	msg := m.startUpdate()()
+	progress, ok := msg.(updateProgressMsg)
+	if !ok {
+		t.Fatalf("the first message of the installation is %T, want the download progress", msg)
+	}
+	_, next := m.Update(progress)
+	if line := strings.Split(m.View(), "\n")[0]; !strings.Contains(line, "Updating to v0.5.0 … 50 %") {
+		t.Errorf("the top line does not show the progress: %q", line)
+	}
+	deliver(m, next)
+	if fake.updates != 1 || m.updating || m.updated != "v0.5.0" {
+		t.Fatalf("the installation did not finish: updates %d updating %v updated %q", fake.updates, m.updating, m.updated)
+	}
+}

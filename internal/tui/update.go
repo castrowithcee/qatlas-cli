@@ -22,6 +22,11 @@ type Updater interface {
 // of the vault process it locked.
 type updateNoter interface{ Note() string }
 
+// progressUpdater is implemented by an Updater that can report the download of the release archive.
+type progressUpdater interface {
+	UpdateProgress(ctx context.Context, progress func(done, total int64)) (selfupdate.Result, error)
+}
+
 // updateCheckTimeout bounds the check at start. It runs in the background, and a slow network must not
 // leave a request open for the whole session.
 const updateCheckTimeout = 5 * time.Second
@@ -35,6 +40,12 @@ type (
 	updateDoneMsg struct {
 		result selfupdate.Result
 		err    error
+	}
+	// updateProgressMsg carries the percentage of the archive downloaded so far; next waits for what the
+	// installation reports after it.
+	updateProgressMsg struct {
+		percent int
+		next    tea.Cmd
 	}
 )
 
@@ -117,11 +128,45 @@ func (m *Model) startUpdate() tea.Cmd {
 	m.updating = true
 	m.updateUnlocked = m.vaultOpen()
 	m.clearMessages()
+	m.updatePercent = -1
 	updater := m.updater
-	return func() tea.Msg {
-		result, err := updater.Update(context.Background())
-		return updateDoneMsg{result: result, err: err}
+	progressing, ok := updater.(progressUpdater)
+	if !ok {
+		return func() tea.Msg {
+			result, err := updater.Update(context.Background())
+			return updateDoneMsg{result: result, err: err}
+		}
 	}
+	// The installation runs on its own and reports through events; each message the editor gets waits for
+	// the next one, so the banner follows the download without a timer.
+	events := make(chan tea.Msg, 1)
+	go func() {
+		last := -1
+		result, err := progressing.UpdateProgress(context.Background(), func(done, total int64) {
+			if total <= 0 {
+				return
+			}
+			if percent := int(done * 100 / total); percent != last {
+				last = percent
+				select {
+				case events <- updateProgressMsg{percent: percent}:
+				default:
+					// The editor has not taken the previous value yet; the next one supersedes it.
+				}
+			}
+		})
+		events <- updateDoneMsg{result: result, err: err}
+	}()
+	var wait tea.Cmd
+	wait = func() tea.Msg {
+		msg := <-events
+		if progress, ok := msg.(updateProgressMsg); ok {
+			progress.next = wait
+			return progress
+		}
+		return msg
+	}
+	return wait
 }
 
 // vaultOpen reports whether the vault is encrypted and unlocked, in this process or in a vault process.
@@ -170,6 +215,9 @@ func (m *Model) updateBanners() []string {
 	switch {
 	case m.updated != "":
 		return []string{tr(tBannerUpdated, m.updated), tr(tBannerUpdatedShort)}
+	case m.updating && m.updatePercent >= 0:
+		return []string{tr(tBannerUpdatingPercent, m.release.Latest, m.updatePercent),
+			tr(tBannerUpdatingPercentShort, m.updatePercent)}
 	case m.updating:
 		return []string{tr(tBannerUpdating, m.release.Latest), tr(tBannerUpdatingShort)}
 	case m.updateOffered():
