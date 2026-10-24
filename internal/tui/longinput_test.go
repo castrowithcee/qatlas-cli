@@ -191,6 +191,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 						t.Fatalf("the long value replaced the screen:\n%s", view)
 					}
 					assertViewFits(t, view, size.w, size.h)
+					view = leftOfPane(m, view)
 
 					want := longMark
 					if c.masked {

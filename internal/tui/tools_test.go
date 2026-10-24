@@ -333,7 +333,8 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	}
 	press(t, m, "esc")
 	press(t, m, "enter")
-	typeText(t, m, "issues.list")
+	// An i on an empty search is the info key, so the search starts with the provider.
+	typeText(t, m, "github.issues.list")
 	if view := screenOf(m); !strings.Contains(view, "github.issues.list  read") || strings.Contains(view, "(listed only)") {
 		t.Fatalf("an ordinary tool is marked:\n%s", view)
 	}

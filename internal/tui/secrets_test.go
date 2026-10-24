@@ -599,14 +599,14 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 			}
 			// The next step is the hint of the role row, so it shows only once that row is focused.
 			focusField(t, m, "token-id")
-			view = screenOf(m)
-			words = strings.Join(strings.Fields(view), " ")
+			view = m.View()
+			words = explained(m)
 			for _, want := range tt.next {
 				if !strings.Contains(words, want) {
-					t.Errorf("the row does not name the next step %q:\n%s", want, view)
+					t.Errorf("the row does not name the next step %q: %s", want, words)
 				}
 			}
-			if strings.Contains(view, canary) {
+			if strings.Contains(view, canary) || strings.Contains(words, canary) {
 				t.Errorf("a stored or exported value reached the screen:\n%s", view)
 			}
 			// The display follows the cascade; it does not decide it.
