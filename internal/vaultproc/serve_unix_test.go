@@ -24,7 +24,8 @@ func successorScript(t *testing.T, dir, body string) string {
 	path := filepath.Join(dir, "qatlas")
 	script := "#!/bin/sh\n" +
 		"echo \"$@\" > " + filepath.Join(dir, "args") + "\n" +
-		"echo $$ > " + filepath.Join(dir, "pid") + "\n" +
+		"echo $$ > " + filepath.Join(dir, "pid.tmp") + "\n" +
+		"mv " + filepath.Join(dir, "pid.tmp") + " " + filepath.Join(dir, "pid") + "\n" +
 		"cat <&3 > " + filepath.Join(dir, "snapshot") + "\n" +
 		body + "\n"
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
@@ -116,23 +117,37 @@ func TestSuccessorContract(t *testing.T) {
 // A successor that reports anything but ready, or nothing in time, is ended before StartSuccessorProcess returns.
 func TestStartSuccessorEndsASuccessorThatDoesNotStart(t *testing.T) {
 	for name, tc := range map[string]struct {
-		body    string
-		timeout time.Duration
-		want    string
+		body string
+		want string
 	}{
-		"reports a failure": {"echo cannot listen >&4\nexec sleep 60", StartTimeout, "cannot listen"},
-		"reports running":   {"echo running >&4\nexec sleep 60", StartTimeout, "did not start"},
-		"reports nothing":   {"exec sleep 60", 300 * time.Millisecond, "did not report"},
+		"reports a failure": {"echo cannot listen >&4\nexec sleep 60", "cannot listen"},
+		"reports running":   {"echo running >&4\nexec sleep 60", "did not start"},
+		"reports nothing":   {"exec sleep 60", "did not report"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			program := successorScript(t, dir, tc.body)
-			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			if name == "reports nothing" {
+				// Ends ctx once the script runs, so the start is not bounded by how fast it gets there.
+				go func() {
+					for limit := time.Now().Add(StartTimeout); time.Now().Before(limit); time.Sleep(5 * time.Millisecond) {
+						if _, err := os.Stat(filepath.Join(dir, "pid")); err == nil {
+							break
+						}
+					}
+					cancel()
+				}()
+			}
 			locksAt := time.Now().Add(time.Hour)
+			started := time.Now()
 			_, end, err := StartSuccessorProcess(ctx, program, "/nowhere/config.yaml", vault.Snapshot{Identity: "x", LocksAt: &locksAt})
 			if err == nil || end != nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("StartSuccessorProcess() = %v, want an error containing %q and no successor", err, tc.want)
+			}
+			if name == "reports nothing" && time.Since(started) >= StartTimeout {
+				t.Fatalf("StartSuccessorProcess() returned only at StartTimeout, not when ctx ended")
 			}
 			awaitGone(t, scriptPID(t, dir))
 		})

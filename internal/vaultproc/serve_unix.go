@@ -55,7 +55,7 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 		return Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
 	}
 	deadline := startDeadline(ctx)
-	if _, _, _, err := startServe(program, serveArgs(configPath, false), snap, deadline); err != nil {
+	if _, _, _, err := startServe(ctx, program, serveArgs(configPath, false), snap, deadline); err != nil {
 		return Status{}, err
 	}
 	return awaitProcess(ctx, client, deadline)
@@ -71,7 +71,7 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 // The successor is started by the path itself, so the path the kernel records for it is the path clients
 // run qatlas from. What it is started with is the successor contract; see HandoverFD.
 func StartSuccessorProcess(ctx context.Context, program, configPath string, snap vault.Snapshot) (int, func(), error) {
-	process, done, report, err := startServe(program, serveArgs(configPath, true), snap, startDeadline(ctx))
+	process, done, report, err := startServe(ctx, program, serveArgs(configPath, true), snap, startDeadline(ctx))
 	if err == nil && report != ReportReady {
 		// Only a process this one started listens beside the vault socket, never one that found another
 		// already running.
@@ -97,11 +97,12 @@ func endProcess(process *os.Process, done <-chan struct{}) {
 }
 
 // startServe starts program with args as a vault process detached from this one and its session, hands it
-// snap through HandoverFD, and waits until deadline for its report on ReportFD. It returns the process, if it
-// was started, with a channel closed once it ended, and the report; an error unless the report was
-// ReportReady or ReportRunning. The process is left running in every case: the caller decides whether it ends.
-func startServe(program string, args []string, snap vault.Snapshot, deadline time.Time) (*os.Process,
-	<-chan struct{}, string, error) {
+// snap through HandoverFD, and waits until deadline, or until ctx ends, for its report on ReportFD. It
+// returns the process, if it was started, with a channel closed once it ended, and the report; an error
+// unless the report was ReportReady or ReportRunning. The process is left running in every case: the caller
+// decides whether it ends.
+func startServe(ctx context.Context, program string, args []string, snap vault.Snapshot,
+	deadline time.Time) (*os.Process, <-chan struct{}, string, error) {
 	handoverRead, handoverWrite, err := os.Pipe()
 	if err != nil {
 		return nil, nil, "", err
@@ -132,11 +133,20 @@ func startServe(program string, args []string, snap vault.Snapshot, deadline tim
 		close(done)
 	}()
 
+	// Both deadlines are set before ctx can move them into the past, so a later call cannot undo its end.
+	_ = handoverWrite.SetWriteDeadline(deadline)
+	_ = reportRead.SetReadDeadline(deadline)
+	stop := context.AfterFunc(ctx, func() {
+		past := time.Unix(1, 0)
+		_ = handoverWrite.SetDeadline(past)
+		_ = reportRead.SetReadDeadline(past)
+	})
+	defer stop()
+
 	data, err := json.Marshal(snap)
 	if err != nil {
 		return cmd.Process, done, "", errors.New("cannot encode the vault for the vault process")
 	}
-	_ = handoverWrite.SetWriteDeadline(deadline)
 	_, err = handoverWrite.Write(data)
 	clear(data)
 	_ = handoverWrite.Close()
@@ -144,7 +154,6 @@ func startServe(program string, args []string, snap vault.Snapshot, deadline tim
 		return cmd.Process, done, "", errors.New("the vault process did not take the vault")
 	}
 
-	_ = reportRead.SetReadDeadline(deadline)
 	report, err := bufio.NewReader(io.LimitReader(reportRead, 4096)).ReadString('\n')
 	report = strings.TrimSpace(report)
 	switch {
@@ -152,6 +161,8 @@ func startServe(program string, args []string, snap vault.Snapshot, deadline tim
 		return cmd.Process, done, report, nil
 	case report != "":
 		return cmd.Process, done, report, fmt.Errorf("the vault process did not start: %s", report)
+	case ctx.Err() != nil:
+		return cmd.Process, done, "", fmt.Errorf("the vault process did not report: %w", ctx.Err())
 	case errors.Is(err, os.ErrDeadlineExceeded):
 		return cmd.Process, done, "", errors.New("the vault process did not report within " + StartTimeout.String())
 	default:
