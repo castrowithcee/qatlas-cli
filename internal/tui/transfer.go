@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -737,15 +736,17 @@ func (m *Model) exportLeaveView() string {
 	if m.export != nil && m.export.step == exportPreview {
 		save = "{save} write"
 	}
-	discard, why := "d discard", "Leaving drops the ticks and every answer, a typed passphrase included. Nothing was written."
+	title, discard, why := "Leave the export?", "d discard", "Leaving drops the ticks and every answer, a typed passphrase included."
 	if m.leaveQuit {
-		discard, why = "d discard and quit", "Quitting would drop them. Nothing was written."
+		title, discard, why = "Quit and drop the export?", "d discard and quit", "Quitting would drop them."
 	}
 	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
 	if m.export != nil && m.export.step == exportPlainConfirm {
 		// F2 does not answer the plain text question; only y does.
 		keys = discard + " · {back} keep editing · {command} cmds · {help} help"
 	}
-	return m.wrapped(styles.warning, "warning: the export is not finished") + m.keyHint(keys) + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), why)
+	return m.questionText(question{title: title, consequence: why,
+		details: []string{m.indentedWith(styles.warning, "warning: the export is not finished"),
+			m.indented("Nothing was written.")},
+		keys: keys})
 }
