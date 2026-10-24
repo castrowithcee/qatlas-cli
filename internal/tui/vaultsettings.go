@@ -231,6 +231,9 @@ func (m *Model) saveVault() tea.Cmd {
 
 // runVaultActionField starts the flow of one action row.
 func (m *Model) runVaultActionField(action string) tea.Cmd {
+	if cmd, ok := m.runPageAction(action); ok {
+		return cmd
+	}
 	if m.vaultBusy {
 		// A vault write, or the prompt that may lead to one, is already in flight: starting a second one
 		// here would race it over the same files.

@@ -27,6 +27,16 @@ func (a area) title() string {
 	return [...]string{"Overview", "Connections", "Activity", "Access", "Library", "Settings"}[a]
 }
 
+// areaByName finds the area whose title is name, ignoring case.
+func areaByName(name string) (area, bool) {
+	for a := area(0); a < areaCount; a++ {
+		if strings.EqualFold(a.title(), name) {
+			return a, true
+		}
+	}
+	return areaOverview, false
+}
+
 // areaSections are the sections of each area in sub-tab order; the first one is what the area opens on.
 var areaSections = [areaCount][]section{
 	areaOverview:    {sectionOverview},
@@ -34,7 +44,7 @@ var areaSections = [areaCount][]section{
 	areaActivity:    {sectionLogs},
 	areaAccess:      {sectionTokens, sectionApprovals},
 	areaLibrary:     {sectionServices, sectionCredentials},
-	areaSettings:    {sectionVault, sectionDefaults},
+	areaSettings:    {sectionGeneral, sectionVault, sectionDefaults, sectionTransfer, sectionUpdate, sectionSelftest},
 }
 
 // area is the area that holds s.
@@ -72,6 +82,11 @@ func (m *Model) previewArea(a area) tea.Cmd {
 	return cmd
 }
 
+// advancedStart is the first Settings page after the device-local preferences: from it on the option bar
+// shows a bar before the page, the part of Settings that manages the vault, the configuration and the
+// program itself.
+const advancedStart = sectionVault
+
 // subNavLine is the option bar of the active area: "Area: [active] other", with "> " in front while it has
 // the focus. A terminal too narrow for every name shows the active one alone.
 func (m *Model) subNavLine() string {
@@ -85,6 +100,10 @@ func (m *Model) subNavLine() string {
 	a := m.section.area()
 	var all, active []string
 	for _, s := range areaSections[a] {
+		if s == advancedStart {
+			// The advanced pages follow the preferences after a bar, so the split reads at any width.
+			all = append(all, "|")
+		}
 		if s == m.section {
 			all, active = append(all, "["+s.subTitle()+"]"), append(active, "["+s.subTitle()+"]")
 			continue
