@@ -122,10 +122,11 @@ func Register(reg *capability.Registry) error {
 				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
-			Description: "reads what the read profile reads and adds and updates the goals of a website; every " +
+			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
 				"change needs its own confirmation, and deleting a goal stays unticked because it also deletes " +
 				"the conversions recorded for it",
-			Tools: append(slices.Clone(readTools), goalsAdd.ID, goalsUpdate.ID),
+			Tools: append(slices.Clone(readTools), goalsAdd.ID, goalsUpdate.ID,
+				goalRecommendationsList.ID, goalRecommendationsScan.ID, goalRecommendationsDismiss.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -153,5 +154,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: goalsAdd, Handler: capability.Handler(invokeGoalsAdd)},
 		capability.Operation{Descriptor: goalsUpdate, Handler: capability.Handler(invokeGoalsUpdate)},
 		capability.Operation{Descriptor: goalsDelete, Handler: capability.Handler(invokeGoalsDelete)},
+		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
+		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
+		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},
 	)
 }

@@ -549,17 +549,23 @@ func (d goalDefinition) params() (url.Values, error) {
 // repeats: a failure after which the request may have been applied says so.
 func (c *Client) change(ctx context.Context, op string, req requirement, method string, params url.Values,
 	out any) error {
+	return c.changeNoting(ctx, op, req, method, params, out, sentOnce)
+}
+
+// changeNoting is change with the note an unclear outcome carries.
+func (c *Client) changeNoting(ctx context.Context, op string, req requirement, method string, params url.Values,
+	out any, note string) error {
 	info, err := c.ensure(ctx, op, req)
 	if err != nil {
 		return err
 	}
-	return uncertainChange(c.refuseMissing(req, c.send(ctx, op, method, params, info.bodyToken, out)))
+	return uncertainChange(c.refuseMissing(req, c.send(ctx, op, method, params, info.bodyToken, out)), note)
 }
 
 // uncertainChange marks a failure of a sent change whose outcome is unknown: no answer in time, a reset
 // connection, an HTTP status Qatlas does not classify, or an answer that cannot be read. An error Matomo
 // reported itself in a recognised form is a clean refusal and stays as it is.
-func uncertainChange(err error) error {
+func uncertainChange(err error, note string) error {
 	var failure *provider.Error
 	if !errors.As(err, &failure) {
 		return err
@@ -568,7 +574,7 @@ func uncertainChange(err error) error {
 	case failure.MayHaveArrived(), failure.Class == provider.ClassInvalidResponse,
 		failure.Class == provider.ClassProviderError:
 		marked := *failure
-		marked.Message += sentOnce
+		marked.Message += note
 		return &marked
 	}
 	return err

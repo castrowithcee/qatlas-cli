@@ -33,8 +33,8 @@ const goalOne = `{"idsite":"1","idgoal":"3","name":"Newsletter","description":"S
 
 // goalConnections adds the connections that change goals to the connections of the other tests.
 const goalConnections = `
-  writer: {service: matomo, credential: token, effects: [read, create, update, delete]}
-  writer-two: {service: matomo, credential: token, effects: [read, create, update], targets: [site/2]}
+  writer: {service: matomo, credential: token, effects: [read, create, update, delete, execute]}
+  writer-two: {service: matomo, credential: token, effects: [read, create, update, execute], targets: [site/2]}
   deleter: {service: matomo, credential: token, tools: [matomo.goals.get, matomo.goals.delete], targets: [site/1]}
   reader: {service: matomo, credential: token, effects: [read]}
 `
