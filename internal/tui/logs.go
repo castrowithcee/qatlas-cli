@@ -44,7 +44,9 @@ const (
 	logModeCount
 )
 
-func (mode logMode) String() string { return [...]string{"Day", "Range", "All"}[mode] }
+func (mode logMode) String() string {
+	return tr([...]textID{tLogModeDay, tLogModeRange, tLogModeAll}[mode])
+}
 
 // logStatus is what the chain and the check values say about one line, ordered from best to worst so the
 // bar can show the worst of what it selects.
@@ -59,7 +61,7 @@ const (
 
 // label is the status as the screen shows it: always symbol and word together, so it reads without colour.
 func (s logStatus) label() string {
-	return [...]string{"✓ verified", "? unverified", "… gap", "✗ altered"}[s]
+	return tr([...]textID{tLogVerified, tLogUnverified, tLogGap, tLogAltered}[s])
 }
 
 func (s logStatus) style() lipgloss.Style {
@@ -88,9 +90,49 @@ const (
 )
 
 var (
-	logFilterNames = [logFilterCount]string{"way", "client", "tool", "connection", "effect", "result"}
-	logFilterShort = [logFilterCount]string{"way", "client", "tool", "conn", "effect", "result"}
+	logFilterNames = [logFilterCount]textID{tLogFilterWay, tLogFilterClient, tLogFilterTool, tLogFilterConnection,
+		tLogFilterEffect, tLogFilterResult}
+	logFilterShort = [logFilterCount]textID{tLogFilterShortWay, tLogFilterShortClient, tLogFilterShortTool,
+		tLogFilterShortConn, tLogFilterShortEffect, tLogFilterShortResult}
 )
+
+var logLabels = map[string]textID{
+	"status":   tLogLabelStatus,
+	"UTC file": tLogLabelUTCFile,
+	"sequence": tLogLabelSequence,
+	"day":      tLogLabelDay,
+	"kind":     tLogLabelKind,
+	"through":  tLogLabelThrough,
+	"way":      tLogLabelWay,
+	"client":   tLogLabelClient,
+	"tool":     tLogLabelTool,
+	"effect":   tLogLabelEffect,
+	"result":   tLogLabelResult,
+	"duration": tLogLabelDuration,
+	"request":  tLogLabelRequest,
+	"response": tLogLabelResponse,
+	"date":     tLogLabelDate,
+	"from":     tLogLabelFrom,
+	"to":       tLogLabelTo,
+}
+
+// logLabel is a row label of the entry detail or the date dialog in the editor's language.
+func logLabel(english string) string {
+	if id, ok := logLabels[english]; ok {
+		return tr(id)
+	}
+	return labelText(english)
+}
+
+// logColumnTitles draws the column titles of a table of the Logs section in the editor's language.
+func logColumnTitles(columns []column) []column {
+	out := make([]column, len(columns))
+	for i, c := range columns {
+		c.title = columnText(c.title)
+		out[i] = c
+	}
+	return out
+}
 
 // logColumns are the columns of the log table. The status leads and is never cut; the tool is the free
 // text; the duration goes first in a narrow terminal, then the connection, then the client.
@@ -193,7 +235,7 @@ func newLogView() *logView {
 		table: table{columns: logColumns, rows: map[string][]string{}},
 	}
 	lv.list = newFilterList(lv.searchText)
-	lv.list.input.Placeholder = "Type to search"
+	lv.list.input.Placeholder = tr(tLogSearchPlaceholder)
 	return lv
 }
 
@@ -260,7 +302,7 @@ func (m *Model) loadLogs() tea.Cmd {
 		days, err := invokelog.VerifyLines(v.Dir(), checker, utcFrom, utcTo)
 		if err != nil && checker != nil {
 			// A check that cannot be made at all never passes a line as verified; the lines go unchecked.
-			note = "the check values could not be checked: " + err.Error()
+			note = tr(tLogCheckFailed, err.Error())
 			days, err = invokelog.VerifyLines(v.Dir(), nil, utcFrom, utcTo)
 		}
 		return logsLoadedMsg{id: id, from: from, to: to, days: days, note: note, err: err}
@@ -276,11 +318,11 @@ func logUTCFileBounds(from, to string) (string, string) { return invokelog.UTCFi
 // note says why there is no checker, and done clears a key this derived.
 func logChecker(ctx context.Context, v *vault.Vault) (invokelog.Checker, string, func()) {
 	nothing := func() {}
-	const locked = "the vault is locked, so check values are not checked; ctrl+l unlocks it"
+	locked := tr(tLogLocked)
 	state, err := v.State()
 	switch {
 	case err != nil:
-		return nil, "the vault's state cannot be read, so check values are not checked", nothing
+		return nil, tr(tLogStateUnreadable), nothing
 	case state == vault.StateUnlocked:
 		key, err := v.LogKey()
 		if err != nil {
@@ -288,7 +330,7 @@ func logChecker(ctx context.Context, v *vault.Vault) (invokelog.Checker, string,
 		}
 		return key, "", key.Clear
 	case state != vault.StateLocked:
-		return nil, "the vault is not encrypted, so there is no key to check check values with", nothing
+		return nil, tr(tLogNotEncrypted), nothing
 	case !vaultproc.Supported:
 		return nil, locked, nothing
 	}
@@ -298,7 +340,7 @@ func logChecker(ctx context.Context, v *vault.Vault) (invokelog.Checker, string,
 	}
 	if _, err := client.Status(ctx); err != nil {
 		if !errors.Is(err, vaultproc.ErrNotRunning) {
-			return nil, "the vault process cannot check the check values: " + err.Error(), nothing
+			return nil, tr(tLogProcessCannot, err.Error()), nothing
 		}
 		return nil, locked, nothing
 	}
@@ -320,7 +362,7 @@ func (m *Model) handleLogsLoaded(msg logsLoadedMsg) tea.Cmd {
 		lv.note = m.redactor.Apply(msg.note)
 	}
 	lv.rows, lv.worst = nil, logVerified
-	lv.table = table{columns: logColumns, rows: map[string][]string{}}
+	lv.table = table{columns: logColumnTitles(logColumns), rows: map[string][]string{}}
 	lv.layoutWidth = -1
 	for _, day := range msg.days {
 		for _, line := range day.Lines {
@@ -365,17 +407,17 @@ func statusOf(line invokelog.LineResult) logStatus {
 func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) logRow {
 	row := logRow{date: date, line: line, status: statusOf(line)}
 	e := line.Entry
-	when, way, client, tool, conn, effect, result, dur, size := "UTC file "+date, "-", "-", "-", "-", "-", "-", "", "-"
+	when, way, client, tool, conn, effect, result, dur, size := tr(tLogUTCFile, date), "-", "-", "-", "-", "-", "-", "", "-"
 	switch {
 	case !line.Parsed:
-		tool = "(unreadable line)"
+		tool = tr(tLogUnreadable)
 	case e.Kind == invokelog.KindCut:
 		if !e.Time.IsZero() {
 			when = logTableTime(e.Time, withDate)
 		}
-		tool = "retention cut"
+		tool = tr(tLogRetentionCut)
 		if e.Cut != nil {
-			tool = fmt.Sprintf("retention cut through #%d", e.Cut.ThroughSeq)
+			tool = tr(tLogRetentionCutThrough, e.Cut.ThroughSeq)
 		}
 	default:
 		if !e.Time.IsZero() {
@@ -646,7 +688,7 @@ func newLogInput(value string) textinput.Model {
 	in := textinput.New()
 	in.Prompt = ""
 	in.CharLimit = len(logDateLayout)
-	in.Placeholder = "YYYY-MM-DD"
+	in.Placeholder = tr(tLogDateFormat)
 	in.Cursor.SetMode(cursor.CursorStatic)
 	in.SetValue(value)
 	in.CursorEnd()
@@ -690,13 +732,13 @@ func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
 		for _, in := range d.inputs {
 			value := strings.TrimSpace(in.Value())
 			if _, err := time.Parse(logDateLayout, value); err != nil {
-				d.err = "a date is typed as YYYY-MM-DD, for example " + time.Now().In(time.Local).Format(logDateLayout)
+				d.err = tr(tLogDateInvalid, time.Now().In(time.Local).Format(logDateLayout))
 				return nil
 			}
 			days = append(days, value)
 		}
 		if len(days) == 2 && days[0] > days[1] {
-			d.err = "from must not be after to"
+			d.err = tr(tLogDateOrder)
 			return nil
 		}
 		if len(days) == 1 {
@@ -722,7 +764,7 @@ func (m *Model) openLogPick(filter int) {
 	if filter < 0 {
 		p.list = newFilterList(func(name string) string {
 			k, _ := strconv.Atoi(name)
-			return fmt.Sprintf("%-11s %s", logFilterNames[k], filterText(lv.filters[k]))
+			return fmt.Sprintf("%-11s %s", tr(logFilterNames[k]), filterText(lv.filters[k]))
 		})
 		for k := range logFilterNames {
 			names = append(names, strconv.Itoa(k))
@@ -739,7 +781,7 @@ func (m *Model) openLogPick(filter int) {
 		sort.Strings(names)
 		names = append([]string{""}, names...)
 	}
-	p.list.input.Placeholder = "Type to search"
+	p.list.input.Placeholder = tr(tLogSearchPlaceholder)
 	p.list.reset(names)
 	p.list.startFilter()
 	if filter >= 0 {
@@ -752,7 +794,7 @@ func (m *Model) openLogPick(filter int) {
 // filterText shows a filter value; "" keeps every row.
 func filterText(value string) string {
 	if value == "" {
-		return "all"
+		return tr(tLogAll)
 	}
 	return value
 }
@@ -865,7 +907,7 @@ func (m *Model) logsFrame() (string, string) {
 	lv := m.logs
 	focused := m.screen == screenLogs
 	width := m.usable(0)
-	status := styles.hint.Render("loading ...")
+	status := styles.hint.Render(tr(tLogLoading))
 	if lv.loaded {
 		status = lv.worst.style().Render(lv.worst.label())
 	}
@@ -874,40 +916,40 @@ func (m *Model) logsFrame() (string, string) {
 	for mode := logModeDay; mode < logModeCount; mode++ {
 		modes = append(modes, mode.String())
 	}
-	modeField := marker(logFocusMode) + "Mode: " + barChips(modes, int(lv.mode))
+	modeField := marker(logFocusMode) + tr(tLogBarMode) + barChips(modes, int(lv.mode))
 	view := 0
 	if lv.heat {
 		view = 1
 	}
-	viewField := marker(logFocusView) + "View: " + barChips([]string{"Table", "Heatmap"}, view)
+	viewField := marker(logFocusView) + tr(tLogBarView) + barChips([]string{tr(tLogViewTable), tr(tLogViewHeatmap)}, view)
 	var dateField string
 	switch lv.mode {
 	case logModeDay:
-		dateField = marker(logFocusDate) + "Date: [" + lv.day + "]"
+		dateField = marker(logFocusDate) + tr(tLogBarDate, lv.day)
 	case logModeRange:
-		dateField = marker(logFocusDate) + "Range: [" + lv.from + ".." + lv.to + "]"
+		dateField = marker(logFocusDate) + tr(tLogBarRange, lv.from, lv.to)
 	default:
-		dateField = "  " + styles.hint.Render("(all recorded days)")
+		dateField = "  " + styles.hint.Render(tr(tLogBarAll))
 	}
 	bar := packBar([]string{modeField, dateField, viewField}, status, width)
 
 	var filters []string
 	for k, value := range lv.filters {
-		filters = append(filters, logFilterShort[k]+"="+filterText(value))
+		filters = append(filters, tr(logFilterShort[k])+"="+filterText(value))
 	}
-	filterLine := "  filter: " + strings.Join(filters, " ")
-	if lipgloss.Width(filterLine)+len("  f change") <= width {
-		filterLine += "  f change"
+	filterLine := tr(tLogFilterLine, strings.Join(filters, " "))
+	if change := tr(tLogFilterChange); lipgloss.Width(filterLine)+lipgloss.Width(change) <= width {
+		filterLine += change
 	}
 	filterLine = styles.hint.Render(truncateCells(filterLine, width))
 
 	var search string
 	switch {
 	case lv.list.editing:
-		prefix, room := m.fit("  search: ")
+		prefix, room := m.fit(tr(tLogSearchPrefix))
 		search = prefix + fitInput(lv.list.input, room).View()
 	case lv.list.query() != "":
-		prefix, room := m.fit("  search: ")
+		prefix, room := m.fit(tr(tLogSearchPrefix))
 		search = prefix + truncateCells(lv.list.query(), room)
 	}
 	rule := styles.quietBorder.Render(strings.Repeat("─", width))
@@ -916,27 +958,23 @@ func (m *Model) logsFrame() (string, string) {
 	shown := len(lv.list.matches)
 	switch {
 	case lv.err != "":
-		body = append(body, m.wrapped(styles.fail, "error: the log cannot be read: "+lv.err))
+		body = append(body, m.wrapped(styles.fail, tr(tLogError, lv.err)))
 	case !lv.loaded:
-		body = append(body, m.wrapped(styles.hint, "Reading the log ..."))
+		body = append(body, m.wrapped(styles.hint, tr(tLogReading)))
 	case len(lv.rows) == 0:
 		body = append(body, m.wrapped(lipgloss.NewStyle(), lv.emptyText()))
 	case shown == 0:
-		body = append(body, m.wrapped(styles.hint,
-			"No entry matches the filters and the search. f changes the filters, esc clears the search."))
+		body = append(body, m.wrapped(styles.hint, tr(tLogNoMatch)))
 	case lv.heat:
 		// The heatmap has no table header.
 	case lv.stats && lv.sessions:
-		body = append(body, m.wrapped(styles.hint, "MCP sessions of the rows shown: the bytes of the JSON-RPC messages per "+
-			"area and tool, error responses included. ~tokens is an estimate (3.5 bytes per token); only the model "+
-			"knows the real count, and the agent's system prompt and thinking are not in it."))
+		body = append(body, m.wrapped(styles.hint, tr(tLogSessionsHelp)))
 		if stats := m.logSessionStats(); len(stats.order) > 0 {
 			body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
 		}
 	case lv.stats:
 		stats := m.logStats()
-		body = append(body, m.wrapped(styles.hint, "Response sizes of the invokes shown, as estimated tokens (3.5 bytes per "+
-			"token): the sum (~tok), the largest, p50, and p95. no size counts invokes without a recorded size."))
+		body = append(body, m.wrapped(styles.hint, tr(tLogStatsHelp)))
 		body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
 	default:
 		body = append(body, styles.hint.Render(clipCells("  "+lv.table.header(m.logLayout()), width)))
@@ -952,7 +990,7 @@ func (m *Model) logsFrame() (string, string) {
 		if search != "" {
 			lines = append(lines, search)
 		} else if !compact {
-			lines = append(lines, styles.hint.Render(truncateCells("  / search", width)))
+			lines = append(lines, styles.hint.Render(truncateCells(tr(tLogSearchIdle), width)))
 		}
 		if !compact {
 			lines = append(lines, rule)
@@ -982,11 +1020,11 @@ func (m *Model) logsFrame() (string, string) {
 func (lv *logView) emptyText() string {
 	switch lv.mode {
 	case logModeDay:
-		return "No entries for " + lv.day + "."
+		return tr(tLogEmptyDay, lv.day)
 	case logModeRange:
-		return "No entries from " + lv.from + " to " + lv.to + "."
+		return tr(tLogEmptyRange, lv.from, lv.to)
 	}
-	return "No entries recorded yet."
+	return tr(tLogEmptyAll)
 }
 
 // hasUnchecked reports whether a row carries a check value nobody checked, the only case note explains.
@@ -1079,7 +1117,7 @@ func (m *Model) logStats() logStats {
 			entries = append(entries, row.line.Entry)
 		}
 	}
-	s := logStats{groups: invokelog.Summarize(entries), table: table{columns: logStatColumns, rows: map[string][]string{}}}
+	s := logStats{groups: invokelog.Summarize(entries), table: table{columns: logColumnTitles(logStatColumns), rows: map[string][]string{}}}
 	num := func(n int64) string { return strconv.FormatInt(n, 10) }
 	for i, g := range s.groups {
 		cells := []string{strconv.Itoa(g.Calls), m.logText(g.Operation), orDash(m.logText(g.Connection)),
@@ -1107,7 +1145,7 @@ func (m *Model) logStatLines(s logStats, room int) string {
 	var b strings.Builder
 	for i := range s.groups {
 		if i == room {
-			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.groups)-i)) + "\n")
+			b.WriteString(styles.hint.Render(tr(tLogMore, len(s.groups)-i)) + "\n")
 			break
 		}
 		b.WriteString(m.listRow(false, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
@@ -1131,7 +1169,7 @@ func (m *Model) logSessionStats() logSessionStats {
 			entries = append(entries, row.line.Entry)
 		}
 	}
-	s := logSessionStats{table: table{columns: logSessionColumns, rows: map[string][]string{}}}
+	s := logSessionStats{table: table{columns: logColumnTitles(logSessionColumns), rows: map[string][]string{}}}
 	add := func(label string, t invokelog.ToolBytes) {
 		name := strconv.Itoa(len(s.order))
 		s.order = append(s.order, name)
@@ -1146,7 +1184,7 @@ func (m *Model) logSessionStats() logSessionStats {
 			sum.ReqBytes += a.ReqBytes
 			sum.RespBytes += a.RespBytes
 		}
-		add("session "+m.logText(session.Session), sum)
+		add(tr(tLogSessionRow, m.logText(session.Session)), sum)
 		for _, a := range session.Areas {
 			add("  "+string(a.Area), a.ToolBytes)
 			for _, t := range a.Tools {
@@ -1185,9 +1223,7 @@ func (m *Model) scrollSessions(key string) {
 // rows shown hold no MCP session; a last line says how many lines it left below.
 func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 	if len(s.order) == 0 {
-		return m.wrapped(lipgloss.NewStyle(), "No MCP session among the entries shown: only the entries of a "+
-			"'qatlas mcp' process carry a session, and a filter on a tool or a connection keeps only the "+
-			"exchanges that match it.") + "\n"
+		return m.wrapped(lipgloss.NewStyle(), tr(tLogNoSession)) + "\n"
 	}
 	start := min(max(m.logs.scroll, 0), max(len(s.order)-1, 0))
 	if len(s.order)-start > room {
@@ -1196,7 +1232,7 @@ func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 	var b strings.Builder
 	for i := start; i < len(s.order); i++ {
 		if i-start == room {
-			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.order)-i)) + "\n")
+			b.WriteString(styles.hint.Render(tr(tLogMore, len(s.order)-i)) + "\n")
 			break
 		}
 		b.WriteString(m.listRow(false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
@@ -1218,16 +1254,17 @@ func (m *Model) logDetailView() string {
 	}
 	row := lv.rows[lv.detail]
 	e := row.line.Entry
-	title := "Log entry UTC file " + row.date
+	title := tr(tLogEntryFile, row.date)
 	if row.line.Parsed && !e.Time.IsZero() {
-		title = "Log entry " + e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700")
+		title = tr(tLogEntryTime, e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700"))
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
-	m.formCol = m.labelColumn("status", "UTC file", "sequence", "day", "kind", "through", "way", "client", "tool",
-		"connection", "effect", "result", "duration", "request", "response")
+	m.formCol = m.labelColumn(logLabel("status"), logLabel("UTC file"), logLabel("sequence"), logLabel("day"), logLabel("kind"),
+		logLabel("through"), logLabel("way"), logLabel("client"), logLabel("tool"), logLabel("connection"),
+		logLabel("effect"), logLabel("result"), logLabel("duration"), logLabel("request"), logLabel("response"))
 	defer func() { m.formCol = 0 }()
-	field := func(label, value string) { b.WriteString(m.formRow(false, label, value) + "\n") }
+	field := func(label, value string) { b.WriteString(m.formRow(false, logLabel(label), value) + "\n") }
 	field("status", row.status.label()+" ("+m.logReason(row.line)+")")
 	field("UTC file", row.date)
 	if row.line.Parsed {
@@ -1237,9 +1274,9 @@ func (m *Model) logDetailView() string {
 	case !row.line.Parsed:
 		field("day", row.date)
 	case e.Kind == invokelog.KindCut:
-		field("kind", "retention cut")
+		field("kind", tr(tLogRetentionCut))
 		if e.Cut != nil {
-			field("through", fmt.Sprintf("#%d, removed on purpose by logs.retention_days", e.Cut.ThroughSeq))
+			field("through", tr(tLogCutThrough, e.Cut.ThroughSeq))
 		}
 	default:
 		field("way", row.values[logFilterWay])
@@ -1250,7 +1287,7 @@ func (m *Model) logDetailView() string {
 		field("client", orDash(client))
 		tool := row.values[logFilterTool]
 		if e.Version > 0 {
-			tool += fmt.Sprintf(" (version %d)", e.Version)
+			tool += tr(tLogToolVersion, e.Version)
 		}
 		field("tool", tool)
 		field("connection", row.values[logFilterConnection])
@@ -1269,34 +1306,33 @@ func (m *Model) logReason(line invokelog.LineResult) string {
 	var reasons []string
 	switch line.Chain {
 	case invokelog.ChainUnparsed:
-		reasons = append(reasons, "the line does not parse as a log entry")
+		reasons = append(reasons, tr(tLogReasonUnparsed))
 	case invokelog.ChainGenesis:
-		reasons = append(reasons, "the first entry does not chain from the genesis hash")
+		reasons = append(reasons, tr(tLogReasonGenesis))
 	case invokelog.ChainNext:
-		reasons = append(reasons, "hash chain mismatch after this entry")
+		reasons = append(reasons, tr(tLogReasonNext))
 	case invokelog.ChainPrevious:
-		reasons = append(reasons, "hash chain mismatch before this entry")
+		reasons = append(reasons, tr(tLogReasonPrevious))
 	}
 	if line.Missing > 0 {
-		reasons = append(reasons, fmt.Sprintf("%d entries missing right before this one without a retention cut",
-			line.Missing))
+		reasons = append(reasons, tr(tLogReasonMissing, line.Missing))
 	}
 	if line.Parsed {
 		switch line.MAC {
 		case invokelog.MACInvalid:
-			reasons = append(reasons, "does not match its check value")
+			reasons = append(reasons, tr(tLogReasonInvalid))
 		case invokelog.MACValid:
 			if len(reasons) == 0 {
-				reasons = append(reasons, "check value matches, chain intact")
+				reasons = append(reasons, tr(tLogReasonValid))
 			}
 		case invokelog.MACUnchecked:
 			note := m.logs.note
 			if note == "" {
-				note = "check value not checked"
+				note = tr(tLogReasonUnchecked)
 			}
 			reasons = append(reasons, note)
 		case invokelog.MACNone:
-			reasons = append(reasons, "written without the log key, so it carries no check value")
+			reasons = append(reasons, tr(tLogReasonNoKey))
 		}
 	}
 	return strings.Join(reasons, "; ")
@@ -1305,20 +1341,20 @@ func (m *Model) logReason(line invokelog.LineResult) string {
 // logDateDialogView draws the dialog of the bar's date field.
 func (m *Model) logDateDialogView() string {
 	d := m.logs.dialog
-	title, labels := "Choose a local day", []string{"date"}
+	title, labels := tr(tLogDayTitle), []string{"date"}
 	if len(d.inputs) == 2 {
-		title, labels = "Choose a range of local days", []string{"from", "to"}
+		title, labels = tr(tLogRangeTitle), []string{"from", "to"}
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	m.formCol = m.labelColumn(labels...)
 	defer func() { m.formCol = 0 }()
 	for i, in := range d.inputs {
-		b.WriteString(m.formRow(i == d.focus, labels[i], in.View()) + "\n")
+		b.WriteString(m.formRow(i == d.focus, logLabel(labels[i]), in.View()) + "\n")
 	}
-	b.WriteString(m.indented("YYYY-MM-DD in the system time zone") + "\n")
+	b.WriteString(m.indented(tr(tLogDateHint)) + "\n")
 	if d.err != "" {
-		b.WriteString(m.indentedWith(styles.fail, "error: "+d.err) + "\n")
+		b.WriteString(m.indentedWith(styles.fail, tr(tNoteError, d.err)) + "\n")
 	}
 	keys := "enter apply · {back} cancel"
 	if len(d.inputs) == 2 {
@@ -1344,19 +1380,19 @@ func (m *Model) logPickView() string {
 func (m *Model) logPickFrame() (string, string) {
 	p := m.logs.pick
 	shown, total := len(p.list.matches), len(p.list.all)
-	title := "Choose a filter"
+	title := tr(tLogPickChoose)
 	if p.filter >= 0 {
-		title = "Filter by " + logFilterNames[p.filter]
+		title = tr(tLogPickBy, tr(logFilterNames[p.filter]))
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)", title,
+	head.WriteString(m.wrapped(styles.title, tr(tLogPickCount, title,
 		min(p.list.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.searchLine(&p.list, "search: ") + "\n")
+	head.WriteString(m.searchLine(&p.list, tr(tLogPickSearch)) + "\n")
 	if p.filter >= 0 {
-		head.WriteString(m.wrapped(styles.hint, "current: "+filterText(m.logs.filters[p.filter])) + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tLogPickCurrent, filterText(m.logs.filters[p.filter]))) + "\n")
 	}
 	if shown == 0 {
-		head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("Nothing matches %q.", p.list.query())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tLogPickNone, p.list.query())) + "\n")
 	}
 	keys := "type to search · up/down move · enter choose · {back} close"
 	if p.filter >= 0 {
@@ -1371,7 +1407,7 @@ func (m *Model) logPickRow(i int) string {
 	name := p.list.matches[i]
 	text := p.list.text(name)
 	if p.filter >= 0 && name == m.logs.filters[p.filter] {
-		text += "  (current)"
+		text += tr(tLogPickCurrentMark)
 	}
 	return m.listRow(i == p.list.cursor, truncateCells(text, width))
 }

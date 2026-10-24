@@ -126,7 +126,7 @@ func TestSecretAndOfferModals(t *testing.T) {
 		t.Fatal("esc kept the typed secret")
 	}
 
-	m.openVaultOfferFor("Set a passphrase for the vault?", vaultFirstSecretHint, true, true,
+	m.openVaultOfferFor("Set a passphrase for the vault?", vaultFirstSecretHint(), true, true,
 		func(func(string) (string, error)) tea.Cmd { return nil }, func() tea.Cmd { return nil })
 	typeText(t, m, canary)
 	view = m.View()

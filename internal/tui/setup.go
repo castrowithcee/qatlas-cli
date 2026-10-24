@@ -504,8 +504,8 @@ func (m *Model) finishSetupSave() tea.Cmd {
 		return m.saveSetup(nil)
 	}
 	m.openVaultOffer(
-		"Set a passphrase for the vault?",
-		vaultFirstSecretHint,
+		tr(tVaultOfferTitle),
+		vaultFirstSecretHint(),
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd { return m.saveSetup(offer) },
 		func() tea.Cmd { m.screen = screenSummary; m.status = "Cancelled"; return nil },

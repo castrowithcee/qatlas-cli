@@ -530,7 +530,7 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 					m.vaultOffer = nil
 					return resume(nil)
 				}
-				m.fail = "a passphrase must not be empty"
+				m.fail = tr(tPassphraseEmpty)
 				return nil
 			}
 			if !o.twice {
@@ -543,7 +543,7 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 		}
 		if typed != o.first {
 			o.first, o.confirming = "", false
-			m.fail = "the two passphrases did not match; type the passphrase again"
+			m.fail = tr(tPassphraseMismatch)
 			return nil
 		}
 		passphrase, resume := o.first, o.resume
@@ -573,8 +573,8 @@ func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
 		return m.writeVaultSecret(credential, role, value, nil)
 	}
 	m.openVaultOffer(
-		"Set a passphrase for the vault?",
-		vaultFirstSecretHint,
+		tr(tVaultOfferTitle),
+		vaultFirstSecretHint(),
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			m.screen = screenForm
@@ -637,7 +637,7 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 }
 
 // vaultFirstSecretHint explains the optional passphrase offer before the vault's very first secret.
-const vaultFirstSecretHint = "type it twice to encrypt; enter on empty keeps it unencrypted"
+func vaultFirstSecretHint() string { return tr(tVaultFirstSecretHint) }
 
 // vaultOfferPrompt is a masked vault passphrase prompt, in the pattern of the masked secret prompt: a
 // title, the masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry
@@ -648,7 +648,7 @@ func (m *Model) vaultOfferPrompt() promptDialog {
 	d := promptDialog{title: o.title, input: m.inputLine("  ", o.input), hint: o.hint,
 		keys: "enter ok · {back} cancel, nothing saved"}
 	if o.confirming {
-		d.title, d.hint = "Confirm the vault passphrase", "type it again to confirm it"
+		d.title, d.hint = tr(tVaultConfirmTitle), tr(tVaultConfirmHint)
 	}
 	return d
 }

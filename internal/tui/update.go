@@ -73,7 +73,7 @@ func (m *Model) askUpdate() {
 	}
 	if work := m.updateBlocker(); work != "" {
 		m.clearMessages()
-		m.status = "Wait until " + work + " finishes, then press u again."
+		m.status = tr(tUpdateWaitAsk, work)
 		return
 	}
 	m.updateFrom = m.screen
@@ -91,7 +91,7 @@ func (m *Model) updateBlocker() string {
 	case m.busy != "":
 		return m.busy
 	case m.vaultBusy:
-		return "the vault work"
+		return tr(tUpdateBlockerVault)
 	}
 	return ""
 }
@@ -101,13 +101,13 @@ func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 	case "y":
 		m.screen = m.updateFrom
 		if work := m.updateBlocker(); work != "" {
-			m.status = "Update not installed: wait until " + work + " finishes, then press u again."
+			m.status = tr(tUpdateWaitConfirm, work)
 			return nil
 		}
 		return m.startUpdate()
 	case "n", keyOf(actBack):
 		m.screen = m.updateFrom
-		m.status = "Update not installed"
+		m.status = tr(tUpdateNotInstalled)
 	}
 	return nil
 }
@@ -143,13 +143,13 @@ func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 	switch {
 	case errors.As(msg.err, &unsupported):
 		m.status = ""
-		m.fail = m.redactor.Error(msg.err) + "; 'qatlas update --help' says which installations it replaces"
+		m.fail = tr(tUpdateUnsupported, m.redactor.Error(msg.err))
 	case errors.Is(msg.err, selfupdate.ErrDevelopmentBuild):
 		m.status = ""
 		m.fail = msg.err.Error()
 	case msg.err != nil:
 		m.status = ""
-		m.fail = "update failed: " + m.redactor.Error(msg.err)
+		m.fail = tr(tUpdateFailed, m.redactor.Error(msg.err))
 	case msg.result.Updated:
 		m.updated = msg.result.Latest
 		m.fail = ""
@@ -159,7 +159,7 @@ func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 		// Nothing newer was there by the time of the installation.
 		m.release = selfupdate.Result{}
 		m.fail = ""
-		m.status = "qatlas is already up to date"
+		m.status = tr(tUpdateUpToDate)
 	}
 	return nil
 }

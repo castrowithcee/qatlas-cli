@@ -1588,7 +1588,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	addConnection(t, m, "wiki", "wiki", "reader")
 	openSectionByName(t, m, sectionDefaults)
 	press(t, m, "n")
-	if view := screenOf(m); !strings.Contains(view, domainHint) {
+	if view := screenOf(m); !strings.Contains(view, domainHint()) {
 		t.Errorf("the domain field has no hint:\n%s", view)
 	}
 }
@@ -2261,7 +2261,7 @@ func TestFormShowsOnlyTheFocusedHintAtEverySize(t *testing.T) {
 		words := strings.Join(strings.Fields(view), " ")
 		lines := formLines(m)
 		at := fieldLine(t, lines, "domain")
-		if !strings.Contains(words, domainHint[:12]) {
+		if !strings.Contains(words, domainHint()[:12]) {
 			t.Errorf("%dx%d: the focused field's hint is missing:\n%s", size.width, size.height, view)
 		}
 		if !strings.HasPrefix(lines[at+1], "    ") {
@@ -2273,7 +2273,7 @@ func TestFormShowsOnlyTheFocusedHintAtEverySize(t *testing.T) {
 		focusField(t, m, "connection")
 		view = screenOf(m)
 		words = strings.Join(strings.Fields(view), " ")
-		if strings.Contains(words, domainHint[:12]) {
+		if strings.Contains(words, domainHint()[:12]) {
 			t.Errorf("%dx%d: the previous field's hint survived the focus change:\n%s",
 				size.width, size.height, view)
 		}

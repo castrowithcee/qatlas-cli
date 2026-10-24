@@ -9,7 +9,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -29,22 +28,8 @@ const (
 	expiresLabel   = "expires"
 )
 
-// Hints and notes of the token form.
-const (
-	tokenNameHint   = "a name you choose"
-	tokenNameDetail = "a name you choose, e.g. the agent or customer the token is for: letters, digits, '-', " +
-		"'_' or '.'"
-	vorbilderHint   = "enter opens the connections to tick"
-	vorbilderDetail = "enter opens the connections that read a vault credential, to tick one or more. " +
-		"Each vorbild sets the ceiling: same service and credential, and everything else " +
-		"(rights, tools, targets, paths) within that connection. This token can never change or delete a " +
-		"vorbild connection itself"
-	expiresHint   = "optional; empty = no expiry"
-	expiresDetail = "optional, empty = no expiry; a date YYYY-MM-DD (its start, local time) or an RFC 3339 time"
-)
-
 // tokenLapsedText is what a vorbild that covers nothing now is marked with, symbol and words together.
-const tokenLapsedText = "renamed, deleted, not approved, or its credential stored anew: covers nothing"
+func tokenLapsedText() string { return tr(tTokenLapsed) }
 
 // tokenEntry is one agent token as the Tokens section shows it: never its value, which only tokenValue
 // reads, and only for the revealed detail screen. lapsed names its vorbilder that cover nothing now, and
@@ -64,7 +49,7 @@ type tokenEntry struct {
 func (m *Model) tokensReport() (entries []tokenEntry, unavailable string) {
 	v := m.secrets.Vault()
 	if v == nil {
-		return nil, "There is no vault configured for this run."
+		return nil, tr(tNoVaultSentence)
 	}
 	state, err := v.State()
 	if err != nil {
@@ -72,10 +57,9 @@ func (m *Model) tokensReport() (entries []tokenEntry, unavailable string) {
 	}
 	switch state {
 	case vault.StateAbsent, vault.StateUnencrypted:
-		return nil, fmt.Sprintf("Agent tokens need an encrypted vault. Open %s to set a passphrase.",
-			sectionVault.ref())
+		return nil, tr(tTokensNeedVault, sectionVault.ref())
 	case vault.StateLocked:
-		return nil, "The vault is locked, so agent tokens cannot be listed; press enter or ctrl+l to unlock it."
+		return nil, tr(tTokensLocked)
 	}
 	tokens, err := v.Tokens()
 	if err != nil {
@@ -140,15 +124,15 @@ func (m *Model) tokenValueShown() bool {
 func tokenWarning(entry tokenEntry) string {
 	var parts []string
 	if entry.token.Expired(time.Now()) {
-		parts = append(parts, "expired")
+		parts = append(parts, tr(tTokenExpired))
 	}
 	switch n := len(entry.lapsed); {
 	case entry.checkErr != "":
-		parts = append(parts, "vorbilder not checked")
+		parts = append(parts, tr(tTokenNotChecked))
 	case n == 1:
-		parts = append(parts, "1 vorbild covers nothing")
+		parts = append(parts, tr(tTokenCoversOne))
 	case n > 1:
-		parts = append(parts, fmt.Sprintf("%d vorbilder cover nothing", n))
+		parts = append(parts, tr(tTokenCoversMany, n))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -160,7 +144,7 @@ func tokenWarning(entry tokenEntry) string {
 // in local time, or "no expiry".
 func tokenExpiry(token vault.Token) string {
 	if token.Expires == nil {
-		return "no expiry"
+		return tr(tTokenNoExpiry)
 	}
 	at := token.Expires.Local()
 	if at.Hour() == 0 && at.Minute() == 0 && at.Second() == 0 {
@@ -214,8 +198,7 @@ func (m *Model) tokensBlocked() string {
 		return unavailable
 	}
 	if len(m.vorbildChoices()) == 0 {
-		return fmt.Sprintf("An agent token needs a connection that reads a vault credential as its vorbild. "+
-			"Press %d to open Connections.", int(sectionConnections.area())+1)
+		return tr(tTokensNeedVorbild, int(sectionConnections.area())+1)
 	}
 	return ""
 }
@@ -228,7 +211,7 @@ func (m *Model) tokensBlocked() string {
 func (m *Model) tokenFields(source string) []field {
 	var name, expires string
 	vorbilder := field{label: vorbilderLabel, kind: fieldToolList, choices: m.vorbildChoices(),
-		selected: map[string]bool{}, hint: vorbilderHint, detail: vorbilderDetail}
+		selected: map[string]bool{}, hint: tr(tVorbilderHint), detail: tr(tVorbilderDetail)}
 	if source != "" {
 		name = m.copyName(source)
 		if entry, ok, _ := m.tokenByName(source); ok {
@@ -240,8 +223,8 @@ func (m *Model) tokenFields(source string) []field {
 			expires = futureExpiryText(entry.token.Expires, time.Now())
 		}
 	}
-	return []field{textField("name", name, false).withHint(tokenNameHint).withDetail(tokenNameDetail), vorbilder,
-		textField(expiresLabel, expires, false).withHint(expiresHint).withDetail(expiresDetail)}
+	return []field{textField("name", name, false).withHint(tr(tTokenNameHint)).withDetail(tr(tTokenNameDetail)), vorbilder,
+		textField(expiresLabel, expires, false).withHint(tr(tExpiresHint)).withDetail(tr(tExpiresDetail))}
 }
 
 // futureExpiryText writes an expiry the way the expires row reads it, or "" for none or one that has passed.
@@ -268,9 +251,9 @@ func parseTokenExpiry(text string, now time.Time) (*time.Time, error) {
 	at, err := config.ParseExpiry(text, now)
 	switch {
 	case errors.Is(err, config.ErrExpiryFormat):
-		return nil, errors.New("expires takes a date as YYYY-MM-DD or an RFC 3339 time")
+		return nil, errors.New(tr(tExpiresFormat))
 	case errors.Is(err, config.ErrExpiryPast):
-		return nil, errors.New("expires lies in the past; the token would never work")
+		return nil, errors.New(tr(tExpiresPast))
 	}
 	return at, err
 }
@@ -288,7 +271,7 @@ type tokenActionMsg struct {
 // refused on the form with every input kept; the vault write runs as a command, off the event loop.
 func (m *Model) createToken() tea.Cmd {
 	if m.vaultBusy {
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	m.clearMessages()
@@ -302,13 +285,13 @@ func (m *Model) createToken() tea.Cmd {
 		models = f.marked()
 	}
 	if len(models) == 0 {
-		m.fail = "tick at least one vorbild connection"
+		m.fail = tr(tTokenTickOne)
 		return nil
 	}
 	for _, model := range models {
 		connection, ok := m.cfg.Connections[model]
 		if !ok || m.cfg.Credentials[connection.Credential].Type != config.CredentialTypeVault {
-			m.fail = fmt.Sprintf("vorbild %s is no connection that reads a vault credential", model)
+			m.fail = tr(tTokenVorbildInvalid, model)
 			return nil
 		}
 	}
@@ -319,12 +302,12 @@ func (m *Model) createToken() tea.Cmd {
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "creating agent token " + name
+	m.busy = tr(tBusyCreatingToken, name)
 	return func() tea.Msg {
 		// The value the vault returns stays here: the detail screen reads it back only when asked to.
 		_, err := v.CreateToken(name, models, expires)
@@ -335,17 +318,17 @@ func (m *Model) createToken() tea.Cmd {
 // revokeToken revokes the named token, once requireAdmin proved the admin session, as a command.
 func (m *Model) revokeToken(name string) tea.Cmd {
 	if m.vaultBusy {
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "revoking agent token " + name
+	m.busy = tr(tBusyRevokingToken, name)
 	return func() tea.Msg { return tokenActionMsg{revoked: name, err: v.RevokeToken(name)} }
 }
 
@@ -364,9 +347,9 @@ func (m *Model) handleTokenAction(msg tokenActionMsg) tea.Cmd {
 	if msg.err != nil {
 		switch {
 		case errors.Is(msg.err, vault.ErrTokenExists):
-			m.fail = fmt.Sprintf("agent token %s exists already; revoke it first or choose another name", name)
+			m.fail = tr(tTokenExists, name)
 		case errors.Is(msg.err, vault.ErrTokenNotFound):
-			m.fail = fmt.Sprintf("agent token %s: %s", name, msg.err)
+			m.fail = tr(tTokenError, name, msg.err)
 		default:
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
@@ -376,14 +359,14 @@ func (m *Model) handleTokenAction(msg tokenActionMsg) tea.Cmd {
 	if msg.revoked != "" {
 		m.tokenDetail, m.tokenRevoke = "", ""
 		cmd := m.returnToList("")
-		m.status = "Revoked agent token " + name
+		m.status = tr(tTokenRevoked, name)
 		return cmd
 	}
 	m.fields = nil
 	cmd := m.returnToList(name)
 	m.tokenDetail = name
 	m.screen = screenConfirm
-	m.status = "Created agent token " + name + "; s reveals its value"
+	m.status = tr(tTokenCreated, name)
 	return cmd
 }
 
@@ -402,7 +385,7 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 			if m.tokenDetail == "" {
 				m.screen = screenList
 			}
-			m.status = "Cancelled; the token stays"
+			m.status = tr(tTokenStays)
 		}
 		return nil, true
 	}
@@ -439,23 +422,23 @@ func (m *Model) tokenDetailView() string {
 	title := m.wrapped(styles.title, "Token "+name) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
-		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("{back} back · {command} cmds · {help} help")
+		return title + m.wrapped(styles.fail, tr(tNoteError, unavailable)) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	if !ok {
-		return title + m.wrapped(styles.hint, "this token no longer exists; nothing to show") + m.keyHint("{back} back · {command} cmds · {help} help")
+		return title + m.wrapped(styles.hint, tr(tTokenGone)) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	var b strings.Builder
 	b.WriteString(title)
 	m.formCol = m.labelColumn("value", vorbilderLabel, expiresLabel, "created")
 	defer func() { m.formCol = 0 }()
-	value, own := strings.Repeat("●", 24)+"  (s to reveal)", ""
+	value, own := strings.Repeat("●", 24)+"  "+tr(tTokenReveal), ""
 	if m.tokenValueShown() {
 		if v := m.tokenValue(name); v != "" {
-			value = v + "  (s to hide)"
+			value = v + "  " + tr(tTokenHide)
 			if m.formIndent()+lipgloss.Width(value) > m.usable(0) {
 				// Too narrow for the row: the value takes a line of its own, so it is not broken where it
 				// could be copied whole.
-				value, own = "(s to hide)", v
+				value, own = tr(tTokenHide), v
 			}
 		}
 	}
@@ -471,17 +454,16 @@ func (m *Model) tokenDetailView() string {
 	for i, model := range entry.token.Models {
 		models[i] = model
 		if lapsed[model] {
-			models[i] = styles.warning.Render("⚠ " + model + " (" + tokenLapsedText + ")")
+			models[i] = styles.warning.Render("⚠ " + model + " (" + tokenLapsedText() + ")")
 		}
 	}
 	b.WriteString(m.formRow(false, vorbilderLabel, strings.Join(models, "\n")) + "\n")
 	if entry.checkErr != "" {
-		b.WriteString(m.indentedWith(styles.warning, "warning: the vorbilder could not be checked: "+
-			entry.checkErr) + "\n")
+		b.WriteString(m.indentedWith(styles.warning, tr(tTokenCheckFailed, entry.checkErr)) + "\n")
 	}
 	expires := tokenExpiry(entry.token)
 	if entry.token.Expired(time.Now()) {
-		expires += "  " + styles.warning.Render("⚠ expired, approves nothing")
+		expires += "  " + styles.warning.Render(tr(tTokenExpiredNote))
 	}
 	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
 	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
@@ -492,8 +474,8 @@ func (m *Model) tokenDetailView() string {
 // tokenRevokeView draws the question asked before a token is revoked.
 func (m *Model) tokenRevokeView() string {
 	return m.questionText(question{
-		title:       "Revoke agent token " + m.tokenRevoke + "?",
-		consequence: "it stops working at once, in a running vault process too; approvals it gave stay",
+		title:       tr(tTokenRevokeTitle, m.tokenRevoke),
+		consequence: tr(tTokenRevokeConsequence),
 		keys:        "y revoke · n/{back} keep · {command} cmds · {help} help",
 	})
 }

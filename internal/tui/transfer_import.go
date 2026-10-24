@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
@@ -36,11 +37,11 @@ const (
 // importModeRows are the answers of the mode step.
 var importModeRows = []struct {
 	mode manage.ImportMode
-	text string
+	text textID
 }{
-	{manage.ImportModeCreate, "create: stop if this installation already has a name from the file"},
-	{manage.ImportModeMerge, "merge: add what is missing, keep the existing entries"},
-	{manage.ImportModeOverwrite, "overwrite: replace the existing entries with the file's (they keep their ids)"},
+	{manage.ImportModeCreate, tImportModeCreate},
+	{manage.ImportModeMerge, tImportModeMerge},
+	{manage.ImportModeOverwrite, tImportModeOverwrite},
 }
 
 // importPlanStage is why a plan is made.
@@ -109,7 +110,7 @@ type importApprovedMsg struct{ report manage.ImportApproval }
 func (m *Model) askImport() tea.Cmd {
 	if work := m.updateBlocker(); work != "" {
 		m.clearMessages()
-		m.status = "Wait until " + work + " finishes, then run import again."
+		m.status = tr(tImportWait, work)
 		return nil
 	}
 	return m.requireAdmin(func() tea.Cmd { m.openImport(); return nil })
@@ -154,7 +155,7 @@ func (m *Model) closeImport() {
 // cancelImport ends the import without a change.
 func (m *Model) cancelImport() {
 	m.closeImport()
-	m.status = "Cancelled; nothing was imported"
+	m.status = tr(tImportCancelled)
 }
 
 // dirty reports whether leaving now would drop a typed file name or answers; a written import loses nothing.
@@ -279,7 +280,7 @@ func (m *Model) updateImportFile(key tea.KeyMsg) tea.Cmd {
 	}
 	path := strings.TrimSpace(e.input.Value())
 	if path == "" {
-		m.fail = "name the file to import"
+		m.fail = tr(tImportNameFile)
 		return nil
 	}
 	e.path = absolutePath(path)
@@ -295,7 +296,7 @@ func (m *Model) updateImportPassphrase(key tea.KeyMsg) tea.Cmd {
 	e.input.Reset()
 	m.clearMessages()
 	if typed == "" {
-		m.fail = "an export passphrase must not be empty"
+		m.fail = tr(tExportPassEmpty)
 		return nil
 	}
 	e.passphrase = typed
@@ -322,7 +323,7 @@ func (m *Model) updateImportMode(key tea.KeyMsg) tea.Cmd {
 func (m *Model) planImport(mode manage.ImportMode, stage importPlanStage) tea.Cmd {
 	e := m.imp
 	e.working = "reading"
-	m.busy = "reading the import file"
+	m.busy = tr(tBusyReadingImport)
 	path, passphrase, svc := e.path, e.passphrase, m.svc
 	return func() tea.Msg {
 		ask := func(string) (string, error) {
@@ -371,7 +372,7 @@ func (m *Model) handleImportPlanned(msg importPlannedMsg) tea.Cmd {
 		// Mostly a wrong passphrase, which the core words; the file was not read, so nothing changed.
 		e.passphrase = ""
 		m.askImportPassphrase()
-		m.fail = m.redactor.Apply(msg.err.Error()) + "; nothing was changed"
+		m.fail = tr(tImportNothingChanged, m.redactor.Apply(msg.err.Error()))
 	default:
 		m.fail = m.redactor.Apply(msg.err.Error())
 	}
@@ -383,55 +384,53 @@ func (m *Model) handleImportPlanned(msg importPlannedMsg) tea.Cmd {
 func (m *Model) importPlanLines(plan *manage.ImportPlan, store string, overSSH bool) []string {
 	apply := m.redactor.Apply
 	names := func(list []string) string { return apply(strings.Join(list, ", ")) }
-	lines := []string{"file      " + apply(plan.Source), "mode      " + string(plan.Mode)}
+	lines := []string{tr(tExLineFile, apply(plan.Source)), tr(tImLineMode, string(plan.Mode))}
 	for _, e := range plan.Entries {
 		line := fmt.Sprintf("%-8s  %s %s", e.Action, e.Section, apply(e.Name))
 		if e.ID != "" {
 			line += " (id " + e.ID
 			switch {
 			case e.NewID && e.Action == manage.ImportActionReplace:
-				line += ", kept from this installation"
+				line += tr(tImEntryKept)
 			case e.NewID:
-				line += ", new"
+				line += tr(tImEntryNew)
 			}
 			line += ")"
 		}
 		lines = append(lines, line)
 		if len(e.UsesTarget) > 0 {
-			lines = append(lines, "          uses this installation's "+names(e.UsesTarget))
+			lines = append(lines, tr(tImLineUses, names(e.UsesTarget)))
 		}
 		if len(e.UsedBy) > 0 {
-			lines = append(lines, "          changes connections of this installation: "+names(e.UsedBy))
+			lines = append(lines, tr(tImLineUsedBy, names(e.UsedBy)))
 		}
 		if len(e.Access) > 0 {
-			lines = append(lines, "          brings local access from the file: "+strings.Join(e.Access, ", "))
+			lines = append(lines, tr(tImLineAccess, strings.Join(e.Access, ", ")))
 		}
 	}
 	if len(plan.CredentialsWithoutSecret) > 0 {
-		lines = append(lines, "without   secret here until one is set: "+names(plan.CredentialsWithoutSecret))
+		lines = append(lines, tr(tImLineWithoutSecret, names(plan.CredentialsWithoutSecret)))
 	}
 	if len(plan.CredentialsKeepSecret) > 0 {
-		lines = append(lines, "keeps     secret here stays as it is, it may not fit the replacement: "+
-			names(plan.CredentialsKeepSecret))
+		lines = append(lines, tr(tImLineKeeps, names(plan.CredentialsKeepSecret)))
 	}
 	if len(plan.SecretRoles) > 0 {
 		for _, name := range slices.Sorted(maps.Keys(plan.SecretRoles)) {
-			lines = append(lines, "secret    credential "+apply(name)+" brings roles: "+names(plan.SecretRoles[name]))
+			lines = append(lines, tr(tImLineSecretRoles, apply(name), names(plan.SecretRoles[name])))
 		}
 		if plan.SourceEncrypted {
-			lines = append(lines, "secrets   the file was encrypted; its secrets go to the "+store)
+			lines = append(lines, tr(tImLineSecretsEnc, storeText(store)))
 		} else {
-			lines = append(lines, "warning   the file holds secrets in plain text; its secrets go to the "+store)
+			lines = append(lines, tr(tImLineWarnPlain, storeText(store)))
 		}
 		if overSSH {
-			lines = append(lines, "warning   this is an SSH session, where the system keyring often cannot be unlocked; "+
-				"if the write fails, choose the vault as the secret store in the defaults and import again")
+			lines = append(lines, tr(tImLineWarnSSH))
 		}
 	}
 	created, replaced, skipped := plan.Count()
-	lines = append(lines, fmt.Sprintf("total     %d to create, %d to replace, %d to skip", created, replaced, skipped))
+	lines = append(lines, tr(tImLineTotal, created, replaced, skipped))
 	if created+replaced == 0 {
-		lines = append(lines, "nothing to import: the configuration already has everything")
+		lines = append(lines, tr(tImportNothing))
 	}
 	return lines
 }
@@ -445,7 +444,7 @@ func (m *Model) beginImportWrite() tea.Cmd {
 		return nil
 	}
 	if created, replaced, _ := e.plan.Count(); created+replaced == 0 {
-		m.fail = "nothing to import: the configuration already has everything"
+		m.fail = tr(tImportNothing)
 		return nil
 	}
 	if e.hasSecrets && e.store == config.CredentialTypeVault {
@@ -456,11 +455,11 @@ func (m *Model) beginImportWrite() tea.Cmd {
 		}
 		if offerNeeded {
 			m.openVaultOfferFor(
-				"Set a passphrase for the vault?",
-				vaultFirstSecretHint,
+				tr(tVaultOfferTitle),
+				vaultFirstSecretHint(),
 				true, true,
 				func(offer func(string) (string, error)) tea.Cmd { m.screen = screenTransfer; return m.runImport(offer) },
-				func() tea.Cmd { m.screen = screenTransfer; m.status = "Cancelled"; return nil },
+				func() tea.Cmd { m.screen = screenTransfer; m.status = tr(tCancelled); return nil },
 			)
 			return nil
 		}
@@ -476,7 +475,7 @@ func (m *Model) runImport(offer func(string) (string, error)) tea.Cmd {
 		return nil
 	}
 	e.working = "writing"
-	m.busy = "writing the import"
+	m.busy = tr(tBusyWritingImport)
 	m.vaultBusy = e.hasSecrets && e.store == config.CredentialTypeVault
 	plan, svc := e.plan, m.svc
 	return func() tea.Msg {
@@ -504,7 +503,7 @@ func (m *Model) handleImportDone(msg importDoneMsg) tea.Cmd {
 			}
 			e.plan, e.lines = nil, nil
 			e.step = importMode
-			m.fail = "nothing was written: " + m.redactor.Apply(msg.err.Error()) + "; plan the import again"
+			m.fail = tr(tImportConflict, m.redactor.Apply(msg.err.Error()))
 			return nil
 		}
 		m.fail = m.redactor.Apply(msg.err.Error())
@@ -521,7 +520,7 @@ func (m *Model) handleImportDone(msg importDoneMsg) tea.Cmd {
 		if hasImportedOpen(msg.report) {
 			for _, o := range msg.report.Open {
 				if o.Imported {
-					e.toApprove = append(e.toApprove, "to approve: "+m.redactor.Apply(o.Connection)+", "+m.redactor.Apply(o.Reason))
+					e.toApprove = append(e.toApprove, tr(tImportToApprove, m.redactor.Apply(o.Connection), m.redactor.Apply(openReasonText(o.Reason))))
 				}
 			}
 			e.pendingApprove = true
@@ -539,20 +538,19 @@ func (m *Model) handleImportDone(msg importDoneMsg) tea.Cmd {
 func (m *Model) importResultLines(plan *manage.ImportPlan, res manage.ImportResult) []string {
 	apply := m.redactor.Apply
 	names := func(list []string) string { return apply(strings.Join(list, ", ")) }
-	lines := []string{fmt.Sprintf("result    created %d, replaced %d, skipped %d", res.Created, res.Replaced, res.Skipped)}
+	lines := []string{tr(tImLineResult, res.Created, res.Replaced, res.Skipped)}
 	if res.SecretStore != "" {
-		lines = append(lines, "secrets   written to the "+res.SecretStore+" for: "+
-			names(slices.Sorted(maps.Keys(plan.SecretRoles))))
+		lines = append(lines, tr(tImLineWritten, storeText(res.SecretStore),
+			names(slices.Sorted(maps.Keys(plan.SecretRoles)))))
 	}
 	if len(res.Withdrawn) > 0 {
-		lines = append(lines, "withdrawn approvals withdrawn, they covered replaced secrets: "+names(res.Withdrawn))
+		lines = append(lines, tr(tImLineWithdrawn, names(res.Withdrawn)))
 	}
 	if len(plan.CredentialsWithoutSecret) > 0 {
-		lines = append(lines, "next      set a secret with 'qatlas credential set' before use: "+
-			names(plan.CredentialsWithoutSecret))
+		lines = append(lines, tr(tImLineNext, names(plan.CredentialsWithoutSecret)))
 	}
 	for _, w := range res.Warnings {
-		lines = append(lines, "warning   "+apply(w))
+		lines = append(lines, tr(tExLineWarning, apply(w)))
 	}
 	return lines
 }
@@ -568,40 +566,39 @@ func (m *Model) importApprovalLines(res manage.ImportResult, report manage.Impor
 	apply := m.redactor.Apply
 	var lines []string
 	for _, w := range report.Warnings {
-		lines = append(lines, "warning   "+apply(w))
+		lines = append(lines, tr(tExLineWarning, apply(w)))
 	}
 	if report.Err != nil {
-		lines = append(lines, "warning   could not check the approvals: "+apply(report.Err.Error()))
+		lines = append(lines, tr(tImLineCheckFailed, apply(report.Err.Error())))
 	}
 	switch {
 	case report.VaultUnencrypted:
-		lines = append(lines, "approval  the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
+		lines = append(lines, tr(tImLineUnencrypted))
 	case report.VaultLocked:
-		lines = append(lines, "approval  the vault is locked; approve the connections with 'qatlas vault approve' after unlocking it")
+		lines = append(lines, tr(tImLineLocked))
 	}
 	required, _, err := manage.AdminRequired(m.secrets.Vault())
 	encrypted := err == nil && required
 	if len(res.Connections) > 0 && report.Err == nil && len(report.Open) == 0 && len(report.Approved) == 0 &&
 		!report.VaultUnencrypted && !report.VaultLocked && !encrypted {
-		lines = append(lines, "approval  new connections need the usual release; where the vault is encrypted, "+
-			"run 'qatlas vault approve'")
+		lines = append(lines, tr(tImLineUsual))
 	}
 	if len(report.Approved) > 0 {
-		lines = append(lines, "approved  "+apply(strings.Join(report.Approved, ", ")))
+		lines = append(lines, tr(tImLineApproved, apply(strings.Join(report.Approved, ", "))))
 	}
 	for _, o := range report.Open {
-		who := "imported connection"
+		who := tr(tImWhoImported)
 		if !o.Imported {
-			who = "connection of this installation changed by the import"
+			who = tr(tImWhoChanged)
 		}
-		lines = append(lines, fmt.Sprintf("open      %s %s, %s", who, apply(o.Connection), apply(o.Reason)))
+		lines = append(lines, tr(tImLineOpen, who, apply(o.Connection), apply(openReasonText(o.Reason))))
 	}
 	if len(report.Open) > 0 {
-		hint := "approve with 'qatlas vault approve'"
+		hint := tr(tImHintApprove)
 		if asked {
-			hint = "nothing else was approved; " + hint
+			hint = tr(tImHintNothingElse)
 		}
-		lines = append(lines, "hint      "+hint)
+		lines = append(lines, tr(tImLineHint, hint))
 	}
 	return lines
 }
@@ -621,7 +618,7 @@ func (m *Model) importNext() {
 	default:
 		res := e.res
 		m.closeImport()
-		m.status = fmt.Sprintf("Imported: created %d, replaced %d, skipped %d", res.Created, res.Replaced, res.Skipped)
+		m.status = tr(tImported, res.Created, res.Replaced, res.Skipped)
 	}
 }
 
@@ -630,7 +627,7 @@ func (m *Model) importNext() {
 func (m *Model) runImportApprove() tea.Cmd {
 	e := m.imp
 	e.working = "writing"
-	m.busy = "approving the imported connections"
+	m.busy = tr(tBusyApprovingImport)
 	m.vaultBusy = true
 	res, svc := e.res, m.svc
 	return func() tea.Msg {
@@ -670,12 +667,12 @@ func (m *Model) deleteImportSource(remove bool) {
 	shown := m.redactor.Apply(e.path)
 	switch {
 	case !remove:
-		e.lines = append(e.lines, "kept      "+shown+" holds secrets in plain text and was kept; delete it")
+		e.lines = append(e.lines, tr(tImLineKept, shown))
 	default:
 		if err := os.Remove(e.path); err != nil {
-			e.lines = append(e.lines, "warning   "+shown+" could not be deleted: "+m.redactor.Apply(err.Error()))
+			e.lines = append(e.lines, tr(tImLineDeleteFailed, shown, m.redactor.Apply(err.Error())))
 		} else {
-			e.lines = append(e.lines, "deleted   "+shown)
+			e.lines = append(e.lines, tr(tImLineDeleted, shown))
 		}
 	}
 	e.offset = 0
@@ -699,14 +696,14 @@ func (m *Model) importView() string {
 	switch e.step {
 	case importMode:
 		var b strings.Builder
-		b.WriteString(m.wrapped(styles.title, "Import: mode") + "\n\n")
+		b.WriteString(m.wrapped(styles.title, tr(tImportModeTitle)) + "\n\n")
 		for i, row := range importModeRows {
-			b.WriteString(m.listRow(i == e.modeCursor, truncateCells(row.text, m.usable(2))) + "\n")
+			b.WriteString(m.listRow(i == e.modeCursor, truncateCells(tr(row.text), m.usable(2))) + "\n")
 		}
-		b.WriteString("\n" + m.indented("entries are matched by name; the preview shows what the mode does") + "\n")
+		b.WriteString("\n" + m.indented(tr(tImportModeNote)) + "\n")
 		return b.String() + m.importKeys("up/down move · {save} or enter preview · {back} back · {command} cmds · {help} help") + m.notes()
 	}
-	title, question, keys := "Import preview", "Nothing is written until you confirm.", "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
+	title, question, keys := tr(tImportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
 	lines := e.lines
 	switch e.step {
 	case importPreview:
@@ -716,20 +713,20 @@ func (m *Model) importView() string {
 			}
 		}
 	case importResult:
-		title, question, keys = "Import written", "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
+		title, question, keys = tr(tImportWrittenTitle), "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
 		if e.pendingApprove || e.pendingDelete {
 			keys = "enter, {save} or {back} next question · up/down scroll · {command} cmds · {help} help"
 		}
 	case importApprove:
-		title, question, keys = "Import written", "Approve the imported connections now?",
+		title, question, keys = tr(tImportWrittenTitle), tr(tImportApproveQuestion),
 			"y approve · n/{back} not now, nothing is approved · up/down scroll · {command} cmds · {help} help"
 		lines = append(slices.Clone(lines), e.toApprove...)
 	case importDelete:
-		title, question, keys = "Import written", "Delete "+m.redactor.Apply(e.path)+", which holds secrets in plain text?",
+		title, question, keys = tr(tImportWrittenTitle), tr(tImportDeleteQuestion, m.redactor.Apply(e.path)),
 			"y delete the file · n/{back} keep it · up/down scroll · {command} cmds · {help} help"
 	}
 	if e.working != "" {
-		keys = e.working + ", please wait"
+		keys = workingWait(e.working)
 	}
 	return m.linesView(title, question, keys, lines, &e.offset)
 }
@@ -743,16 +740,16 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 	switch e.step {
 	case importFile:
 		return promptDialog{
-			title: "Import: file",
+			title: tr(tImportFileTitle),
 			input: m.pathLines("  ", &e.input),
-			hint:  "the file to import",
+			hint:  tr(tImportFileHint),
 			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")),
 		}, true
 	case importPassphrase:
 		return promptDialog{
-			title: "Export passphrase",
+			title: tr(tExportPassTitle),
 			input: m.inputLine("  ", e.input.Model),
-			hint:  "the export passphrase, not the vault passphrase",
+			hint:  tr(tImportPassHint),
 			keys:  m.importDialogKeys("{save} or enter ok · {back} back, nothing imported"),
 		}, true
 	}
@@ -762,9 +759,40 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 // importDialogKeys is the key line of a dialog, or the wait while the import works.
 func (m *Model) importDialogKeys(keys string) string {
 	if m.imp != nil && m.imp.working != "" {
-		return m.imp.working + ", please wait"
+		return workingWait(m.imp.working)
 	}
 	return keys
+}
+
+// openReasonText words the reason the core gives for an open connection (manage.StaysOpenReason, in English)
+// the way the Approvals section words it.
+func openReasonText(reason string) string {
+	if reason == textEN[tApprovalNew] {
+		return tr(tApprovalNew)
+	}
+	if fields, ok := strings.CutSuffix(reason, " changed"); ok {
+		return tr(tApprovalChanged, fields)
+	}
+	return reason
+}
+
+// workingWait is the key line while the import reads or writes.
+func workingWait(working string) string {
+	if working == "reading" {
+		return tr(tWorkReadingWait)
+	}
+	return tr(tWorkWritingWait)
+}
+
+// storeText names a secret store of the core ("vault", "keyring") in the editor's language.
+func storeText(store string) string {
+	if uiLang == i18n.German && store == config.CredentialTypeVault {
+		return "Tresor"
+	}
+	if uiLang == i18n.German && store == config.CredentialTypeKeyring {
+		return "Keyring"
+	}
+	return store
 }
 
 // importKeys is the footer of a step that has no lines to scroll.
@@ -778,12 +806,12 @@ func (m *Model) importLeaveView() string {
 	if m.imp != nil && m.imp.step == importPreview {
 		save = "{save} write"
 	}
-	title, discard, why := "Leave the import?", "d discard", "Leaving drops the typed file name and every answer, a typed passphrase included."
+	title, discard, why := tr(tImportLeaveTitle), "d discard", tr(tImportLeaveWhy)
 	if m.leaveQuit {
-		title, discard, why = "Quit and drop the import?", "d discard and quit", "Quitting would drop them."
+		title, discard, why = tr(tImportQuitTitle), "d discard and quit", tr(tTransferQuitWhy)
 	}
 	return m.questionText(question{title: title, consequence: why,
-		details: []string{m.indentedWith(styles.warning, "warning: the import is not finished"),
-			m.indented("Nothing was written.")},
+		details: []string{m.indentedWith(styles.warning, tr(tImportLeaveWarn)),
+			m.indented(tr(tTransferNothingWritten))},
 		keys: save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"})
 }

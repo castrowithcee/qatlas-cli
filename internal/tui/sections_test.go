@@ -44,7 +44,7 @@ func TestSectionListAndJumpToASection(t *testing.T) {
 		}
 		t.Fatalf("the list does not mark General:\n%s", view)
 	marked:
-		if !strings.Contains(view, "> name") {
+		if !strings.Contains(view, "> "+labelText("name")) {
 			t.Errorf("the focused name row is not marked:\n%s", view)
 		}
 		if !strings.Contains(view, "Advanced (closed)") {
@@ -152,7 +152,7 @@ func TestLongLabelsMoveNoValues(t *testing.T) {
 		view := screenOf(m)
 		columns := map[int]string{}
 		for _, line := range strings.Split(view, "\n") {
-			for _, label := range []string{"state", "update behaviour", "idle timeout", "admin timeout"} {
+			for _, label := range []string{labelText("state"), labelText("update behaviour"), labelText("idle timeout"), labelText("admin timeout")} {
 				rest, ok := strings.CutPrefix(strings.TrimPrefix(strings.TrimPrefix(line, "> "), "  "), label)
 				if !ok || !strings.HasPrefix(rest, " ") {
 					continue
@@ -165,7 +165,7 @@ func TestLongLabelsMoveNoValues(t *testing.T) {
 		if len(columns) != 1 {
 			t.Errorf("the rows of the vault form start their values in columns %v, want one:\n%s", columns, view)
 		}
-		if !strings.Contains(view, "update behaviour") {
+		if !strings.Contains(view, labelText("update behaviour")) {
 			t.Errorf("the vault form lacks the long label:\n%s", view)
 		}
 	})
@@ -260,7 +260,7 @@ func TestTheConnectionFormLeadsWithTheProvider(t *testing.T) {
 		if got := m.fields[0].label; got != providerLabel {
 			t.Fatalf("first row of a new connection = %q, want the provider", got)
 		}
-		if lines := formLines(m); fieldLine(t, lines, providerLabel) > fieldLine(t, lines, "name") {
+		if lines := formLines(m); fieldLine(t, lines, providerLabel) > fieldLine(t, lines, labelText("name")) {
 			t.Errorf("the provider row stands below the name row:\n%s", strings.Join(lines, "\n"))
 		}
 		typeText(t, m, "wiki")
@@ -276,7 +276,7 @@ func TestTheConnectionFormLeadsWithTheProvider(t *testing.T) {
 		if got := m.fields[0].label; got != providerLabel {
 			t.Fatalf("first row of a saved connection = %q, want the provider", got)
 		}
-		if lines := formLines(m); fieldLine(t, lines, providerLabel) > fieldLine(t, lines, "name") {
+		if lines := formLines(m); fieldLine(t, lines, providerLabel) > fieldLine(t, lines, labelText("name")) {
 			t.Errorf("the provider row stands below the name row:\n%s", strings.Join(lines, "\n"))
 		}
 	})

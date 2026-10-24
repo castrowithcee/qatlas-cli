@@ -73,7 +73,7 @@ func decodeHandoff(value string) *handoff {
 // vault was unlocked before and is encrypted and locked now, opens the unlock dialog. Escape leaves the
 // vault locked.
 func (m *Model) adopt(h *handoff) {
-	m.status = "qatlas updated from " + h.From + " to " + h.To
+	m.status = tr(tRestartAdopted, h.From, h.To)
 	if !h.Unlocked {
 		return
 	}
@@ -86,7 +86,7 @@ func (m *Model) adopt(h *handoff) {
 	}
 	m.openVaultUnlockPrompt(screenNav)
 	m.status = ""
-	m.restartNote = "qatlas updated from " + h.From + " to " + h.To + "; the vault was unlocked before."
+	m.restartNote = tr(tRestartAdoptedUnlock, h.From, h.To)
 }
 
 // restartAsks reports whether a restart now would lose input: a form or guided setup with unsaved changes,
@@ -163,13 +163,13 @@ type restartFailedMsg struct{ err error }
 func (m *Model) restartFailed(msg restartFailedMsg) {
 	m.status = m.restartHint()
 	if msg.err != nil {
-		m.fail = "restart failed: " + m.redactor.Error(msg.err)
+		m.fail = tr(tRestartFailed, m.redactor.Error(msg.err))
 	}
 }
 
 // restartHint is what an update says where the editor does not restart itself.
 func (m *Model) restartHint() string {
-	status := "Updated to " + m.updated + ". Restart qatlas tui to use it."
+	status := tr(tRestartHint, m.updated)
 	if noter, ok := m.updater.(updateNoter); ok && noter.Note() != "" {
 		status += " " + noter.Note()
 	}
