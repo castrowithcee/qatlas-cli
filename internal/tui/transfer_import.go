@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -67,7 +65,7 @@ type importState struct {
 	// from is the screen the import was started from and returns to.
 	from screen
 	// input is the file path on importFile and the masked export passphrase on importPassphrase.
-	input textinput.Model
+	input pathField
 	// path is the file as asked for; passphrase is the typed export passphrase. It only ever reaches the
 	// core's passphrase function and is cleared when the import ends.
 	path, passphrase string
@@ -130,14 +128,15 @@ func (m *Model) askImportFile() {
 	e := m.imp
 	e.step = importFile
 	e.encrypted, e.passphrase = false, ""
-	e.input = pathInput(e.path)
+	e.input = newPathField(pathFile)
+	e.input.open(e.path, m.startDir)
 }
 
 // askImportPassphrase shows the empty masked export passphrase prompt.
 func (m *Model) askImportPassphrase() {
 	e := m.imp
 	e.step = importPassphrase
-	e.input = maskedInput()
+	e.input = pathField{Model: maskedInput()}
 	e.passphrase = ""
 }
 
@@ -273,29 +272,25 @@ func (m *Model) importBack() tea.Cmd {
 func (m *Model) updateImportFile(key tea.KeyMsg) tea.Cmd {
 	e := m.imp
 	if key.String() != "enter" {
-		var cmd tea.Cmd
-		e.input, cmd = e.input.Update(key)
-		return cmd
+		return e.input.update(key)
 	}
 	m.clearMessages()
+	if !e.input.accept() {
+		return nil
+	}
 	path := strings.TrimSpace(e.input.Value())
 	if path == "" {
 		m.fail = "name the file to import"
 		return nil
 	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	e.path = path
+	e.path = absolutePath(path)
 	return m.planImport(manage.ImportModeCreate, planProbe)
 }
 
 func (m *Model) updateImportPassphrase(key tea.KeyMsg) tea.Cmd {
 	e := m.imp
 	if key.String() != "enter" {
-		var cmd tea.Cmd
-		e.input, cmd = e.input.Update(key)
-		return cmd
+		return e.input.update(key)
 	}
 	typed := e.input.Value()
 	e.input.Reset()
@@ -701,11 +696,11 @@ func (m *Model) importView() string {
 	}
 	switch e.step {
 	case importFile:
-		return m.wrapped(titleStyle, "Import: file") + "\n\n" + m.inputLine("  ", e.input) + "\n" +
+		return m.wrapped(titleStyle, "Import: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to import, as an export wrote it; nothing changes before you confirm the preview") + "\n" +
-			m.importKeys("F2 or enter next · esc cancel, nothing imported") + m.notes()
+			m.importKeys(pathKeys(&e.input, "F2 or enter next · esc cancel, nothing imported")) + m.notes()
 	case importPassphrase:
-		return m.wrapped(titleStyle, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input) + "\n" +
+		return m.wrapped(titleStyle, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" +
 			m.indented("the file is encrypted: type the passphrase it was exported with, not the vault passphrase") + "\n" +
 			m.importKeys("F2 or enter ok · esc back, nothing imported") + m.notes()
 	case importMode:

@@ -2,17 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 )
 
 // The path list of a connection is edited in a screen of its own, opened from its row like the target list:
@@ -21,15 +17,12 @@ import (
 // it closes an unchanged list, cancels an unchanged entry, and asks about a changed list or a typed entry,
 // so no change is dropped silently.
 //
-// The line a path is typed into has no other field to move to, so tab keeps what the text input does with
-// it: it takes the suggestion shown, and up/down switch between several. The suggestions are the
-// subdirectories of what is typed up to its last separator, never files; with nothing typed yet, the
-// directory the TUI was started in is the one suggestion. A path is checked by the rules of the core when it
-// is taken, and the list as a whole when the form is saved. Whether the directory exists is not checked: a
-// path is only resolved when a call runs, and config validate warns about one that names nothing.
-
-// pathSuggestionsShown is how many suggestions stand under the typed path at once.
-const pathSuggestionsShown = 5
+// The line a path is typed into is a pathField, which has the keys of every path prompt: tab takes the
+// suggestion shown, and up/down switch between several. The suggestions are the subdirectories of what is
+// typed up to its last separator, never files; with nothing typed yet, the directory the TUI was started in
+// is the one suggestion. A path is checked by the rules of the core when it is taken, and the list as a
+// whole when the form is saved. Whether the directory exists is not checked: a path is only resolved when a
+// call runs, and config validate warns about one that names nothing.
 
 // openPaths opens the entries of the focused path list on its first path.
 func (m *Model) openPaths() {
@@ -69,19 +62,11 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 			m.pathInput.Blur()
 			m.clearMessages()
 		case "enter":
-			m.takePath()
-		default:
-			if key.String() == "tab" && m.pathInput.Value() == "" && m.startDir != "" {
-				// Nothing typed has no suggestion of the text input's own; the start directory is the first.
-				m.pathInput.SetValue(withSeparator(m.startDir))
-				m.pathInput.CursorEnd()
-				m.suggestPaths()
-				return nil
+			if m.pathInput.accept() {
+				m.takePath()
 			}
-			var cmd tea.Cmd
-			m.pathInput, cmd = m.pathInput.Update(key)
-			m.suggestPaths()
-			return cmd
+		default:
+			return m.pathInput.update(key)
 		}
 		return nil
 	}
@@ -163,10 +148,7 @@ func (m *Model) pathsPending() bool {
 // editPath starts typing the path at index, or a new one at the end of the list.
 func (m *Model) editPath(index int, value string) {
 	m.pathEdit = index
-	m.pathInput.SetValue(value)
-	m.pathInput.CursorEnd()
-	m.pathInput.Focus()
-	m.suggestPaths()
+	m.pathInput.open(value, m.startDir)
 	m.clearMessages()
 }
 
@@ -224,78 +206,6 @@ func (m *Model) removePath() {
 	m.status = "Removed " + path
 }
 
-// suggestPaths hands the text input the directories that complete what is typed.
-func (m *Model) suggestPaths() {
-	m.pathInput.SetSuggestions(directorySuggestions(m.pathInput.Value()))
-}
-
-// directorySuggestions are the directories that complete typed: those inside the directory it names up to
-// its last separator whose names start with the rest, each written as that directory followed by the name
-// and a separator, so the next tab goes on into it. The names are matched with their case, so a completion
-// never changes what is typed; a hidden directory is offered only once its dot is typed. typed is taken only
-// in a form a path may have, absolute or starting with ~/.
-func directorySuggestions(typed string) []string {
-	cut := strings.LastIndexFunc(typed, isSeparator) + 1
-	dir, rest := typed[:cut], typed[cut:]
-	if dir == "" || (!projectpath.IsHomeRelative(dir) && !filepath.IsAbs(dir)) {
-		return nil
-	}
-	expanded, err := projectpath.Expand(dir)
-	if err != nil {
-		return nil
-	}
-	entries, err := os.ReadDir(expanded)
-	if err != nil {
-		return nil
-	}
-	var suggestions []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if !strings.HasPrefix(name, rest) || (strings.HasPrefix(name, ".") && !strings.HasPrefix(rest, ".")) {
-			continue
-		}
-		isDir := entry.IsDir()
-		if entry.Type()&fs.ModeSymlink != 0 {
-			// A link to a directory is offered like the directory it points to.
-			info, err := os.Stat(filepath.Join(expanded, name))
-			isDir = err == nil && info.IsDir()
-		}
-		if isDir {
-			suggestions = append(suggestions, dir+name+string(filepath.Separator))
-		}
-	}
-	return suggestions
-}
-
-func isSeparator(r rune) bool {
-	return r < 0x80 && os.IsPathSeparator(uint8(r))
-}
-
-// withSeparator is dir with one separator at its end.
-func withSeparator(dir string) string {
-	if dir != "" && os.IsPathSeparator(dir[len(dir)-1]) {
-		return dir
-	}
-	return dir + string(filepath.Separator)
-}
-
-// shownPathSuggestions are the suggestions that stand under the typed path, the one tab takes among them:
-// the start directory while nothing is typed, and otherwise the matches of the text input around the
-// current one.
-func (m *Model) shownPathSuggestions() ([]string, int) {
-	if m.pathInput.Value() == "" {
-		if m.startDir == "" {
-			return nil, -1
-		}
-		return []string{withSeparator(m.startDir)}, 0
-	}
-	matches := m.pathInput.MatchedSuggestions()
-	current := m.pathInput.CurrentSuggestionIndex()
-	start := max(0, min(current-pathSuggestionsShown+1, len(matches)-pathSuggestionsShown))
-	end := min(len(matches), start+pathSuggestionsShown)
-	return matches[start:end], current - start
-}
-
 // pathsView draws the path list screen: its frame, and between them as many paths as fit.
 func (m *Model) pathsView() string {
 	header, footer := m.pathFrame()
@@ -343,19 +253,8 @@ func (m *Model) pathFrame() (string, string) {
 		if m.pathEdit < total {
 			label = "edit path: "
 		}
-		prefix, width := m.fit(label)
-		in := fitInput(m.pathInput, width)
-		// The text input pads to its width without counting the completion it draws after the cursor, so
-		// the line is cut back to the room there is.
-		foot.WriteString("\n" + prefix + lipgloss.NewStyle().MaxWidth(width).Render(in.View()) + "\n")
-		suggestions, current := m.shownPathSuggestions()
-		for i, suggestion := range suggestions {
-			foot.WriteString(m.row(i == current, suggestion) + "\n")
-		}
-		keys = "enter take · F2 save · esc cancel entry"
-		if len(suggestions) > 0 {
-			keys = "tab complete · up/down switch · " + keys
-		}
+		foot.WriteString("\n" + m.pathLines(label, &m.pathInput))
+		keys = pathKeys(&m.pathInput, "enter take · F2 save · esc cancel entry")
 	case m.pathRemove:
 		path, _ := m.pathList.selected()
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.

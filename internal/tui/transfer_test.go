@@ -599,3 +599,44 @@ func TestExportIsInTheRegisterAndTheHelp(t *testing.T) {
 		t.Error("no help topic describes the export command")
 	}
 }
+
+func TestExportToAHomePathLandsInTheHomeDirectory(t *testing.T) {
+	home := tempHome(t)
+	v, _ := plainExportModel(t)
+	m := v.m
+	v.startExport("")
+	v.advance(exportPreview, exportWithout, "~"+string(filepath.Separator)+"home-export.yaml")
+	if want := filepath.Join(home, "home-export.yaml"); m.export.target != want {
+		t.Fatalf("target = %q, want %q", m.export.target, want)
+	}
+	v.pump("f2")
+	if m.fail != "" || m.export == nil || m.export.step != exportResult {
+		t.Fatalf("f2 = fail %q, want the result", m.fail)
+	}
+	if info, err := os.Stat(filepath.Join(home, "home-export.yaml")); err != nil || info.Size() == 0 {
+		t.Fatalf("the file is not in the home directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(m.startDir, "~")); err == nil {
+		t.Fatal("a directory named ~ was created in the working directory")
+	}
+}
+
+func TestExportTargetCompletesTheDirectoryOfAFileThatDoesNotExist(t *testing.T) {
+	home := tempHome(t)
+	treeOf(t, home, "backups/")
+	v, _ := plainExportModel(t)
+	m := v.m
+	v.startExport("")
+	v.advance(exportTarget, exportWithout, "")
+	s := string(filepath.Separator)
+	v.typePath("~" + s + "ba")
+	if view := screenOf(m); !strings.Contains(view, "~"+s+"backups"+s) || !strings.Contains(view, "tab complete") {
+		t.Fatalf("the directory is not suggested:\n%s", view)
+	}
+	v.pump("tab")
+	v.type_("new.yaml")
+	v.pump("enter")
+	if m.export.step != exportPreview || m.export.target != filepath.Join(home, "backups", "new.yaml") {
+		t.Fatalf("step %v target %q fail %q", m.export.step, m.export.target, m.fail)
+	}
+}
