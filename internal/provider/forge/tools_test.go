@@ -155,6 +155,13 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		} else {
 			want = append(want, p.id+".actions-runners.update", p.id+".workflows.enable", p.id+".workflows.disable")
 		}
+		want = append(want, p.id+".admin-runners.list", p.id+".admin-runners.get", p.id+".admin-runners.delete")
+		if p == forgejo {
+			want = append(want, p.id+".admin-runner-jobs.search")
+		} else {
+			want = append(want, p.id+".admin-runners.update", p.id+".admin-workflow-runs.list",
+				p.id+".admin-workflow-jobs.list", p.id+".admin-packages.list")
+		}
 		want = append(want, p.id+".topics.search", p.id+".repository-topics.list", p.id+".repository-topics.set",
 			p.id+".repository-topics.add", p.id+".repository-topics.remove", p.id+".gitignore-templates.list",
 			p.id+".gitignore-templates.get", p.id+".label-templates.list", p.id+".label-templates.get",
