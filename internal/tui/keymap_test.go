@@ -73,7 +73,7 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 		t.Fatal("the new help key does not close the help")
 	}
 
-	press(t, m, "1", "n")
+	press(t, m, "5", "n")
 	if view := m.View(); !strings.Contains(view, "F5 save") || strings.Contains(view, "F2 save") {
 		t.Fatalf("the form footer does not follow the save key:\n%s", view)
 	}

@@ -330,7 +330,7 @@ func (m *Model) forwardOpenNote(name string) string {
 		return ""
 	}
 	return fmt.Sprintf("; %s release(s) it and now wait for approval, which saving does not give: review "+
-		"them in Approvals (%d)", strings.Join(open, ", "), int(sectionApprovals)+1)
+		"them in %s", strings.Join(open, ", "), sectionApprovals.ref())
 }
 
 // forwardField is the forward_secrets row of a connection form, ticked with the connection's own list. A

@@ -295,7 +295,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	openProviderRow(t, m, sectionServices)
 	press(t, m, "enter")
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 
 	check := func(want string) {
 		t.Helper()
@@ -303,7 +303,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the table was replaced by the resize notice:\n%s", view)
 		}
-		assertViewFits(t, view, 40, 12)
+		assertViewFits(t, view, 40, minimumHeight)
 		for _, part := range []string{"search: ", "NAME", "> ", want} {
 			if !strings.Contains(view, part) {
 				t.Fatalf("%q is not on screen:\n%s", part, view)
@@ -329,7 +329,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 	}
 
 	m, _ = providerModel(t, providerRegistry(t, 55))
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 	press(t, m, "c")
 	if m.screen != screenProviders {
 		t.Fatalf("the guided setup opened screen %v, want the provider table", m.screen)
@@ -445,8 +445,8 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 
 // The provider table has no letter actions either, so it filters as you type and shows "Type to search"
 // until something is typed. Its marked row is highlighted the full width of the row under colour and,
-// without it, is still told apart by its leading '>' alone; an unmarked row beside it still gets its zebra
-// shade under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
+// without it, is still told apart by its leading '>' alone; an unmarked row beside it stays unshaded
+// under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
 // hold at.
 func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -474,8 +474,8 @@ func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyp
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
 			t.Errorf("width %d: the marked provider row shows no colour: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the alternating provider row shows no zebra colour: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the unmarked provider row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
 		lipgloss.SetColorProfile(3)

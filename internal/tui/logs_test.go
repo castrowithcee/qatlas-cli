@@ -107,7 +107,7 @@ func (f *logFixture) model(unlocked bool, day string) *Model {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m.logs.day = day
 	m.screen = screenNav
-	pump(f.t, m, "8")
+	pump(f.t, m, "3")
 	if m.screen != screenLogs || m.section != sectionLogs || !m.logs.loaded {
 		f.t.Fatalf("8 = screen %v section %v loaded %v, want the loaded Logs screen", m.screen, m.section,
 			m.logs.loaded)
@@ -144,7 +144,7 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	view := m.View()
-	for _, want := range []string{"8 Logs", "7 Tokens", "Mode: [Day] Range All", "Date: [" + f.localToday() + "]",
+	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: [Day] Range All", "Date: [" + f.localToday() + "]",
 		"status", "time", "way", "client", "tool", "connection", "result", "dur.", "codex", "MCP", "CLI",
 		"12ms", "filter: way=all client=all tool=all conn=all effect=all result=all"} {
 		if !strings.Contains(view, want) {
@@ -379,18 +379,18 @@ func TestLogsKeys(t *testing.T) {
 	if m.screen != screenLogs {
 		t.Fatalf("esc from the help = screen %v, want the Logs screen", m.screen)
 	}
-	press(t, m, "3")
+	press(t, m, "2")
 	if m.screen != screenList || m.section != sectionConnections {
-		t.Errorf("3 from Logs = screen %v section %v, want Connections", m.screen, m.section)
+		t.Errorf("2 from Logs = screen %v section %v, want Connections", m.screen, m.section)
 	}
-	pump(t, m, "8")
+	pump(t, m, "3")
 	press(t, m, "enter")
-	press(t, m, "1")
+	press(t, m, "5")
 	if m.screen != screenList || m.section != sectionServices {
-		t.Errorf("1 from the detail = screen %v section %v, want Services", m.screen, m.section)
+		t.Errorf("5 from the detail = screen %v section %v, want Services", m.screen, m.section)
 	}
 	m.screen = screenNav
-	pump(t, m, "8")
+	pump(t, m, "3")
 	press(t, m, "esc")
 	if m.screen != screenNav || m.section != sectionLogs {
 		t.Fatalf("esc = screen %v section %v", m.screen, m.section)
@@ -419,7 +419,7 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 	m.redactor.Add("canary-secret-value-77")
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.logs.day = f.localToday()
-	pump(t, m, "8")
+	pump(t, m, "3")
 	press(t, m, "enter")
 	for _, view := range []string{m.logDetailView(), func() string { m.screen = screenLogs; return m.View() }()} {
 		if strings.Contains(view, "\x1b[31m") || strings.Contains(view, "\u202e") {
@@ -451,7 +451,7 @@ func TestLogsNarrowLayout(t *testing.T) {
 	if strings.Contains(view, "dur.") || strings.Contains(view, "12ms") {
 		t.Errorf("the narrow table keeps the duration:\n%s", view)
 	}
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 	if view := m.View(); strings.Contains(view, "Resize terminal") {
 		t.Errorf("the smallest terminal cannot show the Logs screen:\n%s", view)
 	}
@@ -639,12 +639,12 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 	const noVault = "There is no vault configured for this run."
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	pump(t, m, "7")
+	pump(t, m, "4")
 	if m.screen != screenList || m.section != sectionTokens {
-		t.Fatalf("7 = screen %v section %v", m.screen, m.section)
+		t.Fatalf("4 = screen %v section %v", m.screen, m.section)
 	}
 	view := m.View()
-	if !strings.Contains(view, noVault) || !strings.Contains(view, "7 Tokens") {
+	if !strings.Contains(view, noVault) || !strings.Contains(view, "[Tokens]") {
 		t.Errorf("Tokens does not say that there is no vault:\n%s", view)
 	}
 	for _, action := range []string{"n new", "enter show", "d revoke", "d delete", "/ filter"} {
@@ -894,8 +894,8 @@ func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
 	if m.logs.scroll != 0 {
 		t.Errorf("home left scroll %d", m.logs.scroll)
 	}
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
-	assertViewFits(t, m.View(), 40, 12)
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
+	assertViewFits(t, m.View(), 40, minimumHeight)
 }
 
 func TestLogsSessionSummaryWithoutSessionsSaysSo(t *testing.T) {

@@ -223,9 +223,9 @@ func TestThePickerFitsASmallTerminal(t *testing.T) {
 	// directory, which needs more than twelve lines.
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	openDefaultForm(t, m)
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 	if view := screenOf(m); strings.Contains(view, "Resize terminal") {
-		t.Fatalf("the form does not fit 40x12:\n%s", view)
+		t.Fatalf("the form does not fit 40x13:\n%s", view)
 	}
 	press(t, m, "/")
 
@@ -235,7 +235,7 @@ func TestThePickerFitsASmallTerminal(t *testing.T) {
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the picker was replaced by the resize notice:\n%s", view)
 		}
-		assertViewFits(t, view, 40, 12)
+		assertViewFits(t, view, 40, minimumHeight)
 		if !strings.Contains(view, "> "+want) {
 			t.Fatalf("the selection %q is not on screen:\n%s", want, view)
 		}
@@ -427,7 +427,7 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 // A picker has no letter actions, so it filters as you type and shows "Type to search" until something is
 // typed. Its marked row is highlighted the full width of the row under colour
 // and, without it, is still told apart by its leading '>' alone; an unmarked row beside it still gets its
-// zebra shade under colour. No row is ever wider than the terminal, at any of the widths the design is
+// unshaded under colour. No row is ever wider than the terminal, at any of the widths the design is
 // meant to hold at.
 func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -456,8 +456,8 @@ func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
 			t.Errorf("width %d: the marked picker row shows no colour: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the alternating picker row shows no zebra colour: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the unmarked picker row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
 		lipgloss.SetColorProfile(3)

@@ -1,4 +1,4 @@
-// The Logs section (section 8, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
+// The Logs section (the Activity area, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
 // connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
 // response sizes summed up per tool and connection, m for the context cost of each MCP session; enter opens
@@ -829,13 +829,13 @@ func (m *Model) logLayout() layout {
 }
 
 // logRowLine draws the shown row at index i. The marked row carries "> " and the full-width highlight while
-// the rows have the focus; the time is faint on every other row, which keeps its zebra shade.
+// the rows have the focus; on the other rows the time is faint.
 func (m *Model) logRowLine(i int, l layout) string {
 	lv := m.logs
 	row := lv.row(lv.list.matches[i])
 	active := m.screen == screenLogs && lv.focus == logFocusRows && i == lv.list.cursor
 	if active {
-		return m.listRow(true, false, lv.table.line(row.cells, l))
+		return m.listRow(true, lv.table.line(row.cells, l))
 	}
 	blank, width := m.fit("  ")
 	line := padLine(lv.table.line(row.cells, l), width)
@@ -843,11 +843,7 @@ func (m *Model) logRowLine(i int, l layout) string {
 	rest := strings.TrimPrefix(line, head)
 	when := clipCells(rest, l.widths[1])
 	tail := strings.TrimPrefix(rest, when)
-	base := lipgloss.NewStyle()
-	if i%2 == 1 {
-		base = styles.zebra
-	}
-	return base.Render(blank+head) + base.Faint(true).Render(when) + base.Render(tail)
+	return blank + head + lipgloss.NewStyle().Faint(true).Render(when) + tail
 }
 
 // logsFrame is everything of the Logs screen except its rows. The bar stands on one line where it fits and
@@ -1109,7 +1105,7 @@ func (m *Model) logStatLines(s logStats, room int) string {
 			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.groups)-i)) + "\n")
 			break
 		}
-		b.WriteString(m.listRow(false, i%2 == 1, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
+		b.WriteString(m.listRow(false, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
 	}
 	return b.String()
 }
@@ -1198,7 +1194,7 @@ func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.order)-i)) + "\n")
 			break
 		}
-		b.WriteString(m.listRow(false, false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
+		b.WriteString(m.listRow(false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
 	}
 	return b.String()
 }
@@ -1367,7 +1363,7 @@ func (m *Model) logPickRow(i int) string {
 	if p.filter >= 0 && name == m.logs.filters[p.filter] {
 		text += "  (current)"
 	}
-	return m.listRow(i == p.list.cursor, i%2 == 1, truncateCells(text, width))
+	return m.listRow(i == p.list.cursor, truncateCells(text, width))
 }
 
 func (m *Model) logPickWindow() (int, int) {

@@ -1,0 +1,123 @@
+// Package matomo implements controlled access to a Matomo instance, on-premise or Matomo Cloud, through
+// its HTTP API with a personal authentication token.
+//
+// Every request is a POST to <base>/index.php with a form body naming module=API, a fixed method of the
+// calling tool, and format=JSON. The token travels in an Authorization bearer header, never in a URL or an
+// argument; only an instance older than 5.4.0, which reads no header, gets it as the token_auth form field.
+// Matomo answers application errors with HTTP 200 and {"result":"error"}; client.go and errors.go map them
+// to the stable classes without ever copying Matomo's message text.
+//
+// The base URL is required and has no default. A connection reaches websites (site, site/ID) and, only when
+// bound explicitly, the instance itself. Every Matomo value is untrusted provider data: strings and lists
+// are bounded, a response is read up to a size limit, and addresses are text that is never fetched.
+package matomo
+
+import (
+	"context"
+	"errors"
+
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
+)
+
+// Provider is the provider name used in the configuration and as the operation namespace.
+const Provider = "matomo"
+
+// roleToken is the single secret role: a personal Matomo authentication token.
+const roleToken = "token"
+
+// TestConnection reads the instance version, which proves the token and enforces Matomo 5, and then proves
+// each website the connection names. It costs nothing and proves neither write rights nor further methods.
+func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor) (provider.Class, error) {
+	const op = "test connection"
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return testClass(err)
+	}
+	info, err := client.instance(ctx, op, true)
+	if err != nil {
+		return testClass(err)
+	}
+	if err := client.supports(info, baseRequirement("")); err != nil {
+		return testClass(err)
+	}
+	for _, id := range client.scope.sites {
+		if _, err := client.fetchSite(ctx, op, baseRequirement(""), id); err != nil {
+			return testClass(err)
+		}
+	}
+	return provider.ClassOK, nil
+}
+
+// testClass turns a failure into the class a connection test reports. A version or method the instance lacks
+// fails closed as a provider error.
+func testClass(err error) (provider.Class, error) {
+	var failure *provider.Error
+	if errors.As(err, &failure) {
+		return failure.Class, nil
+	}
+	var unavailable *unavailableError
+	var invalid *provider.InvalidRequestError
+	if errors.As(err, &unavailable) || errors.As(err, &invalid) {
+		return provider.ClassProviderError, nil
+	}
+	return "", err
+}
+
+// Register adds the provider metadata, its connection test, and its read tools.
+func Register(reg *capability.Registry) error {
+	if err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: Provider, Name: "Matomo",
+		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
+		DefaultEffects: []config.Effect{config.EffectRead},
+		ValidateBaseURL: func(raw string) error {
+			_, err := originOf(raw)
+			return err
+		},
+		SecretRoles: []config.SecretRole{{
+			Name: roleToken,
+			Description: "Personal Matomo authentication token, created under Personal, Security; it has the " +
+				"rights of its user per website and is sent as 'Authorization: Bearer ...'",
+		}},
+		Target: config.TargetMetadata{
+			Label:    "website",
+			Multiple: true,
+			Description: "websites the token reaches, as all of them or as single websites by ID; the instance " +
+				"itself only when bound explicitly. Without targets a connection reaches every website of the " +
+				"token and no instance-wide tool",
+			Kinds: []config.TargetKind{{
+				Name: "site",
+				Description: "site binds every website of the token and cannot be combined with site/ID; " +
+					"site/ID binds exactly that website",
+				Forms: []string{formSites, formSite},
+			}, {
+				Name:        "instance",
+				Description: "the Matomo instance itself, for tools that need Super User rights",
+				Forms:       []string{formInstance},
+				Unlisted:    true,
+			}},
+			Validate:    validateTarget,
+			ValidateSet: validateSet,
+			Reaches:     reaches,
+		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read websites", Recommended: true,
+			Description: "reads the instance version and the websites of the token; changes nothing",
+			Tools:       []string{versionGet.ID, sitesList.ID, sitesGet.ID},
+		}},
+	}, TestConnection); err != nil {
+		return err
+	}
+	if err := reg.RegisterTargetBrowser(Provider, targetBrowser()); err != nil {
+		return err
+	}
+	return reg.Register(Provider,
+		capability.Operation{Descriptor: versionGet, Handler: capability.Handler(invokeVersionGet)},
+		capability.Operation{Descriptor: sitesList, Handler: capability.Handler(invokeSitesList)},
+		capability.Operation{Descriptor: sitesGet, Handler: capability.Handler(invokeSitesGet)},
+	)
+}

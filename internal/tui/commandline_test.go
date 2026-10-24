@@ -82,7 +82,7 @@ func TestCommandSuggestionsMatchPrefixWordAliasAndCase(t *testing.T) {
 		first string
 		has   string
 	}{
-		{"", "go services", "quit"},
+		{"", "go overview", "quit"},
 		{"QU", "quit", ""},
 		{"go lo", "go logs", ""},
 		{"tokens", "go tokens", ""},
@@ -105,18 +105,48 @@ func TestCommandSuggestionsMatchPrefixWordAliasAndCase(t *testing.T) {
 	}
 }
 
-func TestEnterRunsSectionCommandsLikeTheDigits(t *testing.T) {
-	for s := section(0); s < sectionCount; s++ {
-		a, b := cmdModel(t), cmdModel(t)
-		a.screen, b.screen = screenNav, screenNav
-		pump(t, a, string(rune('1'+s)))
-		pump(t, b, ":")
-		typeText(t, b, "go "+strings.ToLower(s.title()))
-		pump(t, b, "enter")
-		if b.section != a.section || b.screen != a.screen || b.cmdline != nil {
+func TestEnterRunsAreaCommandsLikeTheDigits(t *testing.T) {
+	for a := area(0); a < areaCount; a++ {
+		x, y := cmdModel(t), cmdModel(t)
+		x.screen, y.screen = screenNav, screenNav
+		pump(t, x, string(rune('1'+a)))
+		pump(t, y, ":")
+		typeText(t, y, "go "+strings.ToLower(a.title()))
+		pump(t, y, "enter")
+		if y.section != x.section || y.screen != x.screen || y.cmdline != nil {
 			t.Errorf("%v: command = section %v screen %v, key = section %v screen %v",
-				s, b.section, b.screen, a.section, a.screen)
+				a.title(), y.section, y.screen, x.section, x.screen)
 		}
+	}
+}
+
+// The names the sections had before the areas still open them, inside their area.
+func TestEnterRunsSectionAliasesLikeTheOptionBar(t *testing.T) {
+	for s := section(0); s < sectionCount; s++ {
+		x, y := cmdModel(t), cmdModel(t)
+		openSectionByName(t, x, s)
+		y.screen = screenNav
+		pump(t, y, ":")
+		typeText(t, y, "go "+strings.ToLower(s.title()))
+		pump(t, y, "enter")
+		if y.section != s || y.screen != x.screen || y.cmdline != nil {
+			t.Errorf("%v: command = section %v screen %v, option bar = section %v screen %v",
+				s.title(), y.section, y.screen, x.section, x.screen)
+		}
+	}
+}
+
+// The empty line lists the areas, not every sub-tab.
+func TestEmptyCommandLineListsOnlyTheAreas(t *testing.T) {
+	var got []string
+	for _, c := range matchCommands(cmdModel(t).commands(), "") {
+		if strings.HasPrefix(c.name, "go ") {
+			got = append(got, c.name)
+		}
+	}
+	want := "go overview|go connections|go activity|go access|go library|go settings"
+	if strings.Join(got, "|") != want {
+		t.Errorf("go commands = %v, want %s", got, want)
 	}
 }
 
@@ -219,7 +249,7 @@ func TestSectionCommandIsRefusedOnAConfirmationAndKeepsIt(t *testing.T) {
 	press(t, m, ":")
 	typeText(t, m, "go logs")
 	pump(t, m, "enter")
-	if m.screen != screenCommand || !strings.Contains(screenOf(m), "cannot switch sections") {
+	if m.screen != screenCommand || !strings.Contains(screenOf(m), "cannot switch areas") {
 		t.Fatalf("refusal:\n%s", screenOf(m))
 	}
 	press(t, m, "esc")

@@ -53,6 +53,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Blocking an account user uses `list_blocked`, `block`, and `unblock`, lists only block entries, has no
   `user-blocks.check`, and takes no `note`; `user-settings` also carries `pronouns`, `hide_pronouns`, and
   `enable_repo_unit_hints`. See [Users](gitea/users.md).
+- Quota: the `quota.*` tools exist on Forgejo only (Gitea has no quota). See [Quota](#quota).
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
@@ -93,6 +94,30 @@ additional depth of defense: the targets of the connection stay the boundary.
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
 
+## Quota
+
+| Tool | Effect | Reads |
+| --- | --- | --- |
+| `quota.get` | read | groups, rules, and storage in use |
+| `quota.list-artifacts`, `quota.list-attachments`, `quota.list-packages` | read | what counts towards the quota |
+| `quota.check` | read | whether an action on one `subject` is within the quota |
+
+All five read the quota of the account behind the token, or with `owner` (`orgs/NAME`) that of an organization. The
+scopes presumably are `read:user` for the account and `read:organization` for an organization, which the instance
+restricts further to the organization's owners; they are not confirmed against a live instance.
+
+- An organization must be named by an `orgs/NAME` target when the connection has targets; no `users/NAME` target is
+  needed. It is refused before the token is read and without naming it. The account needs, with targets, a
+  `users/NAME` target for it and no repository target, as for `user-settings.get`; it is then proven by reading
+  `GET /user` first.
+- In the lists, a row that names a repository outside the targets is dropped, and with targets so is a row that names
+  none; packages belong to their owner and are not filtered. A page may therefore hold fewer rows than `limit` and
+  still have a successor.
+- Names, versions, and addresses are untrusted data.
+- An instance can switch the quota off; it then does not serve the routes and answers 404, like it does for an
+  organization or a token it does not reach. After a 404 the tool reads `GET /user` or `GET /orgs/NAME`: if that
+  answers, the quota is reported as not available (`provider-error`), otherwise as `not-found`. A 403 is `not-found`.
+
 ## Not on Forgejo
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
@@ -103,6 +128,9 @@ not registered. See [Projects](gitea/projects.md).
   from 15, artifacts from 16. Runs, jobs, artifacts, and filters have Forgejo's own forms, there is no owner level,
   no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
   `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See [Actions](gitea/actions.md).
+- Packages: there is no `package-versions.list`, `package-versions.get-latest`, or `packages.delete`, `terraform` is
+  not a package type, and the size of a package file is `Size` in the API and `size` in the result. See
+  [Packages](gitea/packages.md).
 - Actions administration: secrets and variables carry no `description`, and `actions-secrets.list` reads the secrets
   of a user only from Forgejo 17. Runners have Forgejo's own members and a paged list, there is no
   `actions-runners.update` and no `workflows.enable` or `workflows.disable`, and `actions-runner-jobs.search` is

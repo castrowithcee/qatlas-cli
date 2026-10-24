@@ -27,23 +27,6 @@ const (
 // sinceAdminPackages is the oldest version with the package list of the administrator.
 var sinceAdminPackages = map[string]version{gitea.id: giteaActions28}
 
-// packageTypes are the package types the administrator list filters by.
-var packageTypes = []string{"alpine", "cargo", "chef", "composer", "conan", "conda", "container", "cran", "debian",
-	"generic", "go", "helm", "maven", "npm", "nuget", "pub", "pypi", "rpm", "rubygems", "swift", "terraform",
-	"vagrant"}
-
-var packageMembers = []member{
-	{name: "id", kind: kindInteger, note: "Numeric ID of the package"},
-	{name: "name", kind: kindText, note: "Name of the package, untrusted data"},
-	{name: "type", kind: kindText, note: "Type of the package, such as npm or container"},
-	{name: "version", kind: kindText, note: "Version of the package, untrusted data"},
-	{name: "html_url", kind: kindText, address: true, note: "Address of the package page"},
-	{name: "created_at", kind: kindText, note: "Creation time"},
-	{name: "creator", kind: kindObject, sub: personMembers, note: "User who created the package; personal data"},
-	{name: "owner", kind: kindObject, sub: personMembers, note: "Owner of the package; personal data"},
-	{name: "repository", kind: kindObject, sub: actionsRepositoryMembers, note: "Repository the package is linked to"},
-}
-
 // instanceWide refuses a connection with targets: the instance-wide data reaches past any target.
 func (a allowlist) instanceWide() error {
 	if len(a) != 0 {
@@ -531,11 +514,11 @@ var adminPackagesList = &tool{
 				"Only a connection without targets offers this tool.",
 			Tags: []string{p.id, "admin", "packages", "list"},
 			Risk: readRisk(p.id + adminPackagesSensitivity),
-			InputSchema: inputSchema(`"type":{"type":"string","enum":["` + strings.Join(packageTypes, `","`) + `"]},` +
+			InputSchema: inputSchema(`"type":{"type":"string","enum":["` + strings.Join(packageTypesOf(p), `","`) + `"]},` +
 				`"q":{"type":"string","minLength":1,"maxLength":255},` + pagingKeys),
 			OutputSchema: instanceListOutput("packages", schemaOf(p, packageMembers, "id")),
 			Arguments: append([]capability.Argument{
-				{Name: "type", Description: "Only packages of this type: " + strings.Join(packageTypes, ", ")},
+				{Name: "type", Description: "Only packages of this type: " + strings.Join(packageTypesOf(p), ", ")},
 				{Name: "q", Description: "Only packages whose name the instance matches with this text"}},
 				pagingArguments...),
 			Fields:   instanceListFields("packages", "Packages with every member of the package object"),
@@ -549,7 +532,7 @@ var adminPackagesList = &tool{
 		}
 		query := url.Values{}
 		if a.Type != "" {
-			if !contains(packageTypes, a.Type) {
+			if !contains(packageTypesOf(p), a.Type) {
 				return nil, invalidArgument("type is not one of the documented package types")
 			}
 			query.Set("type", a.Type)

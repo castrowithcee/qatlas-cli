@@ -23,7 +23,7 @@ func openVaultSection(t *testing.T, m *Model) {
 	}
 }
 
-// Digit 5 and the tab line name the fifth section Vault.
+// Digit 6 opens Settings on its Vault sub-tab, and the tab line and option bar name both.
 func TestVaultSectionInNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
@@ -33,13 +33,13 @@ func TestVaultSectionInNavigation(t *testing.T) {
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	if view := m.View(); !strings.Contains(view, "5 Vault") {
+	if view := m.View(); !strings.Contains(view, "6 Settings") || !strings.Contains(view, "[Vault]") {
 		t.Errorf("the tab line does not name the Vault section:\n%s", view)
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
-	if view := m.View(); !strings.Contains(view, "5") {
-		t.Errorf("narrow navigation does not offer digit 5:\n%s", view)
+	if view := m.View(); !strings.Contains(view, "6") {
+		t.Errorf("narrow navigation does not offer digit 6:\n%s", view)
 	}
 }
 

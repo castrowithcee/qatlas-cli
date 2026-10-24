@@ -72,7 +72,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 // A topic longer than the workspace scrolls, and the screen keeps its size while it does.
 func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 	m, _, _ := newModel(t)
-	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, 12}} {
+	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, minimumHeight}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		m.screen = screenNav
 		press(t, m, "?", "right")
@@ -116,7 +116,7 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 // Where keys are text, ? is text: in a form and in the filter of a list.
 func TestQuestionMarkIsTextWhereTextIsTyped(t *testing.T) {
 	m, _, _ := newModel(t)
-	press(t, m, "1", "n")
+	press(t, m, "5", "n")
 	typeText(t, m, "a?b")
 	if m.screen != screenForm || m.fieldValue("name") != "a?b" {
 		t.Errorf("? in a form left it or was not typed: screen %v name %q", m.screen, m.fieldValue("name"))

@@ -58,7 +58,8 @@ labels match `labels`, at most 100 at once and without paging.
 repositories, one batch at a time, with the filters the descriptor names. Titles, branches, job names, and labels
 are untrusted data. Forgejo lists runs and jobs of a repository only (see [Actions](actions.md)).
 
-`admin-packages.list` exists on Gitea only and lists the packages of all owners, filtered by `type` and by name.
+`admin-packages.list` exists on Gitea only and lists the packages of all owners, filtered by `type` and by name;
+the packages of one owner are described in [Packages](packages.md).
 Names and versions are untrusted data; an address with user info or a query is left out. Gitea 1.27 has no such
 route, so the tool is refused there before its request and names the version it needs.
 
