@@ -382,7 +382,7 @@ func TestAnnotationsDeleteTools(t *testing.T) {
 			t.Errorf("profile %s selects a delete tool", profile.ID)
 		}
 		if (profile.ID == "read") != strings.Contains(joined, "matomo.annotations.count") && profile.ID != "annotations" &&
-			profile.ID != "live" && profile.ID != "goals" && profile.ID != "segments" {
+			profile.ID != "live" && profile.ID != "goals" && profile.ID != "segments" && profile.ID != "sites" {
 			t.Errorf("profile %s: count placement", profile.ID)
 		}
 	}

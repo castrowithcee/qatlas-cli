@@ -137,6 +137,11 @@ func Register(reg *capability.Registry) error {
 			Tools: append(slices.Clone(readTools), segmentsAdd.ID, segmentsUpdate.ID, segmentsStar.ID,
 				segmentsUnstar.ID),
 		}, {
+			ID: "sites", Title: "Manage websites",
+			Description: "reads what the read profile reads and changes the settings of a website; every change needs " +
+				"its own confirmation, and adding a website (Super User, instance-wide) and deleting one stay unticked",
+			Tools: append(slices.Clone(readTools), sitesUpdate.ID),
+		}, {
 			ID: "annotations", Title: "Manage annotations",
 			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
 				"every change needs its own confirmation",
@@ -188,6 +193,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trackingCodeGet, Handler: capability.Handler(invokeTrackingCodeGet)},
 		capability.Operation{Descriptor: siteSettingsGet, Handler: capability.Handler(invokeSiteSettingsGet)},
 		capability.Operation{Descriptor: consentManagerDetect, Handler: capability.Handler(invokeConsentManagerDetect)},
+		capability.Operation{Descriptor: sitesAdd, Handler: capability.Handler(invokeSitesAdd)},
+		capability.Operation{Descriptor: sitesUpdate, Handler: capability.Handler(invokeSitesUpdate)},
+		capability.Operation{Descriptor: sitesDelete, Handler: capability.Handler(invokeSitesDelete)},
 		capability.Operation{Descriptor: siteGroupsList, Handler: capability.Handler(invokeSiteGroupsList)},
 	)
 }
