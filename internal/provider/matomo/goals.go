@@ -47,8 +47,13 @@ func goalChangeRisk(effect capability.Effect, idempotency capability.Idempotency
 		OpenWorld: true, DataSensitivity: goalsSensitive}
 }
 
-const sentOnce = "; sent once and never repeated by Qatlas: after an unclear result, read the goal with " +
-	"matomo.goals.get before repeating it"
+// sentOnceFor is the note on a change whose outcome is unclear: it names the read that settles it.
+func sentOnceFor(noun, tool string) string {
+	return "; sent once and never repeated by Qatlas: after an unclear result, read the " + noun + " with " +
+		tool + " before repeating it"
+}
+
+var goalSentOnce = sentOnceFor("goal", "matomo.goals.get")
 
 const goalProperties = `"id":{"type":"integer"},"name":{"type":"string"},"description":{"type":"string"},` +
 	`"match_attribute":{"type":"string"},"pattern":{"type":"string"},"pattern_type":{"type":"string"},` +
@@ -548,24 +553,18 @@ func (d goalDefinition) params() (url.Values, error) {
 // change sends the one request of a mutation after the instance is proven to serve the tool. It never
 // repeats: a failure after which the request may have been applied says so.
 func (c *Client) change(ctx context.Context, op string, req requirement, method string, params url.Values,
-	out any) error {
-	return c.changeNoting(ctx, op, req, method, params, out, sentOnce)
-}
-
-// changeNoting is change with the note an unclear outcome carries.
-func (c *Client) changeNoting(ctx context.Context, op string, req requirement, method string, params url.Values,
-	out any, note string) error {
+	hint string, out any) error {
 	info, err := c.ensure(ctx, op, req)
 	if err != nil {
 		return err
 	}
-	return uncertainChange(c.refuseMissing(req, c.send(ctx, op, method, params, info.bodyToken, out)), note)
+	return uncertainChange(c.refuseMissing(req, c.send(ctx, op, method, params, info.bodyToken, out)), hint)
 }
 
 // uncertainChange marks a failure of a sent change whose outcome is unknown: no answer in time, a reset
 // connection, an HTTP status Qatlas does not classify, or an answer that cannot be read. An error Matomo
 // reported itself in a recognised form is a clean refusal and stays as it is.
-func uncertainChange(err error, note string) error {
+func uncertainChange(err error, hint string) error {
 	var failure *provider.Error
 	if !errors.As(err, &failure) {
 		return err
@@ -574,14 +573,14 @@ func uncertainChange(err error, note string) error {
 	case failure.MayHaveArrived(), failure.Class == provider.ClassInvalidResponse,
 		failure.Class == provider.ClassProviderError:
 		marked := *failure
-		marked.Message += note
+		marked.Message += hint
 		return &marked
 	}
 	return err
 }
 
-func unclearChange(op, message string) error {
-	return provider.InvalidResponse(op, message+sentOnce)
+func unclearChange(op, message, hint string) error {
+	return provider.InvalidResponse(op, message+hint)
 }
 
 func invokeGoalsAdd(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -608,12 +607,12 @@ func invokeGoalsAdd(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, err
 	}
 	var answer json.RawMessage
-	if err := client.change(ctx, op, goalsRequirement(goalsAdd.ID), "Goals.addGoal", params, &answer); err != nil {
+	if err := client.change(ctx, op, goalsRequirement(goalsAdd.ID), "Goals.addGoal", params, goalSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	var created int
 	if scalar(answer, &created) != nil || created < 1 {
-		return nil, unclearChange(op, "Matomo returned no usable ID for the new goal")
+		return nil, unclearChange(op, "Matomo returned no usable ID for the new goal", goalSentOnce)
 	}
 	return &GoalAdded{IDSite: id, IDGoal: created, Created: true}, nil
 }
@@ -650,11 +649,11 @@ func invokeGoalsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	// Matomo checks the pair itself and answers an ID the website does not have as an error, so no read
 	// comes first.
 	var answer json.RawMessage
-	if err := client.change(ctx, op, goalsRequirement(goalsUpdate.ID), "Goals.updateGoal", params, &answer); err != nil {
+	if err := client.change(ctx, op, goalsRequirement(goalsUpdate.ID), "Goals.updateGoal", params, goalSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	if !isSuccessAnswer(answer) {
-		return nil, unclearChange(op, "Matomo returned no confirmation of the update")
+		return nil, unclearChange(op, "Matomo returned no confirmation of the update", goalSentOnce)
 	}
 	return &GoalUpdated{IDSite: id, IDGoal: goalID, Updated: true}, nil
 }
@@ -690,11 +689,11 @@ func invokeGoalsDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	params := url.Values{"idSite": {strconv.Itoa(id)}, "idGoal": {strconv.Itoa(goalID)}}
 	var answer json.RawMessage
-	if err := client.change(ctx, op, req, "Goals.deleteGoal", params, &answer); err != nil {
+	if err := client.change(ctx, op, req, "Goals.deleteGoal", params, goalSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	if !isSuccessAnswer(answer) {
-		return nil, unclearChange(op, "Matomo returned no confirmation of the deletion")
+		return nil, unclearChange(op, "Matomo returned no confirmation of the deletion", goalSentOnce)
 	}
 	return &GoalDeleted{IDSite: id, IDGoal: goalID, Name: goal.Name, Deleted: true}, nil
 }

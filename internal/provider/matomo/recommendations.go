@@ -291,8 +291,8 @@ func invokeGoalRecommendationsScan(ctx context.Context, resolved *config.Resolve
 	// useAi is left out on purpose: Matomo then scans without an AI provider, and no site data leaves the instance.
 	params := url.Values{"idSite": {strconv.Itoa(id)}}
 	var answer json.RawMessage
-	if err := client.changeNoting(ctx, op, goalsRequirement(goalRecommendationsScan.ID),
-		"Goals.runGoalRecommendationScan", params, &answer, scanSentOnce); err != nil {
+	if err := client.change(ctx, op, goalsRequirement(goalRecommendationsScan.ID),
+		"Goals.runGoalRecommendationScan", params, scanSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	result, ok := readRecommendations(answer, id)
@@ -348,16 +348,19 @@ func invokeGoalRecommendationsDismiss(ctx context.Context, resolved *config.Reso
 	var answer struct {
 		Success *loose `json:"success"`
 	}
-	if err := client.change(ctx, op, goalsRequirement(goalRecommendationsDismiss.ID), method, params, &answer); err != nil {
+	if err := client.change(ctx, op, goalsRequirement(goalRecommendationsDismiss.ID), method, params,
+		dismissSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	if answer.Success == nil {
-		return nil, unclearChange(op, "Matomo returned no confirmation of the dismissal")
+		return nil, unclearChange(op, "Matomo returned no confirmation of the dismissal", dismissSentOnce)
 	}
 	done := answer.Success.flag()
 	return &RecommendationDismissed{IDSite: id, RecommendationID: args.RecommendationID, All: args.All,
 		Dismissed: done != nil && *done}, nil
 }
+
+var dismissSentOnce = sentOnceFor("recommendations", "matomo.goal-recommendations.list")
 
 const scanSentOnce = "; sent once and never repeated by Qatlas: a scan may have run and saved its result, so read it " +
 	"with matomo.goal-recommendations.list before scanning again"
