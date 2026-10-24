@@ -1,0 +1,85 @@
+package matomo
+
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
+)
+
+// missingError is Matomo's answer for a method, module, or plugin the instance lacks. It never leaves the
+// package: call turns it into the refusal of the tool.
+type missingError struct{}
+
+func (*missingError) Error() string { return "the Matomo instance lacks the method" }
+
+// answeredError is a failure Matomo itself reported inside an HTTP 200 answer, as opposed to one of the
+// transport or an HTTP status. It unwraps to the provider error that carries the class.
+type answeredError struct{ failure *provider.Error }
+
+func (e *answeredError) Error() string { return e.failure.Error() }
+func (e *answeredError) Unwrap() error { return e.failure }
+
+// unavailableError is the refusal of a tool the instance cannot serve. It is an unsupported capability of
+// the connection; the message names the version or plugin the tool needs, never a Matomo text.
+type unavailableError struct {
+	*capability.UnsupportedError
+	message string
+}
+
+func (e *unavailableError) Error() string { return e.message }
+func (e *unavailableError) Unwrap() error { return e.UnsupportedError }
+
+// messagePatterns map the English texts Matomo puts in the message of an application error to a class.
+// Matomo translates these texts into the language of the token's user, so another language falls through to
+// invalid-provider-response. The first matching group wins; a pattern is matched on the lower-cased text.
+var messagePatterns = []struct {
+	class    string
+	patterns []string
+}{
+	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
+	{"permission", []string{"you can't access this resource", "requires 'view'", "requires 'write'",
+		"requires 'admin'", "requires 'superuser'", "super user", "not allowed to"}},
+	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
+	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist"}},
+}
+
+// applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
+// any other answer. The message text is only matched, never copied.
+func applicationError(op string, data []byte) error {
+	var answer struct {
+		Result  string          `json:"result"`
+		Message json.RawMessage `json:"message"`
+	}
+	if len(data) == 0 || data[0] != '{' || json.Unmarshal(data, &answer) != nil || answer.Result != "error" {
+		return nil
+	}
+	var message string
+	_ = json.Unmarshal(answer.Message, &message)
+	switch classifyMessage(message) {
+	case "missing":
+		return &missingError{}
+	case "auth":
+		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op, Message: "Matomo rejected the token"}}
+	case "permission":
+		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
+			Message: "this token may not use the requested website or function; check its rights for the website"}}
+	case "not-found":
+		return &answeredError{&provider.Error{Class: provider.ClassNotFound, Op: op,
+			Message: "Matomo does not hold this resource or does not show it to this token"}}
+	}
+	return provider.InvalidResponse(op, "Matomo reported an error this provider does not recognise")
+}
+
+func classifyMessage(message string) string {
+	lower := strings.ToLower(message)
+	for _, group := range messagePatterns {
+		for _, pattern := range group.patterns {
+			if strings.Contains(lower, pattern) {
+				return group.class
+			}
+		}
+	}
+	return ""
+}
