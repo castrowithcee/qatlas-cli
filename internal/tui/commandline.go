@@ -53,10 +53,15 @@ func (m *Model) commands() []command {
 			if name == title {
 				continue
 			}
+			aliases := []string{name}
+			if name == "update" {
+				// The bare word belongs to the command that installs the release.
+				aliases = nil
+			}
 			list = append(list, command{
 				name:        "go " + name,
 				desc:        fmt.Sprintf("Open %s, %s (%d)", a.title(), s.title(), int(a)+1),
-				aliases:     []string{name},
+				aliases:     aliases,
 				hidden:      true,
 				unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
 				run:         func(m *Model) tea.Cmd { return m.openSection(s) },
@@ -113,6 +118,20 @@ func (m *Model) commands() []command {
 			aliases:     []string{"import config", "restore"},
 			unavailable: onScreens("import", screenNav, screenList),
 			run:         func(m *Model) tea.Cmd { return m.askImport() },
+		},
+		command{
+			name:        "view heatmap",
+			desc:        "Show the log as a heatmap of its days (View field)",
+			aliases:     []string{"heatmap"},
+			unavailable: onScreens("change the view", screenLogs),
+			run:         func(m *Model) tea.Cmd { return m.setHeat(true) },
+		},
+		command{
+			name:        "view table",
+			desc:        "Show the log as a table (View field)",
+			aliases:     []string{"table"},
+			unavailable: onScreens("change the view", screenLogs),
+			run:         func(m *Model) tea.Cmd { return m.setHeat(false) },
 		},
 		command{
 			name:        "lock vault",
