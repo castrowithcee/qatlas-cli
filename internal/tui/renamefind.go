@@ -113,12 +113,12 @@ func (m *Model) findingsNotice(finds []renameFinding) string {
 	for _, p := range []struct {
 		n    int
 		what string
-	}{{hand, "renamed by hand"}, {left, "unfinished"}, {vague, "ambiguous"}} {
+	}{{hand, tr(tFindHand)}, {left, tr(tFindUnfinished)}, {vague, tr(tFindAmbiguous)}} {
 		if p.n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", p.n, p.what))
 		}
 	}
-	return m.hint(fmt.Sprintf("renames found in the vault: %s; f reviews them", strings.Join(parts, ", ")))
+	return m.hint(tr(tFindNotice, strings.Join(parts, ", ")))
 }
 
 // findingNotice is the short hint at the entry a finding belongs to.
@@ -126,11 +126,9 @@ func (m *Model) findingNotice(f renameFinding) string {
 	apply := m.redactor.Apply
 	switch {
 	case f.leftover:
-		return fmt.Sprintf("%s %s has an unfinished rename to %s in the vault; f finishes it or puts it back",
-			f.kind, apply(f.from), apply(f.to))
+		return tr(tFindNoticeLeftover, kindText(f.kind), apply(f.from), apply(f.to))
 	}
-	return fmt.Sprintf("%s %s was renamed by hand from %s; f adopts the rename in the vault", f.kind, apply(f.entry),
-		apply(f.from))
+	return tr(tFindNoticeHand, kindText(f.kind), apply(f.entry), apply(f.from))
 }
 
 // findingRow is the one line of a finding on the findings screen.
@@ -138,41 +136,34 @@ func (m *Model) findingRow(f renameFinding) string {
 	apply := m.redactor.Apply
 	switch {
 	case f.ambiguous:
-		return fmt.Sprintf("%-11s %s, ambiguous", f.kind, apply(f.from))
+		return tr(tFindRowAmbiguous, kindText(f.kind), apply(f.from))
 	case f.leftover:
-		return fmt.Sprintf("%-11s %s -> %s, unfinished", f.kind, apply(f.from), apply(f.to))
+		return tr(tFindRowUnfinished, kindText(f.kind), apply(f.from), apply(f.to))
 	}
-	return fmt.Sprintf("%-11s %s -> %s, renamed by hand", f.kind, apply(f.from), apply(f.to))
+	return tr(tFindRowHand, kindText(f.kind), apply(f.from), apply(f.to))
 }
 
 // findingDetail words what a finding is and what its action does, for the selected row.
 func (m *Model) findingDetail(f renameFinding) string {
 	apply := m.redactor.Apply
-	what := "approval"
+	what := tr(tFindWhatApproval)
 	if f.kind == manage.RenameCredential {
-		what = "entry"
+		what = tr(tFindWhatEntry)
 	}
 	switch {
 	case f.ambiguous:
-		return fmt.Sprintf("The vault holds a %s %s under the name %s that could belong to more than one configured "+
-			"%s, or the other way round; nothing is suggested, so there is no action here.", f.kind, what,
-			apply(f.from), f.kind)
+		return tr(tFindDetailAmbiguous, kindText(f.kind), what, apply(f.from), kindText(f.kind))
 	case f.leftover && f.kind == manage.RenameConnection:
-		return fmt.Sprintf("The approval of %s is left over from an unfinished rename of connection %s. enter "+
-			"finishes the rename, so the connection takes the name %s; approving all in Approvals removes the "+
-			"leftover instead and keeps the name %s.", apply(f.to), apply(f.from), apply(f.to), apply(f.from))
+		return tr(tFindDetailConnection, apply(f.to), apply(f.from), apply(f.to), apply(f.from))
 	case f.leftover:
 		carried := ""
 		if len(f.carried) > 0 {
-			carried = ", with the approvals of " + apply(strings.Join(f.carried, ", "))
+			carried = tr(tFindCarried, apply(strings.Join(f.carried, ", ")))
 		}
-		return fmt.Sprintf("The vault holds credential %s under the name %s%s, left over from an unfinished "+
-			"rename; until it is resolved, %s is not read from the vault. enter finishes the rename to %s, b "+
-			"puts it back under %s.", apply(f.from), apply(f.to), carried, apply(f.from), apply(f.to), apply(f.from))
+		return tr(tFindDetailCredential, apply(f.from), apply(f.to), carried, apply(f.from), apply(f.to),
+			apply(f.from))
 	}
-	return fmt.Sprintf("%s %s was renamed to %s by hand in the configuration, while the vault holds its %s under "+
-		"the old name. enter adopts the rename: the %s follows the configuration.", f.kind, apply(f.from),
-		apply(f.to), what, what)
+	return tr(tFindDetailHand, kindText(f.kind), apply(f.from), apply(f.to), what, what)
 }
 
 // openFindings lists the renames found, from f on a list that has them. It says why when there is nothing to
@@ -185,12 +176,12 @@ func (m *Model) openFindings() tea.Cmd {
 	}
 	m.clearMessages()
 	if m.vaultLocked() {
-		m.status = "The vault is locked; ctrl+l unlocks it."
+		m.status = tr(tFindVaultLocked)
 		return nil
 	}
 	items := m.renameFindings()
 	if len(items) == 0 {
-		m.status = "No renames found in the vault."
+		m.status = tr(tFindNone)
 		return nil
 	}
 	state := &findingsState{items: items}
@@ -258,14 +249,14 @@ func (m *Model) askFinding(revert bool) tea.Cmd {
 	m.clearMessages()
 	switch {
 	case f.ambiguous:
-		m.status = "Ambiguous: nothing is suggested; check by hand."
+		m.status = tr(tFindAmbiguousStatus)
 		return nil
 	case revert && !f.canRevert():
-		m.status = "Only the unfinished rename of a credential can be put back."
+		m.status = tr(tFindOnlyRevert)
 		return nil
 	}
 	if work := m.updateBlocker(); work != "" {
-		m.status = "Wait until " + work + " finishes, then try again."
+		m.status = tr(tFindWait, work)
 		return nil
 	}
 	return m.requireAdmin(func() tea.Cmd { return m.planFinding(f, revert) })
@@ -302,7 +293,7 @@ func (m *Model) findingsView() string {
 	if s == nil {
 		return ""
 	}
-	head := m.wrapped(styles.title, "Renames found in the vault") + "\n\n"
+	head := m.wrapped(styles.title, tr(tFindTitle)) + "\n\n"
 	f := s.items[s.cursor]
 	keys := "up/down choose"
 	switch {

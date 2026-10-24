@@ -250,13 +250,13 @@ func (m *Model) saveSelftest() {
 // selftestText is the report as the 'qatlas selftest' table shows it.
 func selftestText(r *selftest.Report) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "selftest %s (profile %s)\n", r.Scenario, r.Profile)
+	fmt.Fprintf(&b, tr(tSelftestRepHead)+"\n", r.Scenario, r.Profile)
 	if r.Version != "" {
-		fmt.Fprintf(&b, "version:   %s\n", r.Version)
+		fmt.Fprintf(&b, tr(tSelftestRepVersion)+"\n", r.Version)
 	}
-	fmt.Fprintf(&b, "system:    %s/%s, %d CPUs\n", r.GOOS, r.GOARCH, r.CPUs)
-	fmt.Fprintf(&b, "directory: %s (removed)\n", r.TempDir)
-	fmt.Fprintf(&b, "elapsed:   %.0f ms\n", r.ElapsedMs)
+	fmt.Fprintf(&b, tr(tSelftestRepSystem)+"\n", r.GOOS, r.GOARCH, r.CPUs)
+	fmt.Fprintf(&b, tr(tSelftestRepDir)+"\n", r.TempDir)
+	fmt.Fprintf(&b, tr(tSelftestRepElapsed)+"\n", r.ElapsedMs)
 	for i := 0; i < len(r.Measurements); {
 		group := r.Measurements[i].Group
 		fmt.Fprintf(&b, "\n%s\n", group)
@@ -288,9 +288,9 @@ func (m *Model) selftestBody() []string {
 	wrap := func(text string) []string { return strings.Split(render(lipgloss.NewStyle(), width, text), "\n") }
 	switch {
 	case !st.done && st.cancelling:
-		return wrap("Cancelling ... waiting until the writers have ended and the scratch directory is removed.")
+		return wrap(tr(tSelftestCancelling))
 	case !st.done:
-		body := wrap(fmt.Sprintf("Running (profile %s); this takes minutes. The editor stays usable.", st.profile))
+		body := wrap(tr(tSelftestRunningBody, st.profile))
 		body = append(body, "")
 		for _, l := range st.lines {
 			body = append(body, wrap(l)...)
@@ -300,22 +300,22 @@ func (m *Model) selftestBody() []string {
 	var body []string
 	switch {
 	case st.cancelled:
-		body = wrap("Cancelled; the scratch directory is removed.")
+		body = wrap(tr(tSelftestCancelled))
 		if st.failure != "" {
-			body = append(body, wrap("error: "+st.failure)...)
+			body = append(body, wrap(tr(tNoteError, st.failure))...)
 		}
 	case st.failure != "":
-		body = wrap("error: " + st.failure)
+		body = wrap(tr(tNoteError, st.failure))
 	default:
 		body = wrap(selftestText(st.report))
 	}
 	switch {
 	case st.saved != "":
 		body = append(body, "")
-		body = append(body, wrap("saved to "+st.saved)...)
+		body = append(body, wrap(tr(tSelftestSaved, st.saved))...)
 	case st.saveErr != "":
 		body = append(body, "")
-		body = append(body, wrap("error: cannot save: "+st.saveErr)...)
+		body = append(body, wrap(tr(tSelftestSaveError, st.saveErr))...)
 	}
 	return body
 }
@@ -335,7 +335,7 @@ func (m *Model) selftestKeys() string {
 
 // selftestFrame is the title above the body and the keys below it, and the lines of body that fit between.
 func (m *Model) selftestFrame() (head, foot string, room int) {
-	head = m.wrapped(styles.title, "Selftest "+m.st.scenario) + "\n\n"
+	head = m.wrapped(styles.title, tr(tSelftestTitle, m.st.scenario)) + "\n\n"
 	foot = m.keyHint(m.selftestKeys())
 	return head, foot, max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 }

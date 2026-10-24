@@ -7,7 +7,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -336,7 +335,7 @@ func (m *Model) startVaultProcess() tea.Cmd {
 	if err != nil {
 		return func() tea.Msg { return vaultProcessStartedMsg{err: err} }
 	}
-	m.busy = "starting the vault process"
+	m.busy = tr(tBusyVaultProcess)
 	return func() tea.Msg {
 		ended := 0
 		client, err := vaultproc.ProcessClientOf(v)
@@ -373,13 +372,11 @@ func (m *Model) handleVaultProcessStarted(msg vaultProcessStartedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	if msg.err == nil {
 		if msg.ended > 0 {
-			m.status = fmt.Sprintf("Ended the vault process (pid %d), whose program was replaced since it "+
-				"started; the vault is unlocked in a new one", msg.ended)
+			m.status = tr(tVaultProcessEnded, msg.ended)
 		}
 		return nil
 	}
-	m.status = fmt.Sprintf("The vault is unlocked, but the vault process could not be started: %s; %s",
-		m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
+	m.status = tr(tVaultProcessNotStarted, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
 	return nil
 }
 
@@ -432,8 +429,7 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 	m.endAdminSession()
 	m.vaultProcessUnlocked = false
 	if msg.err != nil {
-		m.fail = fmt.Sprintf("the vault process could not be locked: %s; %s",
-			m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
+		m.fail = tr(tVaultProcessNotLocked, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
 		return nil
 	}
 	m.status = tr(tVaultNowLocked)

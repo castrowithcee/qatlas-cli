@@ -72,7 +72,13 @@ func (g heatGlyphs) cell(d invokelog.DayActivity, level int, retentionStart stri
 	return g.levels[level-1], styles.ok
 }
 
-var heatWeekdays = [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+// heatWeekdayNames and heatMonthNames are the short names of the weekdays (Monday first) and of the months, as the
+// language of the editor writes them; the grid reserves three cells for each.
+func heatWeekdayNames() []string { return strings.Split(tr(tHeatWeekdays), ",") }
+func heatMonthNames() []string   { return strings.Split(tr(tHeatMonths), ",") }
+
+// heatWeekdays are the English names of the weekdays, which the catalog holds.
+var heatWeekdays = strings.Split(textEN[tHeatWeekdays], ",")
 
 // heatGrid draws days (consecutive local days) as seven weekday rows of weeks, Monday first, behind a month
 // header when months is set, at most as wide as width. It keeps the latest weeks that fit and returns the days
@@ -98,6 +104,7 @@ func heatGrid(days []invokelog.DayActivity, today, retentionStart string, width,
 	}
 	levels := invokelog.ActivityLevel(days)
 	g := heatGlyphSet()
+	weekdays, monthNames := heatWeekdayNames(), heatMonthNames()
 	rows := make([][]string, 7)
 	for r := range rows {
 		rows[r] = make([]string, total)
@@ -116,7 +123,7 @@ func heatGrid(days []invokelog.DayActivity, today, retentionStart string, width,
 			rows[row][col] = style.Render(glyph)
 		}
 		if months && row == 0 {
-			if month := day.Format("Jan"); month != lastMonth && len(header) <= label+2*col {
+			if month := monthNames[day.Month()-1]; month != lastMonth && len(header) <= label+2*col {
 				header = append(header, strings.Repeat(" ", label+2*col-len(header))...)
 				header = append(header, month...)
 				lastMonth = month
@@ -128,7 +135,7 @@ func heatGrid(days []invokelog.DayActivity, today, retentionStart string, width,
 		lines = append(lines, styles.hint.Render(strings.TrimRight(string(header), " ")))
 	}
 	for r := range rows {
-		lines = append(lines, styles.hint.Render(heatWeekdays[r])+" "+strings.Join(rows[r], " "))
+		lines = append(lines, styles.hint.Render(fmt.Sprintf("%-3s", weekdays[r]))+" "+strings.Join(rows[r], " "))
 	}
 	return lines, days
 }
@@ -144,15 +151,15 @@ func heatTotals(days []invokelog.DayActivity) string {
 	if calls > 0 {
 		rate = fmt.Sprintf("%d%%", ok*100/calls)
 	}
-	return fmt.Sprintf("Calls %d · success %s · errors %d", calls, rate, calls-ok)
+	return tr(tHeatTotals, calls, rate, calls-ok)
 }
 
 // heatLegend are the two lines that explain the cells.
 func heatLegend() []string {
 	g := heatGlyphSet()
 	return []string{
-		"less " + g.zero + strings.Join(g.levels[:], "") + " more (levels by quartile of the busy days)",
-		fmt.Sprintf("%s outside retention · %s altered entries · %s gap in the chain", g.outside, g.altered, g.gap),
+		tr(tOverviewLess) + g.zero + strings.Join(g.levels[:], "") + tr(tOverviewMore) + tr(tHeatLevels),
+		tr(tHeatLegend, g.outside, g.altered, g.gap),
 	}
 }
 
@@ -220,7 +227,7 @@ func (m *Model) logHeatLines(room int) string {
 	grid, drawn := heatGrid(days, today, m.retentionStart(time.Now()), width, maxHeatWeeks, true)
 	lines := []string{heatTotals(drawn)}
 	if len(drawn) > 0 {
-		lines[0] += fmt.Sprintf(" · %s to %s", drawn[0].Date, min(drawn[len(drawn)-1].Date, today))
+		lines[0] += tr(tHeatSpan, drawn[0].Date, min(drawn[len(drawn)-1].Date, today))
 	}
 	lines = append(lines, grid...)
 	lines = append(lines, heatLegend()...)

@@ -35,7 +35,7 @@ import (
 func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 	v := m.secrets.Vault()
 	if v == nil {
-		return approval.Report{}, "There is no vault configured for this run."
+		return approval.Report{}, tr(tNoVaultSentence)
 	}
 	state, err := v.State()
 	if err != nil {
@@ -43,12 +43,9 @@ func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 	}
 	switch state {
 	case vault.StateAbsent, vault.StateUnencrypted:
-		return approval.Report{}, fmt.Sprintf(
-			"Approvals are not used while the vault is unencrypted. Open %s to set a passphrase.",
-			sectionVault.ref())
+		return approval.Report{}, tr(tApprovalsNeedVault, sectionVault.ref())
 	case vault.StateLocked:
-		return approval.Report{}, "The vault is locked, so open approvals cannot be listed; " +
-			"press enter or ctrl+l to unlock it."
+		return approval.Report{}, tr(tApprovalsLocked)
 	}
 	report, err = approval.Pending(m.cfg, v)
 	if err != nil {
@@ -67,13 +64,13 @@ func (m *Model) hasOpenApprovals() bool {
 // or which fields of its scope changed since it was last approved.
 func approvalSummary(c approval.Change) string {
 	if c.New {
-		return "new connection, not yet approved"
+		return tr(tApprovalNew)
 	}
 	fields := make([]string, len(c.Fields))
 	for i, f := range c.Fields {
 		fields[i] = f.Field
 	}
-	return strings.Join(fields, ", ") + " changed"
+	return tr(tApprovalChanged, strings.Join(fields, ", "))
 }
 
 // approvalFields is every field of a connection's scope, in the order approval.Pending itself compares
@@ -132,7 +129,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		case ok && f.IsListChange():
 			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, approvalCounts(f))})
 			for _, r := range f.Renamed {
-				rows = append(rows, approvalRow{text: "renamed " + r.Old + " -> " + r.New, item: true})
+				rows = append(rows, approvalRow{text: tr(tApprovalRenamedItem, r.Old, r.New), item: true})
 			}
 			for _, v := range f.Added {
 				rows = append(rows, approvalRow{text: "+ " + v, item: true})
@@ -141,7 +138,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 				rows = append(rows, approvalRow{text: "- " + v, item: true})
 			}
 			if len(f.Kept) > 0 {
-				rows = append(rows, approvalRow{text: fmt.Sprintf("unchanged: %d", len(f.Kept)), item: true})
+				rows = append(rows, approvalRow{text: tr(tApprovalUnchangedCount, len(f.Kept)), item: true})
 				if expanded {
 					for _, v := range f.Kept {
 						rows = append(rows, approvalRow{text: "  " + v, item: true})
@@ -149,13 +146,13 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 				}
 			}
 		case ok && f.IsRename:
-			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s renamed %s -> %s", field, f.Before, f.After)})
+			rows = append(rows, approvalRow{text: tr(tApprovalFieldRenamed, field, f.Before, f.After)})
 		case ok:
 			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s -> %s", field, f.Before, f.After)})
 		case c.New:
 			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, current[field])})
 		default:
-			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s unchanged", field)})
+			rows = append(rows, approvalRow{text: tr(tApprovalFieldUnchanged, field)})
 		}
 	}
 	return rows
@@ -165,13 +162,13 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 func approvalCounts(f approval.FieldChange) string {
 	var parts []string
 	if len(f.Renamed) > 0 {
-		parts = append(parts, fmt.Sprintf("%d renamed", len(f.Renamed)))
+		parts = append(parts, tr(tApprovalCountRenamed, len(f.Renamed)))
 	}
 	if len(f.Added) > 0 {
-		parts = append(parts, fmt.Sprintf("%d new", len(f.Added)))
+		parts = append(parts, tr(tApprovalCountNew, len(f.Added)))
 	}
 	if len(f.Removed) > 0 {
-		parts = append(parts, fmt.Sprintf("%d removed", len(f.Removed)))
+		parts = append(parts, tr(tApprovalCountRemoved, len(f.Removed)))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -188,14 +185,14 @@ func approvalHasKept(c approval.Change) bool {
 
 func approvalList(values []string) string {
 	if len(values) == 0 {
-		return "(none)"
+		return tr(tApprovalNone)
 	}
 	return strings.Join(values, " ")
 }
 
 func approvalTools(values []string) string {
 	if values == nil {
-		return "(every tool of its effects)"
+		return tr(tApprovalEveryTool)
 	}
 	return approvalList(values)
 }
@@ -204,12 +201,12 @@ func approvalTools(values []string) string {
 // approved now.
 func (m *Model) approvalDetailView() string {
 	name := m.approvalDetail
-	title := m.wrapped(styles.title, "Approve "+name+"?") + "\n\n"
+	title := m.wrapped(styles.title, tr(tApprovalTitle, name)) + "\n\n"
 	report, unavailable := m.approvalsReport()
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
 		// is nothing left here to show or approve.
-		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("{back} back · {command} cmds · {help} help")
+		return title + m.wrapped(styles.fail, tr(tNoteError, unavailable)) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	var change *approval.Change
 	for i := range report.Open {
@@ -220,7 +217,7 @@ func (m *Model) approvalDetailView() string {
 	}
 	if change == nil {
 		// Approved or removed elsewhere while this screen was open.
-		return title + m.wrapped(styles.hint, "this connection is no longer open; nothing to approve") +
+		return title + m.wrapped(styles.hint, tr(tApprovalClosed)) +
 			m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	return m.approvalChangeView(title, *change)
@@ -253,7 +250,7 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 	m.approvalOffset, m.approvalPage = offset, room
 	foot := m.keyHint(keys)
 	if len(lines) > room {
-		foot = "\n" + m.wrapped(styles.hint, fmt.Sprintf("lines %d-%d of %d", offset+1,
+		foot = "\n" + m.wrapped(styles.hint, tr(tApprovalLines, offset+1,
 			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
 	}
 	return title + strings.Join(lines[offset:min(offset+room, len(lines))], "\n") + "\n" + foot
@@ -280,17 +277,15 @@ func (m *Model) scrollApproval(delta int) {
 func (m *Model) approveAllConfirmView() string {
 	report, _ := m.approvalsReport()
 	q := question{
-		title:       fmt.Sprintf("Approve %d connection(s)?", len(report.Open)),
-		consequence: "every connection currently open is approved as it is configured now",
+		title:       tr(tApproveAllTitle, len(report.Open)),
+		consequence: tr(tApproveAllConsequence),
 		keys:        "y approve all · n/{back} cancel · {command} cmds · {help} help",
 	}
 	if stale := report.RevocableStale(); len(stale) > 0 {
-		q.details = append(q.details, m.indented(fmt.Sprintf(
-			"also removes %d stale approval(s) of a connection that no longer reads the vault", len(stale))))
+		q.details = append(q.details, m.indented(tr(tApproveAllStale, len(stale))))
 	}
 	if n := len(report.HandRenames); n > 0 {
-		q.details = append(q.details, m.indented(fmt.Sprintf(
-			"keeps %d approval(s) of a rename made by hand, so that adopting it still finds them", n)))
+		q.details = append(q.details, m.indented(tr(tApproveAllHand, n)))
 	}
 	return m.questionText(q)
 }
@@ -313,18 +308,18 @@ type approvalActionMsg struct {
 // m.fail, never merely a warning.
 func (m *Model) approveOne(name string) tea.Cmd {
 	if m.vaultBusy {
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	cfg := m.cfg
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "approving " + name
+	m.busy = tr(tBusyApprovingOne, name)
 	return func() tea.Msg {
 		approved, warning, err := approval.Approve(context.Background(), cfg, v, []string{name})
 		return approvalActionMsg{name: name, approved: approved, warning: warning, err: err}
@@ -338,18 +333,18 @@ func (m *Model) approveOne(name string) tea.Cmd {
 // the rename still finds it (see approval.Report.RevocableStale).
 func (m *Model) approveAll() tea.Cmd {
 	if m.vaultBusy {
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	cfg := m.cfg
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "approving every open connection"
+	m.busy = tr(tBusyApprovingAll)
 	return func() tea.Msg {
 		report, err := approval.Pending(cfg, v)
 		if err != nil {
@@ -394,18 +389,17 @@ func (m *Model) handleApprovalAction(msg approvalActionMsg) tea.Cmd {
 	cmd := m.returnToList(msg.name)
 	switch {
 	case msg.name != "":
-		m.status = "Approved " + msg.name
+		m.status = tr(tApprovedOne, msg.name)
 	case len(msg.approved) == 0:
-		m.status = "Nothing to approve"
+		m.status = tr(tApprovedNothing)
 	default:
-		m.status = fmt.Sprintf("Approved %d connection(s)", len(msg.approved))
+		m.status = tr(tApprovedMany, len(msg.approved))
 	}
 	if msg.staleRemoved > 0 {
-		m.status += fmt.Sprintf("; removed %d stale approval(s) no longer read from the vault",
-			msg.staleRemoved)
+		m.status += tr(tApprovedStaleRemoved, msg.staleRemoved)
 	}
 	if msg.warning != "" {
-		m.status += "; warning: " + msg.warning
+		m.status += tr(tNoteWarning, msg.warning)
 	}
 	return cmd
 }
@@ -436,7 +430,7 @@ func (m *Model) autoApprove(before manage.ApprovalSnapshot, direct string) tea.C
 	cfg, redactor := m.cfg, m.redactor
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "checking which connections to approve"
+	m.busy = tr(tBusyApprovalCheck)
 	return func() tea.Msg {
 		res := manage.ApproveAfterChange(context.Background(), v, before, cfg, direct,
 			manage.ApprovalSweepNewlyOpened)
@@ -453,21 +447,17 @@ func approvalNote(res manage.ApprovalResult, redactor *redact.Redactor) string {
 	note := ""
 	if res.StayedOpen != "" && res.ForwardChanged {
 		// A release of payload secrets is a decision of its own, never approved in passing.
-		note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
-			"%s releases", res.StayedOpen, sectionApprovals.ref())
+		note = tr(tApprovalForwardOpen, res.StayedOpen, sectionApprovals.ref())
 	} else if res.StayedOpen != "" {
-		note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
-			"review it in %s", res.StayedOpen, sectionApprovals.ref())
+		note = tr(tApprovalOutsideOpen, res.StayedOpen, sectionApprovals.ref())
 	}
 	switch {
 	case res.ApproveErr != nil:
-		return note + "; warning: no connection was approved to read from the vault: " +
-			redactor.Apply(res.ApproveErr.Error())
+		return note + tr(tNoteApproveFailed, redactor.Apply(res.ApproveErr.Error()))
 	case res.Warning != "":
-		return note + "; warning: " + res.Warning
+		return note + tr(tNoteWarning, res.Warning)
 	case len(res.Approved) > 0:
-		return note + fmt.Sprintf("; approved %d connection(s) to read from the vault: %s",
-			len(res.Approved), strings.Join(res.Approved, ", "))
+		return note + tr(tNoteApproved, len(res.Approved), strings.Join(res.Approved, ", "))
 	}
 	return note
 }
@@ -484,7 +474,7 @@ func (m *Model) revokeApproval(name string) tea.Cmd {
 	redactor := m.redactor
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "removing the approval of " + name
+	m.busy = tr(tBusyRemovingApproval, name)
 	return func() tea.Msg {
 		_, warning, err := approval.Revoke(context.Background(), v, []string{name})
 		switch {
@@ -492,10 +482,9 @@ func (m *Model) revokeApproval(name string) tea.Cmd {
 			if errors.Is(err, vault.ErrNotEncrypted) || errors.Is(err, vault.ErrNotUnlocked) {
 				return approvalSweepMsg{}
 			}
-			return approvalSweepMsg{note: "; warning: the approval of " + name + " could not be removed: " +
-				redactor.Apply(err.Error())}
+			return approvalSweepMsg{note: tr(tNoteRevokeFailed, name, redactor.Apply(err.Error()))}
 		case warning != "":
-			return approvalSweepMsg{note: "; warning: " + warning}
+			return approvalSweepMsg{note: tr(tNoteWarning, warning)}
 		}
 		return approvalSweepMsg{}
 	}
@@ -573,11 +562,11 @@ func (m *Model) approvalOriginLines(name string) []string {
 		return nil
 	}
 	if !m.approvalOriginReady {
-		return []string{fmt.Sprintf("%-11s looking it up in the log...", "source")}
+		return []string{fmt.Sprintf("%-11s %s", tr(tApprovalSource), tr(tApprovalLookingUp))}
 	}
-	lines := []string{fmt.Sprintf("%-11s %s", "source", m.logText(m.approvalOrigin.Text()))}
+	lines := []string{fmt.Sprintf("%-11s %s", tr(tApprovalSource), m.logText(m.approvalOrigin.Text()))}
 	if m.approvalOrigin.Source == approval.OriginOutside {
-		lines = append(lines, fmt.Sprintf("%-11s an agent or another program may have edited the file", ""))
+		lines = append(lines, fmt.Sprintf("%-11s %s", "", tr(tApprovalOutsideEdit)))
 	}
 	return lines
 }

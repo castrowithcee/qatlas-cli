@@ -2,7 +2,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"maps"
 	"path/filepath"
@@ -44,21 +43,18 @@ const (
 )
 
 // exportModeRows are the answers of the mode step, in the order of exportKind.
-var exportModeRows = []string{
-	"without secrets",
-	"with secrets, encrypted with an export passphrase",
-	"with secrets, unencrypted (plain text)",
+func exportModeRows() []string {
+	return []string{tr(tExportModeNone), tr(tExportModeEncrypted), tr(tExportModePlain)}
 }
 
 const (
-	exportAll       = "all"
-	exportDefaults  = "defaults"
-	exportNotes     = "notes"
-	exportConnPref  = "connection:"
-	exportSvcPref   = "service:"
-	exportCredPref  = "credential:"
-	exportFileName  = "qatlas-export.yaml"
-	exportVaultLock = "the vault is locked; unlock it with ctrl+l and export again"
+	exportAll      = "all"
+	exportDefaults = "defaults"
+	exportNotes    = "notes"
+	exportConnPref = "connection:"
+	exportSvcPref  = "service:"
+	exportCredPref = "credential:"
+	exportFileName = "qatlas-export.yaml"
 )
 
 // exportState is the export in progress, while screenTransfer shows it.
@@ -99,7 +95,7 @@ type exportDoneMsg struct {
 func (m *Model) askExport() tea.Cmd {
 	if work := m.updateBlocker(); work != "" {
 		m.clearMessages()
-		m.status = "Wait until " + work + " finishes, then run export again."
+		m.status = tr(tExportWait, work)
 		return nil
 	}
 	return m.requireAdmin(func() tea.Cmd { m.openExport(); return nil })
@@ -130,17 +126,20 @@ func (m *Model) openExport() {
 func (m *Model) exportRowText(key string) string {
 	switch key {
 	case exportAll:
-		return "everything: every service, credential, and connection"
+		return tr(tExportRowAll)
 	case exportDefaults:
-		return "defaults that name an exported connection"
+		return tr(tExportRowDefaults)
 	case exportNotes:
-		return "provider notes"
+		return tr(tExportRowNotes)
 	}
-	for _, p := range []struct{ prefix, label string }{
-		{exportConnPref, "connection  "}, {exportSvcPref, "service     "}, {exportCredPref, "credential  "},
+	for _, p := range []struct {
+		prefix string
+		label  textID
+	}{
+		{exportConnPref, tExportKindConnection}, {exportSvcPref, tExportKindService}, {exportCredPref, tExportKindCredential},
 	} {
 		if name, ok := strings.CutPrefix(key, p.prefix); ok {
-			return p.label + m.redactor.Apply(name)
+			return tr(p.label) + m.redactor.Apply(name)
 		}
 	}
 	return key
@@ -185,7 +184,7 @@ func (m *Model) closeExport() {
 // cancelExport ends the export without a file.
 func (m *Model) cancelExport() {
 	m.closeExport()
-	m.status = "Cancelled; nothing was exported"
+	m.status = tr(tExportCancelled)
 }
 
 // secretsUnavailable is why an export with secrets is not possible now, or "".
@@ -193,9 +192,9 @@ func (m *Model) secretsUnavailable() string {
 	required, _, err := manage.AdminRequired(m.secrets.Vault())
 	switch {
 	case err != nil:
-		return "the vault state cannot be read: " + m.redactor.Apply(err.Error())
+		return tr(tExportStateUnreadable, m.redactor.Apply(err.Error()))
 	case !required:
-		return "the vault has no passphrase, so there is no admin session to export secrets under"
+		return tr(tExportNoPassphrase)
 	}
 	return ""
 }
@@ -252,7 +251,7 @@ func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
 		case "enter":
 			path := e.target
 			m.closeExport()
-			m.status = "Exported to " + m.redactor.Apply(path)
+			m.status = tr(tExported, m.redactor.Apply(path))
 		default:
 			e.scroll(key.String(), m.height)
 		}
@@ -300,7 +299,7 @@ func (m *Model) updateExportSelect(key tea.KeyMsg) tea.Cmd {
 		sel := e.selection()
 		if !sel.All && !sel.Defaults && !sel.ProviderNotes &&
 			len(sel.Connections)+len(sel.Services)+len(sel.Credentials) == 0 {
-			m.fail = "tick what to export first (space)"
+			m.fail = tr(tExportTickFirst)
 			return nil
 		}
 		e.modeCursor = 0
@@ -383,9 +382,9 @@ func (m *Model) updateExportMode(key tea.KeyMsg) tea.Cmd {
 	e := m.export
 	switch key.String() {
 	case "up":
-		e.modeCursor = wrap(e.modeCursor-1, len(exportModeRows))
+		e.modeCursor = wrap(e.modeCursor-1, len(exportModeRows()))
 	case "down":
-		e.modeCursor = wrap(e.modeCursor+1, len(exportModeRows))
+		e.modeCursor = wrap(e.modeCursor+1, len(exportModeRows()))
 	case "enter":
 		m.clearMessages()
 		e.kind = exportKind(e.modeCursor)
@@ -431,12 +430,12 @@ func (m *Model) updateExportPassphrase(key tea.KeyMsg) tea.Cmd {
 	m.clearMessages()
 	switch {
 	case !e.confirming && typed == "":
-		m.fail = "an export passphrase must not be empty"
+		m.fail = tr(tExportPassEmpty)
 	case !e.confirming:
 		e.first, e.confirming = typed, true
 	case typed != e.first:
 		e.first, e.confirming = "", false
-		m.fail = "the two passphrases did not match; type the passphrase again"
+		m.fail = tr(tPassphraseMismatch)
 	default:
 		e.passphrase, e.first, e.confirming = typed, "", false
 		m.askExportTarget()
@@ -467,7 +466,7 @@ func (m *Model) updateExportTarget(key tea.KeyMsg) tea.Cmd {
 	}
 	path := strings.TrimSpace(e.input.Value())
 	if path == "" {
-		m.fail = "name the file to write"
+		m.fail = tr(tExportNameFile)
 		return nil
 	}
 	path = absolutePath(path)
@@ -492,7 +491,7 @@ func (m *Model) runExport() tea.Cmd {
 		return nil
 	}
 	e.writing = true
-	m.busy = "writing the export"
+	m.busy = tr(tBusyExporting)
 	kind, sel, path, svc := e.kind, e.selection(), e.target, m.svc
 	if kind != exportWithout {
 		m.vaultBusy = true
@@ -508,7 +507,7 @@ func (m *Model) runExport() tea.Cmd {
 			return exportDoneMsg{res: res, err: err, path: path}
 		}
 		opts := manage.SecretExport{
-			VaultPassphrase: func(string) (string, error) { return "", errors.New(exportVaultLock) },
+			VaultPassphrase: func(string) (string, error) { return "", errors.New(tr(tExportVaultLock)) },
 		}
 		if kind == exportUnencrypted {
 			opts.Unencrypted = true
@@ -544,7 +543,7 @@ func (m *Model) handleExportDone(msg exportDoneMsg) tea.Cmd {
 // exportError words a refused export; the core never replaces a file.
 func (m *Model) exportError(err error, path string) string {
 	if errors.Is(err, fs.ErrExist) {
-		return m.redactor.Apply(path) + " already exists; export never replaces a file, choose another name"
+		return tr(tExportExists, m.redactor.Apply(path))
 	}
 	return m.redactor.Apply(err.Error())
 }
@@ -556,54 +555,52 @@ func (m *Model) exportLines(res *manage.ExportResult, preview bool) []string {
 	apply := m.redactor.Apply
 	names := func(list []string) string { return apply(strings.Join(list, ", ")) }
 	var lines []string
-	lines = append(lines, "file      "+apply(e.target))
+	lines = append(lines, tr(tExLineFile, apply(e.target)))
 	switch {
 	case e.kind == exportWithout:
-		lines = append(lines, "secrets   none")
+		lines = append(lines, tr(tExLineSecretsNone))
 	case preview && e.kind == exportEncrypted:
-		lines = append(lines, "secrets   included, encrypted with the export passphrase")
+		lines = append(lines, tr(tExLineSecretsEncPreview))
 	case preview:
-		lines = append(lines, "warning   secrets are included in plain text: anyone who can read the file can use them")
+		lines = append(lines, tr(tExLineWarnPlain))
 	case res.Encrypted:
-		lines = append(lines, "secrets   encrypted with the export passphrase")
+		lines = append(lines, tr(tExLineSecretsEnc))
 	}
 	for _, line := range []struct {
-		label string
+		label textID
 		names []string
 	}{
-		{"services", res.Services}, {"credentials", res.Credentials}, {"connections", res.Connections},
-		{"defaults", res.Defaults}, {"notes", res.ProviderNotes},
+		{tExLineServices, res.Services}, {tExLineCredentials, res.Credentials}, {tExLineConnections, res.Connections},
+		{tExLineDefaults, res.Defaults}, {tExLineNotes, res.ProviderNotes},
 	} {
 		if len(line.names) > 0 {
-			lines = append(lines, fmt.Sprintf("%-9s %s", line.label, names(line.names)))
+			lines = append(lines, tr(line.label, names(line.names)))
 		}
 	}
 	for _, dep := range res.Dependencies {
-		lines = append(lines, fmt.Sprintf("needed    %s %s, for %s", dep.Kind, apply(dep.Name), names(dep.For)))
+		lines = append(lines, tr(tExLineNeeded, dep.Kind, apply(dep.Name), names(dep.For)))
 	}
 	if len(res.DefaultsOmitted) > 0 {
-		lines = append(lines, "left out  defaults "+names(res.DefaultsOmitted)+": their connection is not exported")
+		lines = append(lines, tr(tExLineLeftOut, names(res.DefaultsOmitted)))
 	}
 	if len(res.SecretsNotIncluded) > 0 {
 		switch {
 		case preview && e.kind != exportWithout:
-			lines = append(lines, "reads     the secrets of "+names(res.SecretsNotIncluded)+
-				" from the keyring or the vault; the result lists what was found")
+			lines = append(lines, tr(tExLineReads, names(res.SecretsNotIncluded)))
 		case e.kind != exportWithout:
-			lines = append(lines, "without   "+names(res.SecretsNotIncluded)+": no secret in the file")
+			lines = append(lines, tr(tExLineWithoutNone, names(res.SecretsNotIncluded)))
 		default:
-			lines = append(lines, "without   "+names(res.SecretsNotIncluded)+
-				": set them in the target with 'qatlas credential set'")
+			lines = append(lines, tr(tExLineWithoutSet, names(res.SecretsNotIncluded)))
 		}
 	}
 	for _, s := range res.SecretsIncluded {
-		lines = append(lines, "secret    "+apply(s.Credential)+": "+apply(strings.Join(s.Roles, ", ")))
+		lines = append(lines, tr(tExLineSecret, apply(s.Credential), apply(strings.Join(s.Roles, ", "))))
 	}
 	if len(res.SecretsMissing) > 0 {
-		lines = append(lines, "missing   "+names(res.SecretsMissing)+": asked for, but not stored")
+		lines = append(lines, tr(tExLineMissing, names(res.SecretsMissing)))
 	}
 	for _, w := range res.Warnings {
-		lines = append(lines, "warning   "+apply(w))
+		lines = append(lines, tr(tExLineWarning, apply(w)))
 	}
 	return lines
 }
@@ -626,10 +623,10 @@ func (m *Model) exportRow(i int) string {
 }
 
 func (m *Model) exportSelectFrame() (string, string) {
-	head := m.wrapped(styles.title, "Export: what to take") + "\n" +
-		m.wrapped(styles.hint, "a connection brings its service and credentials") + "\n"
+	head := m.wrapped(styles.title, tr(tExportSelectTitle)) + "\n" +
+		m.wrapped(styles.hint, tr(tExportSelectHint)) + "\n"
 	if m.export.marks[exportAll] {
-		head += m.wrapped(styles.hint, "everything is ticked: the single entries are not needed") + "\n"
+		head += m.wrapped(styles.hint, tr(tExportAllTicked)) + "\n"
 	}
 	head += "\n"
 	return head, "\n" + m.keyHint("up/down move · space tick · {save} or enter next · {back} cancel · {command} cmds · {help} help") + m.notes()
@@ -671,12 +668,12 @@ func (m *Model) exportView() string {
 	case exportMode:
 		reason := e.secretsReason
 		var b strings.Builder
-		b.WriteString(m.wrapped(styles.title, "Export: secrets") + "\n\n")
-		for i, row := range exportModeRows {
+		b.WriteString(m.wrapped(styles.title, tr(tExportSecretsTitle)) + "\n\n")
+		for i, row := range exportModeRows() {
 			text := row
 			blocked := i > 0 && reason != ""
 			if blocked {
-				text += " (not possible)"
+				text += tr(tExportNotPossible)
 			}
 			line := m.listRow(i == e.modeCursor, truncateCells(text, m.usable(2)))
 			if blocked && i != e.modeCursor {
@@ -687,21 +684,20 @@ func (m *Model) exportView() string {
 		if reason != "" {
 			b.WriteString("\n" + m.indented(reason) + "\n")
 		} else {
-			b.WriteString("\n" + m.indented("secrets are read under the admin session, never shown") + "\n")
+			b.WriteString("\n" + m.indented(tr(tExportSecretsNote)) + "\n")
 		}
 		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
 	case exportPlainConfirm:
-		return m.wrapped(styles.title, "Write the secrets unencrypted?") + "\n\n" +
-			m.indentedWith(styles.warning, "warning: the file then holds every included secret in plain text; anyone "+
-				"who can read the file can use them. Delete it once it is imported.") + "\n" +
+		return m.wrapped(styles.title, tr(tExportPlainTitle)) + "\n\n" +
+			m.indentedWith(styles.warning, tr(tExportPlainWarn)) + "\n" +
 			m.keyHint("y write unencrypted · n/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
 	}
-	title, question, keys := "Export preview", "Nothing is written until you confirm.", "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
+	title, question, keys := tr(tExportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
 	if e.step == exportResult {
-		title, question, keys = "Export written", "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
+		title, question, keys = tr(tExportWrittenTitle), "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
 	}
 	if e.writing {
-		keys = "writing, please wait"
+		keys = tr(tWorkWritingWait)
 	}
 	return m.linesView(title, question, keys, e.lines, &e.offset)
 }
@@ -715,24 +711,29 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 	switch e.step {
 	case exportPassphrase:
 		d := promptDialog{
-			title: "Export passphrase",
+			title: tr(tExportPassTitle),
 			input: m.inputLine("  ", e.input.Model),
-			hint:  "protects the file; not the vault passphrase; type it twice",
+			hint:  tr(tExportPassHint),
 			keys:  "{save} or enter ok · {back} back, nothing written",
 		}
 		if e.confirming {
-			d.title, d.hint = "Confirm the export passphrase", "type it again to confirm it"
+			d.title, d.hint = tr(tExportPassConfirmTitle), tr(tVaultConfirmHint)
 		}
 		return d, true
 	case exportTarget:
 		return promptDialog{
-			title: "Export: file",
+			title: tr(tExportFileTitle),
 			input: m.pathLines("  ", &e.input),
-			hint:  "the file to write; an existing file is never replaced",
+			hint:  tr(tExportFileHint),
 			keys:  pathKeys(&e.input, "{save} or enter preview · {back} back"),
 		}, true
 	}
 	return promptDialog{}, false
+}
+
+// isWarningLine reports whether a line of a preview or result is a warning, which the label of the line says.
+func isWarningLine(line string) bool {
+	return strings.HasPrefix(line, strings.Fields(tr(tExLineWarning))[0])
 }
 
 // linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, between a title
@@ -747,7 +748,7 @@ func (m *Model) linesView(title, question, keys string, lines []string, offset *
 	var body []string
 	for _, line := range lines {
 		style := styles.hint
-		if strings.HasPrefix(line, "warning") {
+		if isWarningLine(line) {
 			style = styles.warning
 		}
 		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
@@ -763,9 +764,9 @@ func (m *Model) exportLeaveView() string {
 	if m.export != nil && m.export.step == exportPreview {
 		save = "{save} write"
 	}
-	title, discard, why := "Leave the export?", "d discard", "Leaving drops the ticks and every answer, a typed passphrase included."
+	title, discard, why := tr(tExportLeaveTitle), "d discard", tr(tExportLeaveWhy)
 	if m.leaveQuit {
-		title, discard, why = "Quit and drop the export?", "d discard and quit", "Quitting would drop them."
+		title, discard, why = tr(tExportQuitTitle), "d discard and quit", tr(tTransferQuitWhy)
 	}
 	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
 	if m.export != nil && m.export.step == exportPlainConfirm {
@@ -773,7 +774,7 @@ func (m *Model) exportLeaveView() string {
 		keys = discard + " · {back} keep editing · {command} cmds · {help} help"
 	}
 	return m.questionText(question{title: title, consequence: why,
-		details: []string{m.indentedWith(styles.warning, "warning: the export is not finished"),
-			m.indented("Nothing was written.")},
+		details: []string{m.indentedWith(styles.warning, tr(tExportLeaveWarn)),
+			m.indented(tr(tTransferNothingWritten))},
 		keys: keys})
 }

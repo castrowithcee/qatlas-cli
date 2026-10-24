@@ -23,6 +23,7 @@ func labelID(english string) textID       { return textID("label." + english) }
 func valueID(label, choice string) textID { return textID("value." + label + "." + choice) }
 func footerID(group string) textID        { return textID("footer." + group) }
 func termID(id string) textID             { return textID(id) }
+func columnID(title string) textID        { return textID("column." + title) }
 func termTitleID(id string) textID        { return textID(id + ".title") }
 
 var catalogs = i18n.Catalogs[textID]{i18n.English: textEN, i18n.German: textDE}
@@ -103,3 +104,15 @@ func footerText(text string) string {
 // termText is the explanation of a term, and termName its title.
 func termText(t helptopics.Term) string { return trOr(termID(t.ID), t.Text) }
 func termName(t helptopics.Term) string { return trOr(termTitleID(t.ID), t.Title) }
+
+// columnText is how a column title of a list is drawn.
+func columnText(title string) string { return trOr(columnID(title), title) }
+
+// kindText is the kind of a renamed entry ("service", "credential", "connection") as the sentence of the
+// editor's language wants it: the German nouns are capitalised.
+func kindText(kind string) string {
+	if uiLang == i18n.English || kind == "" {
+		return kind
+	}
+	return strings.ToUpper(kind[:1]) + kind[1:]
+}

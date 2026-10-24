@@ -253,8 +253,6 @@ const providerNoteLabel = "provider note"
 const (
 	nameHint      = "a key you choose, without spaces"
 	nameDetail    = "a key you choose, without spaces; connections and --connection refer to it"
-	domainHint    = "a key you choose, without spaces"
-	domainDetail  = "a key you choose, without spaces; commands look up this default by it"
 	baseURLHint   = "root url, http or https, without /api"
 	baseURLDetail = "the root url of the instance, with scheme http or https and without /api"
 	// envHint is said once for all role rows and speaks of all of them: they are the same kind of row, so
@@ -1280,13 +1278,12 @@ func (m *Model) newEntryBlockedFor(s section) string {
 	switch s {
 	case sectionDefaults:
 		if len(m.cfg.Connections) == 0 {
-			return "Create a connection before choosing a default. Press 2 to open Connections, or c for " +
-				"the guided setup."
+			return tr(tDefaultsNeedConnection)
 		}
 	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
 		return tr(tSettingsNotList, m.section.title())
 	case sectionApprovals:
-		return "Approvals lists connections automatically; there is nothing to add by hand."
+		return tr(tApprovalsNothingToAdd)
 	case sectionTokens:
 		return m.tokensBlocked()
 	case sectionLogs:
@@ -2938,7 +2935,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 	}
 	key := textField("name", shown, edit != "").withHint(nameHint).withDetail(nameDetail)
 	if m.section == sectionDefaults {
-		key.label, key.hint, key.detail = "domain", domainHint, domainDetail
+		key.label, key.hint, key.detail = "domain", domainHint(), tr(tDomainDetail)
 	}
 	if key.readOnly {
 		// A locked field must not go on describing a free choice: that hint would claim the opposite of
@@ -3733,8 +3730,14 @@ func (m *Model) editorView() string {
 			noun = "payload secret"
 		}
 		what := "New " + noun
+		switch {
+		case m.section == sectionTokens && m.copyFrom == "":
+			what = tr(tFormNewToken)
+		case m.section == sectionDefaults && m.copyFrom == "":
+			what = tr(tFormNewDefault)
+		}
 		if m.editing != "" {
-			what = "Edit " + m.editing
+			what = tr(tFormEdit, m.editing)
 		} else if m.copyFrom != "" {
 			what += ", from " + m.copyFrom
 			if m.termWidth < narrowWidth {
@@ -4549,9 +4552,9 @@ func (m *Model) emptyHelp() string {
 		return "No connections yet. Press n for the guided setup: it picks or adds the service and credential."
 	case sectionDefaults:
 		if reason := m.newEntryBlocked(); reason != "" {
-			return reason + " Defaults are optional."
+			return reason + tr(tDefaultsOptional)
 		}
-		return "No default yet. Press n to choose one, or leave this empty and select connections explicitly."
+		return tr(tDefaultsEmpty)
 	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
 		return tr(tSettingsNotListShort)
 	case sectionApprovals:
@@ -4559,7 +4562,7 @@ func (m *Model) emptyHelp() string {
 		if unavailable != "" {
 			return unavailable
 		}
-		return "No open approvals."
+		return tr(tApprovalsNoneOpen)
 	case sectionTokens:
 		if _, unavailable := m.tokensReport(); unavailable != "" {
 			return unavailable
@@ -4567,7 +4570,7 @@ func (m *Model) emptyHelp() string {
 		if reason := m.tokensBlocked(); reason != "" {
 			return reason
 		}
-		return "No agent tokens yet. Press n to create one with one or more connections as its vorbilder."
+		return tr(tTokensEmpty)
 	}
 	return "Nothing configured yet."
 }
@@ -4700,6 +4703,9 @@ func (m *Model) testLine() string {
 	return ""
 }
 
+// domainHint is the hint of the key row of a default.
+func domainHint() string { return tr(tDomainHint) }
+
 // sectionColumns are the columns of the list of each section. The name leads, the free text of a section
 // is the first to give way, and a column that only adds detail to the others may be left out of a narrow
 // terminal.
@@ -4718,7 +4724,11 @@ var sectionColumns = map[section][]column{
 
 // listTable is the table of every entry of the section, filtered out or not.
 func (m *Model) listTable() table {
-	t := table{columns: sectionColumns[m.section], rows: map[string][]string{}}
+	columns := slices.Clone(sectionColumns[m.section])
+	for i := range columns {
+		columns[i].title = columnText(columns[i].title)
+	}
+	t := table{columns: columns, rows: map[string][]string{}}
 	for _, name := range m.list.all {
 		if !isGroupRow(name) {
 			t.rows[name] = m.cells(name)

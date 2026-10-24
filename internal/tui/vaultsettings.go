@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,28 +19,20 @@ const (
 	vaultActionDecrypt    = "decrypt"
 )
 
-const (
-	updateBehaviourLabel  = "update behaviour"
-	updateBehaviourHint   = "handover or lock on 'qatlas update'"
-	updateBehaviourDetail = "whether 'qatlas update' hands an unlocked vault over to the new program " +
-		"(handover) or locks it (lock); left/right change it, F2 saves it into the encrypted vault"
-)
+const updateBehaviourLabel = "update behaviour"
 
-// Hints of the two vault settings rows every state offers.
-const (
-	vaultIdleTimeoutHint   = "idle time before the vault locks; empty = 12h"
-	vaultIdleTimeoutDetail = "how long a vault process that holds the vault unlocked does so without a read " +
-		"before it locks itself, as a Go duration such as \"12h\" or \"30m\"; empty means 12h"
-	// vaultAdminTimeoutHint says what this window's own admin session actually does with the value (see
-	// requireAdmin in admin.go): the editor always opens read-only, and the first managing action of this
-	// window asks for the vault's passphrase, masked, and keeps this window alone in admin mode for this
-	// long without a key press before it asks again.
-	vaultAdminTimeoutHint   = "idle time of this window's admin session; empty = 10m"
-	vaultAdminTimeoutDetail = "how long this window's own admin session (see the first managing action of a " +
-		"run) stays open without a key press before it asks for the vault's passphrase again; other windows " +
-		"are unaffected. A Go duration such as \"10m\", or \"0\" to ask for the passphrase on every change; " +
-		"empty means 10m"
-)
+// vaultActionDone is the status line once an action finished without error.
+func vaultActionDone(action string) string {
+	switch action {
+	case vaultActionEncrypt:
+		return tr(tVaultDoneEncrypt)
+	case vaultActionPassphrase:
+		return tr(tVaultDonePassphrase)
+	case vaultActionDecrypt:
+		return tr(tVaultDoneDecrypt)
+	}
+	return ""
+}
 
 // vaultActionMsg carries the outcome of Encrypt, ChangePassphrase, or Decrypt back into the event loop.
 // procNote is set only for ChangePassphrase and Decrypt, which lock a running vault process first (see
@@ -51,13 +42,6 @@ type vaultActionMsg struct {
 	action   string
 	err      error
 	procNote string
-}
-
-// vaultActionDone is the status line once an action finished without error.
-var vaultActionDone = map[string]string{
-	vaultActionEncrypt:    "The vault is encrypted",
-	vaultActionPassphrase: "The vault's passphrase is changed",
-	vaultActionDecrypt:    "The vault is decrypted; every secret it holds is now stored unencrypted",
 }
 
 // openVaultForm opens the vault section: a settings form without a list, over the vault's own state, built
@@ -81,28 +65,21 @@ func (m *Model) vaultFields() []field {
 
 	switch m.vaultState() {
 	case vault.StateUnencrypted:
-		fields = append(fields, vaultActionField(vaultActionEncrypt, "encrypt", "enter turns encryption on",
-			"enter turns encryption on: a new passphrase, typed masked and twice"))
+		fields = append(fields, vaultActionField(vaultActionEncrypt, "encrypt", tr(tVaultEncryptHint), tr(tVaultEncryptDetail)))
 	case vault.StateLocked, vault.StateUnlocked:
 		fields = append(fields,
-			vaultActionField(vaultActionPassphrase, "change passphrase", "enter changes the passphrase",
-				"enter changes the passphrase: the current one once, then a new one typed masked and twice"),
-			vaultActionField(vaultActionDecrypt, "turn off encryption", "enter turns encryption off",
-				"enter turns encryption off: the current passphrase, then an explicit confirmation; every "+
-					"secret is then stored unencrypted"))
+			vaultActionField(vaultActionPassphrase, "change passphrase", tr(tVaultPassphraseHint), tr(tVaultPassphraseDetail)),
+			vaultActionField(vaultActionDecrypt, "turn off encryption", tr(tVaultDecryptHint), tr(tVaultDecryptDetail)))
 	}
 
 	if len(m.legacyEntries()) > 0 {
-		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml", "enter previews, then migrates",
-			"enter shows every entry of the plaintext credentials.yaml left over from an earlier version, "+
-				"credential and role names only, before carrying it into the vault, and offers to delete the "+
-				"file once that is confirmed"))
+		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml", tr(tVaultMigrateHint), tr(tVaultMigrateDetail)))
 	}
 
 	fields = append(fields, m.updateBehaviourField())
 	fields = append(fields,
-		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint).withDetail(vaultIdleTimeoutDetail),
-		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint).withDetail(vaultAdminTimeoutDetail),
+		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(tr(tVaultIdleHint)).withDetail(tr(tVaultIdleDetail)),
+		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(tr(tVaultAdminHint)).withDetail(tr(tVaultAdminDetail)),
 	)
 	return fields
 }
@@ -124,19 +101,18 @@ func (m *Model) updateBehaviourField() field {
 		m.handoverShown = string(behaviour)
 		f := choiceField(updateBehaviourLabel, []string{string(vault.UpdateHandover), string(vault.UpdateLock)},
 			string(behaviour))
-		f.hint, f.detail = updateBehaviourHint, updateBehaviourDetail
+		f.hint, f.detail = tr(tUpdateBehaviourHint), tr(tUpdateBehaviourDetail)
 		if err != nil {
-			f.hint = "settings.age is not understood; updates lock the vault"
-			f.detail = "settings.age was not written by this vault or is not understood, so updates lock the " +
-				"vault; saving a value replaces it. " + updateBehaviourDetail
+			f.hint = tr(tUpdateBehaviourUntrustedHint)
+			f.detail = tr(tUpdateBehaviourUntrustedDetail, tr(tUpdateBehaviourDetail))
 		}
 		return f
 	case vault.StateLocked:
-		reason = "the vault is locked; ctrl+l unlocks it"
+		reason = tr(tVaultLockedUnlockKey)
 	default:
-		reason = "needs a vault with a passphrase"
+		reason = tr(tVaultNeedsPassphrase)
 	}
-	return textField(updateBehaviourLabel, "not available", true).withHint(reason)
+	return textField(updateBehaviourLabel, tr(tNotAvailable), true).withHint(reason)
 }
 
 // vaultActionField is one action row of the vault form: it runs at once on enter, never deferred to F2.
@@ -162,7 +138,7 @@ func (m *Model) vaultState() vault.State {
 func (m *Model) vaultStateText() string {
 	v := m.secrets.Vault()
 	if v == nil {
-		return "no vault is configured for this run"
+		return tr(tVaultNone)
 	}
 	state, err := v.State()
 	if err != nil {
@@ -170,13 +146,13 @@ func (m *Model) vaultStateText() string {
 	}
 	switch state {
 	case vault.StateAbsent:
-		return "no vault yet; it is created automatically the first time a secret is stored in it"
+		return tr(tVaultStateNone)
 	case vault.StateUnencrypted:
-		return "unencrypted"
+		return tr(tVaultStateUnencrypted)
 	case vault.StateLocked:
-		return "encrypted, locked"
+		return tr(tVaultStateLocked)
 	case vault.StateUnlocked:
-		return "encrypted, unlocked"
+		return tr(tVaultStateUnlocked)
 	}
 	return string(state)
 }
@@ -191,7 +167,7 @@ func (m *Model) vaultStateWarning() string {
 	if state, err := v.State(); err != nil || state != vault.StateUnencrypted {
 		return ""
 	}
-	return "the vault is unencrypted: no passphrase was set when its first secret was stored"
+	return tr(tVaultStateWarning)
 }
 
 // saveVault saves the update behaviour into the vault when its row was moved, and vault.idle_timeout and
@@ -213,7 +189,7 @@ func (m *Model) saveVault() tea.Cmd {
 		if !timeoutsChanged {
 			// Only the vault changed; config.yaml stays exactly as it is.
 			m.clearMessages()
-			m.status = "Saved"
+			m.status = tr(tSaved)
 			return m.openVaultForm()
 		}
 	}
@@ -229,7 +205,7 @@ func (m *Model) saveVault() tea.Cmd {
 	// openVaultForm never clears status or fail on its own (see its comment), so a fail left over from an
 	// earlier, refused attempt on this same form has to be cleared here before it is replaced with success.
 	m.clearMessages()
-	m.status = "Saved"
+	m.status = tr(tSaved)
 	return m.openVaultForm()
 }
 
@@ -241,7 +217,7 @@ func (m *Model) runVaultActionField(action string) tea.Cmd {
 	if m.vaultBusy {
 		// A vault write, or the prompt that may lead to one, is already in flight: starting a second one
 		// here would race it over the same files.
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	switch action {
@@ -260,15 +236,15 @@ func (m *Model) runVaultActionField(action string) tea.Cmd {
 // cancelVaultPrompt is the cancel callback every vault settings prompt shares: back to the form, unchanged.
 func (m *Model) cancelVaultPrompt() tea.Cmd {
 	m.screen = screenForm
-	m.status = "Cancelled"
+	m.status = tr(tCancelled)
 	return nil
 }
 
 // startVaultEncrypt asks for a new passphrase, typed masked and twice, and turns encryption on with it.
 func (m *Model) startVaultEncrypt() tea.Cmd {
 	m.openVaultOffer(
-		"Set a passphrase for the vault",
-		"typed masked and twice; this switches the vault's encryption on",
+		tr(tVaultEncryptingTitle),
+		tr(tVaultEncryptingHint),
 		false, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			passphrase, _ := offer("")
@@ -283,12 +259,12 @@ func (m *Model) startVaultEncrypt() tea.Cmd {
 func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "encrypting the vault"
+	m.busy = tr(tBusyEncrypting)
 	store := m.store
 	return func() tea.Msg {
 		if err := v.Encrypt(passphrase); err != nil {
@@ -308,17 +284,15 @@ func approveOnEncrypt(store *config.Store, v *vault.Vault) string {
 	res := manage.ApproveOnEncrypt(context.Background(), v, store.Load)
 	switch {
 	case res.ConfigErr != nil:
-		return "warning: no connection was approved to read from the vault, because the configuration " +
-			"cannot be read: " + res.ConfigErr.Error()
+		return tr(tApproveOnEncryptConfigErr, res.ConfigErr.Error())
 	case res.ApproveErr != nil:
-		return "warning: no connection was approved to read from the vault: " + res.ApproveErr.Error()
+		return tr(tApproveOnEncryptErr, res.ApproveErr.Error())
 	case res.Warning != "":
-		return "warning: " + res.Warning
+		return tr(tWarningPrefix, res.Warning)
 	case len(res.Approved) == 0:
 		return ""
 	}
-	return fmt.Sprintf("approved %d connection(s) to read from it: %s", len(res.Approved),
-		strings.Join(res.Approved, ", "))
+	return tr(tApproveOnEncryptDone, len(res.Approved), strings.Join(res.Approved, ", "))
 }
 
 // startVaultChangePassphrase asks for the current passphrase once, verifies it, then chains into asking for
@@ -326,8 +300,8 @@ func approveOnEncrypt(store *config.Store, v *vault.Vault) string {
 // current passphrase is checked before anything else is asked.
 func (m *Model) startVaultChangePassphrase() tea.Cmd {
 	return m.startVaultCurrentPassphrase(
-		"Current vault passphrase",
-		"verified before the new passphrase is asked",
+		tr(tVaultCurrentTitle),
+		tr(tVaultCurrentHintNew),
 		m.startVaultNewPassphrase,
 	)
 }
@@ -367,11 +341,11 @@ func (m *Model) startVaultCurrentPassphrase(title, hint string, next func(string
 func (m *Model) verifyVaultPassphrase(current, title, hint string, next func(string) tea.Cmd) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
-	m.busy = "checking the current vault passphrase"
+	m.busy = tr(tBusyVerifying)
 	return func() tea.Msg {
 		return vaultPassphraseVerifiedMsg{passphrase: current, err: v.VerifyPassphrase(current),
 			title: title, hint: hint, next: next}
@@ -390,7 +364,7 @@ func (m *Model) handleVaultPassphraseVerified(msg vaultPassphraseVerifiedMsg) te
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
 			cmd := m.startVaultCurrentPassphrase(msg.title, msg.hint, msg.next)
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 			return cmd
 		}
 		m.fail = m.redactor.Apply(msg.err.Error())
@@ -402,8 +376,8 @@ func (m *Model) handleVaultPassphraseVerified(msg vaultPassphraseVerifiedMsg) te
 
 func (m *Model) startVaultNewPassphrase(current string) tea.Cmd {
 	m.openVaultOffer(
-		"New vault passphrase",
-		"typed masked and twice",
+		tr(tVaultNewTitle),
+		tr(tVaultNewHint),
 		false, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			newPassphrase, _ := offer("")
@@ -418,12 +392,12 @@ func (m *Model) startVaultNewPassphrase(current string) tea.Cmd {
 func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "changing the vault's passphrase"
+	m.busy = tr(tBusyChangingPassphrase)
 	svc := m.svc
 	return func() tea.Msg {
 		// A passphrase is changed because the old one should no longer open the vault; a vault process
@@ -441,8 +415,8 @@ func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd 
 // why the current passphrase is checked before the confirmation is ever asked.
 func (m *Model) startVaultDecrypt() tea.Cmd {
 	return m.startVaultCurrentPassphrase(
-		"Current vault passphrase",
-		"verified before encryption is switched off",
+		tr(tVaultCurrentTitle),
+		tr(tVaultCurrentHintOff),
 		func(current string) tea.Cmd {
 			m.decryptPassphrase = current
 			m.decryptConfirm = true
@@ -456,12 +430,12 @@ func (m *Model) startVaultDecrypt() tea.Cmd {
 func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "turning the vault's encryption off"
+	m.busy = tr(tBusyDecrypting)
 	svc := m.svc
 	return func() tea.Msg {
 		// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
@@ -486,7 +460,7 @@ func (m *Model) handleVaultAction(msg vaultActionMsg) tea.Cmd {
 
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 		} else {
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
@@ -494,7 +468,7 @@ func (m *Model) handleVaultAction(msg vaultActionMsg) tea.Cmd {
 			m.fail += "; " + msg.procNote
 		}
 	} else {
-		m.status = vaultActionDone[msg.action]
+		m.status = vaultActionDone(msg.action)
 		if msg.procNote != "" {
 			m.status += "; " + msg.procNote
 		}

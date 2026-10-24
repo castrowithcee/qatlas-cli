@@ -8,7 +8,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -54,12 +53,11 @@ func (m *Model) legacyEntries() map[string]map[string]string {
 
 // countNoun is "1 entry" or "2 entries": the small pluraliser package cli keeps of its own, repeated here
 // because the TUI cannot import internal/cli.
-func countNoun(n int, singular, plural string) string {
-	noun := plural
+func countNoun(n int) string {
 	if n == 1 {
-		noun = singular
+		return tr(tEntryOne, n)
 	}
-	return fmt.Sprintf("%d %s", n, noun)
+	return tr(tEntryMany, n)
 }
 
 // sortedCopy returns names sorted, leaving the caller's own slice untouched.
@@ -81,14 +79,14 @@ func sortedCopy(names []string) []string {
 func (m *Model) startVaultMigrate() tea.Cmd {
 	entries := m.legacyEntries()
 	if len(entries) == 0 {
-		m.status = "nothing to migrate: credentials.yaml is missing or empty"
+		m.status = tr(tMigrateNothing)
 		return nil
 	}
 
 	if m.vaultState() == vault.StateLocked {
 		return m.startVaultCurrentPassphrase(
-			"Vault passphrase",
-			"needed to read what the vault already holds before the migration can be planned",
+			tr(tMigratePassphraseTitle),
+			tr(tMigratePassphraseHint),
 			func(current string) tea.Cmd {
 				return m.planVaultMigrate(entries, func(string) (string, error) { return current, nil })
 			},
@@ -111,13 +109,13 @@ type planVaultMigrateMsg struct {
 func (m *Model) planVaultMigrate(entries map[string]map[string]string, readCurrent vault.PassphraseFunc) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		m.screen = screenForm
 		return nil
 	}
 	cfg, secrets := m.cfg, m.secrets
 	m.vaultBusy = true
-	m.busy = "planning the migration"
+	m.busy = tr(tBusyPlanningMigration)
 	m.screen = screenForm
 	return func() tea.Msg {
 		plan, switched, storeUnsureFor, err := vaultmigrate.Plan(cfg, secrets, v, entries, readCurrent)
@@ -133,7 +131,7 @@ func (m *Model) handlePlannedVaultMigrate(msg planVaultMigrateMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 		} else {
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
@@ -164,20 +162,18 @@ func migrateRows(plan []vaultmigrate.Entry) []string {
 func (m *Model) migratePlanView() string {
 	p := m.migrate
 	q := question{
-		title:       "Migrate credentials.yaml?",
-		consequence: countNoun(len(p.plan), "entry", "entries") + " would move into the vault:",
+		title:       tr(tMigrateTitle),
+		consequence: tr(tMigrateMoves, countNoun(len(p.plan))),
 		keys:        "y migrate · n/{back} cancel, nothing is written · {command} cmds · {help} help",
 	}
 	for _, row := range migrateRows(p.plan) {
 		q.details = append(q.details, "    "+row)
 	}
 	if len(p.switched) > 0 {
-		q.details = append(q.details, m.indented(
-			"switching from the system keyring to the vault: "+strings.Join(sortedCopy(p.switched), ", ")))
+		q.details = append(q.details, m.indented(tr(tMigrateSwitching, strings.Join(sortedCopy(p.switched), ", "))))
 	}
 	if len(p.storeUnsureFor) > 0 {
-		q.details = append(q.details, m.indentedWith(styles.warning, "warning: the system keyring could not be checked for "+
-			strings.Join(sortedCopy(p.storeUnsureFor), ", ")))
+		q.details = append(q.details, m.indentedWith(styles.warning, tr(tMigrateKeyringUnsure, strings.Join(sortedCopy(p.storeUnsureFor), ", "))))
 	}
 	return m.questionText(q)
 }
@@ -187,7 +183,7 @@ func (m *Model) migratePlanView() string {
 func (m *Model) beginVaultMigrateWrite() tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		m.migrate, m.screen = nil, screenForm
 		return nil
 	}
@@ -201,8 +197,8 @@ func (m *Model) beginVaultMigrateWrite() tea.Cmd {
 		return m.runVaultMigrateWrite(nil)
 	}
 	m.openVaultOffer(
-		"Set a passphrase for the vault?",
-		vaultFirstSecretHint,
+		tr(tVaultOfferTitle),
+		vaultFirstSecretHint(),
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			m.screen = screenForm
@@ -210,7 +206,7 @@ func (m *Model) beginVaultMigrateWrite() tea.Cmd {
 		},
 		func() tea.Cmd {
 			m.migrate, m.screen = nil, screenForm
-			m.status = "Cancelled; credentials.yaml was not touched"
+			m.status = tr(tMigrateUntouched)
 			return nil
 		},
 	)
@@ -239,7 +235,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	store, svc, previous := m.store, m.svc, m.cfg
 	m.vaultBusy = true
 	m.writes++
-	m.busy = "migrating credentials.yaml into the vault"
+	m.busy = tr(tBusyMigrating)
 	m.screen = screenForm
 	return func() tea.Msg {
 		var warning string
@@ -305,7 +301,7 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 			return form
 		}
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 		} else {
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
@@ -315,18 +311,15 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 	m.adoptSaved(msg.cfg)
 
 	var lines []string
-	lines = append(lines, "migrated "+countNoun(len(p.plan), "entry", "entries")+" into the vault")
+	lines = append(lines, tr(tMigrateDone, countNoun(len(p.plan))))
 	if len(p.switched) > 0 {
-		lines = append(lines,
-			"switched to the vault: "+strings.Join(sortedCopy(p.switched), ", "))
+		lines = append(lines, tr(tMigrateSwitched, strings.Join(sortedCopy(p.switched), ", ")))
 	}
 	if len(p.storeUnsureFor) > 0 {
-		lines = append(lines, "warning: the system keyring could not be checked for "+
-			strings.Join(sortedCopy(p.storeUnsureFor), ", ")+"; only its plaintext credentials.yaml entries "+
-			"were migrated, and a secret held only in the keyring may still be there and is not deleted")
+		lines = append(lines, tr(tMigrateKeyringLong, strings.Join(sortedCopy(p.storeUnsureFor), ", ")))
 	}
 	if msg.warning != "" {
-		lines = append(lines, "warning: "+msg.warning)
+		lines = append(lines, tr(tWarningPrefix, msg.warning))
 	}
 	m.migrateResult = strings.Join(lines, "; ")
 	m.migrate = p
@@ -340,7 +333,7 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 // switched, and any warning, followed by whether to delete credentials.yaml now.
 func (m *Model) migrateResultView() string {
 	return m.questionText(question{
-		title:       "Delete credentials.yaml?",
+		title:       tr(tMigrateDeleteTitle),
 		consequence: m.migrateResult,
 		keys:        "y delete · n/{back} keep the file · {command} cmds · {help} help",
 	})
@@ -359,6 +352,6 @@ func (m *Model) deleteLegacyCredentials() tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return m.openVaultForm()
 	}
-	m.status = result + "; removed " + p.file.Path()
+	m.status = tr(tMigrateRemoved, result, p.file.Path())
 	return m.openVaultForm()
 }
