@@ -81,7 +81,7 @@ func sortedCopy(names []string) []string {
 func (m *Model) startVaultMigrate() tea.Cmd {
 	entries := m.legacyEntries()
 	if len(entries) == 0 {
-		m.status = "nothing to migrate: credentials.yaml does not exist or holds no entry"
+		m.status = "nothing to migrate: credentials.yaml is missing or empty"
 		return nil
 	}
 

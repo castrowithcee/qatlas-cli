@@ -71,13 +71,13 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 			t.Errorf("%s = %q, want %q", label, got, want)
 		}
 	}
-	if hint := m.fieldHint(*m.field(toolListLabel)); !strings.HasSuffix(hint,
+	if hint := m.fieldDetail(*m.field(toolListLabel)); !strings.HasSuffix(hint,
 		"ticked: bookstack.attachments.get, bookstack.attachments.list, bookstack.books.get, bookstack.books.list, bookstack.chapters.get, bookstack.chapters.list, bookstack.comments.get, bookstack.comments.list, bookstack.content.export, bookstack.content.search, bookstack.images.get, bookstack.images.list, bookstack.pages.get, bookstack.pages.list, bookstack.shelves.get, bookstack.shelves.list, bookstack.system.get, bookstack.tags.list, bookstack.tags.values") {
 		t.Errorf("the tool list does not name its ticks: %q", hint)
 	}
 	for _, want := range []string{"not a role", "do not narrow what the credential itself may do",
 		"selects tools bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list, bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list, bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get, bookstack.attachments.list, bookstack.attachments.get, bookstack.images.list, bookstack.images.get, bookstack.system.get, bookstack.content.export (effects read)"} {
-		if hint := m.field(profileLabel).hint; !strings.Contains(hint, want) {
+		if hint := m.fieldDetail(*m.field(profileLabel)); !strings.Contains(hint, want) {
 			t.Errorf("the profile row does not say %q: %q", want, hint)
 		}
 	}
@@ -141,7 +141,8 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 		}
 	}
 	check("send", "telegram.messages.send")
-	if hint := m.field(profileLabel).hint; !strings.Contains(hint, "preselects a change because") {
+	if hint := m.fieldDetail(*m.field(profileLabel)); !strings.Contains(hint, "preselects a change because") ||
+		!strings.Contains(m.field(profileLabel).hint, "preselects a change") {
 		t.Errorf("the recommended change is not explained: %q", hint)
 	}
 

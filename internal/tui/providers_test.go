@@ -106,7 +106,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 					before := m.fieldValue(providerLabel)
 					view := screenOf(m)
 					if !strings.Contains(view, "provider     [ ") || strings.Contains(view, "provider     < ") ||
-						!strings.Contains(view, fmt.Sprintf("enter opens the table of all %d providers", n)) {
+						!strings.Contains(view, fmt.Sprintf("enter opens all %d providers", n)) {
 						t.Fatalf("the provider row does not show that it opens a table:\n%s", view)
 					}
 					press(t, m, "right", "left", "right")
@@ -244,8 +244,8 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 	if m.fieldValue("service") != "notifications" || m.fieldValue("credential") != "bot" {
 		t.Errorf("selected %q + %q, want notifications + bot", m.fieldValue("service"), m.fieldValue("credential"))
 	}
-	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "required for Telegram") {
-		t.Errorf("target hint = %q, want the Telegram rule", hint)
+	if hint := m.field(targetsLabel).detail; !strings.Contains(hint, "required for Telegram") {
+		t.Errorf("target detail = %q, want the Telegram rule", hint)
 	}
 	if got := m.field(effectsLabel).choices; !reflect.DeepEqual(got, m.permissionChoices("telegram")) {
 		t.Errorf("permissions = %v, want those of Telegram", got)

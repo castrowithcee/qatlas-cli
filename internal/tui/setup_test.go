@@ -512,7 +512,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 		view := screenOf(m)
 		assertNoRawStorageTerm(t, "the setup reusing "+credential, view)
 		want := map[string]string{"store": placeKeyring, "vars": placeEnv}[credential]
-		if words := strings.Join(strings.Fields(view), " "); !strings.Contains(words, "("+want+") unchanged") {
+		if words := strings.Join(strings.Fields(m.fieldDetail(m.fields[0])), " "); !strings.Contains(words, "("+want+") unchanged") {
 			t.Errorf("reusing %s does not say %q:\n%s", credential, want, view)
 		}
 		press(t, m, "f2", "f2", "f2")

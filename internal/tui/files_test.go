@@ -126,7 +126,7 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 
 	openConnection(t, m, "wiki")
 	if view := screenOf(m); !strings.Contains(view, "uploads") || !strings.Contains(view, "downloads") ||
-		!strings.Contains(view, "(none: no local files released)") {
+		!strings.Contains(view, "(none released)") {
 		t.Fatalf("the form does not show the two rows and what empty means:\n%s", view)
 	}
 	openFilesList(t, m, filesReadLabel)

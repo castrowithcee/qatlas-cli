@@ -37,39 +37,28 @@ const (
 
 var setupTitles = [setupSteps]string{"Provider", "Service", "Credential", "Scope", "Access", "Summary"}
 
-// setupLeads say in context what a step decides, including the part about scope and rights that is easy to
-// get wrong: local effects and tools narrow what the credential may do, they never widen it.
-var setupLeads = [setupSteps]string{
-	"Choose the system to connect to. The next steps offer only what this provider defines: its services, " +
-		"secret roles, scope and access.",
-	"A service is the API endpoint of one instance and can serve several connections. Reuse a configured " +
-		"one, or add a new one.",
-	"A credential says where the secrets come from; the configuration file never holds a secret. Reuse one " +
-		"of this provider, or add one. Nothing is stored before you save in the last step.",
-	"The connection is what agents and --connection select by name. Its targets narrow it to scopes inside " +
-		"the service; the credential still decides what the provider lets it reach.",
-	"Access limits locally what agents may do through this connection, by effect or by selected tools. It " +
-		"never grants more than the credential is allowed at the provider, and it does not take away what it " +
-		"is allowed there. A new connection starts on the provider's recommended profile; every tick stays " +
-		"yours to change.",
-	"Nothing is written yet. F2 stores the new secrets first and then the configuration; if the " +
-		"configuration cannot be saved, those secrets are removed again.",
-}
+// summaryLead is what the summary step says about itself: it has no fields to focus, so the line stands
+// as its only explanation. The form steps carry their explanation in the hints of their rows.
+const summaryLead = "Nothing is written yet. F2 stores the new secrets first, then the configuration."
 
 const (
-	savedLead = "The connection is saved. t runs the same connection test as the Connections list; " +
-		"esc opens the Connections list."
+	savedLead = "The connection is saved. t tests it; esc opens the Connections list."
 
 	// The choices that add an entry instead of reusing one. A name cannot start with a parenthesis, so
 	// neither can stand for a configured entry.
 	newService    = "(new service)"
 	newCredential = "(new credential)"
 
-	setupProviderHint       = "the system this connection leads to; it decides everything the next steps offer"
-	setupServiceHint        = "reuse a configured instance of this provider, or choose " + newService + " to add one"
-	setupCredentialHint     = "reuse a credential of this provider, or choose " + newCredential + " to add one"
-	maskedHint              = "typed masked and never shown; stored only when you save in the last step"
-	setupConnectionNameHint = "a key you choose, without spaces; agents and --connection select the " +
+	setupProviderHint         = "the system this connection leads to"
+	setupProviderDetail       = "the system this connection leads to; it decides everything the next steps offer"
+	setupServiceHint          = "reuse one, or add " + newService
+	setupServiceDetail        = "reuse a configured instance of this provider, or choose " + newService + " to add one"
+	setupCredentialHint       = "reuse one, or add " + newCredential
+	setupCredentialDetail     = "reuse a credential of this provider, or choose " + newCredential + " to add one"
+	maskedHint                = "typed masked and never shown; stored only when you save in the last step"
+	maskedShortHint           = "masked; stored on the last step"
+	setupConnectionNameHint   = "a key you choose, without spaces"
+	setupConnectionNameDetail = "a key you choose, without spaces; agents and --connection select the " +
 		"connection by it"
 )
 
@@ -170,14 +159,14 @@ func (m *Model) setupPage(step int) []field {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	switch step {
 	case stepProvider:
-		return []field{providerField(m.cfg.Providers(), provider).withHint(setupProviderHint)}
+		return []field{providerField(m.cfg.Providers(), provider).withHint(setupProviderHint).withDetail(setupProviderDetail)}
 	case stepService:
 		// A configured service comes first, so reusing one is what enter does without further choice.
 		services := append(m.providerServices(provider), newService)
 		return []field{
-			choiceField("service", services, services[0]).withHint(setupServiceHint),
-			textField("name", "", false).withHint(nameHint),
-			textField("base url", metadata.DefaultBaseURL, false).withHint(baseURLHint),
+			choiceField("service", services, services[0]).withHint(setupServiceHint).withDetail(setupServiceDetail),
+			textField("name", "", false).withHint(nameHint).withDetail(nameDetail),
+			textField("base url", metadata.DefaultBaseURL, false).withHint(baseURLHint).withDetail(baseURLDetail),
 		}
 	case stepCredential:
 		credentials := append(m.providerCredentials(provider), newCredential)
@@ -186,8 +175,8 @@ func (m *Model) setupPage(step int) []field {
 			storage = storageVault
 		}
 		fields := []field{
-			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint),
-			textField("name", "", false).withHint(nameHint),
+			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint).withDetail(setupCredentialDetail),
+			textField("name", "", false).withHint(nameHint).withDetail(nameDetail),
 			storageField(storage),
 		}
 		// Every role has a masked row and a row for the name of a variable. Only one of them is shown, so
@@ -206,9 +195,9 @@ func (m *Model) setupPage(step int) []field {
 			name = provider
 		}
 		return []field{
-			textField("name", name, false).withHint(setupConnectionNameHint),
-			targetsField(nil).withHint(m.providerTargetHint(provider)),
-			textField("description", "", false).withHint(descriptionHint),
+			textField("name", name, false).withHint(setupConnectionNameHint).withDetail(setupConnectionNameDetail),
+			targetsField(nil).withHint(m.providerTargetHint(provider)).withDetail(m.providerTargetDetail(provider)),
+			textField("description", "", false).withHint(descriptionHint).withDetail(descriptionDetail),
 		}
 	case stepEffects:
 		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}},
@@ -236,9 +225,10 @@ func (m *Model) setupRefresh() {
 		for i := 1; i < len(m.fields); i++ {
 			m.fields[i].hidden = existing
 		}
-		m.fields[0].hint = setupServiceHint
+		m.fields[0].hint, m.fields[0].detail = setupServiceHint, setupServiceDetail
 		if existing {
-			m.fields[0].hint = fmt.Sprintf("reuses %s at %s unchanged; choose %s to add another instance",
+			m.fields[0].hint = "reuses " + chosen + " unchanged"
+			m.fields[0].detail = fmt.Sprintf("reuses %s at %s unchanged; choose %s to add another instance",
 				chosen, m.cfg.Services[chosen].BaseURL, newService)
 		}
 	case stepCredential:
@@ -256,9 +246,10 @@ func (m *Model) setupRefresh() {
 				f.hidden = existing
 			}
 		}
-		m.fields[0].hint = setupCredentialHint
+		m.fields[0].hint, m.fields[0].detail = setupCredentialHint, setupCredentialDetail
 		if existing {
-			m.fields[0].hint = fmt.Sprintf("reuses %s (%s) unchanged, and its secrets where they are; "+
+			m.fields[0].hint = "reuses " + chosen + " unchanged"
+			m.fields[0].detail = fmt.Sprintf("reuses %s (%s) unchanged, and its secrets where they are; "+
 				"choose %s to add one", chosen, m.storagePlace(chosen, m.cfg.Credentials[chosen]), newCredential)
 		}
 	case stepEffects:
@@ -621,7 +612,7 @@ func setupKeys(step int) string {
 func (m *Model) setupHeading(withLead bool) string {
 	w := m.wizard
 	title := fmt.Sprintf("Set up a connection · step %d of %d · %s", w.step+1, setupSteps, setupTitles[w.step])
-	lead := setupLeads[w.step]
+	lead := summaryLead
 	if w.saved != "" {
 		title, lead = "Set up a connection · saved", savedLead
 	}

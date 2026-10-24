@@ -627,8 +627,7 @@ func (m *Model) exportRow(i int) string {
 
 func (m *Model) exportSelectFrame() (string, string) {
 	head := m.wrapped(styles.title, "Export: what to take") + "\n" +
-		m.wrapped(styles.hint, "a connection comes with its service and credentials; agent tokens, approvals, the log, and "+
-			"the vault settings are never exported") + "\n"
+		m.wrapped(styles.hint, "a connection brings its service and credentials") + "\n"
 	if m.export.marks[exportAll] {
 		head += m.wrapped(styles.hint, "everything is ticked: the single entries are not needed") + "\n"
 	}
@@ -688,7 +687,7 @@ func (m *Model) exportView() string {
 		if reason != "" {
 			b.WriteString("\n" + m.indented(reason) + "\n")
 		} else {
-			b.WriteString("\n" + m.indented("the secrets are read under the admin session; their values are never shown") + "\n")
+			b.WriteString("\n" + m.indented("secrets are read under the admin session, never shown") + "\n")
 		}
 		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
 	case exportPlainConfirm:
@@ -718,7 +717,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 		d := promptDialog{
 			title: "Export passphrase",
 			input: m.inputLine("  ", e.input.Model),
-			hint:  "it protects the file, is not the vault passphrase, and is needed to import it; type it twice",
+			hint:  "protects the file; not the vault passphrase; type it twice",
 			keys:  "{save} or enter ok · {back} back, nothing written",
 		}
 		if e.confirming {
@@ -729,7 +728,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 		return promptDialog{
 			title: "Export: file",
 			input: m.pathLines("  ", &e.input),
-			hint:  "the file to write; it is created for you alone and an existing file is never replaced",
+			hint:  "the file to write; an existing file is never replaced",
 			keys:  pathKeys(&e.input, "{save} or enter preview · {back} back"),
 		}, true
 	}
