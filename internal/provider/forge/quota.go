@@ -45,10 +45,7 @@ var quotaRuleMembers = []member{
 }
 
 var quotaInfoMembers = []member{
-	{name: "groups", kind: kindObjects, note: "Quota groups of the account, with their rules", sub: []member{
-		{name: "name", kind: kindText, note: "Name of the group, shown to administrators only"},
-		{name: "rules", kind: kindObjects, note: "Rules of the group", sub: quotaRuleMembers},
-	}},
+	{name: "groups", kind: kindObjects, note: "Quota groups of the account, with their rules", sub: quotaGroupMembers},
 	{name: "used", kind: kindObject, note: "Storage in use, in bytes", sub: []member{
 		{name: "size", kind: kindObject, note: "Sizes by kind", sub: []member{
 			{name: "repos", kind: kindObject, note: "Repositories", sub: []member{

@@ -220,9 +220,7 @@ func openSectionByName(t *testing.T, m *Model, s section) {
 		for i := 0; i < len(areaSections[s.area()]) && m.section != s; i++ {
 			pump(t, m, "right")
 		}
-		if s != sectionVault {
-			pump(t, m, "down")
-		}
+		pump(t, m, "down")
 	}
 	if m.section != s {
 		t.Fatalf("section = %v, want %v", m.section, s)
@@ -395,7 +393,7 @@ func TestNavigation(t *testing.T) {
 	t.Run("left and right wrap in both directions and show each area at once", func(t *testing.T) {
 		m.screen, m.section, m.navSub = screenNav, sectionOverview, false
 		press(t, m, "left")
-		if m.section != sectionVault || m.screen != screenNav {
+		if m.section != sectionGeneral || m.screen != screenNav {
 			t.Errorf("left = section %v screen %v, want Settings on the tab line", m.section, m.screen)
 		}
 		press(t, m, "right")
@@ -466,11 +464,11 @@ func TestNarrowNavigation(t *testing.T) {
 				t.Errorf("footer does not name left/right:\n%s", m.View())
 			}
 			press(t, m, "left")
-			if m.section != sectionVault || m.screen != screenNav {
+			if m.section != sectionGeneral || m.screen != screenNav {
 				t.Fatalf("left at the Overview = section %v screen %v, want Settings (wrapped back)", m.section, m.screen)
 			}
 			for _, key := range []string{"right", "l"} {
-				m.screen, m.section, m.navSub = screenNav, sectionVault, false
+				m.screen, m.section, m.navSub = screenNav, sectionGeneral, false
 				press(t, m, key)
 				if m.section != sectionOverview || m.screen != screenNav {
 					t.Errorf("%q at Settings = section %v screen %v, want the Overview (wrapped forward)",

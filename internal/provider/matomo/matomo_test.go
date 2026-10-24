@@ -242,10 +242,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 3 || len(metadata.Tools) != 3 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 7 || len(metadata.Tools) != 7 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
-	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get"} {
+	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
+		"matomo.reports.describe", "matomo.segments.fields", "matomo.segments.suggest-values"} {
 		if !strings.Contains(strings.Join(profile.Tools, " "), id) {
 			t.Errorf("profile lacks %s", id)
 		}

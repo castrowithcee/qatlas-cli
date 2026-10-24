@@ -13,7 +13,8 @@ updated: 2026-10-24
 # Instance administration
 
 These tools act as an instance administrator on data of the whole instance, not of an owner or repository. They
-hold for Gitea and Forgejo alike unless a line names one product.
+hold for Gitea and Forgejo alike unless a line names one product. Forgejo also administers its quota groups and
+rules; see [Quota administration](../forgejo.md#quota-administration).
 
 | Tool | Effect | Provider |
 | --- | --- | --- |
