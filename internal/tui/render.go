@@ -28,6 +28,17 @@ func (m *Model) boundTo(view string, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
+// boundKeepingKeys is boundTo for a question: when it does not fit, the first line and the last lines stay,
+// so the key line, which ends the question, is never the part that is cut.
+func (m *Model) boundKeepingKeys(view string, width, height int) string {
+	height = max(height, 1)
+	lines := strings.Split(view, "\n")
+	if len(lines) > height {
+		lines = append(lines[:1], lines[len(lines)-height+1:]...)
+	}
+	return m.boundTo(strings.Join(lines, "\n"), width, height)
+}
+
 // truncateLeft keeps the end of text within width and marks the cut at its start.
 func truncateLeft(text string, width int) string {
 	if lipgloss.Width(text) <= width {

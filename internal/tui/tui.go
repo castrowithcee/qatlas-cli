@@ -3461,9 +3461,12 @@ func (m *Model) View() string {
 	}
 	if m.terminalTooSmall() {
 		if m.screen == screenLeave {
-			return m.boundTo(m.leaveView(), m.termWidth, m.termHeight)
+			return m.boundKeepingKeys(m.leaveView(), m.termWidth, m.termHeight)
 		}
 		return m.resizeView()
+	}
+	if view, ok := m.modalView(); ok {
+		return view
 	}
 	return m.frame(m.workspaceView())
 }
@@ -3639,72 +3642,7 @@ func (m *Model) editorView() string {
 	case screenVaultUnlock:
 		b.WriteString(m.vaultUnlockPromptView())
 	case screenConfirm:
-		if m.vaultLockConfirm {
-			b.WriteString(m.vaultLockConfirmView())
-			break
-		}
-		if m.decryptConfirm {
-			b.WriteString(styles.title.Render("Turn the vault's encryption off?") + "\n\n")
-			b.WriteString(m.indentedWith(styles.warning,
-				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
-					"this machine's files can then read them") + "\n")
-			b.WriteString(m.keyHint("y turn off · n/{back} keep it encrypted · {command} cmds · {help} help"))
-			break
-		}
-		if m.migratePlanConfirm {
-			b.WriteString(m.migratePlanView())
-			break
-		}
-		if m.migrateDeleteConfirm {
-			b.WriteString(m.migrateResultView())
-			break
-		}
-		if m.approvalDetail != "" {
-			b.WriteString(m.approvalDetailView())
-			break
-		}
-		if m.approveAllConfirm {
-			b.WriteString(m.approveAllConfirmView())
-			break
-		}
-		if m.tokenRevoke != "" {
-			b.WriteString(m.tokenRevokeView())
-			break
-		}
-		if m.tokenDetail != "" {
-			b.WriteString(m.tokenDetailView())
-			break
-		}
-		if m.pendingProfile != "" {
-			b.WriteString(m.profileConfirmView())
-			break
-		}
-		if m.confirmRole != "" {
-			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
-			if m.credentialType() == config.CredentialTypeVault {
-				b.WriteString(m.indented("it is removed from the vault") + "\n")
-			} else {
-				b.WriteString(m.indented(
-					"it is removed from the system keyring, and from a plaintext credentials.yaml left over "+
-						"from an earlier version, if any; an environment variable is not touched, because it "+
-						"belongs to your shell") + "\n")
-			}
-		} else {
-			name, _ := m.selected()
-			b.WriteString(fmt.Sprintf("Delete %q?\n", name))
-			credType := m.cfg.Credentials[name].Type
-			if m.section == sectionCredentials && m.cfg.Credentials[name].Forward {
-				b.WriteString(m.indented(
-					"its stored values are not removed with it; remove each with 'qatlas credential delete "+
-						name+" <field>'") + "\n")
-			} else if m.section == sectionCredentials &&
-				(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
-				b.WriteString(m.indented(
-					"its stored secrets are not removed with it; remove them first with d on the role, "+
-						"or later with 'qatlas credential delete'") + "\n")
-			}
-		}
-		b.WriteString(m.keyHint("y remove · n/{back} keep · {command} cmds · {help} help"))
+		b.WriteString(m.confirmView())
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
@@ -3723,7 +3661,7 @@ const (
 )
 
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
-// exactly the answers that apply; they come right under the warning, so even a tiny terminal shows them.
+// exactly the answers that apply.
 func (m *Model) leaveView() string {
 	if m.leaveFrom == screenTransfer {
 		if m.imp != nil {
@@ -3739,26 +3677,30 @@ func (m *Model) leaveView() string {
 	case m.section == sectionVault:
 		what, where = "the vault settings", "Vault"
 	}
-	warning, save := "warning: unsaved changes in "+what, "{save} save"
+	title, warning, save := "Leave "+what+" without saving?", "warning: unsaved changes in "+what, "{save} save"
 	why := "Leaving for " + where + " would lose them."
 	if m.wizard != nil {
-		warning, save = "warning: the guided setup is not saved", "{save} next step"
+		title, warning, save = "Leave the guided setup?", "warning: the guided setup is not saved", "{save} next step"
 		if m.leaveFrom == screenSummary {
 			save = "{save} save"
 		}
-		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
+		why = "Leaving for " + where + " drops every step, typed secrets included."
 	}
 	if sub := m.leaveSubject(); sub != "" {
-		warning = "warning: " + sub
-		why = "Closing it without keeping it would lose the changes. Nothing was written yet."
+		title, warning = "Close without keeping the changes?", "warning: "+sub
+		why = "Closing it without keeping it would lose the changes."
 	}
 	discard := "d discard"
 	if m.leaveQuit {
+		title = "Quit and lose the unsaved input?"
 		discard = "d discard and quit"
-		why = "Quitting would lose them. Nothing was written yet."
+		why = "Quitting would lose them."
 	}
-	return m.wrapped(styles.warning, warning) + m.keyHint(save+" · "+discard+" · {back} keep editing · {command} cmds · {help} help") +
-		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
+	return m.questionText(question{
+		title: title, consequence: why,
+		details: []string{m.indentedWith(styles.warning, warning), m.indented("Nothing was written yet.")},
+		keys:    save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help",
+	})
 }
 
 // leaveSubject names what a list, a picker or a builder would lose; it is empty for a form and a setup.
@@ -4190,7 +4132,13 @@ func (m *Model) activeScreenTooSmall() bool {
 	if m.screen == screenLeave {
 		return false
 	}
-	return m.terminalTooSmall() || !m.viewFits(m.fittedEditorView())
+	if m.terminalTooSmall() {
+		return true
+	}
+	if _, ok := m.modalView(); ok {
+		return false
+	}
+	return !m.viewFits(m.fittedEditorView())
 }
 
 func (m *Model) viewFits(view string) bool {
@@ -4646,10 +4594,66 @@ func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 func (m *Model) profileConfirmView() string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	profile, _ := findProfile(metadata, m.pendingProfile)
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Replace the access and tool ticks with profile %s?\n", profile.ID))
-	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
-	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
-	b.WriteString(m.keyHint("y replace the ticks · n/{back} keep them · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(question{
+		title:       fmt.Sprintf("Replace the access and tool ticks with profile %s?", profile.ID),
+		consequence: "every tick stays changeable afterwards; nothing is saved before you save the form",
+		details:     []string{m.indented(profileText(metadata, profile))},
+		keys:        "y replace the ticks · n/{back} keep them · {command} cmds · {help} help",
+	})
+}
+
+// confirmView is the question of screenConfirm that the set flag or field selects, or the delete question.
+// It ends in the key line and carries no notes, so the same text serves the modal and the full screen.
+func (m *Model) confirmView() string {
+	switch {
+	case m.vaultLockConfirm:
+		return m.vaultLockConfirmView()
+	case m.decryptConfirm:
+		return m.questionText(question{
+			title: "Turn the vault's encryption off?",
+			consequence: "warning: every secret it holds is written back to disk unencrypted; anyone who can " +
+				"read this machine's files can then read them",
+			warn: true,
+			keys: "y turn off · n/{back} keep it encrypted · {command} cmds · {help} help",
+		})
+	case m.migratePlanConfirm:
+		return m.migratePlanView()
+	case m.migrateDeleteConfirm:
+		return m.migrateResultView()
+	case m.approvalDetail != "":
+		return m.approvalDetailView()
+	case m.approveAllConfirm:
+		return m.approveAllConfirmView()
+	case m.tokenRevoke != "":
+		return m.tokenRevokeView()
+	case m.tokenDetail != "":
+		return m.tokenDetailView()
+	case m.pendingProfile != "":
+		return m.profileConfirmView()
+	}
+	const keys = "y remove · n/{back} keep · {command} cmds · {help} help"
+	if m.confirmRole != "" {
+		consequence := "it is removed from the vault"
+		if m.credentialType() != config.CredentialTypeVault {
+			consequence = "it is removed from the system keyring, and from a plaintext credentials.yaml left " +
+				"over from an earlier version, if any; an environment variable is not touched, because it " +
+				"belongs to your shell"
+		}
+		return m.questionText(question{
+			title:       fmt.Sprintf("Remove the stored secret for %s.%s?", m.editing, m.confirmRole),
+			consequence: consequence, keys: keys,
+		})
+	}
+	name, _ := m.selected()
+	credType := m.cfg.Credentials[name].Type
+	consequence := "it is removed from the configuration"
+	if m.section == sectionCredentials && m.cfg.Credentials[name].Forward {
+		consequence = "its stored values are not removed with it; remove each with 'qatlas credential delete " +
+			name + " <field>'"
+	} else if m.section == sectionCredentials &&
+		(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
+		consequence = "its stored secrets are not removed with it; remove them first with d on the role, " +
+			"or later with 'qatlas credential delete'"
+	}
+	return m.questionText(question{title: fmt.Sprintf("Delete %q?", name), consequence: consequence, keys: keys})
 }

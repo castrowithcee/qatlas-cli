@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -754,11 +753,12 @@ func (m *Model) importLeaveView() string {
 	if m.imp != nil && m.imp.step == importPreview {
 		save = "{save} write"
 	}
-	discard, why := "d discard", "Leaving drops the typed file name and every answer, a typed passphrase included. Nothing was written."
+	title, discard, why := "Leave the import?", "d discard", "Leaving drops the typed file name and every answer, a typed passphrase included."
 	if m.leaveQuit {
-		discard, why = "d discard and quit", "Quitting would drop them. Nothing was written."
+		title, discard, why = "Quit and drop the import?", "d discard and quit", "Quitting would drop them."
 	}
-	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
-	return m.wrapped(styles.warning, "warning: the import is not finished") + m.keyHint(keys) + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), why)
+	return m.questionText(question{title: title, consequence: why,
+		details: []string{m.indentedWith(styles.warning, "warning: the import is not finished"),
+			m.indented("Nothing was written.")},
+		keys: save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"})
 }

@@ -360,6 +360,22 @@ func (m *Model) renameView() string {
 			m.indented("the new name; the next step lists everything the rename touches and changes nothing") + "\n" +
 			m.keyHint("enter dry run · {back} cancel") + m.notes()
 	}
+	q := m.renameQuestion()
+	all := q.details
+	notes := m.notes()
+	// What does not fit scrolls between the sentence and the keys; the modal shows the whole plan or, when
+	// that is too tall, leaves the room to this full screen.
+	q.details = nil
+	room := max(m.height-strings.Count(m.questionText(q), "\n")-strings.Count(notes, "\n")-2, 3)
+	r.offset = max(min(r.offset, len(all)-room), 0)
+	q.details = all[r.offset:min(r.offset+room, len(all))]
+	return m.questionText(q) + notes
+}
+
+// renameQuestion is the dry run as a question; its details are every line of the plan, one row each.
+func (m *Model) renameQuestion() question {
+	r := m.rename
+	apply := m.redactor.Apply
 	title, confirm := fmt.Sprintf("Rename %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New)), "y rename"
 	switch {
 	case r.plan.Revert:
@@ -369,24 +385,20 @@ func (m *Model) renameView() string {
 		title = fmt.Sprintf("Adopt the rename of %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New))
 		confirm = "y adopt"
 	}
-	head := m.wrapped(styles.title, title) + "\n\n"
-	question := "Dry run: nothing is changed until you confirm."
+	consequence := "Dry run: nothing is changed until you confirm."
 	if n := len(r.plan.LapsedTokens); n > 0 {
-		question += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
+		consequence += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
 	}
-	keys := confirm + " · n/{back} cancel · up/down scroll · {command} cmds · {help} help"
-	foot := "\n" + m.wrapped(styles.hint, question) + m.keyHint(keys) + m.notes()
-	var body []string
+	q := question{title: title, consequence: consequence,
+		keys: confirm + " · n/{back} cancel · up/down scroll · {command} cmds · {help} help"}
 	for _, line := range m.renameLines(r.plan) {
 		style := styles.hint
 		if strings.HasPrefix(line, "warning") {
 			style = styles.warning
 		}
-		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
+		q.details = append(q.details, strings.Split(m.wrapped(style, line), "\n")...)
 	}
-	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 3)
-	r.offset = max(min(r.offset, len(body)-room), 0)
-	return head + strings.Join(body[r.offset:min(r.offset+room, len(body))], "\n") + foot
+	return q
 }
 
 // renameTyping reports whether the name prompt reads text.

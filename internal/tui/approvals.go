@@ -279,20 +279,20 @@ func (m *Model) scrollApproval(delta int) {
 // approve and, where there is one, of the stale approvals it would also remove (see approveAll).
 func (m *Model) approveAllConfirmView() string {
 	report, _ := m.approvalsReport()
-	var b strings.Builder
-	b.WriteString(m.wrapped(styles.title, fmt.Sprintf("Approve %d connection(s)?", len(report.Open))) + "\n\n")
-	b.WriteString(m.indented("every connection currently open is approved as it is configured now") + "\n")
+	q := question{
+		title:       fmt.Sprintf("Approve %d connection(s)?", len(report.Open)),
+		consequence: "every connection currently open is approved as it is configured now",
+		keys:        "y approve all · n/{back} cancel · {command} cmds · {help} help",
+	}
 	if stale := report.RevocableStale(); len(stale) > 0 {
-		b.WriteString(m.indented(fmt.Sprintf(
-			"also removes %d stale approval(s) of a connection that no longer reads the vault",
-			len(stale))) + "\n")
+		q.details = append(q.details, m.indented(fmt.Sprintf(
+			"also removes %d stale approval(s) of a connection that no longer reads the vault", len(stale))))
 	}
 	if n := len(report.HandRenames); n > 0 {
-		b.WriteString(m.indented(fmt.Sprintf(
-			"keeps %d approval(s) of a rename made by hand, so that adopting it still finds them", n)) + "\n")
+		q.details = append(q.details, m.indented(fmt.Sprintf(
+			"keeps %d approval(s) of a rename made by hand, so that adopting it still finds them", n)))
 	}
-	b.WriteString(m.keyHint("y approve all · n/{back} cancel · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(q)
 }
 
 // approvalActionMsg carries the outcome of approveOne or approveAll back into the event loop: the Approvals

@@ -386,11 +386,11 @@ func (m *Model) openVaultLockConfirm(back screen) {
 
 // vaultLockConfirmView draws the "Lock the vault now?" question.
 func (m *Model) vaultLockConfirmView() string {
-	var b strings.Builder
-	b.WriteString(styles.title.Render("Lock the vault now?") + "\n\n")
-	b.WriteString(m.indented("running invokes stop working until it is unlocked again") + "\n")
-	b.WriteString(m.keyHint("y lock · n/{back} stay unlocked · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(question{
+		title:       "Lock the vault now?",
+		consequence: "running invokes stop working until it is unlocked again",
+		keys:        "y lock · n/{back} stay unlocked · {command} cmds · {help} help",
+	})
 }
 
 // vaultLockedMsg carries the outcome of locking the vault back into the event loop.
