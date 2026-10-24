@@ -82,7 +82,7 @@ func (m *Model) selftestCommands() []command {
 		name := sc.Name
 		list = append(list, command{
 			name:        "selftest " + name,
-			desc:        "Measure: " + sc.Summary,
+			desc:        tr(tCmdSelftest, sc.Summary),
 			unavailable: func(m *Model) string { return m.selftestUnavailable() },
 			run:         func(m *Model) tea.Cmd { return m.startSelftest(name) },
 		})
@@ -94,9 +94,9 @@ func (m *Model) selftestCommands() []command {
 func (m *Model) selftestUnavailable() string {
 	switch {
 	case m.st != nil && !m.st.done:
-		return "a selftest is already running; wait for it or end it with esc"
+		return tr(tSelftestRunning)
 	case m.selftest.run == nil && m.selftest.Worker.Program == "":
-		return "this build cannot start the selftest"
+		return tr(tSelftestNone)
 	}
 	if m.section == sectionSelftest && m.screen == screenForm {
 		return ""

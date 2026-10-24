@@ -11,13 +11,14 @@ import (
 // keyRows are the key rows of the General form: the label of a row, the action it binds, its one-line hint,
 // and the explanation behind it.
 var keyRows = []struct {
-	label, action, hint, detail string
+	label, action string
+	hint, detail  textID
 }{
-	{"save key", uiprefs.ActionSave, "saves forms; enter rebinds it", "saves the form on every screen; a function key, not a character"},
-	{"help key", uiprefs.ActionHelp, "opens the help; enter rebinds it", "opens this help wherever no text is typed"},
-	{"command key", uiprefs.ActionCommand, "opens the command line; enter rebinds it", "opens the command line wherever no text is typed"},
-	{"lock key", uiprefs.ActionLock, "locks the vault; enter rebinds it", "locks or unlocks the vault"},
-	{"info key", uiprefs.ActionInfo, "a second info key; enter sets it", "a second key besides i that also works in text rows; try a function key"},
+	{"save key", uiprefs.ActionSave, tKeySaveHint, tKeySaveDetail},
+	{"help key", uiprefs.ActionHelp, tKeyHelpHint, tKeyHelpDetail},
+	{"command key", uiprefs.ActionCommand, tKeyCommandHint, tKeyCommandDetail},
+	{"lock key", uiprefs.ActionLock, tKeyLockHint, tKeyLockDetail},
+	{"info key", uiprefs.ActionInfo, tKeyInfoHint, tKeyInfoDetail},
 }
 
 // keyFields are the key rows of the General form for keys.
@@ -26,7 +27,7 @@ func keyFields(keys uiprefs.Keys) []field {
 	var fields []field
 	for _, r := range keyRows {
 		fields = append(fields, field{label: r.label, kind: fieldKey, action: r.action, bound: keys.Get(r.action),
-			detail: r.detail + "; enter, then press the new key; esc cancels, r restores the standard"}.withHint(r.hint))
+			detail: tr(r.detail) + tr(tKeyDetailSuffix)}.withHint(tr(r.hint)))
 	}
 	return fields
 }
@@ -48,11 +49,11 @@ func keyRowValue(f field) string {
 	standard := uiprefs.DefaultKeys().Get(f.action)
 	switch {
 	case f.action == uiprefs.ActionInfo && f.bound == "":
-		return "i only (no extra key)"
+		return tr(tKeyInfoOnly)
 	case f.action == uiprefs.ActionInfo:
-		return "i and " + keyName(f.bound)
+		return tr(tKeyInfoAnd, keyName(f.bound))
 	case f.bound == standard:
-		return keyName(f.bound) + " (standard)"
+		return tr(tKeyStandard, keyName(f.bound))
 	}
 	return keyName(f.bound)
 }
@@ -64,7 +65,7 @@ func (m *Model) keyRowKey(key tea.KeyMsg) (tea.Cmd, bool) {
 	case "enter":
 		m.clearMessages()
 		m.keyCapture = true
-		m.status = "Press the new key for " + strings.TrimSuffix(f.label, " key") + "; esc cancels"
+		m.status = tr(tKeyPressStatus, trOr(textID("keyaction."+f.action), strings.TrimSuffix(f.label, " key")))
 		return nil, true
 	case "r":
 		m.clearMessages()
@@ -84,7 +85,7 @@ func (m *Model) captureKey(key tea.KeyMsg) tea.Cmd {
 	m.keyCapture = false
 	m.clearMessages()
 	if key.String() == keyOf(actBack) {
-		m.status = "Kept the key"
+		m.status = tr(tKeyKept)
 		return nil
 	}
 	f := &m.fields[m.focus]

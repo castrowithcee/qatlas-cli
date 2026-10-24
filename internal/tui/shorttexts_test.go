@@ -30,45 +30,47 @@ func hintsFit(t *testing.T, m *Model, what string, fields []field) {
 // Every hint of every form is one line at 80 columns, for each provider whose rows depend on it; the longer
 // explanation is the detail behind the info key.
 func TestEveryFormHintIsOneLineAt80Columns(t *testing.T) {
-	m, _ := providerModel(t, providerRegistry(t, 8))
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 60})
+	eachLanguage(t, func(t *testing.T) {
+		m, _ := providerModel(t, providerRegistry(t, 8))
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 60})
 
-	for _, s := range []section{sectionGeneral, sectionVault, sectionTransfer, sectionUpdate, sectionSelftest} {
-		m.section = s
-		m.openPageForm()
-		hintsFit(t, m, s.title(), m.fields)
-	}
-
-	m.section = sectionTokens
-	hintsFit(t, m, "token", m.tokenFields(""))
-
-	if len(m.cfg.Providers()) != 8 {
-		t.Fatalf("providers = %v, want the registered providers to walk through", m.cfg.Providers())
-	}
-	for _, provider := range m.cfg.Providers() {
-		m.wizard = &setup{provider: provider}
-		for step := 0; step < setupSteps; step++ {
-			hintsFit(t, m, provider+" setup step", m.setupPage(step))
-		}
-		m.wizard = nil
-
-		for _, s := range []section{sectionServices, sectionCredentials, sectionConnections} {
+		for _, s := range []section{sectionGeneral, sectionVault, sectionTransfer, sectionUpdate, sectionSelftest} {
 			m.section = s
-			m.openForm("")
-			focusField(t, m, providerLabel)
-			selectChoice(t, m, provider)
-			hintsFit(t, m, provider+" "+s.title(), m.fields)
-			press(t, m, "esc")
-			if m.screen == screenLeave {
-				press(t, m, "d")
+			m.openPageForm()
+			hintsFit(t, m, s.title(), m.fields)
+		}
+
+		m.section = sectionTokens
+		hintsFit(t, m, "token", m.tokenFields(""))
+
+		if len(m.cfg.Providers()) != 8 {
+			t.Fatalf("providers = %v, want the registered providers to walk through", m.cfg.Providers())
+		}
+		for _, provider := range m.cfg.Providers() {
+			m.wizard = &setup{provider: provider}
+			for step := 0; step < setupSteps; step++ {
+				hintsFit(t, m, provider+" setup step", m.setupPage(step))
+			}
+			m.wizard = nil
+
+			for _, s := range []section{sectionServices, sectionCredentials, sectionConnections} {
+				m.section = s
+				m.openForm("")
+				focusField(t, m, providerLabel)
+				selectChoice(t, m, provider)
+				hintsFit(t, m, provider+" "+s.title(), m.fields)
+				press(t, m, "esc")
+				if m.screen == screenLeave {
+					press(t, m, "d")
+				}
 			}
 		}
-	}
 
-	m.section = sectionCredentials
-	hintsFit(t, m, "payload secret", m.payloadFields("", ""))
-	m.section = sectionDefaults
-	hintsFit(t, m, "default", m.buildFields(""))
+		m.section = sectionCredentials
+		hintsFit(t, m, "payload secret", m.payloadFields("", ""))
+		m.section = sectionDefaults
+		hintsFit(t, m, "default", m.buildFields(""))
+	})
 }
 
 // The tool picker names a tool by its title beside the ID and the effect; the description is the

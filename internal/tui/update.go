@@ -169,16 +169,16 @@ func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 func (m *Model) updateBanners() []string {
 	switch {
 	case m.updated != "":
-		return []string{"Updated to " + m.updated + " · restart qatlas tui", "Updated · restart"}
+		return []string{tr(tBannerUpdated, m.updated), tr(tBannerUpdatedShort)}
 	case m.updating:
-		return []string{"Updating to " + m.release.Latest + " …", "Updating …"}
+		return []string{tr(tBannerUpdating, m.release.Latest), tr(tBannerUpdatingShort)}
 	case m.updateOffered():
 		current, latest := m.release.Current, m.release.Latest
 		return []string{
-			"Update available " + current + " → " + latest + " 🎉 · u update",
-			"Update available " + current + " → " + latest + " · u update",
-			"Update available " + latest + " · u update",
-			"Update " + latest + " · u",
+			tr(tBannerAvailableFull, current, latest),
+			tr(tBannerAvailable, current, latest),
+			tr(tBannerAvailableLatest, latest),
+			tr(tBannerAvailableShort, latest),
 		}
 	}
 	return nil
@@ -196,14 +196,13 @@ func (m *Model) updateBanner(room int) string {
 
 // updateView asks before the installation.
 func (m *Model) updateView() string {
-	after := "Restart qatlas tui afterwards to use it."
+	after := tr(tUpdateAfterManual)
 	if m.restart != nil {
-		after = "This editor then restarts itself into the new version, and opens the unlock dialog if the " +
-			"update locked a vault that was unlocked."
+		after = tr(tUpdateAfterRestart)
 	}
 	return m.questionText(question{
-		title:       "Update qatlas to " + m.release.Latest + "?",
-		consequence: "Installs the release like 'qatlas update' and verifies its checksum.",
+		title:       tr(tUpdateQuestion, m.release.Latest),
+		consequence: tr(tUpdateConsequence),
 		details: []string{m.wrapped(lipgloss.NewStyle(), m.updateText), "",
 			m.wrapped(lipgloss.NewStyle(), after)},
 		keys: "y update · n/{back} cancel · {command} cmds · {help} help",
