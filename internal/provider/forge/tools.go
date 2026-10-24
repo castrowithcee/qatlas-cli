@@ -87,7 +87,11 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	repositoryActivitiesList, repositorySigningKeysGet, actionsSecretsList, actionsSecretsSet,
 	actionsSecretsDelete, actionsVariablesList, actionsVariablesGet, actionsVariablesCreate,
 	actionsVariablesUpdate, actionsVariablesDelete, actionsRunnersList, actionsRunnersGet, actionsRunnersUpdate,
-	actionsRunnersDelete, actionsRunnerJobsSearch, workflowsEnable, workflowsDisable}
+	actionsRunnersDelete, actionsRunnerJobsSearch, workflowsEnable, workflowsDisable, repositoriesCreate,
+	repositoriesUpdate, repositoriesFork, repositoriesListForks, repositoriesGenerate, repositoriesSyncFork,
+	repositoriesGetSyncState, repositoriesConvert, repositoriesDelete, repositoriesTransfer,
+	repositoriesAcceptTransfer, repositoriesRejectTransfer, repositoryMirrorsSync, repositoryAvatarsUpdate,
+	repositoryAvatarsDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

@@ -196,6 +196,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Releases](releases.md): releases and their attached assets
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
+- [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
+  repositories, pull mirror syncs, and repository avatars
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
 - [Actions administration](actions-admin.md): the secrets, variables, and runners of a repository, an
   organization, or the user behind the token, and the state of a workflow
@@ -226,3 +228,6 @@ restrict agent use and traffic; check their terms before pointing a connection a
 - Tokens cannot be bound to repositories, so the targets are the only narrowing besides the scopes.
 - The user object carries `type`.
 - `repositories.list` has no `order_by`.
+- `repositories.update` takes `projects_mode`, `has_code`, `allow_manual_merge`, `autodetect_manual_merge`, and
+  `allow_merge_update`; Forgejo has none of them. `repositories.sync-fork` takes `ff_only`. See
+  [Repository lifecycle](repositories.md).
