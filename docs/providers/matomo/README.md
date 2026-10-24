@@ -13,8 +13,8 @@ Matomo is a provider for one Matomo instance, on-premise or Matomo Cloud, throug
 Matomo 5. The API is the same for both, and the token carries the rights of its Matomo user. This page
 describes the foundation every Matomo tool shares: connection, targets, availability, errors, paging, and the
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
-[reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md), and
-[saved segments](segments.md).
+[reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
+[saved segments](segments.md), and [annotations](annotations.md).
 
 ## Configuration
 
@@ -136,12 +136,14 @@ refused. Methods without server paging are cut on the Qatlas side.
 
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
-`matomo.segments.list`, and `matomo.segments.get`. The profile `live` adds the [live tools](live.md) and the
-[visitor profile tools](visitors.md), because they carry personal data. The profile `goals` adds
-`matomo.goals.add` and `matomo.goals.update`; it is not recommended because it changes the goal configuration of
-a website. `matomo.goals.delete` is in no profile, see [goals](goals.md). The profile `segments` adds
-`matomo.segments.add` and `matomo.segments.update`; it is not recommended because it changes the saved segments
-of the instance.
+`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, and `matomo.annotations.get`. The
+profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md), because they carry
+personal data. The profile `goals` adds `matomo.goals.add` and `matomo.goals.update`; it is not recommended
+because it changes the goal configuration of a website. `matomo.goals.delete` is in no profile, see
+[goals](goals.md). The profile `segments` adds `matomo.segments.add` and `matomo.segments.update`; it is not
+recommended because it changes the saved segments of the instance. The profile `annotations` adds
+`matomo.annotations.add` and `matomo.annotations.update`; it is not recommended because it changes the annotations
+of a website.
 
 ## Tools
 
@@ -170,6 +172,10 @@ of the instance.
 | `matomo.segments.get` | [segments](segments.md) | reads one saved segment by its instance-wide ID |
 | `matomo.segments.add` | [segments](segments.md) | saves a segment (effect `create`) |
 | `matomo.segments.update` | [segments](segments.md) | replaces a saved segment (effect `update`) |
+| `matomo.annotations.list` | [annotations](annotations.md) | reads the annotations of a website in a date range, in batches |
+| `matomo.annotations.get` | [annotations](annotations.md) | reads one annotation of a website |
+| `matomo.annotations.add` | [annotations](annotations.md) | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
+| `matomo.annotations.update` | [annotations](annotations.md) | changes the date, note, or star of an annotation (effect `update`) |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

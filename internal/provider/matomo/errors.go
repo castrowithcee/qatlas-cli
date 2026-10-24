@@ -47,7 +47,7 @@ var messagePatterns = []struct {
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
 		"not found in the list of available reports", "there is no goal", "requested segment not found",
-		"marked as deleted"}},
+		"marked as deleted", "there is no note"}},
 }
 
 // applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
