@@ -165,8 +165,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"light, or dark; auto follows the terminal's background and NO_COLOR wins over all of them), the\n" +
 			"start view (the area the editor opens on the next start), and icons (none or nerdfont, an icon\n" +
 			"before each area name that needs a Nerd Font). They are chosen from lists and saved with F2, with\n" +
-			"no admin session. They live in tui.yaml beside the configuration, belong to this device, and are\n" +
-			"never exported or imported. Transfer, Update, and Self-test only start the export and import, the\n" +
+			"no admin session. General also binds the keys of save, help, command line, lock, and info (info may\n" +
+			"take a second key besides i): enter on a row, then press the new key; a taken key, ctrl+c, esc, tab,\n" +
+			"a digit, a letter, or a character for save, lock, or the extra info key is refused with its\n" +
+			"reason. Terminals take some F-keys for themselves, so choose one yours passes on. They live in\n" +
+			"tui.yaml beside the configuration,\n" +
+			"belong to this device, and are never exported or imported. Transfer, Update, and Self-test only start the export and import, the\n" +
 			"update, and the selftests that the commands and keys start too, under the same rules.\n\n" +
 			"Vault (Settings) is a settings form, not a list: it shows the vault's state (no vault yet,\n" +
 			"unencrypted, or\n" +

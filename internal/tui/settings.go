@@ -65,6 +65,7 @@ func (m *Model) openPageForm() tea.Cmd {
 		return m.openVaultForm()
 	}
 	m.editing = ""
+	m.keyCapture = false
 	m.screen = screenForm
 	switch m.section {
 	case sectionGeneral:
@@ -96,7 +97,7 @@ func (m *Model) generalFields() []field {
 	if _, ok := areaByName(start); !ok {
 		start = uiprefs.DefaultStart
 	}
-	return []field{
+	fields := []field{
 		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
 			withHint("auto follows the terminal").
 			withDetail("auto follows the terminal's background; NO_COLOR turns every colour off whatever is chosen here"),
@@ -106,6 +107,7 @@ func (m *Model) generalFields() []field {
 			withHint("nerdfont needs a Nerd Font").
 			withDetail("nerdfont puts an icon before each area's name and needs a Nerd Font in the terminal; the name always stays"),
 	}
+	return append(fields, keyFields(prefs.Keys)...)
 }
 
 // saveGeneral stores the preferences on this device. It needs neither an admin session nor the vault's
@@ -114,6 +116,11 @@ func (m *Model) generalFields() []field {
 func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	next := uiprefs.Prefs{
 		Theme: m.fieldValue(themeLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
+		Keys: m.keysOfForm(),
+	}
+	if err := next.Keys.Validate(); err != nil {
+		m.status, m.fail = "", err.Error()
+		return nil
 	}
 	if m.savePrefs == nil {
 		m.status, m.fail = "", "the settings cannot be saved here"
@@ -125,6 +132,7 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	}
 	m.prefs = next
 	applyColorScheme(next.Theme)
+	applyKeys(next.Keys)
 	m.clearMessages()
 	m.status = "Saved; the start view applies on the next start"
 	if leave {
