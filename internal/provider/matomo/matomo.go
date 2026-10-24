@@ -74,7 +74,7 @@ func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
 		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
-		siteSettingsGet.ID, consentManagerDetect.ID}
+		siteSettingsGet.ID, consentManagerDetect.ID, referenceDataList.ID, ipRangesExpand.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -189,5 +189,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: siteSettingsGet, Handler: capability.Handler(invokeSiteSettingsGet)},
 		capability.Operation{Descriptor: consentManagerDetect, Handler: capability.Handler(invokeConsentManagerDetect)},
 		capability.Operation{Descriptor: siteGroupsList, Handler: capability.Handler(invokeSiteGroupsList)},
+		capability.Operation{Descriptor: globalSettingsGet, Handler: capability.Handler(invokeGlobalSettingsGet)},
+		capability.Operation{Descriptor: referenceDataList, Handler: capability.Handler(invokeReferenceDataList)},
+		capability.Operation{Descriptor: ipRangesExpand, Handler: capability.Handler(invokeIPRangesExpand)},
 	)
 }
