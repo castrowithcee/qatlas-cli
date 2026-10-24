@@ -193,6 +193,7 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == forgejo {
 			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",
 				p.id+".quota.list-packages", p.id+".quota.check")
+			want = append(want, quotaAdminToolIDs...)
 		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
@@ -247,6 +248,14 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		}
 		if _, _, ok := reg.Lookup("gitea.quota." + action); ok {
 			t.Errorf("gitea.quota.%s is registered", action)
+		}
+	}
+	for _, id := range quotaAdminToolIDs {
+		if _, _, ok := reg.Lookup(id); !ok {
+			t.Errorf("%s is missing", id)
+		}
+		if _, _, ok := reg.Lookup("gitea" + strings.TrimPrefix(id, "forgejo")); ok {
+			t.Errorf("gitea%s is registered", strings.TrimPrefix(id, "forgejo"))
 		}
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet,
