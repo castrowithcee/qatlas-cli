@@ -156,16 +156,21 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("connection fields = %v, want name, provider, service, credential, targets",
 			labelsOf(connectionFields))
 	}
-	if connectionFields[4].value() != "-1001" || !strings.Contains(connectionFields[4].hint, "required for Telegram") {
-		t.Fatalf("target field = value %q, hint %q", connectionFields[4].value(), connectionFields[4].hint)
+	if connectionFields[4].value() != "-1001" || !strings.Contains(connectionFields[4].detail, "required for Telegram") ||
+		connectionFields[4].hint != "chat ID: required, several" {
+		t.Fatalf("target field = value %q, hint %q, detail %q", connectionFields[4].value(),
+			connectionFields[4].hint, connectionFields[4].detail)
 	}
 	if got := m.describe("operations"); !strings.Contains(got, "-1002") {
 		t.Fatalf("list entry = %q, want distinct target", got)
 	}
 	lexwareFields := m.buildFields("books-primary")
 	if strings.Contains(lexwareFields[4].hint, "required") ||
-		!strings.Contains(lexwareFields[4].hint, "optionally one organization") {
-		t.Fatalf("Lexware target hint = %q, want an optional target", lexwareFields[4].hint)
+		lexwareFields[4].hint != "organization: optional, one" ||
+		strings.Contains(lexwareFields[4].detail, "required") ||
+		!strings.Contains(lexwareFields[4].detail, "optionally one organization") {
+		t.Fatalf("Lexware target hint = %q detail %q, want an optional target", lexwareFields[4].hint,
+			lexwareFields[4].detail)
 	}
 	for _, name := range []string{"books-primary", "books-audit"} {
 		if got := m.describe(name); !strings.HasPrefix(got, name+"  active  lexware-main  ") {
@@ -182,7 +187,8 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// neither needs a target.
 	twentyFields := m.buildFields("crm")
 	if strings.Contains(twentyFields[4].hint, "required") ||
-		!strings.Contains(twentyFields[4].hint, "optional objects") {
+		twentyFields[4].hint != "object: optional, several" ||
+		!strings.Contains(twentyFields[4].detail, "optional objects") {
 		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[4].hint)
 	}
 	for name, want := range map[string]string{
@@ -199,10 +205,10 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// stay two visibly separate connections.
 	seatableFields := m.buildFields("sales-rows")
 	if seatableFields[4].value() != "Kunden" ||
-		!strings.Contains(seatableFields[4].hint, "required for SeaTable") ||
-		!strings.Contains(seatableFields[4].hint, "TABLE/VIEW") {
-		t.Fatalf("SeaTable target field = value %q, hint %q",
-			seatableFields[4].value(), seatableFields[4].hint)
+		!strings.Contains(seatableFields[4].detail, "required for SeaTable") ||
+		!strings.Contains(seatableFields[4].detail, "TABLE/VIEW") {
+		t.Fatalf("SeaTable target field = value %q, detail %q",
+			seatableFields[4].value(), seatableFields[4].detail)
 	}
 	for name, want := range map[string]string{
 		"sales-rows":       "sales-rows  active  tables-cloud  ",
@@ -222,9 +228,9 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// stay two visibly separate connections.
 	nextcloudFields := m.buildFields("files-reports")
 	if nextcloudFields[4].value() != "Reports" ||
-		!strings.Contains(nextcloudFields[4].hint, "required for Nextcloud") ||
-		!strings.Contains(nextcloudFields[4].hint, "whole Files root") {
-		t.Fatalf("Nextcloud target field = value %q, hint %q",
+		!strings.Contains(nextcloudFields[4].detail, "required for Nextcloud") ||
+		!strings.Contains(nextcloudFields[4].detail, "whole Files root") {
+		t.Fatalf("Nextcloud target field = value %q, detail %q",
 			nextcloudFields[4].value(), nextcloudFields[4].hint)
 	}
 	for name, want := range map[string]string{
@@ -504,8 +510,8 @@ func TestTheConnectionFormOffersOneProviderAtATime(t *testing.T) {
 		t.Errorf("service = %q, want the first of the new choices", got)
 	}
 	// The target hint follows the provider, because it is the provider that says what a target is.
-	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "required for Telegram") {
-		t.Errorf("target hint = %q, want the Telegram rule", hint)
+	if hint := m.field(targetsLabel).detail; !strings.Contains(hint, "required for Telegram") {
+		t.Errorf("target detail = %q, want the Telegram rule", hint)
 	}
 
 	// Editing an existing connection starts at the provider its service already names.

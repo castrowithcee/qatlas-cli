@@ -141,13 +141,12 @@ func (m *Model) sourceEntry(name string) string {
 
 // copyNote is the line under a copied form.
 func (m *Model) copyNote() string {
-	note := "everything from " + m.copyFrom + " except the name, ready to adjust before saving"
+	note := "everything from " + m.copyFrom + " but the name"
 	switch m.section {
 	case sectionCredentials:
-		note = "where " + m.copyFrom + " keeps its secrets is copied, never a secret value: save this " +
-			"credential, then store its secrets"
+		note = "storage place of " + m.copyFrom + ", never a secret value"
 	case sectionTokens:
-		note = "vorbilder and a future expiry from " + m.copyFrom + "; the new token gets its own value"
+		note = "vorbilder and a future expiry from " + m.copyFrom
 	}
 	return note
 }
@@ -337,11 +336,11 @@ func (m *Model) setupPrefill(step int, page []field) {
 	switch step {
 	case stepService:
 		if slices.Contains(page[0].choices, conn.Service) {
-			page[0] = choiceField("service", page[0].choices, conn.Service).withHint(page[0].hint)
+			page[0] = choiceField("service", page[0].choices, conn.Service).withHint(page[0].hint).withDetail(page[0].detail)
 		}
 	case stepCredential:
 		if slices.Contains(page[0].choices, conn.Credential) {
-			page[0] = choiceField("credential", page[0].choices, conn.Credential).withHint(page[0].hint)
+			page[0] = choiceField("credential", page[0].choices, conn.Credential).withHint(page[0].hint).withDetail(page[0].detail)
 		}
 	case stepScope:
 		taken := map[string]bool{}

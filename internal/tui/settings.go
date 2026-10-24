@@ -98,11 +98,13 @@ func (m *Model) generalFields() []field {
 	}
 	return []field{
 		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
-			withHint("auto follows the terminal's background; NO_COLOR turns every colour off whatever is chosen here"),
+			withHint("auto follows the terminal").
+			withDetail("auto follows the terminal's background; NO_COLOR turns every colour off whatever is chosen here"),
 		choiceField(startLabel, areas, start).
-			withHint("the area the editor opens on the next time it starts"),
+			withHint("the area the editor opens on"),
 		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
-			withHint("nerdfont puts an icon before each area's name and needs a Nerd Font in the terminal; the name always stays"),
+			withHint("nerdfont needs a Nerd Font").
+			withDetail("nerdfont puts an icon before each area's name and needs a Nerd Font in the terminal; the name always stays"),
 	}
 }
 
@@ -124,7 +126,7 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	m.prefs = next
 	applyColorScheme(next.Theme)
 	m.clearMessages()
-	m.status = "Saved; the start view applies the next time the editor starts"
+	m.status = "Saved; the start view applies on the next start"
 	if leave {
 		return m.showList()
 	}
@@ -132,15 +134,15 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 }
 
 // pageAction is a row that runs one of the existing flows at once on enter.
-func pageAction(action, label, hint string) field {
-	return vaultActionField(action, label, hint)
+func pageAction(action, label, hint, detail string) field {
+	return vaultActionField(action, label, hint, detail)
 }
 
 func (m *Model) transferFields() []field {
 	return []field{
-		pageAction(pageActionExport, "export",
+		pageAction(pageActionExport, "export", "enter writes an export file",
 			"enter chooses what to write into an export file, optionally with secrets; needs the admin session"),
-		pageAction(pageActionImport, "import",
+		pageAction(pageActionImport, "import", "enter previews an export file",
 			"enter reads an exported file and shows what it would change before anything is written; needs the admin session"),
 	}
 }
@@ -155,14 +157,15 @@ func (m *Model) updateFields() []field {
 	}
 	return []field{
 		textField("release", status, true),
-		pageAction(pageActionUpdate, "install update", "enter asks before the newer release is installed"),
+		pageAction(pageActionUpdate, "install update", "enter asks first",
+			"enter asks before the newer release is installed"),
 	}
 }
 
 func (m *Model) selftestFields() []field {
 	var fields []field
 	for _, sc := range m.selftest.list() {
-		fields = append(fields, pageAction(pageActionSelftest+sc.Name, sc.Name, "enter measures: "+sc.Summary))
+		fields = append(fields, pageAction(pageActionSelftest+sc.Name, sc.Name, "enter measures", "enter measures: "+sc.Summary))
 	}
 	if len(fields) == 0 {
 		fields = append(fields, textField("selftest", "this build cannot start the selftest", true))

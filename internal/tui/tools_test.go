@@ -160,7 +160,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	typeText(t, m, "pages.list")
 	press(t, m, " ")
-	if !strings.Contains(screenOf(m), "[x] bookstack.pages.list") {
+	if !strings.Contains(screenOf(m), "[x] List BookStack pages  bookstack.pages.list") {
 		t.Fatalf("space did not tick the shown tool:\n%s", screenOf(m))
 	}
 	press(t, m, "esc")

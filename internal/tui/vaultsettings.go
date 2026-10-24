@@ -21,20 +21,23 @@ const (
 )
 
 const (
-	updateBehaviourLabel = "update behaviour"
-	updateBehaviourHint  = "whether 'qatlas update' hands an unlocked vault over to the new program " +
+	updateBehaviourLabel  = "update behaviour"
+	updateBehaviourHint   = "handover or lock on 'qatlas update'"
+	updateBehaviourDetail = "whether 'qatlas update' hands an unlocked vault over to the new program " +
 		"(handover) or locks it (lock); left/right change it, F2 saves it into the encrypted vault"
 )
 
 // Hints of the two vault settings rows every state offers.
 const (
-	vaultIdleTimeoutHint = "how long a vault process that holds the vault unlocked does so without a read " +
+	vaultIdleTimeoutHint   = "idle time before the vault locks; empty = 12h"
+	vaultIdleTimeoutDetail = "how long a vault process that holds the vault unlocked does so without a read " +
 		"before it locks itself, as a Go duration such as \"12h\" or \"30m\"; empty means 12h"
 	// vaultAdminTimeoutHint says what this window's own admin session actually does with the value (see
 	// requireAdmin in admin.go): the editor always opens read-only, and the first managing action of this
 	// window asks for the vault's passphrase, masked, and keeps this window alone in admin mode for this
 	// long without a key press before it asks again.
-	vaultAdminTimeoutHint = "how long this window's own admin session (see the first managing action of a " +
+	vaultAdminTimeoutHint   = "idle time of this window's admin session; empty = 10m"
+	vaultAdminTimeoutDetail = "how long this window's own admin session (see the first managing action of a " +
 		"run) stays open without a key press before it asks for the vault's passphrase again; other windows " +
 		"are unaffected. A Go duration such as \"10m\", or \"0\" to ask for the passphrase on every change; " +
 		"empty means 10m"
@@ -78,19 +81,19 @@ func (m *Model) vaultFields() []field {
 
 	switch m.vaultState() {
 	case vault.StateUnencrypted:
-		fields = append(fields, vaultActionField(vaultActionEncrypt, "encrypt",
+		fields = append(fields, vaultActionField(vaultActionEncrypt, "encrypt", "enter turns encryption on",
 			"enter turns encryption on: a new passphrase, typed masked and twice"))
 	case vault.StateLocked, vault.StateUnlocked:
 		fields = append(fields,
-			vaultActionField(vaultActionPassphrase, "change passphrase",
+			vaultActionField(vaultActionPassphrase, "change passphrase", "enter changes the passphrase",
 				"enter changes the passphrase: the current one once, then a new one typed masked and twice"),
-			vaultActionField(vaultActionDecrypt, "turn off encryption",
+			vaultActionField(vaultActionDecrypt, "turn off encryption", "enter turns encryption off",
 				"enter turns encryption off: the current passphrase, then an explicit confirmation; every "+
 					"secret is then stored unencrypted"))
 	}
 
 	if len(m.legacyEntries()) > 0 {
-		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml",
+		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml", "enter previews, then migrates",
 			"enter shows every entry of the plaintext credentials.yaml left over from an earlier version, "+
 				"credential and role names only, before carrying it into the vault, and offers to delete the "+
 				"file once that is confirmed"))
@@ -98,8 +101,8 @@ func (m *Model) vaultFields() []field {
 
 	fields = append(fields, m.updateBehaviourField())
 	fields = append(fields,
-		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint),
-		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint),
+		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint).withDetail(vaultIdleTimeoutDetail),
+		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint).withDetail(vaultAdminTimeoutDetail),
 	)
 	return fields
 }
@@ -121,23 +124,24 @@ func (m *Model) updateBehaviourField() field {
 		m.handoverShown = string(behaviour)
 		f := choiceField(updateBehaviourLabel, []string{string(vault.UpdateHandover), string(vault.UpdateLock)},
 			string(behaviour))
-		f.hint = updateBehaviourHint
+		f.hint, f.detail = updateBehaviourHint, updateBehaviourDetail
 		if err != nil {
-			f.hint = "settings.age was not written by this vault or is not understood, so updates lock the " +
-				"vault; saving a value replaces it. " + updateBehaviourHint
+			f.hint = "settings.age is not understood; updates lock the vault"
+			f.detail = "settings.age was not written by this vault or is not understood, so updates lock the " +
+				"vault; saving a value replaces it. " + updateBehaviourDetail
 		}
 		return f
 	case vault.StateLocked:
-		reason = "the vault is locked; unlock it (ctrl+l) to see and change this"
+		reason = "the vault is locked; ctrl+l unlocks it"
 	default:
-		reason = "needs a vault with a passphrase, and there is none yet"
+		reason = "needs a vault with a passphrase"
 	}
 	return textField(updateBehaviourLabel, "not available", true).withHint(reason)
 }
 
 // vaultActionField is one action row of the vault form: it runs at once on enter, never deferred to F2.
-func vaultActionField(action, label, hint string) field {
-	return field{label: label, kind: fieldVaultAction, action: action, hint: hint}
+func vaultActionField(action, label, hint, detail string) field {
+	return field{label: label, kind: fieldVaultAction, action: action, hint: hint, detail: detail}
 }
 
 // vaultState is the vault's current state, StateAbsent when this run has no vault configured at all or

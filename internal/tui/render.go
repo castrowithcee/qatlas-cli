@@ -218,7 +218,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		// itself on its own row instead, the way a read-only tool list already does below.
 		value += " (" + f.hint + ")"
 	case f.kind == fieldToolList && f.label == forwardLabel && len(f.marked()) == 0:
-		value = styles.hint.Render("(none: no payload secret is released)")
+		value = styles.hint.Render("(none released)")
 	case f.kind == fieldToolList && f.label == forwardLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && f.label == vorbilderLabel && len(f.marked()) == 0:
@@ -251,7 +251,7 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
-		value = styles.hint.Render("(none: no local files released)")
+		value = styles.hint.Render("(none released)")
 	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
 		value = listLines(f.entries, "directory", "directories")
 	case f.kind == fieldPaths && isFilesLabel(f.label):

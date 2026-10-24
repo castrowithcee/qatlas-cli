@@ -232,57 +232,72 @@ type field struct {
 // providerNoteLabel is the row of a service form that edits the note of the service's provider.
 const providerNoteLabel = "provider note"
 
-// Field hints. They name the shape of an entry, never a rule the core owns: the core states the exact
-// character set when it refuses a value, and repeating it here would let the two drift apart.
+// Field hints. A hint is one short line under the focused row; the explanation behind it is the detail of
+// the same name (see fieldDetail), which the pane and the info key show. Both name the shape of an entry,
+// never a rule the core owns: the core states the exact character set when it refuses a value, and repeating
+// it here would let the two drift apart.
 const (
-	nameHint    = "a key you choose, without spaces; connections and --connection refer to it"
-	domainHint  = "a key you choose, without spaces; commands look up this default by it"
-	baseURLHint = "the root url of the instance, with scheme http or https and without /api"
+	nameHint      = "a key you choose, without spaces"
+	nameDetail    = "a key you choose, without spaces; connections and --connection refer to it"
+	domainHint    = "a key you choose, without spaces"
+	domainDetail  = "a key you choose, without spaces; commands look up this default by it"
+	baseURLHint   = "root url, http or https, without /api"
+	baseURLDetail = "the root url of the instance, with scheme http or https and without /api"
 	// envHint is said once for all role rows and speaks of all of them: they are the same kind of row, so
 	// repeating the sentence under the next one would read like a fault and add nothing.
 	envHint = "every role row holds the NAME of an environment variable that holds the secret, " +
 		"never the secret itself"
+	envShortHint = "the name of an environment variable"
 	// credentialProviderHint names the one thing this choice decides, because it is not obvious from the
 	// field itself: the rows below it are the secret roles of the provider selected here.
-	credentialProviderHint = "the system these secrets belong to; it decides which secret roles are asked for below"
+	credentialProviderHint   = "the system these secrets belong to"
+	credentialProviderDetail = "the system these secrets belong to; it decides which secret roles are asked for below"
 	// connectionProviderHint says why this row exists at all: it is not stored, it decides what the rows
 	// below may offer.
-	connectionProviderHint = "the system this route leads to; it decides which services and credentials " +
+	connectionProviderHint   = "the system this route leads to"
+	connectionProviderDetail = "the system this route leads to; it decides which services and credentials " +
 		"can be chosen below"
-	connectionServiceHint    = "the configured API endpoint this route uses; left/right chooses another instance"
-	connectionCredentialHint = "the provider credential this route authenticates with; secret values stay " +
+	connectionServiceHint      = "the API endpoint this route uses"
+	connectionServiceDetail    = "the configured API endpoint this route uses; left/right chooses another instance"
+	connectionCredentialHint   = "the credential this route uses"
+	connectionCredentialDetail = "the provider credential this route authenticates with; secret values stay " +
 		"outside this file"
-	stateHint = "disabled keeps the whole selection but serves and lists nothing until it is active again"
+	stateHint   = "disabled serves and lists nothing"
+	stateDetail = "disabled keeps the whole selection but serves and lists nothing until it is active again"
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
-	// carry a secret out of this machine.
-	descriptionHint = "optional; what an agent uses this route for, e.g. 'customer records, " +
+	// carry a secret out of this machine. The short form keeps that consequence.
+	descriptionHint   = "optional; published by discovery, no secrets"
+	descriptionDetail = "optional; what an agent uses this route for, e.g. 'customer records, " +
 		"read and create'. discovery publishes it, so it must never carry a secret or personal data"
 	// providerNoteHint says the same for the note of a provider, and that one note serves every service
 	// of that provider rather than this service alone.
-	providerNoteHint = "optional; what this provider stands for here, e.g. 'wiki' or 'CRM', shared by every " +
+	providerNoteHint   = "optional; published by discovery, no secrets"
+	providerNoteDetail = "optional; what this provider stands for here, e.g. 'wiki' or 'CRM', shared by every " +
 		"service of the provider. discovery publishes and searches it, so it must never carry a secret or " +
 		"personal data"
 	// undescribedMarker ends the row of a connection that needsDescription, and undescribedHint says once
 	// under the list what it means. Neither blocks anything: the description stays optional.
 	undescribedMarker = "(no description)"
-	undescribedHint   = undescribedMarker + ": this connection shares its provider with another one, and an " +
-		"agent that has to choose between them sees only names and descriptions; add one line on what each " +
-		"route is for"
+	undescribedHint   = undescribedMarker + ": add a line on what this route is for"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
-	lockedHint = "read-only; press r on the list to rename it"
+	lockedHint = "read-only; rename with r on the list"
 	// accessHint says what each access mode means, including the two consequences that are easy to miss: a
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
-	accessHint = "by effect offers every tool of the effects ticked, also one a later version adds, but never a " +
+	accessHint   = "by effect, or by selected tools"
+	accessDetail = "by effect offers every tool of the effects ticked, also one a later version adds, but never a " +
 		"tool marked listed only; selected tools offers exactly the tools ticked, and none ticked offers no tool at all"
 	// pathsHint says what the path list of a connection does.
-	pathsHint = "the connection is offered only in projects inside these directories, absolute or starting " +
+	pathsHint   = "offered only in projects below these paths"
+	pathsDetail = "the connection is offered only in projects inside these directories, absolute or starting " +
 		"with ~/; none means every project"
 	// filesHint says what the two directory lists of a connection release.
-	filesHint = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
+	filesHint   = "local directories tools may %s"
+	filesDetail = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
 		"directory gives access to it and everything below; none releases no local files"
-	toolListHint = "enter opens this provider's tools to tick; the effects of the ticked tools follow from them"
+	toolListHint   = "enter opens the tools to tick"
+	toolListDetail = "enter opens this provider's tools to tick; the effects of the ticked tools follow from them"
 )
 
 // The profile row of a connection. A profile is a provider's named starting selection: choosing one ticks
@@ -293,7 +308,8 @@ const (
 	profileCustom = "custom"
 	profileHint   = "a starting selection, not a role: only the ticks below are saved, and they do not narrow " +
 		"what the credential itself may do at the provider"
-	profileCustomHint = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
+	profileCustomHint   = "the ticks below match no profile"
+	profileCustomDetail = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
 )
 
 // The state row of a connection form: a disabled connection keeps its selection but serves nothing.
@@ -334,6 +350,12 @@ const (
 
 func (f field) withHint(hint string) field {
 	f.hint = hint
+	return f
+}
+
+// withDetail sets the explanation behind the one-line hint: the text the pane and the info key show.
+func (f field) withDetail(detail string) field {
+	f.detail = detail
 	return f
 }
 
@@ -2025,9 +2047,28 @@ func (m *Model) targetHint(service string) string {
 	return m.providerTargetHint(m.cfg.Services[service].Provider)
 }
 
-// providerTargetHint says what one target of the provider is and what the provider allows of the list:
-// whether it may stay empty, and whether it holds more than one entry.
+// providerTargetHint is the short line of the target row: what one target of the provider is, and whether
+// the list may stay empty and holds more than one entry. The provider's own description is behind the info
+// key (providerTargetDetail).
 func (m *Model) providerTargetHint(provider string) string {
+	metadata, _ := m.cfg.ProviderMetadata(provider)
+	need, count := "optional", "several"
+	if metadata.Target.Required {
+		need = "required"
+	}
+	if !metadata.Target.Multiple {
+		count = "one"
+	}
+	return metadata.Target.Label + ": " + need + ", " + count
+}
+
+// targetDetail is the explanation behind targetHint.
+func (m *Model) targetDetail(service string) string {
+	return m.providerTargetDetail(m.cfg.Services[service].Provider)
+}
+
+// providerTargetDetail says what one target of the provider is and what the provider allows of the list.
+func (m *Model) providerTargetDetail(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	hint := metadata.Target.Description
 	if metadata.Target.Required {
@@ -2042,9 +2083,9 @@ func (m *Model) providerTargetHint(provider string) string {
 // emptyTargets says what a connection without targets does for the provider.
 func emptyTargets(metadata config.TargetMetadata) string {
 	if metadata.Required {
-		return "none yet: required, enter adds one"
+		return "none yet, required"
 	}
-	return "whatever its credential reaches"
+	return "unrestricted"
 }
 
 // connectionProviderChosen narrows the service and credential rows to the provider now selected. A route
@@ -2054,7 +2095,7 @@ func (m *Model) connectionProviderChosen() {
 	m.replaceChoices("service", m.providerServices(provider))
 	m.replaceChoices("credential", m.providerCredentials(provider))
 	if target := m.field(targetsLabel); target != nil {
-		target.hint = m.targetHint(m.fieldValue("service"))
+		target.hint, target.detail = m.targetHint(m.fieldValue("service")), m.targetDetail(m.fieldValue("service"))
 	}
 	m.replaceEffectChoices(provider)
 	m.syncFilesRows()
@@ -2076,7 +2117,7 @@ func (m *Model) accessModeChosen() {
 	}
 	if list := m.field(toolListLabel); list != nil {
 		list.hidden = !byTools
-		list.hint = toolListHint
+		list.hint, list.detail = toolListHint, toolListDetail
 	}
 }
 
@@ -2102,7 +2143,7 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 	return choices
 }
 
-// toolText is how one tool reads in the picker: its ID and effect, whether it is offered only when ticked
+// toolText is how one tool reads in the picker: its title, ID and effect, whether it is offered only when ticked
 // here, and whether the targets set in the form do not reach it, with the reason as text. The same text is
 // what the filter searches. A tool outside the targets stays tickable: the selection is kept and the tool is
 // offered once the targets reach it.
@@ -2112,7 +2153,7 @@ func (m *Model) toolText(id string) string {
 		if tool.ID != id {
 			continue
 		}
-		text := id + "  " + string(tool.Effect)
+		text := m.toolLead(id) + id + "  " + string(tool.Effect)
 		if tool.RequiresToolAllowList {
 			text += "  (listed only)"
 		}
@@ -2128,6 +2169,17 @@ func (m *Model) toolText(id string) string {
 		return text
 	}
 	return id + "  (not registered)"
+}
+
+// toolLead is the title of a tool and the gap after it, "" for a tool without a title.
+func (m *Model) toolLead(id string) string {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	for _, tool := range metadata.Tools {
+		if tool.ID == id && tool.Title != "" {
+			return tool.Title + "  "
+		}
+	}
+	return ""
 }
 
 // formProvider is the provider the form belongs to: the provider row of a connection form, or the provider
@@ -2148,14 +2200,15 @@ func (m *Model) accessFields(provider string, effects []config.Effect, current [
 		mode = accessTools
 	}
 	permissions := permissionField(m.permissionChoicesFor(provider, effects), effects)
-	permissions.hint = m.permissionHint(provider)
+	permissions.hint, permissions.detail = m.permissionHint(provider), m.permissionDetail(provider)
 	tools := field{label: toolListLabel, kind: fieldToolList,
 		choices: m.toolChoices(provider, current), selected: map[string]bool{}}
 	for _, tool := range current {
 		tools.selected[tool] = true
 	}
-	permissions.hidden, tools.hidden, tools.hint = current != nil, current == nil, toolListHint
-	return []field{choiceField(accessLabel, []string{accessEffects, accessTools}, mode).withHint(accessHint),
+	permissions.hidden, tools.hidden = current != nil, current == nil
+	tools.hint, tools.detail = toolListHint, toolListDetail
+	return []field{choiceField(accessLabel, []string{accessEffects, accessTools}, mode).withHint(accessHint).withDetail(accessDetail),
 		permissions, tools}
 }
 
@@ -2193,7 +2246,7 @@ func (m *Model) applyProfile(id string) {
 		return
 	}
 	if mode := m.field(accessLabel); mode != nil {
-		*mode = choiceField(accessLabel, mode.choices, accessTools).withHint(mode.hint)
+		*mode = choiceField(accessLabel, mode.choices, accessTools).withHint(mode.hint).withDetail(mode.detail)
 	}
 	if list := m.field(toolListLabel); list != nil {
 		list.selected = map[string]bool{}
@@ -2249,12 +2302,15 @@ func (m *Model) syncProfile() {
 	match := m.matchingProfile()
 	if match == "" {
 		row.choices = append(row.choices, profileCustom)
-		row.index, row.hint = len(row.choices)-1, profileCustomHint+"; "+profileHint
+		row.index, row.hint, row.detail = len(row.choices)-1, profileCustomHint, profileCustomDetail+"; "+profileHint
 		return
 	}
 	profile, _ := findProfile(metadata, match)
 	*row = choiceField(profileLabel, row.choices, match)
-	row.hint = profileText(metadata, profile) + "; " + profileHint
+	row.hint, row.detail = profile.Title, profileText(metadata, profile)+"; "+profileHint
+	if profile.MutationReason != "" {
+		row.hint += " (preselects a change)"
+	}
 }
 
 // profileText says what one profile is for and exactly what it ticks.
@@ -2286,11 +2342,16 @@ func (m *Model) replaceChoices(label string, choices []string) {
 
 func (m *Model) targetChosen() {
 	if target := m.field(targetsLabel); target != nil {
-		target.hint = m.targetHint(m.fieldValue("service"))
+		target.hint, target.detail = m.targetHint(m.fieldValue("service")), m.targetDetail(m.fieldValue("service"))
 	}
 }
 
 func (m *Model) permissionHint(provider string) string {
+	return "enter opens the effects to tick"
+}
+
+// permissionDetail is the explanation behind permissionHint, with what default means now.
+func (m *Model) permissionDetail(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	permissions := manage.DefaultEffects(metadata)
 	defaults := make([]string, len(permissions))
@@ -2345,7 +2406,7 @@ func (m *Model) replaceEffectChoices(provider string) {
 			}
 		}
 	}
-	f.hint = m.permissionHint(provider)
+	f.hint, f.detail = m.permissionHint(provider), m.permissionDetail(provider)
 }
 
 func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
@@ -2832,14 +2893,14 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 	if source != "" {
 		name, shown = source, m.copyName(source)
 	}
-	key := textField("name", shown, edit != "").withHint(nameHint)
+	key := textField("name", shown, edit != "").withHint(nameHint).withDetail(nameDetail)
 	if m.section == sectionDefaults {
-		key.label, key.hint = "domain", domainHint
+		key.label, key.hint, key.detail = "domain", domainHint, domainDetail
 	}
 	if key.readOnly {
 		// A locked field must not go on describing a free choice: that hint would claim the opposite of
 		// what the field does. It says that it is locked, and how to get the rename it refuses.
-		key.hint = lockedHint
+		key.hint, key.detail = lockedHint, ""
 	}
 	fields := []field{key}
 
@@ -2848,7 +2909,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		s := m.cfg.Services[name]
 		fields = append(fields,
 			providerField(m.cfg.Providers(), s.Provider),
-			textField("base url", s.BaseURL, false).withHint(baseURLHint),
+			textField("base url", s.BaseURL, false).withHint(baseURLHint).withDetail(baseURLDetail),
 		)
 		if name == "" && source == "" {
 			metadata, _ := m.cfg.ProviderMetadata(fields[1].value())
@@ -2857,7 +2918,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		// The note belongs to the provider, not to this service; it stands here because a service is
 		// where a provider is set up.
 		fields = append(fields, textField(providerNoteLabel, m.cfg.ProviderNotes[fields[1].value()], false).
-			withHint(providerNoteHint))
+			withHint(providerNoteHint).withDetail(providerNoteDetail))
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
 		if cred.Forward {
@@ -2873,7 +2934,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		}
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
-			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint),
+			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint).withDetail(credentialProviderDetail),
 			storageField(choice),
 		)
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
@@ -2887,19 +2948,19 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			provider = m.firstProviderWithService()
 		}
 		fields = append(fields,
-			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint),
-			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
+			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint).withDetail(connectionProviderDetail),
+			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint).withDetail(connectionServiceDetail),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
-				withHint(connectionCredentialHint),
+				withHint(connectionCredentialHint).withDetail(connectionCredentialDetail),
 			targetsField(conn.TargetValues()).withLabels(conn.TargetLabels),
-			pathsField(conn.Paths).withHint(pathsHint),
+			pathsField(conn.Paths).withHint(pathsHint).withDetail(pathsDetail),
 			filesField(filesReadLabel, conn.Files.Read),
 			filesField(filesWriteLabel, conn.Files.Write),
 			// Description and access explain the route the fields above define. Only the description
 			// is published during discovery.
-			textField("description", conn.Description, false).withHint(descriptionHint),
+			textField("description", conn.Description, false).withHint(descriptionHint).withDetail(descriptionDetail),
 			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
-				withHint(stateHint),
+				withHint(stateHint).withDetail(stateDetail),
 			m.activeForField(conn),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
 		)
@@ -2907,7 +2968,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		if m.wantsForwardRow(conn) {
 			fields = append(fields, m.forwardField(conn.ForwardSecrets))
 		}
-		fields[4].hint = m.targetHint(fields[2].value())
+		fields[4].hint, fields[4].detail = m.targetHint(fields[2].value()), m.targetDetail(fields[2].value())
 	case sectionDefaults:
 		fields = append(fields,
 			choiceField("connection", m.entryNames(sectionConnections), m.cfg.Defaults.Connections[name]),
@@ -3000,8 +3061,7 @@ func (m *Model) save(name string) tea.Cmd {
 		if credType == config.CredentialTypeVault {
 			where = placeVault
 		}
-		m.status = "Credential saved. Add the required provider secrets below: press enter on each role to " +
-			"store it in " + where + "."
+		m.status = "Credential saved. Store its secrets below: enter on a role stores it in " + where + "."
 		m.addWarning(logged)
 		return tea.Batch(cmd, m.autoApprove(before, direct))
 	}
@@ -3310,11 +3370,19 @@ func (m *Model) roleHintText(provider, role, lead string, isLead, full bool) str
 		}
 		parts = append(parts, description)
 	}
-	if isLead {
+	if isLead && (full || len(parts) == 0) {
+		// The sentence all env rows share is the detail; the line itself keeps it only when there is no
+		// description to show.
+		if !full {
+			lead = shortLeads[lead]
+		}
 		parts = append(parts, lead)
 	}
 	return strings.Join(parts, "; ")
 }
+
+// shortLeads are the one-line forms of the sentences the first role row adds.
+var shortLeads = map[string]string{envHint: envShortHint, maskedHint: maskedShortHint}
 
 // roleDetail is the full hint of a role row, or "" where the short hint already says all of it.
 func (m *Model) roleDetail(provider, role, lead string, isLead bool) string {
@@ -3326,7 +3394,7 @@ func (m *Model) roleDetail(provider, role, lead string, isLead bool) string {
 }
 
 // shortDescriptionLimit is how many characters of a provider's description stand inline under a row.
-const shortDescriptionLimit = 80
+const shortDescriptionLimit = 64
 
 // shortDescription is the part of a provider's description that fits a form: its first clause, or, where
 // that is still long, what stands before its first colon, or else its first words. A cut text ends in an
@@ -3419,7 +3487,7 @@ func filesField(label string, values []string) field {
 	if label == filesWriteLabel {
 		verb = "write files to"
 	}
-	return field{label: label, kind: fieldPaths, entries: values}.withHint(fmt.Sprintf(filesHint, verb))
+	return field{label: label, kind: fieldPaths, entries: values}.withHint(fmt.Sprintf(filesHint, verb)).withDetail(fmt.Sprintf(filesDetail, verb))
 }
 
 // isFilesLabel reports whether label is one of the two local file rows.
@@ -3670,9 +3738,6 @@ func (m *Model) editorView() string {
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
 			b.WriteString("\n" + m.wrapped(styles.hint, m.copyNote()) + "\n")
 		}
-		if m.section == sectionTokens && m.wizard == nil {
-			b.WriteString(m.tokenFormNotes())
-		}
 		keys := "enter next · tab next field · " + formKeys
 		switch m.fields[m.focus].kind {
 		case fieldChoice:
@@ -3740,7 +3805,7 @@ func (m *Model) secretPrompt() promptDialog {
 	return promptDialog{
 		title: fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole),
 		input: m.inputLine("  ", m.secretInput),
-		hint:  "the value is masked while you type, is never shown back, and goes into " + where,
+		hint:  "masked; goes into " + where,
 		keys:  "enter store · {back} cancel",
 	}
 }
@@ -4221,7 +4286,16 @@ func (m *Model) pickerRow(i int) string {
 		}
 	}
 	mark := m.pickerMark(m.fields[m.focus], choice)
-	return m.listRow(i == m.picker.cursor, truncateCells(text, width-lipgloss.Width(mark))+mark)
+	active := i == m.picker.cursor
+	line := m.listRow(active, truncateCells(text, width-lipgloss.Width(mark))+mark)
+	if active || m.pickerMarks == nil || m.fields[m.focus].label != toolListLabel || isEffectRow(choice) ||
+		(m.pickerGroups != nil && m.pickerGroups.isRow(choice)) {
+		return line
+	}
+	// The ID and what follows it stand faint on rows that are not active; they stay text, so nothing depends
+	// on the faint style. A row without a title is faint from the ID on as well.
+	head := clipCells(line, 2+lipgloss.Width("[ ] ")+lipgloss.Width(m.toolLead(choice)))
+	return head + lipgloss.NewStyle().Faint(true).Render(strings.TrimPrefix(line, head))
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
@@ -4438,9 +4512,6 @@ func (m *Model) fieldHint(f field) string { return m.fieldHintText(f, false) }
 // fieldDetail is the whole hint of a row, which fieldHint may show shortened. The text is the same for
 // every terminal size.
 func (m *Model) fieldDetail(f field) string {
-	if f.detail != "" && f.kind != fieldSecret {
-		return f.detail
-	}
 	return m.fieldHintText(f, true)
 }
 
@@ -4455,22 +4526,29 @@ func (m *Model) fieldHintText(f field, full bool) string {
 				}
 				parts = append(parts, description)
 			}
-			if f.roleLead {
-				parts = append(parts,
-					"save this credential with F2 first; you will stay here to add both secrets")
+			if f.roleLead && (full || len(parts) == 0) {
+				lead := "save the credential with F2 first"
+				if full {
+					lead = "save this credential with F2 first; you will stay here to add both secrets"
+				}
+				parts = append(parts, lead)
 			}
 			return strings.Join(parts, "; ")
 		}
 		return m.secretRowHint(m.editing, f.label, f.roleLead, full)
 	}
-	if f.kind == fieldProvider {
+	text := f.hint
+	if full && f.detail != "" {
+		text = f.detail
+	}
+	if f.kind == fieldProvider && !full {
 		return providerHint(f)
 	}
-	if f.kind == fieldToolList && f.label != forwardLabel && len(f.marked()) > 0 {
-		// The ticks are what is saved, so they stand in full under the row that holds them.
-		return f.hint + "; ticked: " + strings.Join(f.marked(), ", ")
+	if full && f.kind == fieldToolList && f.label != forwardLabel && len(f.marked()) > 0 {
+		// The ticks are what is saved, so the explanation of the row lists them in full.
+		return text + "; ticked: " + strings.Join(f.marked(), ", ")
 	}
-	return f.hint
+	return text
 }
 
 func (m *Model) fieldWarning(f field) string {

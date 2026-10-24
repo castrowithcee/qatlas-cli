@@ -959,9 +959,7 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	if m.editing == "" {
 		// A secret stored under a name that was never saved would sit in the store with nothing pointing
 		// at it, which is the orphaning this editor exists to avoid.
-		m.fail = "save the credential first, then store its secrets: a credential kept in the " +
-			placeKeyring + " or the " + placeVault + " saves without any value, and its secrets are added " +
-			"afterwards"
+		m.fail = "save the credential first, then store its secrets"
 		return nil
 	}
 	if m.credentialType() == config.CredentialTypeVault && m.vaultBusy {

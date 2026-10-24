@@ -23,15 +23,20 @@ const (
 	// forwardLabel is the row of a connection that ticks the payload secrets it releases (forward_secrets).
 	forwardLabel = "forward"
 
-	payloadStorageHint = "system keyring keeps the values in the keyring of this machine, vault keeps them in a " +
+	payloadStorageHint   = "keyring or vault, never environment variables"
+	payloadStorageDetail = "system keyring keeps the values in the keyring of this machine, vault keeps them in a " +
 		"file beside the configuration; a payload secret never uses environment variables"
-	payloadDescriptionHint = "optional; what these values are for, e.g. 'login of the billing portal'. discovery " +
+	payloadDescriptionHint   = "optional; published by discovery, no secrets"
+	payloadDescriptionDetail = "optional; what these values are for, e.g. 'login of the billing portal'. discovery " +
 		"publishes it, so it must never carry a secret or personal data"
-	payloadNewHint = "type a field name (letters, digits, - _ .) and press enter; the row for its value follows"
-	// payloadMaskHint takes the shortest value length.
-	payloadMaskHint = "typed masked and never shown, at least %d characters; stored only when you save; " +
+	payloadNewHint   = "a field name, then enter"
+	payloadNewDetail = "type a field name (letters, digits, - _ .) and press enter; the row for its value follows"
+	// payloadMaskHint and payloadMaskDetail take the shortest value length.
+	payloadMaskHint   = "masked; at least %d characters"
+	payloadMaskDetail = "typed masked and never shown, at least %d characters; stored only when you save; " +
 		"ctrl+d removes this field"
-	forwardHint = "forward_secrets: the payload secrets a tool of this connection may pass on by reference; " +
+	forwardHint   = "payload secrets tools may pass on"
+	forwardDetail = "forward_secrets: the payload secrets a tool of this connection may pass on by reference; " +
 		"enter opens them to tick, none ticked releases none"
 )
 
@@ -81,9 +86,9 @@ func (m *Model) payloadFields(edit, source string) []field {
 		name, shown = source, m.copyName(source)
 	}
 	cred := m.cfg.Credentials[name]
-	key := textField("name", shown, edit != "").withHint(nameHint)
+	key := textField("name", shown, edit != "").withHint(nameHint).withDetail(nameDetail)
 	if key.readOnly {
-		key.hint = lockedHint
+		key.hint, key.detail = lockedHint, ""
 	}
 	choice := storageKeyring
 	if cred.Type == config.CredentialTypeVault ||
@@ -91,15 +96,15 @@ func (m *Model) payloadFields(edit, source string) []field {
 		choice = storageVault
 	}
 	storage := choiceField(storageLabel, []string{storageKeyring, storageVault}, choice).
-		withHint(payloadStorageHint)
+		withHint(payloadStorageHint).withDetail(payloadStorageDetail)
 	// Moving the values to the other place is not offered: delete the secret and create it again.
 	storage.readOnly = edit != ""
 	fields := []field{key, storage,
-		textField("description", cred.Description, false).withHint(payloadDescriptionHint)}
+		textField("description", cred.Description, false).withHint(payloadDescriptionHint).withDetail(payloadDescriptionDetail)}
 	for i, field := range cred.Fields {
 		fields = append(fields, m.payloadValueRow(field, edit != "", i == 0))
 	}
-	add := textField(payloadNewLabel, "", false).withHint(payloadNewHint)
+	add := textField(payloadNewLabel, "", false).withHint(payloadNewHint).withDetail(payloadNewDetail)
 	add.kind = fieldPayloadNew
 	return append(fields, add)
 }
@@ -110,8 +115,10 @@ func (m *Model) payloadValueRow(name string, stored, lead bool) field {
 	f := m.maskedField("", name, lead)
 	f.stored = stored
 	f.hint = fmt.Sprintf(payloadMaskHint, config.MinForwardValueLength)
+	f.detail = fmt.Sprintf(payloadMaskDetail, config.MinForwardValueLength)
 	if stored {
-		f.hint += "; empty keeps the stored value"
+		f.hint += "; empty keeps it"
+		f.detail += "; empty keeps the stored value"
 	}
 	return f
 }
@@ -343,7 +350,7 @@ func (m *Model) forwardField(current []string) field {
 			choices = append(choices, name)
 		}
 	}
-	f := field{label: forwardLabel, kind: fieldToolList, choices: choices, selected: map[string]bool{}, hint: forwardHint}
+	f := field{label: forwardLabel, kind: fieldToolList, choices: choices, selected: map[string]bool{}, hint: forwardHint, detail: forwardDetail}
 	for _, name := range current {
 		f.selected[name] = true
 	}

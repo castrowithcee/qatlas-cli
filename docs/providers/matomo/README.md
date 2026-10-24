@@ -136,14 +136,16 @@ refused. Methods without server paging are cut on the Qatlas side.
 
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
-`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, and `matomo.annotations.get`. The
-profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md), because they carry
-personal data. The profile `goals` adds `matomo.goals.add`, `matomo.goals.update`, and the [goal recommendation
-tools](goals.md#goal-recommendations), which need a write right; it is not recommended because it changes the goal
-configuration of a website. `matomo.goals.delete` is in no profile, see [goals](goals.md). The profile `segments`
-adds `matomo.segments.add` and `matomo.segments.update`; it is not recommended because it changes the saved
-segments of the instance. The profile `annotations` adds `matomo.annotations.add` and `matomo.annotations.update`;
-it is not recommended because it changes the annotations of a website.
+`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`, and
+`matomo.annotations.count`. The profile `live` adds the [live tools](live.md) and the [visitor profile
+tools](visitors.md), because they carry personal data. The profile `goals` adds `matomo.goals.add`,
+`matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
+right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
+no profile, see [goals](goals.md). The profile `segments` adds `matomo.segments.add`, `matomo.segments.update`,
+`matomo.segments.star`, and `matomo.segments.unstar`; it is not recommended because it changes the saved segments
+of the instance, and `matomo.segments.delete` is in no profile. The profile `annotations` adds
+`matomo.annotations.add` and `matomo.annotations.update`; it is not recommended because it changes the annotations
+of a website, and the annotation deletions are in no profile.
 
 ## Tools
 
@@ -175,10 +177,16 @@ it is not recommended because it changes the annotations of a website.
 | `matomo.segments.get` | [segments](segments.md) | reads one saved segment by its instance-wide ID |
 | `matomo.segments.add` | [segments](segments.md) | saves a segment (effect `create`) |
 | `matomo.segments.update` | [segments](segments.md) | replaces a saved segment (effect `update`) |
+| `matomo.segments.star` | [segments](segments.md) | stars a saved segment; the star belongs to the segment, not the user (effect `update`) |
+| `matomo.segments.unstar` | [segments](segments.md) | removes the star from a saved segment (effect `update`) |
+| `matomo.segments.delete` | [segments](segments.md) | deletes a saved segment, soft delete (effect `delete`, only via `tools`) |
 | `matomo.annotations.list` | [annotations](annotations.md) | reads the annotations of a website in a date range, in batches |
 | `matomo.annotations.get` | [annotations](annotations.md) | reads one annotation of a website |
 | `matomo.annotations.add` | [annotations](annotations.md) | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
 | `matomo.annotations.update` | [annotations](annotations.md) | changes the date, note, or star of an annotation (effect `update`) |
+| `matomo.annotations.count` | [annotations](annotations.md) | counts the annotations of a website per period, with starred counts |
+| `matomo.annotations.delete` | [annotations](annotations.md) | deletes one annotation for good (effect `delete`, only via `tools`) |
+| `matomo.annotations.delete-all` | [annotations](annotations.md) | deletes every annotation of a website; Super User, needs the `instance` target (effect `delete`, only via `tools`) |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

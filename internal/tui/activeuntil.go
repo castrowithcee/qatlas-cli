@@ -12,7 +12,8 @@ import (
 const (
 	activeForLabel     = "active for"
 	activeForUnlimited = "unlimited"
-	activeForHint      = "how long the connection stays active; afterwards it refuses like a disabled one. " +
+	activeForHint      = "how long the connection stays active"
+	activeForDetail    = "how long the connection stays active; afterwards it refuses like a disabled one. " +
 		"The first choice of a connection with a limit keeps it as it is"
 )
 
@@ -38,7 +39,7 @@ func (m *Model) activeForField(conn config.Connection) field {
 	for _, step := range activeForSteps {
 		choices = append(choices, step.text)
 	}
-	f := choiceField(activeForLabel, choices, activeForUnlimited).withHint(activeForHint)
+	f := choiceField(activeForLabel, choices, activeForUnlimited).withHint(activeForHint).withDetail(activeForDetail)
 	if at, ok := conn.Until(); ok && !conn.Disabled {
 		lead := remainingText(at, m.timeNow())
 		if lead != expiredText {
