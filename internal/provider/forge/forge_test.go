@@ -215,6 +215,9 @@ func testConfig(p *product) *config.Config {
 	cfg.Connections["package-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"orgs/acme"}, Tools: packageDelete}
 	if p == forgejo {
+		cfg.Connections["quota-admin"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+			Tools: append([]string{p.id + ".admin-quota-groups.get", p.id + ".admin-quota-rules.get"},
+				quotaAdminDeleteIDs...)}
 		cfg.Connections["notes-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 			Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".git-notes.delete"}}
 	}
