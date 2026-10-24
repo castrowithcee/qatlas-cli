@@ -74,7 +74,7 @@ func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
 		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
-		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID}
+		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID, referenceDataList.ID, ipRangesExpand.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -111,8 +111,9 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, their tracking code, settings, and consent manager, the goals, the saved segments, the " +
-				"annotations, the report and segment catalog of a website, and the data of its reports; changes nothing",
+			Description: "reads the instance version, the websites of the token, their tracking code, settings, and " +
+				"consent manager, the goals, the saved segments, the annotations, the custom dimensions, the report and " +
+				"segment catalog of a website, the data of its reports, reference data, and IP ranges; changes nothing",
 			Tools: readTools,
 		}, {
 			// Live data is personal data (visitor IDs, IP addresses, user IDs, locations), so it is a
@@ -137,6 +138,14 @@ func Register(reg *capability.Registry) error {
 			Tools: append(slices.Clone(readTools), segmentsAdd.ID, segmentsUpdate.ID, segmentsStar.ID,
 				segmentsUnstar.ID),
 		}, {
+			ID: "sites", Title: "Manage websites",
+			Description: "reads what the read profile reads, changes the settings and alias URLs of a website, and " +
+				"sets the creation date of websites; every change needs its own confirmation, replacing the alias " +
+				"URLs removes those not in the list, and adding a website (Super User, instance-wide) and deleting " +
+				"one stay unticked",
+			Tools: append(slices.Clone(readTools), sitesUpdate.ID, siteURLsAdd.ID, siteURLsSet.ID,
+				sitesUpdateCreatedTime.ID),
+		}, {
 			ID: "annotations", Title: "Manage annotations",
 			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
 				"every change needs its own confirmation",
@@ -147,12 +156,6 @@ func Register(reg *capability.Registry) error {
 				"adds and updates the custom dimensions of a website; every change needs its own confirmation, and a " +
 				"new dimension uses a slot for good because Matomo cannot delete one",
 			Tools: append(slices.Clone(readTools), dimensionOptionsList.ID, dimensionsAdd.ID, dimensionsUpdate.ID),
-		}, {
-			ID: "sites", Title: "Manage website URLs and creation dates",
-			Description: "reads what the read profile reads, adds and replaces the alias URLs of a website, and sets " +
-				"the creation date of websites; every change needs its own confirmation, and replacing the list " +
-				"removes the URLs not in it",
-			Tools: append(slices.Clone(readTools), siteURLsAdd.ID, siteURLsSet.ID, sitesUpdateCreatedTime.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -208,6 +211,12 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trackingCodeGet, Handler: capability.Handler(invokeTrackingCodeGet)},
 		capability.Operation{Descriptor: siteSettingsGet, Handler: capability.Handler(invokeSiteSettingsGet)},
 		capability.Operation{Descriptor: consentManagerDetect, Handler: capability.Handler(invokeConsentManagerDetect)},
+		capability.Operation{Descriptor: sitesAdd, Handler: capability.Handler(invokeSitesAdd)},
+		capability.Operation{Descriptor: sitesUpdate, Handler: capability.Handler(invokeSitesUpdate)},
+		capability.Operation{Descriptor: sitesDelete, Handler: capability.Handler(invokeSitesDelete)},
 		capability.Operation{Descriptor: siteGroupsList, Handler: capability.Handler(invokeSiteGroupsList)},
+		capability.Operation{Descriptor: globalSettingsGet, Handler: capability.Handler(invokeGlobalSettingsGet)},
+		capability.Operation{Descriptor: referenceDataList, Handler: capability.Handler(invokeReferenceDataList)},
+		capability.Operation{Descriptor: ipRangesExpand, Handler: capability.Handler(invokeIPRangesExpand)},
 	)
 }

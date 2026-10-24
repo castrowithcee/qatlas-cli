@@ -28,11 +28,6 @@ var (
 	siteGroupSentOnce = sentOnceFor("group", "matomo.site-groups.list")
 )
 
-func siteChangeRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
-	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
-		OpenWorld: true, DataSensitivity: sitesSensitive}
-}
-
 const aliasURLsSchema = `"urls":{"type":"array","maxItems":20,"items":{"type":"string","minLength":1,"maxLength":2000}}`
 
 const siteURLsOutput = `{"type":"object","properties":{"idSite":{"type":"integer"},"inserted":{"type":"integer"},` +
