@@ -125,7 +125,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".commits.list", p.id+".commits.get", p.id+".commits.get-diff", p.id+".compare.get",
 			p.id+".commit-statuses.list", p.id+".commit-statuses.get-combined", p.id+".commit-statuses.create",
 			p.id+".git-blobs.get", p.id+".git-trees.get", p.id+".git-refs.list", p.id+".git-tags.get",
-			p.id+".git-notes.get")
+			p.id+".git-notes.get", p.id+".repositories.search", p.id+".repository-languages.list",
+			p.id+".repository-activities.list", p.id+".repository-signing-keys.get")
 		if p == forgejo {
 			want = append(want, p.id+".git-blobs.list", p.id+".git-notes.set", p.id+".git-notes.delete")
 		}

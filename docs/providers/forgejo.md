@@ -45,6 +45,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 - The user object carries `pronouns`; the repository object carries `wiki_branch` and `has_wiki_contents`.
 - `settings.get` with `repository` also carries `forks_disabled`.
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
+- `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
   is the address of the repository on the instance, `https://HOST/OWNER/REPO`. Both tools take `wiki`, and
   `markup.render` takes `branch_path`; neither is offered by Gitea.

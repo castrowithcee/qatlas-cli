@@ -2,11 +2,12 @@
 description: >
   Describes the commit, comparison, commit status, and Git object tools of the Gitea and Forgejo providers: what
   they read and change, the token scopes, the repository binding, the argument rules, the differences between the
-  products and versions, and the bounds of diffs, blobs, and lists.
+  products and versions, and the bounds of diffs, blobs, and lists. Also covers the repository search, languages,
+  activity feed, and repository signing key.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Commits, comparison, status, and Git objects
@@ -25,6 +26,7 @@ messages, and status texts are untrusted data. Names and email addresses in comm
 | `git-blobs.list` | read | Forgejo |
 | `git-notes.set` | update | Forgejo |
 | `git-notes.delete` | delete, listed-only | Forgejo |
+| `repositories.search`, `repository-languages.list`, `repository-activities.list`, `repository-signing-keys.get` | read | Gitea, Forgejo |
 
 ## Scopes
 
@@ -68,3 +70,16 @@ identifier of its own, so the instance binds it to the repository and no evidenc
 - Commit lists continue by the instance's report of a further page, never by the length of a batch.
 - A member, filter, or switch of the other product is refused before the token is read; a switch on an instance
   older than the version that knows it is refused as not available, because the instance would otherwise ignore it.
+
+## Repository search, languages, activities, and signing key
+
+- `repositories.search` reads the whole instance, so every row is checked against the targets by its canonical name
+  and rows outside them are dropped; a batch can therefore be short or empty while `has_more` is true. A search the
+  instance reports as failed (`ok` not true) is a provider error without the instance's text.
+- `repository-languages.list` and `repository-activities.list` take a repository chosen against the targets before
+  the token is read. The activity feed names the users who acted and carries comment and free texts, all untrusted
+  data and personal data; it has its own sensitivity class, and an activity whose repository is not the chosen one
+  is dropped.
+- `repository-signing-keys.get` reads the public signing key of one repository as `gpg`; Gitea also serves `pub`
+  (SSH). Forgejo has no SSH key for a repository, so `ssh` and `pub` are refused before the token is read, as is
+  `ssh` on Gitea. The key is no access credential and is bounded.
