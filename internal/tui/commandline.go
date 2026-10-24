@@ -53,10 +53,15 @@ func (m *Model) commands() []command {
 			if name == title {
 				continue
 			}
+			aliases := []string{name}
+			if name == "update" {
+				// The bare word belongs to the command that installs the release.
+				aliases = nil
+			}
 			list = append(list, command{
 				name:        "go " + name,
 				desc:        fmt.Sprintf("Open %s, %s (%d)", a.title(), s.title(), int(a)+1),
-				aliases:     []string{name},
+				aliases:     aliases,
 				hidden:      true,
 				unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
 				run:         func(m *Model) tea.Cmd { return m.openSection(s) },

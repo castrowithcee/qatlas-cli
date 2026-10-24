@@ -31,6 +31,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // Tester checks one configured connection and reports the stable outcome class. The editor holds no
@@ -66,12 +67,19 @@ const (
 	sectionLogs
 	// sectionOverview is the start of the editor. It holds no entries; see overview.go.
 	sectionOverview
+	// sectionGeneral holds the device-local preferences (colour scheme, start view, icons), a settings form
+	// that needs no admin session. sectionTransfer, sectionUpdate and sectionSelftest are pages of action
+	// rows that start the export and import, the update and the selftests. See settings.go.
+	sectionGeneral
+	sectionTransfer
+	sectionUpdate
+	sectionSelftest
 	sectionCount
 )
 
 func (s section) title() string {
 	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals", "Tokens", "Logs",
-		"Overview"}[s]
+		"Overview", "General", "Transfer", "Update", "Self-test"}[s]
 }
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
@@ -80,7 +88,7 @@ func (s section) title() string {
 // and Overview hold no list of named entries either.
 func (s section) entry() string {
 	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "agent token",
-		"log entry", "overview"}[s]
+		"log entry", "overview", "preference", "transfer", "update", "selftest"}[s]
 }
 
 type screen int
@@ -648,6 +656,13 @@ type Model struct {
 	payloadRemoveAsk bool
 
 	quitting bool
+
+	// prefs are the device-local preferences and savePrefs stores them; the latter is nil when they cannot be
+	// saved.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
+	// start is the area the editor opens on; the Overview is where it already is.
+	start area
 }
 
 // New builds the editor over the management service svc. store is only the handle the vault form's migrate
@@ -712,8 +727,16 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 // Init resolves credential locations for the credential list. It asks only for source metadata; secret values
 // never enter the model. It also starts the check for a newer release, which never blocks the editor.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick(),
-		m.loadOverviewActivity())
+	cmds := []tea.Cmd{m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick(),
+		m.loadOverviewActivity()}
+	if m.start != areaOverview {
+		// The chosen area opens like a tab pick: on its first part, with the focus on the tab line.
+		notice := m.status
+		cmds = append(cmds, m.previewArea(m.start))
+		m.status = notice
+		m.start = areaOverview
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
@@ -982,8 +1005,8 @@ func (m *Model) focusList() tea.Cmd {
 		m.clearMessages()
 		return nil
 	}
-	if m.section == sectionVault {
-		return m.enterVaultSection()
+	if m.section.isPage() {
+		return m.enterPage()
 	}
 	if m.section == sectionLogs {
 		m.screen = screenLogs
@@ -1172,8 +1195,8 @@ func (m *Model) newEntryBlockedFor(s section) string {
 			return "Create a connection before choosing a default. Press 2 to open Connections, or c for " +
 				"the guided setup."
 		}
-	case sectionVault:
-		return "Vault is a settings form, not a list; press enter to open it."
+	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
+		return m.section.title() + " is a settings page, not a list; press enter to open it."
 	case sectionApprovals:
 		return "Approvals lists connections automatically; there is nothing to add by hand."
 	case sectionTokens:
@@ -1554,6 +1577,9 @@ func (m *Model) discard() tea.Cmd {
 func (m *Model) saveAndLeave() tea.Cmd {
 	m.screen = m.leaveFrom
 	m.trimFields()
+	if m.section == sectionGeneral {
+		return m.saveGeneral(true)
+	}
 	if m.section == sectionVault {
 		return m.requireAdmin(m.saveVault)
 	}
@@ -2529,9 +2555,9 @@ func (m *Model) openSection(s section) tea.Cmd {
 	m.section = s
 	m.layoutWorkspace()
 	m.list.reset(m.entryNames(s))
-	if s == sectionVault {
-		// Vault has no list: entering the section opens its settings form directly.
-		return m.enterVaultSection()
+	if s.isPage() {
+		// A settings page has no list: entering the section opens its form directly.
+		return m.enterPage()
 	}
 	if s == sectionLogs {
 		return m.openLogs()
@@ -2557,9 +2583,10 @@ func (m *Model) showList() tea.Cmd {
 	m.confirmRole = ""
 	m.clearMessages()
 	m.problems = problemState{}
-	if m.section == sectionVault {
-		// Vault has no list of its own, so "the list" a form or confirmation returns to is the level above
-		// it, the tab line; openSection is what opens the form directly on the way in (see enterVaultSection).
+	if m.section.isPage() {
+		// A settings page has no list of its own, so "the list" a form or confirmation returns to is the
+		// level above it, the tab line; openSection is what opens the form directly on the way in (see
+		// enterPage).
 		m.focusNav()
 		return nil
 	}
@@ -2576,16 +2603,16 @@ func (m *Model) showList() tea.Cmd {
 	return m.refreshSources(m.keyringQueries())
 }
 
-// enterVaultSection opens the vault settings form directly: Vault has no list to show first, so entering
-// the section from the tab line is the same one step as opening a list's own entry would be for any other
+// enterPage opens the form of a settings page directly: it has no list to show first, so entering the
+// section from the tab line is the same one step as opening a list's own entry would be for any other
 // section.
-func (m *Model) enterVaultSection() tea.Cmd {
+func (m *Model) enterPage() tea.Cmd {
 	m.stopTest()
 	m.testName = ""
 	m.editing = ""
 	m.confirmRole = ""
 	m.clearMessages()
-	return m.openVaultForm()
+	return m.openPageForm()
 }
 
 func (m *Model) selected() (string, bool) { return m.list.selected() }
@@ -2853,6 +2880,13 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 // Saving is a managing action: requireAdmin gates it behind this window's admin session first.
 func (m *Model) submit() tea.Cmd {
 	m.trimFields()
+	if m.section == sectionGeneral {
+		return m.saveGeneral(false)
+	}
+	if m.section == sectionTransfer || m.section == sectionUpdate || m.section == sectionSelftest {
+		// These pages hold action rows only; there is nothing to save.
+		return nil
+	}
 	if m.section == sectionVault {
 		// The vault form has no name field, and its action rows already ran on their own enter, never
 		// deferred to here; F2 saves only the two timeouts (see vaultsettings.go).
@@ -3552,8 +3586,8 @@ func (m *Model) editorView() string {
 			if m.termWidth < narrowWidth {
 				what = "New " + noun + "\nfrom " + m.copyFrom
 			}
-		} else if m.section == sectionVault {
-			what = "Vault"
+		} else if m.section.isPage() {
+			what = m.section.pageTitle()
 		}
 		if m.wizard != nil {
 			b.WriteString(m.setupHeading(false))
@@ -3628,6 +3662,9 @@ func (m *Model) editorView() string {
 			// A token is created, not saved: it goes to the vault, never into the configuration.
 			keys = strings.ReplaceAll(keys, " save", " create")
 		}
+		if m.section == sectionTransfer || m.section == sectionUpdate || m.section == sectionSelftest {
+			keys = "enter run · tab next field · " + leaveKeys
+		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
 			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
@@ -3684,6 +3721,8 @@ func (m *Model) leaveView() string {
 		what = m.editing
 	case m.section == sectionVault:
 		what, where = "the vault settings", "Vault"
+	case m.section == sectionGeneral:
+		what, where = "the general settings", "General"
 	}
 	title, warning, save := "Leave "+what+" without saving?", "warning: unsaved changes in "+what, "{save} save"
 	why := "Leaving for " + where + " would lose them."
@@ -4259,8 +4298,8 @@ func (m *Model) emptyHelp() string {
 			return reason + " Defaults are optional."
 		}
 		return "No default yet. Press n to choose one, or leave this empty and select connections explicitly."
-	case sectionVault:
-		return "A settings form, not a list: press enter to open it."
+	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
+		return "A settings page, not a list: press enter to open it."
 	case sectionApprovals:
 		_, unavailable := m.approvalsReport()
 		if unavailable != "" {
@@ -4549,24 +4588,61 @@ func (m *Model) cells(name string) []string {
 	return []string{name}
 }
 
-// Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
-// not look for a newer release. The restart may be nil, in which case an installed release waits for a
-// restart by hand. The selftest says how the selftest commands run.
-func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets,
-	redactor *redact.Redactor, updater Updater, restart *Restart, selftest SelfTest, in, out *os.File) error {
+// Options is everything Run needs besides the terminal streams' defaults.
+type Options struct {
+	Service  *manage.Service
+	Store    *config.Store
+	Tester   Tester
+	Secrets  Secrets
+	Redactor *redact.Redactor
+	// Updater may be nil, in which case the editor does not look for a newer release.
+	Updater Updater
+	// Restart may be nil, in which case an installed release waits for a restart by hand.
+	Restart *Restart
+	// SelfTest says how the selftest commands run.
+	SelfTest SelfTest
+	// Prefs are the device-local preferences; the zero value is read as the defaults.
+	Prefs uiprefs.Prefs
+	// PrefsWarnings are problems found while loading Prefs; the editor shows the first one at start.
+	PrefsWarnings []string
+	// SavePrefs stores changed preferences. It may be nil, in which case they cannot be saved.
+	SavePrefs func(uiprefs.Prefs) error
+	In, Out   *os.File
+}
+
+// Run starts the editor on the terminal streams of opts.
+func Run(opts Options) error {
 	// Read before anything else, so that no child of the editor inherits the handoff.
 	predecessor := takeHandoff()
-	model, err := New(svc, store, tester, secrets, redactor)
+	prefs := opts.Prefs
+	if prefs == (uiprefs.Prefs{}) {
+		prefs = uiprefs.Default()
+	}
+	// The colour scheme is settled before the program takes the terminal, so a background query never
+	// races the editor's own input.
+	applyColorScheme(prefs.Theme)
+	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
 	if err != nil {
 		return err
 	}
-	model.updater = updater
-	model.restart = restart
-	model.selftest = selftest
+	model.updater = opts.Updater
+	model.restart = opts.Restart
+	model.selftest = opts.SelfTest
+	model.prefs = prefs
+	model.savePrefs = opts.SavePrefs
+	warnings := opts.PrefsWarnings
+	if start, ok := areaByName(prefs.Start); ok {
+		model.start = start
+	} else {
+		warnings = append(warnings, fmt.Sprintf("start %q is not an area, opening the Overview", prefs.Start))
+	}
+	if len(warnings) > 0 {
+		model.status = "warning: " + warnings[0]
+	}
 	if predecessor != nil {
 		model.adopt(predecessor)
 	}
-	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
+	_, err = tea.NewProgram(model, tea.WithInput(opts.In), tea.WithOutput(opts.Out)).Run()
 	return err
 }
 

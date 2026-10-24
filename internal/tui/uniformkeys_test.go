@@ -39,7 +39,7 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 			t.Fatalf("h, k = section %v bar %v, want Services on the tab line", m.section, m.navSub)
 		}
 		press(t, m, "end")
-		if m.section != sectionVault {
+		if m.section != sectionGeneral {
 			t.Fatalf("end = section %v, want the last area", m.section)
 		}
 		press(t, m, "home")
