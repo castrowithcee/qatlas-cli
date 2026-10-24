@@ -639,6 +639,8 @@ type Model struct {
 
 	// logs is the state of the Logs section; see logs.go.
 	logs *logView
+	// overviewAct is the latest activity the Overview shows, read in the background.
+	overviewAct overviewActivity
 
 	// payloadSaving is true while the commit of a payload secret is in flight; its form takes no input then.
 	payloadSaving bool
@@ -710,7 +712,8 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 // Init resolves credential locations for the credential list. It asks only for source metadata; secret values
 // never enter the model. It also starts the check for a newer release, which never blocks the editor.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick())
+	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick(),
+		m.loadOverviewActivity())
 }
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
@@ -762,13 +765,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenActionMsg:
 		return m, m.handleTokenAction(msg)
 	case vaultUnlockedMsg:
-		return m, tea.Batch(m.handleVaultUnlocked(msg), m.reloadShownLogs())
+		return m, tea.Batch(m.handleVaultUnlocked(msg), m.reloadShownLogs(), m.loadOverviewActivity())
 	case vaultProcessStartedMsg:
 		return m, m.handleVaultProcessStarted(msg)
 	case vaultLockedMsg:
-		return m, tea.Batch(m.handleVaultLocked(msg), m.reloadShownLogs())
+		return m, tea.Batch(m.handleVaultLocked(msg), m.reloadShownLogs(), m.loadOverviewActivity())
 	case logsLoadedMsg:
 		return m, m.handleLogsLoaded(msg)
+	case overviewActivityMsg:
+		m.handleOverviewActivity(msg)
+		return m, nil
 	case vaultProcessCheckMsg:
 		m.vaultProcessUnlocked = msg.unlocked
 		return m, nil

@@ -204,6 +204,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"kept and have their check values checked. A field of a log line is shown without its control\n" +
 			"characters and with every known secret redacted. Nothing in the section writes or deletes the\n" +
 			"log.\n\n" +
+			"The View field of the bar, reached with tab and changed with left/right, or the commands view\n" +
+			"heatmap and view table, swaps the table for a heatmap of the same rows: one cell per local day,\n" +
+			"weekdays by weeks, leveled by the number of invokes (quartiles of the busy days) with ·░▒▓█ or,\n" +
+			"in a terminal that is not UTF-8, .-=+#, a legend, and the calls, the success rate, and the errors.\n" +
+			"A day outside logs.retention_days shows × instead of the dot of a day without calls, a day with a\n" +
+			"changed line ✗, and a day with missing entries …. The mode, the days, the filters, and the search\n" +
+			"apply to it; from a single day, the heatmap widens the days to the retention window.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +

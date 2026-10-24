@@ -85,6 +85,8 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 		state = append(state, styles.ok.Render(banner))
 	}
 	state = state[:min(len(state), max(room, 0))]
+	// The activity block gets what the counts, the state, and the steps leave.
+	room -= len(state)
 
 	row := func(i int, text string) string {
 		line := "  " + truncateCells(text, width)
@@ -106,6 +108,7 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 			items = append(items, step)
 		}
 	}
+	lines = append(lines, m.overviewActivityLines(room, width)...)
 	return lines, items, foot
 }
 
