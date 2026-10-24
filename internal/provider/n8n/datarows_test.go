@@ -326,3 +326,28 @@ func TestDataRowChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestDataRowsListKeepsNumbersExact(t *testing.T) {
+	rows := `{"data":[{"id":9007199254740993,"big":12345678901234567890,"dec":0.1}]}`
+	var calls []call
+	var mutations []string
+	env := newEnvironment(t, &calls, rowServer(t, &mutations, rows))
+	result, err := env.invoke(dataRowsList.ID, "pdelete", `{`+tableArg()+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, literal := range []string{`"id":9007199254740993`, `"big":12345678901234567890`, `"dec":0.1`} {
+		if !strings.Contains(result, literal) {
+			t.Errorf("result = %s, want %s", result, literal)
+		}
+	}
+}
+
+func TestDataRowsListRefusesARowThatIsNotAnObject(t *testing.T) {
+	var calls []call
+	var mutations []string
+	env := newEnvironment(t, &calls, rowServer(t, &mutations, `{"data":[{"id":1},[1]]}`))
+	if _, err := env.invoke(dataRowsList.ID, "pdelete", `{`+tableArg()+`,"limit":1}`); classOf(err) != "invalid-provider-response" {
+		t.Fatalf("err = %v, want an invalid provider response", err)
+	}
+}
