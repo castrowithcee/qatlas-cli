@@ -48,19 +48,19 @@ func (m *Model) vaultHeaderText() string {
 		// Neither locked nor unlocked describes a vault whose state cannot even be read; this is closer to
 		// the unencrypted warning than to either of the other two, and keeps the line naming what is wrong
 		// instead of silently showing nothing.
-		return styles.fail.Render("⚠ vault: " + m.redactor.Apply(err.Error()))
+		return styles.fail.Render(tr(tVaultError, m.redactor.Apply(err.Error())))
 	}
 	switch {
 	case state == vault.StateUnencrypted:
-		return styles.fail.Render("⚠ vault unencrypted")
+		return styles.fail.Render(tr(tVaultUnencrypted))
 	case m.vaultDisplayUnlocked(state):
 		// A vault process elsewhere may hold it open while this window itself has never unlocked it; either
 		// way the admin abbreviation belongs here too, since every unlocked, encrypted vault shows one, and
 		// adminHeaderText already reads "admin off" (or the vault.admin_timeout: 0 text) on its own for a
 		// window that never started a session, since AdminSessionActive is false regardless of why.
-		return styles.ok.Render("🔓 vault unlocked") + " · " + styles.hint.Render(m.adminHeaderText())
+		return styles.ok.Render(tr(tVaultUnlocked)) + " · " + styles.hint.Render(m.adminHeaderText())
 	case state == vault.StateLocked:
-		return styles.warning.Render("🔒 vault locked")
+		return styles.warning.Render(tr(tVaultLocked))
 	}
 	return ""
 }
@@ -89,13 +89,13 @@ func (m *Model) vaultDisplayUnlocked(state vault.State) bool {
 // each change" for vault.admin_timeout: 0, which never keeps one at all (see requireAdmin in admin.go).
 func (m *Model) adminHeaderText() string {
 	if m.cfg.VaultAdminTimeout() <= 0 {
-		return "admin: confirm each change"
+		return tr(tAdminEachChange)
 	}
 	if !m.AdminSessionActive() {
-		return "admin off"
+		return tr(tAdminOff)
 	}
 	minutes := int(m.AdminSessionRemaining().Round(time.Minute) / time.Minute)
-	return fmt.Sprintf("admin %dm left", minutes)
+	return tr(tAdminLeft, minutes)
 }
 
 // vaultLockKeyHint is the 'ctrl+l' group of the key line on the tab line and the lists, only for an
@@ -137,12 +137,12 @@ func (m *Model) vaultLockKeyAllowed() bool {
 // other), or says there is nothing to do for one that is absent or unencrypted.
 func (m *Model) handleVaultLockKey() tea.Cmd {
 	if m.vaultBusy {
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.status = "no vault is configured for this run"
+		m.status = tr(tVaultNone)
 		return nil
 	}
 	state, err := v.State()
@@ -156,7 +156,7 @@ func (m *Model) handleVaultLockKey() tea.Cmd {
 	case state == vault.StateLocked:
 		m.openVaultUnlockPrompt(m.screen)
 	default:
-		m.status = "the vault is not encrypted, so there is nothing to lock"
+		m.status = tr(tVaultNothingToLock)
 	}
 	return nil
 }
@@ -193,7 +193,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 		u.input.Reset()
 		m.vaultUnlock = nil
 		m.screen = back
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 		return nil
 	case "enter":
 		if m.vaultBusy {
@@ -204,7 +204,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 		u.input.Reset()
 		m.clearMessages()
 		if typed == "" {
-			m.fail = "a passphrase must not be empty"
+			m.fail = tr(tPassphraseEmpty)
 			return nil
 		}
 		return m.beginVaultUnlock(typed, u.back)
@@ -220,7 +220,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 // adminSessionHint: this dialog opens without a pending admin-gated action, so it reads as unlocking that
 // also starts admin mode, not the other way round.
 func (m *Model) vaultUnlockPrompt() promptDialog {
-	d := promptDialog{title: "Unlock vault", input: m.inputLine("  ", m.vaultUnlock.input),
+	d := promptDialog{title: tr(tUnlockTitle), input: m.inputLine("  ", m.vaultUnlock.input),
 		hint: m.vaultUnlockHint(), keys: "enter unlock · {back} cancel"}
 	if m.restartNote != "" {
 		d.notice = m.indented(m.restartNote)
@@ -238,7 +238,7 @@ func (m *Model) vaultUnlockHint() string {
 		return m.adminSessionHint()
 	}
 	minutes := int(timeout.Round(time.Minute) / time.Minute)
-	return fmt.Sprintf("this also starts admin mode for this window, until %dm idle", minutes)
+	return tr(tUnlockAlsoAdmin, minutes)
 }
 
 // vaultUnlockedMsg carries the outcome of unlocking the vault back into the event loop: the scrypt work
@@ -256,11 +256,11 @@ type vaultUnlockedMsg struct {
 func (m *Model) beginVaultUnlock(passphrase string, back screen) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
-	m.busy = "unlocking the vault"
+	m.busy = tr(tBusyUnlocking)
 	return func() tea.Msg {
 		merged, err := v.Unlock(passphrase)
 		return vaultUnlockedMsg{err: err, back: back, merged: merged}
@@ -278,7 +278,7 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 		m.vaultBusy, m.busy = false, ""
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
 			m.openVaultUnlockPrompt(msg.back)
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 			return nil
 		}
 		m.vaultUnlock = nil
@@ -289,7 +289,7 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 	m.vaultUnlock = nil
 	m.screen = msg.back
 	m.startAdminSession()
-	m.status = "The vault is unlocked"
+	m.status = tr(tVaultNowUnlocked)
 	if m.section == sectionVault && m.screen == screenForm && m.formState() == m.pristine {
 		// The update behaviour row can only be read now; rebuilding drops nothing, the form is unedited.
 		m.openVaultForm()
@@ -394,8 +394,8 @@ func (m *Model) openVaultLockConfirm(back screen) {
 // vaultLockConfirmView draws the "Lock the vault now?" question.
 func (m *Model) vaultLockConfirmView() string {
 	return m.questionText(question{
-		title:       "Lock the vault now?",
-		consequence: "running invokes stop working until it is unlocked again",
+		title:       tr(tLockTitle),
+		consequence: tr(tLockConsequence),
 		keys:        "y lock · n/{back} stay unlocked · {command} cmds · {help} help",
 	})
 }
@@ -416,7 +416,7 @@ func (m *Model) beginVaultLock() tea.Cmd {
 		return nil
 	}
 	m.vaultBusy = true
-	m.busy = "locking the vault"
+	m.busy = tr(tBusyLocking)
 	return func() tea.Msg {
 		_, err := vaultproc.LockProcess(context.Background(), v)
 		v.Forget()
@@ -436,7 +436,7 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 			m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
 		return nil
 	}
-	m.status = "The vault is locked"
+	m.status = tr(tVaultNowLocked)
 	return nil
 }
 
@@ -471,20 +471,20 @@ func (m *Model) checkVaultProcess() tea.Cmd {
 // lockUnavailable is why ctrl+l would not lock the vault now.
 func (m *Model) lockUnavailable() string {
 	if !m.vaultLockKeyAllowed() {
-		return "cannot lock the vault from this screen; leave it first (esc)"
+		return tr(tLockCannotHere)
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		return "no vault is configured for this run"
+		return tr(tVaultNone)
 	}
 	state, err := v.State()
 	switch {
 	case err != nil:
-		return "the vault state is unknown"
+		return tr(tLockStateUnknown)
 	case m.vaultDisplayUnlocked(state):
 		return ""
 	case state == vault.StateLocked:
-		return "the vault is already locked"
+		return tr(tLockAlready)
 	}
-	return "the vault is not encrypted, so there is nothing to lock"
+	return tr(tVaultNothingToLock)
 }

@@ -53,7 +53,7 @@ func TestLoadInvalidValuesFallBackPerField(t *testing.T) {
 
 func TestLoadToleratesUnknownKeys(t *testing.T) {
 	path := Path(t.TempDir())
-	data := "theme: dark\nlanguage: de\nmouse: true\n"
+	data := "theme: dark\nmouse: true\nfont: x\n"
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestLoadToleratesUnknownKeys(t *testing.T) {
 
 func TestSaveRoundTripLeavesNoTempFile(t *testing.T) {
 	dir := t.TempDir()
-	want := Prefs{Theme: ThemeLight, Start: "access", Icons: IconsNerdFont, Keys: DefaultKeys()}
+	want := Prefs{Theme: ThemeLight, Start: "access", Icons: IconsNerdFont, Language: LanguageGerman, Keys: DefaultKeys()}
 	if err := Save(Path(dir), want); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != "theme: light\nstart: overview\nicons: none\n" {
+	if got := string(data); got != "theme: light\nstart: overview\nicons: none\nlanguage: english\n" {
 		t.Fatalf("file = %q", got)
 	}
 }
@@ -105,6 +105,7 @@ func TestSaveInvalidWritesNothing(t *testing.T) {
 		{Theme: "x", Start: "overview", Icons: IconsNone},
 		{Theme: ThemeAuto, Start: "", Icons: IconsNone},
 		{Theme: ThemeAuto, Start: "overview", Icons: "x"},
+		{Theme: ThemeAuto, Start: "overview", Icons: IconsNone, Language: "fr"},
 	} {
 		if err := Save(Path(dir), bad); err == nil {
 			t.Errorf("Save(%+v) = nil; want an error", bad)
@@ -138,5 +139,25 @@ func TestSaveCreatesDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLanguageLoadsAndFallsBack(t *testing.T) {
+	path := Path(t.TempDir())
+	if err := os.WriteFile(path, []byte("language: system\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, warnings := Load(path); got.Language != LanguageSystem || len(warnings) != 0 {
+		t.Fatalf("Load() = %+v, %v; want language system", got, warnings)
+	}
+	if err := os.WriteFile(path, []byte("language: de\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if got.Language != LanguageEnglish || len(warnings) != 1 {
+		t.Fatalf("Load() = %+v, %v; want english and one warning", got, warnings)
+	}
+	if Default().Language != LanguageEnglish {
+		t.Fatalf("default language = %q, want english", Default().Language)
 	}
 }

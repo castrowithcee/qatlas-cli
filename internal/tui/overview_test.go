@@ -179,13 +179,15 @@ func mustModel(t *testing.T) *Model {
 
 // Every terminal size keeps the counts on screen and the view inside the terminal.
 func TestOverviewFitsEverySize(t *testing.T) {
-	m := overviewModel(t, unencryptedVaultModel(t))
-	for _, size := range []struct{ width, height int }{{40, minimumHeight}, {60, 16}, {80, 24}, {200, 60}} {
-		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		view := m.View()
-		assertViewFits(t, view, size.width, size.height)
-		if !strings.Contains(view, "Approvals") || !strings.Contains(view, "Connections") {
-			t.Errorf("%dx%d lacks the counts:\n%s", size.width, size.height, view)
+	eachLanguage(t, func(t *testing.T) {
+		m := overviewModel(t, unencryptedVaultModel(t))
+		for _, size := range []struct{ width, height int }{{40, minimumHeight}, {60, 16}, {80, 24}, {200, 60}} {
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			view := m.View()
+			assertViewFits(t, view, size.width, size.height)
+			if !strings.Contains(view, sectionApprovals.title()) || !strings.Contains(view, sectionConnections.title()) {
+				t.Errorf("%dx%d lacks the counts:\n%s", size.width, size.height, view)
+			}
 		}
-	}
+	})
 }

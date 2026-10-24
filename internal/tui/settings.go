@@ -24,6 +24,7 @@ const (
 	themeLabel = "color scheme"
 	startLabel = "start view"
 	iconsLabel = "icons"
+	langLabel  = "language"
 )
 
 // Actions of the Transfer, Update and Self-test pages, run by a fieldVaultAction row.
@@ -48,13 +49,13 @@ func (s section) isPage() bool {
 func (s section) pageTitle() string {
 	switch s {
 	case sectionGeneral:
-		return "General settings"
+		return tr(tPageGeneral)
 	case sectionTransfer:
-		return "Export and import"
+		return tr(tPageTransfer)
 	case sectionUpdate:
-		return "Update"
+		return tr(tPageUpdate)
 	case sectionSelftest:
-		return "Self-test"
+		return tr(tPageSelftest)
 	}
 	return s.title()
 }
@@ -91,21 +92,28 @@ func (m *Model) generalFields() []field {
 	}
 	var areas []string
 	for a := area(0); a < areaCount; a++ {
-		areas = append(areas, strings.ToLower(a.title()))
+		areas = append(areas, strings.ToLower(a.key()))
 	}
 	start := prefs.Start
 	if _, ok := areaByName(start); !ok {
 		start = uiprefs.DefaultStart
 	}
+	language := prefs.Language
+	if language == "" {
+		language = uiprefs.LanguageEnglish
+	}
 	fields := []field{
 		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
-			withHint("auto follows the terminal").
-			withDetail("auto follows the terminal's background; NO_COLOR turns every colour off whatever is chosen here"),
+			withHint(tr(tThemeHint)).
+			withDetail(tr(tThemeDetail)),
 		choiceField(startLabel, areas, start).
-			withHint("the area the editor opens on"),
+			withHint(tr(tStartHint)),
 		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
-			withHint("nerdfont needs a Nerd Font").
-			withDetail("nerdfont puts an icon before each area's name and needs a Nerd Font in the terminal; the name always stays"),
+			withHint(tr(tIconsHint)).
+			withDetail(tr(tIconsDetail)),
+		choiceField(langLabel, []string{uiprefs.LanguageEnglish, uiprefs.LanguageGerman, uiprefs.LanguageSystem}, language).
+			withHint(tr(tLanguageHint)).
+			withDetail(tr(tLanguageDetail)),
 	}
 	return append(fields, keyFields(prefs.Keys)...)
 }
@@ -116,25 +124,27 @@ func (m *Model) generalFields() []field {
 func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	next := uiprefs.Prefs{
 		Theme: m.fieldValue(themeLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
-		Keys: m.keysOfForm(),
+		Language: m.fieldValue(langLabel), Keys: m.keysOfForm(),
 	}
 	if err := next.Keys.Validate(); err != nil {
 		m.status, m.fail = "", err.Error()
 		return nil
 	}
 	if m.savePrefs == nil {
-		m.status, m.fail = "", "the settings cannot be saved here"
+		m.status, m.fail = "", tr(tSettingsCannotSaveHere)
 		return nil
 	}
 	if err := m.savePrefs(next); err != nil {
-		m.status, m.fail = "", "cannot save the settings: "+m.redactor.Apply(err.Error())
+		m.status, m.fail = "", tr(tSettingsSaveFailed, m.redactor.Apply(err.Error()))
 		return nil
 	}
 	m.prefs = next
 	applyColorScheme(next.Theme)
 	applyKeys(next.Keys)
+	// The language applies at once: the messages and the form below are drawn in it.
+	setLanguage(next.Language)
 	m.clearMessages()
-	m.status = "Saved; the start view applies on the next start"
+	m.status = tr(tSettingsSaved)
 	if leave {
 		return m.showList()
 	}
@@ -148,35 +158,32 @@ func pageAction(action, label, hint, detail string) field {
 
 func (m *Model) transferFields() []field {
 	return []field{
-		pageAction(pageActionExport, "export", "enter writes an export file",
-			"enter chooses what to write into an export file, optionally with secrets; needs the admin session"),
-		pageAction(pageActionImport, "import", "enter previews an export file",
-			"enter reads an exported file and shows what it would change before anything is written; needs the admin session"),
+		pageAction(pageActionExport, "export", tr(tExportHint), tr(tExportDetail)),
+		pageAction(pageActionImport, "import", tr(tImportHint), tr(tImportDetail)),
 	}
 }
 
 func (m *Model) updateFields() []field {
-	status := "no newer release is known"
+	status := tr(tUpdateNoneKnown)
 	if reason := m.updateUnavailable(); reason != "" {
 		status = reason
 	}
 	if m.updateOffered() {
-		status = "update available " + m.release.Current + " → " + m.release.Latest
+		status = tr(tUpdateAvailableRow, m.release.Current, m.release.Latest)
 	}
 	return []field{
 		textField("release", status, true),
-		pageAction(pageActionUpdate, "install update", "enter asks first",
-			"enter asks before the newer release is installed"),
+		pageAction(pageActionUpdate, "install update", tr(tUpdateInstallHint), tr(tUpdateInstallDetail)),
 	}
 }
 
 func (m *Model) selftestFields() []field {
 	var fields []field
 	for _, sc := range m.selftest.list() {
-		fields = append(fields, pageAction(pageActionSelftest+sc.Name, sc.Name, "enter measures", "enter measures: "+sc.Summary))
+		fields = append(fields, pageAction(pageActionSelftest+sc.Name, sc.Name, tr(tSelftestHint), tr(tSelftestDetail, sc.Summary)))
 	}
 	if len(fields) == 0 {
-		fields = append(fields, textField("selftest", "this build cannot start the selftest", true))
+		fields = append(fields, textField("selftest", tr(tSelftestNone), true))
 	}
 	return fields
 }

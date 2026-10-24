@@ -35,20 +35,20 @@ func (m *Model) overviewTiles() []overviewItem {
 		return overviewItem{text: fmt.Sprintf("%-12s %s", name, value), target: target}
 	}
 	return []overviewItem{
-		tile("Connections", count(len(m.cfg.Connections)), sectionConnections),
-		tile("Services", count(len(m.cfg.Services)), sectionServices),
-		tile("Credentials", count(len(m.cfg.Credentials)), sectionCredentials),
-		tile("Tokens", tokens, sectionTokens),
-		tile("Approvals", approvals, sectionApprovals),
+		tile(sectionConnections.title(), count(len(m.cfg.Connections)), sectionConnections),
+		tile(sectionServices.title(), count(len(m.cfg.Services)), sectionServices),
+		tile(sectionCredentials.title(), count(len(m.cfg.Credentials)), sectionCredentials),
+		tile(sectionTokens.title(), tokens, sectionTokens),
+		tile(sectionApprovals.title(), approvals, sectionApprovals),
 	}
 }
 
 // unavailableWord says in a word why the vault cannot list tokens or approvals now.
 func (m *Model) unavailableWord() string {
 	if m.vaultLocked() {
-		return "vault locked"
+		return tr(tOverviewVaultLocked)
 	}
-	return "needs encrypted vault"
+	return tr(tOverviewNeedsVault)
 }
 
 // overviewSteps are the next steps as selectable lines.
@@ -77,9 +77,9 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 	// The vault and the release come before the steps in the view: they are state, the steps are advice.
 	var state []string
 	if v := m.vaultHeaderText(); v != "" {
-		state = append(state, "Vault: "+v)
+		state = append(state, tr(tOverviewVault, v))
 	} else {
-		state = append(state, styles.hint.Render("Vault: none configured"))
+		state = append(state, styles.hint.Render(tr(tOverviewVaultNone)))
 	}
 	if banner := m.updateBanner(m.usable(0)); banner != "" {
 		state = append(state, styles.ok.Render(banner))
@@ -102,7 +102,7 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 		lines = append(lines, row(i, tile.text))
 	}
 	if shown > 0 {
-		lines = append(lines, styles.hint.Render("Next steps"))
+		lines = append(lines, styles.hint.Render(tr(tOverviewNextSteps)))
 		for i, step := range steps[:shown] {
 			lines = append(lines, row(len(tiles)+i, step.text))
 			items = append(items, step)
