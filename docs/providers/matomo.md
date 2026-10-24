@@ -2,7 +2,7 @@
 description: >
   Describes the Matomo provider: setup with a personal authentication token and a required base URL for
   on-premise and Matomo Cloud, website and instance targets, version and plugin availability, HTTP 200 error
-  forms, rate limits, paging without a total, and the first read tools.
+  forms, rate limits, paging without a total, the report catalog, and the read tools.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -136,6 +136,36 @@ it reads at most 1000 matching websites and keeps those inside the targets; when
 many, the call is refused as an invalid request asking for a narrower pattern, so a bound website is never
 missing silently.
 
+## Report catalog
+
+An agent finds reports without knowing Matomo method names. The catalog of a website is what the instance
+lists for it in `API.getReportMetadata`, and nothing else: no report is derived from a method name. Reports per
+goal, ecommerce, custom dimensions, site search, and plugins are in the catalog only where the website has them;
+a report that is missing there is not available. Subtable reports are listed only with `showSubtableReports`.
+
+- `idSite` is required, or taken from the one website the connection binds. A list of websites or `all` is not
+  offered.
+- A report is identified by its catalog ID, the `uniqueId` of Matomo, such as `Actions_getPageUrls`. It is stable
+  only within the instance, so it is looked up in the catalog and never composed. An unknown ID is `not-found`.
+- `matomo.reports.list` returns only `id`, `name`, and `category`, optionally filtered by `category` (exact, without
+  regard to case) and `query` (a part of the name, ID, or category, without regard to case), in the order of the
+  catalog and in batches. Without `category` the first batch also lists the categories with their counts, so the
+  whole catalog need not be read.
+- `matomo.reports.describe` returns the details of one report: module, action, parameters such as `idGoal`,
+  dimension, metrics and calculated metrics, and the action that loads its subtables. The
+  explanation of the metrics comes only with `includeMetricsDocumentation` and costs one more request.
+- `language`, `period`, `date`, and `showSubtableReports` are optional and shape the catalog: labels differ per
+  language, some reports depend on the period and date, and subtable reports are listed only on request. They
+  are part of the cache key and of the cursor.
+- The catalog is held for five minutes per instance and token, website, and language within a process. Only
+  structure is held, no report data and no token; a failure is not held. A goal or plugin change shows after at
+  most that long.
+- `matomo.segments.fields` lists the segment fields of a website (identifier, name, type, category, and the
+  operators of the segment syntax that fit the type) in batches, filtered by `category`.
+  `matomo.segments.suggest-values` reads frequent values of one field; they are visitor data, at most 100, and
+  empty when Matomo has none, and always empty when the instance disables suggested values
+  (`enable_segment_suggested_values`). Neither changes segments.
+
 ## Tools
 
 | Tool | Reads |
@@ -143,8 +173,12 @@ missing silently.
 | `matomo.version.get` | the instance version and, with `plugin`, whether that plugin is activated |
 | `matomo.sites.list` | websites of the token inside the targets, optionally matching `pattern` |
 | `matomo.sites.get` | one website with its addresses, time zone, currency, and tracking settings |
+| `matomo.reports.list` | the report catalog of a website as id, name, and category, with a category overview |
+| `matomo.reports.describe` | the details of one report of the catalog |
+| `matomo.segments.fields` | the segment fields of a website |
+| `matomo.segments.suggest-values` | frequent values of a segment field |
 
 All tools read, are safe to repeat, and need no confirmation. The terminal editor starts a new connection on the
-setup profile `read`, which selects all of them. Names, addresses, and settings Matomo returns are untrusted data:
-they are shortened, and an address is returned as text and never fetched. `matomo.version.get` needs a view right
-on any website, `matomo.sites.get` on the website read.
+setup profile `read`, which selects all of them. Names, addresses, settings, and values Matomo returns are
+untrusted data: they are shortened, and an address is returned as text and never fetched. `matomo.version.get`
+needs a view right on any website; the other tools need one on the website read.
