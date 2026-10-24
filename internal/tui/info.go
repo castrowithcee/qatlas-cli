@@ -46,7 +46,7 @@ func (s infoSubject) paragraphs() []string {
 		out = append(out, long)
 	}
 	if s.term.ID != "" {
-		out = append(out, s.term.Title+": "+s.term.Text)
+		out = append(out, termName(s.term)+": "+termText(s.term))
 	}
 	return out
 }
@@ -97,7 +97,7 @@ func (m *Model) infoSubject() infoSubject {
 			return infoSubject{}
 		}
 		f := m.fields[m.focus]
-		return infoSubject{title: f.label, long: m.fieldDetail(f)}.withTerm(m.fieldTerm(f))
+		return infoSubject{title: labelText(f.label), long: m.fieldDetail(f)}.withTerm(m.fieldTerm(f))
 	case screenPicker:
 		return m.pickerSubject()
 	case screenTargets:
@@ -332,7 +332,7 @@ func (m *Model) infoView() string {
 		lines = lines[:maxRows]
 		lines[maxRows-1] = truncateDots(lines[maxRows-1]+" ...", inner)
 	}
-	lines = append(lines, "", "esc close")
+	lines = append(lines, "", footerText("esc close"))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "")
 	}

@@ -23,14 +23,21 @@ const (
 	areaCount
 )
 
-func (a area) title() string {
+// key is the English name of the area: the name the start view is kept under and the commands are named
+// after, whatever language the editor draws in.
+func (a area) key() string {
 	return [...]string{"Overview", "Connections", "Activity", "Access", "Library", "Settings"}[a]
 }
 
-// areaByName finds the area whose title is name, ignoring case.
+// title is the name of the area as drawn.
+func (a area) title() string {
+	return tr([...]textID{tAreaOverview, tAreaConnections, tAreaActivity, tAreaAccess, tAreaLibrary, tAreaSettings}[a])
+}
+
+// areaByName finds the area whose English name is name, ignoring case.
 func areaByName(name string) (area, bool) {
 	for a := area(0); a < areaCount; a++ {
-		if strings.EqualFold(a.title(), name) {
+		if strings.EqualFold(a.key(), name) {
 			return a, true
 		}
 	}

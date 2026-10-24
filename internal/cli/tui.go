@@ -163,8 +163,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"overrides keyring; that is the way for CI and containers.\n\n" +
 			"General (6, first part of Settings) holds the preferences of this device: the color scheme (auto,\n" +
 			"light, or dark; auto follows the terminal's background and NO_COLOR wins over all of them), the\n" +
-			"start view (the area the editor opens on the next start), and icons (none or nerdfont, an icon\n" +
-			"before each area name that needs a Nerd Font). They are chosen from lists and saved with F2, with\n" +
+			"start view (the area the editor opens on the next start), icons (none or nerdfont, an icon\n" +
+			"before each area name that needs a Nerd Font), and language (english, deutsch, or system, which\n" +
+			"follows the device; it applies at once and covers the editor's own texts only). They are chosen from lists and saved with F2, with\n" +
 			"no admin session. General also binds the keys of save, help, command line, lock, and info (info may\n" +
 			"take a second key besides i): enter on a row, then press the new key; a taken key, ctrl+c, esc, tab,\n" +
 			"a digit, a letter, or a character for save, lock, or the extra info key is refused with its\n" +

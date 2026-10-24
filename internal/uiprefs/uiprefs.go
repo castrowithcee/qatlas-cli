@@ -31,6 +31,11 @@ const (
 
 	IconsNone     = "none"
 	IconsNerdFont = "nerdfont"
+
+	// The language of the editor's own texts; system follows the language of the device.
+	LanguageEnglish = "english"
+	LanguageGerman  = "deutsch"
+	LanguageSystem  = "system"
 )
 
 // DefaultStart is the area the editor opens on by default. Whether another name is an area is the editor's
@@ -42,12 +47,14 @@ type Prefs struct {
 	Theme string `yaml:"theme"`
 	Start string `yaml:"start"`
 	Icons string `yaml:"icons"`
-	Keys  Keys   `yaml:"-"`
+	// Language is empty in a Prefs built without it; every reader takes that as LanguageEnglish.
+	Language string `yaml:"language"`
+	Keys     Keys   `yaml:"-"`
 }
 
 // Default returns the preferences of a device that has none.
 func Default() Prefs {
-	return Prefs{Theme: ThemeAuto, Start: DefaultStart, Icons: IconsNone, Keys: DefaultKeys()}
+	return Prefs{Theme: ThemeAuto, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
 }
 
 // Path returns the preferences file that belongs to the configuration directory dir.
@@ -66,10 +73,11 @@ func Load(path string) (Prefs, []string) {
 		return prefs, []string{fmt.Sprintf("cannot read %s, using the defaults: %v", path, err)}
 	}
 	var raw struct {
-		Theme *string `yaml:"theme"`
-		Start *string `yaml:"start"`
-		Icons *string `yaml:"icons"`
-		Keys  *struct {
+		Theme    *string `yaml:"theme"`
+		Start    *string `yaml:"start"`
+		Icons    *string `yaml:"icons"`
+		Language *string `yaml:"language"`
+		Keys     *struct {
 			Info    *string `yaml:"info"`
 			Save    *string `yaml:"save"`
 			Help    *string `yaml:"help"`
@@ -106,6 +114,15 @@ func Load(path string) (Prefs, []string) {
 				path, *raw.Icons, IconsNone))
 		}
 	}
+	if raw.Language != nil {
+		switch *raw.Language {
+		case LanguageEnglish, LanguageGerman, LanguageSystem:
+			prefs.Language = *raw.Language
+		default:
+			warnings = append(warnings, fmt.Sprintf("%s: language %q is not english, deutsch or system, using %s",
+				path, *raw.Language, LanguageEnglish))
+		}
+	}
 	if raw.Keys != nil {
 		prefs.Keys, warnings = loadKeys(path, map[string]*string{
 			ActionInfo: raw.Keys.Info, ActionSave: raw.Keys.Save, ActionHelp: raw.Keys.Help,
@@ -127,6 +144,13 @@ func Save(path string, prefs Prefs) error {
 	case IconsNone, IconsNerdFont:
 	default:
 		return fmt.Errorf("icons %q is not none or nerdfont", prefs.Icons)
+	}
+	switch prefs.Language {
+	case "":
+		prefs.Language = LanguageEnglish
+	case LanguageEnglish, LanguageGerman, LanguageSystem:
+	default:
+		return fmt.Errorf("language %q is not english, deutsch or system", prefs.Language)
 	}
 	if prefs.Start == "" {
 		return errors.New("start must not be empty")

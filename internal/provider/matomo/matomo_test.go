@@ -239,14 +239,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	for _, tool := range metadata.Tools {
 		changes := (strings.HasPrefix(tool.ID, "matomo.goals.") || strings.HasPrefix(tool.ID, "matomo.segments.") ||
-			strings.HasPrefix(tool.ID, "matomo.annotations.") || strings.HasPrefix(tool.ID, "matomo.goal-recommendations.")) &&
+			strings.HasPrefix(tool.ID, "matomo.annotations.") || strings.HasPrefix(tool.ID, "matomo.dimensions.") || strings.HasPrefix(tool.ID, "matomo.goal-recommendations.")) &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList) {
 			t.Errorf("tool %+v, want an open read", tool)
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 20 || len(metadata.Tools) != 43 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 47 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

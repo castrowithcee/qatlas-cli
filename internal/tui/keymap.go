@@ -89,7 +89,11 @@ var footerPlaceholders = []struct {
 
 // footerKeys replaces the key placeholders of a footer text with the current key names, so a footer
 // follows the keymap while a screen-local key stays a plain literal in its text.
-func footerKeys(text string) string {
+func footerKeys(text string) string { return keyPlaceholders(footerText(text)) }
+
+// keyPlaceholders replaces the key placeholders of an already translated footer text. Translating comes
+// first because the catalog is keyed by the group with its placeholders.
+func keyPlaceholders(text string) string {
 	if !strings.Contains(text, "{") {
 		return text
 	}

@@ -77,9 +77,17 @@ const (
 	sectionCount
 )
 
-func (s section) title() string {
+// key is the English name of the section: the name the commands are named after, whatever language the
+// editor draws in.
+func (s section) key() string {
 	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals", "Tokens", "Logs",
 		"Overview", "General", "Transfer", "Update", "Self-test"}[s]
+}
+
+// title is the name of the section as drawn.
+func (s section) title() string {
+	return tr([...]textID{tSecServices, tSecCredentials, tSecConnections, tSecDefaults, tSecVault, tSecApprovals,
+		tSecTokens, tSecLogs, tSecOverview, tSecGeneral, tSecTransfer, tSecUpdate, tSecSelftest}[s])
 }
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
@@ -1269,7 +1277,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 				"the guided setup."
 		}
 	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
-		return m.section.title() + " is a settings page, not a list; press enter to open it."
+		return tr(tSettingsNotList, m.section.title())
 	case sectionApprovals:
 		return "Approvals lists connections automatically; there is nothing to add by hand."
 	case sectionTokens:
@@ -3656,7 +3664,7 @@ func (m *Model) workspaceView() string {
 	if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 		way = "q quit"
 	}
-	return m.boundView(wrapCells(fmt.Sprintf("Resize terminal. Need %dx%d. %s.",
+	return m.boundView(wrapCells(tr(tResizeLine,
 		width+m.termWidth-m.width, height+m.termHeight-m.height, footerKeys(way)), m.width))
 }
 
@@ -3851,38 +3859,38 @@ func (m *Model) leaveView() string {
 		}
 		return m.exportLeaveView()
 	}
-	what := "New " + m.section.entry()
-	where := "the " + m.section.title() + " list"
+	what := tr(tLeaveNew, m.section.entry())
+	where := tr(tLeaveWhereList, m.section.title())
 	switch {
 	case m.editing != "":
 		what = m.editing
 	case m.section == sectionVault:
-		what, where = "the vault settings", "Vault"
+		what, where = tr(tLeaveVaultSettings), sectionVault.title()
 	case m.section == sectionGeneral:
-		what, where = "the general settings", "General"
+		what, where = tr(tLeaveGeneralSettings), sectionGeneral.title()
 	}
-	title, warning, save := "Leave "+what+" without saving?", "warning: unsaved changes in "+what, "{save} save"
-	why := "Leaving for " + where + " would lose them."
+	title, warning, save := tr(tLeaveTitle, what), tr(tLeaveWarning, what), "{save} save"
+	why := tr(tLeaveWhy, where)
 	if m.wizard != nil {
-		title, warning, save = "Leave the guided setup?", "warning: the guided setup is not saved", "{save} next step"
+		title, warning, save = tr(tLeaveSetupTitle), tr(tLeaveSetupWarning), "{save} next step"
 		if m.leaveFrom == screenSummary {
 			save = "{save} save"
 		}
-		why = "Leaving for " + where + " drops every step, typed secrets included."
+		why = tr(tLeaveSetupWhy, where)
 	}
 	if sub := m.leaveSubject(); sub != "" {
-		title, warning = "Close without keeping the changes?", "warning: "+sub
-		why = "Closing it without keeping it would lose the changes."
+		title, warning = tr(tLeaveSubTitle), tr(tLeaveSubWarning, sub)
+		why = tr(tLeaveSubWhy)
 	}
 	discard := "d discard"
 	if m.leaveQuit {
-		title = "Quit and lose the unsaved input?"
+		title = tr(tLeaveQuitTitle)
 		discard = "d discard and quit"
-		why = "Quitting would lose them."
+		why = tr(tLeaveQuitWhy)
 	}
 	return m.questionText(question{
 		title: title, consequence: why,
-		details: []string{m.indentedWith(styles.warning, warning), m.indented("Nothing was written yet.")},
+		details: []string{m.indentedWith(styles.warning, warning), m.indented(tr(tLeaveNothingWritten))},
 		keys:    save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help",
 	})
 }
@@ -3892,7 +3900,7 @@ func (m *Model) leaveSubject() string {
 	switch m.leaveFrom {
 	case screenPicker:
 		if m.pickerChanged() {
-			return "the ticks changed"
+			return tr(tLeaveTicks)
 		}
 	case screenTargets:
 		if !m.targetsPending() {
@@ -3900,16 +3908,16 @@ func (m *Model) leaveSubject() string {
 		}
 		switch {
 		case m.targetPick != nil:
-			return "the marked entries were not taken"
+			return tr(tLeaveMarked)
 		case m.targetAdd != nil && m.targetAdd.kind >= 0:
-			return "the new target is not finished"
+			return tr(tLeaveNewTarget)
 		case m.targetAdd != nil || m.targetEdit >= 0:
-			return "the typed target was not taken"
+			return tr(tLeaveTypedTarget)
 		}
 		if slices.Equal(m.targetList.all, m.fields[m.focus].entries) {
-			return "the target labels changed"
+			return tr(tLeaveTargetLabels)
 		}
-		return "the target list changed"
+		return tr(tLeaveTargetList)
 	case screenPaths:
 		if !m.pathsPending() {
 			return ""
@@ -3919,9 +3927,9 @@ func (m *Model) leaveSubject() string {
 			list = m.fields[m.focus].label
 		}
 		if m.pathEdit >= 0 {
-			return "the typed " + list + " was not taken"
+			return tr(tLeaveTypedList, list)
 		}
-		return "the " + list + " list changed"
+		return tr(tLeaveListChanged, list)
 	}
 	return ""
 }
@@ -3931,7 +3939,7 @@ func (m *Model) notes() string {
 	var b strings.Builder
 	for _, note := range []string{m.busy, m.probing} {
 		if note != "" {
-			b.WriteString("\n\n" + m.wrapped(styles.hint, note+" ... (the editor stays usable)"))
+			b.WriteString("\n\n" + m.wrapped(styles.hint, tr(tNoteRunning, note)))
 		}
 	}
 	if m.fields == nil || m.screen == screenSummary {
@@ -3941,7 +3949,7 @@ func (m *Model) notes() string {
 		}
 	}
 	if m.fail != "" {
-		b.WriteString("\n\n" + m.wrapped(styles.fail, "error: "+m.fail))
+		b.WriteString("\n\n" + m.wrapped(styles.fail, tr(tNoteError, m.fail)))
 	} else if m.status != "" {
 		b.WriteString("\n\n" + m.wrapped(styles.hint, m.status))
 	}
@@ -4098,7 +4106,7 @@ func (m *Model) nextLine() string {
 	if m.fail != "" || m.status != "" || m.list.editing {
 		return ""
 	}
-	return "\n\n" + m.wrapped(styles.hint, "next: "+m.nextStep())
+	return "\n\n" + m.wrapped(styles.hint, tr(tNextLine, m.nextStep()))
 }
 
 // findKeys is the key that reviews the renames found, with its separator, where there are any.
@@ -4419,7 +4427,7 @@ func (m *Model) resizeView() string {
 	if m.screen != screenNav && m.screen != screenList {
 		way = "{back} leave"
 	}
-	lines := []string{footerKeys(way), "Resize terminal", fmt.Sprintf("Need %dx%d", minimumWidth, minimumHeight)}
+	lines := []string{footerKeys(way), tr(tResizeTitle), tr(tResizeNeed, minimumWidth, minimumHeight)}
 	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 
@@ -4451,20 +4459,20 @@ type nextStepItem struct {
 func (m *Model) nextSteps() []nextStepItem {
 	var steps []nextStepItem
 	if m.hasOpenApprovals() {
-		steps = append(steps, nextStepItem{"open " + sectionApprovals.ref(), sectionApprovals})
+		steps = append(steps, nextStepItem{tr(tStepOpen, sectionApprovals.ref()), sectionApprovals})
 	}
 	if m.vaultUnencrypted() {
-		steps = append(steps, nextStepItem{"open " + sectionVault.ref() + " to set a passphrase", sectionVault})
+		steps = append(steps, nextStepItem{tr(tStepVaultPassphrase, sectionVault.ref()), sectionVault})
 	}
 	switch {
 	case len(m.cfg.Connections) == 0:
 		// The guided setup creates whatever of service and credential is still missing, so it is the
 		// next step however far the expert sections got.
-		steps = append(steps, nextStepItem{"press c to set up a connection step by step", sectionConnections})
+		steps = append(steps, nextStepItem{tr(tStepSetup), sectionConnections})
 	case len(m.cfg.Defaults.Connections) == 0:
-		steps = append(steps, nextStepItem{"open Connections and press t to test; Defaults are optional", sectionConnections})
+		steps = append(steps, nextStepItem{tr(tStepTestDefaults), sectionConnections})
 	default:
-		steps = append(steps, nextStepItem{"open Connections and press t to test the selected provider", sectionConnections})
+		steps = append(steps, nextStepItem{tr(tStepTest), sectionConnections})
 	}
 	return steps
 }
@@ -4483,7 +4491,7 @@ func (m *Model) emptyHelp() string {
 		}
 		return "No default yet. Press n to choose one, or leave this empty and select connections explicitly."
 	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
-		return "A settings page, not a list: press enter to open it."
+		return tr(tSettingsNotListShort)
 	case sectionApprovals:
 		_, unavailable := m.approvalsReport()
 		if unavailable != "" {
@@ -4779,6 +4787,7 @@ func Run(opts Options) error {
 	// The colour scheme is settled before the program takes the terminal, so a background query never
 	// races the editor's own input.
 	applyColorScheme(prefs.Theme)
+	setLanguage(prefs.Language)
 	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
 	if err != nil {
 		return err

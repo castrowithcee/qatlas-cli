@@ -193,9 +193,9 @@ func (m *Model) renderField(f field, focused bool) string {
 		// but reading it fresh here as well costs nothing and can never go stale.
 		value = m.vaultStateText()
 	case f.kind == fieldVaultAction:
-		value = "enter runs this"
+		value = tr(tValueRunsThis)
 	case f.kind == fieldKey && focused && m.keyCapture:
-		value = "press the new key"
+		value = tr(tKeyPress)
 	case f.kind == fieldKey:
 		value = keyRowValue(f)
 	case f.kind == fieldSecret:
@@ -214,9 +214,9 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldProvider:
 		value = m.providerValue(f)
 	case f.kind == fieldChoice && len(f.choices) == 0:
-		value = "(nothing to choose)"
+		value = tr(tValueNothingToChoose)
 	case f.kind == fieldChoice:
-		value = "< " + value + " >"
+		value = "< " + valueText(f.label, value) + " >"
 	case f.kind == fieldText && f.readOnly && f.hint != "":
 		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
 		// itself on its own row instead, the way a read-only tool list already does below.
@@ -309,7 +309,7 @@ func formHead(active bool, label string) string {
 	if active {
 		marker = "> "
 	}
-	return fmt.Sprintf("%s%-12s ", marker, label)
+	return fmt.Sprintf("%s%-12s ", marker, labelText(label))
 }
 
 // valueRoom is the room a form row with the given label leaves for its value.
@@ -407,7 +407,7 @@ func (m *Model) keyHint(text string) string {
 
 // keyHintLines is the footer text broken into lines of whole groups.
 func (m *Model) keyHintLines(text string) []string {
-	text = footerKeys(strings.ReplaceAll(text, "{info}", m.infoLabel()))
+	text = keyPlaceholders(strings.ReplaceAll(footerText(text), "{info}", m.infoLabel()))
 	width := m.usable(0)
 	var lines []string
 	var line string
