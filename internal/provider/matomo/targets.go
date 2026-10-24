@@ -121,7 +121,13 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 // tools need a binding that reaches websites. A binding to the instance alone reaches no website.
 func reaches(tool string, targets []string) (bool, []string) {
 	bound, err := parseScope(targets)
-	if err != nil || bound.reachesSites() || tool == versionGet.ID {
+	if err != nil {
+		return true, nil
+	}
+	if tool == annotationsDeleteAll.ID && !(bound.instance && bound.reachesSites()) {
+		return false, []string{formInstance}
+	}
+	if bound.reachesSites() || tool == versionGet.ID {
 		return true, nil
 	}
 	return false, []string{formSites, formSite}
