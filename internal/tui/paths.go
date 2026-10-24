@@ -248,6 +248,8 @@ func (m *Model) pathFrame() (string, string) {
 	var foot strings.Builder
 	keys := "a add · enter edit · {delete} remove · up/down move · {save} save · {back} close · {command} cmds · {help} help"
 	switch {
+	case m.pathEdit >= 0 && m.backdrop:
+		// The typed path stands in its own dialog (see pathPrompt) over this screen.
 	case m.pathEdit >= 0:
 		label := "add path: "
 		if m.pathEdit < total {
@@ -264,6 +266,23 @@ func (m *Model) pathFrame() (string, string) {
 	}
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()
+}
+
+// pathPrompt is the dialog the path being added or edited is typed into.
+func (m *Model) pathPrompt() promptDialog {
+	noun := "path"
+	if isFilesLabel(m.fields[m.focus].label) {
+		noun = "directory"
+	}
+	title := "Add " + noun
+	if m.pathEdit < len(m.pathList.all) {
+		title = "Edit " + noun
+	}
+	return promptDialog{
+		title: title,
+		input: m.pathLines("  ", &m.pathInput),
+		keys:  pathKeys(&m.pathInput, "enter take · {save} save · {back} cancel entry"),
+	}
 }
 
 // pathRow draws the path at index i of the list.

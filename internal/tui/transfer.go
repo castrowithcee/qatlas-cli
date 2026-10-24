@@ -648,6 +648,16 @@ func (m *Model) exportView() string {
 	if e == nil {
 		return ""
 	}
+	if d, ok := m.exportPrompt(); ok {
+		if m.backdrop {
+			// A dialog stands over the question that led to it.
+			saved := e.step
+			e.step = exportMode
+			defer func() { e.step = saved }()
+			return m.exportView()
+		}
+		return m.promptView(d)
+	}
 	switch e.step {
 	case exportSelect:
 		head, foot := m.exportSelectFrame()
@@ -681,22 +691,11 @@ func (m *Model) exportView() string {
 			b.WriteString("\n" + m.indented("the secrets are read under the admin session; their values are never shown") + "\n")
 		}
 		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
-	case exportPassphrase:
-		hint, title := "it protects the file, is not the vault passphrase, and is needed to import it; type it twice", "Export passphrase"
-		if e.confirming {
-			title, hint = "Confirm the export passphrase", "type it again to confirm it"
-		}
-		return m.wrapped(styles.title, title) + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" + m.indented(hint) + "\n" +
-			m.keyHint("{save} or enter ok · {back} back, nothing written") + m.notes()
 	case exportPlainConfirm:
 		return m.wrapped(styles.title, "Write the secrets unencrypted?") + "\n\n" +
 			m.indentedWith(styles.warning, "warning: the file then holds every included secret in plain text; anyone "+
 				"who can read the file can use them. Delete it once it is imported.") + "\n" +
 			m.keyHint("y write unencrypted · n/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
-	case exportTarget:
-		return m.wrapped(styles.title, "Export: file") + "\n\n" + m.pathLines("  ", &e.input) +
-			m.indented("the file to write; it is created for you alone and an existing file is never replaced") + "\n" +
-			m.keyHint(pathKeys(&e.input, "{save} or enter preview · {back} back")) + m.notes()
 	}
 	title, question, keys := "Export preview", "Nothing is written until you confirm.", "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
 	if e.step == exportResult {
@@ -706,6 +705,35 @@ func (m *Model) exportView() string {
 		keys = "writing, please wait"
 	}
 	return m.linesView(title, question, keys, e.lines, &e.offset)
+}
+
+// exportPrompt is the one-line dialog the export is at, if it is at one.
+func (m *Model) exportPrompt() (promptDialog, bool) {
+	e := m.export
+	if e == nil {
+		return promptDialog{}, false
+	}
+	switch e.step {
+	case exportPassphrase:
+		d := promptDialog{
+			title: "Export passphrase",
+			input: m.inputLine("  ", e.input.Model),
+			hint:  "it protects the file, is not the vault passphrase, and is needed to import it; type it twice",
+			keys:  "{save} or enter ok · {back} back, nothing written",
+		}
+		if e.confirming {
+			d.title, d.hint = "Confirm the export passphrase", "type it again to confirm it"
+		}
+		return d, true
+	case exportTarget:
+		return promptDialog{
+			title: "Export: file",
+			input: m.pathLines("  ", &e.input),
+			hint:  "the file to write; it is created for you alone and an existing file is never replaced",
+			keys:  pathKeys(&e.input, "{save} or enter preview · {back} back"),
+		}, true
+	}
+	return promptDialog{}, false
 }
 
 // linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, between a title
