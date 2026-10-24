@@ -22,9 +22,12 @@ import (
 
 const secretFixture = "fixture-secret-value"
 
-var accessReaders = []*tool{webhooksList, webhooksGet, gitHooksList, gitHooksGet, pushMirrorsList, pushMirrorsGet}
+var accessReaders = []*tool{webhooksList, webhooksGet, gitHooksList, gitHooksGet, pushMirrorsList, pushMirrorsGet,
+	deployKeysList, deployKeysGet, userKeysList, userKeysGet, userGPGKeysList, userGPGKeysGet, accessTokensList,
+	accessTokensGetCurrent, oauth2AppsList, oauth2AppsGet}
 
-var accessListedOnly = []*tool{webhooksDelete, gitHooksDelete, pushMirrorsDelete}
+var accessListedOnly = []*tool{webhooksDelete, gitHooksDelete, pushMirrorsDelete, deployKeysDelete, userKeysDelete,
+	userGPGKeysDelete, accessTokensDeleteCurrent, oauth2AppsDelete}
 
 // accessTools are the tools of the existing accesses.
 var accessTools = append(append(slices.Clone(accessReaders), accessListedOnly...), pushMirrorsSync)
@@ -32,7 +35,9 @@ var accessTools = append(append(slices.Clone(accessReaders), accessListedOnly...
 func accessToolIDs(p *product) []string {
 	var ids []string
 	for _, t := range accessTools {
-		ids = append(ids, p.toolID(t))
+		if _, ok := t.since[p.id]; ok {
+			ids = append(ids, p.toolID(t))
+		}
 	}
 	return ids
 }
@@ -94,6 +99,12 @@ func TestAccessToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		metadata, _ := reg.ProviderMetadata(p.id)
 		for _, tl := range accessTools {
 			d, _, ok := reg.Lookup(p.toolID(tl))
+			if _, offered := tl.since[p.id]; !offered {
+				if ok {
+					t.Errorf("%s is registered for a product that lacks it", d.ID)
+				}
+				continue
+			}
 			if !ok {
 				t.Fatalf("%s is missing", p.toolID(tl))
 			}
@@ -101,7 +112,8 @@ func TestAccessToolsAreRegisteredWithTheirRisk(t *testing.T) {
 			if d.RequiresToolAllowList != listed {
 				t.Errorf("%s listed-only = %t", d.ID, d.RequiresToolAllowList)
 			}
-			wantEffect := map[string]string{"list": "read", "get": "read", "delete": "delete", "sync": "execute"}[tl.action]
+			wantEffect := map[string]string{"list": "read", "get": "read", "get-current": "read", "delete": "delete",
+				"delete-current": "delete", "sync": "execute"}[tl.action]
 			if string(d.Risk.Effect) != wantEffect || (wantEffect != "read") != (d.Risk.Confirmation == "required") {
 				t.Errorf("%s risk = %+v", d.ID, d.Risk)
 			}
@@ -465,10 +477,16 @@ var accessWiring = map[string]struct{ methods, paths []string }{
 	"webhooks.go":    {[]string{"MethodDelete"}, []string{"/hooks", "/user/hooks"}},
 	"githooks.go":    {[]string{"MethodDelete"}, []string{"/hooks/git", "/hooks/git/"}},
 	"pushmirrors.go": {[]string{"MethodDelete", "MethodPost"}, []string{"/push_mirrors", "/push_mirrors/", "/push_mirrors-sync"}},
+	"keys.go":        {[]string{"MethodDelete"}, []string{"/user/keys", "/user/gpg_keys", "/keys", "/gpg_keys", "/keys/"}},
+	"tokens.go":      {[]string{"MethodDelete"}, []string{"/tokens", "/token"}},
+	"oauth2apps.go":  {nil, []string{"/user/applications/oauth2"}},
 }
 
+// accessRouteWords mark a path literal as an access route that accessWiring must list.
+var accessRouteWords = []string{"hooks", "push_mirrors", "keys", "token", "applications", "oauth2"}
+
 // forbiddenPaths are access routes that create or change an access or reach beyond the account's own scope.
-var forbiddenPaths = []string{"/tests", "/admin/hooks", "/admin/"}
+var forbiddenPaths = []string{"/tests", "/admin/hooks", "/admin/", "/keys/tokens", "/gpg_key_token", "/gpg_key_verify"}
 
 // Every literal in the package that names an access route is one of the wired ones, and no file wires another
 // method than the listed ones. The scan reads the source, so a new route cannot hide behind a test fixture.
@@ -510,7 +528,9 @@ func TestOnlyTheListedAccessRoutesAndMethodsAreWired(t *testing.T) {
 						t.Errorf("%s names the forbidden route %q", name, value)
 					}
 				}
-				if strings.HasPrefix(value, "/") && (strings.Contains(value, "hooks") || strings.Contains(value, "push_mirrors")) {
+				if strings.HasPrefix(value, "/") && slices.ContainsFunc(accessRouteWords, func(w string) bool {
+					return strings.Contains(value, w)
+				}) {
 					if !isAccess || !slices.Contains(wired.paths, value) {
 						t.Errorf("%s names the route %q, which is not wired", name, value)
 					} else if slices.Contains(wired.paths, value) {

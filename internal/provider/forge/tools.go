@@ -105,7 +105,10 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	userHeatmapGet, userFollowersList, userFollowingList, userFollowingCheck, userFollowsAdd, userFollowsRemove, userSettingsGet,
 	userSettingsUpdate, userAvatarsUpdate, userAvatarsDelete, userEmailsList, userEmailsDelete, userBlocksList,
 	userBlocksCheck, userBlocksAdd, userBlocksRemove, webhooksList, webhooksGet, webhooksDelete, gitHooksList,
-	gitHooksGet, gitHooksDelete, pushMirrorsList, pushMirrorsGet, pushMirrorsSync, pushMirrorsDelete}
+	gitHooksGet, gitHooksDelete, pushMirrorsList, pushMirrorsGet, pushMirrorsSync, pushMirrorsDelete,
+	deployKeysList, deployKeysGet, deployKeysDelete, userKeysList, userKeysGet, userKeysDelete, userGPGKeysList,
+	userGPGKeysGet, userGPGKeysDelete, accessTokensList, accessTokensGetCurrent, accessTokensDeleteCurrent,
+	oauth2AppsList, oauth2AppsGet, oauth2AppsDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

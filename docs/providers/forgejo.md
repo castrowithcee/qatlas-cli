@@ -87,6 +87,7 @@ additional depth of defense: the targets of the connection stay the boundary.
   the operations `create` and `update`, and the new-branch overwrite is `force_overwrite_new_branch` instead of
   `force_push`; neither is offered. See [Contents](gitea/contents.md).
 - Accesses: webhooks carry `content_type` and `url` instead of Gitea's `name`; push mirrors carry `branch_filter`.
+  `access-tokens.list` exists on Forgejo only; `access-tokens.get-current` and `access-tokens.delete-current` do not.
   See [Accesses](gitea/accesses.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older

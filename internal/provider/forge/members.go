@@ -3,6 +3,7 @@ package forge
 import (
 	"encoding/json"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -29,7 +30,7 @@ const (
 const maxListItems = 100
 
 // member is one documented member. only limits it to one product; address marks a URL that is left out when it
-// carries user info or a query, since either may hold a credential.
+// carries user info or a query, since either may hold a credential; in a list of texts it drops such entries.
 type member struct {
 	name    string
 	kind    memberKind
@@ -114,6 +115,9 @@ func (m member) read(p *product, o object) (any, bool) {
 		var values []string
 		if json.Unmarshal(o[m.name], &values) != nil {
 			return nil, false
+		}
+		if m.address {
+			values = slices.DeleteFunc(values, func(v string) bool { return !plainAddress(v) })
 		}
 		if len(values) > maxListItems {
 			values = values[:maxListItems]
