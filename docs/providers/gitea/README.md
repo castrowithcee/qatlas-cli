@@ -203,6 +203,9 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Teams](teams.md): the teams of an organization, their members, their repositories, and their activity feeds
 - [Users](users.md): searching and reading users, their activity feeds and heatmaps, followers, following, follows,
   and the settings, avatar, email addresses, and blocked users of the account
+- [Stars and watching](stars-and-watching.md): starring and watching repositories, the starred and watched
+  repositories of an account, and the stargazers and watchers of a repository
+- [Notifications](notifications.md): the notifications of the account, marking a thread, and marking in bulk
 - [Topics and templates](topics-templates.md): repository topics, the instance-wide topic search, and the gitignore,
   label, and license templates
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
