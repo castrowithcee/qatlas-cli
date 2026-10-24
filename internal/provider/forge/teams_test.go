@@ -84,6 +84,10 @@ func newTeamEnvironment(t *testing.T, p *product, handler func(call) *http.Respo
 		Targets: []string{"orgs/acme"}, Tools: []string{p.toolID(teamsDelete), p.toolID(teamsGet)}}
 	cfg.Connections["repo-listed"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.toolID(teamsDelete)}}
+	cfg.Connections["org-foreign-repo"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"orgs/acme", "repos/stranger/place"}}
+	cfg.Connections["two-orgs"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"orgs/acme", "orgs/" + foreignOrg}}
 	cfg.Connections["open-listed"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Tools: []string{p.toolID(teamsDelete), p.toolID(teamsGet)}}
 	return &environment{core: application.New(registry(t), cfg, resolver(red, &reads), red), red: red,
