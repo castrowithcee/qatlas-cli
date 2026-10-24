@@ -848,6 +848,7 @@ func (m *Model) logsView() string {
 	head, foot := m.logsFrame()
 	var b strings.Builder
 	b.WriteString(head)
+	m.hitBar(strings.Split(head, "\n"), m.workspaceTop(), m.logBarSpecs)
 	if lv.stats && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
 		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
 		if lv.sessions {
@@ -868,6 +869,7 @@ func (m *Model) logsView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.logRowLine(i, l) + "\n")
 	}
+	m.hitLogs(head, start, end)
 	b.WriteString(foot)
 	return b.String()
 }
@@ -932,6 +934,7 @@ func (m *Model) logsFrame() (string, string) {
 		dateField = "  " + styles.hint.Render(tr(tLogBarAll))
 	}
 	bar := packBar([]string{modeField, dateField, viewField}, status, width)
+	m.logBarSpecs = m.logBarTargets(modeField, dateField, viewField, modes, view)
 
 	var filters []string
 	for k, value := range lv.filters {

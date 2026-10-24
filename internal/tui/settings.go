@@ -25,6 +25,7 @@ const (
 	startLabel = "start view"
 	iconsLabel = "icons"
 	langLabel  = "language"
+	mouseLabel = "mouse"
 )
 
 // Actions of the Transfer, Update and Self-test pages, run by a fieldVaultAction row.
@@ -102,6 +103,10 @@ func (m *Model) generalFields() []field {
 	if language == "" {
 		language = uiprefs.LanguageEnglish
 	}
+	mouse := uiprefs.ChoiceMouseOn
+	if !prefs.MouseEnabled() {
+		mouse = uiprefs.ChoiceMouseOff
+	}
 	fields := []field{
 		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
 			withHint(tr(tThemeHint)).
@@ -114,6 +119,9 @@ func (m *Model) generalFields() []field {
 		choiceField(langLabel, []string{uiprefs.LanguageEnglish, uiprefs.LanguageGerman, uiprefs.LanguageSystem}, language).
 			withHint(tr(tLanguageHint)).
 			withDetail(tr(tLanguageDetail)),
+		choiceField(mouseLabel, []string{uiprefs.ChoiceMouseOn, uiprefs.ChoiceMouseOff}, mouse).
+			withHint(tr(tMouseHint)).
+			withDetail(tr(tMouseDetail)),
 	}
 	return m.groupSections(append(fields, keyFields(prefs.Keys)...), -1)
 }
@@ -124,7 +132,7 @@ func (m *Model) generalFields() []field {
 func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	next := uiprefs.Prefs{
 		Theme: m.fieldValue(themeLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
-		Language: m.fieldValue(langLabel), Keys: m.keysOfForm(),
+		Language: m.fieldValue(langLabel), MouseOff: m.fieldValue(mouseLabel) == uiprefs.ChoiceMouseOff, Keys: m.keysOfForm(),
 	}
 	if err := next.Keys.Validate(); err != nil {
 		m.status, m.fail = "", err.Error()
@@ -138,6 +146,7 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 		m.status, m.fail = "", tr(tSettingsSaveFailed, m.redactor.Apply(err.Error()))
 		return nil
 	}
+	mouseWas := m.mouseEnabled()
 	m.prefs = next
 	applyColorScheme(next.Theme)
 	applyKeys(next.Keys)
@@ -145,10 +154,12 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	setLanguage(next.Language)
 	m.clearMessages()
 	m.status = tr(tSettingsSaved)
+	// The mouse mode of the terminal follows the preference at once.
+	mouse := m.mouseSwitch(mouseWas)
 	if leave {
-		return m.showList()
+		return tea.Batch(mouse, m.showList())
 	}
-	return m.openPageForm()
+	return tea.Batch(mouse, m.openPageForm())
 }
 
 // pageAction is a row that runs one of the existing flows at once on enter.

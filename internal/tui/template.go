@@ -243,6 +243,7 @@ func (m *Model) templateView() string {
 		for i := start; i < end; i++ {
 			b.WriteString(m.templateRow(i) + "\n")
 		}
+		m.hitTable(&m.templateList, screenTemplate, header, start, end, m.templateRow)
 		b.WriteString(footer)
 		return b.String()
 	}
@@ -258,7 +259,16 @@ func (m *Model) templateView() string {
 		if i == m.template.index {
 			mark, style = "(•) ", styles.active
 		}
-		b.WriteString(m.indentedHanging(style, mark, row) + "\n")
+		text := m.indentedHanging(style, mark, row)
+		y, index := m.workspaceTop()+strings.Count(b.String(), "\n"), i
+		m.addHit(0, y, m.usable(0), y+strings.Count(text, "\n")+1, func() tea.Cmd {
+			if m.screen != screenTemplate || m.template == nil || m.template.picking {
+				return nil
+			}
+			m.template.index = index
+			return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+		})
+		b.WriteString(text + "\n")
 	}
 	b.WriteString(m.keyHint("up/down move · enter choose · {back} cancel · {command} cmds · {help} help") + m.notes())
 	return b.String()

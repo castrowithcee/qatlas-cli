@@ -142,6 +142,7 @@ func (m *Model) providerTableView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.providerTableRow(i) + "\n")
 	}
+	m.hitTable(&m.providers.list, screenProviders, header, start, end, m.providerTableRow)
 	b.WriteString(footer)
 	return b.String()
 }

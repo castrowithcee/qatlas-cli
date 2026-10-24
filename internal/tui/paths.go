@@ -215,6 +215,7 @@ func (m *Model) pathsView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.pathRow(i) + "\n")
 	}
+	m.hitSelect(&m.pathList, screenPaths, header, start, end, m.pathRow)
 	b.WriteString(footer)
 	return b.String()
 }

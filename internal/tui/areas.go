@@ -100,17 +100,40 @@ func (m *Model) subNavLine() string {
 	if !m.hasSubTabs() || m.wizard != nil {
 		return ""
 	}
+	line, _ := m.subNavBar()
+	return styles.active.Render(clipCells(line, m.termWidth))
+}
+
+// subNavItem is a part on the option bar and the cells it stands in.
+type subNavItem struct {
+	section section
+	navSpan
+}
+
+// subNavSpans are the cells of the parts on the option bar.
+func (m *Model) subNavSpans() []subNavItem {
+	if !m.hasSubTabs() || m.wizard != nil {
+		return nil
+	}
+	_, items := m.subNavBar()
+	return items
+}
+
+// subNavBar is the text of the option bar and the cells of its parts.
+func (m *Model) subNavBar() (string, []subNavItem) {
 	focus := "  "
 	if m.screen == screenNav && m.navSub {
 		focus = "> "
 	}
 	a := m.section.area()
 	var all, active []string
+	var sections []section
 	for _, s := range areaSections[a] {
 		if s == advancedStart {
 			// The advanced pages follow the preferences after a bar, so the split reads at any width.
-			all = append(all, "|")
+			all, sections = append(all, "|"), append(sections, -1)
 		}
+		sections = append(sections, s)
 		if s == m.section {
 			all, active = append(all, "["+s.subTitle()+"]"), append(active, "["+s.subTitle()+"]")
 			continue
@@ -118,11 +141,17 @@ func (m *Model) subNavLine() string {
 		all = append(all, s.subTitle())
 	}
 	prefix := focus + a.title() + ": "
-	line := prefix + strings.Join(all, " ")
+	line, items := prefix+strings.Join(all, " "), all
 	if lipgloss.Width(line) > m.termWidth {
-		line = prefix + strings.Join(active, " ")
+		line, items, sections = prefix+strings.Join(active, " "), active, []section{m.section}
 	}
-	return styles.active.Render(clipCells(line, m.termWidth))
+	var out []subNavItem
+	for i, span := range spanItems(items, lipgloss.Width(prefix), " ", m.termWidth) {
+		if sections[i] >= 0 {
+			out = append(out, subNavItem{sections[i], span})
+		}
+	}
+	return line, out
 }
 
 // ref names s for a message that points at it: its sub-tab inside its area, with the digit that opens the

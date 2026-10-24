@@ -88,7 +88,9 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 	// The activity block gets what the counts, the state, and the steps leave.
 	room -= len(state)
 
+	var rowLines []int
 	row := func(i int, text string) string {
+		rowLines = append(rowLines, len(lines))
 		line := "  " + truncateCells(text, width)
 		if m.screen == screenList && i == m.overviewCursor {
 			return styles.active.Render("> " + line[2:])
@@ -109,6 +111,7 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 		}
 	}
 	lines = append(lines, m.overviewActivityLines(room, width)...)
+	m.overviewRowLines = rowLines
 	return lines, items, foot
 }
 
@@ -120,6 +123,7 @@ func (m *Model) overviewView() string {
 		m.overviewCursor = max(len(items)-1, 0)
 		lines, _, foot = m.overviewLines()
 	}
+	m.hitOverview()
 	return strings.Join(lines, "\n") + "\n" + foot
 }
 

@@ -332,6 +332,7 @@ func (m *Model) targetsView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.targetRow(i) + "\n")
 	}
+	m.hitSelect(&m.targetList, screenTargets, header, start, end, m.targetRow)
 	b.WriteString(footer)
 	return b.String()
 }

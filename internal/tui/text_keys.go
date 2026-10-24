@@ -116,6 +116,8 @@ const (
 	tIconsDetail                    textID = "IconsDetail"
 	tLanguageHint                   textID = "LanguageHint"
 	tLanguageDetail                 textID = "LanguageDetail"
+	tMouseHint                      textID = "MouseHint"
+	tMouseDetail                    textID = "MouseDetail"
 	tSettingsNotList                textID = "SettingsNotList"
 	tSettingsNotListShort           textID = "SettingsNotListShort"
 	tExportHint                     textID = "ExportHint"

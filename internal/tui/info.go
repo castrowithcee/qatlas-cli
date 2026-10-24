@@ -248,6 +248,10 @@ func (m *Model) paneShown() bool { return m.inPane || (m.width >= helpPaneMinWid
 
 // screenView is editorView, and from helpPaneMinWidth on, with the pane of the focused row at its right.
 func (m *Model) screenView() string {
+	if !m.backdrop {
+		// Every drawing of the screen starts its targets anew; the last one is the one that is shown.
+		m.hits = nil
+	}
 	if !m.paneShown() {
 		return m.editorView()
 	}

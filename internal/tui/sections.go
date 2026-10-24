@@ -251,8 +251,13 @@ func (m *Model) jumpSection(by int) {
 	if next == at {
 		return
 	}
+	m.enterSection(entries[next].name)
+}
+
+// enterSection moves the focus to the first row of the named section that takes input, opening the section if
+// it is closed.
+func (m *Model) enterSection(name string) {
 	m.trimFields()
-	name := entries[next].name
 	if m.sectionPinned == nil {
 		m.sectionPinned = map[string]bool{}
 	}

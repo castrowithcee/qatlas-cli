@@ -38,6 +38,12 @@ const (
 	LanguageSystem  = "system"
 )
 
+// The values a form offers for the mouse row; off is Prefs.MouseOff.
+const (
+	ChoiceMouseOn  = "on"
+	ChoiceMouseOff = "off"
+)
+
 // DefaultStart is the area the editor opens on by default. Whether another name is an area is the editor's
 // to decide; this package only keeps the text.
 const DefaultStart = "overview"
@@ -49,8 +55,13 @@ type Prefs struct {
 	Icons string `yaml:"icons"`
 	// Language is empty in a Prefs built without it; every reader takes that as LanguageEnglish.
 	Language string `yaml:"language"`
-	Keys     Keys   `yaml:"-"`
+	// MouseOff switches the mouse off; the zero value keeps it on, so a Prefs built without it has it on.
+	MouseOff bool `yaml:"-"`
+	Keys     Keys `yaml:"-"`
 }
+
+// MouseEnabled reports whether the editor takes mouse input.
+func (p Prefs) MouseEnabled() bool { return !p.MouseOff }
 
 // Default returns the preferences of a device that has none.
 func Default() Prefs {
@@ -77,6 +88,7 @@ func Load(path string) (Prefs, []string) {
 		Start    *string `yaml:"start"`
 		Icons    *string `yaml:"icons"`
 		Language *string `yaml:"language"`
+		Mouse    *string `yaml:"mouse"`
 		Keys     *struct {
 			Info    *string `yaml:"info"`
 			Save    *string `yaml:"save"`
@@ -123,6 +135,15 @@ func Load(path string) (Prefs, []string) {
 				path, *raw.Language, LanguageEnglish))
 		}
 	}
+	if raw.Mouse != nil {
+		switch *raw.Mouse {
+		case "true":
+		case "false":
+			prefs.MouseOff = true
+		default:
+			warnings = append(warnings, fmt.Sprintf("%s: mouse %q is not true or false, using true", path, *raw.Mouse))
+		}
+	}
 	if raw.Keys != nil {
 		prefs.Keys, warnings = loadKeys(path, map[string]*string{
 			ActionInfo: raw.Keys.Info, ActionSave: raw.Keys.Save, ActionHelp: raw.Keys.Help,
@@ -164,8 +185,9 @@ func Save(path string, prefs Prefs) error {
 	enc.SetIndent(2)
 	if err := enc.Encode(struct {
 		Prefs `yaml:",inline"`
+		Mouse bool      `yaml:"mouse"`
 		Keys  *keysFile `yaml:"keys,omitempty"`
-	}{prefs, keys.file()}); err != nil {
+	}{prefs, prefs.MouseEnabled(), keys.file()}); err != nil {
 		return err
 	}
 	if err := enc.Close(); err != nil {
