@@ -48,18 +48,15 @@ flag itself is unaffected.
 
 A node's `credentials` only ever carry the `id`/`name` reference pair n8n itself resolves and validates, the
 same shape a workflow read already reports; this provider never accepts anything else of a credential.
-`settings` accepts the subset of n8n's own settings object a caller can reasonably set programmatically
-(`save_execution_progress`, `save_manual_executions`, `save_data_error_execution`,
-`save_data_success_execution`, `execution_timeout`, `error_workflow`, `timezone`, `execution_order`,
-`caller_policy`, `caller_ids`, `time_saved_mode`, `time_saved_per_execution`, `redaction_policy`,
-`available_in_mcp`); it never writes `binaryMode` and `credentialResolverId`, which n8n's own spec
-documents as derived, internal settings whose value is ignored on write, nor `customTelemetryTags` and the
-top-level `nodeGroups`, which are canvas and telemetry decoration with no execution effect. A node likewise
-writes none of the execution-behaviour fields n8n's own create/update schemas additionally accept, such as
-`notes`, `onError`, `retryOnFail`, and `maxTries`; a node's `webhookId` is never taken from a caller. The
-settings and node attributes a workflow read reports but this provider does not write are accepted, so a read
-workflow can be sent back unchanged, and dropped: a full update does not keep them. A save setting a read
-reports as `DEFAULT` is refused on write. `error_workflow` is passed
+`settings` accepts the subset of n8n's own settings object a caller can reasonably set programmatically,
+including `custom_telemetry_tags`; the top-level `nodeGroups` are not written. A node writes the execution
+attributes n8n's create and update schemas accept (`notes`, `on_error`, `retry_on_fail`, `max_tries`, the
+telemetry tags, and the like), numbers exactly as given; a node's `webhookId` is never taken from a caller.
+Everything a workflow read reports is accepted, so a read workflow can be sent back unchanged, but some of
+it is not written: `binary_mode` and `credential_resolver_id`, which n8n ignores on write, and the
+`created_at` and `updated_at` of a node. A save setting a read reports as `DEFAULT` is accepted and left out
+of the request, because n8n's write schema takes only booleans and `all`/`none`; n8n then applies its
+default. `error_workflow` is passed
 through as an opaque workflow ID and is not checked against this connection's own allow-lists: n8n enforces
 its own access to that workflow when the error trigger it names would actually run.
 
@@ -75,8 +72,8 @@ free text are not searched; credentials belong in n8n credentials, whose values 
 a placeholder it cannot match to that read, and a change that would no longer withhold a restored value.
 `workflows.create` refuses every placeholder.
 
-`n8n.workflows.get`, `create`, `update`, `activate`, and `deactivate` are at version 2: webhook
-paths and recognised credentials in `parameters` appear as `__qatlas_withheld__` and webhook ids are left out.
+`n8n.workflows.get`, `activate`, and `deactivate` are at version 2, `create` and `update` at version 3:
+webhook paths and recognised credentials in `parameters` appear as `__qatlas_withheld__` and webhook ids are left out.
 
 ### `workflows.create` under a project or workflow restriction
 
