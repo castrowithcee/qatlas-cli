@@ -120,6 +120,20 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { return m.askImport() },
 		},
 		command{
+			name:        "view heatmap",
+			desc:        "Show the log as a heatmap of its days (View field)",
+			aliases:     []string{"heatmap"},
+			unavailable: onScreens("change the view", screenLogs),
+			run:         func(m *Model) tea.Cmd { return m.setHeat(true) },
+		},
+		command{
+			name:        "view table",
+			desc:        "Show the log as a table (View field)",
+			aliases:     []string{"table"},
+			unavailable: onScreens("change the view", screenLogs),
+			run:         func(m *Model) tea.Cmd { return m.setHeat(false) },
+		},
+		command{
 			name:        "lock vault",
 			desc:        "Lock the vault (ctrl+l)",
 			aliases:     []string{"lock"},

@@ -242,11 +242,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 7 || len(metadata.Tools) != 7 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 8 || len(metadata.Tools) != 11 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
-		"matomo.reports.describe", "matomo.segments.fields", "matomo.segments.suggest-values"} {
+		"matomo.reports.describe", "matomo.reports.get", "matomo.segments.fields", "matomo.segments.suggest-values"} {
 		if !strings.Contains(strings.Join(profile.Tools, " "), id) {
 			t.Errorf("profile lacks %s", id)
 		}
@@ -467,12 +467,13 @@ func TestMessagePatterns(t *testing.T) {
 		"Unable to authenticate with the provided token.": "auth",
 		"The token is not valid.":                         "auth",
 		permissionMsg:                                     "permission",
-		"You can't access this resource as it requires 'superuser' access.":           "permission",
-		"An unexpected website was found in the request: website id was set to '3' .": "not-found",
-		"The method 'X.y' does not exist or is not available in the module 'X'.":      "missing",
-		"The plugin Goals is not activated.":                                          "missing",
-		"Ein unbekannter Fehler":                                                      "",
-		"":                                                                            "",
+		"You can't access this resource as it requires 'superuser' access.":                    "permission",
+		"An unexpected website was found in the request: website id was set to '3' .":          "not-found",
+		"The method 'X.y' does not exist or is not available in the module 'X'.":               "missing",
+		"The plugin Goals is not activated.":                                                   "missing",
+		"Requested report A.b for Website id=1 not found in the list of available reports. \n": "not-found",
+		"Ein unbekannter Fehler": "",
+		"":                       "",
 	} {
 		if got := classifyMessage(message); got != want {
 			t.Errorf("classifyMessage(%q) = %q, want %q", message, got, want)

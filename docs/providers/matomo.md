@@ -2,7 +2,7 @@
 description: >
   Describes the Matomo provider: setup with a personal authentication token and a required base URL for
   on-premise and Matomo Cloud, website and instance targets, version and plugin availability, HTTP 200 error
-  forms, rate limits, paging without a total, the report catalog, and the read tools.
+  forms, rate limits, paging without a total, the report catalog, and the read tools for websites and live data.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -166,6 +166,48 @@ a report that is missing there is not available. Subtable reports are listed onl
   empty when Matomo has none, and always empty when the instance disables suggested values
   (`enable_segment_suggested_values`). Neither changes segments.
 
+## Reports
+
+`matomo.reports.get` reads one report of a website through `API.getProcessedReport`. The report must be in the
+catalog of the website (`report` is the catalog ID, an unknown one is `not-found` before any report is read);
+module, method, and report parameters such as `idGoal` or `idDimension` come from the catalog entry, so there is
+no argument for them. `period` and `date` are required: `day`, `week`, `month`, `year`, or `range` with a date,
+`today`, `yesterday`, a range `YYYY-MM-DD,YYYY-MM-DD`, `lastN`, or `previousN`.
+
+- **Row limits.** Matomo's own default comes from the instance (`API_datatable_default_limit`) and without
+  `filter_limit` it returns all rows, so Qatlas always sends `filter_limit` as `limit + 1` with `filter_offset`,
+  never `-1`. `limit` is 1 to 1000 and 100 when omitted; there is no way to ask for all rows. The extra row sets
+  `has_more`; Matomo reports no total, so a count of rows is not available. `next_cursor` is bound to the
+  arguments and to the `limit` of the first call, and offsets stop at 100000.
+- **Time series.** With `day`, `week`, `month`, or `year` and a date range or `lastN`/`previousN`, Matomo answers one
+  table per period in one call, and every row carries `period_label` (Matomo's localized period text, in
+  chronological order). The limit holds over all periods: `limit` times the number of periods must not exceed 1000,
+  otherwise the call is refused as `invalid-request` naming the largest `limit`; an omitted `limit` shrinks to fit
+  (for 30 days it is 33). A report without a dimension, such as `VisitsSummary_get`, returns one row per period.
+  `period=range` sums the dates into one table. Paging applies to every period's table alike.
+- **Columns and metadata.** `columns` becomes `showColumns` (the `label` column always stays, calculated metrics are
+  covered; with `flat` it needs Matomo 5.14.0). Values are raw numbers (`format_metrics=0`), strings are shortened
+  to 512 characters, and nested row members such as comparisons are dropped. Matomo's response always holds the
+  report metadata and the row metadata, and no parameter removes them, so Qatlas drops them on its side and returns
+  `metadata` and `row_metadata` (for example `idsubdatatable` for `subtable`, and URLs) only with
+  `include_metadata`. `hideMetricsDoc` is always on and the timer off. `totals` carries Matomo's report totals.
+- **Filters.** `sort_column`, `sort_order`, `filter_column` with `filter_pattern` (a regular expression of the
+  instance, up to 100 characters), `filter_excludelowpop` with `filter_excludelowpop_value`, `flat`, `subtable`, and
+  `label` (at most 10 labels) map to Matomo's generic filters. Matomo skips its row limit when `label` is set, so
+  Qatlas pages those rows itself. `segment` is checked for the shape of its terms; the fields are those of
+  `matomo.segments.fields`.
+- **Never sent.** `disable_generic_filters`, `disable_queued_filters`, `disable_root_datatable_post_processor`,
+  `callback`, `jsoncallback`, `filter_limit=-1`, `idSite=all`, several websites, and raw `apiParameters`; a catalog
+  parameter named like one of these makes the report unreadable instead of being sent.
+- **Archiving limits.** Matomo cuts large tables when it archives them (for example Actions to 500 rows and
+  Referrers to 1000, `datatable_archiving_maximum_rows_*`; `userid_users` to 50000) and sums the rest in a row
+  labelled `Others`. The cut rows are not available through the API at any `limit`. When the instance archives on
+  demand (`enable_browser_archiving_triggering`), a report, a `range` period, or a segment on a large website can run
+  into the timeout.
+- **Not covered.** Comparisons (`compareDates`, `comparePeriods`, `compareSegments`) are not offered.
+
+Row labels, titles, URLs, search terms, and event names are visitor data and untrusted.
+
 ## Tools
 
 | Tool | Reads |
@@ -175,10 +217,58 @@ a report that is missing there is not available. Subtable reports are listed onl
 | `matomo.sites.get` | one website with its addresses, time zone, currency, and tracking settings |
 | `matomo.reports.list` | the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | the details of one report of the catalog |
+| `matomo.reports.get` | one report of a website for a period, in bounded rows |
 | `matomo.segments.fields` | the segment fields of a website |
 | `matomo.segments.suggest-values` | frequent values of a segment field |
+| `matomo.visits.list` | the visit log of one website, see Live data |
+| `matomo.live-counters.get` | visits, actions, visitors, and converted visits of the last minutes |
+| `matomo.visits.get-latest-time` | the time of the latest visit per website |
 
 All tools read, are safe to repeat, and need no confirmation. The terminal editor starts a new connection on the
-setup profile `read`, which selects all of them. Names, addresses, settings, and values Matomo returns are
-untrusted data: they are shortened, and an address is returned as text and never fetched. `matomo.version.get`
-needs a view right on any website; the other tools need one on the website read.
+setup profile `read`, which selects the version, website, report catalog, report, and segment tools. The three
+live tools are in the profile `live` only, because they carry personal data. Names, addresses, settings, and
+values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
+fetched.
+`matomo.version.get` needs a view right on any website; the other tools need one on the website read.
+
+## Live data
+
+The live tools read `Live.getLastVisitsDetails`, `Live.getCounters`, and `Live.getMostRecentVisitsDateTime`. They
+need a view right on the website, and `matomo.visits.list` a visits log that is not disabled for it; otherwise
+Matomo answers with an error that ends as `unsupported-capability` or `permission`.
+
+**Personal data.** A visit holds the visitor ID, fingerprint, IP address, user ID, and the location of a person.
+All three tools carry the data classification `matomo-live-personal`, also the counters, because a `segment` can
+single out one visitor. They are not part of the profile `read`; a connection selects the profile `live` or lists
+them in `tools`. Addresses, titles, referrers, keywords, and names in a visit are untrusted text: they are
+shortened, and an address is never fetched.
+
+**`matomo.visits.list`** returns the visits of one `idSite`, newest first, 25 per batch and at most 100. Paging
+uses `filter_offset` and one extra row (`limit` plus one) and an opaque `next_cursor` that is bound to the
+website, period, segment, and the other arguments; Matomo's `countVisitorsToFetch` is not used. `period` and `date`
+come together or not at all. Actions come only with `include_actions` (otherwise `doNotFetchActions=1` is sent),
+up to 50 per visit, with `actions_truncated` marking more. `flat` and `enhanced` are sent only when set;
+`flat` does not change the result, which still lists the actions. A row of another website than asked for is
+dropped.
+
+A visit and its actions carry every member that the plugins shipped with Matomo 5.14.2 add to the visit log:
+Live, CoreHome, Actions, Events, Contents, Goals, Ecommerce, Referrers, UserCountry, DevicesDetection,
+DevicePlugins, Resolution, UserLanguage, VisitTime, and VisitorInterest, in snake_case (`device_type`,
+`event_category`, `item_details`, and so on; the tool description lists them). Custom dimensions of the visit and
+the action scope come as `custom_dimensions`, a map of `dimensionN` to value, up to 30. Lists are bounded (50
+actions per visit, 50 items per order, 5 product categories). Members that only present another member are not
+returned: icons and icon paths, pretty dates, durations and times, rendered titles and subtitles. The Custom
+Variables and Provider plugins are not part of the Matomo core release and their members are not returned.
+A member that Matomo does not report, or reports as false, is absent.
+
+**`matomo.live-counters.get`** needs `last_minutes` (1 through 2880) and can narrow the counters with `segment`,
+`show_columns`, and `hide_columns`. Matomo rounds the counters when data rounding is enforced.
+
+**`matomo.visits.get-latest-time`** reads one website per request. `idSites` names up to 20 websites, each inside
+the targets and refused otherwise; when it is omitted, the connection must bind at most 20 single websites,
+which are then all read.
+
+**Cloud limits.** Matomo Cloud limits `method=live` to 200 requests per minute per IP address and runs at most
+eight raw-data queries at once per subdomain. Qatlas lets one process run only one live request at a time per
+instance and token and keeps 300 ms between them. Another process, another machine, or another token on the
+same IP address is not coordinated, so a 429 can still occur and ends as `rate-limited`.

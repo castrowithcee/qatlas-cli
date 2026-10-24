@@ -65,14 +65,31 @@ func newTableModel(t *testing.T, width int) *Model {
 	return m
 }
 
+// shownEntries are the entries the list shows, group rows left out.
+func shownEntries(m *Model) []string {
+	var entries []string
+	for _, name := range m.list.matches {
+		if !isGroupRow(name) {
+			entries = append(entries, name)
+		}
+	}
+	return entries
+}
+
 // tableLines are the column names and the rows of the list screen, in the order they are drawn.
 func tableLines(t *testing.T, m *Model) (string, []string) {
 	t.Helper()
 	lines := strings.Split(screenOf(m), "\n")
 	for i, line := range lines {
-		if strings.HasPrefix(line, "  "+sectionColumns[m.section][0].title) {
-			end := min(i+1+len(m.list.matches), len(lines))
-			return line, lines[i+1 : end]
+		if strings.HasPrefix(line, m.entryIndent()+sectionColumns[m.section][0].title) {
+			// Group rows are drawn between the entry rows; the rows returned are those of the entries.
+			var rows []string
+			for j, name := range m.list.matches {
+				if i+1+j < len(lines) && !isGroupRow(name) {
+					rows = append(rows, lines[i+1+j])
+				}
+			}
+			return line, rows
 		}
 	}
 	t.Fatalf("the list has no column names:\n%s", screenOf(m))
@@ -102,12 +119,12 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 	m := newTableModel(t, 200)
 	want := map[section]map[string][]string{
 		sectionServices: {
-			"tracker-main": {"tracker-main", "tracker", "https://tracker.internal.example.invalid/api/v4"},
-			"wiki-main":    {"wiki-main", "bookstack", "https://wiki.example.invalid"},
+			"tracker-main": {"tracker-main", "https://tracker.internal.example.invalid/api/v4"},
+			"wiki-main":    {"wiki-main", "https://wiki.example.invalid"},
 		},
 		sectionCredentials: {
-			"tracker-bot": {"tracker-bot", "tracker", placeEnv, "token ✓"},
-			"wiki-reader": {"wiki-reader", "bookstack", placeKeyring, "token-id ✓, token-secret missing"},
+			"tracker-bot": {"tracker-bot", placeEnv, "token ✓"},
+			"wiki-reader": {"wiki-reader", placeKeyring, "token-id ✓, token-secret missing"},
 		},
 		sectionConnections: {
 			"tracker-issues": {"tracker-issues", stateActive, "tracker-main", "read,create", "listed 2",
@@ -130,11 +147,11 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 			t.Fatalf("%s: %d rows, want %d:\n%s", s.title(), len(rows), len(entries), screenOf(m))
 		}
 		for i, row := range rows {
-			cells := entries[m.list.matches[i]]
+			cells := entries[shownEntries(m)[i]]
 			for c, col := range sectionColumns[s] {
 				if got := cellAt(header, row, col.title); got != cells[c] {
 					t.Errorf("%s: column %s of %q = %q, want %q\n%s", s.title(), col.title,
-						m.list.matches[i], got, cells[c], screenOf(m))
+						shownEntries(m)[i], got, cells[c], screenOf(m))
 				}
 			}
 		}
@@ -154,7 +171,7 @@ func TestNarrowTablesCutTheLongTextsButNeverTheName(t *testing.T) {
 			assertViewFits(t, screenOf(m), m.width, m.height)
 			header, rows := tableLines(t, m)
 			for i, row := range rows {
-				name := m.list.matches[i]
+				name := shownEntries(m)[i]
 				if got := cellAt(header, row, sectionColumns[s][0].title); got != name {
 					t.Errorf("width %d, %s: name cell = %q, want %q whole\n%s", width, s.title(), got, name,
 						screenOf(m))
@@ -193,7 +210,7 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 			}
 		}
 		for i, row := range rows {
-			cells := m.cells(m.list.matches[i])
+			cells := m.cells(shownEntries(m)[i])
 			for index, title := range c.columns {
 				if got := cellAt(header, row, title); got != cells[index] {
 					t.Errorf("width %d: %s = %q, want %q whole\n%s", c.width, title, got, cells[index], screenOf(m))
@@ -206,11 +223,11 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 		}
 	}
 
-	m := newTableModel(t, 57)
+	m := newTableModel(t, 45)
 	openSectionByName(t, m, sectionCredentials)
 	header, rows := tableLines(t, m)
-	if len(rows) != 2 || cellAt(header, rows[0], "STORAGE") != "env" ||
-		cellAt(header, rows[1], "STORAGE") != "keyring" {
+	if len(rows) != 2 || cellAt(header, rows[0], "STORAGE") != "keyring" ||
+		cellAt(header, rows[1], "STORAGE") != "env" {
 		t.Errorf("the storage column does not fall back to its short labels:\n%s", screenOf(m))
 	}
 }
@@ -222,7 +239,7 @@ func TestFilterFindsTableEntriesByAnyCell(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	press(t, m, "/")
 	typeText(t, m, "onboarding")
-	if len(m.list.matches) != 1 || m.list.matches[0] != "wiki-docs" {
+	if got := shownEntries(m); len(got) != 1 || got[0] != "wiki-docs" {
 		t.Fatalf("matches = %v, want the connection whose description holds the text", m.list.matches)
 	}
 	if header, rows := tableLines(t, m); !strings.Contains(header, "SERVICE") || len(rows) != 1 ||
@@ -233,7 +250,7 @@ func TestFilterFindsTableEntriesByAnyCell(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "/")
 	typeText(t, m, "missing")
-	if len(m.list.matches) != 1 || m.list.matches[0] != "wiki-reader" {
+	if got := shownEntries(m); len(got) != 1 || got[0] != "wiki-reader" {
 		t.Errorf("matches = %v, want the credential with a missing secret", m.list.matches)
 	}
 }
@@ -252,7 +269,7 @@ func TestTheColumnNamesDoNotScrollAway(t *testing.T) {
 	if !strings.Contains(header, "BASE URL") || len(rows) == 0 {
 		t.Fatalf("the column names are gone after scrolling:\n%s", screenOf(m))
 	}
-	if !strings.Contains(screenOf(m), "> wiki-main") {
+	if !strings.Contains(screenOf(m), ">   tracker-main") {
 		t.Errorf("the last entry is not selected and shown:\n%s", screenOf(m))
 	}
 	assertViewFits(t, screenOf(m), m.width, m.height)
@@ -336,10 +353,16 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 	for _, width := range []int{40, 79, 80, 120} {
 		m := newTableModel(t, width)
 		openSectionByName(t, m, sectionServices)
-		if len(m.list.matches) < 2 {
+		var entries []string
+		for _, name := range m.list.matches {
+			if !isGroupRow(name) {
+				entries = append(entries, name)
+			}
+		}
+		if len(entries) < 2 {
 			t.Fatalf("width %d: need at least two services for the marked row and its neighbour", width)
 		}
-		marked, alt := m.list.matches[0], m.list.matches[1]
+		marked, alt := entries[0], entries[1]
 
 		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
 		coloured := screenOf(m)
@@ -366,7 +389,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 
 		press(t, m, "/")
 		typeText(t, m, marked)
-		if len(m.list.matches) != 1 || m.list.matches[0] != marked {
+		if got := m.list.matches; len(got) != 2 || !isGroupRow(got[0]) || got[1] != marked {
 			t.Errorf("width %d: typing %q does not filter down to it: %v", width, marked, m.list.matches)
 		}
 		press(t, m, "esc")
