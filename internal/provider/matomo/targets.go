@@ -117,10 +117,18 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// reaches is the Reaches answer of the Matomo target: the version tool serves every binding, the website
-// tools need a binding that reaches websites. A binding to the instance alone reaches no website.
+// instanceTools are the instance-wide tools: they need Super User rights, not a website, and are offered only
+// to a connection whose targets name instance.
+var instanceTools = map[string]bool{siteGroupsList.ID: true}
+
+// reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide
+// tool needs the instance target, and the website tools need a binding that reaches websites. A binding to the
+// instance alone reaches no website.
 func reaches(tool string, targets []string) (bool, []string) {
 	bound, err := parseScope(targets)
+	if instanceTools[tool] {
+		return err == nil && bound.instance, []string{formInstance}
+	}
 	if err != nil || bound.reachesSites() || tool == versionGet.ID {
 		return true, nil
 	}
