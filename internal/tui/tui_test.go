@@ -1522,8 +1522,8 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageEnv)
-	if view := screenOf(m); !strings.Contains(view, "system keyring keeps the secrets in the system keyring") {
-		t.Errorf("the form does not say what the secrets row decides:\n%s", view)
+	if words := explained(m); !strings.Contains(words, "system keyring keeps the secrets in "+secret.StoreLabel(platform)) {
+		t.Errorf("the form does not say what the secrets row decides: %s", words)
 	}
 
 	// The role rows are one kind of row, so the sentence about all of them stands only under the first, and
