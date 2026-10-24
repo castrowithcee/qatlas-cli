@@ -49,7 +49,7 @@ func formsBase(t *testing.T, w, h int) *Model {
 		"docs": {Service: "wiki", Credential: "reader", Description: "team wiki", Target: "book/12",
 			Tools: []string{"bookstack.pages.list"}},
 		"docs-off":  {Service: "wiki", Credential: "reader", Disabled: true},
-		"docs-wide": {Service: "wiki", Credential: "reader", Paths: []string{"/tmp"}},
+		"docs-wide": {Service: "wiki", Credential: "reader", Paths: []string{"~/projects"}},
 	})
 	mustNoError(t, m.cfg.SetService("bot", config.Service{Provider: "telegram", BaseURL: "https://bot.example.invalid"}))
 	mustNoError(t, m.cfg.SetCredential("billing", config.Credential{Type: config.CredentialTypeKeyring, Forward: true,
@@ -335,7 +335,7 @@ func (v *viewSet) targetsAndPaths() {
 	v.see(m)
 	press(t, m, "enter")
 	v.see(m)
-	typeText(t, m, "/tm")
+	typeText(t, m, "~/pr")
 	v.see(m)
 	press(t, m, "esc", "esc")
 	press(t, m, "d")
