@@ -464,6 +464,13 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	return response.StatusCode, response.Header, nil
 }
 
+// notShown is the one failure for a resource the token does not reach, which a binding check reuses so that a
+// resource outside the targets cannot be told from one that does not exist.
+func notShown(op string, p *product) *provider.Error {
+	return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: p.name + " does not show this " +
+		"resource to this token; it may not exist, or the token's scopes or repository binding do not reach it"}
+}
+
 // refusal maps an HTTP status to a stable class; the provider body is never read into the message. 403 and
 // 404 are both "not reachable": an instance answers 404 instead of 403 to a token bound to other repositories
 // or to public ones only, so neither proves that a resource exists or not.
@@ -471,8 +478,7 @@ func refusal(op string, p *product, limiter *ratelimit.Limiter, response *http.R
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch response.StatusCode {
 	case http.StatusForbidden, http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: p.name + " does not show this " +
-			"resource to this token; it may not exist, or the token's scopes or repository binding do not reach it"}
+		return notShown(op, p)
 	case http.StatusTooManyRequests:
 		limiter.HoldFor(min(provider.RetryAfter(response.Header), maxHold))
 	}
