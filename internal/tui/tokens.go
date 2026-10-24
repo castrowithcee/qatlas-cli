@@ -433,13 +433,13 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 // with a warning in words beside every one that covers nothing now, its expiry, and when it was created.
 func (m *Model) tokenDetailView() string {
 	name := m.tokenDetail
-	title := m.wrapped(titleStyle, "Token "+name) + "\n\n"
+	title := m.wrapped(styles.title, "Token "+name) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
-		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
 	}
 	if !ok {
-		return title + m.wrapped(hintStyle, "this token no longer exists; nothing to show") + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.hint, "this token no longer exists; nothing to show") + m.keyHint("esc back · : cmds · ? help")
 	}
 	var b strings.Builder
 	b.WriteString(title)
@@ -466,17 +466,17 @@ func (m *Model) tokenDetailView() string {
 	for i, model := range entry.token.Models {
 		models[i] = model
 		if lapsed[model] {
-			models[i] = warningStyle.Render("⚠ " + model + " (" + tokenLapsedText + ")")
+			models[i] = styles.warning.Render("⚠ " + model + " (" + tokenLapsedText + ")")
 		}
 	}
 	b.WriteString(m.formRow(false, vorbilderLabel, strings.Join(models, "\n")) + "\n")
 	if entry.checkErr != "" {
-		b.WriteString(m.indentedWith(warningStyle, "warning: the vorbilder could not be checked: "+
+		b.WriteString(m.indentedWith(styles.warning, "warning: the vorbilder could not be checked: "+
 			entry.checkErr) + "\n")
 	}
 	expires := tokenExpiry(entry.token)
 	if entry.token.Expired(time.Now()) {
-		expires += "  " + warningStyle.Render("⚠ expired, approves nothing")
+		expires += "  " + styles.warning.Render("⚠ expired, approves nothing")
 	}
 	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
 	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
@@ -487,7 +487,7 @@ func (m *Model) tokenDetailView() string {
 // tokenRevokeView draws the question asked before a token is revoked.
 func (m *Model) tokenRevokeView() string {
 	var b strings.Builder
-	b.WriteString(m.wrapped(titleStyle, "Revoke agent token "+m.tokenRevoke+"?") + "\n\n")
+	b.WriteString(m.wrapped(styles.title, "Revoke agent token "+m.tokenRevoke+"?") + "\n\n")
 	b.WriteString(m.indented("it stops working at once, in a running vault process too; approvals it gave stay") +
 		"\n")
 	b.WriteString(m.keyHint("y revoke · n/esc keep · : cmds · ? help"))
@@ -496,5 +496,5 @@ func (m *Model) tokenRevokeView() string {
 
 // tokenFormNotes are the lines under the rows of the token form: what a vorbild means, said once for all.
 func (m *Model) tokenFormNotes() string {
-	return "\n" + m.indentedWith(hintStyle, vorbildNote) + "\n" + m.indentedWith(hintStyle, vorbildSelfNote) + "\n"
+	return "\n" + m.indentedWith(styles.hint, vorbildNote) + "\n" + m.indentedWith(styles.hint, vorbildSelfNote) + "\n"
 }

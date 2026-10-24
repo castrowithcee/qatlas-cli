@@ -160,18 +160,18 @@ func (m *Model) providerTableFrame() (string, string) {
 		keys = "type to search · up/down · enter next · esc cancel setup"
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("%s  %d/%d (%d total)",
+	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)",
 		title, min(t.list.cursor+1, shown), shown, total)) + "\n")
 	head.WriteString(m.searchLine(&t.list, "search: ") + "\n")
 	current := t.name(t.current)
 	if t.current != "" {
 		current += " (" + t.current + ")"
 	}
-	head.WriteString(m.wrapped(hintStyle, "current: "+current) + "\n")
+	head.WriteString(m.wrapped(styles.hint, "current: "+current) + "\n")
 	_, width := m.fit("  ")
-	head.WriteString(hintStyle.Render(clipCells("  "+t.header(width), m.usable(0))) + "\n")
+	head.WriteString(styles.hint.Render(clipCells("  "+t.header(width), m.usable(0))) + "\n")
 	if shown == 0 {
-		head.WriteString(m.wrapped(hintStyle,
+		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
 	}
 	if t.list.query() == "" {

@@ -68,8 +68,8 @@ func (m *Model) helpFrame() (string, string, int) {
 		names = append(names, topic.Name)
 	}
 	title := "Help  " + strings.Join(names, "  ")
-	base := m.wrapped(titleStyle, title) + "\n\n"
-	note := m.wrapped(hintStyle, macOSFunctionKeyNote) + "\n\n"
+	base := m.wrapped(styles.title, title) + "\n\n"
+	note := m.wrapped(styles.hint, macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
 	keys := "left/right topic · up/down scroll · pgup/pgdown page · esc/? close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
@@ -80,7 +80,7 @@ func (m *Model) helpFrame() (string, string, int) {
 		if lines > room {
 			room--
 			first := min(m.helpOffset+1, lines)
-			foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", first,
+			foot = "\n" + m.wrapped(styles.hint, fmt.Sprintf("lines %d-%d of %d", first,
 				min(m.helpOffset+max(room, 1), lines), lines)) + foot
 		}
 		return head, foot, room

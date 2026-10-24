@@ -156,7 +156,7 @@ func (m *Model) fit(prefix string) (string, int) {
 // indented draws a hint under the row it belongs to and keeps its continuation lines there too, so a hint
 // that needs two lines still reads as one hint rather than as a stray sentence at the left margin.
 func (m *Model) indented(text string) string {
-	return m.indentedWith(hintStyle, text)
+	return m.indentedWith(styles.hint, text)
 }
 
 func (m *Model) indentedWith(style lipgloss.Style, text string) string {
@@ -190,9 +190,9 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldMasked && f.input.Value() != "":
 		value = "(entered, masked)"
 	case f.kind == fieldMasked && f.stored:
-		value = hintStyle.Render("(stored, unchanged)")
+		value = styles.hint.Render("(stored, unchanged)")
 	case f.kind == fieldMasked:
-		value = hintStyle.Render("(empty)")
+		value = styles.hint.Render("(empty)")
 	case f.kind == fieldProvider:
 		value = m.providerValue(f)
 	case f.kind == fieldChoice && len(f.choices) == 0:
@@ -204,11 +204,11 @@ func (m *Model) renderField(f field, focused bool) string {
 		// itself on its own row instead, the way a read-only tool list already does below.
 		value += " (" + f.hint + ")"
 	case f.kind == fieldToolList && f.label == forwardLabel && len(f.marked()) == 0:
-		value = hintStyle.Render("(none: no payload secret is released)")
+		value = styles.hint.Render("(none: no payload secret is released)")
 	case f.kind == fieldToolList && f.label == forwardLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && f.label == vorbilderLabel && len(f.marked()) == 0:
-		value = hintStyle.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
+		value = styles.hint.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
 	case f.kind == fieldToolList && f.label == vorbilderLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && len(f.marked()) == 0:
@@ -227,7 +227,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
 	case f.kind == fieldTargets && len(f.entries) == 0:
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
-		value = hintStyle.Render("(" + emptyTargets(metadata.Target) + ")")
+		value = styles.hint.Render("(" + emptyTargets(metadata.Target) + ")")
 	case f.kind == fieldTargets && f.expanded:
 		lines := make([]string, len(f.entries))
 		for i, target := range f.entries {
@@ -237,13 +237,13 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
-		value = hintStyle.Render("(none: no local files released)")
+		value = styles.hint.Render("(none: no local files released)")
 	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
 		value = listLines(f.entries, "directory", "directories")
 	case f.kind == fieldPaths && isFilesLabel(f.label):
 		value = listSummary(f.entries, "directories")
 	case f.kind == fieldPaths && len(f.entries) == 0:
-		value = hintStyle.Render("(none: every project)")
+		value = styles.hint.Render("(none: every project)")
 	case f.kind == fieldPaths && f.expanded:
 		value = listLines(f.entries, "path", "paths")
 	case f.kind == fieldPaths:
@@ -276,7 +276,7 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldEnvName && value != "":
 		value += " (" + m.envSource(value) + ")"
 	case value == "":
-		value = hintStyle.Render("(empty)")
+		value = styles.hint.Render("(empty)")
 	}
 	return value
 }
@@ -305,7 +305,7 @@ func (m *Model) valueRoom(label string) int {
 func (m *Model) formRow(active bool, label, value string) string {
 	style := lipgloss.NewStyle()
 	if active {
-		style = activeStyle
+		style = styles.active
 	}
 	head := formHead(active, label)
 	indent, width := m.fit(strings.Repeat(" ", lipgloss.Width(head)))
@@ -328,7 +328,7 @@ func (m *Model) row(active bool, text string) string {
 	}
 	style := lipgloss.NewStyle()
 	if active {
-		style = activeStyle
+		style = styles.active
 	}
 	lines := strings.Split(render(style, width, text), "\n")
 	for i, l := range lines {
@@ -355,9 +355,9 @@ func (m *Model) listRow(active, alt bool, text string) string {
 	line := marker + padLine(text, width)
 	switch {
 	case active:
-		return activeRowStyle.Render(line)
+		return styles.activeRow.Render(line)
 	case alt:
-		return zebraStyle.Render(line)
+		return styles.zebra.Render(line)
 	default:
 		return line
 	}
@@ -365,7 +365,7 @@ func (m *Model) listRow(active, alt bool, text string) string {
 
 // hint is the key line of a screen. Like every other prose line it is wrapped into the terminal instead of
 // being cut off at its right edge.
-func (m *Model) hint(text string) string { return "\n" + m.wrapped(hintStyle, text) }
+func (m *Model) hint(text string) string { return "\n" + m.wrapped(styles.hint, text) }
 
 // keyHint is the key line of a table screen (a section list, the picker, the provider table): groups of
 // keys separated by " · " never split across a wrap, only between groups, and within a group the key (its
@@ -385,7 +385,7 @@ func (m *Model) keyHint(text string) string {
 			line, lineWidth = "", 0
 		}
 		if lineWidth > 0 {
-			line += hintStyle.Render(" · ")
+			line += styles.hint.Render(" · ")
 			lineWidth += lipgloss.Width(" · ")
 		}
 		line += keyHintGroup(group)
@@ -401,7 +401,7 @@ func (m *Model) keyHint(text string) string {
 func keyHintGroup(group string) string {
 	key, action, ok := strings.Cut(group, " ")
 	if !ok {
-		return keyStyle.Render(key)
+		return styles.key.Render(key)
 	}
-	return keyStyle.Render(key) + hintStyle.Render(" "+action)
+	return styles.key.Render(key) + styles.hint.Render(" "+action)
 }

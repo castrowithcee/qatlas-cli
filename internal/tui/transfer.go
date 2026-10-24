@@ -627,11 +627,11 @@ func (m *Model) exportRow(i int) string {
 }
 
 func (m *Model) exportSelectFrame() (string, string) {
-	head := m.wrapped(titleStyle, "Export: what to take") + "\n" +
-		m.wrapped(hintStyle, "a connection comes with its service and credentials; agent tokens, approvals, the log, and "+
+	head := m.wrapped(styles.title, "Export: what to take") + "\n" +
+		m.wrapped(styles.hint, "a connection comes with its service and credentials; agent tokens, approvals, the log, and "+
 			"the vault settings are never exported") + "\n"
 	if m.export.marks[exportAll] {
-		head += m.wrapped(hintStyle, "everything is ticked: the single entries are not needed") + "\n"
+		head += m.wrapped(styles.hint, "everything is ticked: the single entries are not needed") + "\n"
 	}
 	head += "\n"
 	return head, "\n" + m.keyHint("up/down move · space tick · F2 or enter next · esc cancel · : cmds · ? help") + m.notes()
@@ -663,7 +663,7 @@ func (m *Model) exportView() string {
 	case exportMode:
 		reason := e.secretsReason
 		var b strings.Builder
-		b.WriteString(m.wrapped(titleStyle, "Export: secrets") + "\n\n")
+		b.WriteString(m.wrapped(styles.title, "Export: secrets") + "\n\n")
 		for i, row := range exportModeRows {
 			text := row
 			blocked := i > 0 && reason != ""
@@ -672,7 +672,7 @@ func (m *Model) exportView() string {
 			}
 			line := m.listRow(i == e.modeCursor, false, truncateCells(text, m.usable(2)))
 			if blocked && i != e.modeCursor {
-				line = hintStyle.Render(line)
+				line = styles.hint.Render(line)
 			}
 			b.WriteString(line + "\n")
 		}
@@ -687,15 +687,15 @@ func (m *Model) exportView() string {
 		if e.confirming {
 			title, hint = "Confirm the export passphrase", "type it again to confirm it"
 		}
-		return m.wrapped(titleStyle, title) + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" + m.indented(hint) + "\n" +
+		return m.wrapped(styles.title, title) + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" + m.indented(hint) + "\n" +
 			m.keyHint("F2 or enter ok · esc back, nothing written") + m.notes()
 	case exportPlainConfirm:
-		return m.wrapped(titleStyle, "Write the secrets unencrypted?") + "\n\n" +
-			m.indentedWith(warningStyle, "warning: the file then holds every included secret in plain text; anyone "+
+		return m.wrapped(styles.title, "Write the secrets unencrypted?") + "\n\n" +
+			m.indentedWith(styles.warning, "warning: the file then holds every included secret in plain text; anyone "+
 				"who can read the file can use them. Delete it once it is imported.") + "\n" +
 			m.keyHint("y write unencrypted · n/esc back, nothing written · : cmds · ? help") + m.notes()
 	case exportTarget:
-		return m.wrapped(titleStyle, "Export: file") + "\n\n" + m.pathLines("  ", &e.input) +
+		return m.wrapped(styles.title, "Export: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to write; it is created for you alone and an existing file is never replaced") + "\n" +
 			m.keyHint(pathKeys(&e.input, "F2 or enter preview · esc back")) + m.notes()
 	}
@@ -712,17 +712,17 @@ func (m *Model) exportView() string {
 // linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, between a title
 // and the question and keys of the step. A line that starts with "warning" is drawn as one.
 func (m *Model) linesView(title, question, keys string, lines []string, offset *int) string {
-	head := m.wrapped(titleStyle, title) + "\n\n"
+	head := m.wrapped(styles.title, title) + "\n\n"
 	foot := "\n"
 	if question != "" {
-		foot += m.wrapped(hintStyle, question)
+		foot += m.wrapped(styles.hint, question)
 	}
 	foot += m.keyHint(keys) + m.notes()
 	var body []string
 	for _, line := range lines {
-		style := hintStyle
+		style := styles.hint
 		if strings.HasPrefix(line, "warning") {
-			style = warningStyle
+			style = styles.warning
 		}
 		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
 	}
@@ -746,6 +746,6 @@ func (m *Model) exportLeaveView() string {
 		// F2 does not answer the plain text question; only y does.
 		keys = discard + " · esc keep editing · : cmds · ? help"
 	}
-	return m.wrapped(warningStyle, "warning: the export is not finished") + m.keyHint(keys) + "\n\n" +
+	return m.wrapped(styles.warning, "warning: the export is not finished") + m.keyHint(keys) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), why)
 }

@@ -204,12 +204,12 @@ func approvalTools(values []string) string {
 // approved now.
 func (m *Model) approvalDetailView() string {
 	name := m.approvalDetail
-	title := m.wrapped(titleStyle, "Approve "+name+"?") + "\n\n"
+	title := m.wrapped(styles.title, "Approve "+name+"?") + "\n\n"
 	report, unavailable := m.approvalsReport()
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
 		// is nothing left here to show or approve.
-		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
 	}
 	var change *approval.Change
 	for i := range report.Open {
@@ -220,7 +220,7 @@ func (m *Model) approvalDetailView() string {
 	}
 	if change == nil {
 		// Approved or removed elsewhere while this screen was open.
-		return title + m.wrapped(hintStyle, "this connection is no longer open; nothing to approve") +
+		return title + m.wrapped(styles.hint, "this connection is no longer open; nothing to approve") +
 			m.keyHint("esc back · : cmds · ? help")
 	}
 	return m.approvalChangeView(title, *change)
@@ -253,7 +253,7 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 	m.approvalOffset, m.approvalPage = offset, room
 	foot := m.keyHint(keys)
 	if len(lines) > room {
-		foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", offset+1,
+		foot = "\n" + m.wrapped(styles.hint, fmt.Sprintf("lines %d-%d of %d", offset+1,
 			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
 	}
 	return title + strings.Join(lines[offset:min(offset+room, len(lines))], "\n") + "\n" + foot
@@ -280,7 +280,7 @@ func (m *Model) scrollApproval(delta int) {
 func (m *Model) approveAllConfirmView() string {
 	report, _ := m.approvalsReport()
 	var b strings.Builder
-	b.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Approve %d connection(s)?", len(report.Open))) + "\n\n")
+	b.WriteString(m.wrapped(styles.title, fmt.Sprintf("Approve %d connection(s)?", len(report.Open))) + "\n\n")
 	b.WriteString(m.indented("every connection currently open is approved as it is configured now") + "\n")
 	if stale := report.RevocableStale(); len(stale) > 0 {
 		b.WriteString(m.indented(fmt.Sprintf(

@@ -240,12 +240,12 @@ func (m *Model) commandLineView() string {
 	matches := matchCommands(m.commands(), cl.input.Value())
 	foot := m.keyHint("type to search · up/down or tab choose · enter run · esc close")
 	if cl.msg != "" {
-		foot = "\n" + m.wrapped(failStyle, "error: "+cl.msg) + foot
+		foot = "\n" + m.wrapped(styles.fail, "error: "+cl.msg) + foot
 	}
-	head := m.wrapped(titleStyle, "Commands") + "\n\n" + cl.input.View() + "\n\n"
+	head := m.wrapped(styles.title, "Commands") + "\n\n" + cl.input.View() + "\n\n"
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 	if len(matches) == 0 {
-		return head + m.wrapped(hintStyle, "no command matches") + "\n" + foot
+		return head + m.wrapped(styles.hint, "no command matches") + "\n" + foot
 	}
 	cursor := min(cl.cursor, len(matches)-1)
 	start := max(min(cursor-room/2, len(matches)-room), 0)
@@ -257,9 +257,9 @@ func (m *Model) commandLineView() string {
 		text := truncateCells(fmt.Sprintf("%-14s %s", c.name, c.desc), width)
 		switch {
 		case m.unavailableFrom(c, cl.from) != "":
-			text = hintStyle.Render(text)
+			text = styles.hint.Render(text)
 		case i == cursor:
-			text = activeStyle.Render(text)
+			text = styles.active.Render(text)
 		}
 		prefix := "  "
 		if i == cursor {

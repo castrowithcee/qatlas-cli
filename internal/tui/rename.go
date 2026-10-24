@@ -355,7 +355,7 @@ func (m *Model) renameView() string {
 	}
 	apply := m.redactor.Apply
 	if r.plan == nil {
-		return m.wrapped(titleStyle, "Rename "+r.kind+" "+apply(r.old)) + "\n\n" +
+		return m.wrapped(styles.title, "Rename "+r.kind+" "+apply(r.old)) + "\n\n" +
 			m.inputLine("  ", r.input) + "\n" +
 			m.indented("the new name; the next step lists everything the rename touches and changes nothing") + "\n" +
 			m.keyHint("enter dry run · esc cancel") + m.notes()
@@ -369,18 +369,18 @@ func (m *Model) renameView() string {
 		title = fmt.Sprintf("Adopt the rename of %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New))
 		confirm = "y adopt"
 	}
-	head := m.wrapped(titleStyle, title) + "\n\n"
+	head := m.wrapped(styles.title, title) + "\n\n"
 	question := "Dry run: nothing is changed until you confirm."
 	if n := len(r.plan.LapsedTokens); n > 0 {
 		question += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
 	}
 	keys := confirm + " · n/esc cancel · up/down scroll · : cmds · ? help"
-	foot := "\n" + m.wrapped(hintStyle, question) + m.keyHint(keys) + m.notes()
+	foot := "\n" + m.wrapped(styles.hint, question) + m.keyHint(keys) + m.notes()
 	var body []string
 	for _, line := range m.renameLines(r.plan) {
-		style := hintStyle
+		style := styles.hint
 		if strings.HasPrefix(line, "warning") {
-			style = warningStyle
+			style = styles.warning
 		}
 		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
 	}

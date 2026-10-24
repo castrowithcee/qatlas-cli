@@ -24,7 +24,7 @@ func (m *Model) frame(workspace string) string {
 	lines := m.headerLines()
 	content := strings.Split(workspace, "\n")
 	if !m.sidebarLayout() {
-		lines = append(lines, m.navLine(), quietBorder.Render(strings.Repeat("─", m.termWidth)))
+		lines = append(lines, m.navLine(), styles.quietBorder.Render(strings.Repeat("─", m.termWidth)))
 		lines = append(lines, content...)
 		return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 	}
@@ -95,7 +95,7 @@ func (m *Model) pathLine(vaultText string) string {
 		label, suffix = "", ""
 	}
 	path := truncateLeft(m.svc.Path(), rest-lipgloss.Width(label+suffix))
-	return titleStyle.Render(title) + vaultText + sep + okStyle.Render(banner) + hintStyle.Render(label+path+suffix)
+	return styles.title.Render(title) + vaultText + sep + styles.ok.Render(banner) + styles.hint.Render(label+path+suffix)
 }
 
 // pathRoom is what the banner of a newer release leaves the path at least.
@@ -125,18 +125,18 @@ func (m *Model) navLine() string {
 	if lipgloss.Width(line) > m.termWidth {
 		line = focus + strings.Join(short, " ")
 	}
-	return activeStyle.Render(clipCells(line, m.termWidth))
+	return styles.active.Render(clipCells(line, m.termWidth))
 }
 
 // box draws a frame of inner width by rows around lines, with its title in the top border. The frame with
 // the focus is drawn double, the other one single, so focus reads without colour as well.
 func box(title string, lines []string, inner, rows int, focused bool) []string {
-	style, h, v, corners := quietBorder, "─", "│", [4]string{"╭", "╮", "╰", "╯"}
+	style, h, v, corners := styles.quietBorder, "─", "│", [4]string{"╭", "╮", "╰", "╯"}
 	if focused {
-		style, h, v, corners = focusBorder, "═", "║", [4]string{"╔", "╗", "╚", "╝"}
+		style, h, v, corners = styles.focusBorder, "═", "║", [4]string{"╔", "╗", "╚", "╝"}
 	}
 	label := truncateCells(" "+title+" ", inner+1)
-	out := []string{style.Render(corners[0]+h) + titleStyle.Render(label) +
+	out := []string{style.Render(corners[0]+h) + styles.title.Render(label) +
 		style.Render(strings.Repeat(h, max(inner+1-lipgloss.Width(label), 0))+corners[1])}
 	for i := 0; i < rows; i++ {
 		text := ""
