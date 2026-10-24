@@ -964,7 +964,7 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	if strings.Contains(view, "\x1b") {
 		t.Fatalf("a terminal without colour got escape sequences:\n%q", view)
 	}
-	for _, want := range []string{"[2 Connections]", "> wiki"} {
+	for _, want := range []string{"[2 Connections]", ">   wiki"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list in focus does not show %q:\n%s", want, view)
 		}
@@ -1562,6 +1562,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 func openEntryForm(t *testing.T, m *Model, s section, name string) {
 	t.Helper()
 	openSectionByName(t, m, s)
+	m.list.selectName(name)
 	pump(t, m, "enter")
 	if m.screen != screenForm || m.editing != name {
 		t.Fatalf("screen = %v, editing = %q, want the form of %q", m.screen, m.editing, name)
