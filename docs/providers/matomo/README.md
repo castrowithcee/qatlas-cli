@@ -14,8 +14,8 @@ Matomo 5. The API is the same for both, and the token carries the rights of its 
 describes the foundation every Matomo tool shares: connection, targets, availability, errors, paging, and the
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
-[saved segments](segments.md), [annotations](annotations.md), and
-[custom dimensions](dimensions.md).
+[saved segments](segments.md), [annotations](annotations.md),
+[custom dimensions](dimensions.md), and [instance settings and reference data](instance.md).
 
 ## Configuration
 
@@ -139,8 +139,9 @@ The terminal editor starts a new connection on the setup profile `read`, which s
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
 `matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
 `matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.site-settings.get`,
-`matomo.consent-manager.detect`, and `matomo.dimensions.list`; `matomo.site-groups.list` needs the `instance`
-target and is in no profile. The profile `live` adds the [live tools](live.md) and the [visitor profile
+`matomo.consent-manager.detect`, `matomo.dimensions.list`, `matomo.reference-data.list`, and
+`matomo.ip-ranges.expand`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
+and are in no profile. The profile `live` adds the [live tools](live.md) and the [visitor profile
 tools](visitors.md), because they carry personal data. The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
@@ -163,6 +164,9 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 | `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
 | `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
 | `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
+| `matomo.global-settings.get` | [instance](instance.md) | reads the global website settings (admin right, target `instance`) |
+| `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
+| `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
