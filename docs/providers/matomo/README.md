@@ -151,7 +151,9 @@ of the instance, and `matomo.segments.delete` is in no profile. The profile `ann
 `matomo.annotations.add` and `matomo.annotations.update`; it is not recommended because it changes the annotations
 of a website, and the annotation deletions are in no profile. The profile `dimensions` adds
 `matomo.dimension-options.list`, which needs a write right, `matomo.dimensions.add`, and
-`matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good.
+`matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good. The profile
+`sites` adds `matomo.sites.update`; it is not recommended because it changes the settings of a website, and
+`matomo.sites.add` (target `instance`) and `matomo.sites.delete` are in no profile.
 
 ## Tools
 
@@ -160,6 +162,9 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 | `matomo.version.get` | [sites](sites.md) | reads the instance version and, with `plugin`, whether that plugin is activated |
 | `matomo.sites.list` | [sites](sites.md) | reads websites of the token inside the targets, optionally matching `pattern` |
 | `matomo.sites.get` | [sites](sites.md) | reads one website with its addresses, time zone, currency, and tracking settings |
+| `matomo.sites.add` | [sites](sites.md) | creates a website (Super User, target `instance`; effect `create`) |
+| `matomo.sites.update` | [sites](sites.md) | changes the settings of one website; lists not sent are kept (effect `update`) |
+| `matomo.sites.delete` | [sites](sites.md) | deletes a website and its configuration (Super User, targets `instance` and the website; effect `delete`, only via `tools`) |
 | `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
 | `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
 | `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
