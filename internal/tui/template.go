@@ -252,12 +252,12 @@ func (m *Model) templateView() string {
 	if m.template.setup {
 		title = "Guided setup"
 	}
-	b.WriteString(m.wrapped(titleStyle, title) + "\n\n")
+	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	rows := []string{templateEmpty, fmt.Sprintf(templateExisting, m.templateNoun())}
 	for i, row := range rows {
-		mark, style := "( ) ", hintStyle
+		mark, style := "( ) ", styles.hint
 		if i == m.template.index {
-			mark, style = "(•) ", activeStyle
+			mark, style = "(•) ", styles.active
 		}
 		b.WriteString(m.indentedHanging(style, mark, row) + "\n")
 	}
@@ -283,11 +283,11 @@ func (m *Model) templateFrame() (string, string) {
 	l := &m.templateList
 	shown, total := len(l.matches), len(l.all)
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("New %s, from existing  %d/%d (%d total)",
+	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("New %s, from existing  %d/%d (%d total)",
 		m.templateNoun(), min(l.cursor+1, shown), shown, total)) + "\n")
 	head.WriteString(m.searchLine(l, "search: ") + "\n")
 	if shown == 0 {
-		head.WriteString(m.wrapped(hintStyle,
+		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No entry matches %q. esc goes back.", l.query())) + "\n")
 	}
 	keys := "type to search · up/down move · enter choose · esc back"

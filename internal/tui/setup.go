@@ -625,9 +625,9 @@ func (m *Model) setupHeading(withLead bool) string {
 	if w.saved != "" {
 		title, lead = "Set up a connection · saved", savedLead
 	}
-	heading := m.wrapped(titleStyle, title) + "\n"
+	heading := m.wrapped(styles.title, title) + "\n"
 	if withLead {
-		heading += m.wrapped(hintStyle, lead) + "\n"
+		heading += m.wrapped(styles.hint, lead) + "\n"
 	}
 	return heading + "\n"
 }
@@ -641,7 +641,7 @@ func (m *Model) summaryView() string {
 		b.WriteString(m.row(false, row) + "\n")
 	}
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
-		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
+		b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
 	}
 	keys := "F2 save · esc back · : cmds · ? help"
 	switch {

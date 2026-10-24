@@ -164,7 +164,7 @@ func migrateRows(plan []vaultmigrate.Entry) []string {
 func (m *Model) migratePlanView() string {
 	p := m.migrate
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Migrate credentials.yaml?") + "\n\n")
+	b.WriteString(styles.title.Render("Migrate credentials.yaml?") + "\n\n")
 	b.WriteString(m.indented(countNoun(len(p.plan), "entry", "entries")+" would move into the vault:") + "\n")
 	for _, row := range migrateRows(p.plan) {
 		b.WriteString("    " + row + "\n")
@@ -174,7 +174,7 @@ func (m *Model) migratePlanView() string {
 			"switching from the system keyring to the vault: "+strings.Join(sortedCopy(p.switched), ", ")) + "\n")
 	}
 	if len(p.storeUnsureFor) > 0 {
-		b.WriteString(m.indentedWith(warningStyle, "warning: the system keyring could not be checked for "+
+		b.WriteString(m.indentedWith(styles.warning, "warning: the system keyring could not be checked for "+
 			strings.Join(sortedCopy(p.storeUnsureFor), ", ")) + "\n")
 	}
 	b.WriteString(m.keyHint("y migrate · n/esc cancel, nothing is written · : cmds · ? help"))
@@ -339,7 +339,7 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 // switched, and any warning, followed by whether to delete credentials.yaml now.
 func (m *Model) migrateResultView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Delete credentials.yaml?") + "\n\n")
+	b.WriteString(styles.title.Render("Delete credentials.yaml?") + "\n\n")
 	b.WriteString(m.indented(m.migrateResult) + "\n")
 	b.WriteString(m.keyHint("y delete · n/esc keep the file · : cmds · ? help"))
 	return b.String()

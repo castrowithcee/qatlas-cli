@@ -484,16 +484,16 @@ func (m *Model) addFrame() (string, string) {
 	label := "filter or type: "
 	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · esc cancel entry"
 	if a.kind < 0 {
-		head.WriteString(m.wrapped(titleStyle, "Add a "+metadata.Label) + "\n")
+		head.WriteString(m.wrapped(styles.title, "Add a "+metadata.Label) + "\n")
 		hint := "build a new target step by step, or type it"
 		if len(a.known) > 0 {
 			hint = "take a target another connection of " + m.formService() + " uses, " + hint
 		}
-		head.WriteString(m.wrapped(hintStyle, hint) + "\n")
+		head.WriteString(m.wrapped(styles.hint, hint) + "\n")
 	} else {
 		kind := metadata.Kinds[a.kind]
 		ask := m.addAsk()
-		head.WriteString(m.wrapped(titleStyle, "New "+kind.Name+" · "+ask) + "\n")
+		head.WriteString(m.wrapped(styles.title, "New "+kind.Name+" · "+ask) + "\n")
 		so := strings.Join(a.chosen, "/")
 		if so != "" {
 			so += "/"
@@ -502,7 +502,7 @@ func (m *Model) addFrame() (string, string) {
 		for _, form := range a.forms {
 			forms = append(forms, strings.Join(form, "/"))
 		}
-		head.WriteString(m.wrapped(hintStyle, "so far: "+so+"   forms: "+strings.Join(forms, ", ")) + "\n")
+		head.WriteString(m.wrapped(styles.hint, "so far: "+so+"   forms: "+strings.Join(forms, ", ")) + "\n")
 		label = "value: "
 		keys = "type a value or filter · up/down move · enter choose · " + save + " · esc step back"
 		if len(a.history) <= 1 {
@@ -511,7 +511,7 @@ func (m *Model) addFrame() (string, string) {
 	}
 	head.WriteString(m.searchLine(&a.choices, label) + "\n")
 	if len(a.choices.matches) == 0 {
-		head.WriteString(m.wrapped(hintStyle, "(nothing to choose; type a value)") + "\n")
+		head.WriteString(m.wrapped(styles.hint, "(nothing to choose; type a value)") + "\n")
 	}
 	if a.choices.query() == "" {
 		keys += " · : cmds · ? help"

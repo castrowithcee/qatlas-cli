@@ -239,10 +239,10 @@ func (m *Model) pathFrame() (string, string) {
 		title += fmt.Sprintf("  %d/%d", m.pathList.cursor+1, total)
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, title) + "\n")
-	head.WriteString(m.wrapped(hintStyle, hint) + "\n\n")
+	head.WriteString(m.wrapped(styles.title, title) + "\n")
+	head.WriteString(m.wrapped(styles.hint, hint) + "\n\n")
 	if total == 0 {
-		head.WriteString(m.wrapped(hintStyle, none) + "\n")
+		head.WriteString(m.wrapped(styles.hint, none) + "\n")
 	}
 
 	var foot strings.Builder
@@ -259,7 +259,7 @@ func (m *Model) pathFrame() (string, string) {
 		path, _ := m.pathList.selected()
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
-		foot.WriteString("\n" + m.wrapped(warningStyle, "Remove "+quoted+" from the list?") + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.warning, "Remove "+quoted+" from the list?") + "\n")
 		keys = "y remove · n/esc keep · : cmds · ? help"
 	}
 	foot.WriteString(m.keyHint(keys))

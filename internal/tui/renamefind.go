@@ -302,7 +302,7 @@ func (m *Model) findingsView() string {
 	if s == nil {
 		return ""
 	}
-	head := m.wrapped(titleStyle, "Renames found in the vault") + "\n\n"
+	head := m.wrapped(styles.title, "Renames found in the vault") + "\n\n"
 	f := s.items[s.cursor]
 	keys := "up/down choose"
 	switch {
@@ -312,7 +312,7 @@ func (m *Model) findingsView() string {
 		keys += " · enter " + f.action()
 	}
 	keys += " · esc back · : cmds · ? help"
-	foot := "\n" + m.wrapped(hintStyle, m.findingDetail(f)) + m.keyHint(keys) + m.notes()
+	foot := "\n" + m.wrapped(styles.hint, m.findingDetail(f)) + m.keyHint(keys) + m.notes()
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 	start := max(min(s.cursor-room/2, len(s.items)-room), 0)
 	end := min(start+room, len(s.items))

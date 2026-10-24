@@ -332,7 +332,7 @@ func (m *Model) selftestKeys() string {
 
 // selftestFrame is the title above the body and the keys below it, and the lines of body that fit between.
 func (m *Model) selftestFrame() (head, foot string, room int) {
-	head = m.wrapped(titleStyle, "Selftest "+m.st.scenario) + "\n\n"
+	head = m.wrapped(styles.title, "Selftest "+m.st.scenario) + "\n\n"
 	foot = m.keyHint(m.selftestKeys())
 	return head, foot, max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 }
