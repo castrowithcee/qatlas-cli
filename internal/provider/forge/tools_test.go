@@ -149,6 +149,13 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		} else {
 			want = append(want, p.id+".actions-runners.update", p.id+".workflows.enable", p.id+".workflows.disable")
 		}
+		want = append(want, p.id+".topics.search", p.id+".repository-topics.list", p.id+".repository-topics.set",
+			p.id+".repository-topics.add", p.id+".repository-topics.remove", p.id+".gitignore-templates.list",
+			p.id+".gitignore-templates.get", p.id+".label-templates.list", p.id+".label-templates.get",
+			p.id+".license-templates.list", p.id+".license-templates.get")
+		if p == gitea {
+			want = append(want, p.id+".repository-licenses.list")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
