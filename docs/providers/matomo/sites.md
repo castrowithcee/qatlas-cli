@@ -56,3 +56,28 @@ connection is offered the tool, and the call checks the target again before a se
 (`SitesManager.getSitesGroups`; an empty name stands for websites without a group). With `group` it pages the
 websites of that group (`SitesManager.getSitesFromGroup`) and keeps only those inside the website targets, so an
 instance-only binding sees no website. The group names come from the whole instance and are not cut to the targets.
+
+## Managing websites
+
+`matomo.sites.add`, `matomo.sites.update`, and `matomo.sites.delete` change websites through `SitesManager.addSite`,
+`SitesManager.updateSite`, and `SitesManager.deleteSite`. Each needs confirmation and is sent once and never
+repeated; after an unclear result, read the website (`matomo.sites.get`, or `matomo.sites.list` after an add) before
+trying again. Every documented parameter is offered, and the Matomo `message` never reaches an error.
+
+- `sites.add` needs Super User rights and a connection whose targets name `instance`; it is offered only there and
+  checks the target again before a secret is read. The result names the new `idSite`. The new website lies outside
+  any `site/ID` target of the connection, so it is reachable only after the targets change, or with the target
+  `site` without an ID. Not idempotent. The tool is in no profile, because the profile cannot bind the instance.
+- `sites.update` takes `idSite` (checked against the targets before a secret is read, optional with exactly one bound
+  website) and needs an admin right on it. `null` values stay unchanged in Matomo, so a value not given is left as it
+  is, with one exception: Matomo clears the six comma-separated lists (`searchKeywordParameters`,
+  `searchCategoryParameters`, `excludedIps`, `excludedQueryParameters`, `excludedUserAgents`, `excludedReferrers`)
+  whenever they are not sent. Qatlas therefore reads the website once and sends the current value of each list that
+  is not given (refused when a stored list is too long to be sent back faithfully); an empty text clears a list.
+  `urls`, when given, replace the main and all alias addresses. `group` needs Super User rights; for others Matomo
+  ignores it. It is in the `sites` profile, which is not recommended.
+- `sites.delete` needs Super User rights, `idSite` given explicitly, a connection whose targets name `instance`, and
+  the website inside its `site` targets; the website is read first to name it. It is listed-only (a connection's
+  `tools` list) and in no profile. Matomo removes the website record and its configuration for good; it does not
+  delete tracked logs and archives, and it refuses to delete the last website. A personal token needs no password
+  confirmation (only a session token does), so the safeguard is the confirmation and the `tools` list alone.
