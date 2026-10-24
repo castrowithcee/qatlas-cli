@@ -29,7 +29,11 @@ import (
 // It also shrinks vaultTickInterval: deliver (update_test.go) calls a command's function directly, which for
 // tea.Tick blocks for the interval, and never recurses past the message it produces (see deliver's own
 // comment on vaultTickMsg), so no test wants the real 5 seconds.
+//
+// Every vault the tests create, re-key or unlock, also through a dialog, uses a low scrypt work factor; the
+// real one costs seconds per passphrase and would let the package overrun the CI time limit.
 func TestMain(m *testing.M) {
+	vault.LowerWorkFactorForTests()
 	startVaultProcessFn = func(context.Context, string, vault.Snapshot, *vaultproc.Client) (vaultproc.Status, error) {
 		return vaultproc.Status{}, vaultproc.ErrUnsupported
 	}

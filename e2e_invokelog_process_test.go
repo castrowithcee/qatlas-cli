@@ -174,19 +174,29 @@ defaults:
 		t.Fatalf("MCP invoke = %s", invoke.Result.Structured)
 	}
 
+	// An entry is appended after its response was written, so it may follow the answer by a moment. The search
+	// waits for the invoke entry, since signing it takes longer than the search and the order is the append order.
+	awaitEntries := func(t *testing.T, want int) (string, []map[string]any) {
+		t.Helper()
+		var file string
+		var entries []map[string]any
+		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+			if file, entries = readLog(t); len(entries) >= want {
+				return file, entries
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the log holds %d entries, want %d: %v", len(entries), want, entries)
+			}
+		}
+	}
+	awaitEntries(t, 4)
+
 	if search := broker.call(t, `{"query":"pages"}`, "qatlas.search"); search.Result.IsError {
 		t.Fatalf("MCP search = %s", search.Result.Structured)
 	}
-	// An entry is appended after its response was written, so it may follow the answer by a moment.
-	var file string
-	var entries []map[string]any
-	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		if file, entries = readLog(t); len(entries) >= 5 || time.Now().After(deadline) {
-			break
-		}
-	}
+	file, entries := awaitEntries(t, 5)
 	if len(entries) != 5 {
-		t.Fatalf("the log holds %d entries, want 5", len(entries))
+		t.Fatalf("the log holds %d entries, want 5: %v", len(entries), entries)
 	}
 	for i, entry := range entries {
 		signed := entry["mac"] != ""

@@ -76,7 +76,7 @@ type exportState struct {
 	modeCursor    int
 	secretsReason string
 	// input is the masked passphrase on exportPassphrase and the file path on exportTarget.
-	input textinput.Model
+	input pathField
 	// first is the first passphrase entry while it is typed again; passphrase is the confirmed one. Both
 	// only ever reach the core's ExportPassphrase and are cleared when the export ends.
 	first, passphrase string
@@ -321,7 +321,7 @@ func (m *Model) enterExportMode() {
 func (m *Model) askExportPassphrase() {
 	e := m.export
 	e.step = exportPassphrase
-	e.input = maskedInput()
+	e.input = pathField{Model: maskedInput()}
 	e.first, e.passphrase, e.confirming = "", "", false
 }
 
@@ -425,9 +425,7 @@ func maskedInput() textinput.Model {
 func (m *Model) updateExportPassphrase(key tea.KeyMsg) tea.Cmd {
 	e := m.export
 	if key.String() != "enter" {
-		var cmd tea.Cmd
-		e.input, cmd = e.input.Update(key)
-		return cmd
+		return e.input.update(key)
 	}
 	typed := e.input.Value()
 	e.input.Reset()
@@ -455,36 +453,25 @@ func (m *Model) askExportTarget() {
 	if value == "" && m.startDir != "" {
 		value = filepath.Join(m.startDir, exportFileName)
 	}
-	e.input = pathInput(value)
-}
-
-// pathInput is a focused one-line input holding value, the cursor at its end.
-func pathInput(value string) textinput.Model {
-	in := textinput.New()
-	in.Prompt = ""
-	in.Cursor.SetMode(cursor.CursorStatic)
-	in.SetValue(value)
-	in.Focus()
-	in.CursorEnd()
-	return in
+	e.input = newPathField(pathFile)
+	e.input.open(value, m.startDir)
 }
 
 func (m *Model) updateExportTarget(key tea.KeyMsg) tea.Cmd {
 	e := m.export
 	if key.String() != "enter" {
-		var cmd tea.Cmd
-		e.input, cmd = e.input.Update(key)
-		return cmd
+		return e.input.update(key)
 	}
 	m.clearMessages()
+	if !e.input.accept() {
+		return nil
+	}
 	path := strings.TrimSpace(e.input.Value())
 	if path == "" {
 		m.fail = "name the file to write"
 		return nil
 	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
+	path = absolutePath(path)
 	// Nothing is read or written yet: the preview never holds a secret value.
 	res, err := m.svc.ExportConfig(e.selection(), "")
 	if err != nil {
@@ -700,7 +687,7 @@ func (m *Model) exportView() string {
 		if e.confirming {
 			title, hint = "Confirm the export passphrase", "type it again to confirm it"
 		}
-		return m.wrapped(titleStyle, title) + "\n\n" + m.inputLine("  ", e.input) + "\n" + m.indented(hint) + "\n" +
+		return m.wrapped(titleStyle, title) + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" + m.indented(hint) + "\n" +
 			m.keyHint("F2 or enter ok · esc back, nothing written") + m.notes()
 	case exportPlainConfirm:
 		return m.wrapped(titleStyle, "Write the secrets unencrypted?") + "\n\n" +
@@ -708,9 +695,9 @@ func (m *Model) exportView() string {
 				"who can read the file can use them. Delete it once it is imported.") + "\n" +
 			m.keyHint("y write unencrypted · n/esc back, nothing written · : cmds · ? help") + m.notes()
 	case exportTarget:
-		return m.wrapped(titleStyle, "Export: file") + "\n\n" + m.inputLine("  ", e.input) + "\n" +
+		return m.wrapped(titleStyle, "Export: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to write; it is created for you alone and an existing file is never replaced") + "\n" +
-			m.keyHint("F2 or enter preview · esc back") + m.notes()
+			m.keyHint(pathKeys(&e.input, "F2 or enter preview · esc back")) + m.notes()
 	}
 	title, question, keys := "Export preview", "Nothing is written until you confirm.", "F2 write · esc back · up/down scroll · : cmds · ? help"
 	if e.step == exportResult {

@@ -46,7 +46,7 @@ const (
 	propertyNameSchema  = `{"type":"string","minLength":1,"maxLength":100,"pattern":"` + propertyNamePattern + `"}`
 	propertyValueSchema = `{"anyOf":[{"type":"string","maxLength":1024},` +
 		`{"type":"array","maxItems":50,"items":{"type":"string","maxLength":1024}},{"type":"null"}]}`
-	propertyValueTypeSchema   = `{"type":"string","enum":["string","single_select","multi_select","true_false"]}`
+	propertyValueTypeSchema   = `{"type":"string","enum":["string","single_select","multi_select","true_false","url"]}`
 	propertyEditableSchema    = `{"type":"string","enum":["org_actors","org_and_repo_actors"]}`
 	propertyDescriptionSchema = `{"type":"string","maxLength":1024}`
 	propertyAllowedSchema     = `{"type":"array","maxItems":200,"items":{"type":"string","maxLength":1024}}`
@@ -155,7 +155,7 @@ var customPropertiesSet = capability.Descriptor{
 			"value (a string, an array of strings for a multi-select property, or null to remove the property); " +
 			"required with repository, refused with organization"},
 		{Name: "definitions", Description: "For an organization: property definitions to create or replace, each " +
-			"property_name, value_type (string, single_select, multi_select, or true_false), required, " +
+			"property_name, value_type (string, single_select, multi_select, true_false, or url), required, " +
 			"default_value, description, allowed_values (for single_select or multi_select), and " +
 			"values_editable_by (org_actors or org_and_repo_actors); required with organization, refused with " +
 			"repository"},

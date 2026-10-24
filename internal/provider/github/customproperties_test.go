@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -262,6 +263,8 @@ func TestCustomPropertiesSetArgumentsAreValidatedBeforeIO(t *testing.T) {
 			`{"organization":"orgs/octo-org","properties":[{"property_name":"x","value":"y"}]}`},
 		{"an invalid property name", "repo-listed",
 			`{"repository":"octo-org/example","properties":[{"property_name":"","value":"y"}]}`},
+		{"an unknown value type", "org-listed",
+			`{"organization":"orgs/octo-org","definitions":[{"property_name":"x","value_type":"color"}]}`},
 	} {
 		reads = 0
 		before := len(f.recorded())
@@ -285,5 +288,30 @@ func TestCustomPropertiesSetArgumentsAreValidatedBeforeIO(t *testing.T) {
 	}
 	if reads != 0 || len(f.recorded()) != before {
 		t.Error("too many properties reached the credential or GitHub")
+	}
+}
+
+func TestCustomPropertiesSetSendsAURLDefinitionUnchanged(t *testing.T) {
+	f, _, base := serveCustomProperties(t)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), customPropertiesConfig(base), resolver(red, nil), red)
+
+	definition := `{"property_name":"docs","value_type":"url","default_value":"https://example.com/docs"}`
+	before := len(f.recorded())
+	if _, err := invoke(t, core, customPropertiesSet.ID, "org-listed",
+		`{"organization":"orgs/octo-org","definitions":[`+definition+`]}`, true); err != nil {
+		t.Fatal(err)
+	}
+	requests := f.recorded()[before:]
+	if len(requests) != 1 {
+		t.Fatalf("requests = %+v, want one set", requests)
+	}
+	var want map[string]any
+	if err := json.Unmarshal([]byte(definition), &want); err != nil {
+		t.Fatal(err)
+	}
+	sent, _ := requests[0].body["properties"].([]any)
+	if len(sent) != 1 || !reflect.DeepEqual(sent[0], want) {
+		t.Errorf("sent properties = %v, want [%v]", requests[0].body["properties"], want)
 	}
 }
