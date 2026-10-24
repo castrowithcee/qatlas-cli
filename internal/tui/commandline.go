@@ -17,6 +17,8 @@ type command struct {
 	name    string
 	desc    string
 	aliases []string
+	// hidden keeps the command out of the empty line's list; it still matches what is typed.
+	hidden bool
 	// unavailable returns the reason the command cannot run on m.screen now, or "" where it can.
 	unavailable func(m *Model) string
 	// run performs the action on the screen the command line was opened from.
@@ -34,15 +36,32 @@ type commandLine struct {
 // commands is the register, in the order an empty line lists it.
 func (m *Model) commands() []command {
 	var list []command
-	for s := section(0); s < sectionCount; s++ {
-		title := strings.ToLower(s.title())
+	for a := area(0); a < areaCount; a++ {
+		title := strings.ToLower(a.title())
+		first := areaSections[a][0]
 		list = append(list, command{
 			name:        "go " + title,
-			desc:        fmt.Sprintf("Open %s (%d)", s.title(), int(s)+1),
+			desc:        fmt.Sprintf("Open %s (%d)", a.title(), int(a)+1),
 			aliases:     []string{title},
-			unavailable: onScreens("switch sections", screenNav, screenList, screenLogs),
-			run:         func(m *Model) tea.Cmd { return m.openSection(s) },
+			unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
+			run:         func(m *Model) tea.Cmd { return m.openSection(first) },
 		})
+		for _, s := range areaSections[a] {
+			// The sub-tabs keep the names the sections had before the areas, so older habits still work; the
+			// empty line lists only the areas.
+			name := strings.ToLower(s.title())
+			if name == title {
+				continue
+			}
+			list = append(list, command{
+				name:        "go " + name,
+				desc:        fmt.Sprintf("Open %s, %s (%d)", a.title(), s.title(), int(a)+1),
+				aliases:     []string{name},
+				hidden:      true,
+				unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
+				run:         func(m *Model) tea.Cmd { return m.openSection(s) },
+			})
+		}
 	}
 	list = append(list, m.selftestCommands()...)
 	return append(list,
@@ -158,7 +177,13 @@ func (m *Model) unavailableFrom(c command, from screen) string {
 func matchCommands(list []command, query string) []command {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "" {
-		return list
+		var shown []command
+		for _, c := range list {
+			if !c.hidden {
+				shown = append(shown, c)
+			}
+		}
+		return shown
 	}
 	var groups [3][]command
 	for _, c := range list {
