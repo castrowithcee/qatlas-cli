@@ -212,12 +212,15 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
   trees, references, annotated tags, and notes
 - [Contents](contents.md): files, raw content, archives, editor configuration, and writing files as commits
 - [Wiki](wiki.md): wiki pages, their text, and their revisions
+- [Accesses](accesses.md): reading and deleting webhooks, reading and resetting server-side Git hooks, and reading,
+  syncing, and deleting push mirrors
 
 ## Not offered
 
 No tool of either provider covers ActivityPub and federation, repository migration, creating mirrors, deleting all
-repositories of an organization, creating tokens, keys, webhooks, or OAuth2 applications, creating users, adding
-email addresses, registering runners (including registration tokens), or acting as another user (Sudo).
+repositories of an organization, creating tokens, keys, webhooks, or OAuth2 applications, changing or testing a
+webhook (including pausing it), system webhooks, creating push mirrors, changing Git hook scripts, creating users,
+adding email addresses, registering runners (including registration tokens), or acting as another user (Sudo).
 
 ## Setup profile
 
