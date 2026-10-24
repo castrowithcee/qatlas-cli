@@ -486,12 +486,11 @@ func (m *Model) tokenDetailView() string {
 
 // tokenRevokeView draws the question asked before a token is revoked.
 func (m *Model) tokenRevokeView() string {
-	var b strings.Builder
-	b.WriteString(m.wrapped(styles.title, "Revoke agent token "+m.tokenRevoke+"?") + "\n\n")
-	b.WriteString(m.indented("it stops working at once, in a running vault process too; approvals it gave stay") +
-		"\n")
-	b.WriteString(m.keyHint("y revoke · n/{back} keep · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(question{
+		title:       "Revoke agent token " + m.tokenRevoke + "?",
+		consequence: "it stops working at once, in a running vault process too; approvals it gave stay",
+		keys:        "y revoke · n/{back} keep · {command} cmds · {help} help",
+	})
 }
 
 // tokenFormNotes are the lines under the rows of the token form: what a vorbild means, said once for all.

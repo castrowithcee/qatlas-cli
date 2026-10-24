@@ -194,16 +194,18 @@ func (m *Model) updateBanner(room int) string {
 	return ""
 }
 
-// updateView asks before the installation. The keys come right under the question, so a small terminal
-// still shows them.
+// updateView asks before the installation.
 func (m *Model) updateView() string {
-	question := "Update qatlas to " + m.release.Latest + "?"
 	after := "Restart qatlas tui afterwards to use it."
 	if m.restart != nil {
 		after = "This editor then restarts itself into the new version, and opens the unlock dialog if the " +
 			"update locked a vault that was unlocked."
 	}
-	return m.wrapped(styles.title, question) + m.keyHint("y update · n/{back} cancel · {command} cmds · {help} help") + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), m.updateText) + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), "Installs the release like 'qatlas update' and verifies its checksum. "+after)
+	return m.questionText(question{
+		title:       "Update qatlas to " + m.release.Latest + "?",
+		consequence: "Installs the release like 'qatlas update' and verifies its checksum.",
+		details: []string{m.wrapped(lipgloss.NewStyle(), m.updateText), "",
+			m.wrapped(lipgloss.NewStyle(), after)},
+		keys: "y update · n/{back} cancel · {command} cmds · {help} help",
+	})
 }

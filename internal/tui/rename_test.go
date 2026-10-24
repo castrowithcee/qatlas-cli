@@ -122,9 +122,10 @@ func TestRenamingAConnectionWarnsOfTokensAndKeepsItsApproval(t *testing.T) {
 	clearField(t, m)
 	typeText(t, m, "private")
 	pump(t, m, "enter")
-	view := screenOf(m)
-	for _, want := range []string{"approval  approved; carried over", "warning   agent token ci names personal",
-		"outside   agent calls", "ends the cover of 1 agent token"} {
+	// The sentence on the tokens wraps with the question, so the words are compared, not the line breaks.
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	for _, want := range []string{"approval approved; carried over", "warning agent token ci names personal",
+		"outside agent calls", "ends the cover of 1 agent token"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the dry run does not show %q:\n%s", want, view)
 		}

@@ -163,22 +163,23 @@ func migrateRows(plan []vaultmigrate.Entry) []string {
 // could not be checked in the system keyring at all.
 func (m *Model) migratePlanView() string {
 	p := m.migrate
-	var b strings.Builder
-	b.WriteString(styles.title.Render("Migrate credentials.yaml?") + "\n\n")
-	b.WriteString(m.indented(countNoun(len(p.plan), "entry", "entries")+" would move into the vault:") + "\n")
+	q := question{
+		title:       "Migrate credentials.yaml?",
+		consequence: countNoun(len(p.plan), "entry", "entries") + " would move into the vault:",
+		keys:        "y migrate · n/{back} cancel, nothing is written · {command} cmds · {help} help",
+	}
 	for _, row := range migrateRows(p.plan) {
-		b.WriteString("    " + row + "\n")
+		q.details = append(q.details, "    "+row)
 	}
 	if len(p.switched) > 0 {
-		b.WriteString(m.indented(
-			"switching from the system keyring to the vault: "+strings.Join(sortedCopy(p.switched), ", ")) + "\n")
+		q.details = append(q.details, m.indented(
+			"switching from the system keyring to the vault: "+strings.Join(sortedCopy(p.switched), ", ")))
 	}
 	if len(p.storeUnsureFor) > 0 {
-		b.WriteString(m.indentedWith(styles.warning, "warning: the system keyring could not be checked for "+
-			strings.Join(sortedCopy(p.storeUnsureFor), ", ")) + "\n")
+		q.details = append(q.details, m.indentedWith(styles.warning, "warning: the system keyring could not be checked for "+
+			strings.Join(sortedCopy(p.storeUnsureFor), ", ")))
 	}
-	b.WriteString(m.keyHint("y migrate · n/{back} cancel, nothing is written · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(q)
 }
 
 // beginVaultMigrateWrite decides whether writing the confirmed plan would create the vault's very first
@@ -338,11 +339,11 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 // migrateResultView is the combined result and delete question a migrate action ends on: what moved, what
 // switched, and any warning, followed by whether to delete credentials.yaml now.
 func (m *Model) migrateResultView() string {
-	var b strings.Builder
-	b.WriteString(styles.title.Render("Delete credentials.yaml?") + "\n\n")
-	b.WriteString(m.indented(m.migrateResult) + "\n")
-	b.WriteString(m.keyHint("y delete · n/{back} keep the file · {command} cmds · {help} help"))
-	return b.String()
+	return m.questionText(question{
+		title:       "Delete credentials.yaml?",
+		consequence: m.migrateResult,
+		keys:        "y delete · n/{back} keep the file · {command} cmds · {help} help",
+	})
 }
 
 // deleteLegacyCredentials removes credentials.yaml once its migration is confirmed done, and reports the
