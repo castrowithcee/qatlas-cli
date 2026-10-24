@@ -26,7 +26,7 @@ type providerTable struct {
 func (t *providerTable) open(ids []string, names map[string]string, current string) {
 	t.names, t.current = names, current
 	t.list = newFilterList(t.text)
-	t.list.input.Placeholder = "Type to search"
+	t.list.input.Placeholder = tr(tLogSearchPlaceholder)
 	t.list.reset(ids)
 	t.list.selectName(current)
 	t.list.startFilter()
@@ -49,7 +49,7 @@ func (t *providerTable) text(id string) string { return t.name(id) + " " + id }
 // columns splits width into the name and ID columns: the name column is as wide as the longest name as
 // long as the IDs keep room, and never narrower than half of what is left beside the marks.
 func (t *providerTable) columns(width int) (int, int) {
-	nameWidth, idWidth := lipgloss.Width("NAME"), lipgloss.Width("ID")
+	nameWidth, idWidth := lipgloss.Width(tr(tProviderNAME)), lipgloss.Width("ID")
 	for _, id := range t.list.all {
 		nameWidth = max(nameWidth, lipgloss.Width(t.name(id)))
 		idWidth = max(idWidth, lipgloss.Width(id))
@@ -64,7 +64,7 @@ func (t *providerTable) columns(width int) (int, int) {
 // header is the line that names the columns, aligned with the rows below it.
 func (t *providerTable) header(width int) string {
 	nameWidth, _ := t.columns(width)
-	return "    " + padLine("NAME", nameWidth) + "  ID"
+	return "    " + padLine(tr(tProviderNAME), nameWidth) + "  ID"
 }
 
 // row is one provider: whether the form row holds it now, its name and its ID, each cut to its column.
@@ -153,26 +153,26 @@ func (m *Model) providerTableView() string {
 func (m *Model) providerTableFrame() (string, string) {
 	t := &m.providers
 	shown, total := len(t.list.matches), len(t.list.all)
-	title := "Choose provider"
+	title := tr(tProviderChooseProvider)
 	keys := "type to search · up/down · enter choose · {back} cancel"
 	if w := m.wizard; w != nil {
-		title = fmt.Sprintf("Setup step %d of %d · choose provider", w.step+1, setupSteps)
+		title = tr(tProviderSetupStepOfChooseProvider, w.step+1, setupSteps)
 		keys = "type to search · up/down · enter next · {back} cancel setup"
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)",
 		title, min(t.list.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.searchLine(&t.list, "search: ") + "\n")
+	head.WriteString(m.searchLine(&t.list, tr(tLogPickSearch)) + "\n")
 	current := t.name(t.current)
 	if t.current != "" {
 		current += " (" + t.current + ")"
 	}
-	head.WriteString(m.wrapped(styles.hint, "current: "+current) + "\n")
+	head.WriteString(m.wrapped(styles.hint, tr(tLogPickCurrent, current)) + "\n")
 	_, width := m.fit("  ")
 	head.WriteString(styles.hint.Render(clipCells("  "+t.header(width), m.usable(0))) + "\n")
 	if shown == 0 {
 		head.WriteString(m.wrapped(styles.hint,
-			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
+			tr(tProviderNoProviderMatchesEscKeeps, t.list.query())) + "\n")
 	}
 	if t.list.query() == "" {
 		keys += " · {command} cmds · {help} help"
@@ -218,7 +218,7 @@ func providerHint(f field) string {
 			providers++
 		}
 	}
-	lead := fmt.Sprintf("enter opens all %d providers", providers)
+	lead := tr(tProviderEnterOpensAllProviders, providers)
 	if f.hint == "" {
 		return lead
 	}

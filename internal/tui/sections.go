@@ -42,8 +42,6 @@ const (
 	// sectionListMinWidth is the working width from which the sections stand as a list at the left of the
 	// rows. Below it each section is a heading above its rows, so the rows keep the room their hints need.
 	sectionListMinWidth = 100
-	// sectionClosedMark says in words that the rows of a section are not shown.
-	sectionClosedMark = " (closed)"
 )
 
 // sectionOfRow is the section of a row of the form being built: step is the step of the guided setup, or -1
@@ -184,9 +182,9 @@ func (m *Model) formSections() []sectionEntry {
 
 func (e sectionEntry) text() string {
 	if e.closed {
-		return e.name + sectionClosedMark
+		return sectionText(e.name) + tr(tSectionClosedMark)
 	}
-	return e.name
+	return sectionText(e.name)
 }
 
 // currentSection is the section of the focused row.
@@ -229,9 +227,9 @@ func (m *Model) sectionListFits(entries []sectionEntry) bool {
 // sectionHeading is the heading above the rows of a section where the list does not fit.
 func (m *Model) sectionHeading(e sectionEntry) string {
 	if e.closed {
-		return styles.title.Render(e.name) + styles.hint.Render(sectionClosedMark)
+		return styles.title.Render(sectionText(e.name)) + styles.hint.Render(tr(tSectionClosedMark))
 	}
-	return styles.title.Render(e.name)
+	return styles.title.Render(sectionText(e.name))
 }
 
 // jumpSection moves the focus to the first row of the previous or next section, opening it if it is closed.

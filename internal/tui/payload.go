@@ -6,7 +6,6 @@
 package tui
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -22,22 +21,6 @@ const (
 	payloadNewLabel = "new field"
 	// forwardLabel is the row of a connection that ticks the payload secrets it releases (forward_secrets).
 	forwardLabel = "forward"
-
-	payloadStorageHint   = "keyring or vault, never environment variables"
-	payloadStorageDetail = "system keyring keeps the values in the keyring of this machine, vault keeps them in a " +
-		"file beside the configuration; a payload secret never uses environment variables"
-	payloadDescriptionHint   = "optional; published by discovery, no secrets"
-	payloadDescriptionDetail = "optional; what these values are for, e.g. 'login of the billing portal'. discovery " +
-		"publishes it, so it must never carry a secret or personal data"
-	payloadNewHint   = "a field name, then enter"
-	payloadNewDetail = "type a field name (letters, digits, - _ .) and press enter; the row for its value follows"
-	// payloadMaskHint and payloadMaskDetail take the shortest value length.
-	payloadMaskHint   = "masked; at least %d characters"
-	payloadMaskDetail = "typed masked and never shown, at least %d characters; stored only when you save; " +
-		"ctrl+d removes this field"
-	forwardHint   = "payload secrets tools may pass on"
-	forwardDetail = "forward_secrets: the payload secrets a tool of this connection may pass on by reference; " +
-		"enter opens them to tick, none ticked releases none"
 )
 
 // payloadSavedMsg carries the outcome of saving a payload secret back into the event loop. It carries no
@@ -86,9 +69,9 @@ func (m *Model) payloadFields(edit, source string) []field {
 		name, shown = source, m.copyName(source)
 	}
 	cred := m.cfg.Credentials[name]
-	key := textField("name", shown, edit != "").withHint(nameHint).withDetail(nameDetail)
+	key := textField("name", shown, edit != "").withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail))
 	if key.readOnly {
-		key.hint, key.detail = lockedHint, ""
+		key.hint, key.detail = tr(tFormLockedHint), ""
 	}
 	choice := storageKeyring
 	if cred.Type == config.CredentialTypeVault ||
@@ -96,15 +79,15 @@ func (m *Model) payloadFields(edit, source string) []field {
 		choice = storageVault
 	}
 	storage := choiceField(storageLabel, []string{storageKeyring, storageVault}, choice).
-		withHint(payloadStorageHint).withDetail(payloadStorageDetail)
+		withHint(tr(tPayloadStorageHint)).withDetail(tr(tPayloadStorageDetail))
 	// Moving the values to the other place is not offered: delete the secret and create it again.
 	storage.readOnly = edit != ""
 	fields := []field{key, storage,
-		textField("description", cred.Description, false).withHint(payloadDescriptionHint).withDetail(payloadDescriptionDetail)}
+		textField("description", cred.Description, false).withHint(tr(tPayloadDescriptionHint)).withDetail(tr(tPayloadDescriptionDetail))}
 	for i, field := range cred.Fields {
 		fields = append(fields, m.payloadValueRow(field, edit != "", i == 0))
 	}
-	add := textField(payloadNewLabel, "", false).withHint(payloadNewHint).withDetail(payloadNewDetail)
+	add := textField(payloadNewLabel, "", false).withHint(tr(tPayloadNewHint)).withDetail(tr(tPayloadNewDetail))
 	add.kind = fieldPayloadNew
 	return append(fields, add)
 }
@@ -114,11 +97,11 @@ func (m *Model) payloadFields(edit, source string) []field {
 func (m *Model) payloadValueRow(name string, stored, lead bool) field {
 	f := m.maskedField("", name, lead)
 	f.stored = stored
-	f.hint = fmt.Sprintf(payloadMaskHint, config.MinForwardValueLength)
-	f.detail = fmt.Sprintf(payloadMaskDetail, config.MinForwardValueLength)
+	f.hint = tr(tPayloadMaskHint, config.MinForwardValueLength)
+	f.detail = tr(tPayloadMaskDetail, config.MinForwardValueLength)
 	if stored {
-		f.hint += "; empty keeps it"
-		f.detail += "; empty keeps the stored value"
+		f.hint += tr(tPayloadEmptyKeepsIt)
+		f.detail += tr(tPayloadEmptyKeepsTheStoredValue)
 	}
 	return f
 }
@@ -155,12 +138,12 @@ func (m *Model) addPayloadField() {
 	at := m.focus
 	name := strings.TrimSpace(m.fields[at].input.Value())
 	if name == "" {
-		m.fail = "type the name of the field first"
+		m.fail = tr(tPayloadTypeTheNameOfThe)
 		return
 	}
 	for _, f := range m.fields {
 		if f.kind == fieldMasked && f.label == name {
-			m.fail = fmt.Sprintf("the field %q exists already", name)
+			m.fail = tr(tPayloadTheFieldExistsAlready, name)
 			return
 		}
 	}
@@ -173,7 +156,7 @@ func (m *Model) addPayloadField() {
 	m.fields = slices.Insert(m.fields, at, row)
 	m.focus = at
 	m.applyFocus()
-	m.status = "Added field " + name + "; type its value"
+	m.status = tr(tPayloadAddedFieldTypeItsValue, name)
 }
 
 // removePayloadField drops the focused value row. A stored value of that field is removed when the form is
@@ -188,9 +171,9 @@ func (m *Model) removePayloadField() {
 	}
 	m.focus = min(at, len(m.fields)-1)
 	m.applyFocus()
-	m.status = "Removed field " + name
+	m.status = tr(tPayloadRemovedField, name)
 	if stored {
-		m.status += "; its stored value is deleted when you save"
+		m.status += tr(tPayloadItsStoredValueIsDeleted)
 	}
 }
 
@@ -198,7 +181,7 @@ func (m *Model) removePayloadField() {
 // the values and the configuration entry together. It runs inside requireAdmin.
 func (m *Model) savePayload() tea.Cmd {
 	if m.payloadSaving || m.vaultBusy {
-		m.status = "a write is already in progress; wait for it to finish"
+		m.status = tr(tPayloadAWriteIsAlreadyIn)
 		return nil
 	}
 	m.clearMessages()
@@ -211,7 +194,7 @@ func (m *Model) savePayload() tea.Cmd {
 		cred.Fields = append(cred.Fields, m.fields[i].label)
 	}
 	if _, taken := m.cfg.Credentials[name]; taken && m.editing == "" {
-		m.fail = fmt.Sprintf("a credential named %q already exists", name)
+		m.fail = tr(tPayloadACredentialNamedAlreadyExists, name)
 		return nil
 	}
 	base := m.rev
@@ -234,12 +217,12 @@ func (m *Model) savePayload() tea.Cmd {
 			if f.stored {
 				continue
 			}
-			m.fail = fmt.Sprintf("the field %q needs a value", f.label)
+			m.fail = tr(tPayloadTheFieldNeedsAValue, f.label)
 			return nil
 		}
 		// The same check manage.Service.CommitSecrets repeats before it writes anything; here it answers at once.
 		if err := cred.CheckForwardValue(f.label, value); err != nil {
-			m.fail = fmt.Sprintf("credential %s: %v", name, err)
+			m.fail = tr(tPayloadCredential, name, err)
 			return nil
 		}
 		values[f.label] = value
@@ -253,7 +236,7 @@ func (m *Model) savePayload() tea.Cmd {
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	state, err := v.State()
@@ -269,7 +252,7 @@ func (m *Model) savePayload() tea.Cmd {
 		vaultFirstSecretHint(),
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd { m.screen = screenForm; return commit(offer) },
-		func() tea.Cmd { m.screen = screenForm; m.status = "Cancelled"; return nil },
+		func() tea.Cmd { m.screen = screenForm; m.status = tr(tCancelled); return nil },
 	)
 	return nil
 }
@@ -280,7 +263,7 @@ func (m *Model) commitPayload(candidate *config.Config, base config.Revision, na
 	values map[string]string, offer vault.PassphraseFunc) tea.Cmd {
 	m.payloadSaving = true
 	m.writes++
-	m.busy = "saving " + name
+	m.busy = tr(tPayloadSaving, name)
 	if toVault {
 		m.vaultBusy = true
 	}
@@ -317,7 +300,7 @@ func (m *Model) handlePayloadSaved(msg payloadSavedMsg) tea.Cmd {
 	m.adoptSaved(msg.cfg)
 	m.fields = nil
 	cmd := m.returnToList(msg.name)
-	m.status = "Saved payload secret " + msg.name
+	m.status = tr(tPayloadSavedPayloadSecret, msg.name)
 	if msg.warning != "" {
 		m.status += "; " + msg.warning
 	}
@@ -336,8 +319,8 @@ func (m *Model) forwardOpenNote(name string) string {
 	if len(open) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("; %s release(s) it and now wait for approval, which saving does not give: review "+
-		"them in %s", strings.Join(open, ", "), sectionApprovals.ref())
+	return tr(tPayloadReleaseSItAndNow,
+		strings.Join(open, ", "), sectionApprovals.ref())
 }
 
 // forwardField is the forward_secrets row of a connection form, ticked with the connection's own list. A
@@ -350,7 +333,7 @@ func (m *Model) forwardField(current []string) field {
 			choices = append(choices, name)
 		}
 	}
-	f := field{label: forwardLabel, kind: fieldToolList, choices: choices, selected: map[string]bool{}, hint: forwardHint, detail: forwardDetail}
+	f := field{label: forwardLabel, kind: fieldToolList, choices: choices, selected: map[string]bool{}, hint: tr(tPayloadForwardHint), detail: tr(tPayloadForwardDetail)}
 	for _, name := range current {
 		f.selected[name] = true
 	}
@@ -367,13 +350,12 @@ func (m *Model) wantsForwardRow(conn config.Connection) bool {
 // forward_secrets list of the configuration guards it, and "" when one does. connCredential is the credential
 // of the connection the note is about, "" for the payload secret's own form, where that is not known yet.
 func (m *Model) forwardBindingNote(connCredential string) string {
-	const only = "only the forward_secrets list in this configuration limits which payload secrets a tool may use"
+	only := tr(tPayloadOnlyTheForwardSecretsList)
 	switch m.svc.ForwardBinding(m.cfg, connCredential) {
 	case manage.ForwardUnbound:
-		return "no encrypted vault binds this release: " + only
+		return tr(tPayloadNoEncryptedVaultBindsThis) + only
 	case manage.ForwardCredentialOutside:
-		return "this connection's own credential is not in the encrypted vault, so no approval binds this " +
-			"release: " + only
+		return tr(tPayloadThisConnectionSOwnCredential) + only
 	}
 	return ""
 }
@@ -405,5 +387,5 @@ func (m *Model) payloadCells(name string, cred config.Credential) []string {
 		}
 		parts = append(parts, field)
 	}
-	return []string{name, place, "(payload) " + strings.Join(parts, ", ")}
+	return []string{name, place, tr(tPayloadPayload, strings.Join(parts, ", "))}
 }

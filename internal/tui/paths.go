@@ -76,7 +76,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 			m.removePath()
 		case "n", keyOf(actBack):
 			m.pathRemove = false
-			m.status = "Path kept"
+			m.status = tr(tPathPathKept)
 		}
 		return nil
 	}
@@ -162,22 +162,22 @@ func (m *Model) takePath() {
 	}
 	m.status = ""
 	if value == "" {
-		m.fail = "a path must not be empty; esc cancels the entry"
+		m.fail = tr(tPathAPathMustNotBe)
 		return
 	}
 	if isFilesLabel(m.fields[m.focus].label) {
 		if err := config.CheckFilesEntry(value); err != nil {
-			m.fail = "directory: " + err.Error()
+			m.fail = tr(tPathDirectory, err.Error())
 			return
 		}
 	} else if err := config.CheckPath(value); err != nil {
-		m.fail = "path: " + err.Error()
+		m.fail = tr(tPathPath, err.Error())
 		return
 	}
 	entries := append([]string(nil), m.pathList.all...)
 	for i, entry := range entries {
 		if i != m.pathEdit && config.SamePath(entry, value) {
-			m.fail = "this directory is already in the list"
+			m.fail = tr(tPathThisDirectoryIsAlreadyIn)
 			return
 		}
 	}
@@ -203,7 +203,7 @@ func (m *Model) removePath() {
 	i := m.pathList.cursor
 	entries := append(append([]string(nil), m.pathList.all[:i]...), m.pathList.all[i+1:]...)
 	m.pathList.setItems(entries)
-	m.status = "Removed " + path
+	m.status = tr(tPathRemoved, path)
 }
 
 // pathsView draws the path list screen: its frame, and between them as many paths as fit.
@@ -223,17 +223,17 @@ func (m *Model) pathsView() string {
 // them the path being typed with its suggestions or the remove question, the keys and the notes.
 func (m *Model) pathFrame() (string, string) {
 	total := len(m.pathList.all)
-	title, hint, none := "Paths", pathsHint, "(none: every project)"
+	title, hint, none := tr(tPathPaths), tr(tFormPathsHint), tr(tPathNoneEveryProject)
 	if label := m.fields[m.focus].label; isFilesLabel(label) {
-		verb := "read files from"
+		hint = tr(tFormFilesReadHint)
 		if label == filesWriteLabel {
-			verb = "write files to"
+			hint = tr(tFormFilesWriteHint)
 		}
-		title, hint = "Directories for "+label, fmt.Sprintf(filesHint, verb)
-		none = "(none released)"
+		title = tr(tPathDirectoriesFor, labelText(label))
+		none = tr(tPathNoneReleased)
 	}
 	if name := m.fieldValue("name"); name != "" {
-		title += " of " + name
+		title += tr(tPathOf, name)
 	}
 	if total > 0 {
 		title += fmt.Sprintf("  %d/%d", m.pathList.cursor+1, total)
@@ -251,9 +251,9 @@ func (m *Model) pathFrame() (string, string) {
 	case m.pathEdit >= 0 && m.backdrop:
 		// The typed path stands in its own dialog (see pathPrompt) over this screen.
 	case m.pathEdit >= 0:
-		label := "add path: "
+		label := tr(tPathAddPath)
 		if m.pathEdit < total {
-			label = "edit path: "
+			label = tr(tPathEditPath)
 		}
 		foot.WriteString("\n" + m.pathLines(label, &m.pathInput))
 		keys = pathKeys(&m.pathInput, "enter take · {save} save · {back} cancel entry")
@@ -261,7 +261,7 @@ func (m *Model) pathFrame() (string, string) {
 		path, _ := m.pathList.selected()
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
-		foot.WriteString("\n" + m.wrapped(styles.warning, "Remove "+quoted+" from the list?") + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.warning, tr(tPathRemoveFromTheList, quoted)) + "\n")
 		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
 	foot.WriteString(m.keyHint(keys))
@@ -270,13 +270,13 @@ func (m *Model) pathFrame() (string, string) {
 
 // pathPrompt is the dialog the path being added or edited is typed into.
 func (m *Model) pathPrompt() promptDialog {
-	noun := "path"
+	noun := tr(tPathPath2)
 	if isFilesLabel(m.fields[m.focus].label) {
-		noun = "directory"
+		noun = tr(tPathDirectory2)
 	}
-	title := "Add " + noun
+	title := tr(tPathAdd, noun)
 	if m.pathEdit < len(m.pathList.all) {
-		title = "Edit " + noun
+		title = tr(tFormEdit, noun)
 	}
 	return promptDialog{
 		title: title,

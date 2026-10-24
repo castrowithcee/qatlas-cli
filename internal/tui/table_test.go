@@ -130,7 +130,7 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 			"tracker-issues": {"tracker-issues", stateActive, "tracker-main", "read,create", "listed 2",
 				"octo/test-repo", "issues in the test repository, read and create"},
 			"tracker-triage": {"tracker-triage", stateActive, "tracker-main", "", "none", "3 targets",
-				undescribedMarker},
+				tr(tFormUndescribedMarker)},
 			"wiki-docs": {"wiki-docs", stateActive, "wiki-main", "read", "all", "-",
 				"handbook pages for onboarding, read only"},
 		},

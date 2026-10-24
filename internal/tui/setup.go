@@ -37,29 +37,14 @@ const (
 
 var setupTitles = [setupSteps]string{"Provider", "Service", "Credential", "Scope", "Access", "Summary"}
 
-// summaryLead is what the summary step says about itself: it has no fields to focus, so the line stands
-// as its only explanation. The form steps carry their explanation in the hints of their rows.
-const summaryLead = "Nothing is written yet. F2 stores the new secrets first, then the configuration."
-
+// The summary step says tSetupSummaryLead about itself: it has no fields to focus, so the line stands as its
+// only explanation. The form steps carry their explanation in the hints of their rows.
 const (
-	savedLead = "The connection is saved. t tests it; esc opens the Connections list."
 
 	// The choices that add an entry instead of reusing one. A name cannot start with a parenthesis, so
 	// neither can stand for a configured entry.
 	newService    = "(new service)"
 	newCredential = "(new credential)"
-
-	setupProviderHint         = "the system this connection leads to"
-	setupProviderDetail       = "the system this connection leads to; it decides everything the next steps offer"
-	setupServiceHint          = "reuse one, or add " + newService
-	setupServiceDetail        = "reuse a configured instance of this provider, or choose " + newService + " to add one"
-	setupCredentialHint       = "reuse one, or add " + newCredential
-	setupCredentialDetail     = "reuse a credential of this provider, or choose " + newCredential + " to add one"
-	maskedHint                = "typed masked and never shown; stored only when you save in the last step"
-	maskedShortHint           = "masked; stored on the last step"
-	setupConnectionNameHint   = "a key you choose, without spaces"
-	setupConnectionNameDetail = "a key you choose, without spaces; agents and --connection select the " +
-		"connection by it"
 )
 
 // setup is the state of a running guided setup. pages keeps the rows of every step that was opened, so
@@ -111,7 +96,7 @@ type setupSavedMsg struct {
 func (m *Model) startSetup() {
 	m.clearMessages()
 	if len(m.cfg.Providers()) == 0 {
-		m.fail = "this build registers no provider"
+		m.fail = tr(tSetupThisBuildRegistersNoProvider)
 		return
 	}
 	m.stopTest()
@@ -162,14 +147,14 @@ func (m *Model) setupRows(step int) []field {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	switch step {
 	case stepProvider:
-		return []field{providerField(m.cfg.Providers(), provider).withHint(setupProviderHint).withDetail(setupProviderDetail)}
+		return []field{providerField(m.cfg.Providers(), provider).withHint(tr(tSetupSetupProviderHint)).withDetail(tr(tSetupSetupProviderDetail))}
 	case stepService:
 		// A configured service comes first, so reusing one is what enter does without further choice.
 		services := append(m.providerServices(provider), newService)
 		return []field{
-			choiceField("service", services, services[0]).withHint(setupServiceHint).withDetail(setupServiceDetail),
-			textField("name", "", false).withHint(nameHint).withDetail(nameDetail),
-			textField("base url", metadata.DefaultBaseURL, false).withHint(baseURLHint).withDetail(baseURLDetail),
+			choiceField("service", services, services[0]).withHint(tr(tSetupSetupServiceHint)).withDetail(tr(tSetupSetupServiceDetail)),
+			textField("name", "", false).withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail)),
+			textField("base url", metadata.DefaultBaseURL, false).withHint(tr(tFormBaseURLHint)).withDetail(tr(tFormBaseURLDetail)),
 		}
 	case stepCredential:
 		credentials := append(m.providerCredentials(provider), newCredential)
@@ -178,8 +163,8 @@ func (m *Model) setupRows(step int) []field {
 			storage = storageVault
 		}
 		fields := []field{
-			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint).withDetail(setupCredentialDetail),
-			textField("name", "", false).withHint(nameHint).withDetail(nameDetail),
+			choiceField("credential", credentials, credentials[0]).withHint(tr(tSetupSetupCredentialHint)).withDetail(tr(tSetupSetupCredentialDetail)),
+			textField("name", "", false).withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail)),
 			storageField(storage),
 		}
 		// Every role has a masked row and a row for the name of a variable. Only one of them is shown, so
@@ -198,9 +183,9 @@ func (m *Model) setupRows(step int) []field {
 			name = provider
 		}
 		return []field{
-			textField("name", name, false).withHint(setupConnectionNameHint).withDetail(setupConnectionNameDetail),
+			textField("name", name, false).withHint(tr(tDomainHint)).withDetail(tr(tSetupSetupConnectionNameDetail)),
 			targetsField(nil).withHint(m.providerTargetHint(provider)).withDetail(m.providerTargetDetail(provider)),
-			textField("description", "", false).withHint(descriptionHint).withDetail(descriptionDetail),
+			textField("description", "", false).withHint(tr(tPayloadDescriptionHint)).withDetail(tr(tFormDescriptionDetail)),
 		}
 	case stepEffects:
 		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}},
@@ -214,8 +199,8 @@ func (m *Model) maskedField(provider, role string, lead bool) field {
 	f := textField(role, "", false)
 	f.kind, f.roleLead = fieldMasked, lead
 	f.input.EchoMode = textinput.EchoPassword
-	f.hint = m.roleHintText(provider, role, maskedHint, lead, false)
-	f.detail = m.roleDetail(provider, role, maskedHint, lead)
+	f.hint = m.roleHintText(provider, role, tSetupMaskedHint, lead, false)
+	f.detail = m.roleDetail(provider, role, tSetupMaskedHint, lead)
 	return f
 }
 
@@ -228,11 +213,11 @@ func (m *Model) setupRefresh() {
 		for i := 1; i < len(m.fields); i++ {
 			m.fields[i].hidden = existing
 		}
-		m.fields[0].hint, m.fields[0].detail = setupServiceHint, setupServiceDetail
+		m.fields[0].hint, m.fields[0].detail = tr(tSetupSetupServiceHint), tr(tSetupSetupServiceDetail)
 		if existing {
-			m.fields[0].hint = "reuses " + chosen + " unchanged"
-			m.fields[0].detail = fmt.Sprintf("reuses %s at %s unchanged; choose %s to add another instance",
-				chosen, m.cfg.Services[chosen].BaseURL, newService)
+			m.fields[0].hint = tr(tSetupReusesUnchanged, chosen)
+			m.fields[0].detail = tr(tSetupReusesAtUnchangedChooseTo,
+				chosen, m.cfg.Services[chosen].BaseURL, valueText("service", newService))
 		}
 	case stepCredential:
 		chosen := m.fieldValue("credential")
@@ -249,11 +234,11 @@ func (m *Model) setupRefresh() {
 				f.hidden = existing
 			}
 		}
-		m.fields[0].hint, m.fields[0].detail = setupCredentialHint, setupCredentialDetail
+		m.fields[0].hint, m.fields[0].detail = tr(tSetupSetupCredentialHint), tr(tSetupSetupCredentialDetail)
 		if existing {
-			m.fields[0].hint = "reuses " + chosen + " unchanged"
-			m.fields[0].detail = fmt.Sprintf("reuses %s (%s) unchanged, and its secrets where they are; "+
-				"choose %s to add one", chosen, m.storagePlace(chosen, m.cfg.Credentials[chosen]), newCredential)
+			m.fields[0].hint = tr(tSetupReusesUnchanged, chosen)
+			m.fields[0].detail = tr(tSetupReusesUnchangedAndItsSecrets,
+				chosen, valueText(storageLabel, m.storagePlace(chosen, m.cfg.Credentials[chosen])), valueText("credential", newCredential))
 		}
 	case stepEffects:
 		m.accessModeChosen()
@@ -314,7 +299,7 @@ func (m *Model) finishSetup() tea.Cmd {
 	m.wizard, m.fields = nil, nil
 	cmd := m.openSection(sectionConnections)
 	m.selectEntry(name)
-	m.status = "Saved " + name
+	m.status = tr(tSetupSaved, name)
 	return cmd
 }
 
@@ -446,10 +431,10 @@ func setupProblem(err error) error {
 	var missing *manage.RoleMissingError
 	switch {
 	case errors.As(err, &taken) && taken.Kind != manage.KindConnection:
-		return fmt.Errorf("a %s named %q already exists; choose it in the %s row instead of adding it again",
-			taken.Kind, taken.Name, taken.Kind)
+		return errors.New(tr(tSetupANamedAlreadyExistsChoose,
+			labelText(string(taken.Kind)), taken.Name, labelText(string(taken.Kind))))
 	case errors.As(err, &missing):
-		return fmt.Errorf("%s is empty; type its secret, or choose %s", missing.Role, storageEnv)
+		return errors.New(tr(tSetupIsEmptyTypeItsSecret, missing.Role, valueText(storageLabel, storageEnv)))
 	}
 	return err
 }
@@ -467,7 +452,7 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 		case keyOf(actBack):
 			if m.testing {
 				m.stopTest()
-				m.status = "Connection test cancelled"
+				m.status = tr(tSetupConnectionTestCancelled)
 				return nil
 			}
 			return m.finishSetup()
@@ -508,7 +493,7 @@ func (m *Model) finishSetupSave() tea.Cmd {
 		vaultFirstSecretHint(),
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd { return m.saveSetup(offer) },
-		func() tea.Cmd { m.screen = screenSummary; m.status = "Cancelled"; return nil },
+		func() tea.Cmd { m.screen = screenSummary; m.status = tr(tCancelled); return nil },
 	)
 	return nil
 }
@@ -521,7 +506,7 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	w.saving = true
 	m.screen = screenSummary
 	m.clearMessages()
-	m.busy = "saving " + plan.connection
+	m.busy = tr(tPayloadSaving, plan.connection)
 	svc, previous := m.svc, m.cfg
 	return func() tea.Msg {
 		res, err := svc.SaveConnectionSetup(previous, built, base, plan.secrets, offer)
@@ -562,7 +547,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	w.saved = msg.name
 	// The secrets are where they belong now, and the editor drops its only copy of them.
 	w.plan.secrets, w.pages, m.fields = nil, nil, nil
-	m.status = "Saved " + msg.name
+	m.status = tr(tSetupSaved, msg.name)
 	if msg.warning != "" {
 		m.status += "; " + msg.warning
 	}
@@ -570,7 +555,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	// opened, such as one sharing the service or credential just created, is approved alongside it.
 	sweep := m.autoApprove(w.before, msg.name)
 	if m.tester != nil {
-		m.status += ". Press t to test it now."
+		m.status += tr(tSetupPressTToTestIt)
 	}
 	// Where the secrets of a new credential now resolve from is what the lists and the next setup name.
 	return tea.Batch(sweep, m.refreshSources(m.keyringQueries()))
@@ -586,18 +571,18 @@ func (m *Model) setupRebase() {
 		conflict := m.fail
 		m.problems = problemState{}
 		m.reportSaveError(err, "", true)
-		m.fail = conflict + "; the setup no longer fits it: " + m.fail
+		m.fail = conflict + tr(tSetupTheSetupNoLongerFits) + m.fail
 		return
 	}
 	w.built, w.candidate, w.plan, w.base = built, built.Config, plan, m.rev
-	m.fail += ". The summary shows the setup applied to the current file"
+	m.fail += tr(tSetupTheSummaryShowsTheSetup)
 }
 
 // setupStoreAdvice turns a save that failed on the secret store into the way out, "" for any other error.
 func (m *Model) setupStoreAdvice(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-		return fmt.Sprintf("%v; nothing was saved. %s, then press F2 again, or press esc to go "+
-			"back and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
+		return tr(tSetupNothingWasSavedThenPress,
+			err, secret.StoreAdvice(secret.StoreStateOf(err), platform), valueText(storageLabel, storageEnv))
 	}
 	return ""
 }
@@ -614,10 +599,10 @@ func setupKeys(step int) string {
 // field; the summary has no fields to focus, so it keeps the lead as the step's only explanation.
 func (m *Model) setupHeading(withLead bool) string {
 	w := m.wizard
-	title := fmt.Sprintf("Set up a connection · step %d of %d · %s", w.step+1, setupSteps, setupTitles[w.step])
-	lead := summaryLead
+	title := tr(tSetupSetUpAConnectionStep, w.step+1, setupSteps, wordText(setupTitles[w.step]))
+	lead := tr(tSetupSummaryLead)
 	if w.saved != "" {
-		title, lead = "Set up a connection · saved", savedLead
+		title, lead = tr(tSetupSetUpAConnectionSaved), tr(tSetupSavedLead)
 	}
 	heading := m.wrapped(styles.title, title) + "\n"
 	if withLead {
@@ -635,7 +620,7 @@ func (m *Model) summaryView() string {
 		b.WriteString(m.row(false, row) + "\n")
 	}
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
-		b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
+		b.WriteString(m.indentedWith(styles.warning, warningLine(warning)) + "\n")
 	}
 	keys := "{save} save · {back} back · {command} cmds · {help} help"
 	switch {
@@ -660,53 +645,54 @@ func (m *Model) summaryRows() []string {
 	conn := cfg.Connections[plan.connection]
 	state := func(added bool) string {
 		if added {
-			return "new"
+			return tr(tSetupNew)
 		}
-		return "existing, unchanged"
+		return tr(tSetupExistingUnchanged)
 	}
+	line := func(label, text string) string { return padLine(labelText(label), 12) + " " + text }
 
-	secrets := m.storagePlace(plan.credential, cfg.Credentials[plan.credential]) + "; its secrets stay where they are"
+	secrets := valueText(storageLabel, m.storagePlace(plan.credential, cfg.Credentials[plan.credential])) +
+		tr(tSetupItsSecretsStayWhereThey)
 	roles := strings.Join(plan.roles, ", ")
 	switch {
 	case !plan.newCredential:
 	case plan.storage == storageEnv:
 		names := make([]string, len(plan.roles))
 		for i, role := range plan.roles {
-			names[i] = role + " from $" + cfg.Credentials[plan.credential].Values[role]
+			names[i] = tr(tSetupFrom, role, cfg.Credentials[plan.credential].Values[role])
 		}
-		secrets = placeEnv + ": " + strings.Join(names, ", ")
+		secrets = valueText(storageLabel, placeEnv) + ": " + strings.Join(names, ", ")
 	default:
 		// plan.storage is already exactly the place chosen: system keyring or vault.
-		secrets = plan.storage + ": " + roles
+		secrets = valueText(storageLabel, plan.storage) + ": " + roles
 	}
 
 	// Only the field the access mode stores is listed; the effects of selected tools follow from them.
-	access := []string{fmt.Sprintf("%-12s %s", accessLabel, accessEffects)}
+	access := []string{line(accessLabel, valueText(accessLabel, accessEffects))}
 	if conn.Tools == nil {
 		effects := config.FormatEffects(conn.Effects)
 		if conn.Effects == nil {
-			effects = "default: " + config.FormatEffects(manage.DefaultEffects(metadata))
+			effects = tr(tSetupDefault, config.FormatEffects(manage.DefaultEffects(metadata)))
 		}
-		access = append(access, fmt.Sprintf("%-12s %s", effectsLabel, effects))
+		access = append(access, line(effectsLabel, effects))
 	} else {
-		tools := "none: no tool is offered"
+		tools := tr(tSetupNoneNoToolIsOffered)
 		if len(conn.Tools) > 0 {
 			tools = strings.Join(conn.Tools, ", ")
 		}
 		access = []string{
-			fmt.Sprintf("%-12s %s", accessLabel, accessTools),
-			fmt.Sprintf("%-12s %s", toolListLabel, tools),
-			fmt.Sprintf("%-12s %s", effectsLabel, config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools))+" (from the tools)"),
+			line(accessLabel, valueText(accessLabel, accessTools)),
+			line(toolListLabel, tools),
+			line(effectsLabel, config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools))+" "+tr(tSetupFromTheTools)),
 		}
 	}
 
 	return append([]string{
-		fmt.Sprintf("%-12s %s", "provider", metadata.Name),
-		fmt.Sprintf("%-12s %s (%s) · %s", "service", plan.service, state(plan.newService),
-			cfg.Services[plan.service].BaseURL),
-		fmt.Sprintf("%-12s %s (%s) · %s", "credential", plan.credential, state(plan.newCredential), secrets),
-		fmt.Sprintf("%-12s %s", "connection", plan.connection),
-		fmt.Sprintf("%-12s %s", targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
-		fmt.Sprintf("%-12s %s", "description", choiceText(conn.Description)),
+		line("provider", metadata.Name),
+		line("service", fmt.Sprintf("%s (%s) · %s", plan.service, state(plan.newService), cfg.Services[plan.service].BaseURL)),
+		line("credential", fmt.Sprintf("%s (%s) · %s", plan.credential, state(plan.newCredential), secrets)),
+		line("connection", plan.connection),
+		line(targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
+		line("description", choiceText(conn.Description)),
 	}, access...)
 }

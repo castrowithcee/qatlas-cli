@@ -95,8 +95,9 @@ func (s section) title() string {
 // leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending. Logs
 // and Overview hold no list of named entries either.
 func (s section) entry() string {
-	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "agent token",
+	name := [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "agent token",
 		"log entry", "overview", "preference", "transfer", "update", "selftest"}[s]
+	return entryWord(name)
 }
 
 type screen int
@@ -250,67 +251,21 @@ const providerNoteLabel = "provider note"
 // the same name (see fieldDetail), which the pane and the info key show. Both name the shape of an entry,
 // never a rule the core owns: the core states the exact character set when it refuses a value, and repeating
 // it here would let the two drift apart.
-const (
-	nameHint      = "a key you choose, without spaces"
-	nameDetail    = "a key you choose, without spaces; connections and --connection refer to it"
-	baseURLHint   = "root url, http or https, without /api"
-	baseURLDetail = "the root url of the instance, with scheme http or https and without /api"
-	// envHint is said once for all role rows and speaks of all of them: they are the same kind of row, so
-	// repeating the sentence under the next one would read like a fault and add nothing.
-	envHint = "every role row holds the NAME of an environment variable that holds the secret, " +
-		"never the secret itself"
-	envShortHint = "the name of an environment variable"
-	// credentialProviderHint names the one thing this choice decides, because it is not obvious from the
-	// field itself: the rows below it are the secret roles of the provider selected here.
-	credentialProviderHint   = "the system these secrets belong to"
-	credentialProviderDetail = "the system these secrets belong to; it decides which secret roles are asked for below"
-	// connectionProviderHint says why this row exists at all: it is not stored, it decides what the rows
-	// below may offer.
-	connectionProviderHint   = "the system this route leads to"
-	connectionProviderDetail = "the system this route leads to; it decides which services and credentials " +
-		"can be chosen below"
-	connectionServiceHint      = "the API endpoint this route uses"
-	connectionServiceDetail    = "the configured API endpoint this route uses; left/right chooses another instance"
-	connectionCredentialHint   = "the credential this route uses"
-	connectionCredentialDetail = "the provider credential this route authenticates with; secret values stay " +
-		"outside this file"
-	stateHint   = "disabled serves and lists nothing"
-	stateDetail = "disabled keeps the whole selection but serves and lists nothing until it is active again"
-	// descriptionHint names the one consequence that sets this field apart from everything else in the
-	// editor: what is typed here is published by discovery, so it is the one place where free text can
-	// carry a secret out of this machine. The short form keeps that consequence.
-	descriptionHint   = "optional; published by discovery, no secrets"
-	descriptionDetail = "optional; what an agent uses this route for, e.g. 'customer records, " +
-		"read and create'. discovery publishes it, so it must never carry a secret or personal data"
-	// providerNoteHint says the same for the note of a provider, and that one note serves every service
-	// of that provider rather than this service alone.
-	providerNoteHint   = "optional; published by discovery, no secrets"
-	providerNoteDetail = "optional; what this provider stands for here, e.g. 'wiki' or 'CRM', shared by every " +
-		"service of the provider. discovery publishes and searches it, so it must never carry a secret or " +
-		"personal data"
-	// undescribedMarker ends the row of a connection that needsDescription, and undescribedHint says once
-	// under the list what it means. Neither blocks anything: the description stays optional.
-	undescribedMarker = "(no description)"
-	undescribedHint   = undescribedMarker + ": add a line on what this route is for"
-	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
-	// describes a free choice, which is the opposite of what this field does.
-	lockedHint = "read-only; rename with r on the list"
-	// accessHint says what each access mode means, including the two consequences that are easy to miss: a
-	// tool added by a later version joins only the first mode, and an empty selection closes the route.
-	accessHint   = "by effect, or by selected tools"
-	accessDetail = "by effect offers every tool of the effects ticked, also one a later version adds, but never a " +
-		"tool marked listed only; selected tools offers exactly the tools ticked, and none ticked offers no tool at all"
-	// pathsHint says what the path list of a connection does.
-	pathsHint   = "offered only in projects below these paths"
-	pathsDetail = "the connection is offered only in projects inside these directories, absolute or starting " +
-		"with ~/; none means every project"
-	// filesHint says what the two directory lists of a connection release.
-	filesHint   = "local directories tools may %s"
-	filesDetail = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
-		"directory gives access to it and everything below; none releases no local files"
-	toolListHint   = "enter opens the tools to tick"
-	toolListDetail = "enter opens this provider's tools to tick; the effects of the ticked tools follow from them"
-)
+//
+// The env hint is said once for all role rows and speaks of all of them: they are the same kind of row, so
+// repeating the sentence under the next one would read like a fault and add nothing. The provider hint of a
+// credential names the one thing this choice decides, because it is not obvious from the field itself: the
+// rows below it are the secret roles of the provider selected here. The provider hint of a connection says why
+// this row exists at all: it is not stored, it decides what the rows below may offer. The description hints
+// name the one consequence that sets these fields apart from everything else in the editor: what is typed
+// there is published by discovery, so it is the one place where free text can carry a secret out of this
+// machine; the note of a provider says the same, and that one note serves every service of that provider. The
+// undescribed hint says once under the list what the marker at the end of an undescribed connection means;
+// neither blocks anything, the description stays optional. The locked hint is what the name of an existing
+// entry says about itself; it replaces the hint that describes a free choice, which is the opposite of what
+// that field does. The access hint says what each access mode means, including the two consequences that are
+// easy to miss: a tool added by a later version joins only the first mode, and an empty selection closes the
+// route.
 
 // The profile row of a connection. A profile is a provider's named starting selection: choosing one ticks
 // the tools it expands to as selected tools, and nothing else. The row shows the profile the ticks match, or
@@ -318,10 +273,6 @@ const (
 const (
 	profileLabel  = "profile"
 	profileCustom = "custom"
-	profileHint   = "a starting selection, not a role: only the ticks below are saved, and they do not narrow " +
-		"what the credential itself may do at the provider"
-	profileCustomHint   = "the ticks below match no profile"
-	profileCustomDetail = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
 )
 
 // The state row of a connection form: a disabled connection keeps its selection but serves nothing.
@@ -749,7 +700,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	}
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
-	m.picker = newFilterList(choiceText)
+	m.picker = newFilterList(m.choiceShown)
 	m.templateList = newFilterList(m.templateText)
 	m.templateList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
@@ -1125,7 +1076,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		if m.testing {
 			// Cancelling the test returns to the editor with the configuration untouched.
 			m.stopTest()
-			m.status = "Connection test cancelled"
+			m.status = tr(tSetupConnectionTestCancelled)
 			return nil
 		}
 		if m.list.query() != "" {
@@ -1346,7 +1297,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenVaultUnlock:
 		m.screen = m.vaultUnlock.back
 		m.vaultUnlock = nil
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 		return nil
 	case screenHelp:
 		m.screen = m.helpFrom
@@ -1378,20 +1329,20 @@ func (m *Model) leaveScreen() tea.Cmd {
 			// Both stand over the Approvals list, never a form; see approvals.go.
 			m.approvalDetail, m.approveAllConfirm = "", false
 			m.screen = screenList
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 			return nil
 		}
 		if m.tokenDetail != "" || m.tokenRevoke != "" {
 			// Both stand over the Tokens list, never a form; see tokens.go.
 			m.tokenDetail, m.tokenRevoke, m.tokenReveal = "", "", false
 			m.screen = screenList
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 			return nil
 		}
 		if m.confirmRole == "" && m.pendingProfile == "" {
 			// The delete question stands over the list.
 			m.screen = screenList
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 			return nil
 		}
 	}
@@ -1404,7 +1355,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		// openAdminPrompt.
 		back := m.adminAuth.back
 		m.adminAuth = nil
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 		m.screen = back
 		return nil
 	}
@@ -1536,7 +1487,7 @@ func (m *Model) abandon() tea.Cmd {
 	m.wizard, m.fields = nil, nil
 	cmd := m.returnToList("")
 	if setup {
-		m.status = "Setup cancelled; nothing was written"
+		m.status = tr(tFormSetupCancelledNothingWasWritten)
 	}
 	return cmd
 }
@@ -1573,7 +1524,7 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		m.screen, m.leaveQuit = from, false
-		m.status = "Still editing; nothing was saved or discarded"
+		m.status = tr(tFormStillEditingNothingWasSaved)
 	case "d":
 		if m.leaveQuit {
 			return m.quit()
@@ -1626,7 +1577,7 @@ func (m *Model) discard() tea.Cmd {
 			m.screen = screenForm
 		}
 		m.clearMessages()
-		m.status = "Target changes discarded"
+		m.status = tr(tFormTargetChangesDiscarded)
 		return nil
 	case screenPaths:
 		if m.pathEdit >= 0 {
@@ -1636,11 +1587,11 @@ func (m *Model) discard() tea.Cmd {
 			m.screen = screenForm
 		}
 		m.clearMessages()
-		m.status = "Path changes discarded"
+		m.status = tr(tFormPathChangesDiscarded)
 		return nil
 	case screenPicker:
 		m.screen = screenForm
-		m.status = "Selection discarded; the row is as it was"
+		m.status = tr(tFormSelectionDiscardedTheRowIs)
 		return nil
 	case screenTransfer:
 		if m.imp != nil {
@@ -1653,7 +1604,7 @@ func (m *Model) discard() tea.Cmd {
 	setup := m.wizard != nil
 	cmd := m.abandon()
 	if !setup {
-		m.status = "Changes discarded; nothing was written"
+		m.status = tr(tFormChangesDiscardedNothingWasWritten)
 	}
 	return cmd
 }
@@ -1695,7 +1646,7 @@ func (m *Model) saveAndLeave() tea.Cmd {
 			return cmd
 		}
 		cmd = m.returnToList(name)
-		m.status = "Saved " + name
+		m.status = tr(tSetupSaved, name)
 		return cmd
 	})
 }
@@ -1712,7 +1663,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			m.removePayloadField()
 		case "n", keyOf(actBack):
 			m.payloadRemoveAsk = false
-			m.status = "Field kept"
+			m.status = tr(tFormFieldKept)
 		}
 		return nil
 	}
@@ -1873,7 +1824,7 @@ func (m *Model) openPicker() {
 	if len(f.choices) == 0 {
 		return
 	}
-	m.picker.text, m.pickerMarks, m.picker.match, m.pickerGroups, m.pickerEffects = choiceText, nil, nil, nil, nil
+	m.picker.text, m.pickerMarks, m.picker.match, m.pickerGroups, m.pickerEffects = m.choiceShown, nil, nil, nil, nil
 	if f.kind == fieldToolList || f.kind == fieldMultiChoice {
 		m.pickerMarks = map[string]bool{}
 		for choice, marked := range f.selected {
@@ -2028,9 +1979,18 @@ func (m *Model) choose(choice string) tea.Cmd {
 // names no provider, is a value too and has to be readable and findable.
 func choiceText(choice string) string {
 	if choice == "" {
-		return "(none)"
+		return tr(tApprovalNone)
 	}
 	return choice
+}
+
+// choiceShown is how a value of the focused choice row reads in the picker.
+func (m *Model) choiceShown(choice string) string {
+	label := ""
+	if m.focus >= 0 && m.focus < len(m.fields) {
+		label = m.fields[m.focus].label
+	}
+	return choiceText(valueText(label, choice))
 }
 
 func (m *Model) providerChosen(previous string) {
@@ -2091,12 +2051,12 @@ func (m *Model) targetHint(service string) string {
 // key (providerTargetDetail).
 func (m *Model) providerTargetHint(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
-	need, count := "optional", "several"
+	need, count := tr(tFormOptional), tr(tFormSeveral)
 	if metadata.Target.Required {
-		need = "required"
+		need = tr(tFormRequired)
 	}
 	if !metadata.Target.Multiple {
-		count = "one"
+		count = tr(tFormOne)
 	}
 	return metadata.Target.Label + ": " + need + ", " + count
 }
@@ -2111,10 +2071,10 @@ func (m *Model) providerTargetDetail(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	hint := metadata.Target.Description
 	if metadata.Target.Required {
-		hint += "; required for " + metadata.Name + ", so an empty list cannot be saved"
+		hint += tr(tFormRequiredForSoAnEmpty, metadata.Name)
 	}
 	if !metadata.Target.Multiple {
-		hint += "; one " + metadata.Target.Label + " at most"
+		hint += tr(tFormOneAtMost, metadata.Target.Label)
 	}
 	return hint
 }
@@ -2122,9 +2082,9 @@ func (m *Model) providerTargetDetail(provider string) string {
 // emptyTargets says what a connection without targets does for the provider.
 func emptyTargets(metadata config.TargetMetadata) string {
 	if metadata.Required {
-		return "none yet, required"
+		return tr(tFormNoneYetRequired)
 	}
-	return "unrestricted"
+	return tr(tFormUnrestricted)
 }
 
 // connectionProviderChosen narrows the service and credential rows to the provider now selected. A route
@@ -2156,7 +2116,7 @@ func (m *Model) accessModeChosen() {
 	}
 	if list := m.field(toolListLabel); list != nil {
 		list.hidden = !byTools
-		list.hint, list.detail = toolListHint, toolListDetail
+		list.hint, list.detail = tr(tFormToolListHint), tr(tFormToolListDetail)
 	}
 }
 
@@ -2194,11 +2154,11 @@ func (m *Model) toolText(id string) string {
 		}
 		text := m.toolLead(id) + id + "  " + string(tool.Effect)
 		if tool.RequiresToolAllowList {
-			text += "  (listed only)"
+			text += "  " + tr(tFormListedOnly)
 		}
 		if target := m.field(targetsLabel); target != nil {
 			if reached, hint := metadata.Target.Reach(id, target.entries); !reached {
-				text += "  (outside-targets"
+				text += "  " + tr(tFormOutsideTargets)
 				if hint != "" {
 					text += ": " + hint
 				}
@@ -2207,7 +2167,7 @@ func (m *Model) toolText(id string) string {
 		}
 		return text
 	}
-	return id + "  (not registered)"
+	return id + "  " + tr(tFormNotRegistered)
 }
 
 // toolLead is the title of a tool and the gap after it, "" for a tool without a title.
@@ -2246,8 +2206,8 @@ func (m *Model) accessFields(provider string, effects []config.Effect, current [
 		tools.selected[tool] = true
 	}
 	permissions.hidden, tools.hidden = current != nil, current == nil
-	tools.hint, tools.detail = toolListHint, toolListDetail
-	return []field{choiceField(accessLabel, []string{accessEffects, accessTools}, mode).withHint(accessHint).withDetail(accessDetail),
+	tools.hint, tools.detail = tr(tFormToolListHint), tr(tFormToolListDetail)
+	return []field{choiceField(accessLabel, []string{accessEffects, accessTools}, mode).withHint(tr(tFormAccessHint)).withDetail(tr(tFormAccessDetail)),
 		permissions, tools}
 }
 
@@ -2341,14 +2301,14 @@ func (m *Model) syncProfile() {
 	match := m.matchingProfile()
 	if match == "" {
 		row.choices = append(row.choices, profileCustom)
-		row.index, row.hint, row.detail = len(row.choices)-1, profileCustomHint, profileCustomDetail+"; "+profileHint
+		row.index, row.hint, row.detail = len(row.choices)-1, tr(tFormProfileCustomHint), tr(tFormProfileCustomDetail)+"; "+tr(tFormProfileHint)
 		return
 	}
 	profile, _ := findProfile(metadata, match)
 	*row = choiceField(profileLabel, row.choices, match).inSection(row.section)
-	row.hint, row.detail = profile.Title, profileText(metadata, profile)+"; "+profileHint
+	row.hint, row.detail = profile.Title, profileText(metadata, profile)+"; "+tr(tFormProfileHint)
 	if profile.MutationReason != "" {
-		row.hint += " (preselects a change)"
+		row.hint += " " + tr(tFormPreselectsAChange)
 	}
 }
 
@@ -2356,10 +2316,10 @@ func (m *Model) syncProfile() {
 func profileText(metadata config.ProviderMetadata, profile config.ToolProfile) string {
 	text := profile.Title + ": " + profile.Description
 	if profile.MutationReason != "" {
-		text += "; it preselects a change because " + profile.MutationReason
+		text += tr(tFormItPreselectsAChangeBecause, profile.MutationReason)
 	}
-	return text + "; selects tools " + strings.Join(profile.Tools, ", ") + " (effects " +
-		config.FormatEffects(metadata.ProfileEffects(profile)) + ")"
+	return text + tr(tFormSelectsToolsEffects, strings.Join(profile.Tools, ", "),
+		config.FormatEffects(metadata.ProfileEffects(profile)))
 }
 
 // replaceChoices puts a new set of options on one choice row, keeping the current value when it is still
@@ -2386,7 +2346,7 @@ func (m *Model) targetChosen() {
 }
 
 func (m *Model) permissionHint(provider string) string {
-	return "enter opens the effects to tick"
+	return tr(tFormEnterOpensTheEffectsTo)
 }
 
 // permissionDetail is the explanation behind permissionHint, with what default means now.
@@ -2397,8 +2357,8 @@ func (m *Model) permissionDetail(provider string) string {
 	for i, permission := range permissions {
 		defaults[i] = string(permission)
 	}
-	return "enter opens this provider's effects to tick; every tool of the ticked effects is offered; default currently means " +
-		strings.Join(defaults, ", ") + "; selecting none denies every operation"
+	return tr(tFormEnterOpensThisProviderS,
+		strings.Join(defaults, ", "))
 }
 
 func (m *Model) permissionChoices(provider string) []string {
@@ -2507,7 +2467,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			return m.requireAdmin(func() tea.Cmd { return m.approveOne(name) })
 		case "n", keyOf(actBack):
 			m.approvalDetail, m.screen = "", screenList
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 		case "e":
 			m.approvalExpanded = !m.approvalExpanded
 		case "o":
@@ -2534,7 +2494,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			return m.requireAdmin(m.approveAll)
 		case "n", keyOf(actBack):
 			m.approveAllConfirm, m.screen = false, screenList
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 		}
 		return nil
 	}
@@ -2543,10 +2503,10 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.pendingProfile, m.screen = "", screenForm
 			m.applyProfile(profile)
-			m.status = "Profile " + profile + " ticked; review the selected tools before saving"
+			m.status = tr(tFormProfileTickedReviewTheSelected, profile)
 		case "n", keyOf(actBack):
 			m.pendingProfile, m.screen = "", screenForm
-			m.status = "Profile not applied; the ticks are unchanged"
+			m.status = tr(tFormProfileNotAppliedTheTicks)
 		}
 		return nil
 	}
@@ -2573,7 +2533,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		} else {
 			m.screen = screenList
 		}
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 	}
 	return nil
 }
@@ -2594,7 +2554,7 @@ func (m *Model) startTest() tea.Cmd {
 // while it runs, so the editor never blocks.
 func (m *Model) testConnection(name string) tea.Cmd {
 	if m.tester == nil {
-		m.fail = "connection testing is unavailable"
+		m.fail = tr(tFormConnectionTestingIsUnavailable)
 		return nil
 	}
 
@@ -2625,7 +2585,7 @@ func connectionTestError(err error) string {
 	if errors.As(err, &locked) {
 		// The resolver never asked this editor's own terminal for the passphrase (see tuiSecrets in
 		// internal/cli); it just reported the vault locked, the same as an agent gets over MCP.
-		return err.Error() + "; run 'qatlas vault unlock' first"
+		return err.Error() + tr(tFormRunQatlasVaultUnlockFirst)
 	}
 	var missing *secret.MissingSecretError
 	if !errors.As(err, &missing) {
@@ -2633,15 +2593,14 @@ func connectionTestError(err error) string {
 	}
 	switch missing.Type {
 	case config.CredentialTypeKeyring:
-		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press enter "+
-			"to store it in the system keyring; the row says what to do if the keyring is locked or "+
-			"unreachable", missing.Credential, missing.Role, missing.Role)
+		return tr(tFormCredentialIsMissingOpenCredentials,
+			missing.Credential, missing.Role, missing.Role)
 	case config.CredentialTypeVault:
-		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press enter "+
-			"to store it in the vault", missing.Credential, missing.Role, missing.Role)
+		return tr(tFormCredentialIsMissingOpenCredentials2,
+			missing.Credential, missing.Role, missing.Role)
 	}
-	return fmt.Sprintf("credential %q is missing %s; open Credentials and set the environment variable "+
-		"named for that role", missing.Credential, missing.Role)
+	return tr(tFormCredentialIsMissingOpenCredentials3,
+		missing.Credential, missing.Role)
 }
 
 // finishTest accepts a result only while it is still the current one, so a cancelled test cannot report
@@ -2658,7 +2617,7 @@ func (m *Model) finishTest(done testDoneMsg) {
 	}
 	if done.err != "" {
 		// Redaction happens before anything reaches the model, including an unexpected provider error.
-		m.fail = "Connection test could not run: " + m.redactor.Apply(done.err)
+		m.fail = tr(tFormConnectionTestCouldNotRun, m.redactor.Apply(done.err))
 		return
 	}
 	m.testClass = done.class
@@ -2933,14 +2892,14 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 	if source != "" {
 		name, shown = source, m.copyName(source)
 	}
-	key := textField("name", shown, edit != "").withHint(nameHint).withDetail(nameDetail)
+	key := textField("name", shown, edit != "").withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail))
 	if m.section == sectionDefaults {
 		key.label, key.hint, key.detail = "domain", domainHint(), tr(tDomainDetail)
 	}
 	if key.readOnly {
 		// A locked field must not go on describing a free choice: that hint would claim the opposite of
 		// what the field does. It says that it is locked, and how to get the rename it refuses.
-		key.hint, key.detail = lockedHint, ""
+		key.hint, key.detail = tr(tFormLockedHint), ""
 	}
 	fields := []field{key}
 
@@ -2949,7 +2908,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		s := m.cfg.Services[name]
 		fields = append(fields,
 			providerField(m.cfg.Providers(), s.Provider),
-			textField("base url", s.BaseURL, false).withHint(baseURLHint).withDetail(baseURLDetail),
+			textField("base url", s.BaseURL, false).withHint(tr(tFormBaseURLHint)).withDetail(tr(tFormBaseURLDetail)),
 		)
 		if name == "" && source == "" {
 			metadata, _ := m.cfg.ProviderMetadata(fields[1].value())
@@ -2958,7 +2917,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		// The note belongs to the provider, not to this service; it stands here because a service is
 		// where a provider is set up.
 		fields = append(fields, textField(providerNoteLabel, m.cfg.ProviderNotes[fields[1].value()], false).
-			withHint(providerNoteHint).withDetail(providerNoteDetail))
+			withHint(tr(tPayloadDescriptionHint)).withDetail(tr(tFormProviderNoteDetail)))
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
 		if cred.Forward {
@@ -2974,7 +2933,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		}
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
-			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint).withDetail(credentialProviderDetail),
+			providerField(m.credentialProviders(provider), provider).withHint(tr(tFormCredentialProviderHint)).withDetail(tr(tFormCredentialProviderDetail)),
 			storageField(choice),
 		)
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
@@ -2988,19 +2947,19 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			provider = m.firstProviderWithService()
 		}
 		fields = append(fields,
-			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint).withDetail(connectionProviderDetail),
-			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint).withDetail(connectionServiceDetail),
+			providerField(m.connectionProviders(), provider).withHint(tr(tFormConnectionProviderHint)).withDetail(tr(tFormConnectionProviderDetail)),
+			choiceField("service", m.providerServices(provider), conn.Service).withHint(tr(tFormConnectionServiceHint)).withDetail(tr(tFormConnectionServiceDetail)),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
-				withHint(connectionCredentialHint).withDetail(connectionCredentialDetail),
+				withHint(tr(tFormConnectionCredentialHint)).withDetail(tr(tFormConnectionCredentialDetail)),
 			targetsField(conn.TargetValues()).withLabels(conn.TargetLabels),
-			pathsField(conn.Paths).withHint(pathsHint).withDetail(pathsDetail),
+			pathsField(conn.Paths).withHint(tr(tFormPathsHint)).withDetail(tr(tFormPathsDetail)),
 			filesField(filesReadLabel, conn.Files.Read),
 			filesField(filesWriteLabel, conn.Files.Write),
 			// Description and access explain the route the fields above define. Only the description
 			// is published during discovery.
-			textField("description", conn.Description, false).withHint(descriptionHint).withDetail(descriptionDetail),
+			textField("description", conn.Description, false).withHint(tr(tPayloadDescriptionHint)).withDetail(tr(tFormDescriptionDetail)),
 			choiceField(stateLabel, []string{stateActive, stateDisabled}, connectionState(conn.Disabled)).
-				withHint(stateHint).withDetail(stateDetail),
+				withHint(tr(tFormStateHint)).withDetail(tr(tFormStateDetail)),
 			m.activeForField(conn),
 			field{label: profileLabel, kind: fieldChoice, hidden: true},
 		)
@@ -3097,16 +3056,16 @@ func (m *Model) save(name string) tea.Cmd {
 			}
 		}
 		m.applyFocus()
-		where := placeKeyring
+		where := valueText(storageLabel, placeKeyring)
 		if credType == config.CredentialTypeVault {
-			where = placeVault
+			where = valueText(storageLabel, placeVault)
 		}
-		m.status = "Credential saved. Store its secrets below: enter on a role stores it in " + where + "."
+		m.status = tr(tFormCredentialSavedStoreItsSecrets, where)
 		m.addWarning(logged)
 		return tea.Batch(cmd, m.autoApprove(before, direct))
 	}
 	cmd := m.returnToList(name)
-	m.status = "Saved " + name
+	m.status = tr(tSetupSaved, name)
 	m.addWarning(logged)
 	return tea.Batch(cmd, m.autoApprove(before, direct))
 }
@@ -3246,7 +3205,7 @@ func (m *Model) delete() tea.Cmd {
 	}
 	m.adoptSaved(candidate)
 	cmd := m.returnToList("")
-	m.status = "Deleted " + name
+	m.status = tr(tFormDeleted, name)
 	m.addWarning(logged)
 	if section == sectionConnections {
 		return tea.Batch(cmd, m.revokeApproval(name))
@@ -3397,12 +3356,12 @@ func (m *Model) roleField(provider, role, envName, credType string, lead bool) f
 // several providers, and another provider's text under the row would be wrong. The hint carries the short
 // form of the description; detail the full one, or nothing where the two are the same.
 func (m *Model) roleHints(provider, role string, lead bool) (hint, detail string) {
-	return m.roleHintText(provider, role, envHint, lead, false), m.roleDetail(provider, role, envHint, lead)
+	return m.roleHintText(provider, role, tFormEnvHint, lead, false), m.roleDetail(provider, role, tFormEnvHint, lead)
 }
 
 // roleHintText joins the description of a role with what its first row adds (lead); full keeps the whole
 // description instead of its short form.
-func (m *Model) roleHintText(provider, role, lead string, isLead, full bool) string {
+func (m *Model) roleHintText(provider, role string, lead textID, isLead, full bool) string {
 	var parts []string
 	if description := m.cfg.SecretRoleDescriptionOf(provider, role); description != "" {
 		if !full {
@@ -3416,16 +3375,16 @@ func (m *Model) roleHintText(provider, role, lead string, isLead, full bool) str
 		if !full {
 			lead = shortLeads[lead]
 		}
-		parts = append(parts, lead)
+		parts = append(parts, tr(lead))
 	}
 	return strings.Join(parts, "; ")
 }
 
 // shortLeads are the one-line forms of the sentences the first role row adds.
-var shortLeads = map[string]string{envHint: envShortHint, maskedHint: maskedShortHint}
+var shortLeads = map[textID]textID{tFormEnvHint: tFormEnvShortHint, tSetupMaskedHint: tSetupMaskedShortHint}
 
 // roleDetail is the full hint of a role row, or "" where the short hint already says all of it.
-func (m *Model) roleDetail(provider, role, lead string, isLead bool) string {
+func (m *Model) roleDetail(provider, role string, lead textID, isLead bool) string {
 	full := m.roleHintText(provider, role, lead, isLead, true)
 	if full == m.roleHintText(provider, role, lead, isLead, false) {
 		return ""
@@ -3523,11 +3482,11 @@ const (
 
 // filesField is a directory list row of the local file release, a list like the path list.
 func filesField(label string, values []string) field {
-	verb := "read files from"
+	hint, detail := tr(tFormFilesReadHint), tr(tFormFilesReadDetail)
 	if label == filesWriteLabel {
-		verb = "write files to"
+		hint, detail = tr(tFormFilesWriteHint), tr(tFormFilesWriteDetail)
 	}
-	return field{label: label, kind: fieldPaths, entries: values}.withHint(fmt.Sprintf(filesHint, verb)).withDetail(fmt.Sprintf(filesDetail, verb))
+	return field{label: label, kind: fieldPaths, entries: values}.withHint(hint).withDetail(detail)
 }
 
 // isFilesLabel reports whether label is one of the two local file rows.
@@ -3614,7 +3573,7 @@ func listSummary(values []string, plural string) string {
 	case 1:
 		return values[0]
 	}
-	text := fmt.Sprintf("%d %s: %s", len(values), plural, strings.Join(values[:2], ", "))
+	text := fmt.Sprintf("%d %s: %s", len(values), wordText(plural), strings.Join(values[:2], ", "))
 	if len(values) > 2 {
 		text += fmt.Sprintf(", +%d", len(values)-2)
 	}
@@ -3624,9 +3583,9 @@ func listSummary(values []string, plural string) string {
 // listLines is the unfolded form of a list row: every entry on a line of its own, under how many there are.
 func listLines(values []string, singular, plural string) string {
 	if len(values) == 1 {
-		return "1 " + singular + "\n" + values[0]
+		return "1 " + wordText(singular) + "\n" + values[0]
 	}
-	return fmt.Sprintf("%d %s\n%s", len(values), plural, strings.Join(values, "\n"))
+	return fmt.Sprintf("%d %s\n%s", len(values), wordText(plural), strings.Join(values, "\n"))
 }
 
 func wrap(i, n int) int {
@@ -3727,7 +3686,7 @@ func (m *Model) editorView() string {
 	case screenForm:
 		noun := m.section.entry()
 		if m.isPayloadForm() {
-			noun = "payload secret"
+			noun = tr(tFormPayloadSecret)
 		}
 		what := "New " + noun
 		switch {
@@ -3739,9 +3698,9 @@ func (m *Model) editorView() string {
 		if m.editing != "" {
 			what = tr(tFormEdit, m.editing)
 		} else if m.copyFrom != "" {
-			what += ", from " + m.copyFrom
+			what = tr(tFormNewFrom, noun, m.copyFrom)
 			if m.termWidth < narrowWidth {
-				what = "New " + noun + "\nfrom " + m.copyFrom
+				what = tr(tFormNewNfrom, noun, m.copyFrom)
 			}
 		} else if m.section.isPage() {
 			what = m.section.pageTitle()
@@ -3797,7 +3756,7 @@ func (m *Model) editorView() string {
 			keys = "enter run · tab next field · " + leaveKeys
 		}
 		if m.payloadRemoveAsk {
-			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
+			b.WriteString("\n" + m.wrapped(styles.warning, tr(tFormRemoveTheField, m.shownLabel(m.fields[m.focus].label))) + "\n")
 			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 		}
 		if !m.payloadRemoveAsk && m.infoWorks() {
@@ -3883,7 +3842,7 @@ func (m *Model) formRows(headings bool, entries []sectionEntry) string {
 		// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
 		// an idle connection) matters whether or not the field is the one focused, so it always stands.
 		if warning := m.fieldWarning(f); warning != "" {
-			b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
+			b.WriteString(m.indentedWith(styles.warning, warningLine(warning)) + "\n")
 		}
 		// A refused save names its cause and its resolution under the row it concerns. The symbol, not
 		// only the colour, marks the line as an error.
@@ -3896,14 +3855,14 @@ func (m *Model) formRows(headings bool, entries []sectionEntry) string {
 
 // secretPrompt is the masked dialog for the secret of the credential role being edited.
 func (m *Model) secretPrompt() promptDialog {
-	where := secret.StoreLabel(platform) + " of this machine"
+	where := tr(tFormOfThisMachine, secret.StoreLabel(platform))
 	if m.credentialType() == config.CredentialTypeVault {
-		where = "the vault"
+		where = tr(tFormTheVault)
 	}
 	return promptDialog{
-		title: fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole),
+		title: tr(tFormSecretFor, m.editing, m.secretRole),
 		input: m.inputLine("  ", m.secretInput),
-		hint:  "masked; goes into " + where,
+		hint:  tr(tFormMaskedGoesInto, where),
 		keys:  "enter store · {back} cancel",
 	}
 }
@@ -4081,12 +4040,12 @@ func (m *Model) listFrame() (string, string) {
 	}
 	switch {
 	case total == 0 && bar:
-		head.WriteString(m.wrapped(styles.hint, "No entry matches the filter bar. Change Group or State to see more.") + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tFormNoEntryMatchesTheFilter)) + "\n")
 	case total == 0:
 		head.WriteString(m.wrapped(styles.hint, m.emptyHelp()) + "\n")
 	case shown == 0:
 		head.WriteString(m.wrapped(styles.hint,
-			fmt.Sprintf("No entry matches %q. Press esc to clear the filter.", m.list.query())) + "\n")
+			tr(tFormNoEntryMatchesPressEsc, m.list.query())) + "\n")
 	}
 
 	back := m.backToSectionsHint()
@@ -4136,7 +4095,7 @@ func (m *Model) listFrame() (string, string) {
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
 			if !isGroupRow(name) && m.needsDescription(name) {
-				foot = m.hint(undescribedHint) + foot
+				foot = m.hint(tr(tFormUndescribedHint)) + foot
 				break
 			}
 		}
@@ -4148,7 +4107,7 @@ func (m *Model) listFrame() (string, string) {
 				continue
 			}
 			if warning := m.cfg.IdleWarning(name); warning != "" {
-				idle.WriteString("\n" + m.wrapped(styles.warning, "warning: "+warning))
+				idle.WriteString("\n" + m.wrapped(styles.warning, warningLine(warning)))
 			}
 		}
 		foot = m.testLine() + idle.String() + foot
@@ -4202,11 +4161,12 @@ func (m *Model) backToSectionsHint() string {
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
-func (m *Model) filterLine(l *filterList) string { return m.searchLine(l, "filter: ") }
+func (m *Model) filterLine(l *filterList) string { return m.searchLine(l, tr(tFormFilter)) }
 
 // searchLine shows the filter of l behind the given label.
 func (m *Model) searchLine(l *filterList, label string) string {
 	prefix, width := m.fit(label)
+	l.input.Placeholder = tr(tLogSearchPlaceholder)
 	if !l.editing {
 		return prefix + truncateCells(l.query(), width)
 	}
@@ -4315,13 +4275,13 @@ func (m *Model) pickerFrame() (string, string) {
 		}
 		shown, total, position = shown-rows, len(f.choices), max(position, 0)
 	}
-	title := fmt.Sprintf("Choose %s  %d/%d (%d total)", f.label, min(position, shown), shown, total)
+	title := tr(tFormChooseTotal, m.shownLabel(f.label), min(position, shown), shown, total)
 	if m.pickerGroups != nil {
 		ticked, all := m.pickerGroups.count(m.pickerMarks)
-		title = fmt.Sprintf("Choose %s  %d/%d ticked", f.label, ticked, all)
+		title = tr(tFormChooseTicked, m.shownLabel(f.label), ticked, all)
 	}
 	head.WriteString(m.wrapped(styles.title, title) + "\n")
-	head.WriteString(m.searchLine(&m.picker, "search: ") + "\n")
+	head.WriteString(m.searchLine(&m.picker, tr(tLogPickSearch)) + "\n")
 	keys := "type to search · up/down move · enter choose · {back} cancel"
 	if m.pickerMarks != nil {
 		ticked := 0
@@ -4337,21 +4297,21 @@ func (m *Model) pickerFrame() (string, string) {
 			if m.pickerEffects != nil {
 				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · {back} cancel"
 			}
-			head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
+			head.WriteString(m.wrapped(styles.hint, tr(tFormTickedOf, ticked, total)) + "\n")
 			keys = "type to search · up/down move · space tick · enter keep · {back} cancel"
 		} else {
 			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · {back} cancel"
 		}
 	} else {
-		head.WriteString(m.wrapped(styles.hint, "current: "+choiceText(f.value())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tLogPickCurrent, m.choiceShown(f.value()))) + "\n")
 	}
 	if shown == 0 {
 		head.WriteString(m.wrapped(styles.hint,
-			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
+			tr(tFormNoValueMatchesEscKeeps, m.picker.query())) + "\n")
 	}
 	if f.label == forwardLabel {
 		if note := m.forwardBindingNote(m.fieldValue("credential")); note != "" {
-			head.WriteString(m.wrapped(styles.warning, "warning: "+note) + "\n")
+			head.WriteString(m.wrapped(styles.warning, warningLine(note)) + "\n")
 		}
 	}
 	if m.infoWorks() {
@@ -4378,9 +4338,9 @@ func (m *Model) pickerRow(i int) string {
 		}
 		text = mark + m.picker.text(choice)
 	} else {
-		text = choiceText(choice)
+		text = m.choiceShown(choice)
 		if choice == m.fields[m.focus].value() {
-			text += "  (current)"
+			text += "  " + tr(tFormCurrent)
 		}
 	}
 	mark := m.pickerMark(m.fields[m.focus], choice)
@@ -4545,11 +4505,11 @@ func (m *Model) nextSteps() []nextStepItem {
 func (m *Model) emptyHelp() string {
 	switch m.section {
 	case sectionServices:
-		return "No services yet. Press n to choose a provider and add its API root URL."
+		return tr(tFormNoServicesYetPressN)
 	case sectionCredentials:
-		return "No credentials yet. Press n to add the roles required by a provider."
+		return tr(tFormNoCredentialsYetPressN)
 	case sectionConnections:
-		return "No connections yet. Press n for the guided setup: it picks or adds the service and credential."
+		return tr(tFormNoConnectionsYetPressN)
 	case sectionDefaults:
 		if reason := m.newEntryBlocked(); reason != "" {
 			return reason + tr(tDefaultsOptional)
@@ -4572,7 +4532,7 @@ func (m *Model) emptyHelp() string {
 		}
 		return tr(tTokensEmpty)
 	}
-	return "Nothing configured yet."
+	return tr(tFormNothingConfiguredYet)
 }
 
 // fittedEditorView is screenView, and for a form taller than the terminal, only as many rows around the
@@ -4625,9 +4585,9 @@ func (m *Model) fieldHintText(f field, full bool) string {
 				parts = append(parts, description)
 			}
 			if f.roleLead && (full || len(parts) == 0) {
-				lead := "save the credential with F2 first"
+				lead := tr(tFormSaveTheCredentialWithF2)
 				if full {
-					lead = "save this credential with F2 first; you will stay here to add both secrets"
+					lead = tr(tFormSaveThisCredentialWithF2)
 				}
 				parts = append(parts, lead)
 			}
@@ -4644,7 +4604,7 @@ func (m *Model) fieldHintText(f field, full bool) string {
 	}
 	if full && f.kind == fieldToolList && f.label != forwardLabel && len(f.marked()) > 0 {
 		// The ticks are what is saved, so the explanation of the row lists them in full.
-		return text + "; ticked: " + strings.Join(f.marked(), ", ")
+		return text + tr(tFormTicked, strings.Join(f.marked(), ", "))
 	}
 	return text
 }
@@ -4680,7 +4640,7 @@ func (m *Model) fieldWarning(f field) string {
 
 // testLine keeps the stable class visible and adds the next useful interpretation for a human.
 func (m *Model) testLine() string {
-	providerName := "the provider"
+	providerName := tr(tFormTheProvider)
 	if connection, ok := m.cfg.Connections[m.testName]; ok {
 		if metadata, found := m.cfg.ProviderMetadata(m.cfg.Services[connection.Service].Provider); found {
 			providerName = metadata.Name
@@ -4688,17 +4648,17 @@ func (m *Model) testLine() string {
 	}
 	switch {
 	case m.testing:
-		return "\n" + m.wrapped(styles.hint, fmt.Sprintf("testing %s ... (esc cancels)", m.testName))
+		return "\n" + m.wrapped(styles.hint, tr(tFormTestingEscCancels, m.testName))
 	case m.backdrop:
 		// The result stands in its own dialog (see testPrompt) over this screen.
 		return ""
 	case m.testClass == provider.ClassOK:
 		return "\n" + m.wrapped(styles.ok,
-			fmt.Sprintf("[ok] %s: ok - %s accepted the connection", m.testName, providerName))
+			tr(tFormOkOkAcceptedTheConnection, m.testName, providerName))
 	case m.testClass != "":
 		explanation := provider.Explain(m.testClass, providerName)
 		return "\n" + m.wrapped(styles.fail,
-			fmt.Sprintf("[failed] %s: %s - %s", m.testName, m.testClass, explanation))
+			tr(tFormFailed, m.testName, m.testClass, explanation))
 	}
 	return ""
 }
@@ -4713,7 +4673,8 @@ var sectionColumns = map[section][]column{
 	sectionServices: {{title: "NAME"}, {title: "BASE URL", flex: true}},
 	sectionCredentials: {{title: "NAME"},
 		{title: "STORAGE", optional: true, short: map[string]string{
-			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"}},
+			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"},
+			shown: func(place string) string { return valueText(storageLabel, place) }},
 		{title: "SECRETS", flex: true}},
 	sectionConnections: {{title: "NAME"}, {title: "STATE", optional: true}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
@@ -4786,11 +4747,11 @@ func (m *Model) cells(name string) []string {
 		for _, permission := range m.cfg.ConnectionEffects(name) {
 			effects = append(effects, string(permission))
 		}
-		tools := "all"
+		tools := tr(tLogAll)
 		if conn.Tools != nil {
-			tools = fmt.Sprintf("listed %d", len(conn.Tools))
+			tools = tr(tFormListed, len(conn.Tools))
 			if len(conn.Tools) == 0 {
-				tools = "none"
+				tools = tr(tFormNone)
 			}
 		}
 		// A single target stands as it is, several by their number: the form lists them.
@@ -4802,13 +4763,13 @@ func (m *Model) cells(name string) []string {
 				targets = m.logText(label)
 			}
 		case len(values) > 1:
-			targets = fmt.Sprintf("%d targets", len(values))
+			targets = tr(tFormTargets, len(values))
 		}
 		description := m.logText(conn.Description)
 		if description == "" && m.needsDescription(name) {
-			description = undescribedMarker
+			description = tr(tFormUndescribedMarker)
 		}
-		return []string{name, m.connectionStateText(conn), conn.Service, strings.Join(effects, ","), tools,
+		return []string{name, connectionStateCell(m.connectionStateText(conn)), conn.Service, strings.Join(effects, ","), tools,
 			targets, description}
 	case sectionDefaults:
 		return []string{name, m.cfg.Defaults.Connections[name]}
@@ -4896,8 +4857,8 @@ func (m *Model) profileConfirmView() string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	profile, _ := findProfile(metadata, m.pendingProfile)
 	return m.questionText(question{
-		title:       fmt.Sprintf("Replace the access and tool ticks with profile %s?", profile.ID),
-		consequence: "every tick stays changeable afterwards; nothing is saved before you save the form",
+		title:       tr(tFormReplaceTheAccessAndTool, profile.ID),
+		consequence: tr(tFormEveryTickStaysChangeableAfterwards),
 		details:     []string{m.indented(profileText(metadata, profile))},
 		keys:        "y replace the ticks · n/{back} keep them · {command} cmds · {help} help",
 	})
@@ -4934,27 +4895,23 @@ func (m *Model) confirmView() string {
 	}
 	const keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	if m.confirmRole != "" {
-		consequence := "it is removed from the vault"
+		consequence := tr(tFormItIsRemovedFromThe)
 		if m.credentialType() != config.CredentialTypeVault {
-			consequence = "it is removed from the system keyring, and from a plaintext credentials.yaml left " +
-				"over from an earlier version, if any; an environment variable is not touched, because it " +
-				"belongs to your shell"
+			consequence = tr(tFormItIsRemovedFromThe2)
 		}
 		return m.questionText(question{
-			title:       fmt.Sprintf("Remove the stored secret for %s.%s?", m.editing, m.confirmRole),
+			title:       tr(tFormRemoveTheStoredSecretFor, m.editing, m.confirmRole),
 			consequence: consequence, keys: keys,
 		})
 	}
 	name, _ := m.selected()
 	credType := m.cfg.Credentials[name].Type
-	consequence := "it is removed from the configuration"
+	consequence := tr(tFormItIsRemovedFromThe3)
 	if m.section == sectionCredentials && m.cfg.Credentials[name].Forward {
-		consequence = "its stored values are not removed with it; remove each with 'qatlas credential delete " +
-			name + " <field>'"
+		consequence = tr(tFormItsStoredValuesAreNot, name)
 	} else if m.section == sectionCredentials &&
 		(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
-		consequence = "its stored secrets are not removed with it; remove them first with d on the role, " +
-			"or later with 'qatlas credential delete'"
+		consequence = tr(tFormItsStoredSecretsAreNot)
 	}
-	return m.questionText(question{title: fmt.Sprintf("Delete %q?", name), consequence: consequence, keys: keys})
+	return m.questionText(question{title: tr(tFormDelete, name), consequence: consequence, keys: keys})
 }

@@ -49,7 +49,7 @@ func newToolGroups(metadata config.ProviderMetadata, choices []string) *toolGrou
 		g.of[choice] = id
 	}
 	candidates := append(append([]config.ToolGroup{}, metadata.Groups...),
-		config.ToolGroup{ID: unlistedGroup, Title: "Not registered"})
+		config.ToolGroup{ID: unlistedGroup, Title: tr(tToolGroupNotRegistered)})
 	for _, group := range candidates {
 		if len(g.members[group.ID]) == 0 {
 			continue
@@ -190,7 +190,7 @@ func (g *toolGroups) count(marks map[string]bool) (int, int) { return countTicks
 func (g *toolGroups) rowText(row string, marks map[string]bool, searching bool) string {
 	if row == allGroupsRow {
 		ticked, total := g.count(marks)
-		return fmt.Sprintf("%s  %d/%d", padLine("  all groups", g.titleCol), ticked, total)
+		return fmt.Sprintf("%s  %d/%d", padLine("  "+tr(tToolGroupAllGroups), g.titleCol), ticked, total)
 	}
 	id := strings.TrimPrefix(row, groupRowPrefix)
 	for _, group := range g.groups {

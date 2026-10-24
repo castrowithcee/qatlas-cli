@@ -38,7 +38,7 @@ func TestSectionListAndJumpToASection(t *testing.T) {
 		}
 		view := screenOf(m)
 		for _, line := range strings.Split(view, "\n") {
-			if strings.HasPrefix(line, "> General") {
+			if strings.HasPrefix(line, "> "+sectionText(secGeneral)) {
 				goto marked
 			}
 		}
@@ -47,7 +47,7 @@ func TestSectionListAndJumpToASection(t *testing.T) {
 		if !strings.Contains(view, "> "+labelText("name")) {
 			t.Errorf("the focused name row is not marked:\n%s", view)
 		}
-		if !strings.Contains(view, "Advanced (closed)") {
+		if !strings.Contains(view, sectionText(secAdvanced)+tr(tSectionClosedMark)) {
 			t.Errorf("the list does not say that Advanced is closed:\n%s", view)
 		}
 		assertViewFits(t, view, 110, 40)
@@ -85,7 +85,7 @@ func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 		if !m.sectionClosed(secAdvanced) {
 			t.Fatal("Advanced is open on a new connection")
 		}
-		if view := screenOf(m); strings.Contains(view, activeForLabel) {
+		if view := screenOf(m); strings.Contains(view, labelText(activeForLabel)) {
 			t.Fatalf("a closed Advanced shows its rows:\n%s", view)
 		}
 		before := m.focus
@@ -101,7 +101,7 @@ func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 		if m.currentSection() != secAdvanced || m.fields[m.focus].label != activeForLabel {
 			t.Fatalf("jump focused %q in %q, want the first Advanced row", m.fields[m.focus].label, m.currentSection())
 		}
-		if view := screenOf(m); !strings.Contains(view, activeForLabel) || strings.Contains(view, "Advanced (closed)") {
+		if view := screenOf(m); !strings.Contains(view, labelText(activeForLabel)) || strings.Contains(view, sectionText(secAdvanced)+tr(tSectionClosedMark)) {
 			t.Fatalf("a jump did not open Advanced:\n%s", view)
 		}
 
@@ -182,14 +182,14 @@ func TestNarrowFormsHaveHeadingsInsteadOfTheList(t *testing.T) {
 			headings := map[string]bool{}
 			for _, line := range lines {
 				headings[strings.TrimRight(line, " ")] = true
-				if strings.HasPrefix(line, "> General") || strings.HasPrefix(line, "  General ") {
+				if strings.HasPrefix(line, "> "+sectionText(secGeneral)) || strings.HasPrefix(line, "  "+sectionText(secGeneral)+" ") {
 					t.Errorf("%dx%d: the list is shown below the minimum width: %q", size.w, size.h, line)
 				}
 			}
-			if size.h >= 24 && !headings["General"] {
+			if size.h >= 24 && !headings[sectionText(secGeneral)] {
 				t.Errorf("%dx%d: no General heading:\n%s", size.w, size.h, view)
 			}
-			if size.h >= 24 && (!headings["Service"] || !headings["Advanced (closed)"]) {
+			if size.h >= 24 && (!headings[sectionText(secService)] || !headings[sectionText(secAdvanced)+tr(tSectionClosedMark)]) {
 				t.Errorf("%dx%d: headings missing:\n%s", size.w, size.h, view)
 			}
 		}
@@ -217,7 +217,11 @@ func TestEmptyValuesAreOneWord(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		m := connectionFormModel(t, 110, 40)
 		view := screenOf(m)
-		for _, want := range []string{"description empty", "targets     any", "paths       any"} {
+		// The labels stand in a column as wide as the longest one, description.
+		row := func(label, word string) string {
+			return labelText(label) + strings.Repeat(" ", lipgloss.Width(labelText("description"))-lipgloss.Width(labelText(label))) + " " + wordText(word)
+		}
+		for _, want := range []string{row("description", "empty"), row("targets", "any"), row("paths", "any")} {
 			if !strings.Contains(view, want) {
 				t.Errorf("view lacks %q:\n%s", want, view)
 			}

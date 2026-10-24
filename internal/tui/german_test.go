@@ -297,7 +297,8 @@ func englishSentences() map[textID]*regexp.Regexp {
 	out := map[textID]*regexp.Regexp{}
 	for id, english := range textEN {
 		german, ok := textDE[id]
-		if !ok || german == english {
+		// Choice values and kinds of entries are single words; the core says some of them in its own sentences.
+		if !ok || german == english || strings.HasPrefix(string(id), "value.") || strings.HasPrefix(string(id), "entry.") {
 			continue
 		}
 		literal := strings.TrimSpace(germanVerb.ReplaceAllString(english, ""))
