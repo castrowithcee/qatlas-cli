@@ -72,7 +72,8 @@ func testClass(err error) (provider.Class, error) {
 // Register adds the provider metadata, its connection test, and its tools.
 func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
-		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID}
+		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
+		segmentsGet.ID, annotationsList.ID, annotationsGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -109,8 +110,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, the goals, the report and segment " +
-				"catalog of a website, and the data of its reports; changes nothing",
+			Description: "reads the instance version, the websites of the token, the goals, the saved segments, the " +
+				"annotations, the report and segment catalog of a website, and the data of its reports; changes nothing",
 			Tools: readTools,
 		}, {
 			// Live data is personal data (visitor IDs, IP addresses, user IDs, locations), so it is a
@@ -122,10 +123,22 @@ func Register(reg *capability.Registry) error {
 				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
-			Description: "reads what the read profile reads and adds and updates the goals of a website; every " +
+			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
 				"change needs its own confirmation, and deleting a goal stays unticked because it also deletes " +
 				"the conversions recorded for it",
-			Tools: append(slices.Clone(readTools), goalsAdd.ID, goalsUpdate.ID),
+			Tools: append(slices.Clone(readTools), goalsAdd.ID, goalsUpdate.ID,
+				goalRecommendationsList.ID, goalRecommendationsScan.ID, goalRecommendationsDismiss.ID),
+		}, {
+			ID: "segments", Title: "Manage segments",
+			Description: "reads what the read profile reads and adds and updates the saved segments of the " +
+				"instance; every change needs its own confirmation, and the right to change a segment is " +
+				"Matomo's, per website and per creator",
+			Tools: append(slices.Clone(readTools), segmentsAdd.ID, segmentsUpdate.ID),
+		}, {
+			ID: "annotations", Title: "Manage annotations",
+			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
+				"every change needs its own confirmation",
+			Tools: append(slices.Clone(readTools), annotationsAdd.ID, annotationsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -153,5 +166,16 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: goalsAdd, Handler: capability.Handler(invokeGoalsAdd)},
 		capability.Operation{Descriptor: goalsUpdate, Handler: capability.Handler(invokeGoalsUpdate)},
 		capability.Operation{Descriptor: goalsDelete, Handler: capability.Handler(invokeGoalsDelete)},
+		capability.Operation{Descriptor: segmentsList, Handler: capability.Handler(invokeSegmentsList)},
+		capability.Operation{Descriptor: segmentsGet, Handler: capability.Handler(invokeSegmentsGet)},
+		capability.Operation{Descriptor: segmentsAdd, Handler: capability.Handler(invokeSegmentsAdd)},
+		capability.Operation{Descriptor: segmentsUpdate, Handler: capability.Handler(invokeSegmentsUpdate)},
+		capability.Operation{Descriptor: annotationsList, Handler: capability.Handler(invokeAnnotationsList)},
+		capability.Operation{Descriptor: annotationsGet, Handler: capability.Handler(invokeAnnotationsGet)},
+		capability.Operation{Descriptor: annotationsAdd, Handler: capability.Handler(invokeAnnotationsAdd)},
+		capability.Operation{Descriptor: annotationsUpdate, Handler: capability.Handler(invokeAnnotationsUpdate)},
+		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
+		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
+		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},
 	)
 }
