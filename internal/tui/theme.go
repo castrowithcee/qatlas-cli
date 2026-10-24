@@ -20,10 +20,6 @@ type theme struct {
 	// has instead of naming a colour of its own. It never carries the selection alone: the '>' prefix of
 	// listRow still leads the row, so NO_COLOR or an ASCII terminal keeps showing which one is marked.
 	activeRow lipgloss.Style
-	// zebra shades every other unmarked row of a table screen as a reading aid on top of the '>' prefix
-	// and the column layout, never instead of them; it is gone under NO_COLOR like every other colour
-	// here, which is fine because it never was the only way to tell a row apart.
-	zebra lipgloss.Style
 	// key is the key of a footer hint (bold); the action after it keeps the plain hint style.
 	key lipgloss.Style
 }
@@ -40,7 +36,6 @@ func defaultTheme() theme {
 		focusBorder: lipgloss.NewStyle().Foreground(accent),
 		quietBorder: lipgloss.NewStyle().Faint(true),
 		activeRow:   lipgloss.NewStyle().Bold(true).Reverse(true),
-		zebra:       lipgloss.NewStyle().Background(lipgloss.Color("8")),
 		key:         lipgloss.NewStyle().Bold(true),
 	}
 }

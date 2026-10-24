@@ -524,8 +524,8 @@ func TestOnlyTheListedAccessRoutesAndMethodsAreWired(t *testing.T) {
 				}
 				value, _ := strconv.Unquote(node.Value)
 				for _, bad := range forbiddenPaths {
-					// The quota administration is the one file that may name the administration routes.
-					if bad == "/admin/" && name == "quotaadmin.go" {
+					// The instance and quota administration tools are the only files that wire administrator routes.
+					if bad == "/admin/" && (name == "instanceadmin.go" || name == "quotaadmin.go") {
 						continue
 					}
 					if strings.Contains(value, bad) && strings.Contains(value, "/") {
