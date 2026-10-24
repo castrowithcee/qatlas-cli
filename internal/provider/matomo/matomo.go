@@ -15,6 +15,7 @@ package matomo
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -68,8 +69,10 @@ func testClass(err error) (provider.Class, error) {
 	return "", err
 }
 
-// Register adds the provider metadata, its connection test, and its read tools.
+// Register adds the provider metadata, its connection test, and its tools.
 func Register(reg *capability.Registry) error {
+	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
+		segmentsFields.ID, segmentsSuggest.ID, goalsList.ID, goalsGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -106,9 +109,14 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, and the report and segment catalog of a website; changes nothing",
-			Tools: []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
-				segmentsFields.ID, segmentsSuggest.ID},
+			Description: "reads the instance version, the websites of the token, the goals, and the report and segment catalog of a website; changes nothing",
+			Tools:       readTools,
+		}, {
+			ID: "goals", Title: "Manage goals",
+			Description: "reads what the read profile reads and adds and updates the goals of a website; every " +
+				"change needs its own confirmation, and deleting a goal stays unticked because it also deletes " +
+				"the conversions recorded for it",
+			Tools: append(slices.Clone(readTools), goalsAdd.ID, goalsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -124,5 +132,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: reportsDescribe, Handler: capability.Handler(invokeReportsDescribe)},
 		capability.Operation{Descriptor: segmentsFields, Handler: capability.Handler(invokeSegmentsFields)},
 		capability.Operation{Descriptor: segmentsSuggest, Handler: capability.Handler(invokeSegmentsSuggest)},
+		capability.Operation{Descriptor: goalsList, Handler: capability.Handler(invokeGoalsList)},
+		capability.Operation{Descriptor: goalsGet, Handler: capability.Handler(invokeGoalsGet)},
+		capability.Operation{Descriptor: goalsAdd, Handler: capability.Handler(invokeGoalsAdd)},
+		capability.Operation{Descriptor: goalsUpdate, Handler: capability.Handler(invokeGoalsUpdate)},
+		capability.Operation{Descriptor: goalsDelete, Handler: capability.Handler(invokeGoalsDelete)},
 	)
 }
