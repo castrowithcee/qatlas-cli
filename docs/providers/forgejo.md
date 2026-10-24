@@ -86,6 +86,8 @@ additional depth of defense: the targets of the connection stay the boundary.
   `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. `contents.change-files` has only
   the operations `create` and `update`, and the new-branch overwrite is `force_overwrite_new_branch` instead of
   `force_push`; neither is offered. See [Contents](gitea/contents.md).
+- Accesses: webhooks carry `content_type` and `url` instead of Gitea's `name`; push mirrors carry `branch_filter`.
+  See [Accesses](gitea/accesses.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
