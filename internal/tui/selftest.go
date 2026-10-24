@@ -189,13 +189,13 @@ func (m *Model) endSelftest() {
 func (m *Model) updateSelftest(key tea.KeyMsg) tea.Cmd {
 	st := m.st
 	if !st.done {
-		if key.String() == "esc" {
+		if key.String() == keyOf(actBack) {
 			m.endSelftest()
 		}
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.screen = st.from
 		m.st = nil
 	case "down":
@@ -321,13 +321,13 @@ func (m *Model) selftestKeys() string {
 	st := m.st
 	switch {
 	case !st.done && st.cancelling:
-		return "ctrl+c quit when done · : cmds · ? help"
+		return "ctrl+c quit when done · {command} cmds · {help} help"
 	case !st.done:
-		return "esc cancel · : cmds · ? help"
+		return "{back} cancel · {command} cmds · {help} help"
 	case st.report != nil:
-		return "up/down scroll · w save as file · esc close · : cmds · ? help"
+		return "up/down scroll · w save as file · {back} close · {command} cmds · {help} help"
 	}
-	return "esc close · : cmds · ? help"
+	return "{back} close · {command} cmds · {help} help"
 }
 
 // selftestFrame is the title above the body and the keys below it, and the lines of body that fit between.

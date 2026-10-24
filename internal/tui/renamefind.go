@@ -233,7 +233,7 @@ func (m *Model) updateFindings(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.closeFindings()
 	case "up":
 		s.cursor = wrap(s.cursor-1, len(s.items))
@@ -311,7 +311,7 @@ func (m *Model) findingsView() string {
 	case f.action() != "":
 		keys += " · enter " + f.action()
 	}
-	keys += " · esc back · : cmds · ? help"
+	keys += " · {back} back · {command} cmds · {help} help"
 	foot := "\n" + m.wrapped(styles.hint, m.findingDetail(f)) + m.keyHint(keys) + m.notes()
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 	start := max(min(s.cursor-room/2, len(s.items)-room), 0)

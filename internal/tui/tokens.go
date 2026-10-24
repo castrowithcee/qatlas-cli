@@ -393,7 +393,7 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 			m.tokenRevoke, m.tokenDetail, m.tokenReveal = "", "", false
 			m.screen = screenList
 			return m.requireAdmin(func() tea.Cmd { return m.revokeToken(name) }), true
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			// The question returns to where it was asked: the detail screen, or the list.
 			m.tokenRevoke = ""
 			if m.tokenDetail == "" {
@@ -418,10 +418,10 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 			m.tokenReveal = true
 			return nil
 		}), true
-	case "d":
+	case keyOf(actDelete):
 		m.tokenRevoke = name
 		m.clearMessages()
-	case "esc":
+	case keyOf(actBack):
 		m.tokenDetail, m.tokenReveal = "", false
 		m.screen = screenList
 		m.clearMessages()
@@ -436,10 +436,10 @@ func (m *Model) tokenDetailView() string {
 	title := m.wrapped(styles.title, "Token "+name) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
-		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	if !ok {
-		return title + m.wrapped(styles.hint, "this token no longer exists; nothing to show") + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.hint, "this token no longer exists; nothing to show") + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	var b strings.Builder
 	b.WriteString(title)
@@ -480,7 +480,7 @@ func (m *Model) tokenDetailView() string {
 	}
 	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
 	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
-	b.WriteString(m.keyHint("s reveal/hide · d revoke · esc back · : cmds · ? help"))
+	b.WriteString(m.keyHint("s reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help"))
 	return b.String()
 }
 
@@ -490,7 +490,7 @@ func (m *Model) tokenRevokeView() string {
 	b.WriteString(m.wrapped(styles.title, "Revoke agent token "+m.tokenRevoke+"?") + "\n\n")
 	b.WriteString(m.indented("it stops working at once, in a running vault process too; approvals it gave stay") +
 		"\n")
-	b.WriteString(m.keyHint("y revoke · n/esc keep · : cmds · ? help"))
+	b.WriteString(m.keyHint("y revoke · n/{back} keep · {command} cmds · {help} help"))
 	return b.String()
 }
 

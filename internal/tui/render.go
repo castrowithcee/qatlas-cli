@@ -373,6 +373,7 @@ func (m *Model) hint(text string) string { return "\n" + m.wrapped(styles.hint, 
 // terminal is cut with "..." rather than left to overflow, which only a pathologically narrow terminal
 // should ever trigger.
 func (m *Model) keyHint(text string) string {
+	text = footerKeys(text)
 	width := m.usable(0)
 	var lines []string
 	var line string

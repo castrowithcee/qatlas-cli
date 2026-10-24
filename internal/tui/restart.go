@@ -192,7 +192,7 @@ func (m *Model) updateRestartConfirm(key tea.KeyMsg) tea.Cmd {
 	case "y":
 		m.screen = m.restartBack
 		return m.restartNow()
-	case "n", "esc":
+	case "n", keyOf(actBack):
 		m.screen = m.restartBack
 		m.status = m.restartHint()
 	}
@@ -202,7 +202,7 @@ func (m *Model) updateRestartConfirm(key tea.KeyMsg) tea.Cmd {
 // restartView asks before the restart that would drop unsaved input.
 func (m *Model) restartView() string {
 	return m.wrapped(styles.title, "Restart qatlas tui into "+m.updated+"?") +
-		m.keyHint("y restart and discard · n/esc not now · : cmds · ? help") + "\n\n" +
+		m.keyHint("y restart and discard · n/{back} not now · {command} cmds · {help} help") + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), "The update is installed. Restarting replaces this editor with the new "+
 			"version and drops the input that is not saved yet. Not now keeps editing on the old version.")
 }

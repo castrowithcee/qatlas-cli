@@ -209,7 +209,7 @@ func (m *Model) approvalDetailView() string {
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
 		// is nothing left here to show or approve.
-		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("esc back · : cmds · ? help")
+		return title + m.wrapped(styles.fail, "error: "+unavailable) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	var change *approval.Change
 	for i := range report.Open {
@@ -221,7 +221,7 @@ func (m *Model) approvalDetailView() string {
 	if change == nil {
 		// Approved or removed elsewhere while this screen was open.
 		return title + m.wrapped(styles.hint, "this connection is no longer open; nothing to approve") +
-			m.keyHint("esc back · : cmds · ? help")
+			m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	return m.approvalChangeView(title, *change)
 }
@@ -241,11 +241,11 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 		}
 		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
 	}
-	keys := "o logs · y approve · n/esc back, stays open · : cmds · ? help"
+	keys := "o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "e unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "e fold unchanged · o logs · y approve · n/esc back, stays open · : cmds · ? help"
+			keys = "e fold unchanged · o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 		}
 	}
 	room := m.approvalRoom(title, keys, len(lines))
@@ -291,7 +291,7 @@ func (m *Model) approveAllConfirmView() string {
 		b.WriteString(m.indented(fmt.Sprintf(
 			"keeps %d approval(s) of a rename made by hand, so that adopting it still finds them", n)) + "\n")
 	}
-	b.WriteString(m.keyHint("y approve all · n/esc cancel · : cmds · ? help"))
+	b.WriteString(m.keyHint("y approve all · n/{back} cancel · {command} cmds · {help} help"))
 	return b.String()
 }
 

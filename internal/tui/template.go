@@ -177,7 +177,7 @@ func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
 	}
 	if !t.picking {
 		switch key.String() {
-		case "esc":
+		case keyOf(actBack):
 			m.template = nil
 			m.screen = t.from
 		case "up", "down":
@@ -204,7 +204,7 @@ func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		t.picking = false
 		m.templateList.stopFilter()
 	case "enter":
@@ -261,7 +261,7 @@ func (m *Model) templateView() string {
 		}
 		b.WriteString(m.indentedHanging(style, mark, row) + "\n")
 	}
-	b.WriteString(m.keyHint("up/down move · enter choose · esc cancel · : cmds · ? help") + m.notes())
+	b.WriteString(m.keyHint("up/down move · enter choose · {back} cancel · {command} cmds · {help} help") + m.notes())
 	return b.String()
 }
 
@@ -290,9 +290,9 @@ func (m *Model) templateFrame() (string, string) {
 		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No entry matches %q. esc goes back.", l.query())) + "\n")
 	}
-	keys := "type to search · up/down move · enter choose · esc back"
+	keys := "type to search · up/down move · enter choose · {back} back"
 	if l.query() == "" {
-		keys += " · : cmds · ? help"
+		keys += " · {command} cmds · {help} help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

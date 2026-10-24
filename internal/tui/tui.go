@@ -802,7 +802,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 					return m, m.quit()
 				}
-			case "esc":
+			case keyOf(actBack):
 				// Leaving is what makes this a notice instead of a trap: a screen too large for the
 				// terminal must not be the only way out of the editor.
 				return m, m.leaveScreen()
@@ -815,17 +815,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 'ctrl+l' is global, ahead of every screen's own keys (see vaultheader.go): it never reaches a
 		// screen that already asks its own question, and is a no-op while vaultBusy, so it can never step on
 		// a passphrase dialog, a confirmation, or vault work already running.
-		if msg.String() == "ctrl+l" && m.vaultLockKeyAllowed() {
+		if keyIs(msg, actLock) && m.vaultLockKeyAllowed() {
 			return m, m.handleVaultLockKey()
 		}
 		if msg.String() == "ctrl+c" {
 			return m, m.interrupt()
 		}
-		if msg.String() == "?" && m.helpReachable() {
+		if keyIs(msg, actHelp) && m.helpReachable() {
 			m.openHelp()
 			return m, nil
 		}
-		if msg.String() == ":" && m.helpReachable() {
+		if keyIs(msg, actCommand) && m.helpReachable() {
 			m.openCommandLine()
 			return m, nil
 		}
@@ -998,7 +998,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		if m.testing {
 			// Cancelling the test returns to the editor with the configuration untouched.
 			m.stopTest()
@@ -1085,7 +1085,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.openForm(name)
-	case "d":
+	case keyOf(actDelete):
 		if m.section == sectionApprovals {
 			return nil
 		}
@@ -1120,7 +1120,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 // the letters and digits that are list keys otherwise; the arrows still move through what it matches.
 func (m *Model) updateFilter(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.list.clearFilter()
 	case "enter":
 		m.list.stopFilter()
@@ -1456,7 +1456,7 @@ func (m *Model) formState() string {
 func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 	from := m.leaveFrom
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.screen, m.leaveQuit = from, false
 		m.status = "Still editing; nothing was saved or discarded"
 	case "d":
@@ -1464,7 +1464,7 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 			return m.quit()
 		}
 		return m.discard()
-	case "f2":
+	case keyOf(actSave):
 		m.leaveQuit = false
 		switch from {
 		case screenTargets:
@@ -1592,13 +1592,13 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.payloadRemoveAsk = false
 			m.removePayloadField()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.payloadRemoveAsk = false
 			m.status = "Field kept"
 		}
 		return nil
 	}
-	if key.String() == "f2" {
+	if key.String() == keyOf(actSave) {
 		// F2 saves, or goes on to the next setup step, from any row; enter never saves.
 		if m.wizard != nil {
 			m.setupNext()
@@ -1651,7 +1651,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		// Leaving a form never drops input silently: an unchanged form closes, a changed one asks first.
 		if m.wizard != nil {
 			return m.setupEsc()
@@ -1801,7 +1801,7 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 			m.keepPicker()
 			m.screen = screenForm
 			return nil
-		case "esc":
+		case keyOf(actBack):
 			if m.pickerChanged() {
 				m.askLeave(false)
 			} else {
@@ -1811,7 +1811,7 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		}
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.screen = screenForm
 	case "enter":
 		choice, ok := m.picker.selected()
@@ -2287,7 +2287,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
 			return m.beginVaultLock()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
 			m.status = "Cancelled; the vault stays unlocked"
@@ -2300,7 +2300,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			passphrase := m.decryptPassphrase
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
 			return m.runVaultDecrypt(passphrase)
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
 			m.status = "Cancelled; the vault stays encrypted"
 		}
@@ -2311,7 +2311,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.migratePlanConfirm = false
 			return m.beginVaultMigrateWrite()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.migratePlanConfirm, m.migrate, m.screen = false, nil, screenForm
 			m.status = "Cancelled; credentials.yaml was not touched"
 		}
@@ -2322,7 +2322,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.migrateDeleteConfirm = false
 			return m.deleteLegacyCredentials()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.migrateDeleteConfirm, m.screen = false, screenForm
 			m.status = m.migrateResult + "; the file was kept"
 			m.migrate, m.migrateResult = nil, ""
@@ -2337,7 +2337,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.approvalDetail, m.screen = "", screenList
 			return m.requireAdmin(func() tea.Cmd { return m.approveOne(name) })
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.approvalDetail, m.screen = "", screenList
 			m.status = "Cancelled"
 		case "e":
@@ -2364,7 +2364,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "y":
 			m.approveAllConfirm, m.screen = false, screenList
 			return m.requireAdmin(m.approveAll)
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.approveAllConfirm, m.screen = false, screenList
 			m.status = "Cancelled"
 		}
@@ -2376,7 +2376,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.pendingProfile, m.screen = "", screenForm
 			m.applyProfile(profile)
 			m.status = "Profile " + profile + " ticked; review the selected tools before saving"
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.pendingProfile, m.screen = "", screenForm
 			m.status = "Profile not applied; the ticks are unchanged"
 		}
@@ -2398,7 +2398,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		}
 		m.screen = screenList
 		return m.requireAdmin(m.delete)
-	case "n", "esc":
+	case "n", keyOf(actBack):
 		if m.confirmRole != "" {
 			m.confirmRole = ""
 			m.screen = screenForm
@@ -3476,12 +3476,12 @@ func (m *Model) workspaceView() string {
 		return view
 	}
 	width, height := lipgloss.Width(view), lipgloss.Height(view)
-	way := "esc leave, asking first if anything changed"
+	way := "{back} leave, asking first if anything changed"
 	if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 		way = "q quit"
 	}
 	return m.boundView(wrapCells(fmt.Sprintf("Resize terminal. Need %dx%d. %s.",
-		width+m.termWidth-m.width, height+m.termHeight-m.height, way), m.width))
+		width+m.termWidth-m.width, height+m.termHeight-m.height, footerKeys(way)), m.width))
 }
 
 // editorView renders the current screen. A form shows only the hint of the focused field, directly under
@@ -3605,7 +3605,7 @@ func (m *Model) editorView() string {
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
-				keys = "F2 save credential first · tab next field · " + leaveKeys
+				keys = "{save} save credential first · tab next field · " + leaveKeys
 			} else {
 				keys = m.secretKeys() + " · tab next field · " + formKeys
 			}
@@ -3619,7 +3619,7 @@ func (m *Model) editorView() string {
 		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
-			keys = "y remove · n/esc keep · : cmds · ? help"
+			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 		}
 		b.WriteString(m.keyHint(keys))
 	case screenSecret:
@@ -3631,7 +3631,7 @@ func (m *Model) editorView() string {
 		b.WriteString(m.inputLine("  ", m.secretInput) + "\n")
 		b.WriteString(m.indented(
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
-		b.WriteString(m.keyHint("enter store · esc cancel"))
+		b.WriteString(m.keyHint("enter store · {back} cancel"))
 	case screenVaultOffer:
 		b.WriteString(m.vaultOfferView())
 	case screenAdminAuth:
@@ -3648,7 +3648,7 @@ func (m *Model) editorView() string {
 			b.WriteString(m.indentedWith(styles.warning,
 				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
 					"this machine's files can then read them") + "\n")
-			b.WriteString(m.keyHint("y turn off · n/esc keep it encrypted · : cmds · ? help"))
+			b.WriteString(m.keyHint("y turn off · n/{back} keep it encrypted · {command} cmds · {help} help"))
 			break
 		}
 		if m.migratePlanConfirm {
@@ -3704,7 +3704,7 @@ func (m *Model) editorView() string {
 						"or later with 'qatlas credential delete'") + "\n")
 			}
 		}
-		b.WriteString(m.keyHint("y remove · n/esc keep · : cmds · ? help"))
+		b.WriteString(m.keyHint("y remove · n/{back} keep · {command} cmds · {help} help"))
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
@@ -3718,8 +3718,8 @@ func (m *Model) editorView() string {
 // formKeys ends the key line of every form: F2 saves from every row and, in leaveKeys, esc is the way out
 // of it, which asks before unsaved input is lost.
 const (
-	leaveKeys = "esc leave"
-	formKeys  = "F2 save · " + leaveKeys
+	leaveKeys = "{back} leave"
+	formKeys  = "{save} save · " + leaveKeys
 )
 
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
@@ -3739,12 +3739,12 @@ func (m *Model) leaveView() string {
 	case m.section == sectionVault:
 		what, where = "the vault settings", "Vault"
 	}
-	warning, save := "warning: unsaved changes in "+what, "F2 save"
+	warning, save := "warning: unsaved changes in "+what, "{save} save"
 	why := "Leaving for " + where + " would lose them."
 	if m.wizard != nil {
-		warning, save = "warning: the guided setup is not saved", "F2 next step"
+		warning, save = "warning: the guided setup is not saved", "{save} next step"
 		if m.leaveFrom == screenSummary {
-			save = "F2 save"
+			save = "{save} save"
 		}
 		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
 	}
@@ -3757,7 +3757,7 @@ func (m *Model) leaveView() string {
 		discard = "d discard and quit"
 		why = "Quitting would lose them. Nothing was written yet."
 	}
-	return m.wrapped(styles.warning, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · : cmds · ? help") +
+	return m.wrapped(styles.warning, warning) + m.keyHint(save+" · "+discard+" · {back} keep editing · {command} cmds · {help} help") +
 		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
 }
 
@@ -3883,32 +3883,32 @@ func (m *Model) listFrame() (string, string) {
 	case m.screen == screenNav:
 		keys = m.navKeys()
 	case m.list.editing:
-		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
+		keys = "type to filter · up/down move · enter keep filter · {back} clear filter"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · " + back + " · : cmds · ? help · q quit"
+		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · " + findKeys(finds) + back + " · : cmds · ? help · q quit"
+		keys = "enter details · a approve all · " + findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
-		keys = "enter unlock · n new · " + back + " · : cmds · ? help · q quit"
+		keys = "enter unlock · n new · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
-		keys = back + " · : cmds · ? help · q quit"
+		keys = back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · p duplicate · enter show · d revoke · " + back + " · : cmds · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter show · {delete} revoke · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · t test · c setup · " +
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · {delete} delete · t test · c setup · " +
 			findKeys(finds) + back +
-			" · : cmds · ? help · q quit"
+			" · {command} cmds · {help} help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · d delete · c setup · " +
-			findKeys(finds) + back + " · : cmds · ? help · q quit"
+		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · {delete} delete · c setup · " +
+			findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · d delete · c setup · " + back +
-			" · : cmds · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter edit · r rename · {delete} delete · c setup · " + back +
+			" · {command} cmds · {help} help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c setup · " + back + " · : cmds · ? help · q quit"
+		keys = "/ filter · n new · enter edit · {delete} delete · c setup · " + back + " · {command} cmds · {help} help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
-		keys += " · esc clear filter"
+		keys += " · {back} clear filter"
 	}
 	foot := m.findingsNotice(finds) + m.keyHint(keys)
 	if m.section == sectionConnections {
@@ -3942,13 +3942,13 @@ func findKeys(finds []renameFinding) string {
 // navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
 func (m *Model) navKeys() string {
 	if m.sidebarLayout() {
-		return "up/down section · enter/tab open · 1-8 open · n new · c setup · : cmds · ? help · q quit"
+		return "up/down section · enter/tab open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
 	}
 	// Below the sidebar width the navigation line follows its own keys: left/right step through the
 	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
 	// here, so it is left out of the hint, the same way the sidebar hint above leaves out right. Kept short
 	// enough to still wrap into two lines at the minimum terminal width.
-	return "←/→ move · down open · 1-8 open · n new · c setup · : cmds · ? help · q quit"
+	return "←/→ move · down open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
 }
 
 // backToSectionsHint names the keys that take the focus from the list back to the sections: esc, and left in
@@ -3956,9 +3956,9 @@ func (m *Model) navKeys() string {
 // left/right instead stay inside the list (see updateList).
 func (m *Model) backToSectionsHint() string {
 	if m.sidebarLayout() {
-		return "1-8 or esc/left/tab sections"
+		return "1-8 or {back}/left/tab sections"
 	}
-	return "1-8/esc/tab sections"
+	return "1-8/{back}/tab sections"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -4068,7 +4068,7 @@ func (m *Model) pickerFrame() (string, string) {
 	}
 	head.WriteString(m.wrapped(styles.title, title) + "\n")
 	head.WriteString(m.searchLine(&m.picker, "search: ") + "\n")
-	keys := "type to search · up/down move · enter choose · esc cancel"
+	keys := "type to search · up/down move · enter choose · {back} cancel"
 	if m.pickerMarks != nil {
 		ticked := 0
 		for _, choice := range m.picker.all {
@@ -4081,12 +4081,12 @@ func (m *Model) pickerFrame() (string, string) {
 		}
 		if m.pickerGroups == nil {
 			if m.pickerEffects != nil {
-				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · esc cancel"
+				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · {back} cancel"
 			}
 			head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
-			keys = "type to search · up/down move · space tick · enter keep · esc cancel"
+			keys = "type to search · up/down move · space tick · enter keep · {back} cancel"
 		} else {
-			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · esc cancel"
+			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · {back} cancel"
 		}
 	} else {
 		head.WriteString(m.wrapped(styles.hint, "current: "+choiceText(f.value())) + "\n")
@@ -4214,9 +4214,9 @@ func (m *Model) viewFits(view string) bool {
 func (m *Model) resizeView() string {
 	way := "q quit"
 	if m.screen != screenNav && m.screen != screenList {
-		way = "esc leave"
+		way = "{back} leave"
 	}
-	lines := []string{way, "Resize terminal", fmt.Sprintf("Need %dx%d", minimumWidth, minimumHeight)}
+	lines := []string{footerKeys(way), "Resize terminal", fmt.Sprintf("Need %dx%d", minimumWidth, minimumHeight)}
 	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 
@@ -4267,7 +4267,7 @@ func (m *Model) sidebarLines() []string {
 	if m.wizard != nil {
 		setup = styles.active.Render("> c guided setup")
 	}
-	lines = append(lines, "", setup, "  : cmds", "  ? help", "  q quit")
+	lines = append(lines, "", setup, "  "+keyLabel(actCommand)+" cmds", "  "+keyLabel(actHelp)+" help", "  q quit")
 	if next := render(styles.hint, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(next, "\n")...)
@@ -4650,6 +4650,6 @@ func (m *Model) profileConfirmView() string {
 	b.WriteString(fmt.Sprintf("Replace the access and tool ticks with profile %s?\n", profile.ID))
 	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
 	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
-	b.WriteString(m.keyHint("y replace the ticks · n/esc keep them · : cmds · ? help"))
+	b.WriteString(m.keyHint("y replace the ticks · n/{back} keep them · {command} cmds · {help} help"))
 	return b.String()
 }

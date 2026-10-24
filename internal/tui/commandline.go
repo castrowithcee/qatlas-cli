@@ -201,7 +201,7 @@ func (m *Model) updateCommandLine(key tea.KeyMsg) tea.Cmd {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.closeCommandLine()
 		return nil
 	case "up", "shift+tab":
@@ -238,7 +238,7 @@ func (m *Model) updateCommandLine(key tea.KeyMsg) tea.Cmd {
 func (m *Model) commandLineView() string {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
-	foot := m.keyHint("type to search · up/down or tab choose · enter run · esc close")
+	foot := m.keyHint("type to search · up/down or tab choose · enter run · {back} close")
 	if cl.msg != "" {
 		foot = "\n" + m.wrapped(styles.fail, "error: "+cl.msg) + foot
 	}
