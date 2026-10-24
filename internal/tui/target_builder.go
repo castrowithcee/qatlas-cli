@@ -119,24 +119,24 @@ func (m *Model) refreshAdd() {
 		}
 		sort.Strings(targets)
 		for _, target := range targets {
-			add(addKnown+target, target+"  · used by "+strings.Join(a.known[target], ", "))
+			add(addKnown+target, tr(tTargetUsedBy, target, strings.Join(a.known[target], ", ")))
 			if target == query {
 				exact = addKnown + target
 			}
 		}
 		for i, kind := range m.targetMetadata().Kinds {
-			add(fmt.Sprintf("%s%d", addKind, i), "new "+kind.Name+", step by step: "+kind.Description)
+			add(fmt.Sprintf("%s%d", addKind, i), tr(tTargetNewStepByStep, kind.Name, kind.Description))
 		}
 		for _, kind := range m.pickRoots() {
-			add(addPick+kind, "choose a "+kind+" from the provider's list")
+			add(addPick+kind, tr(tTargetChooseAFromTheProvider, kind))
 		}
-		typed := "type a target"
+		typed := tr(tTargetTypeATarget)
 		if query != "" {
-			typed = `use as typed: "` + query + `"`
+			typed = tr(tTargetUseAsTyped, query)
 		}
 		if looksLikeURL(query) {
 			if _, _, ok := m.pickSubject(); ok {
-				typed = `look up the address at the provider: "` + query + `"`
+				typed = tr(tTargetLookUpTheAddressAt, query)
 			}
 		}
 		if query != "" && exact == "" {
@@ -156,21 +156,21 @@ func (m *Model) refreshAdd() {
 			}
 		}
 		if slices.Contains(fixed, "*") {
-			add(addValue+"*", "* (all)")
+			add(addValue+"*", tr(tTargetAll))
 		}
 		if done {
-			add(addDone, "done: "+strings.Join(a.chosen, "/"))
+			add(addDone, tr(tTargetDone, strings.Join(a.chosen, "/")))
 		}
 		if _, ok := a.text[addValue+query]; ok {
 			exact = addValue + query
 		} else if query != "" && len(names) > 0 {
 			rows = append([]string{addTyped}, rows...)
-			a.text[addTyped] = `use "` + query + `"`
+			a.text[addTyped] = tr(tTargetUse, query)
 		} else if query == "" && len(rows) > 0 && rows[0] == addValue+"*" {
 			// A pattern widens the list, so it is never what enter takes without a choice: with nothing
 			// else to offer first, the selection rests on a line that takes nothing.
 			rows = append([]string{addTyped}, rows...)
-			a.text[addTyped] = "(type a value, or choose a row)"
+			a.text[addTyped] = tr(tTargetTypeAValueOrChoose)
 		}
 	}
 	a.choices.setItems(rows)
@@ -356,13 +356,13 @@ func (m *Model) pickAdd(key string) {
 		if key == addTyped {
 			if query == "" {
 				m.status = ""
-				m.fail = "type " + m.addAsk() + " first, or choose a row with up/down"
+				m.fail = tr(tTargetTypeFirstOrChooseA, m.addAsk())
 				return
 			}
 			value = query
 		}
 		if strings.Contains(value, "/") {
-			m.fail = "one part of a target cannot contain /; type the parts one by one"
+			m.fail = tr(tTargetOnePartOfATarget)
 			return
 		}
 		m.clearMessages()
@@ -405,8 +405,8 @@ func (m *Model) saveAdd() bool {
 	}
 	kind := m.targetMetadata().Kinds[a.kind].Name
 	m.status = ""
-	m.fail = "the new " + kind + " is not complete yet: choose " + m.addAsk() +
-		" by typing it or with enter, or esc to leave it; nothing was saved"
+	m.fail = tr(tTargetTheNewIsNotComplete,
+		kind, m.addAsk())
 	return false
 }
 
@@ -419,12 +419,12 @@ func (m *Model) addAsk() string {
 		fixed = slices.Delete(fixed, all, all+1)
 	}
 	if len(fixed) > 0 {
-		parts = append(parts, "one of "+strings.Join(fixed, ", "))
+		parts = append(parts, tr(tTargetOneOf, strings.Join(fixed, ", ")))
 	}
 	if all >= 0 {
-		parts = append(parts, "* (all)")
+		parts = append(parts, tr(tTargetAll))
 	}
-	return strings.Join(parts, " or ")
+	return strings.Join(parts, tr(tTargetOr))
 }
 
 // updateAdd handles the menu and the builder. Every printable key belongs to the typed line.
@@ -481,19 +481,19 @@ func (m *Model) addFrame() (string, string) {
 		save = "{save} next step"
 	}
 	var head strings.Builder
-	label := "filter or type: "
+	label := tr(tTargetFilterOrType)
 	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · {back} cancel entry"
 	if a.kind < 0 {
-		head.WriteString(m.wrapped(styles.title, "Add a "+metadata.Label) + "\n")
-		hint := "build a new target step by step, or type it"
+		head.WriteString(m.wrapped(styles.title, tr(tTargetAddA, metadata.Label)) + "\n")
+		hint := tr(tTargetBuildANewTargetStep)
 		if len(a.known) > 0 {
-			hint = "take a target another connection of " + m.formService() + " uses, " + hint
+			hint = tr(tTargetTakeATargetAnotherConnection, m.formService(), hint)
 		}
 		head.WriteString(m.wrapped(styles.hint, hint) + "\n")
 	} else {
 		kind := metadata.Kinds[a.kind]
 		ask := m.addAsk()
-		head.WriteString(m.wrapped(styles.title, "New "+kind.Name+" · "+ask) + "\n")
+		head.WriteString(m.wrapped(styles.title, tr(tTargetNew, kind.Name, ask)) + "\n")
 		so := strings.Join(a.chosen, "/")
 		if so != "" {
 			so += "/"
@@ -502,8 +502,8 @@ func (m *Model) addFrame() (string, string) {
 		for _, form := range a.forms {
 			forms = append(forms, strings.Join(form, "/"))
 		}
-		head.WriteString(m.wrapped(styles.hint, "so far: "+so+"   forms: "+strings.Join(forms, ", ")) + "\n")
-		label = "value: "
+		head.WriteString(m.wrapped(styles.hint, tr(tTargetSoFarForms, so, strings.Join(forms, ", "))) + "\n")
+		label = tr(tTargetValue)
 		keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} step back"
 		if len(a.history) <= 1 {
 			keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} cancel entry"
@@ -511,7 +511,7 @@ func (m *Model) addFrame() (string, string) {
 	}
 	head.WriteString(m.searchLine(&a.choices, label) + "\n")
 	if len(a.choices.matches) == 0 {
-		head.WriteString(m.wrapped(styles.hint, "(nothing to choose; type a value)") + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tTargetNothingToChooseTypeA)) + "\n")
 	}
 	if a.choices.query() == "" {
 		keys += " · {command} cmds · {help} help"

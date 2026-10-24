@@ -159,7 +159,7 @@ func (m *Model) newPickLevel(p *targetPick, kinds []string, ki int, parent, labe
 	lv := &pickLevel{id: p.nextID, kinds: kinds, ki: ki, parent: parent, label: label,
 		entries: map[string]*pickEntry{}}
 	lv.table = table{rows: map[string][]string{}, columns: []column{
-		{title: "Name"}, {title: "Kind", optional: true}, {title: "ID"}, {title: "Path", optional: true},
+		{title: columnText("Name")}, {title: columnText("Kind"), optional: true}, {title: "ID"}, {title: columnText("Path"), optional: true},
 	}}
 	lv.list = newFilterList(func(target string) string {
 		return strings.Join(lv.entries[target].cells, " ")
@@ -176,7 +176,7 @@ func (m *Model) newPickLevel(p *targetPick, kinds []string, ki int, parent, labe
 func (m *Model) startPick(kind string) tea.Cmd {
 	connection, draft, ok := m.pickSubject()
 	if !ok {
-		m.fail = "the provider's list cannot be read for this form yet"
+		m.fail = tr(tPickTheProviderSListCannot)
 		return nil
 	}
 	roots := m.pickKindsUnder("")
@@ -368,8 +368,8 @@ func (m *Model) pickResolved(lv *pickLevel) tea.Cmd {
 	switch len(found) {
 	case 0:
 		m.closePick()
-		m.fail = "the provider found no entry for this address; check that it is a page of this service, " +
-			"or type the " + m.targetMetadata().Label + " itself"
+		m.fail = tr(tPickTheProviderFoundNoEntry,
+			m.targetMetadata().Label)
 	case 1:
 		if !m.takeEntries(found) {
 			m.closePick()
@@ -384,7 +384,7 @@ func (m *Model) pickError(err error) string {
 	if errors.As(err, &choice) {
 		return choice.Code + ": " + choice.Error()
 	}
-	return "error: " + m.pickText(m.redactor.Apply(err.Error()))
+	return tr(tNoteError, m.pickText(m.redactor.Apply(err.Error())))
 }
 
 // pickSync asks a searching provider for the search text as it stands now, once the level shows the entries
@@ -454,7 +454,7 @@ func (m *Model) updatePick(key tea.KeyMsg) tea.Cmd {
 	case keyOf(actBack):
 		if len(p.marks) > 0 {
 			p.marks, p.markOrder = map[string]config.TargetEntry{}, nil
-			m.status = "Marks cleared"
+			m.status = tr(tPickMarksCleared)
 			return nil
 		}
 		m.closePick()
@@ -519,7 +519,7 @@ func (m *Model) pickOpen(lv *pickLevel) tea.Cmd {
 	}
 	kinds := m.pickKindsUnder(lv.kind())
 	if !e.entry.HasChildren || len(kinds) == 0 || m.targetPick.url != "" {
-		m.status = "Nothing lies below this entry"
+		m.status = tr(tPickNothingLiesBelowThisEntry)
 		return nil
 	}
 	if lv.cancel != nil {
@@ -541,7 +541,7 @@ func (m *Model) pickOpen(lv *pickLevel) tea.Cmd {
 func (m *Model) pickBack() tea.Cmd {
 	p := m.targetPick
 	if len(p.levels) == 1 {
-		m.status = "Already on the top level"
+		m.status = tr(tPickAlreadyOnTheTopLevel)
 		return nil
 	}
 	left := p.top()
@@ -573,7 +573,7 @@ func (m *Model) pickMark(lv *pickLevel) {
 		return
 	}
 	if !m.targetMetadata().Multiple {
-		m.fail = "this provider takes one " + m.targetMetadata().Label + " only; enter takes the entry"
+		m.fail = tr(tPickThisProviderTakesOneOnly, m.targetMetadata().Label)
 		return
 	}
 	p := m.targetPick
@@ -618,7 +618,7 @@ func (m *Model) takeEntries(picked []config.TargetEntry) bool {
 	for _, e := range picked {
 		problem := m.targetProblem(e.Target, len(m.targetList.all))
 		if problem == "" && pending[e.Target] {
-			problem = "this " + m.targetMetadata().Label + " is already in the list"
+			problem = tr(tPickThisIsAlreadyInThe, m.targetMetadata().Label)
 		}
 		if problem != "" {
 			m.fail = m.pickText(e.Target) + ": " + problem
@@ -639,7 +639,7 @@ func (m *Model) takeEntries(picked []config.TargetEntry) bool {
 	m.closePick()
 	m.targetAdd = nil
 	m.clearMessages()
-	m.status = fmt.Sprintf("Added %d from the provider", len(picked))
+	m.status = tr(tPickAddedFromTheProvider, len(picked))
 	return true
 }
 
@@ -647,7 +647,7 @@ func (m *Model) takeEntries(picked []config.TargetEntry) bool {
 func (lv *pickLevel) position() string {
 	total := len(lv.list.all)
 	if query := lv.list.query(); query != "" && !lv.server {
-		return fmt.Sprintf("%d/%d (%d loaded)", min(lv.list.cursor+1, len(lv.list.matches)), len(lv.list.matches), total)
+		return tr(tPickLoaded, min(lv.list.cursor+1, len(lv.list.matches)), len(lv.list.matches), total)
 	}
 	if total == 0 {
 		return "0"
@@ -663,12 +663,12 @@ func (lv *pickLevel) position() string {
 func (m *Model) pickFrame() (string, string) {
 	p := m.targetPick
 	lv := p.top()
-	title := "Choose " + lv.kind() + " from the list  " + lv.position()
+	title := tr(tPickChooseFromTheList, lv.kind(), lv.position())
 	if p.url != "" {
-		title = "Entries found for the address  " + lv.position()
+		title = tr(tPickEntriesFoundForTheAddress, lv.position())
 	}
 	if len(p.marks) > 0 {
-		title += fmt.Sprintf(" · %d marked", len(p.marks))
+		title += tr(tPickMarked, len(p.marks))
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(styles.title, title) + "\n")
@@ -679,28 +679,28 @@ func (m *Model) pickFrame() (string, string) {
 		}
 		where = append(where, level.kind())
 	}
-	level := "level: " + strings.Join(where, " › ")
+	level := tr(tPickLevel, strings.Join(where, " › "))
 	if p.url != "" {
-		level = "the address you typed matched these entries"
+		level = tr(tPickTheAddressYouTypedMatched)
 	}
 	head.WriteString(m.wrapped(styles.hint, level) + "\n")
-	head.WriteString(m.searchLine(&lv.list, "search: ") + "\n")
+	head.WriteString(m.searchLine(&lv.list, tr(tLogPickSearch)) + "\n")
 	_, width := m.fit("  ")
 	if len(lv.list.all) > 0 {
 		head.WriteString(styles.hint.Render(clipCells("  "+lv.table.header(m.pickLayout(lv, width)), m.usable(0))) + "\n")
 	}
 	switch {
 	case lv.err != "":
-		head.WriteString(m.wrapped(styles.fail, "[!] "+lv.err+" (ctrl+r reads again)") + "\n")
+		head.WriteString(m.wrapped(styles.fail, "[!] "+lv.err+" "+tr(tPickCtrlRReadsAgain)) + "\n")
 	case lv.loading:
-		head.WriteString(m.wrapped(styles.hint, "loading ...") + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tLogLoading)) + "\n")
 	case len(lv.list.all) == 0:
-		head.WriteString(m.wrapped(styles.hint, "(the provider lists no entry here)") + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tPickTheProviderListsNoEntry)) + "\n")
 	case len(lv.list.matches) == 0 && lv.next != "":
 		head.WriteString(m.wrapped(styles.hint,
-			fmt.Sprintf("No loaded entry matches %q; down reads more.", lv.list.query())) + "\n")
+			tr(tPickNoLoadedEntryMatchesDown, lv.list.query())) + "\n")
 	case len(lv.list.matches) == 0:
-		head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("No entry matches %q.", lv.list.query())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, tr(tPickNoEntryMatches, lv.list.query())) + "\n")
 	}
 
 	keys := "type to search · up/down move · enter take"

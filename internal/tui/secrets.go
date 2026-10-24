@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"runtime"
 	"strings"
 
@@ -80,13 +79,6 @@ func (noSecrets) Stored(string, string) secret.Placement {
 	}
 }
 
-// What a secret row says while the answer is not in yet, and before there is a credential to ask about.
-const (
-	sourcePending = "checking ..."
-	sourceUnsaved = "save the credential first"
-	sourceUnnamed = "no variable named"
-)
-
 // What the row of a keyring role says once the resolver has answered. The environment is named as what it
 // is, an override. unencrypted file is shown only for a role that still resolves from a plaintext
 // credentials.yaml left over from an earlier version: this editor offers no way to write one any more, so
@@ -127,13 +119,12 @@ const (
 // storageHint is the one-line hint of the storage row. It names the platform keyring in full, as this
 // platform calls it, so a user recognises it as something the machine already has; it is a function because
 // platform may change in a test.
-func storageHint() string { return secret.StoreLabel(platform) + ": nothing to set up" }
+func storageHint() string { return tr(tSecretNothingToSetUp, secret.StoreLabel(platform)) }
 
 // storageDetail says what each place for new secrets is for.
 func storageDetail() string {
-	return "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-		"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
-		"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
+	return tr(tSecretSystemKeyringKeepsTheSecrets,
+		secret.StoreLabel(platform))
 }
 
 // storageField is the row that chooses where the secrets of a credential are kept: the system keyring, the
@@ -243,7 +234,7 @@ func (m *Model) refreshSources(queries []credQuery) tea.Cmd {
 
 	m.probeID++
 	id := m.probeID
-	m.probing = "checking where the secrets resolve from"
+	m.probing = tr(tSecretCheckingWhereTheSecretsResolve)
 
 	secrets, roles := m.secrets, m.cfg.SecretRoles()
 	return func() tea.Msg {
@@ -366,7 +357,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	case keyOf(actBack):
 		m.secretInput.Reset()
 		m.screen = screenForm
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 		return nil
 	case "enter":
 		value := m.secretInput.Value()
@@ -376,7 +367,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 		m.secretInput.Reset()
 		m.screen = screenForm
 		if value == "" {
-			m.fail = "nothing was typed, so nothing was stored"
+			m.fail = tr(tSecretNothingWasTypedSoNothing)
 			return nil
 		}
 		// Storing a secret is a managing action: requireAdmin gates it behind this window's admin
@@ -415,9 +406,9 @@ func (m *Model) vaultApproval() manage.ApprovalPolicy {
 // storeSecret hands one secret to the resolver. The write may reach the platform store, so it runs as a
 // command and the editor stays usable while it does.
 func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
-	where := "system keyring"
+	where := tr(tSecretSystemKeyring)
 	m.writes++
-	m.busy = fmt.Sprintf("storing the secret for %s.%s in the %s", credential, role, where)
+	m.busy = tr(tSecretStoringTheSecretForIn, credential, role, where)
 
 	svc, cfg, entry := m.svc, m.cfg, m.secretEntry()
 	return func() tea.Msg {
@@ -426,7 +417,7 @@ func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
 		})
 		return writtenMsg{
 			credential: credential, role: role,
-			done: fmt.Sprintf("Stored %s.%s in the %s", credential, role, where),
+			done: tr(tSecretStoredInThe, credential, role, where),
 			err:  err,
 		}
 	}
@@ -435,7 +426,7 @@ func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
 // removeSecret clears one stored secret from every place the resolver keeps one.
 func (m *Model) removeSecret(credential, role string) tea.Cmd {
 	m.writes++
-	m.busy = fmt.Sprintf("removing the stored secret for %s.%s", credential, role)
+	m.busy = tr(tSecretRemovingTheStoredSecretFor, credential, role)
 
 	svc, cfg, entry := m.svc, m.cfg, m.secretEntry()
 	return func() tea.Msg {
@@ -445,7 +436,7 @@ func (m *Model) removeSecret(credential, role string) tea.Cmd {
 		})
 		msg.err = err
 		if err == nil {
-			msg.done = fmt.Sprintf("Removed %s.%s from the %s", credential, role, joinSources(out.Cleared))
+			msg.done = tr(tSecretRemovedFromThe, credential, role, joinSources(out.Cleared))
 		}
 		return msg
 	}
@@ -582,7 +573,7 @@ func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
 		},
 		func() tea.Cmd {
 			m.screen = screenForm
-			m.status = "Cancelled"
+			m.status = tr(tCancelled)
 			return nil
 		},
 	)
@@ -596,7 +587,7 @@ func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
 func (m *Model) writeVaultSecret(credential, role, value string, offer vault.PassphraseFunc) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
-	m.busy = fmt.Sprintf("storing the secret for %s.%s in the vault", credential, role)
+	m.busy = tr(tSecretStoringTheSecretForIn2, credential, role)
 
 	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
@@ -607,7 +598,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 		})
 		msg := writtenMsg{credential: credential, role: role, vault: true, err: err}
 		if err == nil {
-			msg.done = fmt.Sprintf("Stored %s.%s in the vault", credential, role)
+			msg.done = tr(tSecretStoredInTheVault, credential, role)
 			msg.procWarning, msg.approval = out.ProcessWarning, out.Approval
 		}
 		return msg
@@ -618,7 +609,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
-	m.busy = fmt.Sprintf("removing the stored secret for %s.%s from the vault", credential, role)
+	m.busy = tr(tSecretRemovingTheStoredSecretFor2, credential, role)
 
 	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
@@ -629,7 +620,7 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 		})
 		msg := writtenMsg{credential: credential, role: role, vault: true, err: err}
 		if err == nil {
-			msg.done = fmt.Sprintf("Removed %s.%s from the vault", credential, role)
+			msg.done = tr(tSecretRemovedFromTheVault, credential, role)
 			msg.procWarning, msg.approval = out.ProcessWarning, out.Approval
 		}
 		return msg
@@ -658,7 +649,7 @@ func joinSources(sources []secret.Source) string {
 	for i, s := range sources {
 		names[i] = string(s)
 	}
-	return strings.Join(names, " and the ")
+	return strings.Join(names, tr(tSecretAndThe))
 }
 
 // explain turns a store failure into the way out.
@@ -668,7 +659,7 @@ func joinSources(sources []secret.Source) string {
 // other way. It is built from the class of the failure and never carries a value.
 func (m *Model) explain(err error, credential, role string) string {
 	if errors.Is(err, secret.ErrNoEntry) {
-		return fmt.Sprintf("no stored secret for %s.%s", credential, role)
+		return tr(tSecretNoStoredSecretFor, credential, role)
 	}
 	if !errors.Is(err, secret.ErrUnavailable) && !errors.Is(err, secret.ErrDisabled) {
 		return err.Error()
@@ -684,9 +675,9 @@ func (m *Model) explain(err error, credential, role string) string {
 		retry = keyLabel(actDelete)
 	}
 	if state != secret.StoreOff {
-		text += ", then retry " + retry
+		text += tr(tSecretThenRetry, retry)
 	}
-	return fmt.Sprintf("%s. Alternatively export %s.", text, secret.DerivedEnvName(credential, role))
+	return tr(tSecretAlternativelyExport, text, secret.DerivedEnvName(credential, role))
 }
 
 // guardVaultTypeChange refuses to turn a stored vault credential into a keyring or env credential while the
@@ -714,15 +705,13 @@ func (m *Model) guardVaultTypeChange() string {
 		return m.redactor.Apply(err.Error())
 	}
 	if held.Locked {
-		return fmt.Sprintf("the vault is encrypted and locked, so whether it still holds a secret of %s "+
-			"cannot be checked; the secrets cannot move to %s until it is unlocked with 'qatlas vault unlock' "+
-			"and saving is tried again", m.editing, vaultTypeChangeDestination(newType))
+		return tr(tSecretTheVaultIsEncryptedAnd,
+			m.editing, vaultTypeChangeDestination(newType))
 	}
 	if len(held.Roles) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("a secret of %s is still stored in the vault (%s); the secrets cannot move to %s "+
-		"until it is removed first with d on the role, or with 'qatlas credential delete'",
+	return tr(tSecretASecretOfIsStill,
 		m.editing, strings.Join(held.Roles, ", "), vaultTypeChangeDestination(newType))
 }
 
@@ -730,9 +719,9 @@ func (m *Model) guardVaultTypeChange() string {
 // to: the same words the storage row itself uses.
 func vaultTypeChangeDestination(credType string) string {
 	if credType == config.CredentialTypeEnv {
-		return placeEnv
+		return valueText(storageLabel, placeEnv)
 	}
-	return placeKeyring
+	return valueText(storageLabel, placeKeyring)
 }
 
 // guardTypeChange refuses to turn a keyring credential into an env credential behind the user's back while
@@ -759,7 +748,7 @@ func (m *Model) guardTypeChange() tea.Cmd {
 
 	m.guardID++
 	id := m.guardID
-	m.probing = "checking what is stored for " + m.editing
+	m.probing = tr(tSecretCheckingWhatIsStoredFor, m.editing)
 
 	secrets, credential, roles := m.secrets, m.editing, m.cfg.SecretRoles()
 	return func() tea.Msg {
@@ -792,21 +781,19 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 	var problems, ways []string
 	if len(held) > 0 {
 		problems = append(problems,
-			fmt.Sprintf("a secret of %s is still stored (%s)", msg.credential, strings.Join(held, ", ")))
-		ways = append(ways, fmt.Sprintf("switch %s back to %s and remove it with d on the role, or "+
-			"run 'qatlas credential delete %s <role>'", storageLabel, storageKeyring, msg.credential))
+			tr(tSecretASecretOfIsStill2, msg.credential, strings.Join(held, ", ")))
+		ways = append(ways, tr(tSecretSwitchBackToAndRemove,
+			m.shownLabel(storageLabel), valueText(storageLabel, storageKeyring), msg.credential))
 	}
 	if len(unsure) > 0 {
 		// Not knowing is not the same as nothing being there, and only one of the two is safe to act on.
-		problems = append(problems, fmt.Sprintf("cannot tell whether a secret of %s is stored where it "+
-			"could not be asked (%s): %s", msg.credential, strings.Join(unsure, ", "),
-			strings.Join(causes, "; ")))
-		ways = append(ways, "make that place answerable and try again")
+		problems = append(problems, tr(tSecretCannotTellWhetherASecret,
+			msg.credential, strings.Join(unsure, ", "), strings.Join(causes, "; ")))
+		ways = append(ways, tr(tSecretMakeThatPlaceAnswerableAnd))
 	}
 
-	m.fail = m.redactor.Apply(fmt.Sprintf("%s; the secrets cannot move to %s until that is settled, because "+
-		"a copy left behind would have nothing that reads it: %s",
-		strings.Join(problems, "; "), placeEnv, strings.Join(ways, "; ")))
+	m.fail = m.redactor.Apply(tr(tSecretTheSecretsCannotMoveTo,
+		strings.Join(problems, "; "), valueText(storageLabel, placeEnv), strings.Join(ways, "; ")))
 	return nil
 }
 
@@ -815,7 +802,7 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 func (m *Model) envSource(name string) string {
 	switch {
 	case name == "":
-		return sourceUnnamed
+		return tr(tSecretSourceUnnamed)
 	case m.secrets.Lookup(name):
 		return string(secret.SourceEnv)
 	default:
@@ -827,12 +814,12 @@ func (m *Model) envSource(name string) string {
 // resolver gave. It never asks synchronously: that would block the whole editor on the store.
 func (m *Model) storedSource(credential, role string) string {
 	if credential == "" {
-		return sourceUnsaved
+		return tr(tSecretSourceUnsaved)
 	}
 	key := secret.StoreKey(credential, role)
 	source, ok := m.sources[key]
 	if !ok {
-		return sourcePending
+		return tr(tSecretSourcePending)
 	}
 	return manage.RoleState(manage.RoleStateInput{Source: source, Checked: m.checked[key]})
 }
@@ -863,7 +850,7 @@ func (m *Model) vaultRoleState(credential, role string) string {
 // storage row now names.
 func (m *Model) roleState(credential, role, credType string) string {
 	if credential == "" {
-		return sourceUnsaved
+		return tr(tSecretSourceUnsaved)
 	}
 	if credType == config.CredentialTypeVault {
 		return m.vaultRoleState(credential, role)
@@ -878,11 +865,11 @@ func secretState(source string) string {
 	case stateStored, stateStoredVault, statePlaintext, string(secret.SourceEnv):
 		return "✓"
 	case stateEmpty, string(secret.SourceMissing):
-		return "missing"
+		return tr(tSecretMissing)
 	case stateOverride:
-		return "env override"
+		return tr(tSecretEnvOverride)
 	case stateVaultLocked, stateVaultElsewhere:
-		return "locked"
+		return tr(tSecretLocked)
 	}
 	return source
 }
@@ -899,18 +886,18 @@ func (m *Model) secretNextStep(credential, role string) string {
 	switch source {
 	case secret.SourceEnv:
 		// The override stays visible: it wins over the keyring for as long as it is set.
-		return fmt.Sprintf("%s is set and wins over the system keyring; unset it to use the keyring", env)
+		return tr(tSecretIsSetAndWinsOver, env)
 	case secret.SourceMissing:
 	default:
 		return ""
 	}
 	switch state := secret.StoreStage(m.checked[key]); state {
 	case secret.StoreEmpty:
-		return "next: press enter to store it in " + secret.StoreLabel(platform)
+		return tr(tSecretNextPressEnterToStore, secret.StoreLabel(platform))
 	case secret.StoreLocked, secret.StoreUnavailable, secret.StoreTimedOut:
-		return fmt.Sprintf("next: %s, then press enter; or export %s", secret.StoreAdvice(state, platform), env)
+		return tr(tSecretNextThenPressEnterOr, secret.StoreAdvice(state, platform), env)
 	case secret.StoreOff:
-		return fmt.Sprintf("next: %s; or export %s", secret.StoreAdvice(state, platform), env)
+		return tr(tSecretNextOrExport, secret.StoreAdvice(state, platform), env)
 	}
 	return ""
 }
@@ -930,10 +917,10 @@ func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 		parts = append(parts, description)
 	}
 	if lead {
-		parts = append(parts, m.secretKeys()+"; typing is masked")
+		parts = append(parts, m.secretKeys()+tr(tSecretTypingIsMasked))
 	}
 	if checked := m.checked[secret.StoreKey(credential, role)]; len(checked) > 0 {
-		parts = append(parts, "checked: "+strings.Join(checked, ", "))
+		parts = append(parts, tr(tSecretChecked, strings.Join(checked, ", ")))
 	}
 	if next := m.secretNextStep(credential, role); next != "" {
 		parts = append(parts, next)
@@ -959,13 +946,13 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	if m.editing == "" {
 		// A secret stored under a name that was never saved would sit in the store with nothing pointing
 		// at it, which is the orphaning this editor exists to avoid.
-		m.fail = "save the credential first, then store its secrets"
+		m.fail = tr(tSecretSaveTheCredentialFirstThen)
 		return nil
 	}
 	if m.credentialType() == config.CredentialTypeVault && m.vaultBusy {
 		// A second vault write, or a second passphrase offer, must not start before the one already in
 		// flight is done: either could still be deciding whether this is the vault's very first secret.
-		m.status = "a vault write is already in progress; wait for it to finish"
+		m.status = tr(tVaultWriteBusy)
 		return nil
 	}
 

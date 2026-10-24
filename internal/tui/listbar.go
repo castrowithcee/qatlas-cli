@@ -71,6 +71,15 @@ func (m *Model) barField(k barKind) (label string, values []string, active int) 
 	return "Sort", []string{"Name", "Provider"}, boolIndex(o.byProvider)
 }
 
+// translated is the alternatives of a bar field as drawn.
+func translated(values []string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = wordText(v)
+	}
+	return out
+}
+
 func boolIndex(b bool) int {
 	if b {
 		return 1
@@ -139,8 +148,8 @@ func (m *Model) barLine(width int) string {
 	var fields, summary []string
 	for i, k := range barKinds(m.section) {
 		label, values, active := m.barField(k)
-		fields = append(fields, barMarker(m.screen == screenList && m.barFocus == i+1)+label+": "+barChips(values, active))
-		summary = append(summary, strings.ToLower(label)+" "+strings.ToLower(values[active]))
+		fields = append(fields, barMarker(m.screen == screenList && m.barFocus == i+1)+wordText(label)+": "+barChips(translated(values), active))
+		summary = append(summary, strings.ToLower(wordText(label))+" "+strings.ToLower(wordText(values[active])))
 	}
 	if line := strings.Join(fields, "  "); lipgloss.Width(line) <= width {
 		return line

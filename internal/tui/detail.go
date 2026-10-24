@@ -70,14 +70,15 @@ func (m *Model) withPane(lines []string, room int) []string {
 // secret value. Texts from the configuration are made safe to print first.
 func (m *Model) detailLines(name string, width int) []string {
 	var lines []string
+	column := detailLabelColumn()
 	add := func(label, value string) {
 		if value == "" {
 			return
 		}
 		// Labels share one column, so a value that goes on in a second line stands under its first.
-		prefix := padLine(label+":", 13)
+		prefix := padLine(wordText(label)+":", column)
 		if label == "" {
-			prefix = padLine("", 13)
+			prefix = padLine("", column)
 		}
 		for i, part := range wrapCellsLines(m.logText(value), max(width-lipgloss.Width(prefix), 1)) {
 			if i == 0 {
@@ -91,7 +92,7 @@ func (m *Model) detailLines(name string, width int) []string {
 		key := strings.TrimPrefix(name, groupRowPrefix)
 		title := key
 		if key == "" {
-			title = noProviderGroup
+			title = wordText(noProviderGroup)
 		}
 		add("Group", title)
 		add("Entries", fmt.Sprint(len(m.groups.members[key])))
@@ -112,7 +113,7 @@ func (m *Model) detailLines(name string, width int) []string {
 		add("Connections", fmt.Sprint(len(users)))
 	case sectionCredentials:
 		cells := m.cells(name)
-		add("Storage", cells[1])
+		add("Storage", valueText(storageLabel, cells[1]))
 		add("Secrets", cells[2])
 		used := 0
 		for _, c := range m.cfg.Connections {
@@ -133,7 +134,7 @@ func (m *Model) detailLines(name string, width int) []string {
 		values := conn.TargetValues()
 		for i, target := range values {
 			if i == 5 {
-				add("Targets", fmt.Sprintf("+%d more", len(values)-5))
+				add("Targets", tr(tDetailMore, len(values)-5))
 				break
 			}
 			text := target
@@ -150,13 +151,27 @@ func (m *Model) detailLines(name string, width int) []string {
 		if name == m.testName {
 			switch {
 			case m.testing:
-				add("Last test", "running")
+				add("Last test", tr(tDetailRunning))
 			case m.testClass != "":
 				add("Last test", string(m.testClass))
 			}
 		}
 	}
 	return lines
+}
+
+// detailLabels are the labels of the detail pane.
+var detailLabels = []string{"Group", "Entries", "Provider", "Base URL", "Connections", "Storage", "Secrets", "Service",
+	"Credential", "State", "Effects", "Tools", "Targets", "Description", "Last test"}
+
+// detailLabelColumn is the width of the label column of the detail pane: 13 cells, or one more than the
+// longest label where a language needs more.
+func detailLabelColumn() int {
+	column := 13
+	for _, label := range detailLabels {
+		column = max(column, lipgloss.Width(wordText(label))+2)
+	}
+	return column
 }
 
 // wrapCellsLines is wrapCells as lines; an empty text has none.
