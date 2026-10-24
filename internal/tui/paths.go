@@ -37,7 +37,7 @@ func (m *Model) openPaths() {
 // itself.
 func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "f2":
+	case keyOf(actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed path
 		// is taken first; one the rules refuse stays typed with the reason, and nothing is saved.
 		if m.pathEdit >= 0 {
@@ -53,7 +53,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 	}
 	if m.pathEdit >= 0 {
 		switch key.String() {
-		case "esc":
+		case keyOf(actBack):
 			if m.pathTyped() {
 				m.askLeave(false)
 				return nil
@@ -74,7 +74,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 		switch key.String() {
 		case "y":
 			m.removePath()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.pathRemove = false
 			m.status = "Path kept"
 		}
@@ -82,7 +82,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 	}
 	path, selected := m.pathList.selected()
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		return m.leavePaths()
 	case "a":
 		m.editPath(len(m.pathList.all), "")
@@ -93,7 +93,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.editPath(m.pathList.cursor, path)
-	case "d":
+	case keyOf(actDelete):
 		if selected {
 			m.pathRemove = true
 			m.clearMessages()
@@ -246,7 +246,7 @@ func (m *Model) pathFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close · : cmds · ? help"
+	keys := "a add · enter edit · {delete} remove · up/down move · {save} save · {back} close · {command} cmds · {help} help"
 	switch {
 	case m.pathEdit >= 0:
 		label := "add path: "
@@ -254,13 +254,13 @@ func (m *Model) pathFrame() (string, string) {
 			label = "edit path: "
 		}
 		foot.WriteString("\n" + m.pathLines(label, &m.pathInput))
-		keys = pathKeys(&m.pathInput, "enter take · F2 save · esc cancel entry")
+		keys = pathKeys(&m.pathInput, "enter take · {save} save · {back} cancel entry")
 	case m.pathRemove:
 		path, _ := m.pathList.selected()
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
 		foot.WriteString("\n" + m.wrapped(styles.warning, "Remove "+quoted+" from the list?") + "\n")
-		keys = "y remove · n/esc keep · : cmds · ? help"
+		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()

@@ -3,6 +3,7 @@ package n8n
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -253,40 +254,88 @@ func TestWorkflowsReadOmitsMissingMembersAndWriteViewIsUnchanged(t *testing.T) {
 	}
 }
 
-// A workflow whose nodes carry the execution attributes goes from get into update unchanged: none of the
-// attributes reaches n8n, the withheld values and webhook ids are restored, and the requests stay the same.
-func TestWorkflowsUpdateAcceptsReadNodeAttributesWithoutSendingThem(t *testing.T) {
+// wantAttributes is what a node carrying richNodeAttributes must send: the writable execution attributes in
+// n8n's camelCase, exact numbers, and neither the deprecated continueOnFail nor the read-only timestamps.
+var wantAttributes = map[string]any{
+	"notesInFlow": true, "notes": "Check this", "executeOnce": false, "alwaysOutputData": true,
+	"retryOnFail": true, "maxTries": json.Number("9007199254740993"), "waitBetweenTries": json.Number("5000"),
+	"onError":             "continueRegularOutput",
+	"customTelemetryTags": map[string]any{"tag": []any{map[string]any{"key": "owner", "value": "ops"}}},
+}
+
+func decodeRaw(t *testing.T, raw []byte) map[string]any {
+	t.Helper()
+	body, _ := decodeExact(t, string(raw)).(map[string]any)
+	return body
+}
+
+func assertAttributes(t *testing.T, node map[string]any) {
+	t.Helper()
+	for key, want := range wantAttributes {
+		if !reflect.DeepEqual(node[key], want) {
+			t.Errorf("node %v %s = %#v, want %#v", node["id"], key, node[key], want)
+		}
+	}
+	for _, key := range []string{"created_at", "updated_at", "createdAt", "updatedAt", "continueOnFail",
+		"notes_in_flow", "max_tries", "custom_telemetry_tags"} {
+		if _, ok := node[key]; ok {
+			t.Errorf("node %v carries %s", node["id"], key)
+		}
+	}
+}
+
+// A workflow whose nodes carry the execution attributes goes from get into update with those attributes sent
+// exactly, large numbers included; the withheld values and webhook ids are still restored.
+func TestWorkflowsUpdateRoundTripsReadNodeAttributes(t *testing.T) {
 	nodes := strings.Replace(withheldNodes, `"position":[0,0],`, `"position":[0,0],`+richNodeAttributes+`,`, 1)
 	var calls []call
-	var put map[string]any
-	env := updateEnvironment(t, nodes, &calls, &put)
+	var rawPut []byte
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch r.Method {
+		case http.MethodGet:
+			return jsonResponse(200, withheldWorkflowJSON(ownWorkflow, nodes)), nil
+		case http.MethodPut:
+			rawPut, _ = io.ReadAll(r.Body)
+			return jsonResponse(200, `{}`), nil
+		}
+		t.Fatalf("unexpected request %s", r.Method)
+		return nil, nil
+	})
 	read := readOutput(t, env)
-	if !strings.Contains(read, `"notes_in_flow":true`) || !strings.Contains(read, `"custom_telemetry_tags"`) {
-		t.Fatalf("get did not report the attributes: %s", read)
+	var got struct {
+		Name        string            `json:"name"`
+		Nodes       []json.RawMessage `json:"nodes"`
+		Connections json.RawMessage   `json:"connections"`
 	}
-	arguments := updateArgumentsFrom(t, read, nil)
+	if err := json.Unmarshal([]byte(read), &got); err != nil || !strings.Contains(read, `"max_tries":9007199254740993`) {
+		t.Fatalf("get did not report the attributes: %s, %v", read, err)
+	}
+	if len(got.Connections) == 0 {
+		got.Connections = json.RawMessage(`{}`)
+	}
+	arguments, _ := json.Marshal(map[string]any{"workflow_id": ownWorkflow, "name": got.Name, "nodes": got.Nodes,
+		"connections": got.Connections, "settings": map[string]any{}})
 	calls = nil
-	if _, err := env.confirmed(workflowsUpdate.ID, "open", arguments); err != nil {
+	if _, err := env.confirmed(workflowsUpdate.ID, "open", string(arguments)); err != nil {
 		t.Fatalf("update = %v", err)
 	}
-	if len(calls) != 3 || calls[0].method != http.MethodGet || calls[1].method != http.MethodPut ||
-		calls[2].method != http.MethodGet {
+	if len(calls) != 3 || calls[1].method != http.MethodPut {
 		t.Fatalf("calls = %+v, want read, one PUT, re-read", calls)
 	}
-	original := readNodes(t, nodes)
-	sent, _ := put["nodes"].([]any)
+	original := map[string]map[string]any{}
+	list, _ := decodeExact(t, nodes).([]any)
+	for _, item := range list {
+		node := item.(map[string]any)
+		original[node["id"].(string)] = node
+	}
+	sent, _ := decodeRaw(t, rawPut)["nodes"].([]any)
 	if len(sent) != len(original) {
-		t.Fatalf("PUT nodes = %v", put["nodes"])
+		t.Fatalf("PUT nodes = %v", sent)
 	}
 	for _, item := range sent {
 		node := item.(map[string]any)
-		for _, key := range []string{"notes_in_flow", "notes", "execute_once", "always_output_data", "retry_on_fail",
-			"max_tries", "wait_between_tries", "on_error", "custom_telemetry_tags", "created_at", "updated_at",
-			"notesInFlow", "executeOnce", "alwaysOutputData", "retryOnFail", "maxTries", "waitBetweenTries",
-			"onError", "customTelemetryTags", "createdAt", "updatedAt", "continueOnFail"} {
-			if _, ok := node[key]; ok {
-				t.Errorf("PUT node %s carries %s", node["id"], key)
-			}
+		if node["id"] == "w1" {
+			assertAttributes(t, node)
 		}
 		want := original[node["id"].(string)]
 		if !reflect.DeepEqual(node["parameters"], want["parameters"]) || node["webhookId"] != want["webhookId"] {
@@ -296,11 +345,53 @@ func TestWorkflowsUpdateAcceptsReadNodeAttributesWithoutSendingThem(t *testing.T
 	}
 }
 
+// Create sends the same node attributes and settings as update, and the version of both tools is 3.
+func TestWorkflowsCreateSendsNodeAttributesAndWritableSettings(t *testing.T) {
+	var calls []call
+	var rawPost []byte
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.Method == http.MethodPost {
+			rawPost, _ = io.ReadAll(r.Body)
+			return jsonResponse(201, `{"id":"`+newWorkflow+`"}`), nil
+		}
+		return jsonResponse(200, workflowJSONOf(newWorkflow, "My workflow", ownProject)), nil
+	})
+	node := `{"id":"n1","name":"Set","type":"n8n-nodes-base.set","notes_in_flow":true,"notes":"Check this",` +
+		`"execute_once":false,"always_output_data":true,"retry_on_fail":true,"max_tries":9007199254740993,` +
+		`"wait_between_tries":5000,"on_error":"continueRegularOutput",` +
+		`"custom_telemetry_tags":{"tag":[{"key":"owner","value":"ops"}]},` +
+		`"created_at":"2026-01-03T00:00:00.000Z","updated_at":"2026-01-04T00:00:00.000Z"}`
+	settings := `{"save_execution_progress":"DEFAULT","save_manual_executions":false,` +
+		`"save_data_error_execution":"DEFAULT","save_data_success_execution":"none","binary_mode":"separate",` +
+		`"credential_resolver_id":"cr1","custom_telemetry_tags":[{"key":"team","value":"ops"}]}`
+	arguments := `{"name":"My workflow","nodes":[` + node + `],"connections":{},"settings":` + settings + `}`
+	if _, err := env.confirmed(workflowsCreate.ID, "open", arguments); err != nil {
+		t.Fatalf("create = %v", err)
+	}
+	body := decodeRaw(t, rawPost)
+	sent, _ := body["nodes"].([]any)
+	if len(sent) != 1 {
+		t.Fatalf("POST nodes = %v", body["nodes"])
+	}
+	assertAttributes(t, sent[0].(map[string]any))
+	wantSettings := map[string]any{"saveManualExecutions": false, "saveDataSuccessExecution": "none",
+		"customTelemetryTags": []any{map[string]any{"key": "team", "value": "ops"}}}
+	if !reflect.DeepEqual(body["settings"], wantSettings) {
+		t.Errorf("POST settings = %#v, want %#v", body["settings"], wantSettings)
+	}
+}
+
+func TestWorkflowCreateAndUpdateAreVersion3(t *testing.T) {
+	if workflowsCreate.Version != 3 || workflowsUpdate.Version != 3 {
+		t.Errorf("versions = %d, %d, want 3", workflowsCreate.Version, workflowsUpdate.Version)
+	}
+}
+
 // The name, nodes, connections, and settings of a complete get answer go into update unchanged. The three
-// settings that are only read stay out of the PUT body; every other setting is sent as before.
-func TestWorkflowsUpdateAcceptsReadSettingsWithoutSendingReadOnlyOnes(t *testing.T) {
-	settings := `{"saveExecutionProgress":true,"saveManualExecutions":false,"saveDataErrorExecution":"all",` +
-		`"saveDataSuccessExecution":"none","executionTimeout":3600,"errorWorkflow":"EW1","timezone":"Europe/Berlin",` +
+// settings that n8n ignores stay out of the PUT body, DEFAULT is dropped, and the telemetry tags are sent.
+func TestWorkflowsUpdateRoundTripsReadSettings(t *testing.T) {
+	settings := `{"saveExecutionProgress":"DEFAULT","saveManualExecutions":false,"saveDataErrorExecution":"all",` +
+		`"saveDataSuccessExecution":"DEFAULT","executionTimeout":3600,"errorWorkflow":"EW1","timezone":"Europe/Berlin",` +
 		`"executionOrder":"v1","binaryMode":"separate","callerPolicy":"workflowsFromAList","callerIds":"14, 18",` +
 		`"timeSavedMode":"fixed","timeSavedPerExecution":2.5,"redactionPolicy":"all","availableInMCP":true,` +
 		`"customTelemetryTags":[{"key":"team","value":"ops"}],"credentialResolverId":"cr1"}`
@@ -340,11 +431,11 @@ func TestWorkflowsUpdateAcceptsReadSettingsWithoutSendingReadOnlyOnes(t *testing
 	if len(calls) != 3 || calls[1].method != http.MethodPut {
 		t.Fatalf("calls = %+v, want read, one PUT, re-read", calls)
 	}
-	want := map[string]any{"saveExecutionProgress": true, "saveManualExecutions": false, "saveDataErrorExecution": "all",
-		"saveDataSuccessExecution": "none", "executionTimeout": 3600.0, "errorWorkflow": "EW1",
+	want := map[string]any{"saveManualExecutions": false, "saveDataErrorExecution": "all",
+		"executionTimeout": 3600.0, "errorWorkflow": "EW1",
 		"timezone": "Europe/Berlin", "executionOrder": "v1", "callerPolicy": "workflowsFromAList",
 		"callerIds": "14, 18", "timeSavedMode": "fixed", "timeSavedPerExecution": 2.5, "redactionPolicy": "all",
-		"availableInMCP": true}
+		"availableInMCP": true, "customTelemetryTags": []any{map[string]any{"key": "team", "value": "ops"}}}
 	if !reflect.DeepEqual(put["settings"], want) {
 		t.Errorf("PUT settings = %v, want %v", put["settings"], want)
 	}

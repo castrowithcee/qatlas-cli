@@ -103,7 +103,7 @@ func (m *Model) openProviderTable() {
 // setup like on every other step.
 func (m *Model) updateProviderTable(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		if m.wizard != nil {
 			return m.setupEsc()
 		}
@@ -154,10 +154,10 @@ func (m *Model) providerTableFrame() (string, string) {
 	t := &m.providers
 	shown, total := len(t.list.matches), len(t.list.all)
 	title := "Choose provider"
-	keys := "type to search · up/down · enter choose · esc cancel"
+	keys := "type to search · up/down · enter choose · {back} cancel"
 	if w := m.wizard; w != nil {
 		title = fmt.Sprintf("Setup step %d of %d · choose provider", w.step+1, setupSteps)
-		keys = "type to search · up/down · enter next · esc cancel setup"
+		keys = "type to search · up/down · enter next · {back} cancel setup"
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)",
@@ -175,7 +175,7 @@ func (m *Model) providerTableFrame() (string, string) {
 			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
 	}
 	if t.list.query() == "" {
-		keys += " · : cmds · ? help"
+		keys += " · {command} cmds · {help} help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

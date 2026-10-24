@@ -353,8 +353,12 @@ func TestWorkflowToolsWithRawNodeParametersAreVersion2(t *testing.T) {
 	for _, d := range registry(t).Provider(Provider) {
 		switch d.ID {
 		case workflowsGet.ID, workflowsCreate.ID, workflowsUpdate.ID, workflowsActivate.ID, workflowsDeactivate.ID:
-			if d.Version != 2 {
-				t.Errorf("%s version = %d, want 2", d.ID, d.Version)
+			want := 2
+			if d.ID == workflowsCreate.ID || d.ID == workflowsUpdate.ID {
+				want = 3
+			}
+			if d.Version != want {
+				t.Errorf("%s version = %d, want %d", d.ID, d.Version, want)
 			}
 			if !strings.Contains(string(d.OutputSchema), `"withheld_parameters"`) ||
 				!strings.Contains(string(d.OutputSchema), `"parameters_withheld"`) {

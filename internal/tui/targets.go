@@ -43,7 +43,7 @@ func (m *Model) openTargets() {
 // the list itself.
 func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "f2":
+	case keyOf(actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
 		// The add menu takes its typed line the same way, and the builder its target once it is complete.
@@ -80,7 +80,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	}
 	if m.labelEdit {
 		switch key.String() {
-		case "esc":
+		case keyOf(actBack):
 			m.stopLabel()
 		case "enter":
 			m.takeLabel()
@@ -93,7 +93,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	}
 	if m.targetEdit >= 0 {
 		switch key.String() {
-		case "esc":
+		case keyOf(actBack):
 			if m.targetTyped() {
 				m.askLeave(false)
 				return nil
@@ -114,7 +114,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		switch key.String() {
 		case "y":
 			m.removeTarget()
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.targetRemove = false
 			m.status = "Target kept"
 		}
@@ -122,7 +122,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	}
 	target, selected := m.targetList.selected()
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		return m.leaveTargets()
 	case "a":
 		metadata := m.targetMetadata()
@@ -145,7 +145,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		if selected && m.wizard == nil {
 			m.editLabel(target)
 		}
-	case "d":
+	case keyOf(actDelete):
 		if selected {
 			m.targetRemove = true
 			m.clearMessages()
@@ -354,32 +354,32 @@ func (m *Model) targetFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	save := "F2 save"
+	save := "{save} save"
 	if m.wizard != nil {
 		// The guided setup saves only from its summary.
-		save = "F2 next step"
+		save = "{save} next step"
 	}
-	keys := "a add · enter edit · i label · d remove · up/down move · " + save + " · esc close · : cmds · ? help"
+	keys := "a add · enter edit · i label · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	if m.wizard != nil {
-		keys = "a add · enter edit · d remove · up/down move · " + save + " · esc close · : cmds · ? help"
+		keys = "a add · enter edit · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	}
 	switch {
 	case m.labelEdit:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(styles.hint, "Label for "+target+"; leave it empty to remove the label") + "\n")
 		foot.WriteString(m.inputLine("label: ", m.labelInput) + "\n")
-		keys = "enter take · " + save + " · esc cancel entry"
+		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetEdit >= 0:
 		label := "new: "
 		if m.targetEdit < total {
 			label = "edit: "
 		}
 		foot.WriteString("\n" + m.inputLine(label, m.targetInput) + "\n")
-		keys = "enter take · " + save + " · esc cancel entry"
+		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
-		keys = "y remove · n/esc keep · : cmds · ? help"
+		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()

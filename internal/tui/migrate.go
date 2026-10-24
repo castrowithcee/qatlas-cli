@@ -177,7 +177,7 @@ func (m *Model) migratePlanView() string {
 		b.WriteString(m.indentedWith(styles.warning, "warning: the system keyring could not be checked for "+
 			strings.Join(sortedCopy(p.storeUnsureFor), ", ")) + "\n")
 	}
-	b.WriteString(m.keyHint("y migrate · n/esc cancel, nothing is written · : cmds · ? help"))
+	b.WriteString(m.keyHint("y migrate · n/{back} cancel, nothing is written · {command} cmds · {help} help"))
 	return b.String()
 }
 
@@ -341,7 +341,7 @@ func (m *Model) migrateResultView() string {
 	var b strings.Builder
 	b.WriteString(styles.title.Render("Delete credentials.yaml?") + "\n\n")
 	b.WriteString(m.indented(m.migrateResult) + "\n")
-	b.WriteString(m.keyHint("y delete · n/esc keep the file · : cmds · ? help"))
+	b.WriteString(m.keyHint("y delete · n/{back} keep the file · {command} cmds · {help} help"))
 	return b.String()
 }
 

@@ -529,15 +529,10 @@ func n8nChangeRisk(effect capability.Effect, idempotency capability.Idempotency)
 var nodeCredentialsSchema = `{"type":"object","additionalProperties":` + credentialRefSchema + `}`
 
 // nodeWriteSchema is the JSON Schema of one node a caller may create or replace with workflows.create or
-// workflows.update. It mirrors the fields workflows.get already exposes for a node (id, name, type,
-// type_version, position, disabled, parameters, credentials): n8n's own create/update schemas additionally
-// accept execution-behaviour fields such as notes, onError, retryOnFail, maxTries, and webhookId.
-// The execution attributes workflows.get reports (readOnlyNodeProperties) are accepted so a read node can be
-// sent back unchanged, but not written: they are never sent to n8n, so a full update does not keep them.
-// qatlas-dev: this is a deliberate simplification, not a spec limit; extend nodeWriteSchema and nodeInput
-// together, in step, if a caller needs to write one of those fields. webhookId is never taken from a caller:
-// workflows.update sends back the one it read, see restoreWithheld. withheld_parameters and
-// parameters_withheld are accepted so a read node can be sent back unchanged; the former is informational.
+// workflows.update. It mirrors the node fields workflows.get exposes and n8n's create/update schemas accept,
+// so a read node can be sent back unchanged. webhookId is never taken from a caller: workflows.update sends
+// back the one it read, see restoreWithheld. withheld_parameters is accepted and informational;
+// parameters_withheld asks update to keep the withheld parameters.
 var nodeWriteSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string","minLength":1,"maxLength":128},` +
 	`"name":{"type":"string","minLength":1,"maxLength":128},` +
@@ -550,8 +545,8 @@ var nodeWriteSchema = `{"type":"object","properties":{` +
 	`"credentials":` + nodeCredentialsSchema + `,` + readOnlyNodeProperties + `},` +
 	`"required":["id","name","type"],"additionalProperties":false}`
 
-// readOnlyNodeProperties are the node attributes workflows.get reports beyond the written ones, in the form
-// it reports them. They are accepted and ignored.
+// readOnlyNodeProperties are the node attributes workflows.get reports beyond the core ones. All are written
+// except created_at and updated_at, which n8n marks read-only: those are accepted and never sent.
 var readOnlyNodeProperties = `"notes_in_flow":{"type":"boolean"},` +
 	`"notes":{"type":"string","maxLength":` + strconv.Itoa(maxLongTextLength) + `},` +
 	`"execute_once":{"type":"boolean"},"always_output_data":{"type":"boolean"},"retry_on_fail":{"type":"boolean"},` +
@@ -576,7 +571,17 @@ type nodeInput struct {
 	ParametersWithheld bool `json:"parameters_withheld"`
 	// WebhookID is set only by restoreWithheld, never from an argument.
 	WebhookID string `json:"-"`
-	// The attributes of readOnlyNodeProperties are accepted by the schema and not decoded: wire never sends them.
+	// Execution attributes; wire sends each only when set. Numbers stay json.Number so large values stay exact.
+	Notes            string                 `json:"notes"`
+	NotesInFlow      *bool                  `json:"notes_in_flow"`
+	ExecuteOnce      *bool                  `json:"execute_once"`
+	AlwaysOutputData *bool                  `json:"always_output_data"`
+	RetryOnFail      *bool                  `json:"retry_on_fail"`
+	MaxTries         json.Number            `json:"max_tries"`
+	WaitBetweenTries json.Number            `json:"wait_between_tries"`
+	OnError          string                 `json:"on_error"`
+	TelemetryTags    *nodeTelemetryTagsJSON `json:"custom_telemetry_tags"`
+	// created_at and updated_at are accepted by the schema and not decoded: n8n marks them read-only.
 }
 
 // wire converts one node argument to the shape n8n's createWorkflow and updateWorkflow requests read. It
@@ -595,6 +600,31 @@ func (n nodeInput) wire() map[string]any {
 	if n.WebhookID != "" {
 		out["webhookId"] = n.WebhookID
 	}
+	if n.Notes != "" {
+		out["notes"] = n.Notes
+	}
+	for key, flag := range map[string]*bool{"notesInFlow": n.NotesInFlow, "executeOnce": n.ExecuteOnce,
+		"alwaysOutputData": n.AlwaysOutputData, "retryOnFail": n.RetryOnFail} {
+		if flag != nil {
+			out[key] = *flag
+		}
+	}
+	if n.MaxTries != "" {
+		out["maxTries"] = n.MaxTries
+	}
+	if n.WaitBetweenTries != "" {
+		out["waitBetweenTries"] = n.WaitBetweenTries
+	}
+	if n.OnError != "" {
+		out["onError"] = n.OnError
+	}
+	if n.TelemetryTags != nil {
+		tags := n.TelemetryTags.Tag
+		if tags == nil {
+			tags = []telemetryTagJSON{}
+		}
+		out["customTelemetryTags"] = map[string]any{"tag": tags}
+	}
 	if len(n.Credentials) > 0 {
 		credentials := make(map[string]map[string]string, len(n.Credentials))
 		for kind, ref := range n.Credentials {
@@ -605,17 +635,19 @@ func (n nodeInput) wire() map[string]any {
 	return out
 }
 
+const writeSaveFlagSchema = `{"anyOf":[{"type":"boolean"},{"type":"string","enum":["DEFAULT"]}]}`
+
 // settingsWriteSchema is the JSON Schema of the workflow settings this provider offers, the subset of
-// n8n's own settings object (createWorkflow.generated.yml) a caller may reasonably set programmatically. It
-// binary_mode, credential_resolver_id, and custom_telemetry_tags, which workflows.get reports, are accepted
-// so a read settings object can be sent back unchanged, but never sent: n8n documents the first two as
-// derived, internal settings whose value is ignored on a create or an update, and the tags are telemetry
-// decoration with no execution effect. The top-level nodeGroups are not offered either.
+// n8n's own settings object (createWorkflow.generated.yml) a caller may reasonably set programmatically.
+// binary_mode and credential_resolver_id, which workflows.get reports, are accepted so a read settings
+// object can be sent back unchanged, but never sent: n8n ignores them on a create or an update. The four
+// save settings also accept the DEFAULT workflows.get reports; n8n's write schema does not, so it is dropped
+// from the body, which leaves n8n's default. The top-level nodeGroups are not offered either.
 // qatlas-dev: extend settingsWriteSchema and settingsInput together, in step, if a caller needs to write one.
 var settingsWriteSchema = `{"type":"object","properties":{` +
-	`"save_execution_progress":{"type":"boolean"},"save_manual_executions":{"type":"boolean"},` +
-	`"save_data_error_execution":{"type":"string","enum":["all","none"]},` +
-	`"save_data_success_execution":{"type":"string","enum":["all","none"]},` +
+	`"save_execution_progress":` + writeSaveFlagSchema + `,"save_manual_executions":` + writeSaveFlagSchema + `,` +
+	`"save_data_error_execution":{"type":"string","enum":["all","none","DEFAULT"]},` +
+	`"save_data_success_execution":{"type":"string","enum":["all","none","DEFAULT"]},` +
 	`"execution_timeout":{"type":"number"},"error_workflow":` + targetIDSchema + `,` +
 	`"timezone":{"type":"string","minLength":1,"maxLength":64},` +
 	`"execution_order":{"type":"string","minLength":1,"maxLength":16},` +
@@ -633,35 +665,37 @@ var settingsWriteSchema = `{"type":"object","properties":{` +
 // snake_case input shape. Every value is optional; wire sends only the ones a caller actually set, and n8n
 // applies its own defaults to everything else.
 type settingsInput struct {
-	SaveExecutionProgress    *bool    `json:"save_execution_progress"`
-	SaveManualExecutions     *bool    `json:"save_manual_executions"`
-	SaveDataErrorExecution   string   `json:"save_data_error_execution"`
-	SaveDataSuccessExecution string   `json:"save_data_success_execution"`
-	ExecutionTimeout         *float64 `json:"execution_timeout"`
-	ErrorWorkflow            string   `json:"error_workflow"`
-	Timezone                 string   `json:"timezone"`
-	ExecutionOrder           string   `json:"execution_order"`
-	CallerPolicy             string   `json:"caller_policy"`
-	CallerIDs                string   `json:"caller_ids"`
-	TimeSavedMode            string   `json:"time_saved_mode"`
-	TimeSavedPerExecution    *float64 `json:"time_saved_per_execution"`
-	RedactionPolicy          string   `json:"redaction_policy"`
-	AvailableInMCP           *bool    `json:"available_in_mcp"`
+	SaveExecutionProgress    json.RawMessage `json:"save_execution_progress"`
+	SaveManualExecutions     json.RawMessage `json:"save_manual_executions"`
+	SaveDataErrorExecution   string          `json:"save_data_error_execution"`
+	SaveDataSuccessExecution string          `json:"save_data_success_execution"`
+	ExecutionTimeout         *float64        `json:"execution_timeout"`
+	ErrorWorkflow            string          `json:"error_workflow"`
+	Timezone                 string          `json:"timezone"`
+	ExecutionOrder           string          `json:"execution_order"`
+	CallerPolicy             string          `json:"caller_policy"`
+	CallerIDs                string          `json:"caller_ids"`
+	TimeSavedMode            string          `json:"time_saved_mode"`
+	TimeSavedPerExecution    *float64        `json:"time_saved_per_execution"`
+	RedactionPolicy          string          `json:"redaction_policy"`
+	AvailableInMCP           *bool           `json:"available_in_mcp"`
+	// TelemetryTags: nil means not set.
+	TelemetryTags []telemetryTagJSON `json:"custom_telemetry_tags"`
 }
 
 // wire converts the settings argument to the camelCase shape n8n's own settings object reads.
 func (s settingsInput) wire() map[string]any {
 	out := map[string]any{}
-	if s.SaveExecutionProgress != nil {
-		out["saveExecutionProgress"] = *s.SaveExecutionProgress
+	if flag, ok := saveFlag(s.SaveExecutionProgress); ok {
+		out["saveExecutionProgress"] = flag
 	}
-	if s.SaveManualExecutions != nil {
-		out["saveManualExecutions"] = *s.SaveManualExecutions
+	if flag, ok := saveFlag(s.SaveManualExecutions); ok {
+		out["saveManualExecutions"] = flag
 	}
-	if s.SaveDataErrorExecution != "" {
+	if s.SaveDataErrorExecution != "" && s.SaveDataErrorExecution != defaultSetting {
 		out["saveDataErrorExecution"] = s.SaveDataErrorExecution
 	}
-	if s.SaveDataSuccessExecution != "" {
+	if s.SaveDataSuccessExecution != "" && s.SaveDataSuccessExecution != defaultSetting {
 		out["saveDataSuccessExecution"] = s.SaveDataSuccessExecution
 	}
 	if s.ExecutionTimeout != nil {
@@ -694,7 +728,25 @@ func (s settingsInput) wire() map[string]any {
 	if s.AvailableInMCP != nil {
 		out["availableInMCP"] = *s.AvailableInMCP
 	}
+	if s.TelemetryTags != nil {
+		out["customTelemetryTags"] = s.TelemetryTags
+	}
 	return out
+}
+
+// defaultSetting is what workflows.get reports for a save setting n8n has not set; n8n's write schema takes
+// no such value, so it is never sent.
+const defaultSetting = "DEFAULT"
+
+// saveFlag returns the boolean of a save flag; DEFAULT and an absent value yield none.
+func saveFlag(raw json.RawMessage) (bool, bool) {
+	switch string(raw) {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	}
+	return false, false
 }
 
 // workflowWriteArguments are the four fields workflows.create and workflows.update share: n8n's own
@@ -713,12 +765,14 @@ func workflowWriteArguments(withheld string) []capability.Argument {
 		{Name: "nodes", Description: "Every node of the workflow, replacing whatever it held before; the id, " +
 			"name, and type n8n itself validates are required, and a credential reference carries only the id " +
 			"and name n8n itself resolves. The execution attributes workflows.get reports for a node (notes, " +
-			"on_error, retry_on_fail, and the like) are accepted so a read node can be sent back unchanged, " +
-			"but they are not written: a full update does not keep them. " + withheld, Required: true},
+			"on_error, retry_on_fail, and the like) are written; created_at and updated_at are accepted and " +
+			"not written, so a read node can be sent back unchanged. " + withheld, Required: true},
 		{Name: "connections", Description: "How the nodes are wired together, keyed by source node name, " +
 			"replacing whatever the workflow held before", Required: true},
 		{Name: "settings", Description: "Execution and behaviour settings of the workflow, replacing whatever " +
-			"it held before; {} keeps n8n's own defaults", Required: true},
+			"it held before; {} keeps n8n's own defaults. A save setting read as DEFAULT is accepted and not " +
+			"written, which leaves n8n's default; binary_mode and credential_resolver_id are accepted and not " +
+			"written", Required: true},
 	}
 }
 
@@ -759,7 +813,7 @@ func workflowWriteBody(name string, nodes []nodeInput, connections json.RawMessa
 
 var workflowsCreate = capability.Descriptor{
 	ID:      Provider + ".workflows.create",
-	Version: 2,
+	Version: 3,
 	Title:   "Create an n8n workflow",
 	Description: "Create one workflow of the bound n8n instance from its name, nodes, connections, and " +
 		"settings; a repeated call creates a second workflow. There is no tool to start the created workflow: " +
@@ -862,7 +916,7 @@ func (c *Client) CreateWorkflow(ctx context.Context, body map[string]any) (*Work
 
 var workflowsUpdate = capability.Descriptor{
 	ID:      Provider + ".workflows.update",
-	Version: 2,
+	Version: 3,
 	Title:   "Replace an n8n workflow",
 	Description: "Replace one workflow's name, nodes, connections, and settings of the bound n8n instance " +
 		"with a full PUT, exactly as n8n's own updateWorkflow endpoint is: fields left out are not kept, they " +
