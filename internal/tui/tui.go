@@ -3925,7 +3925,7 @@ func (m *Model) listRows() func(i int) string {
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
-		return m.listRow(i == m.list.cursor && m.screen != screenNav, i%2 == 1, t.line(t.rows[name], layout))
+		return m.listRow(i == m.list.cursor && m.screen != screenNav, t.line(t.rows[name], layout))
 	}
 }
 
@@ -4047,7 +4047,7 @@ func (m *Model) pickerRow(i int) string {
 			text += "  (current)"
 		}
 	}
-	return m.listRow(i == m.picker.cursor, i%2 == 1, truncateCells(text, width))
+	return m.listRow(i == m.picker.cursor, truncateCells(text, width))
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a

@@ -183,7 +183,7 @@ func (m *Model) providerTableFrame() (string, string) {
 // providerTableRow draws the shown provider at index i of the table.
 func (m *Model) providerTableRow(i int) string {
 	_, width := m.fit("  ")
-	return m.listRow(i == m.providers.list.cursor, i%2 == 1, m.providers.row(m.providers.list.matches[i], width))
+	return m.listRow(i == m.providers.list.cursor, m.providers.row(m.providers.list.matches[i], width))
 }
 
 func (m *Model) providerTableWindow() (int, int) {
