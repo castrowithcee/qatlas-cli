@@ -107,3 +107,6 @@ not registered. See [Projects](gitea/projects.md).
   of a user only from Forgejo 17. Runners have Forgejo's own members and a paged list, there is no
   `actions-runners.update` and no `workflows.enable` or `workflows.disable`, and `actions-runner-jobs.search` is
   Forgejo's own. See [Actions administration](gitea/actions-admin.md).
+- Instance administration: `admin-runners.update`, `admin-workflow-runs.list`, `admin-workflow-jobs.list`, and
+  `admin-packages.list` are not registered; Forgejo lists runners with a paged list and `visible`, and has its own
+  `admin-runner-jobs.search`. See [Instance administration](gitea/administration.md).
