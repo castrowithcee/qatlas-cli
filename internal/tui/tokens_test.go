@@ -81,7 +81,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 	openSectionByName(t, m, sectionTokens)
 
 	view := m.View()
-	for _, want := range []string{"Agent tokens need an encrypted vault.", "Open Vault (5)", "7 Tokens"} {
+	for _, want := range []string{"Agent tokens need an encrypted vault.", "Open Settings > Vault (6)", "[Tokens]"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the section does not show %q:\n%s", want, view)
 		}

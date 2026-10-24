@@ -29,22 +29,28 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 		seedServices(t, m, "a-one", "b-two", "c-three")
-		m.screen = screenNav
+		m.screen, m.navSub = screenNav, true
 		press(t, m, "l")
 		if m.section != sectionCredentials || m.screen != screenNav {
-			t.Fatalf("l = section %v screen %v, want Credentials on the tab line", m.section, m.screen)
+			t.Fatalf("l = section %v screen %v, want Credentials on the option bar", m.section, m.screen)
 		}
-		press(t, m, "h", "end")
-		if m.section != sectionLogs {
-			t.Fatalf("end = section %v, want the last section", m.section)
+		press(t, m, "h", "k")
+		if m.section != sectionServices || m.navSub {
+			t.Fatalf("h, k = section %v bar %v, want Services on the tab line", m.section, m.navSub)
+		}
+		press(t, m, "end")
+		if m.section != sectionVault {
+			t.Fatalf("end = section %v, want the last area", m.section)
 		}
 		press(t, m, "home")
-		if m.section != sectionServices {
-			t.Fatalf("home = section %v, want the first section", m.section)
+		if m.section != sectionOverview {
+			t.Fatalf("home = section %v, want the first area", m.section)
 		}
-		press(t, m, "j")
+		m.screen, m.section = screenNav, sectionServices
+		m.list.reset(m.entryNames(m.section))
+		press(t, m, "j", "j")
 		if m.screen != screenList {
-			t.Fatalf("j = screen %v, want the list", m.screen)
+			t.Fatalf("j, j = screen %v, want the list", m.screen)
 		}
 		press(t, m, "j")
 		if name := selectedName(t, m); name != "b-two" {

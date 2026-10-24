@@ -55,8 +55,17 @@ func testService(store *config.Store, secrets Secrets, redactor *redact.Redactor
 }
 
 // buildModel builds the editor over store the way the command does, with a service over the same secrets.
+// buildModel is New with the editor moved onto the Library's Services list, tab line in focus: the section
+// most walks begin on. TestEditorStartsOnTheOverview covers what New itself opens.
 func buildModel(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor) (*Model, error) {
-	return New(testService(store, secrets, redactor), store, tester, secrets, redactor)
+	m, err := New(testService(store, secrets, redactor), store, tester, secrets, redactor)
+	if err != nil {
+		return nil, err
+	}
+	m.section = sectionServices
+	m.list.reset(m.entryNames(m.section))
+	m.layoutWorkspace()
+	return m, nil
 }
 
 func newTestConfig(t *testing.T) *config.Config {
@@ -191,11 +200,30 @@ func clearField(t *testing.T, m *Model) {
 	}
 }
 
-// openSectionByName navigates from the tab line to a section.
+// openSectionByName navigates from the tab line to a section the way a person does: the digit of its area,
+// then the arrows of the option bar when it is not the area's first sub-tab. It ends where opening a list
+// ends: on the list, or on the form for the Vault.
 func openSectionByName(t *testing.T, m *Model, s section) {
 	t.Helper()
 	m.screen = screenNav
-	pump(t, m, string(rune('1'+s)))
+	pump(t, m, string(rune('1'+s.area())))
+	if m.section != s {
+		if m.screen == screenForm {
+			pump(t, m, "esc")
+		}
+		if m.screen == screenList {
+			pump(t, m, "tab")
+		}
+		if m.screen != screenNav || !m.navSub {
+			t.Fatalf("after the digit of %v: screen %v, section %v", s.area().title(), m.screen, m.section)
+		}
+		for i := 0; i < len(areaSections[s.area()]) && m.section != s; i++ {
+			pump(t, m, "right")
+		}
+		if s != sectionVault {
+			pump(t, m, "down")
+		}
+	}
 	if m.section != s {
 		t.Fatalf("section = %v, want %v", m.section, s)
 	}
@@ -356,21 +384,23 @@ func TestFullConfigurationFlow(t *testing.T) {
 func TestNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
-	t.Run("the editor opens on the tab line with Services shown below it", func(t *testing.T) {
-		if m.screen != screenNav || m.section != sectionServices {
-			t.Fatalf("start = screen %v section %v, want the tab line on Services", m.screen, m.section)
+	t.Run("the editor opens on the tab line with the Overview shown below it", func(t *testing.T) {
+		fresh, _, _ := newModel(t)
+		fresh.section = sectionOverview
+		if fresh.screen != screenNav || fresh.section.area() != areaOverview {
+			t.Fatalf("start = screen %v section %v, want the tab line on the Overview", fresh.screen, fresh.section)
 		}
 	})
 
-	t.Run("left and right wrap in both directions and show each section at once", func(t *testing.T) {
-		m.screen, m.section = screenNav, sectionServices
+	t.Run("left and right wrap in both directions and show each area at once", func(t *testing.T) {
+		m.screen, m.section, m.navSub = screenNav, sectionOverview, false
 		press(t, m, "left")
-		if m.section != sectionLogs || m.screen != screenNav {
-			t.Errorf("left = section %v screen %v, want Logs on the tab line", m.section, m.screen)
+		if m.section != sectionVault || m.screen != screenNav {
+			t.Errorf("left = section %v screen %v, want Settings on the tab line", m.section, m.screen)
 		}
 		press(t, m, "right")
-		if m.section != sectionServices {
-			t.Errorf("right = section %v, want Services", m.section)
+		if m.section != sectionOverview {
+			t.Errorf("right = section %v, want the Overview", m.section)
 		}
 		for _, key := range []string{"l", "h"} {
 			before := m.section
@@ -383,7 +413,7 @@ func TestNavigation(t *testing.T) {
 
 	t.Run("enter, down and tab hand the focus to the list and back", func(t *testing.T) {
 		for _, key := range []string{"enter", "down", "j", "tab"} {
-			m.screen, m.section = screenNav, sectionCredentials
+			m.screen, m.section, m.navSub = screenNav, sectionCredentials, true
 			press(t, m, key)
 			if m.screen != screenList || m.section != sectionCredentials {
 				t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
@@ -400,7 +430,7 @@ func TestNavigation(t *testing.T) {
 	})
 
 	t.Run("escape on the tab line neither quits nor moves", func(t *testing.T) {
-		m.screen, m.section = screenNav, sectionConnections
+		m.screen, m.section, m.navSub = screenNav, sectionConnections, false
 		press(t, m, "esc", "esc")
 		if m.quitting || m.screen != screenNav || m.section != sectionConnections {
 			t.Errorf("esc on the tab line = quitting %v screen %v section %v", m.quitting, m.screen, m.section)
@@ -431,43 +461,62 @@ func TestNarrowNavigation(t *testing.T) {
 		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
 			m, _, _ := newModel(t)
 			m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
-			m.screen, m.section = screenNav, sectionServices
+			m.screen, m.section, m.navSub = screenNav, sectionOverview, false
 			if !strings.Contains(m.View(), "←/→ move") {
 				t.Errorf("footer does not name left/right:\n%s", m.View())
 			}
 			press(t, m, "left")
-			if m.section != sectionLogs || m.screen != screenNav {
-				t.Fatalf("left at Services = section %v screen %v, want Logs (wrapped back)", m.section, m.screen)
+			if m.section != sectionVault || m.screen != screenNav {
+				t.Fatalf("left at the Overview = section %v screen %v, want Settings (wrapped back)", m.section, m.screen)
 			}
 			for _, key := range []string{"right", "l"} {
-				m.screen, m.section = screenNav, sectionLogs
+				m.screen, m.section, m.navSub = screenNav, sectionVault, false
 				press(t, m, key)
-				if m.section != sectionServices || m.screen != screenNav {
-					t.Errorf("%q at Logs = section %v screen %v, want Services (wrapped forward)",
+				if m.section != sectionOverview || m.screen != screenNav {
+					t.Errorf("%q at Settings = section %v screen %v, want the Overview (wrapped forward)",
 						key, m.section, m.screen)
 				}
 			}
 			for _, key := range []string{"up", "k"} {
-				m.screen, m.section = screenNav, sectionServices
+				m.screen, m.section, m.navSub = screenNav, sectionServices, false
 				press(t, m, key)
-				if m.section != sectionServices || m.screen != screenNav {
-					t.Errorf("%q at Services = section %v screen %v, want no change", key, m.section, m.screen)
+				if m.section != sectionServices || m.screen != screenNav || m.navSub {
+					t.Errorf("%q at the tab line = section %v screen %v, want no change", key, m.section, m.screen)
 				}
 			}
+			// The option bar sits between the tab line and the list, and its arrows wrap through the sub-tabs.
+			m.screen, m.section, m.navSub = screenNav, sectionServices, false
+			press(t, m, "down")
+			if !m.navSub || m.screen != screenNav {
+				t.Errorf("down at the tab line = screen %v option bar %v, want the option bar", m.screen, m.navSub)
+			}
+			for _, step := range []struct {
+				key  string
+				want section
+			}{{"right", sectionCredentials}, {"right", sectionServices}, {"left", sectionCredentials}} {
+				press(t, m, step.key)
+				if m.section != step.want || m.screen != screenNav || !m.navSub {
+					t.Errorf("%q on the option bar = section %v screen %v, want %v", step.key, m.section, m.screen, step.want)
+				}
+			}
+			press(t, m, "up")
+			if m.navSub || m.section != sectionCredentials {
+				t.Errorf("up on the option bar = section %v bar %v, want the tab line", m.section, m.navSub)
+			}
 			for _, key := range []string{"down", "j", "enter", "tab"} {
-				m.screen, m.section = screenNav, sectionCredentials
+				m.screen, m.section, m.navSub = screenNav, sectionCredentials, true
 				press(t, m, key)
 				if m.screen != screenList || m.section != sectionCredentials {
 					t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
 				}
 			}
 			// Vault and Logs have no list of their own; down/enter/tab open their own content area.
-			m.screen, m.section = screenNav, sectionVault
+			m.screen, m.section, m.navSub = screenNav, sectionVault, true
 			press(t, m, "down")
 			if m.screen != screenForm {
 				t.Errorf("down at Vault = screen %v, want the Vault form", m.screen)
 			}
-			m.screen, m.section = screenNav, sectionLogs
+			m.screen, m.section, m.navSub = screenNav, sectionLogs, false
 			press(t, m, "enter")
 			if m.screen != screenLogs {
 				t.Errorf("enter at Logs = screen %v, want the Logs screen", m.screen)
@@ -486,7 +535,7 @@ func TestNarrowListFocus(t *testing.T) {
 			m.list.reset([]string{"a", "b", "c"})
 			m.screen = screenList
 
-			if !strings.Contains(m.View(), "tab sections") {
+			if !strings.Contains(m.View(), "tab areas") {
 				t.Errorf("footer does not name tab:\n%s", m.View())
 			}
 
@@ -528,8 +577,8 @@ func TestNarrowListFocus(t *testing.T) {
 	}
 }
 
-// sectionLabels are how the tab line names the eight sections in full.
-var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault", "6 Approvals", "7 Tokens", "8 Logs"}
+// areaLabels are how the tab line names the six areas in full.
+var areaLabels = []string{"1 Overview", "2 Connections", "3 Activity", "4 Access", "5 Library", "6 Settings"}
 
 func TestLayoutsFitTheirTerminal(t *testing.T) {
 	m, _, _ := newEnvModel(t, map[string]string{
@@ -548,14 +597,14 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 		tabs string
 	}{
 		{name: "wide terminal", width: 160, height: 28,
-			tabs: "[1 Services]  2 Credentials   3 Connections   4 Defaults   5 Vault   6 Approvals   7 Tokens   8 Logs"},
+			tabs: "1 Overview   2 Connections   3 Activity   4 Access   [5 Library]  6 Settings"},
 		{name: "standard terminal", width: 100, height: 24,
-			tabs: "[1 Services] 2 Credentials 3 Connections 4 Defaults 5 Vault 6 Approvals 7 Tokens 8 Logs"},
+			tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
 		{name: "names without gaps", width: 90, height: 24,
-			tabs: "[1 Services] 2 Credentials 3 Connections 4 Defaults 5 Vault 6 Approvals 7 Tokens 8 Logs"},
-		{name: "standard width", width: 80, height: 24, tabs: "[1 Services] 2 3 4 5 6 7 8"},
-		{name: "names give way to digits", width: 72, height: 24, tabs: "[1 Services] 2 3 4 5 6 7 8"},
-		{name: "compact", width: 40, height: 12, tabs: "[1 Services] 2 3 4 5 6 7 8"},
+			tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
+		{name: "standard width", width: 80, height: 24, tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
+		{name: "names give way to digits", width: 60, height: 24, tabs: "1 2 3 4 [5 Library] 6"},
+		{name: "compact", width: 40, height: minimumHeight, tabs: "1 2 3 4 [5 Library] 6"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -568,8 +617,8 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 				tabs = 2
 			}
 			if !strings.Contains(strings.Join(strings.Fields(lines[tabs]), " "), strings.Join(strings.Fields(tt.tabs), " ")) ||
-				!strings.Contains(lines[tabs+1], "─") {
-				t.Errorf("the tab line %q does not stand above a rule and the workspace:\n%s", tt.tabs, view)
+				!strings.Contains(lines[tabs+1], "Library: [Services]") || !strings.Contains(lines[tabs+2], "─") {
+				t.Errorf("the tab line %q does not stand above the option bar, a rule and the workspace:\n%s", tt.tabs, view)
 			}
 			for _, want := range []string{"Services  1/1", "wiki"} {
 				if !strings.Contains(view, want) {
@@ -600,13 +649,13 @@ func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
 	m, _, _ := newModel(t)
 	for _, width := range []int{40, 60, 80, 160} {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
-		for s := section(0); s < sectionCount; s++ {
-			m.section, m.screen = s, screenList
+		for a := area(0); a < areaCount; a++ {
+			m.section, m.screen = areaSections[a][0], screenList
 			line := m.navLine()
 			if strings.Contains(line, "\x1b") {
 				t.Fatalf("width %d: the tab line carries colour codes: %q", width, line)
 			}
-			if want := "[" + sectionLabels[s] + "]"; !strings.Contains(line, want) {
+			if want := "[" + areaLabels[a] + "]"; !strings.Contains(line, want) {
 				t.Errorf("width %d: the tab line does not show %q whole: %q", width, want, line)
 			}
 			if strings.Contains(line, "> ") {
@@ -645,9 +694,9 @@ func TestDirectSectionKeys(t *testing.T) {
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	openSectionByName(t, m, sectionServices)
 
-	for _, want := range []section{sectionCredentials, sectionConnections, sectionDefaults, sectionServices} {
+	for _, want := range []area{areaConnections, areaAccess, areaLibrary} {
 		press(t, m, string(rune('1'+want)))
-		if m.screen != screenList || m.section != want {
+		if m.screen != screenList || m.section != areaSections[want][0] {
 			t.Fatalf("%d from the list = screen %v section %v", want+1, m.screen, m.section)
 		}
 	}
@@ -665,7 +714,7 @@ func TestDirectSectionKeys(t *testing.T) {
 	press(t, m, "esc")
 
 	// alt+digit does nothing in a form, changed or not.
-	for _, want := range []section{sectionCredentials, sectionConnections, sectionDefaults} {
+	for _, want := range []area{areaConnections, areaAccess, areaSettings} {
 		openSectionByName(t, m, sectionServices)
 		press(t, m, "enter")
 		if m.screen != screenForm || m.editing != "wiki" {
@@ -679,9 +728,9 @@ func TestDirectSectionKeys(t *testing.T) {
 
 	// The tab line answers the digits as well, and n there opens the form of the section it stands on.
 	m.screen = screenNav
-	press(t, m, "3")
+	press(t, m, "2")
 	if m.screen != screenList || m.section != sectionConnections {
-		t.Fatalf("3 on the tab line = screen %v section %v", m.screen, m.section)
+		t.Fatalf("2 on the tab line = screen %v section %v", m.screen, m.section)
 	}
 	press(t, m, "n")
 	if m.screen != screenList || !strings.Contains(m.fail, "Create a credential before adding a connection") {
@@ -703,10 +752,11 @@ func TestDirectSectionKeys(t *testing.T) {
 	}
 }
 
-// A new setup runs from Services over Credentials to Connections with section keys only: no dashboard and
-// no escape in between.
+// A new setup runs from the Overview over Services and Credentials to Connections with the area digits and
+// the command line only: no dashboard, no tab line and no escape in between.
 func TestRebuildWithoutADashboard(t *testing.T) {
 	m, store, _ := newModel(t)
+	m.section = sectionOverview
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	screens := map[screen]bool{}
 	step := func(keys ...string) {
@@ -720,11 +770,13 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 		}
 	}
 
-	step("n")
+	step("5", "n")
 	typeText(t, m, "wiki")
 	step("tab", "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	step("f2", "2", "n")
+	step("f2", ":")
+	typeText(t, m, "go credentials")
+	step("enter", "n")
 	typeText(t, m, "reader")
 	step("tab", "tab")
 	selectChoice(t, m, storageEnv)
@@ -732,7 +784,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	typeText(t, m, "WIKI_ID")
 	step("tab")
 	typeText(t, m, "WIKI_SECRET")
-	step("f2", "3", "n")
+	step("f2", "2", "n")
 	typeText(t, m, "wiki")
 	step("f2")
 
@@ -743,14 +795,14 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 		t.Fatalf("the walk ended on screen %v section %v", m.screen, m.section)
 	}
 	if screens[screenNav] {
-		t.Error("the walk passed through the tab line although only section keys were pressed")
+		t.Error("the walk passed through the tab line although only area keys and commands were used")
 	}
 	saved, err := store.Load()
 	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
 		t.Fatalf("saved configuration = %+v, %v", saved, err)
 	}
 	if view := m.View(); !strings.Contains(view, "wiki  active  wiki     read") ||
-		!strings.Contains(view, "[3 Connections]") {
+		!strings.Contains(view, "[2 Connections]") {
 		t.Errorf("the workspace or the tab line does not show the result:\n%s", view)
 	}
 }
@@ -912,17 +964,18 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	if strings.Contains(view, "\x1b") {
 		t.Fatalf("a terminal without colour got escape sequences:\n%q", view)
 	}
-	for _, want := range []string{"[3 Connections]", "> wiki"} {
+	for _, want := range []string{"[2 Connections]", "> wiki"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list in focus does not show %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "> 1 Services") || strings.Contains(view, "> [3 Connections]") {
+	if strings.Contains(view, "> 1 Overview") || strings.Contains(view, "> [2 Connections]") {
 		t.Errorf("the tab line is marked although the list has the focus:\n%s", view)
 	}
 	press(t, m, "tab")
 	view = m.View()
-	if !strings.Contains(view, "> 1 Services 2 Credentials [3 Connections]") || strings.Contains(view, "> wiki") ||
+	if !strings.Contains(strings.Join(strings.Fields(view), " "), "> 1 Overview [2 Connections] 3 Activity") ||
+		strings.Contains(view, "> wiki") ||
 		strings.Count(view, "> ") != 1 {
 		t.Errorf("the tab line in focus is not the one marked line:\n%s", view)
 	}
@@ -963,7 +1016,7 @@ func TestResizePreservesState(t *testing.T) {
 	press(t, m, "enter", "down")
 	selected := selectedName(t, m)
 
-	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, 12}, {20, 5}, {80, 24}} {
+	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, minimumHeight}, {20, 5}, {80, 24}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		assertViewFits(t, m.View(), max(size.width, minimumWidth), max(size.height, minimumHeight))
 		if m.screen != screenList || m.section != sectionServices || m.list.query() != "a" ||
@@ -982,13 +1035,13 @@ func TestResizePreservesState(t *testing.T) {
 	}
 	typeText(t, m, "/draft")
 	focus, url := m.focus, m.fieldValue("base url")
-	for _, size := range []struct{ width, height int }{{60, 24}, {40, 12}, {20, 5}, {100, 28}} {
+	for _, size := range []struct{ width, height int }{{60, 24}, {40, minimumHeight}, {20, 5}, {100, 28}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		view := m.View()
 		assertViewFits(t, view, max(size.width, minimumWidth), max(size.height, minimumHeight))
 		if m.activeScreenTooSmall() {
 			// A screen that cannot be shown takes no keys that change it.
-			press(t, m, "tab", "n", "1")
+			press(t, m, "tab", "n", "5")
 			if !strings.Contains(view, "Resize terminal") {
 				t.Errorf("%dx%d is too small for the form but shows no notice:\n%s", size.width, size.height, view)
 			}
@@ -1023,7 +1076,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 		if !strings.Contains(view, "q") {
 			t.Errorf("%dx%d resize view has no visible q key: %q", size.width, size.height, view)
 		}
-		press(t, m, "1", "n", "enter")
+		press(t, m, "5", "n", "enter")
 		if m.screen != screenNav || m.section != sectionDefaults {
 			t.Fatalf("%dx%d changed hidden state to screen %v section %v", size.width, size.height,
 				m.screen, m.section)
@@ -1034,13 +1087,15 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	if m.screen != screenNav || m.section != sectionDefaults {
 		t.Fatalf("resize lost the tab line state: screen %v section %v", m.screen, m.section)
 	}
-	if nav := strings.Split(m.View(), "\n")[1]; !strings.HasPrefix(nav, "> ") || !strings.Contains(nav, "[4 Defaults]") {
+	lines := strings.Split(m.View(), "\n")
+	if !strings.Contains(lines[1], "[6 Settings]") || !strings.HasPrefix(lines[2], "> ") ||
+		!strings.Contains(lines[2], "[Defaults]") {
 		t.Errorf("restored navigation lost focus:\n%s", m.View())
 	}
 
 	// The notice is not a new editor screen. A half-completed form remains intact behind it.
 	form, _, _ := newModel(t)
-	press(t, form, "1", "n")
+	press(t, form, "5", "n")
 	typeText(t, form, "draft-service")
 	press(t, form, "tab")
 	focus := form.focus
@@ -1048,7 +1103,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	if view := form.View(); !strings.Contains(view, "esc leave") {
 		t.Errorf("a tiny form view does not offer its way out:\n%s", view)
 	}
-	press(t, form, "tab", "n", "1", "q")
+	press(t, form, "tab", "n", "5", "q")
 	form.Update(tea.WindowSizeMsg{Width: 80, Height: 100})
 	if form.quitting || form.screen != screenForm || form.focus != focus || form.fieldValue("name") != "draft-service" {
 		t.Errorf("resize changed form state: quitting %v screen %v focus %d name %q", form.quitting, form.screen,
@@ -1778,10 +1833,10 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 		"created on first save",
 		"c setup",
 		"next: press c to",
-		"1 Services",
-		"2 Credentials",
-		"3 Connections",
-		"4 Defaults",
+		"1 Overview",
+		"2 Connections",
+		"3 Activity",
+		"4 Access",
 		"Config:",
 	} {
 		if !strings.Contains(view, want) {
@@ -1801,7 +1856,7 @@ func TestDependentSectionsExplainWhatMustBeCreatedFirst(t *testing.T) {
 
 	openSectionByName(t, m, sectionConnections)
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Create a service and a credential", "Press 1 or 2", "c for the guided setup"} {
+	for _, want := range []string{"Create a service and a credential", "Press 5", "c for the guided setup"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("empty Connections does not contain %q:\n%s", want, view)
 		}
@@ -2138,9 +2193,9 @@ func assertNoRepeatedHint(t *testing.T, m *Model, what string) {
 // A form shows exactly the hint of the focused field, in the same place directly under it, whether the
 // terminal is large enough to hold every hint at once or not: a terminal large enough is not a license to
 // show them all, because that inconsistency is exactly what a fixed, size-independent hint replaces. The
-// default form is used because its two rows fit even at the smallest supported size, 40x12.
+// default form is used because its two rows fit even at the smallest supported size, 40x13.
 func TestFormShowsOnlyTheFocusedHintAtEverySize(t *testing.T) {
-	for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 12}} {
+	for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, minimumHeight}} {
 		m, _, _ := newModel(t)
 		addService(t, m, "wiki", "https://wiki.example.invalid")
 		addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")

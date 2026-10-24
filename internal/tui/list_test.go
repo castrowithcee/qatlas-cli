@@ -50,7 +50,7 @@ func selectedName(t *testing.T, m *Model) string {
 // A list longer than the terminal scrolls inside it: every entry can be reached, the selection is always
 // on screen, and the position says where it is.
 func TestALongListScrollsInsideTheTerminal(t *testing.T) {
-	for _, size := range []struct{ width, height int }{{80, 24}, {60, 16}, {40, 12}} {
+	for _, size := range []struct{ width, height int }{{80, 24}, {60, 16}, {40, minimumHeight}} {
 		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 			m, _, _ := newModel(t)
 			names := numberedServices(120)
@@ -250,7 +250,7 @@ func TestResizeKeepsTheFilterAndTheSelection(t *testing.T) {
 	}
 	want := selectedName(t, m)
 
-	for _, size := range []struct{ width, height int }{{40, 12}, {20, 5}, {200, 60}, {60, 14}, {80, 24}} {
+	for _, size := range []struct{ width, height int }{{40, minimumHeight}, {20, 5}, {200, 60}, {60, 14}, {80, 24}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		if got := selectedName(t, m); got != want || m.list.query() != "svc-1" {
 			t.Fatalf("%dx%d: selected %q with filter %q, want %q with svc-1",
@@ -320,9 +320,9 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	}
 
 	// Opening a section again starts without the filter.
-	press(t, m, "1", "/")
+	press(t, m, "5", "/")
 	typeText(t, m, "chat")
-	press(t, m, "enter", "esc", "esc", "1")
+	press(t, m, "enter", "esc", "esc", "5")
 	if m.list.query() != "" || len(m.list.matches) != 2 {
 		t.Errorf("a reopened section kept an old filter %q", m.list.query())
 	}

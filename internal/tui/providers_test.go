@@ -295,7 +295,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	openProviderRow(t, m, sectionServices)
 	press(t, m, "enter")
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 
 	check := func(want string) {
 		t.Helper()
@@ -303,7 +303,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the table was replaced by the resize notice:\n%s", view)
 		}
-		assertViewFits(t, view, 40, 12)
+		assertViewFits(t, view, 40, minimumHeight)
 		for _, part := range []string{"search: ", "NAME", "> ", want} {
 			if !strings.Contains(view, part) {
 				t.Fatalf("%q is not on screen:\n%s", part, view)
@@ -329,7 +329,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 	}
 
 	m, _ = providerModel(t, providerRegistry(t, 55))
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 	press(t, m, "c")
 	if m.screen != screenProviders {
 		t.Fatalf("the guided setup opened screen %v, want the provider table", m.screen)

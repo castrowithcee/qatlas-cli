@@ -64,27 +64,30 @@ const (
 	// sectionLogs is the invocation log, read only: its own screen with a day, range or all days, filters,
 	// search, and the status of every entry. See logs.go.
 	sectionLogs
+	// sectionOverview is the start of the editor. It holds no entries; see overview.go.
+	sectionOverview
 	sectionCount
 )
 
 func (s section) title() string {
-	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals", "Tokens", "Logs"}[s]
+	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals", "Tokens", "Logs",
+		"Overview"}[s]
 }
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
 // never shown, because the vault form and its leave question are worded on their own (see editorView and
 // leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending. Logs
-// holds no list of named entries either.
+// and Overview hold no list of named entries either.
 func (s section) entry() string {
 	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "agent token",
-		"log entry"}[s]
+		"log entry", "overview"}[s]
 }
 
 type screen int
 
 const (
-	// screenNav is the tab line in focus: the arrows choose the active section, whose list the workspace
-	// shows beside it.
+	// screenNav is the tab line, or the option bar of the area below it, in focus: the arrows choose the
+	// active area or sub-tab, whose list the workspace shows beneath them.
 	screenNav screen = iota
 	// screenList is the list of the active section in focus.
 	screenList
@@ -322,7 +325,7 @@ const (
 	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
-	minimumHeight = 12
+	minimumHeight = 13
 	// narrowWidth is the width below which the header and long headings take a second line.
 	narrowWidth = 80
 	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
@@ -406,10 +409,14 @@ type Model struct {
 	problems problemState
 
 	screen screen
-	// section is the active section: the one the tab line marks and whose entries, with their filter,
-	// selection and scroll position, list holds.
+	// section is the active section: the one the tab line and option bar mark and whose entries, with their
+	// filter, selection and scroll position, list holds. Its area is derived, never stored.
 	section section
-	list    filterList
+	// overviewCursor is the selected line of the Overview, counting its tiles first and then its next steps.
+	overviewCursor int
+	// navSub is set while screenNav stands on the option bar of the area instead of on the tab line.
+	navSub bool
+	list   filterList
 
 	editing string
 	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
@@ -686,7 +693,8 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.pathList = newFilterList(func(path string) string { return path })
 	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView()
-	// The editor opens on the tab line, with the first section already shown below it.
+	// The editor opens on the tab line, with the Overview already shown below it.
+	m.section = sectionOverview
 	m.list.reset(m.entryNames(m.section))
 	return m, nil
 }
@@ -887,10 +895,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateNav handles the tab line in focus: left/right step through the sections with wraparound, down,
-// enter, or tab move the focus into the workspace, and up does nothing, since there is nothing above the
-// tabs. home/end and pgup/pgdown jump to the first or last section. Moving through the sections changes
-// the active one at once, so the workspace below always shows the section the marker stands on.
+// updateNav handles the tab line and the option bar in focus: left/right step through the areas, or on the
+// option bar through the sub-tabs, with wraparound. Down from the tab line moves to the option bar when the
+// area has one; down from the option bar, enter, or tab move the focus into the workspace, and up on the
+// option bar returns to the tab line. home/end and pgup/pgdown jump to the first or last area. Moving
+// changes the active section at once, so the workspace below always shows what the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -899,22 +908,38 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	case "q":
 		return m.quit()
 	case "pgup", "home":
-		return m.previewSection(0)
+		return m.previewArea(0)
 	case "pgdown", "end":
-		return m.previewSection(sectionCount - 1)
-	case "left":
-		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
-	case "right":
-		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
-	case "down", "enter", "tab", "shift+tab":
-		// The areas are the tabs and the workspace, so next and previous lead to the same one.
+		return m.previewArea(areaCount - 1)
+	case "left", "right":
+		step := 1
+		if key.String() == "left" {
+			step = -1
+		}
+		if m.navSub && m.hasSubTabs() {
+			tabs := areaSections[m.section.area()]
+			return m.previewSection(tabs[wrap(m.section.index()+step, len(tabs))])
+		}
+		return m.previewArea(area(wrap(int(m.section.area())+step, int(areaCount))))
+	case "up":
+		m.navSub = false
+	case "down":
+		if !m.navSub && m.hasSubTabs() {
+			m.navSub = true
+			return nil
+		}
+		return m.focusList()
+	case "enter", "tab", "shift+tab":
+		// The bars and the workspace are the stops, so next and previous lead to the same one.
 		return m.focusList()
 	case "c":
 		m.askSetupTemplate()
 	case "u":
 		m.askUpdate()
 	case "n":
-		return m.newEntry()
+		if m.section != sectionOverview {
+			return m.newEntry()
+		}
 	}
 	return nil
 }
@@ -943,8 +968,14 @@ func (m *Model) newEmptyEntry() tea.Cmd {
 }
 
 // focusList hands the focus to the active section's list, or, for Vault, which holds no entries of its
-// own, opens its form the same way enter does from the list, or, for Logs, to its own screen.
+// own, opens its form the same way enter does from the list, or, for Logs, to its own screen. The Overview
+// focuses its lines.
 func (m *Model) focusList() tea.Cmd {
+	if m.section == sectionOverview {
+		m.screen = screenList
+		m.clearMessages()
+		return nil
+	}
 	if m.section == sectionVault {
 		return m.enterVaultSection()
 	}
@@ -969,6 +1000,9 @@ func (m *Model) previewSection(s section) tea.Cmd {
 }
 
 func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
+	if m.section == sectionOverview {
+		return m.updateOverview(key)
+	}
 	if m.list.editing {
 		return m.updateFilter(key)
 	}
@@ -1125,11 +1159,11 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		}
 		if len(missing) > 0 {
 			return "Create " + strings.Join(missing, " and ") +
-				" before adding a connection. Press 1 or 2 to open that section, or c for the guided setup."
+				" before adding a connection. Press 5 to open the Library, or c for the guided setup."
 		}
 	case sectionDefaults:
 		if len(m.cfg.Connections) == 0 {
-			return "Create a connection before choosing a default. Press 3 to open Connections, or c for " +
+			return "Create a connection before choosing a default. Press 2 to open Connections, or c for " +
 				"the guided setup."
 		}
 	case sectionVault:
@@ -1271,9 +1305,11 @@ func (m *Model) leaveScreen() tea.Cmd {
 	return nil
 }
 
-// focusNav hands the focus to the tab line. The workspace keeps showing the list of the active section.
+// focusNav hands the focus to the bar above the workspace: the option bar when the area has one, else the
+// tab line. The workspace keeps showing the list of the active section.
 func (m *Model) focusNav() {
 	m.screen = screenNav
+	m.navSub = m.hasSubTabs()
 	m.clearMessages()
 }
 
@@ -2485,6 +2521,7 @@ func (m *Model) stopTest() {
 // openSection shows a section from its first entry, without a filter.
 func (m *Model) openSection(s section) tea.Cmd {
 	m.section = s
+	m.layoutWorkspace()
 	m.list.reset(m.entryNames(s))
 	if s == sectionVault {
 		// Vault has no list: entering the section opens its settings form directly.
@@ -3411,11 +3448,12 @@ func wrap(i, n int) int {
 	return ((i % n) + n) % n
 }
 
+// sectionShortcut is the digit of an area: the section it opens on.
 func sectionShortcut(key string) (section, bool) {
-	if len(key) != 1 || key[0] < '1' || key[0] > '0'+byte(sectionCount) {
+	if len(key) != 1 || key[0] < '1' || key[0] > '0'+byte(areaCount) {
 		return 0, false
 	}
-	return section(key[0] - '1'), true
+	return areaSections[key[0]-'1'][0], true
 }
 
 // View renders the frame: the configuration path, the sections, and the workspace with the current screen.
@@ -3728,11 +3766,14 @@ func (m *Model) notes() string {
 	return b.String()
 }
 
-// listView draws the list screen: its frame, and between them as many rows as fit. Logs has no list; the
-// the tab line stays above it.
+// listView draws the list screen: its frame, and between them as many rows as fit. Logs and the Overview
+// have no list; the tab line stays above them.
 func (m *Model) listView() string {
 	if m.section == sectionLogs {
 		return m.logsView()
+	}
+	if m.section == sectionOverview {
+		return m.overviewView()
 	}
 	header, footer := m.listFrame()
 	row := m.listRows()
@@ -3870,7 +3911,7 @@ func findKeys(finds []renameFinding) string {
 // down (like enter and tab) moves the focus into the workspace below it; up does nothing here, so it is left
 // out of the hint. Kept short enough to still wrap into two lines at the minimum terminal width.
 func (m *Model) navKeys() string {
-	keys := "←/→ move · down open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
+	keys := "←/→ move · down open · 1-6 open · n new · c setup · {command} cmds · {help} help · q quit"
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
@@ -3879,7 +3920,7 @@ func (m *Model) navKeys() string {
 
 // backToSectionsHint names the keys that take the focus from the list back to the tab line.
 func (m *Model) backToSectionsHint() string {
-	return "1-8/{back}/tab sections"
+	return "1-6/{back}/tab areas"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -4071,6 +4112,9 @@ func (m *Model) keepScrollPosition() {
 	if m.terminalTooSmall() {
 		return
 	}
+	if m.section == sectionOverview {
+		return
+	}
 	if m.section == sectionLogs && (m.screen == screenNav || m.screen == screenLogs) {
 		m.keepLogsScrollPosition()
 		return
@@ -4161,25 +4205,36 @@ func (m *Model) needsDescription(name string) bool {
 	return false
 }
 
-// nextStep is the one thing the status line of the lists points at: open approvals first, then a vault
-// without a passphrase, then the connection setup.
-func (m *Model) nextStep() string {
+// nextStep is the one thing the status line of the lists points at: the first of nextSteps.
+func (m *Model) nextStep() string { return m.nextSteps()[0].text }
+
+// nextStepItem is one thing to do next and the section that deals with it.
+type nextStepItem struct {
+	text   string
+	target section
+}
+
+// nextSteps are all the open next steps in order of importance, never empty: open approvals, then a vault
+// without a passphrase, then the connection setup or its test.
+func (m *Model) nextSteps() []nextStepItem {
+	var steps []nextStepItem
 	if m.hasOpenApprovals() {
-		return fmt.Sprintf("open Approvals (%d)", int(sectionApprovals)+1)
+		steps = append(steps, nextStepItem{"open " + sectionApprovals.ref(), sectionApprovals})
 	}
 	if m.vaultUnencrypted() {
-		return fmt.Sprintf("open Vault (%d) to set a passphrase", int(sectionVault)+1)
+		steps = append(steps, nextStepItem{"open " + sectionVault.ref() + " to set a passphrase", sectionVault})
 	}
 	switch {
 	case len(m.cfg.Connections) == 0:
 		// The guided setup creates whatever of service and credential is still missing, so it is the
 		// next step however far the expert sections got.
-		return "press c to set up a connection step by step"
+		steps = append(steps, nextStepItem{"press c to set up a connection step by step", sectionConnections})
 	case len(m.cfg.Defaults.Connections) == 0:
-		return "open Connections and press t to test; Defaults are optional"
+		steps = append(steps, nextStepItem{"open Connections and press t to test; Defaults are optional", sectionConnections})
 	default:
-		return "open Connections and press t to test the selected provider"
+		steps = append(steps, nextStepItem{"open Connections and press t to test the selected provider", sectionConnections})
 	}
+	return steps
 }
 
 func (m *Model) emptyHelp() string {
