@@ -1003,6 +1003,7 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	}
 	m.clearMessages()
 	press(t, m, "enter")
+	press(t, m, "enter")
 	focusField(t, m, "description")
 	typeText(t, m, "x")
 	press(t, m, "esc")

@@ -629,6 +629,9 @@ type Model struct {
 	restartTo      string
 	restartBack    screen
 	restartNote    string
+	// backdrop is set while a screen is drawn as the background of a dialog: the dialog shows what the
+	// screen would show for its own input.
+	backdrop bool
 	// updateText is what the update question says an installation does, set when it opens.
 	updateText string
 
@@ -857,6 +860,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "ctrl+c" {
 			return m, m.interrupt()
+		}
+		if m.testResultShown() {
+			m.testResultKey(msg)
+			return m, nil
 		}
 		if keyIs(msg, actHelp) && m.helpReachable() {
 			m.openHelp()
@@ -3687,22 +3694,9 @@ func (m *Model) editorView() string {
 			keys += " · {info} info"
 		}
 		b.WriteString(m.keyHint(keys))
-	case screenSecret:
-		where := secret.StoreLabel(platform) + " of this machine"
-		if m.credentialType() == config.CredentialTypeVault {
-			where = "the vault"
-		}
-		b.WriteString(styles.title.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
-		b.WriteString(m.inputLine("  ", m.secretInput) + "\n")
-		b.WriteString(m.indented(
-			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
-		b.WriteString(m.keyHint("enter store · {back} cancel"))
-	case screenVaultOffer:
-		b.WriteString(m.vaultOfferView())
-	case screenAdminAuth:
-		b.WriteString(m.adminAuthView())
-	case screenVaultUnlock:
-		b.WriteString(m.vaultUnlockPromptView())
+	case screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock:
+		d, _ := m.prompt()
+		b.WriteString(m.promptText(d, true))
 	case screenConfirm:
 		b.WriteString(m.confirmView())
 	case screenSummary:
@@ -3713,6 +3707,20 @@ func (m *Model) editorView() string {
 
 	b.WriteString(m.notes())
 	return b.String()
+}
+
+// secretPrompt is the masked dialog for the secret of the credential role being edited.
+func (m *Model) secretPrompt() promptDialog {
+	where := secret.StoreLabel(platform) + " of this machine"
+	if m.credentialType() == config.CredentialTypeVault {
+		where = "the vault"
+	}
+	return promptDialog{
+		title: fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole),
+		input: m.inputLine("  ", m.secretInput),
+		hint:  "the value is masked while you type, is never shown back, and goes into " + where,
+		keys:  "enter store · {back} cancel",
+	}
 }
 
 // formKeys ends the key line of every form: F2 saves from every row and, in leaveKeys, esc is the way out
@@ -4465,6 +4473,9 @@ func (m *Model) testLine() string {
 	switch {
 	case m.testing:
 		return "\n" + m.wrapped(styles.hint, fmt.Sprintf("testing %s ... (esc cancels)", m.testName))
+	case m.backdrop:
+		// The result stands in its own dialog (see testPrompt) over this screen.
+		return ""
 	case m.testClass == provider.ClassOK:
 		return "\n" + m.wrapped(styles.ok,
 			fmt.Sprintf("[ok] %s: ok - %s accepted the connection", m.testName, providerName))

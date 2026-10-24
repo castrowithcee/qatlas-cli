@@ -62,6 +62,12 @@ func (m *Model) screenBeneath(s screen) (screen, bool) {
 		if m.vaultUnlock != nil {
 			return m.vaultUnlock.back, true
 		}
+	case screenTransfer:
+		// The import's dialogs stand over the screen it was started from; the export's over its own
+		// question (see exportView).
+		if _, ok := m.importPrompt(); ok {
+			return m.imp.from, true
+		}
 	case screenLeave:
 		return m.leaveFrom, true
 	case screenUpdate:
@@ -143,31 +149,48 @@ func (m *Model) renderAs(s screen, width int, render func()) {
 // modalView is the current question centred over its dimmed background, or false when the terminal is too
 // small for that and the question takes the whole workspace.
 func (m *Model) modalView() (string, bool) {
-	if !m.questionScreen() || m.termWidth < modalMinWidth || m.termHeight < modalMinHeight {
+	if m.termWidth < modalMinWidth || m.termHeight < modalMinHeight {
 		return "", false
+	}
+	inner := min(modalMaxInner, m.termWidth-8)
+	title := "Confirm"
+	var text string
+	if m.questionScreen() {
+		m.renderAs(m.screen, inner, func() { text = m.questionView() })
+		if m.screen == screenLeave {
+			title = "Unsaved changes"
+		}
+	} else {
+		ok := false
+		m.renderAs(m.screen, inner, func() {
+			var d promptDialog
+			if d, ok = m.prompt(); ok {
+				title, text = d.title, m.promptText(d, false)+m.promptNotes()
+			}
+		})
+		if !ok {
+			return "", false
+		}
 	}
 	base := m.baseScreen()
 	if base == screenForm && m.fields == nil {
 		return "", false
 	}
-	inner := min(modalMaxInner, m.termWidth-8)
-	var question string
-	m.renderAs(m.screen, inner, func() { question = strings.TrimRight(m.questionView(), "\n") })
-	lines := strings.Split(question, "\n")
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	if len(lines) > m.termHeight-4 {
 		return "", false
 	}
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, inner, "")
 	}
-	title := "Confirm"
-	if m.screen == screenLeave {
-		title = "Unsaved changes"
-	}
 	dialog := box(title, lines, inner, len(lines), true)
 
 	var background string
-	m.renderAs(base, 0, func() { background = m.frame(m.workspaceView()) })
+	m.renderAs(base, 0, func() {
+		m.backdrop = true
+		defer func() { m.backdrop = false }()
+		background = m.frame(m.workspaceView())
+	})
 	return overlay(background, dialog, m.termWidth, m.termHeight), true
 }
 
