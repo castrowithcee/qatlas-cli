@@ -175,6 +175,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".users.search", p.id+".users.get", p.id+".user-activities.list",
 			p.id+".user-heatmap.get", p.id+".user-followers.list", p.id+".user-following.list",
 			p.id+".user-following.check", p.id+".user-follows.add", p.id+".user-follows.remove")
+		want = append(want, p.id+".user-settings.get", p.id+".user-settings.update", p.id+".user-avatars.update",
+			p.id+".user-avatars.delete", p.id+".user-emails.list", p.id+".user-emails.delete", p.id+".user-blocks.list",
+			p.id+".user-blocks.add", p.id+".user-blocks.remove")
+		if p == gitea {
+			want = append(want, p.id+".user-blocks.check")
+		}
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
 		slices.Sort(want)

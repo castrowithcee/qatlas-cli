@@ -1,7 +1,8 @@
 ---
 description: >
   Describes the Gitea and Forgejo user tools: searching and reading users, their activity feeds and contribution
-  heatmaps, and followers, following, and follows. It covers the token scopes, how views of other people and of the
+  heatmaps, followers, following, and follows, and the settings, avatar, email addresses, and blocked users of the
+  account behind the token. It covers the token scopes, how views of other people and of the
   account behind the token are bound to the targets, the personal-data rules, differences between the products, and
   the limits.
 type: knowledge
@@ -13,13 +14,15 @@ updated: 2026-10-24
 # Users
 
 These tools read the profiles of users, their activity, and who follows whom, and change which users the account
-behind the token follows. Names, profile texts, and locations in answers are untrusted personal data; profile
-addresses (`website`, `avatar_url`) are shown and never fetched. [Forgejo](../forgejo.md) names the differences.
+behind the token follows, blocks, and how it appears (settings, avatar, email addresses). Names, profile texts, and
+locations in answers are untrusted personal data; profile addresses (`website`, `avatar_url`) are shown and never
+fetched. [Forgejo](../forgejo.md) names the differences.
 
 ## Scopes
 
-A read needs `read:user`, `user-follows.add` and `user-follows.remove` need `write:user`. Both products serve the
-routes in the `user` category.
+A read needs `read:user`; the changes (`user-follows.*`, `user-settings.update`, `user-avatars.*`,
+`user-emails.delete`, `user-blocks.add`, `user-blocks.remove`) need `write:user`. Both products serve all routes in
+the `user` category. Gitea refuses `user-settings.*` and `user-emails.*` to a token limited to public resources.
 
 ## Target binding
 
@@ -31,6 +34,8 @@ routes in the `user` category.
   `users/NAME`; `orgs/NAME` and `repos/OWNER/REPO` do not allow it, and a repository target refuses it as it does
   `accounts.me`. A read of the account (`GET /user`) first proves that the named user is the token's account. Without
   targets there is no proof read. The lists still show other people and carry their personal data.
+- `user-settings.*`, `user-avatars.*`, `user-emails.*`, and `user-blocks.*` always belong to the account behind the
+  token and are bound as above, with a proof read before every request, also for reads.
 - A follow change is that one proof read (with targets) followed by exactly one change request, which is never
   repeated, also not after a server error or a timeout.
 
@@ -47,7 +52,23 @@ routes in the `user` category.
   not reach; any other failure is an error. `target` is the checked user; `username` is whose follows are asked.
 - `user-activities.list` filters by `date` and `only_performed_by`.
 
+## Account settings, avatar, emails, and blocks
+
+- `user-settings.update` sends only the given members of the documented settings object and needs at least one.
+  `pronouns`, `hide_pronouns`, and `enable_repo_unit_hints` exist on Forgejo only; Gitea refuses them as invalid
+  arguments before the token is read. Texts hold at most 255 characters.
+- `user-avatars.update` reads an image (PNG, JPEG, GIF, or WebP, at most 4 MiB) from a directory the connection
+  releases for reading; the file is checked before the token is read.
+- `user-emails.list` returns at most 200 addresses and sets `truncated` beyond that. Addresses are personal data and
+  never used. Adding an address is not offered. `user-emails.delete` removes up to 20 addresses in one request and is
+  offered only to a connection whose `tools` list names it; no setup profile holds it.
+- `user-blocks.list` pages; Gitea lists user objects, Forgejo only block entries (`block_id`, `created_at`).
+  `user-blocks.check` exists on Gitea only and reports a 404 as `false`. `user-blocks.add` takes a `note` of at most
+  255 characters on Gitea only. Security details of the account (MFA state, failed attempts) are not exposed.
+
 ## Differences
 
 - The user object carries `pronouns` on Forgejo and `type` on Gitea 28 and later.
 - `sort` of `users.search` exists on Forgejo only; Gitea refuses it as an invalid argument.
+- Blocking uses `list_blocked`, `block/NAME`, and `unblock/NAME` on Forgejo and `blocks` with PUT and DELETE on
+  Gitea. Settings carry `pronouns`, `hide_pronouns`, and `enable_repo_unit_hints` on Forgejo only.
