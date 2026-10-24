@@ -199,7 +199,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
   repositories, pull mirror syncs, and repository avatars
 - [Organizations](organizations.md): listing, reading, creating, changing, renaming, and deleting organizations, their
-  avatars, activity feeds, and a user's permissions
+  avatars, activity feeds, a user's permissions, members, public members, and blocked users
 - [Topics and templates](topics-templates.md): repository topics, the instance-wide topic search, and the gitignore,
   label, and license templates
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs

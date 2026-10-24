@@ -43,6 +43,8 @@ additional depth of defense: the targets of the connection stay the boundary.
   depth, length, and key count.
 - `repositories.list` takes `order_by` for the token's own repositories (not together with `owner`).
 - The organization object carries `created`. See [Organizations](gitea/organizations.md).
+- Organization blocking uses `list_blocked`, `block`, and `unblock`, lists only block entries, has no
+  `org-blocks.check`, and takes no `note`. See [Organizations](gitea/organizations.md).
 - The user object carries `pronouns`; the repository object carries `wiki_branch` and `has_wiki_contents`.
 - `settings.get` with `repository` also carries `forks_disabled`.
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
