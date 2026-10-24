@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -220,10 +219,10 @@ func (m *Model) problemLine(p config.Problem) string {
 func (m *Model) problemOtherLine(p config.Problem) string {
 	if m.wizard != nil {
 		if step, _ := m.setupProblemLabel(p); step >= 0 {
-			return "step " + strings.ToLower(setupTitles[step]) + ": " + m.problemLine(p)
+			return tr(tProblemStep, strings.ToLower(wordText(setupTitles[step])), m.problemLine(p))
 		}
 	}
-	who := problemKinds[p.Section]
+	who := entryWord(problemKinds[p.Section])
 	name := p.Name
 	if domain, ok := strings.CutPrefix(p.Field, "connections."); ok && p.Section == config.SectionDefaults {
 		name = domain
@@ -271,11 +270,11 @@ func (m *Model) reportSaveError(err error, name string, form bool) {
 		m.focus = first
 		m.applyFocus()
 	}
-	noun := "problems"
+	count := tr(tProblemProblemsNothingWasSaved, len(problems))
 	if len(problems) == 1 {
-		noun = "problem"
+		count = tr(tProblemProblemNothingWasSaved, len(problems))
 	}
-	m.status, m.fail = "", fmt.Sprintf("%d %s; nothing was saved", len(problems), noun)
+	m.status, m.fail = "", count
 }
 
 // fieldProblems are the lines of the refused save that still stand under a row: none once the row changed.

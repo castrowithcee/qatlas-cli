@@ -69,7 +69,7 @@ func (g *listGroups) rowText(row string, open bool) string {
 	key := strings.TrimPrefix(row, groupRowPrefix)
 	title := key
 	if key == "" {
-		title = noProviderGroup
+		title = wordText(noProviderGroup)
 	}
 	arrow := "▸ "
 	if open {

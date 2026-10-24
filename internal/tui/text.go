@@ -25,6 +25,9 @@ func footerID(group string) textID        { return textID("footer." + group) }
 func termID(id string) textID             { return textID(id) }
 func columnID(title string) textID        { return textID("column." + title) }
 func termTitleID(id string) textID        { return textID(id + ".title") }
+func wordID(english string) textID        { return textID("word." + english) }
+func sectionID(name string) textID        { return textID("section." + name) }
+func entryID(kind string) textID          { return textID("entry." + kind) }
 
 var catalogs = i18n.Catalogs[textID]{i18n.English: textEN, i18n.German: textDE}
 
@@ -104,6 +107,20 @@ func footerText(text string) string {
 // termText is the explanation of a term, and termName its title.
 func termText(t helptopics.Term) string { return trOr(termID(t.ID), t.Text) }
 func termName(t helptopics.Term) string { return trOr(termTitleID(t.ID), t.Title) }
+
+// wordText is how a word or short phrase is drawn that the editor takes from its own tables: the titles of
+// a list bar, the labels of the detail pane, the words of an empty row. An unknown word is drawn as it is.
+func wordText(english string) string { return trOr(wordID(english), english) }
+
+// sectionText is the name of a form section as drawn; the sections themselves stay the English keys.
+func sectionText(name string) string { return trOr(sectionID(name), name) }
+
+// entryWord is what an entry of the given kind ("service", "default", ...) is called, in the language of the
+// editor.
+func entryWord(kind string) string { return trOr(entryID(kind), kind) }
+
+// warningLine is a warning drawn under a row or a list.
+func warningLine(text string) string { return tr(tWarningPrefix, text) }
 
 // columnText is how a column title of a list is drawn.
 func columnText(title string) string { return trOr(columnID(title), title) }

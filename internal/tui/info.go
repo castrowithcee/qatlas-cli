@@ -116,7 +116,7 @@ func (m *Model) pickerSubject() infoSubject {
 	f := m.fields[m.focus]
 	choice, ok := m.picker.selected()
 	if !ok {
-		return infoSubject{title: f.label}.withTerm(m.fieldTerm(f))
+		return infoSubject{title: labelText(f.label)}.withTerm(m.fieldTerm(f))
 	}
 	return m.pickerChoiceSubject(f, choice)
 }
@@ -124,7 +124,7 @@ func (m *Model) pickerSubject() infoSubject {
 // pickerChoiceSubject explains one entry of the picker of f.
 func (m *Model) pickerChoiceSubject(f field, choice string) infoSubject {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
-	s := infoSubject{title: choiceText(choice)}
+	s := infoSubject{title: choiceText(valueText(f.label, choice))}
 	switch {
 	case m.pickerEffects != nil && isEffectRow(choice):
 		s.title = strings.TrimPrefix(choice, effectRowPrefix)
@@ -153,7 +153,7 @@ func (m *Model) pickerChoiceSubject(f field, choice string) infoSubject {
 		}
 		return s.withTerm("term.profile")
 	}
-	s.title = f.label
+	s.title = labelText(f.label)
 	return s.withTerm(m.fieldTerm(f))
 }
 
@@ -279,7 +279,7 @@ func (m *Model) pane(width, rows int) string {
 	inner := width - 4
 	lines := s.lines(inner)
 	if s.empty() {
-		lines = []string{"no further explanation for this row"}
+		lines = infoSubject{long: tr(tInfoNoFurtherExplanationForThis)}.lines(inner)
 	}
 	rows = max(rows-2, 1)
 	if len(lines) > rows {

@@ -219,7 +219,7 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 			t.Errorf("role %q is drawn as a variable name, not as a stored secret", role)
 		}
 	}
-	if view := screenOf(m); strings.Contains(view, envHint) {
+	if view := screenOf(m); strings.Contains(view, tr(tFormEnvHint)) {
 		t.Errorf("the keyring form offers variable names:\n%s", view)
 	}
 
@@ -792,7 +792,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	if m.probing == "" {
 		t.Error("the editor does not report the query it is waiting for")
 	}
-	if view := screenOf(m); !strings.Contains(view, sourcePending) {
+	if view := screenOf(m); !strings.Contains(view, tr(tSecretSourcePending)) {
 		t.Errorf("view = %q, want the pending rows", view)
 	}
 

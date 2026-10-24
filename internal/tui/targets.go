@@ -116,7 +116,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			m.removeTarget()
 		case "n", keyOf(actBack):
 			m.targetRemove = false
-			m.status = "Target kept"
+			m.status = tr(tTargetTargetKept)
 		}
 		return nil
 	}
@@ -128,7 +128,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		metadata := m.targetMetadata()
 		if !metadata.Multiple && len(m.targetList.all) > 0 {
 			m.status = ""
-			m.fail = fmt.Sprintf("this provider takes one %s only; press enter to edit it or d to remove it",
+			m.fail = tr(tTargetThisProviderTakesOneOnly,
 				metadata.Label)
 			return nil
 		}
@@ -267,7 +267,7 @@ func (m *Model) editTarget(index int, value string) {
 func (m *Model) targetProblem(value string, index int) string {
 	metadata := m.targetMetadata()
 	if value == "" {
-		return "a " + metadata.Label + " must not be empty; esc cancels the entry"
+		return tr(tTargetAMustNotBeEmpty, metadata.Label)
 	}
 	if metadata.Validate != nil {
 		if err := metadata.Validate(value); err != nil {
@@ -276,7 +276,7 @@ func (m *Model) targetProblem(value string, index int) string {
 	}
 	for i, entry := range m.targetList.all {
 		if entry == value && i != index {
-			return "this " + metadata.Label + " is already in the list"
+			return tr(tPickThisIsAlreadyInThe, metadata.Label)
 		}
 	}
 	return ""
@@ -314,7 +314,7 @@ func (m *Model) removeTarget() {
 	i := m.targetList.cursor
 	entries := append(append([]string(nil), m.targetList.all[:i]...), m.targetList.all[i+1:]...)
 	m.targetList.setItems(entries)
-	m.status = "Removed " + target
+	m.status = tr(tPathRemoved, target)
 }
 
 // targetsView draws the target list screen: its frame, and between them as many targets as fit.
@@ -343,7 +343,7 @@ func (m *Model) targetsView() string {
 func (m *Model) targetFrame() (string, string) {
 	metadata := m.targetMetadata()
 	total := len(m.targetList.all)
-	title := "Targets · " + metadata.Label
+	title := tr(tTargetTargets, metadata.Label)
 	if total > 0 {
 		title += fmt.Sprintf("  %d/%d", m.targetList.cursor+1, total)
 	}
@@ -367,19 +367,19 @@ func (m *Model) targetFrame() (string, string) {
 	switch {
 	case m.labelEdit:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(styles.hint, "Label for "+target+"; leave it empty to remove the label") + "\n")
-		foot.WriteString(m.inputLine("label: ", m.labelInput) + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.hint, tr(tTargetLabelForLeaveItEmpty, target)) + "\n")
+		foot.WriteString(m.inputLine(tr(tTargetLabel), m.labelInput) + "\n")
 		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetEdit >= 0:
-		label := "new: "
+		label := tr(tTargetNew2)
 		if m.targetEdit < total {
-			label = "edit: "
+			label = tr(tTargetEdit)
 		}
 		foot.WriteString("\n" + m.inputLine(label, m.targetInput) + "\n")
 		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.warning, tr(tTargetRemoveFromTheList, target)) + "\n")
 		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
 	foot.WriteString(m.keyHint(keys))

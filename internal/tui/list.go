@@ -197,6 +197,8 @@ type column struct {
 	optional bool
 	flex     bool
 	short    map[string]string
+	// shown draws a value of the column in the language of the editor; nil draws it as it is.
+	shown func(string) string
 }
 
 // flexFloor is the narrowest a free text column is cut to before anything else of the row gives way.
@@ -228,6 +230,9 @@ const columnGap = "  "
 func (t table) cell(cells []string, i int, l layout) string {
 	if label, ok := t.columns[i].short[cells[i]]; ok && l.short[i] {
 		return label
+	}
+	if show := t.columns[i].shown; show != nil {
+		return show(cells[i])
 	}
 	return cells[i]
 }

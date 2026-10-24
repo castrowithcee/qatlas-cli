@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -207,9 +206,9 @@ func (m *Model) renderField(f field, focused bool) string {
 		// The input draws one mask character per typed character and never the characters themselves.
 		value = fitInput(f.input, m.valueRoom(f.label)).View()
 	case f.kind == fieldMasked && f.input.Value() != "":
-		value = "(entered, masked)"
+		value = tr(tRenderEnteredMasked)
 	case f.kind == fieldMasked && f.stored:
-		value = styles.hint.Render("(stored, unchanged)")
+		value = styles.hint.Render(tr(tRenderStoredUnchanged))
 	case f.kind == fieldMasked:
 		value = emptyValue(wordEmpty)
 	case f.kind == fieldProvider:
@@ -233,9 +232,9 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldToolList && f.label == vorbilderLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && len(f.marked()) == 0:
-		value = emptyValue(wordNone) + ": no tool is offered"
+		value = emptyValue(wordNone) + tr(tRenderNoToolIsOffered)
 	case f.kind == fieldToolList && f.label == toolListLabel:
-		value = fmt.Sprintf("%d of %d", len(f.marked()), len(f.choices))
+		value = tr(tRenderOf, len(f.marked()), len(f.choices))
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 		if effects := config.EffectsOfTools(metadata, f.marked()); len(effects) > 0 {
 			names := make([]string, len(effects))
@@ -245,7 +244,7 @@ func (m *Model) renderField(f field, focused bool) string {
 			value += " · " + strings.Join(names, ", ")
 		}
 	case f.kind == fieldToolList:
-		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
+		value = tr(tRenderOfTicked, len(f.marked()), len(f.choices))
 	case f.kind == fieldTargets && len(f.entries) == 0:
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 		value = emptyValue(wordAny)
@@ -279,7 +278,7 @@ func (m *Model) renderField(f field, focused bool) string {
 			if f.selected[choice] {
 				mark = "x"
 			}
-			parts[i] = "[" + mark + "] " + choice
+			parts[i] = "[" + mark + "] " + valueText(f.label, choice)
 		}
 		// A box is never split from its value: the row breaks between the values only.
 		var lines []string
@@ -317,7 +316,7 @@ const (
 )
 
 // emptyValue draws the empty value of a row of any kind the same way.
-func emptyValue(word string) string { return styles.hint.Render(word) }
+func emptyValue(word string) string { return styles.hint.Render(wordText(word)) }
 
 // shownLabel is the text a row label is drawn as, in the language of the editor. Every label of a form
 // passes through here, for its width as well as for its text, so the label column fits the drawn label.

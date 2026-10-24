@@ -1571,14 +1571,14 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 
 	openSectionByName(t, m, sectionServices)
 	pressNew(t, m)
-	if view := screenOf(m); !strings.Contains(view, nameHint) {
-		t.Errorf("the service form does not show %q:\n%s", nameHint, view)
+	if view := screenOf(m); !strings.Contains(view, tr(tDomainHint)) {
+		t.Errorf("the service form does not show %q:\n%s", tr(tDomainHint), view)
 	}
 	if detail := m.fieldDetail(m.fields[m.focus]); !strings.Contains(detail, "--connection") {
 		t.Errorf("the name detail does not say what the field is for: %q", detail)
 	}
 	focusField(t, m, "base url")
-	if view := screenOf(m); !strings.Contains(view, baseURLHint) || !strings.Contains(view, "http or https") {
+	if view := screenOf(m); !strings.Contains(view, tr(tFormBaseURLHint)) || !strings.Contains(view, "http or https") {
 		t.Errorf("the base url field does not explain itself:\n%s", view)
 	}
 
@@ -1703,7 +1703,7 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 		openSectionByName(t, m, sectionConnections)
 		return strings.Join(strings.Fields(screenOf(m)), " ")
 	}
-	if view := listed(); strings.Contains(view, undescribedMarker) {
+	if view := listed(); strings.Contains(view, tr(tFormUndescribedMarker)) {
 		t.Fatalf("a single connection is marked:\n%s", screenOf(m))
 	}
 
@@ -1712,14 +1712,14 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 		t.Fatalf("editor reported %q", m.fail)
 	}
 	view := listed()
-	for _, want := range []string{"wiki active wiki read all - " + undescribedMarker,
-		"wiki-2 active wiki read all - " + undescribedMarker, "add a line on what this route is for"} {
+	for _, want := range []string{"wiki active wiki read all - " + tr(tFormUndescribedMarker),
+		"wiki-2 active wiki read all - " + tr(tFormUndescribedMarker), "add a line on what this route is for"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list does not say %q:\n%s", want, screenOf(m))
 		}
 	}
 	for _, name := range []string{"wiki", "wiki-2"} {
-		if got := m.describe(name); !strings.HasSuffix(got, undescribedMarker) {
+		if got := m.describe(name); !strings.HasSuffix(got, tr(tFormUndescribedMarker)) {
 			t.Errorf("list entry = %q, want it marked", got)
 		}
 	}
@@ -1852,8 +1852,8 @@ func TestEnvSourceReportsTheStageWithoutTheValue(t *testing.T) {
 	if got, want := m.envSource("QATLAS_TUI_ABSENT"), string(secret.SourceMissing); got != want {
 		t.Errorf("envSource() = %q, want %q", got, want)
 	}
-	if got := m.envSource(""); got != sourceUnnamed {
-		t.Errorf("envSource() = %q, want %q", got, sourceUnnamed)
+	if got := m.envSource(""); got != tr(tSecretSourceUnnamed) {
+		t.Errorf("envSource() = %q, want %q", got, tr(tSecretSourceUnnamed))
 	}
 }
 
@@ -1997,7 +1997,7 @@ func fieldLine(t *testing.T, lines []string, label string) int {
 				continue
 			}
 		}
-		if strings.HasPrefix(body, label) {
+		if strings.HasPrefix(body, labelText(label)) {
 			return i
 		}
 	}

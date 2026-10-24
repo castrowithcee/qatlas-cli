@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -12,9 +13,6 @@ import (
 const (
 	activeForLabel     = "active for"
 	activeForUnlimited = "unlimited"
-	activeForHint      = "how long the connection stays active"
-	activeForDetail    = "how long the connection stays active; afterwards it refuses like a disabled one. " +
-		"The first choice of a connection with a limit keeps it as it is"
 )
 
 // activeForSteps are the durations the row offers besides unlimited.
@@ -39,11 +37,11 @@ func (m *Model) activeForField(conn config.Connection) field {
 	for _, step := range activeForSteps {
 		choices = append(choices, step.text)
 	}
-	f := choiceField(activeForLabel, choices, activeForUnlimited).withHint(activeForHint).withDetail(activeForDetail)
+	f := choiceField(activeForLabel, choices, activeForUnlimited).withHint(tr(tActiveActiveForHint)).withDetail(tr(tActiveActiveForDetail))
 	if at, ok := conn.Until(); ok && !conn.Disabled {
 		lead := remainingText(at, m.timeNow())
 		if lead != expiredText {
-			lead += " left"
+			lead = tr(tActiveLeft, lead)
 		}
 		f.choices = append([]string{lead}, choices...)
 		f.index, f.keep = 0, conn.ActiveUntilCanonical()
@@ -98,6 +96,14 @@ func (m *Model) connectionStateText(conn config.Connection) string {
 }
 
 const expiredText = "expired"
+
+// stateCell is connectionStateText as the state column draws it.
+func connectionStateCell(text string) string {
+	if rest, ok := strings.CutPrefix(text, stateActive); ok {
+		return valueText(stateLabel, stateActive) + rest
+	}
+	return valueText(stateLabel, text)
+}
 
 // remainingText is the time left until at, rounded down to minutes, or expired once it has passed.
 func remainingText(at, now time.Time) string {

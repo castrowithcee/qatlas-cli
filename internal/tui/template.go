@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"strconv"
@@ -20,10 +19,7 @@ import (
 // keyring or vault credential keeps only where its secrets are kept.
 
 // Rows of the template question.
-const (
-	templateEmpty    = "empty"
-	templateExisting = "from existing %s..."
-)
+const ()
 
 // templateChoice is the state of screenTemplate: the question first, then the picker over the entries.
 type templateChoice struct {
@@ -77,7 +73,7 @@ func (m *Model) askSetupTemplate() {
 	}
 	m.clearMessages()
 	if len(m.cfg.Providers()) == 0 {
-		m.fail = "this build registers no provider"
+		m.fail = tr(tSetupThisBuildRegistersNoProvider)
 		return
 	}
 	m.askTemplate(true)
@@ -141,12 +137,12 @@ func (m *Model) sourceEntry(name string) string {
 
 // copyNote is the line under a copied form.
 func (m *Model) copyNote() string {
-	note := "everything from " + m.copyFrom + " but the name"
+	note := tr(tTemplateEverythingFromButTheName, m.copyFrom)
 	switch m.section {
 	case sectionCredentials:
-		note = "storage place of " + m.copyFrom + ", never a secret value"
+		note = tr(tTemplateStoragePlaceOfNeverA, m.copyFrom)
 	case sectionTokens:
-		note = "vorbilder and a future expiry from " + m.copyFrom
+		note = tr(tTemplateVorbilderAndAFutureExpiry, m.copyFrom)
 	}
 	return note
 }
@@ -163,7 +159,7 @@ func (m *Model) templateText(name string) string {
 // templateNoun is the entry the question talks about.
 func (m *Model) templateNoun() string {
 	if m.template != nil && m.template.setup {
-		return "connection"
+		return entryWord("connection")
 	}
 	return m.section.entry()
 }
@@ -248,12 +244,12 @@ func (m *Model) templateView() string {
 		return b.String()
 	}
 	var b strings.Builder
-	title := "New " + m.templateNoun()
+	title := tr(tLeaveNew, m.templateNoun())
 	if m.template.setup {
-		title = "Guided setup"
+		title = tr(tTemplateGuidedSetup)
 	}
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
-	rows := []string{templateEmpty, fmt.Sprintf(templateExisting, m.templateNoun())}
+	rows := []string{tr(tFormTemplateEmpty), tr(tFormTemplateExisting, m.templateNoun())}
 	for i, row := range rows {
 		mark, style := "( ) ", styles.hint
 		if i == m.template.index {
@@ -292,12 +288,12 @@ func (m *Model) templateFrame() (string, string) {
 	l := &m.templateList
 	shown, total := len(l.matches), len(l.all)
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("New %s, from existing  %d/%d (%d total)",
+	head.WriteString(m.wrapped(styles.title, tr(tTemplateNewFromExistingTotal,
 		m.templateNoun(), min(l.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.searchLine(l, "search: ") + "\n")
+	head.WriteString(m.searchLine(l, tr(tLogPickSearch)) + "\n")
 	if shown == 0 {
 		head.WriteString(m.wrapped(styles.hint,
-			fmt.Sprintf("No entry matches %q. esc goes back.", l.query())) + "\n")
+			tr(tTemplateNoEntryMatchesEscGoes, l.query())) + "\n")
 	}
 	keys := "type to search · up/down move · enter choose · {back} back"
 	if l.query() == "" {
@@ -325,7 +321,7 @@ func (m *Model) startSetupFrom(source string) {
 	conn, ok := m.cfg.Connections[source]
 	provider := m.cfg.Services[conn.Service].Provider
 	if !ok || provider == "" {
-		m.fail = fmt.Sprintf("connection %s names no provider to start from", source)
+		m.fail = tr(tTemplateConnectionNamesNoProviderTo, source)
 		return
 	}
 	m.stopTest()
