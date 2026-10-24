@@ -83,6 +83,14 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == gitea {
 			want = append(want, p.id+".branches.update-ref")
 		}
+		want = append(want, p.id+".repositories.create", p.id+".repositories.update", p.id+".repositories.fork",
+			p.id+".repositories.list-forks", p.id+".repositories.generate", p.id+".repositories.sync-fork",
+			p.id+".repositories.delete", p.id+".repositories.transfer", p.id+".repositories.accept-transfer",
+			p.id+".repositories.reject-transfer", p.id+".repository-mirrors.sync",
+			p.id+".repository-avatars.update", p.id+".repository-avatars.delete")
+		if p == forgejo {
+			want = append(want, p.id+".repositories.get-sync-state", p.id+".repositories.convert")
+		}
 		want = append(want, p.id+".contents.list", p.id+".contents.get", p.id+".contents.get-raw",
 			p.id+".archives.get", p.id+".editorconfig.get", p.id+".contents.create", p.id+".contents.update",
 			p.id+".contents.change-files", p.id+".contents.apply-diff", p.id+".contents.delete")

@@ -68,6 +68,11 @@ additional depth of defense: the targets of the connection stay the boundary.
   `*-attachments.download`. See [Attachments](gitea/attachments.md).
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
+- Repository lifecycle: `repositories.get-sync-state` and `repositories.convert` (listed-only) exist on Forgejo only.
+  `repositories.sync-fork` calls `sync_fork` where Gitea calls `merge-upstream` and has no `ff_only`.
+  `repositories.update` takes `wiki_branch` and `globally_editable_wiki`, which Gitea does not, and offers the merge
+  styles `manually-merged` and `rebase-update-only`; Gitea's `projects_mode`, `has_code`, `allow_manual_merge`,
+  `autodetect_manual_merge`, and `allow_merge_update` are refused. See [Repository lifecycle](gitea/repositories.md).
 - Contents: `contents.get-ext` and `contents.get-many` do not exist, `archives.get` has no `paths`, and entries carry
   `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. `contents.change-files` has only
   the operations `create` and `update`, and the new-branch overwrite is `force_overwrite_new_branch` instead of

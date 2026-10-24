@@ -800,3 +800,46 @@ func TestImportIsInTheRegisterAndTheHelp(t *testing.T) {
 		t.Error("no help topic describes the import command")
 	}
 }
+
+func TestImportFromAHomePathReadsTheFileInTheHomeDirectory(t *testing.T) {
+	home := tempHome(t)
+	fixture := importFixture(t, exportWithout)
+	data, err := os.ReadFile(fixture)
+	mustNoError(t, err)
+	mustNoError(t, os.WriteFile(filepath.Join(home, "in.yaml"), data, 0o600))
+	v := plainImportTarget(t)
+	v.startImport("")
+	v.importTo(importMode, "~"+string(filepath.Separator)+"in.yaml", false, 0)
+	if want := filepath.Join(home, "in.yaml"); v.m.imp.path != want {
+		t.Fatalf("path = %q, want %q", v.m.imp.path, want)
+	}
+}
+
+func TestImportFileQuestionSuggestsFilesAndRefusesAMissingOne(t *testing.T) {
+	home := tempHome(t)
+	treeOf(t, home, "inbox/", "in-a.yaml")
+	v := plainImportTarget(t)
+	m := v.m
+	v.startImport("")
+	s := string(filepath.Separator)
+	v.typePath("~" + s + "in")
+	view := screenOf(m)
+	if !strings.Contains(view, "~"+s+"inbox"+s) || !strings.Contains(view, "~"+s+"in-a.yaml") {
+		t.Fatalf("directories and files are not suggested:\n%s", view)
+	}
+	// A marked directory is entered, not taken as the file.
+	v.pump("down", "down", "enter")
+	if m.imp.step != importFile || m.fail != "" || m.imp.input.Value() != "~"+s+"inbox"+s {
+		t.Fatalf("value %q step %v fail %q, want the directory entered", m.imp.input.Value(), m.imp.step, m.fail)
+	}
+	v.typePath("~" + s + "in")
+	v.pump("down", "enter")
+	if want := filepath.Join(home, "in-a.yaml"); m.imp.path != want {
+		t.Fatalf("path = %q, want the marked file %q", m.imp.path, want)
+	}
+	v.typePath("~" + s + "missing.yaml")
+	v.pump("enter")
+	if m.imp.step != importFile || m.fail == "" {
+		t.Fatalf("a missing file = step %v fail %q, want it refused", m.imp.step, m.fail)
+	}
+}
