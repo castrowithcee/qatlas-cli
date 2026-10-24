@@ -86,17 +86,23 @@ func TestALongListScrollsInsideTheTerminal(t *testing.T) {
 			check(names[119], 120)
 			press(t, m, "up")
 			check(names[118], 119)
+			// Home goes to the group row above the first entry.
 			press(t, m, "home")
+			if name, _ := m.list.selected(); name != groupRow("bookstack") {
+				t.Fatalf("home selected %q, want the group row", name)
+			}
+			press(t, m, "down")
 			check(names[0], 1)
 			press(t, m, "pgdown")
-			if got := m.list.cursor; got < 1 {
+			if got := m.list.cursor; got < 2 {
 				t.Fatalf("pgdown moved to %d, want at least one entry further", got)
 			}
-			check(names[m.list.cursor], m.list.cursor+1)
+			// The list holds the group row first, so the cursor is one ahead of the entry index.
+			check(names[m.list.cursor-1], m.list.cursor)
 			press(t, m, "end")
 			check(names[119], 120)
 			press(t, m, "pgup")
-			check(names[m.list.cursor], m.list.cursor+1)
+			check(names[m.list.cursor-1], m.list.cursor)
 		})
 	}
 }
@@ -140,14 +146,14 @@ func TestFilterIgnoresCaseAndLeavesTheConfigurationAlone(t *testing.T) {
 	if m.section != sectionServices || m.screen != screenList {
 		t.Fatalf("typing a filter left the list: screen %v section %v", m.screen, m.section)
 	}
-	if got := len(m.list.matches); got != 10 {
+	if got := len(shownEntries(m)); got != 10 {
 		t.Errorf("svc-01 matches %d entries, want 10", got)
 	}
 	// Looking at the whole row, the filter also finds entries by what else it shows.
 	clearField(t, m)
 	typeText(t, m, "BookStack")
-	if got := len(m.list.matches); got != 103 {
-		t.Errorf("the provider column matches %d entries, want all 103", got)
+	if got := len(shownEntries(m)); got != 103 {
+		t.Errorf("the provider matches %d entries, want all 103", got)
 	}
 
 	after, err := os.ReadFile(path)
@@ -157,7 +163,7 @@ func TestFilterIgnoresCaseAndLeavesTheConfigurationAlone(t *testing.T) {
 	if string(after) != string(before) {
 		t.Error("filtering changed the configuration file")
 	}
-	if len(m.cfg.Services) != 103 || len(m.list.all) != 103 {
+	if len(m.cfg.Services) != 103 || m.entryTotal() != 103 {
 		t.Errorf("filtering removed entries: %d configured, %d listed", len(m.cfg.Services), len(m.list.all))
 	}
 }
@@ -295,12 +301,12 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	// Escape while typing clears the filter and keeps the list.
 	press(t, m, "/")
 	press(t, m, "esc")
-	if m.screen != screenList || m.list.query() != "" || len(m.list.matches) != 2 || m.list.editing {
+	if m.screen != screenList || m.list.query() != "" || len(shownEntries(m)) != 2 || m.list.editing {
 		t.Fatalf("escape while typing: screen %v filter %q shown %v", m.screen, m.list.query(), m.list.matches)
 	}
 
 	// Escape after a kept filter clears it first, and only the next one leaves the list.
-	press(t, m, "down", "/")
+	press(t, m, "down", "down", "/")
 	typeText(t, m, "i")
 	press(t, m, "enter")
 	if got := selectedName(t, m); got != "wiki" {
@@ -323,7 +329,7 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	press(t, m, "5", "/")
 	typeText(t, m, "chat")
 	press(t, m, "enter", "esc", "esc", "5")
-	if m.list.query() != "" || len(m.list.matches) != 2 {
+	if m.list.query() != "" || len(shownEntries(m)) != 2 {
 		t.Errorf("a reopened section kept an old filter %q", m.list.query())
 	}
 }

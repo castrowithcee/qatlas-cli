@@ -72,7 +72,7 @@ func testClass(err error) (provider.Class, error) {
 // Register adds the provider metadata, its connection test, and its tools.
 func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
-		segmentsFields.ID, segmentsSuggest.ID, goalsList.ID, goalsGet.ID}
+		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -109,8 +109,16 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, the goals, and the report and segment catalog of a website; changes nothing",
-			Tools:       readTools,
+			Description: "reads the instance version, the websites of the token, the goals, the report and segment " +
+				"catalog of a website, and the data of its reports; changes nothing",
+			Tools: readTools,
+		}, {
+			// Live data is personal data (visitor IDs, IP addresses, user IDs, locations), so it is a
+			// separate choice and not part of the recommended start.
+			ID: "live", Title: "Read websites and live visits",
+			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
+				"and locations, the live counters, and the time of the latest visit; changes nothing",
+			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website; every " +
@@ -130,8 +138,12 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: sitesGet, Handler: capability.Handler(invokeSitesGet)},
 		capability.Operation{Descriptor: reportsList, Handler: capability.Handler(invokeReportsList)},
 		capability.Operation{Descriptor: reportsDescribe, Handler: capability.Handler(invokeReportsDescribe)},
+		capability.Operation{Descriptor: reportsGet, Handler: capability.Handler(invokeReportsGet)},
 		capability.Operation{Descriptor: segmentsFields, Handler: capability.Handler(invokeSegmentsFields)},
 		capability.Operation{Descriptor: segmentsSuggest, Handler: capability.Handler(invokeSegmentsSuggest)},
+		capability.Operation{Descriptor: visitsList, Handler: capability.Handler(invokeVisitsList)},
+		capability.Operation{Descriptor: liveCountersGet, Handler: capability.Handler(invokeLiveCountersGet)},
+		capability.Operation{Descriptor: visitsGetLatestTime, Handler: capability.Handler(invokeVisitsGetLatestTime)},
 		capability.Operation{Descriptor: goalsList, Handler: capability.Handler(invokeGoalsList)},
 		capability.Operation{Descriptor: goalsGet, Handler: capability.Handler(invokeGoalsGet)},
 		capability.Operation{Descriptor: goalsAdd, Handler: capability.Handler(invokeGoalsAdd)},

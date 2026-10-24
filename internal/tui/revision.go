@@ -41,7 +41,7 @@ func (m *Model) reloadConfig() error {
 		m.configExists = true
 	}
 	m.cfg, m.rev = cfg, rev
-	m.list.setItems(m.entryNames(m.section))
+	m.list.setItems(m.listItems(m.section))
 	return nil
 }
 
