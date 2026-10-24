@@ -13,6 +13,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakmail"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/lexware"
 	makeapi "github.com/castrowithcee/qatlas-cli/internal/provider/make"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/matomo"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/n8n"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/penpot"
@@ -83,6 +84,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := forge.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := matomo.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	// Rename tables and tool profiles name registered tools, so they are checked once every provider has
