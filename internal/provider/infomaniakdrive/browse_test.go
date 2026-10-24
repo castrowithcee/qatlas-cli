@@ -28,6 +28,9 @@ func TestTargetBrowserRegistration(t *testing.T) {
 	if strings.Join(account.Parents, ",") != "" || strings.Join(drive.Parents, ",") != "account" {
 		t.Fatalf("parents = %q, %q", strings.Join(account.Parents, ","), strings.Join(drive.Parents, ","))
 	}
+	if !drive.Top {
+		t.Fatal("drive is not offered at the top level")
+	}
 	if _, err := browseList(t, config.TargetListRequest{Kind: "account"}); errorsIsUnsupported(err) {
 		t.Fatal("no target browser registered")
 	}
@@ -35,19 +38,17 @@ func TestTargetBrowserRegistration(t *testing.T) {
 
 func errorsIsUnsupported(err error) bool { return err == config.ErrTargetBrowseUnsupported }
 
-func TestAccountTargetsGroupDrivesAndNameThem(t *testing.T) {
+func TestAccountTargetsComeFromTheAccountsEndpoint(t *testing.T) {
 	var calls []call
 	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
-		switch r.URL.Path {
-		case "/2/drive":
-			return jsonResponse(200, `{"result":"success","data":[`+
-				driveJSONOf(foreignDrive, otherAccount, "x")+`,`+driveJSONOf(ownDrive, ownAccount, "a")+`,`+
-				driveJSONOf(otherOwnDrive, otherAccount, "b")+`],"page":1,"pages":2,"total":3}`), nil
-		case "/1/accounts":
-			return jsonResponse(200, `{"result":"success","data":[{"id":1001,"name":"Customer A"},{"id":1002,"name":"Customer B"}]}`), nil
+		if r.URL.Path != "/1/accounts" {
+			t.Fatalf("unexpected %s", r.URL.Path)
 		}
-		t.Fatalf("unexpected %s", r.URL.Path)
-		return nil, nil
+		if r.URL.Query().Get("page") == "2" {
+			return jsonResponse(200, `{"result":"success","data":[{"id":1003,"name":"Third"}],"page":2,"pages":2}`), nil
+		}
+		return jsonResponse(200, `{"result":"success","data":[{"id":1002,"name":"Customer B"},{"id":1001,"name":""},`+
+			`{"id":0,"name":"Invalid"}],"page":1,"pages":2}`), nil
 	}, nil)
 	// A connection without any account target is a draft; the list still works.
 	page, err := browseList(t, config.TargetListRequest{Kind: "account"})
@@ -56,35 +57,88 @@ func TestAccountTargetsGroupDrivesAndNameThem(t *testing.T) {
 	}
 	want := []config.TargetEntry{
 		{Target: "account/1002", Name: "Customer B", Kind: "account", HasChildren: true},
-		{Target: "account/1001", Name: "Customer A", Kind: "account", HasChildren: true},
+		{Target: "account/1001", Name: "1001", Kind: "account", HasChildren: true},
 	}
 	if !reflect.DeepEqual(page.Entries, want) || page.Next != "2" || page.ServerSearch {
 		t.Fatalf("page = %+v", page)
 	}
-	if calls[0].query.Has("account_id") || len(calls) != 2 {
+	page, err = browseList(t, config.TargetListRequest{Kind: "account", Cursor: page.Next})
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Target != "account/1003" || page.Next != "" {
+		t.Fatalf("page 2 = %+v, %v", page, err)
+	}
+	if len(calls) != 2 || calls[0].query.Has("page") || calls[1].query.Get("page") != "2" {
+		t.Fatalf("calls = %+v", calls)
+	}
+	for _, c := range calls {
+		if c.path == "/2/drive" {
+			t.Fatalf("the account level read the drives listing: %+v", c)
+		}
+	}
+}
+
+func TestAccountTargetsWithoutPaginationAreOnePage(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"result":"success","data":[{"id":1001,"name":"A"}]}`), nil
+	}, nil)
+	page, err := browseList(t, config.TargetListRequest{Kind: "account"})
+	if err != nil || len(page.Entries) != 1 || page.Next != "" {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+}
+
+func TestAccountTargetsClassifyFailures(t *testing.T) {
+	for status, want := range map[int]provider.Class{
+		403: provider.ClassPermission, 404: provider.ClassNotFound, 401: provider.ClassAuth, 500: provider.ClassProviderError,
+	} {
+		var calls []call
+		serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(status, `{}`), nil
+		}, nil)
+		if _, err := browseList(t, config.TargetListRequest{Kind: "account"}); classOf(err) != want {
+			t.Fatalf("status %d: err = %v", status, err)
+		}
+		if len(calls) != 1 || calls[0].path != "/1/accounts" {
+			t.Fatalf("status %d: calls = %+v", status, calls)
+		}
+	}
+}
+
+func TestDriveTargetsWithoutParentUseTheSingleAccountTarget(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/2/drive" {
+			t.Fatalf("unexpected %s", r.URL.Path)
+		}
+		return jsonResponse(200, `{"result":"success","data":[`+driveJSONOf(ownDrive, ownAccount, "Mine")+`,`+
+			driveJSONOf(foreignDrive, otherAccount, foreignCanary)+`],"page":1,"pages":1,"total":2}`), nil
+	}, nil)
+	page, err := browseList(t, config.TargetListRequest{Kind: "drive"}, "account/1001", "drive/5001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []config.TargetEntry{{Target: "drive/5001", Name: "Mine", Kind: "drive"}}
+	if !reflect.DeepEqual(page.Entries, want) {
+		t.Fatalf("page = %+v", page)
+	}
+	if len(calls) != 1 || calls[0].query.Get("account_id") != "1001" {
 		t.Fatalf("calls = %+v", calls)
 	}
 }
 
-func TestAccountTargetsFallBackToIDs(t *testing.T) {
-	for status, wantErr := range map[int]provider.Class{403: "", 404: "", 401: provider.ClassAuth, 500: provider.ClassProviderError} {
-		var calls []call
-		serve(t, &calls, func(r *http.Request) (*http.Response, error) {
-			if r.URL.Path == "/1/accounts" {
-				return jsonResponse(status, `{}`), nil
-			}
-			return jsonResponse(200, `{"result":"success","data":[`+driveJSONOf(ownDrive, ownAccount, "a")+`],"page":1,"pages":1,"total":1}`), nil
-		}, nil)
-		page, err := browseList(t, config.TargetListRequest{Kind: "account"})
-		if wantErr != "" {
-			if classOf(err) != wantErr {
-				t.Fatalf("status %d: err = %v", status, err)
-			}
-			continue
+func TestDriveTargetsWithoutParentNeedExactlyOneAccountTarget(t *testing.T) {
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		t.Fatalf("unexpected %s", r.URL.Path)
+		return nil, nil
+	}, nil)
+	for _, targets := range [][]string{nil, {"drive/5001"}, {"account/1001", "account/1002"}} {
+		if _, err := browseList(t, config.TargetListRequest{Kind: "drive"}, targets...); !isInvalidRequest(err) {
+			t.Fatalf("%v: err = %v", targets, err)
 		}
-		if err != nil || len(page.Entries) != 1 || page.Entries[0].Name != "1001" || page.Next != "" {
-			t.Fatalf("status %d: page = %+v, err = %v", status, page, err)
-		}
+	}
+	if len(calls) != 0 {
+		t.Fatalf("calls = %+v", calls)
 	}
 }
 
