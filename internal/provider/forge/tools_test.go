@@ -135,6 +135,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".actions-secrets.list", p.id+".actions-secrets.set", p.id+".actions-secrets.delete",
 			p.id+".actions-variables.list", p.id+".actions-variables.get", p.id+".actions-variables.create",
 			p.id+".actions-variables.update", p.id+".actions-variables.delete")
+		want = append(want, p.id+".actions-runners.list", p.id+".actions-runners.get", p.id+".actions-runners.delete")
+		if p == forgejo {
+			want = append(want, p.id+".actions-runner-jobs.search")
+		} else {
+			want = append(want, p.id+".actions-runners.update", p.id+".workflows.enable", p.id+".workflows.disable")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
