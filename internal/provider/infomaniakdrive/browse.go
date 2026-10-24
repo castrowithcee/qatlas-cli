@@ -2,13 +2,11 @@ package infomaniakdrive
 
 import (
 	"context"
-	"errors"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -27,8 +25,9 @@ func openUnbound(ctx context.Context, resolved *config.Resolved, secrets *secret
 	return build(ctx, resolved, secrets, red, nil, scope{})
 }
 
-// ListTargets reads one page of accounts or of the drives of one account. Every read counts against the
-// token's request budget like any other. Neither level filters by the connection's current targets.
+// ListTargets reads one page of accounts or of the drives of one account. A drive without a parent is read
+// from the connection's single account target. Every read counts against the token's request budget like any
+// other. Neither level filters by the connection's current targets.
 func ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	req config.TargetListRequest) (config.TargetPage, error) {
 	if req.Kind == "files" {
@@ -45,6 +44,14 @@ func ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret
 	switch req.Kind {
 	case "account":
 	case "drive":
+		if strings.TrimSpace(req.Parent) == "" {
+			id, err := boundAccount(resolved)
+			if err != nil {
+				return config.TargetPage{}, err
+			}
+			parent = id
+			break
+		}
 		kind, id, err := parseTarget(strings.TrimSpace(req.Parent))
 		if err != nil || kind != "account" {
 			return config.TargetPage{}, invalidRequest("the parent of a drive must be account/ACCOUNT_ID")
@@ -61,6 +68,28 @@ func ListTargets(ctx context.Context, resolved *config.Resolved, secrets *secret
 		return client.listDriveTargets(ctx, parent, page)
 	}
 	return client.listAccountTargets(ctx, page)
+}
+
+// boundAccount is the one account target of the connection, the start of a drive pick without a parent.
+func boundAccount(resolved *config.Resolved) (int64, error) {
+	const need = "listing drives without an account needs exactly one account/ACCOUNT_ID target on the connection"
+	if resolved == nil {
+		return 0, invalidRequest(need)
+	}
+	var found int64
+	count := 0
+	for _, target := range resolved.Targets {
+		kind, id, err := parseTarget(strings.TrimSpace(target))
+		if err != nil || kind != "account" {
+			continue
+		}
+		found = id
+		count++
+	}
+	if count != 1 {
+		return 0, invalidRequest(need)
+	}
+	return found, nil
 }
 
 // fileTargetsPerPage is the page size of one folder read while choosing a file or folder.
@@ -150,44 +179,27 @@ type accountJSON struct {
 	Name string `json:"name"`
 }
 
-// listAccountTargets groups one page of the token's drives by account. Infomaniak has no accounts listing
-// that is bound to kDrive, so an account appears once per page on which it holds a drive. Names come from
-// the accounts endpoint; a token that may not read it, or does not show it, still gets the accounts by ID. Any
-// other failure of that read is a failure of the list, not something to guess around.
+// listAccountTargets reads one page of the accounts the token may see. The drives listing needs an account_id
+// and cannot name the accounts, so a token that may not read the accounts endpoint fails with the classified
+// error: the person types the ID or a kDrive URL instead. The endpoint's own pagination is followed only when
+// its answer reports it; page 1 sends no query because the endpoint's parameters are not relied on.
 func (c *Client) listAccountTargets(ctx context.Context, page int) (config.TargetPage, error) {
-	drives, meta, err := c.readDrives(ctx, "list account targets", 0, page)
-	if err != nil {
+	var query url.Values
+	if page > 1 {
+		query = url.Values{"page": {strconv.Itoa(page)}}
+	}
+	var accounts []accountJSON
+	var meta paginationJSON
+	if err := c.doInto(ctx, "list account targets", "/1/accounts", query, &accounts, &meta); err != nil {
 		return config.TargetPage{}, err
 	}
-	var ids []int64
-	seen := map[int64]bool{}
-	for _, d := range drives {
-		if d.AccountID <= 0 || seen[d.AccountID] {
+	entries := make([]config.TargetEntry, 0, len(accounts))
+	for _, a := range accounts {
+		if a.ID <= 0 {
 			continue
 		}
-		seen[d.AccountID] = true
-		ids = append(ids, d.AccountID)
-	}
-	names := map[int64]string{}
-	if len(ids) > 0 {
-		var accounts []accountJSON
-		err := c.do(ctx, "list account names", "/1/accounts", nil, &accounts)
-		var providerErr *provider.Error
-		switch {
-		case err == nil:
-			for _, a := range accounts {
-				names[a.ID] = bounded(a.Name)
-			}
-		case errors.As(err, &providerErr) &&
-			(providerErr.Class == provider.ClassPermission || providerErr.Class == provider.ClassNotFound):
-		default:
-			return config.TargetPage{}, err
-		}
-	}
-	entries := make([]config.TargetEntry, 0, len(ids))
-	for _, id := range ids {
-		text := strconv.FormatInt(id, 10)
-		name := names[id]
+		text := strconv.FormatInt(a.ID, 10)
+		name := bounded(a.Name)
 		if name == "" {
 			name = text
 		}
