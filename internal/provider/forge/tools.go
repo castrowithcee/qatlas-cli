@@ -32,6 +32,11 @@ type tool struct {
 	// once the operation is over.
 	local func(ctx context.Context, p *product, allowed allowlist, resolved *config.Resolved,
 		raw json.RawMessage) (run, func(), error)
+	// forward replaces prepare for a tool that sends the value of a forward credential the connection releases:
+	// it also checks that credential's form before the token is resolved, and the operation reads the value
+	// through the resolver only once the core has confirmed the call.
+	forward func(p *product, allowed allowlist, resolved *config.Resolved, secrets *secret.Resolver,
+		raw json.RawMessage) (run, error)
 }
 
 type run func(ctx context.Context, c *Client) (any, error)
@@ -79,7 +84,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	reviewersRemove, workflowArtifactsList, workflowArtifactsGet, workflowArtifactsDownload,
 	workflowArtifactsDelete, workflowsList, workflowsGet, workflowsDispatch, contentsCreate, contentsUpdate,
 	contentsChangeFiles, contentsApplyDiff, contentsDelete, repositoriesSearch, repositoryLanguagesList,
-	repositoryActivitiesList, repositorySigningKeysGet}
+	repositoryActivitiesList, repositorySigningKeysGet, actionsSecretsList, actionsSecretsSet,
+	actionsSecretsDelete, actionsVariablesList, actionsVariablesGet, actionsVariablesCreate,
+	actionsVariablesUpdate, actionsVariablesDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
@@ -113,6 +120,10 @@ func (t *tool) handler(p *product) capability.Handler {
 			}
 			defer release()
 			operation = prepared
+		} else if t.forward != nil {
+			if operation, err = t.forward(p, allowed, resolved, secrets, raw); err != nil {
+				return nil, err
+			}
 		} else if operation, err = t.prepare(p, allowed, raw); err != nil {
 			return nil, err
 		}

@@ -132,6 +132,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		want = append(want, p.id+".pull-request-reviewers.list", p.id+".pull-request-reviewers.request",
 			p.id+".pull-request-reviewers.remove")
+		want = append(want, p.id+".actions-secrets.list", p.id+".actions-secrets.set", p.id+".actions-secrets.delete",
+			p.id+".actions-variables.list", p.id+".actions-variables.get", p.id+".actions-variables.create",
+			p.id+".actions-variables.update", p.id+".actions-variables.delete")
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)

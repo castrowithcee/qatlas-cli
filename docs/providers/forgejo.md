@@ -84,3 +84,5 @@ not registered. See [Projects](gitea/projects.md).
   from 15, artifacts from 16. Runs, jobs, artifacts, and filters have Forgejo's own forms, there is no owner level,
   no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
   `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See [Actions](gitea/actions.md).
+- Actions administration: secrets and variables carry no `description`, and `actions-secrets.list` reads the secrets
+  of a user only from Forgejo 17. See [Actions administration](gitea/actions-admin.md).
