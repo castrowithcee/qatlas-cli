@@ -91,18 +91,20 @@ accepted and may list drives of that account, not that every bound drive exists 
 
 ## Choosing targets
 
-The target picker offers `account`, then `drive` below the chosen account, then `files` below a drive or below a
-folder: the entries directly inside, folders marked as having children, each with the path of the listed folder
-(`/` at the root; below a folder one extra read of that folder with its parents per page, no path if the chain
-is unclear). It works on a draft connection. Accounts are grouped from the drives listing without an
-`account_id`; names come from the accounts endpoint if readable, else the ID. Names are untrusted. Account and
-drive lists are paged by number, `files` by the folder cursor. It never searches on the server.
+The target picker offers `account` and `drive`, then `files` below a drive or below a folder: the entries directly
+inside, folders marked as having children, each with the path of the listed folder (`/` at the root; below a
+folder one extra read of that folder with its parents per page, no path if the chain is unclear). It works on a
+draft connection. A connection with exactly one `account` target lists the drives of that account directly,
+without loading the account list; with none or several, drives are chosen below an account. The account list
+reads the accounts endpoint and needs a token that may read accounts; otherwise the read fails with a rights
+error and the account ID or a kDrive URL is entered instead. Names are untrusted. Account and drive lists are paged
+by number, `files` by the folder cursor. It never searches on the server.
 
 A URL on `kdrive.infomaniak.com` or `ksuite.infomaniak.com` is turned into `drive/DRIVE_ID` (on
 `ksuite.infomaniak.com` with an account number before the drive also `account/ACCOUNT_ID`), plus
 `drive/DRIVE_ID/files/FILE_ID` for `…/files/FILE_ID` or the one numeric segment after `…/files/FOLDER/preview`.
 Other hosts and forms give nothing; entries are named by their IDs. Reading a URL sends no request; every list
-read counts against the shared 60 requests per minute budget (an account page costs two).
+read counts against the shared 60 requests per minute budget.
 
 ## Tools
 
