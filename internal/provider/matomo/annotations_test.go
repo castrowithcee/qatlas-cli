@@ -381,9 +381,9 @@ func TestAnnotationsDeleteTools(t *testing.T) {
 		if strings.Contains(joined, "matomo.annotations.delete") {
 			t.Errorf("profile %s selects a delete tool", profile.ID)
 		}
-		if (profile.ID == "read") != strings.Contains(joined, "matomo.annotations.count") && profile.ID != "annotations" &&
-			profile.ID != "live" && profile.ID != "goals" && profile.ID != "segments" {
-			t.Errorf("profile %s: count placement", profile.ID)
+		// Every profile builds on the read profile, which counts annotations.
+		if !strings.Contains(joined, "matomo.annotations.count") {
+			t.Errorf("profile %s lacks the annotation count", profile.ID)
 		}
 	}
 }
