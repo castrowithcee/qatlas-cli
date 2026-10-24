@@ -15,7 +15,6 @@ import (
 	"os"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -84,7 +83,7 @@ func (s section) entry() string {
 type screen int
 
 const (
-	// screenNav is the sidebar in focus: the arrows choose the active section, whose list the workspace
+	// screenNav is the tab line in focus: the arrows choose the active section, whose list the workspace
 	// shows beside it.
 	screenNav screen = iota
 	// screenList is the list of the active section in focus.
@@ -106,7 +105,7 @@ const (
 	screenProviders
 	// screenLeave asks what happens to the unsaved input of a form before it is left: save, discard, or stay.
 	screenLeave
-	// screenHelp shows the help topics over the sidebar or the list it was opened from.
+	// screenHelp shows the help topics over the tab line or the list it was opened from.
 	screenHelp
 	// screenUpdate asks before a newer release of qatlas is installed.
 	screenUpdate
@@ -318,18 +317,14 @@ func providerColumn(provider string) string {
 }
 
 // The defaults bridge the first frame until the terminal reports its real size, which it does before a
-// person can press a key; they are generous so that frame is not squeezed. From then on the width decides
-// whether the sections stand in a sidebar beside the workspace or in one line above it.
+// person can press a key; they are generous so that frame is not squeezed.
 const (
 	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
 	minimumHeight = 12
-	// sidebarMinWidth is the narrowest terminal that keeps the sidebar; below it the sections stack above
-	// the workspace in one navigation line.
-	sidebarMinWidth = 80
-	// sidebarWidth is the outer width of the sidebar, frame included.
-	sidebarWidth = 22
+	// narrowWidth is the width below which the header and long headings take a second line.
+	narrowWidth = 80
 	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
 	// sides, and a blank column inside each vertical border.
 	frameCells = 4
@@ -411,7 +406,7 @@ type Model struct {
 	problems problemState
 
 	screen screen
-	// section is the active section: the one the sidebar marks and whose entries, with their filter,
+	// section is the active section: the one the tab line marks and whose entries, with their filter,
 	// selection and scroll position, list holds.
 	section section
 	list    filterList
@@ -691,7 +686,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.pathList = newFilterList(func(path string) string { return path })
 	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView()
-	// The editor opens on the sidebar, with the first section already shown beside it.
+	// The editor opens on the tab line, with the first section already shown below it.
 	m.list.reset(m.entryNames(m.section))
 	return m, nil
 }
@@ -892,13 +887,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. In the sidebar,
-// up/down step through the sections with wraparound, and right, enter, or tab move the focus into the
-// workspace. Below the sidebar width the navigation line follows its own layout instead: left/right step
-// through the sections with the same wraparound, down, enter, or tab move the focus into the workspace,
-// and up does nothing there, since it has no section above it to go to. home/end and pgup/pgdown jump to
-// the first or last section. Moving through the sections changes the active one at once, so the workspace
-// beside or below it always shows the section the marker stands on.
+// updateNav handles the tab line in focus: left/right step through the sections with wraparound, down,
+// enter, or tab move the focus into the workspace, and up does nothing, since there is nothing above the
+// tabs. home/end and pgup/pgdown jump to the first or last section. Moving through the sections changes
+// the active one at once, so the workspace below always shows the section the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -910,26 +902,12 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 		return m.previewSection(0)
 	case "pgdown", "end":
 		return m.previewSection(sectionCount - 1)
-	case "up":
-		if m.sidebarLayout() {
-			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
-		}
-	case "down":
-		if m.sidebarLayout() {
-			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
-		}
-		return m.focusList()
 	case "left":
-		if !m.sidebarLayout() {
-			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
-		}
+		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 	case "right":
-		if !m.sidebarLayout() {
-			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
-		}
-		return m.focusList()
-	case "enter", "tab", "shift+tab":
-		// The areas are the navigation and the workspace, so next and previous lead to the same one.
+		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+	case "down", "enter", "tab", "shift+tab":
+		// The areas are the tabs and the workspace, so next and previous lead to the same one.
 		return m.focusList()
 	case "c":
 		m.askSetupTemplate()
@@ -941,7 +919,7 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// newEntry is n from the sidebar or a list: the form of a new entry of the active section, unless a missing
+// newEntry is n from the tab line or a list: the form of a new entry of the active section, unless a missing
 // prerequisite blocks it. A new agent token is a managing action from the start (see newToken).
 func (m *Model) newEntry() tea.Cmd {
 	if reason := m.newEntryBlocked(); reason != "" {
@@ -983,7 +961,7 @@ func (m *Model) focusList() tea.Cmd {
 	return nil
 }
 
-// previewSection makes s the active section while the sidebar keeps the focus.
+// previewSection makes s the active section while the tab line keeps the focus.
 func (m *Model) previewSection(s section) tea.Cmd {
 	cmd := m.openSection(s)
 	m.screen = screenNav
@@ -1013,12 +991,6 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.focusNav()
 	case "tab", "shift+tab":
 		m.focusNav()
-	case "left":
-		if m.sidebarLayout() {
-			m.focusNav()
-		}
-		// Below the sidebar width, left/right stay in the list: the navigation line above it, not beside it,
-		// is where those keys belong instead (see updateNav).
 	case "c":
 		m.askSetupTemplate()
 	case "u":
@@ -1028,23 +1000,15 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	case "/":
 		m.list.startFilter()
 	case "up":
-		if !m.sidebarLayout() {
-			// No wraparound below the sidebar width: the first entry is where the list ends and the
-			// navigation line begins, in an empty list just as much as a full one.
-			if m.list.cursor <= 0 {
-				m.focusNav()
-			} else {
-				m.list.jump(-1)
-			}
-			return nil
+		// No wraparound: the first entry is where the list ends and the tab line begins, in an empty list
+		// just as much as a full one.
+		if m.list.cursor <= 0 {
+			m.focusNav()
+		} else {
+			m.list.jump(-1)
 		}
-		m.list.move(-1)
 	case "down":
-		if !m.sidebarLayout() {
-			m.list.jump(1)
-			return nil
-		}
-		m.list.move(1)
+		m.list.jump(1)
 	case "pgup", "pgdown", "home", "end":
 		m.jumpList(key.String())
 	case "n":
@@ -1307,7 +1271,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 	return nil
 }
 
-// focusNav hands the focus to the sidebar. The workspace keeps showing the list of the active section.
+// focusNav hands the focus to the tab line. The workspace keeps showing the list of the active section.
 func (m *Model) focusNav() {
 	m.screen = screenNav
 	m.clearMessages()
@@ -2552,7 +2516,7 @@ func (m *Model) showList() tea.Cmd {
 	m.problems = problemState{}
 	if m.section == sectionVault {
 		// Vault has no list of its own, so "the list" a form or confirmation returns to is the level above
-		// it, the sidebar; openSection is what opens the form directly on the way in (see enterVaultSection).
+		// it, the tab line; openSection is what opens the form directly on the way in (see enterVaultSection).
 		m.focusNav()
 		return nil
 	}
@@ -2570,7 +2534,7 @@ func (m *Model) showList() tea.Cmd {
 }
 
 // enterVaultSection opens the vault settings form directly: Vault has no list to show first, so entering
-// the section from the sidebar is the same one step as opening a list's own entry would be for any other
+// the section from the tab line is the same one step as opening a list's own entry would be for any other
 // section.
 func (m *Model) enterVaultSection() tea.Cmd {
 	m.stopTest()
@@ -3541,7 +3505,7 @@ func (m *Model) editorView() string {
 			what = "Edit " + m.editing
 		} else if m.copyFrom != "" {
 			what += ", from " + m.copyFrom
-			if !m.sidebarLayout() {
+			if m.termWidth < narrowWidth {
 				what = "New " + noun + "\nfrom " + m.copyFrom
 			}
 		} else if m.section == sectionVault {
@@ -3765,7 +3729,7 @@ func (m *Model) notes() string {
 }
 
 // listView draws the list screen: its frame, and between them as many rows as fit. Logs has no list; the
-// sidebar shows its own screen beside it.
+// the tab line stays above it.
 func (m *Model) listView() string {
 	if m.section == sectionLogs {
 		return m.logsView()
@@ -3849,6 +3813,9 @@ func (m *Model) listFrame() (string, string) {
 	default:
 		keys = "/ filter · n new · enter edit · {delete} delete · c setup · " + back + " · {command} cmds · {help} help · q quit"
 	}
+	if hint := m.vaultLockKeyHint(); hint != "" && !m.list.editing {
+		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
+	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · {back} clear filter"
 	}
@@ -3870,7 +3837,25 @@ func (m *Model) listFrame() (string, string) {
 		}
 		foot = m.testLine() + idle.String() + foot
 	}
-	return head.String(), foot + m.notes()
+	foot += m.notes()
+	if next := m.nextLine(); next != "" &&
+		m.height-strings.Count(head.String(), "\n")-strings.Count(foot+next, "\n")-1 >= minRowsWithNext {
+		foot += next
+	}
+	return head.String(), foot
+}
+
+// minRowsWithNext is how many rows a list keeps at least once the next step takes lines of its own; below
+// that the next step is left out, so a small terminal keeps its entries.
+const minRowsWithNext = 3
+
+// nextLine is the status line of the lists while nothing else reports: the next step, until the overview
+// takes over that job.
+func (m *Model) nextLine() string {
+	if m.fail != "" || m.status != "" || m.list.editing {
+		return ""
+	}
+	return "\n\n" + m.wrapped(styles.hint, "next: "+m.nextStep())
 }
 
 // findKeys is the key that reviews the renames found, with its separator, where there are any.
@@ -3881,25 +3866,19 @@ func findKeys(finds []renameFinding) string {
 	return "f renames · "
 }
 
-// navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
+// navKeys is the key line while the tab line has the focus: left/right step through the sections, and
+// down (like enter and tab) moves the focus into the workspace below it; up does nothing here, so it is left
+// out of the hint. Kept short enough to still wrap into two lines at the minimum terminal width.
 func (m *Model) navKeys() string {
-	if m.sidebarLayout() {
-		return "up/down section · enter/tab open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
+	keys := "←/→ move · down open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
+	if hint := m.vaultLockKeyHint(); hint != "" {
+		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
-	// Below the sidebar width the navigation line follows its own keys: left/right step through the
-	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
-	// here, so it is left out of the hint, the same way the sidebar hint above leaves out right. Kept short
-	// enough to still wrap into two lines at the minimum terminal width.
-	return "←/→ move · down open · 1-8 open · n new · c setup · {command} cmds · {help} help · q quit"
+	return keys
 }
 
-// backToSectionsHint names the keys that take the focus from the list back to the sections: esc, and left in
-// the sidebar layout, where it also steps the sidebar's own selection; tab below the sidebar width, where
-// left/right instead stay inside the list (see updateList).
+// backToSectionsHint names the keys that take the focus from the list back to the tab line.
 func (m *Model) backToSectionsHint() string {
-	if m.sidebarLayout() {
-		return "1-8 or {back}/left/tab sections"
-	}
 	return "1-8/{back}/tab sections"
 }
 
@@ -4168,70 +4147,6 @@ func (m *Model) resizeView() string {
 	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 
-// sidebarLayout reports whether the sections stand in a sidebar beside the workspace.
-func (m *Model) sidebarLayout() bool { return m.termWidth >= sidebarMinWidth }
-
-// sectionEntryCount is the number shown after a section's name in the sidebar and the narrow navigation
-// line: how many entries it holds, or "-" for a settings form such as Vault, which holds none.
-func sectionEntryCount(m *Model, s section) string {
-	if s == sectionVault || s == sectionLogs {
-		return "-"
-	}
-	if s == sectionTokens {
-		entries, unavailable := m.tokensReport()
-		if unavailable != "" {
-			return "-"
-		}
-		return strconv.Itoa(len(entries))
-	}
-	if s == sectionApprovals {
-		report, unavailable := m.approvalsReport()
-		if unavailable != "" {
-			return "-"
-		}
-		return strconv.Itoa(len(report.Open))
-	}
-	return strconv.Itoa(len(m.entryNames(s)))
-}
-
-// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, the help,
-// quitting, and the next step while there is room. The active section is marked "> " while the sidebar has
-// the focus and "* " while the workspace has it; the marker, not the colour, is what says so.
-func (m *Model) sidebarLines() []string {
-	inner := sidebarWidth - frameCells
-	var lines []string
-	for s := section(0); s < sectionCount; s++ {
-		text := fmt.Sprintf("%d %-11s%3s", int(s)+1, s.title(), sectionEntryCount(m, s))
-		switch {
-		case s != m.section || m.wizard != nil:
-			lines = append(lines, "  "+text)
-		case m.screen == screenNav:
-			lines = append(lines, styles.active.Render("> "+text))
-		default:
-			lines = append(lines, styles.title.Render("* "+text))
-		}
-	}
-	setup := "  c guided setup"
-	if m.wizard != nil {
-		setup = styles.active.Render("> c guided setup")
-	}
-	lines = append(lines, "", setup, "  "+keyLabel(actCommand)+" cmds", "  "+keyLabel(actHelp)+" help", "  q quit")
-	if next := render(styles.hint, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
-		lines = append(lines, "")
-		lines = append(lines, strings.Split(next, "\n")...)
-	}
-	// The 'ctrl+l' footer hint is worth a line only for an encrypted vault (an absent or unencrypted one has
-	// nothing to lock or unlock, see handleVaultLockKey), and only where the sidebar still has room left
-	// over for it, the same "wo Platz ist" rule the next: line above already follows.
-	if hint := m.vaultLockKeyHint(); hint != "" {
-		if extra := render(styles.hint, inner, hint); len(lines)+1+strings.Count(extra, "\n")+1 <= m.height {
-			lines = append(lines, "")
-			lines = append(lines, strings.Split(extra, "\n")...)
-		}
-	}
-	return lines
-}
-
 func (m *Model) needsDescription(name string) bool {
 	connection := m.cfg.Connections[name]
 	provider := m.cfg.Services[connection.Service].Provider
@@ -4246,9 +4161,14 @@ func (m *Model) needsDescription(name string) bool {
 	return false
 }
 
+// nextStep is the one thing the status line of the lists points at: open approvals first, then a vault
+// without a passphrase, then the connection setup.
 func (m *Model) nextStep() string {
 	if m.hasOpenApprovals() {
 		return fmt.Sprintf("open Approvals (%d)", int(sectionApprovals)+1)
+	}
+	if m.vaultUnencrypted() {
+		return fmt.Sprintf("open Vault (%d) to set a passphrase", int(sectionVault)+1)
 	}
 	switch {
 	case len(m.cfg.Connections) == 0:

@@ -59,10 +59,10 @@ func unencryptedVaultModel(t *testing.T) *Model {
 // The header names all three states of an encrypted or unencrypted vault, symbol and word together, and a
 // run without a vault at all keeps the plain header it always had (Vorgabe 1's own narrower reading: nothing
 // instead of a warning for something that does not exist yet). Combined with the path line from
-// sidebarMinWidth up, and its own row above it in a narrower terminal.
+// narrowWidth up, and its own row above it in a narrower terminal.
 func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 	for _, width := range []int{100, 60} {
-		narrow := width < sidebarMinWidth
+		narrow := width < narrowWidth
 		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
 			none, _, _ := newModel(t)
 			none.Update(tea.WindowSizeMsg{Width: width, Height: 30})
@@ -382,6 +382,36 @@ func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
 	}
 }
 
+// The key line of the tab line and the lists names ctrl+l for an encrypted vault, at every width, and leaves
+// it out where there is nothing to lock.
+func TestKeyLineNamesTheLockKey(t *testing.T) {
+	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	for _, width := range []int{40, 80, 160} {
+		for _, tt := range []struct {
+			name string
+			m    *Model
+			want string
+		}{
+			{"locked", locked, "ctrl+l unlock vault"},
+			{"unlocked", unlocked, "ctrl+l lock vault"},
+			{"unencrypted", unencryptedVaultModel(t), ""},
+		} {
+			tt.m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+			for _, scr := range []screen{screenNav, screenList} {
+				tt.m.screen = scr
+				view := strings.Join(strings.Fields(tt.m.View()), " ")
+				if tt.want == "" && strings.Contains(view, "ctrl+l") {
+					t.Errorf("%s at %d columns names ctrl+l:\n%s", tt.name, width, view)
+				}
+				if tt.want != "" && !strings.Contains(view, tt.want) {
+					t.Errorf("%s at %d columns, screen %v: no %q in\n%s", tt.name, width, scr, tt.want, view)
+				}
+			}
+		}
+	}
+}
+
 // An unencrypted vault has nothing to lock: 'ctrl+l' says so and touches nothing.
 func TestCtrlLOnAnUnencryptedVault(t *testing.T) {
 	m := unencryptedVaultModel(t)
@@ -419,7 +449,7 @@ func TestCtrlLIsHarmlessDuringOtherDialogs(t *testing.T) {
 }
 
 // The header's emoji, 🔓/🔒/⚠, are wide cells, not one column each; every width this editor is meant to hold
-// at, the minimum 40x12, the 79/80 sidebar edge, and a normal terminal, still fits within its own bounds with
+// at, the minimum 40x12, the 79/80 header edge, and a normal terminal, still fits within its own bounds with
 // the vault header showing, in every one of its three states, the same way TestLayoutsFitTheirTerminal
 // already checks the rest of the frame.
 func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {

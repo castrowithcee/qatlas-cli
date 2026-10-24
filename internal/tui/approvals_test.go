@@ -506,7 +506,7 @@ func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 	}
 }
 
-// An unencrypted vault has no approvals at all: the section says so, and its sidebar count is "-", never 0.
+// An unencrypted vault has no approvals at all: the section says so, and the tab line points at Vault.
 func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
@@ -523,8 +523,35 @@ func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	view := m.View()
-	if !strings.Contains(view, "6 Approvals    -") && !strings.Contains(view, "6 Approvals  -") {
-		t.Errorf("the sidebar does not show '-' for Approvals while unencrypted:\n%s", view)
+	if strings.Contains(view, "next: open Vault") {
+		t.Errorf("a vault that does not exist yet already gets the unencrypted next step:\n%s", view)
+	}
+}
+
+// The status line names open approvals and an unencrypted vault as the next step, each with its section.
+func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
+	m := unencryptedVaultModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+	for _, size := range []int{160, 80, 40} {
+		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Vault (5) to set a passphrase") {
+			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.View())
+		}
+	}
+
+	const passphrase = "correct horse battery staple"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, passphrase)
+	m = openApprovalModel(t, store, dir)
+	openSectionByName(t, m, sectionApprovals)
+	pump(t, m, "enter")
+	unlockWithAdminPassphrase(t, m, passphrase)
+	m.screen = screenNav
+	for _, size := range []int{160, 80, 40} {
+		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Approvals (6)") {
+			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.View())
+		}
 	}
 }
 
@@ -565,13 +592,13 @@ func TestApprovalsSectionWhileLocked(t *testing.T) {
 	}
 }
 
-// Digit 6 opens Approvals from the sidebar or the list, and the narrow navigation line offers it too.
+// Digit 6 opens Approvals from the tab line or the list, and the tab line offers it too.
 func TestApprovalsNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.screen = screenNav
 	press(t, m, "6")
 	if m.screen != screenList || m.section != sectionApprovals {
-		t.Fatalf("6 on the sidebar = screen %v section %v", m.screen, m.section)
+		t.Fatalf("6 on the tab line = screen %v section %v", m.screen, m.section)
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})

@@ -81,7 +81,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 	openSectionByName(t, m, sectionTokens)
 
 	view := m.View()
-	for _, want := range []string{"Agent tokens need an encrypted vault.", "Open Vault (5)", "7 Tokens       -"} {
+	for _, want := range []string{"Agent tokens need an encrypted vault.", "Open Vault (5)", "7 Tokens"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the section does not show %q:\n%s", want, view)
 		}
@@ -123,7 +123,7 @@ func TestTokensWhileLocked(t *testing.T) {
 		t.Fatalf("Tokens lists %v after unlocking, want kunde-a-ci", m.list.all)
 	}
 	view = m.View()
-	for _, want := range []string{"kunde-a-ci", "personal", "no expiry", "7 Tokens       1", "n new", "d revoke"} {
+	for _, want := range []string{"kunde-a-ci", "personal", "no expiry", "n new", "d revoke"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the unlocked list does not show %q:\n%s", want, view)
 		}

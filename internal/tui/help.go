@@ -9,7 +9,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 )
 
-// openHelp shows the help topics in the workspace, over the sidebar or the list it was opened from.
+// openHelp shows the help topics in the workspace, over the tab line or the list it was opened from.
 func (m *Model) openHelp() {
 	m.helpFrom = m.screen
 	m.screen = screenHelp

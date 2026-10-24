@@ -1,5 +1,5 @@
 // The vault state segment of the header, and 'ctrl+l', which unlocks or locks the vault from anywhere in
-// the editor. See the header itself in tui.go (headerLines, pathLine, sidebarLines) and this window's own
+// the editor. See the header itself in tui.go (headerLines, pathLine) and this window's own
 // admin session in admin.go, which 'ctrl+l' starts or ends alongside the vault itself but never otherwise
 // touches: the two stay independent.
 package tui
@@ -66,6 +66,16 @@ func (m *Model) vaultHeaderText() string {
 	return ""
 }
 
+// vaultUnencrypted reports whether the vault exists without a passphrase, the state the header warns about.
+func (m *Model) vaultUnencrypted() bool {
+	v := m.secrets.Vault()
+	if v == nil {
+		return false
+	}
+	state, err := v.State()
+	return err == nil && state == vault.StateUnencrypted
+}
+
 // vaultDisplayUnlocked reports whether the header, and 'ctrl+l', should treat the vault as unlocked: this
 // process unlocked it itself, or a vault process elsewhere holds it open (see checkVaultProcess). The two
 // are deliberately folded into one question here, unlike admin.go's own requireAdmin, which always asks this
@@ -89,9 +99,9 @@ func (m *Model) adminHeaderText() string {
 	return fmt.Sprintf("admin %dm left", minutes)
 }
 
-// vaultLockKeyHint is the sidebar's own 'ctrl+l' footer line, added only where sidebarLines still has room
-// (see there) and only for an encrypted vault, since an absent or unencrypted one has nothing to lock or
-// unlock (handleVaultLockKey says so itself if it is pressed anyway).
+// vaultLockKeyHint is the 'ctrl+l' group of the key line on the tab line and the lists, only for an
+// encrypted vault, since an absent or unencrypted one has nothing to lock or unlock (handleVaultLockKey says
+// so itself if it is pressed anyway).
 func (m *Model) vaultLockKeyHint() string {
 	v := m.secrets.Vault()
 	if v == nil {

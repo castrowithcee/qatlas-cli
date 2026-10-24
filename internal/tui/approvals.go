@@ -57,7 +57,7 @@ func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 	return report, ""
 }
 
-// hasOpenApprovals reports whether the sidebar's next: hint should point at the Approvals section.
+// hasOpenApprovals reports whether the status line's next: hint should point at the Approvals section.
 func (m *Model) hasOpenApprovals() bool {
 	report, unavailable := m.approvalsReport()
 	return unavailable == "" && len(report.Open) > 0

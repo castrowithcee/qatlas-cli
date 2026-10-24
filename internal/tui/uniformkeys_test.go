@@ -25,16 +25,16 @@ func helpRoundTrip(t *testing.T, m *Model, what string) {
 }
 
 func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
-	t.Run("sidebar and list", func(t *testing.T) {
+	t.Run("tab line and list", func(t *testing.T) {
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 		seedServices(t, m, "a-one", "b-two", "c-three")
 		m.screen = screenNav
-		press(t, m, "j")
+		press(t, m, "l")
 		if m.section != sectionCredentials || m.screen != screenNav {
-			t.Fatalf("j = section %v screen %v, want Credentials on the sidebar", m.section, m.screen)
+			t.Fatalf("l = section %v screen %v, want Credentials on the tab line", m.section, m.screen)
 		}
-		press(t, m, "k", "end")
+		press(t, m, "h", "end")
 		if m.section != sectionLogs {
 			t.Fatalf("end = section %v, want the last section", m.section)
 		}
@@ -42,9 +42,9 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 		if m.section != sectionServices {
 			t.Fatalf("home = section %v, want the first section", m.section)
 		}
-		press(t, m, "l")
+		press(t, m, "j")
 		if m.screen != screenList {
-			t.Fatalf("l = screen %v, want the list", m.screen)
+			t.Fatalf("j = screen %v, want the list", m.screen)
 		}
 		press(t, m, "j")
 		if name := selectedName(t, m); name != "b-two" {
@@ -59,8 +59,12 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 			t.Fatalf("l in the list = screen %v, want the list unchanged", m.screen)
 		}
 		press(t, m, "h")
+		if m.screen != screenList {
+			t.Fatalf("h in the list = screen %v, want the list unchanged", m.screen)
+		}
+		press(t, m, "k", "k")
 		if m.screen != screenNav {
-			t.Fatalf("h in the list = screen %v, want the sidebar", m.screen)
+			t.Fatalf("k at the first entry = screen %v, want the tab line", m.screen)
 		}
 	})
 
@@ -403,11 +407,11 @@ func TestTabAndShiftTabCycleThroughTheAreas(t *testing.T) {
 		m.screen = screenNav
 		press(t, m, key)
 		if m.screen != screenList {
-			t.Fatalf("%s on the sidebar = screen %v, want the list", key, m.screen)
+			t.Fatalf("%s on the tab line = screen %v, want the list", key, m.screen)
 		}
 		press(t, m, key)
 		if m.screen != screenNav {
-			t.Fatalf("%s in the list = screen %v, want the sidebar", key, m.screen)
+			t.Fatalf("%s in the list = screen %v, want the tab line", key, m.screen)
 		}
 	}
 }

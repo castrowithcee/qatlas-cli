@@ -54,8 +54,8 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 	if !strings.Contains(lines[0], "Qatlas setup") {
 		t.Errorf("the background header is gone:\n%s", view)
 	}
-	if !strings.Contains(view, "Sections") {
-		t.Errorf("the background sidebar is gone:\n%s", view)
+	if !strings.Contains(view, "[1 Services]") {
+		t.Errorf("the background tab line is gone:\n%s", view)
 	}
 	for _, line := range lines {
 		if lipgloss.Width(line) != 100 {
@@ -87,7 +87,7 @@ func TestModalBackgroundDoesNotChangeScrollState(t *testing.T) {
 		t.Errorf("drawing the background clamped the scroll state: offset %d, rows offset %d",
 			m.export.offset, m.export.rows.offset)
 	}
-	if m.screen != screenLeave || m.width != m.termWidth-sidebarWidth-1-frameCells {
+	if m.screen != screenLeave || m.width != m.termWidth {
 		t.Errorf("drawing the background left screen %v, width %d", m.screen, m.width)
 	}
 }

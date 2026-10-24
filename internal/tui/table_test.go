@@ -145,7 +145,7 @@ func TestSectionListsAreAlignedTables(t *testing.T) {
 }
 
 // A narrow terminal cuts the long texts and marks the cut; the name of every entry stays whole, and no line
-// is wider than the workspace. The sidebar leaves an 80 column terminal the narrowest workspace it has.
+// is wider than the workspace. The workspace has the full terminal width, so 40 columns is the narrowest it gets.
 func TestNarrowTablesCutTheLongTextsButNeverTheName(t *testing.T) {
 	for _, width := range []int{80, 60, 40} {
 		m := newTableModel(t, width)
@@ -179,7 +179,7 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 		gone    []string
 	}{
 		{120, []string{"NAME", "STATE", "SERVICE", "EFFECTS", "TOOLS", "TARGETS"}, nil},
-		{80, []string{"NAME", "STATE", "SERVICE"}, []string{"EFFECTS", "TOOLS", "TARGETS"}},
+		{57, []string{"NAME", "STATE", "SERVICE"}, []string{"EFFECTS", "TOOLS", "TARGETS"}},
 	} {
 		m := newTableModel(t, c.width)
 		conn := m.cfg.Connections["wiki-docs"]
@@ -206,7 +206,7 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 		}
 	}
 
-	m := newTableModel(t, 80)
+	m := newTableModel(t, 57)
 	openSectionByName(t, m, sectionCredentials)
 	header, rows := tableLines(t, m)
 	if len(rows) != 2 || cellAt(header, rows[0], "STORAGE") != "env" ||

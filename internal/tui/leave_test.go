@@ -45,7 +45,7 @@ func TestEscIsOneLevelBackOnEveryScreen(t *testing.T) {
 	}
 	press(t, m, "esc")
 	if m.screen != screenNav {
-		t.Fatalf("esc on the list left screen %v, want the sidebar", m.screen)
+		t.Fatalf("esc on the list left screen %v, want the tab line", m.screen)
 	}
 }
 
@@ -191,9 +191,9 @@ func TestTheFormQuestionHasOneSetOfKeys(t *testing.T) {
 // ctrl+c ends the editor at once while nothing is unsaved, on every kind of screen.
 func TestCtrlCQuitsAtOnceWithoutChanges(t *testing.T) {
 	for name, setup := range map[string]func(*testing.T, *Model){
-		"sidebar": func(t *testing.T, m *Model) { m.screen = screenNav },
-		"list":    func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) },
-		"help":    func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices); press(t, m, "?") },
+		"tab line": func(t *testing.T, m *Model) { m.screen = screenNav },
+		"list":     func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) },
+		"help":     func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices); press(t, m, "?") },
 		"unchanged form": func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionServices)
 			pressNew(t, m)
@@ -295,7 +295,7 @@ func TestCtrlCAsksWhenSomethingIsUnsaved(t *testing.T) {
 	})
 }
 
-// F3 and backspace have no effect as "back", q is text or nothing outside the sidebar, lists and Logs.
+// F3 and backspace have no effect as "back", q is text or nothing outside the tab line, lists and Logs.
 func TestF3BackspaceAndQAreNotBackOrQuitInTheSetupAndForms(t *testing.T) {
 	m, _, _ := newModel(t)
 	walkSetup(t, m, 2)
