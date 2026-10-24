@@ -139,9 +139,12 @@ func Register(reg *capability.Registry) error {
 				segmentsUnstar.ID),
 		}, {
 			ID: "sites", Title: "Manage websites",
-			Description: "reads what the read profile reads and changes the settings of a website; every change needs " +
-				"its own confirmation, and adding a website (Super User, instance-wide) and deleting one stay unticked",
-			Tools: append(slices.Clone(readTools), sitesUpdate.ID),
+			Description: "reads what the read profile reads, changes the settings and alias URLs of a website, and " +
+				"sets the creation date of websites; every change needs its own confirmation, replacing the alias " +
+				"URLs removes those not in the list, and adding a website (Super User, instance-wide) and deleting " +
+				"one stay unticked",
+			Tools: append(slices.Clone(readTools), sitesUpdate.ID, siteURLsAdd.ID, siteURLsSet.ID,
+				sitesUpdateCreatedTime.ID),
 		}, {
 			ID: "annotations", Title: "Manage annotations",
 			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
@@ -201,6 +204,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
 		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
 		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},
+		capability.Operation{Descriptor: siteURLsAdd, Handler: invokeSiteURLs(siteURLsAdd, "SitesManager.addSiteAliasUrls", "add website URLs", false)},
+		capability.Operation{Descriptor: siteURLsSet, Handler: invokeSiteURLs(siteURLsSet, "SitesManager.setSiteAliasUrls", "set website URLs", true)},
+		capability.Operation{Descriptor: sitesUpdateCreatedTime, Handler: capability.Handler(invokeSitesUpdateCreatedTime)},
+		capability.Operation{Descriptor: siteGroupsRename, Handler: capability.Handler(invokeSiteGroupsRename)},
 		capability.Operation{Descriptor: trackingCodeGet, Handler: capability.Handler(invokeTrackingCodeGet)},
 		capability.Operation{Descriptor: siteSettingsGet, Handler: capability.Handler(invokeSiteSettingsGet)},
 		capability.Operation{Descriptor: consentManagerDetect, Handler: capability.Handler(invokeConsentManagerDetect)},
