@@ -155,13 +155,16 @@ func (m *Model) usable(prefix int) int {
 // fit returns the prefix to draw and the room left for the text beside it, so that the two together never
 // exceed the terminal. A terminal narrower than the prefix keeps one cell for the text and loses part of
 // the prefix: an indent that pushes text past the right edge is worse than a missing indent.
-func (m *Model) fit(prefix string) (string, int) {
+func (m *Model) fit(prefix string) (string, int) { return m.fitIn(m.usable(0), prefix) }
+
+// fitIn is fit within the first room cells of the workspace.
+func (m *Model) fitIn(room int, prefix string) (string, int) {
 	if m.width > 0 {
-		if room := m.width - 1; room < len(prefix) {
+		if room := room - 1; room < len(prefix) {
 			prefix = prefix[:max(room, 0)]
 		}
 	}
-	return prefix, m.usable(len(prefix))
+	return prefix, max(room-len(prefix), 1)
 }
 
 // indented draws a hint under the row it belongs to and keeps its continuation lines there too, so a hint
@@ -357,7 +360,12 @@ func (m *Model) row(active bool, text string) string {
 // wrapped. The marked row is highlighted the full width of the row, on top of the '>' prefix row already
 // gives it, so NO_COLOR or an ASCII terminal still shows which one it is; every other row is plain.
 func (m *Model) listRow(active bool, text string) string {
-	blank, width := m.fit("  ")
+	return m.listRowIn(m.usable(0), active, text)
+}
+
+// listRowIn is listRow within the first room cells of the workspace.
+func (m *Model) listRowIn(room int, active bool, text string) string {
+	blank, width := m.fitIn(room, "  ")
 	marker := blank
 	if active && len(blank) == 2 {
 		marker = "> "

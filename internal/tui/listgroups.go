@@ -170,6 +170,11 @@ func (m *Model) listItems(s section) []string {
 		m.groups, m.list.match, m.list.begin = nil, nil, nil
 		return names
 	}
+	names = m.barNames(s, names)
+	if m.opts(s).flat {
+		m.groups, m.list.match, m.list.begin = nil, nil, nil
+		return names
+	}
 	if m.folds == nil {
 		m.folds = map[section]map[string]bool{}
 	}
@@ -245,6 +250,7 @@ func (m *Model) selectEntry(name string) {
 
 // resetList fills the list with the entries of s and puts the cursor on the first entry, below its group row.
 func (m *Model) resetList(s section) {
+	m.barFocus = 0
 	m.list.reset(m.listItems(s))
 	if len(m.list.matches) > 1 && isGroupRow(m.list.matches[0]) {
 		m.list.cursor = 1

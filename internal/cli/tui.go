@@ -226,6 +226,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
+			"The lists of connections, services, and credentials have a filter bar above the rows: Group (by\n" +
+			"provider or none), State (all, active, inactive; connections only), and Sort (by name or by\n" +
+			"provider). From the rows, tab steps to its fields and on to the tab line; left/right change the\n" +
+			"value, and shift+tab goes back. The bar only changes what the list shows, never the\n" +
+			"configuration. From 120 columns a detail pane at the right shows the marked entry: provider,\n" +
+			"service, credential, state, targets, description, and the last test, never a secret value.\n\n" +
 			"Every provider row, in the forms of services, credentials, and connections and as the first step\n" +
 			"of the guided setup, is chosen in the same provider table, however many providers there are:\n" +
 			"enter or / on the row opens it. The table lists every provider the row offers with its\n" +

@@ -420,6 +420,10 @@ type Model struct {
 	// the fold state of each grouped section (see listgroups.go).
 	groups *listGroups
 	folds  map[section]map[string]bool
+	// listOpts holds the filter bar of each grouped section; barFocus is the bar field that has the focus
+	// (1-based), 0 while the rows do (see listbar.go).
+	listOpts map[section]*listOptions
+	barFocus int
 
 	editing string
 	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
@@ -1012,6 +1016,7 @@ func (m *Model) focusList() tea.Cmd {
 		return nil
 	}
 	m.screen = screenList
+	m.barFocus = 0
 	m.clearMessages()
 	return nil
 }
@@ -1030,6 +1035,11 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	if m.list.editing {
 		return m.updateFilter(key)
 	}
+	if m.barFocus > 0 {
+		if cmd, done := m.updateBar(key); done {
+			return cmd
+		}
+	}
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
@@ -1047,7 +1057,14 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "tab", "shift+tab":
+	case "tab":
+		// The stops run rows, the fields of the filter bar, the tab line.
+		if m.listBarShown() {
+			m.barFocus = 1
+		} else {
+			m.focusNav()
+		}
+	case "shift+tab":
 		m.focusNav()
 	case "c":
 		m.askSetupTemplate()
@@ -1058,10 +1075,14 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	case "/":
 		m.list.startFilter()
 	case "up":
-		// No wraparound: the first entry is where the list ends and the tab line begins, in an empty list
-		// just as much as a full one.
+		// No wraparound: the first entry is where the list ends and the filter bar or, without one, the tab
+		// line begins, in an empty list just as much as a full one.
 		if m.list.cursor <= 0 {
-			m.focusNav()
+			if m.listBarShown() {
+				m.barFocus = 1
+			} else {
+				m.focusNav()
+			}
 		} else {
 			m.list.jump(-1)
 		}
@@ -1337,6 +1358,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 // focusNav hands the focus to the bar above the workspace: the option bar when the area has one, else the
 // tab line. The workspace keeps showing the list of the active section.
 func (m *Model) focusNav() {
+	m.barFocus = 0
 	m.screen = screenNav
 	m.navSub = m.hasSubTabs()
 	m.clearMessages()
@@ -3832,6 +3854,11 @@ func (m *Model) listView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(row(i) + "\n")
 	}
+	if m.paneWidth() > 0 {
+		room := m.height - strings.Count(footer, "\n") - 1
+		lines := m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), room)
+		return strings.Join(lines, "\n") + "\n" + footer
+	}
 	b.WriteString(footer)
 	return b.String()
 }
@@ -3852,18 +3879,25 @@ func (m *Model) listFrame() (string, string) {
 		title += fmt.Sprintf("  %d/%d", pos, total)
 	}
 	head.WriteString(title + "\n")
-	if filtered {
+	bar := m.listBarShown()
+	switch {
+	case bar && m.barFocus > 0 || bar && !filtered:
+		// The bar takes the line of the filter, so a filter costs no row; it shows again once the bar is left.
+		head.WriteString(m.barLine(m.listWidth()) + "\n")
+	case filtered:
 		head.WriteString(m.filterLine(&m.list) + "\n")
-	} else {
+	default:
 		head.WriteString("\n")
 	}
 	if total > 0 {
 		t := m.listTable()
 		indent := m.entryIndent()
-		_, width := m.fit(indent)
-		head.WriteString(styles.hint.Render(clipCells(indent+t.header(t.layout(width)), m.usable(0))) + "\n")
+		_, width := m.listFit(indent)
+		head.WriteString(styles.hint.Render(clipCells(indent+t.header(t.layout(width)), m.listWidth())) + "\n")
 	}
 	switch {
+	case total == 0 && bar:
+		head.WriteString(m.wrapped(styles.hint, "No entry matches the filter bar. Change Group or State to see more.") + "\n")
 	case total == 0:
 		head.WriteString(m.wrapped(styles.hint, m.emptyHelp()) + "\n")
 	case shown == 0:
@@ -3882,6 +3916,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = m.navKeys()
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · {back} clear filter"
+	case m.barFocus > 0:
+		keys = m.barKeys()
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals:
@@ -3893,11 +3929,11 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionTokens:
 		keys = "/ filter · n new · p duplicate · enter show · {delete} revoke · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · p duplicate · enter edit/fold · r rename · {delete} delete · t test · c setup · " +
+		keys = "/ filter · ←/→ fold · n new · p duplicate · enter edit/fold · r rename · {delete} delete · t test · c setup · " +
 			findKeys(finds) + back +
 			" · {command} cmds · {help} help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " +
+		keys = "/ filter · ←/→ fold · n new · s new payload secret · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " +
 			findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
 	case m.templateSection(m.section):
 		keys = "/ filter · n new · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " + back +
@@ -3909,7 +3945,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
-		keys += " · {back} clear filter"
+		// The first esc clears the filter, so the areas keep their digits only.
+		keys = strings.Replace(keys, "1-6/{back} areas", "1-6 areas", 1) + " · {back} clear filter"
 	}
 	foot := m.findingsNotice(finds) + m.keyHint(keys)
 	if m.section == sectionConnections {
@@ -3974,6 +4011,9 @@ func (m *Model) navKeys() string {
 
 // backToSectionsHint names the keys that take the focus from the list back to the tab line.
 func (m *Model) backToSectionsHint() string {
+	if m.listBarShown() && m.screen == screenList {
+		return "tab bar · 1-6/{back} areas"
+	}
 	return "1-6/{back}/tab areas"
 }
 
@@ -4017,15 +4057,15 @@ func (m *Model) inputLine(prefix string, in textinput.Model) string {
 func (m *Model) listRows() func(i int) string {
 	t := m.listTable()
 	indent := m.entryIndent()
-	_, width := m.fit(indent)
+	_, width := m.listFit(indent)
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
-		active := i == m.list.cursor && m.screen != screenNav
+		active := i == m.list.cursor && m.screen != screenNav && m.barFocus == 0
 		if isGroupRow(name) {
-			return m.listRow(active, m.groups.rowText(name, m.groups.open(name) || m.list.query() != ""))
+			return m.listRowIn(m.listWidth(), active, m.groups.rowText(name, m.groups.open(name) || m.list.query() != ""))
 		}
-		return m.listRow(active, indent[2:]+t.line(t.rows[name], layout))
+		return m.listRowIn(m.listWidth(), active, indent[2:]+t.line(t.rows[name], layout))
 	}
 }
 
@@ -4532,9 +4572,9 @@ func (m *Model) listTable() table {
 // read can be found. It never holds a secret value.
 func (m *Model) describe(name string) string {
 	text := strings.Join(m.cells(name), columnGap)
-	if m.groups != nil {
-		// The provider is the group heading, not a column; it is found all the same.
-		text = m.groups.of[name] + columnGap + text
+	if m.groups != nil || (groupedSection(m.section) && m.opts(m.section).flat) {
+		// The provider is the group heading or the detail, not a column; it is found all the same.
+		text = m.providerOf(m.section)(name) + columnGap + text
 	}
 	if m.section != sectionConnections {
 		return text
@@ -4552,7 +4592,7 @@ func (m *Model) cells(name string) []string {
 	switch m.section {
 	case sectionServices:
 		s := m.cfg.Services[name]
-		return []string{name, s.BaseURL}
+		return []string{name, m.logText(s.BaseURL)}
 	case sectionCredentials:
 		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.
@@ -4595,7 +4635,7 @@ func (m *Model) cells(name string) []string {
 		case len(values) > 1:
 			targets = fmt.Sprintf("%d targets", len(values))
 		}
-		description := conn.Description
+		description := m.logText(conn.Description)
 		if description == "" && m.needsDescription(name) {
 			description = undescribedMarker
 		}

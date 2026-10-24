@@ -408,17 +408,36 @@ func TestTabAndShiftTabCycleThroughTheAreas(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	seedServices(t, m, "a-one")
+	// Forward: the tab line, the rows, the fields of the filter bar, the tab line again.
 	m.screen = screenNav
-	for _, key := range []string{"tab", "shift+tab"} {
-		m.screen = screenNav
-		press(t, m, key)
-		if m.screen != screenList {
-			t.Fatalf("%s on the tab line = screen %v, want the list", key, m.screen)
+	press(t, m, "tab")
+	if m.screen != screenList || m.barFocus != 0 {
+		t.Fatalf("tab on the tab line = screen %v bar %d, want the rows", m.screen, m.barFocus)
+	}
+	for field := 1; field <= len(barKinds(m.section)); field++ {
+		press(t, m, "tab")
+		if m.screen != screenList || m.barFocus != field {
+			t.Fatalf("tab %d in the list = screen %v bar %d, want bar field %d", field, m.screen, m.barFocus, field)
 		}
-		press(t, m, key)
-		if m.screen != screenNav {
-			t.Fatalf("%s in the list = screen %v, want the tab line", key, m.screen)
-		}
+	}
+	press(t, m, "tab")
+	if m.screen != screenNav || m.barFocus != 0 {
+		t.Fatalf("tab on the last bar field = screen %v bar %d, want the tab line", m.screen, m.barFocus)
+	}
+	// Backward: shift+tab from the rows leads to the tab line, from the first bar field back to the rows.
+	m.screen = screenNav
+	press(t, m, "shift+tab")
+	if m.screen != screenList {
+		t.Fatalf("shift+tab on the tab line = screen %v, want the list", m.screen)
+	}
+	press(t, m, "shift+tab")
+	if m.screen != screenNav {
+		t.Fatalf("shift+tab in the list = screen %v, want the tab line", m.screen)
+	}
+	m.screen, m.barFocus = screenList, 1
+	press(t, m, "shift+tab")
+	if m.screen != screenList || m.barFocus != 0 {
+		t.Fatalf("shift+tab on the first bar field = screen %v bar %d, want the rows", m.screen, m.barFocus)
 	}
 }
 
