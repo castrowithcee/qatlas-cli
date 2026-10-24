@@ -101,9 +101,9 @@ func (m *Model) vaultLockKeyHint() string {
 	case err != nil:
 		return ""
 	case m.vaultDisplayUnlocked(state):
-		return "ctrl+l lock vault"
+		return keyLabel(actLock) + " lock vault"
 	case state == vault.StateLocked:
-		return "ctrl+l unlock vault"
+		return keyLabel(actLock) + " unlock vault"
 	}
 	return ""
 }
@@ -179,7 +179,7 @@ func (m *Model) openVaultUnlockPrompt(back screen) {
 func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 	u := m.vaultUnlock
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		back := u.back
 		m.vaultUnlock = nil
 		m.screen = back
@@ -217,7 +217,7 @@ func (m *Model) vaultUnlockPromptView() string {
 	}
 	b.WriteString(m.inputLine("  ", m.vaultUnlock.input) + "\n")
 	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
-	b.WriteString(m.keyHint("enter unlock · esc cancel"))
+	b.WriteString(m.keyHint("enter unlock · {back} cancel"))
 	return b.String()
 }
 
@@ -389,7 +389,7 @@ func (m *Model) vaultLockConfirmView() string {
 	var b strings.Builder
 	b.WriteString(styles.title.Render("Lock the vault now?") + "\n\n")
 	b.WriteString(m.indented("running invokes stop working until it is unlocked again") + "\n")
-	b.WriteString(m.keyHint("y lock · n/esc stay unlocked · : cmds · ? help"))
+	b.WriteString(m.keyHint("y lock · n/{back} stay unlocked · {command} cmds · {help} help"))
 	return b.String()
 }
 

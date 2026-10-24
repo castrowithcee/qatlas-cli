@@ -431,7 +431,7 @@ func (m *Model) addAsk() string {
 func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 	a := m.targetAdd
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		switch {
 		case a.kind >= 0 && len(a.history) > 1:
 			m.stepBack()
@@ -476,13 +476,13 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 func (m *Model) addFrame() (string, string) {
 	a := m.targetAdd
 	metadata := m.targetMetadata()
-	save := "F2 save"
+	save := "{save} save"
 	if m.wizard != nil {
-		save = "F2 next step"
+		save = "{save} next step"
 	}
 	var head strings.Builder
 	label := "filter or type: "
-	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · esc cancel entry"
+	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · {back} cancel entry"
 	if a.kind < 0 {
 		head.WriteString(m.wrapped(styles.title, "Add a "+metadata.Label) + "\n")
 		hint := "build a new target step by step, or type it"
@@ -504,9 +504,9 @@ func (m *Model) addFrame() (string, string) {
 		}
 		head.WriteString(m.wrapped(styles.hint, "so far: "+so+"   forms: "+strings.Join(forms, ", ")) + "\n")
 		label = "value: "
-		keys = "type a value or filter · up/down move · enter choose · " + save + " · esc step back"
+		keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} step back"
 		if len(a.history) <= 1 {
-			keys = "type a value or filter · up/down move · enter choose · " + save + " · esc cancel entry"
+			keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} cancel entry"
 		}
 	}
 	head.WriteString(m.searchLine(&a.choices, label) + "\n")
@@ -514,7 +514,7 @@ func (m *Model) addFrame() (string, string) {
 		head.WriteString(m.wrapped(styles.hint, "(nothing to choose; type a value)") + "\n")
 	}
 	if a.choices.query() == "" {
-		keys += " · : cmds · ? help"
+		keys += " · {command} cmds · {help} help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

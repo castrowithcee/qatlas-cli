@@ -451,7 +451,7 @@ func (m *Model) updatePick(key tea.KeyMsg) tea.Cmd {
 	lv := p.top()
 	m.clearMessages()
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		if len(p.marks) > 0 {
 			p.marks, p.markOrder = map[string]config.TargetEntry{}, nil
 			m.status = "Marks cleared"
@@ -716,14 +716,14 @@ func (m *Model) pickFrame() (string, string) {
 	if len(lv.kinds) > 1 {
 		keys += " · ctrl+t next kind"
 	}
-	keys += " · F2 save · esc "
+	keys += " · {save} save · esc "
 	if len(p.marks) > 0 {
 		keys += "clear marks"
 	} else {
 		keys += "close"
 	}
 	if lv.list.query() == "" {
-		keys += " · : cmds · ? help"
+		keys += " · {command} cmds · {help} help"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

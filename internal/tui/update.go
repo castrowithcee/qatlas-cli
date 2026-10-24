@@ -105,7 +105,7 @@ func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.startUpdate()
-	case "n", "esc":
+	case "n", keyOf(actBack):
 		m.screen = m.updateFrom
 		m.status = "Update not installed"
 	}
@@ -203,7 +203,7 @@ func (m *Model) updateView() string {
 		after = "This editor then restarts itself into the new version, and opens the unlock dialog if the " +
 			"update locked a vault that was unlocked."
 	}
-	return m.wrapped(styles.title, question) + m.keyHint("y update · n/esc cancel · : cmds · ? help") + "\n\n" +
+	return m.wrapped(styles.title, question) + m.keyHint("y update · n/{back} cancel · {command} cmds · {help} help") + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), m.updateText) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), "Installs the release like 'qatlas update' and verifies its checksum. "+after)
 }
