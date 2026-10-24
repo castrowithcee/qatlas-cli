@@ -239,6 +239,7 @@ defaults:
 			t.Errorf("call after the update = %s, must not contain %q", result, banned)
 		}
 	}
+	finishMCPServer(t, cmd, stdin, &stderr)
 	if !strings.Contains(stderr.String(), "no executable program") {
 		t.Errorf("stderr = %q, want the note that the restart found no program", stderr.String())
 	}
@@ -246,5 +247,21 @@ defaults:
 		if strings.Contains(seen.String()+stderr.String(), canary) {
 			t.Errorf("a secret reached the output: %s", canary)
 		}
+	}
+}
+
+// finishMCPServer ends the server by closing its stdin and waits for it, so that the copy of its stderr into the
+// test's buffer is complete and ordered before the test reads it. A server that does not end is a test failure.
+func finishMCPServer(t *testing.T, cmd *exec.Cmd, stdin io.Closer, stderr fmt.Stringer) {
+	t.Helper()
+	_ = stdin.Close()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		_ = cmd.Process.Kill()
+		<-done
+		t.Fatalf("the server did not end after its stdin was closed; stderr: %q", stderr.String())
 	}
 }

@@ -227,15 +227,16 @@ defaults:
 	if exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid)); err != nil || exe != bin {
 		t.Errorf("process %d runs %q (%v), want the new program at %s", pid, exe, err, bin)
 	}
+	// The session survived: a further call needs no initialize either.
+	if result := invoke(); !strings.Contains(result, "Restart Runbook") {
+		t.Errorf("further call = %s, want the page", result)
+	}
+	finishMCPServer(t, cmd, stdin, &stderr)
 	if text := stderr.String(); !strings.Contains(text, "restarted after an update, version 1.0.0 to 2.0.0") {
 		t.Errorf("stderr = %q, want the note naming both versions", text)
 	}
 	if strings.Count(stderr.String(), "restarting from version") != 1 {
 		t.Errorf("stderr = %q, want exactly one restart", stderr.String())
-	}
-	// The session survived: a further call needs no initialize either.
-	if result := invoke(); !strings.Contains(result, "Restart Runbook") {
-		t.Errorf("further call = %s, want the page", result)
 	}
 	for _, canary := range []string{storedID, storedSecret, passphrase} {
 		if strings.Contains(seen.String()+stderr.String(), canary) {
