@@ -223,14 +223,14 @@ func (m *Model) pathsView() string {
 // them the path being typed with its suggestions or the remove question, the keys and the notes.
 func (m *Model) pathFrame() (string, string) {
 	total := len(m.pathList.all)
-	title, hint, none := "Paths", pathsHint, "(none: the connection applies in every project; a adds one)"
+	title, hint, none := "Paths", pathsHint, "(none: every project)"
 	if label := m.fields[m.focus].label; isFilesLabel(label) {
 		verb := "read files from"
 		if label == filesWriteLabel {
 			verb = "write files to"
 		}
 		title, hint = "Directories for "+label, fmt.Sprintf(filesHint, verb)
-		none = "(none: no local files released; a adds one)"
+		none = "(none released)"
 	}
 	if name := m.fieldValue("name"); name != "" {
 		title += " of " + name

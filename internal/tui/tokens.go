@@ -31,13 +31,16 @@ const (
 
 // Hints and notes of the token form.
 const (
-	tokenNameHint = "a name you choose, e.g. the agent or customer the token is for: letters, digits, '-', " +
+	tokenNameHint   = "a name you choose"
+	tokenNameDetail = "a name you choose, e.g. the agent or customer the token is for: letters, digits, '-', " +
 		"'_' or '.'"
-	vorbilderHint = "enter opens the connections that read a vault credential, to tick one or more"
-	expiresHint   = "optional, empty = no expiry; a date YYYY-MM-DD (its start, local time) or an RFC 3339 time"
-	vorbildNote   = "each vorbild sets the ceiling: same service and credential, and everything else " +
-		"(rights, tools, targets, paths) within that connection"
-	vorbildSelfNote = "this token can never change or delete a vorbild connection itself"
+	vorbilderHint   = "enter opens the connections to tick"
+	vorbilderDetail = "enter opens the connections that read a vault credential, to tick one or more. " +
+		"Each vorbild sets the ceiling: same service and credential, and everything else " +
+		"(rights, tools, targets, paths) within that connection. This token can never change or delete a " +
+		"vorbild connection itself"
+	expiresHint   = "optional; empty = no expiry"
+	expiresDetail = "optional, empty = no expiry; a date YYYY-MM-DD (its start, local time) or an RFC 3339 time"
 )
 
 // tokenLapsedText is what a vorbild that covers nothing now is marked with, symbol and words together.
@@ -225,7 +228,7 @@ func (m *Model) tokensBlocked() string {
 func (m *Model) tokenFields(source string) []field {
 	var name, expires string
 	vorbilder := field{label: vorbilderLabel, kind: fieldToolList, choices: m.vorbildChoices(),
-		selected: map[string]bool{}, hint: vorbilderHint}
+		selected: map[string]bool{}, hint: vorbilderHint, detail: vorbilderDetail}
 	if source != "" {
 		name = m.copyName(source)
 		if entry, ok, _ := m.tokenByName(source); ok {
@@ -237,8 +240,8 @@ func (m *Model) tokenFields(source string) []field {
 			expires = futureExpiryText(entry.token.Expires, time.Now())
 		}
 	}
-	return []field{textField("name", name, false).withHint(tokenNameHint), vorbilder,
-		textField(expiresLabel, expires, false).withHint(expiresHint)}
+	return []field{textField("name", name, false).withHint(tokenNameHint).withDetail(tokenNameDetail), vorbilder,
+		textField(expiresLabel, expires, false).withHint(expiresHint).withDetail(expiresDetail)}
 }
 
 // futureExpiryText writes an expiry the way the expires row reads it, or "" for none or one that has passed.
@@ -491,9 +494,4 @@ func (m *Model) tokenRevokeView() string {
 		consequence: "it stops working at once, in a running vault process too; approvals it gave stay",
 		keys:        "y revoke · n/{back} keep · {command} cmds · {help} help",
 	})
-}
-
-// tokenFormNotes are the lines under the rows of the token form: what a vorbild means, said once for all.
-func (m *Model) tokenFormNotes() string {
-	return "\n" + m.indentedWith(styles.hint, vorbildNote) + "\n" + m.indentedWith(styles.hint, vorbildSelfNote) + "\n"
 }

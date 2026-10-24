@@ -72,7 +72,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "gh")
 	openTargetList(t, m)
-	if view := screenOf(m); !strings.Contains(view, "whatever its credential reaches") {
+	if view := screenOf(m); !strings.Contains(view, "(unrestricted)") {
 		t.Fatalf("the empty list does not say what it means:\n%s", view)
 	}
 	addTarget(t, m, "repos/octo/a")
@@ -219,9 +219,10 @@ func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "account")
-	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "one base at most") ||
-		!strings.Contains(hint, "an empty list cannot be saved") {
-		t.Fatalf("hint = %q, want the single-base rules", hint)
+	if hint := m.field(targetsLabel).detail; !strings.Contains(hint, "one base at most") ||
+		!strings.Contains(hint, "an empty list cannot be saved") ||
+		!strings.Contains(m.field(targetsLabel).hint, "required, one") {
+		t.Fatalf("detail = %q, want the single-base rules", hint)
 	}
 	openTargetList(t, m)
 	addTarget(t, m, "1/Sales")

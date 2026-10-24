@@ -658,7 +658,7 @@ func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
 		m      *Model
 		reason string
 	}{
-		"locked":      {locked, "unlock it"},
+		"locked":      {locked, "unlocks it"},
 		"unencrypted": {plain, "with a passphrase"},
 	} {
 		t.Run(name, func(t *testing.T) {
