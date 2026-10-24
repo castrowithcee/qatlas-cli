@@ -5,6 +5,9 @@ import tea "github.com/charmbracelet/bubbletea"
 // typing reports whether the current screen reads typed text right now. Letters are text there, so neither
 // the vim movement keys, ? nor : mean anything else.
 func (m *Model) typing() bool {
+	if m.keyCapture {
+		return true
+	}
 	switch m.screen {
 	case screenCommand, screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenPicker, screenProviders:
 		return true

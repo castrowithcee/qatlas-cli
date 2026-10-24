@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo annotation tools: listing, reading, adding, and updating the notes on a website's days, their rights, limits, and unclear outcomes.
+  Describes the Matomo annotation tools: listing, reading, counting, adding, updating, and deleting the notes on a website's days, their rights, limits, and unclear outcomes.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -10,11 +10,10 @@ updated: 2026-10-24
 # Matomo annotations
 
 The annotation tools of the [Matomo provider](README.md). The profiles are described under
-[Setup profiles](README.md#setup-profiles). All four tools need the Annotations plugin.
+[Setup profiles](README.md#setup-profiles). All seven tools need the Annotations plugin.
 
 Annotations are per website; `idNote` counts per website, and every tool works with `idSite` and `idNote` together.
 Matomo checks that pair itself and answers an ID the website does not have as an error, so no tool reads first.
-Deleting and counting annotations are not offered.
 
 - `matomo.annotations.list` returns the annotations of one website in a date range, ordered by date and ID.
   `date`, `period`, and `lastN` shape the range as in Matomo; without `date` every annotation of the website is
@@ -26,6 +25,17 @@ Deleting and counting annotations are not offered.
   a repeated call creates a second annotation.
 - `matomo.annotations.update` changes the date, note, or star; a value not given stays as it is, and at least one
   is required. It needs a write right on the website, or the user is the author of the annotation.
+- `matomo.annotations.count` counts the annotations of one website per period of `date`, `period`, and `lastN`
+  (both `date` and `period` are required, as in Matomo; `range` counts per day), with the number of starred ones.
+  `getAnnotationText` adds the note for a period with exactly one annotation. One website per call. It is part of
+  the `read` profile.
+- `matomo.annotations.delete` deletes one annotation for good. Matomo pairs `idSite` and `idNote` itself and answers
+  an ID the website does not have as an error, so no read comes first. Matomo allows it with admin access to the
+  website, or to the author with view access.
+- `matomo.annotations.delete-all` deletes every annotation of a website for good, whoever wrote it. Matomo allows it
+  to Super Users only, so the connection must also bind the target `instance`.
+
+Both delete tools are offered only where the `tools` list of a connection names them and are in no profile.
 
 The fields `idNote` and `id` of Matomo carry the same value, so only `idNote` is returned. `user` is the login of
 the author and `canEditOrDelete` tells whether the token's user may change the annotation; both are returned.

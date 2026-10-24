@@ -129,7 +129,13 @@ func reaches(tool string, targets []string) (bool, []string) {
 	if instanceTools[tool] {
 		return err == nil && bound.instance, []string{formInstance}
 	}
-	if err != nil || bound.reachesSites() || tool == versionGet.ID {
+	if err != nil {
+		return true, nil
+	}
+	if tool == annotationsDeleteAll.ID && !(bound.instance && bound.reachesSites()) {
+		return false, []string{formInstance}
+	}
+	if bound.reachesSites() || tool == versionGet.ID {
 		return true, nil
 	}
 	return false, []string{formSites, formSite}
