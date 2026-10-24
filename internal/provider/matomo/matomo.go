@@ -130,10 +130,11 @@ func Register(reg *capability.Registry) error {
 				goalRecommendationsList.ID, goalRecommendationsScan.ID, goalRecommendationsDismiss.ID),
 		}, {
 			ID: "segments", Title: "Manage segments",
-			Description: "reads what the read profile reads and adds and updates the saved segments of the " +
-				"instance; every change needs its own confirmation, and the right to change a segment is " +
-				"Matomo's, per website and per creator",
-			Tools: append(slices.Clone(readTools), segmentsAdd.ID, segmentsUpdate.ID),
+			Description: "reads what the read profile reads and adds, updates, and stars the saved segments of the " +
+				"instance; every change needs its own confirmation, deleting a segment stays unticked, and the " +
+				"right to change a segment is Matomo's, per website and per creator",
+			Tools: append(slices.Clone(readTools), segmentsAdd.ID, segmentsUpdate.ID, segmentsStar.ID,
+				segmentsUnstar.ID),
 		}, {
 			ID: "annotations", Title: "Manage annotations",
 			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
@@ -170,6 +171,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: segmentsGet, Handler: capability.Handler(invokeSegmentsGet)},
 		capability.Operation{Descriptor: segmentsAdd, Handler: capability.Handler(invokeSegmentsAdd)},
 		capability.Operation{Descriptor: segmentsUpdate, Handler: capability.Handler(invokeSegmentsUpdate)},
+		capability.Operation{Descriptor: segmentsDelete, Handler: capability.Handler(invokeSegmentsDelete)},
+		capability.Operation{Descriptor: segmentsStar, Handler: invokeSegmentsMark(true)},
+		capability.Operation{Descriptor: segmentsUnstar, Handler: invokeSegmentsMark(false)},
 		capability.Operation{Descriptor: annotationsList, Handler: capability.Handler(invokeAnnotationsList)},
 		capability.Operation{Descriptor: annotationsGet, Handler: capability.Handler(invokeAnnotationsGet)},
 		capability.Operation{Descriptor: annotationsAdd, Handler: capability.Handler(invokeAnnotationsAdd)},
