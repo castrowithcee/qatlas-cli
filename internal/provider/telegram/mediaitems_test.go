@@ -436,7 +436,7 @@ func TestPersonalChatMessagesListMediaItems(t *testing.T) {
 		t.Errorf("media_items = %v\nwant %v", items, want)
 	}
 	second := messages[1].(map[string]any)
-	if strings.Contains(string(mustMarshal(second["media_items"])), "file_ref") || second["media_kind"] != "photo" {
+	if _, ok := second["file_ref"]; ok || strings.Contains(string(mustMarshal(second["media_items"])), "file_ref") || second["media_kind"] != "photo" {
 		t.Errorf("business message = %v", second)
 	}
 }

@@ -354,14 +354,14 @@ func (c *Client) PersonalChatMessages(ctx context.Context, userID int64, _, limi
 	out := make([]message, 0, min(len(messages), maxUserItems))
 	for _, m := range messages[:min(len(messages), maxUserItems)] {
 		kind, file := m.media()
-		ref := ""
-		if file != nil {
-			ref = signRef(c.token, refFile, c.target, file.FileID)
-		}
 		scope := messageScope{binding: c.target, chatID: m.Chat.ID, refs: c.fileRefs(c.target)}
 		if m.BusinessConnectionID != "" {
 			// A business message names its connection, not a bound chat: no file reference, no guest reference.
 			scope = messageScope{chatID: m.Chat.ID, business: true}
+		}
+		ref := ""
+		if file != nil && scope.refs != nil {
+			ref = scope.refs(file.FileID)
 		}
 		items, omitted := mediaItems(&m, scope.refs)
 		head, headOmitted := c.messageHead(&m, scope, false)
