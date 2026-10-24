@@ -439,3 +439,89 @@ func TestExecutionsRetryAndStopOutputIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// execBody builds an execution answer whose id is the given raw JSON value.
+func execBody(rawID string) string {
+	return `{"id":` + rawID + `,"workflowId":"` + ownWorkflow + `","status":"success","mode":"manual","finished":true,` +
+		`"startedAt":"2026-01-01T00:00:00.000Z","stoppedAt":"2026-01-01T00:00:05.000Z"}`
+}
+
+func executionIDEnvironment(t *testing.T, calls *[]call, rawID, retriedID string) *environment {
+	return newEnvironment(t, calls, func(r *http.Request) (*http.Response, error) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/executions":
+			return jsonResponse(200, executionsPageJSONOf(execBody(rawID))), nil
+		case r.Method == http.MethodGet:
+			return jsonResponse(200, execBody(rawID)), nil
+		case strings.HasSuffix(r.URL.Path, "/retry"):
+			return jsonResponse(200, execBody(retriedID)), nil
+		default:
+			return jsonResponse(200, `{"mode":"manual","finished":false,"status":"canceled"}`), nil
+		}
+	})
+}
+
+func TestExecutionsAcceptNumberAndStringID(t *testing.T) {
+	for _, rawID := range []string{`1000`, `"1000"`} {
+		var calls []call
+		env := executionIDEnvironment(t, &calls, rawID, rawID)
+		for _, tc := range []struct {
+			op, args string
+			confirm  bool
+		}{
+			{executionsList.ID, `{}`, false},
+			{executionsGet.ID, `{"execution_id":1000}`, false},
+			{executionsRetry.ID, `{"execution_id":1000}`, true},
+			{executionsStop.ID, `{"execution_id":1000}`, true},
+		} {
+			var result string
+			var err error
+			if tc.confirm {
+				result, err = env.confirmed(tc.op, "open", tc.args)
+			} else {
+				result, err = env.invoke(tc.op, "open", tc.args)
+			}
+			if err != nil {
+				t.Fatalf("%s with id %s = %v", tc.op, rawID, err)
+			}
+			if !strings.Contains(result, `"id":1000`) {
+				t.Errorf("%s with id %s = %s, want \"id\":1000", tc.op, rawID, result)
+			}
+		}
+	}
+}
+
+func TestExecutionsRefuseInvalidID(t *testing.T) {
+	for _, rawID := range []string{`"abc"`, `"-1"`, `1.5`, `-1`, `0`, `""`} {
+		var calls []call
+		env := executionIDEnvironment(t, &calls, rawID, rawID)
+		for _, tc := range []struct {
+			op, args string
+			confirm  bool
+		}{
+			{executionsList.ID, `{}`, false},
+			{executionsGet.ID, `{"execution_id":1000}`, false},
+			{executionsRetry.ID, `{"execution_id":1000}`, true},
+			{executionsStop.ID, `{"execution_id":1000}`, true},
+		} {
+			var err error
+			if tc.confirm {
+				_, err = env.confirmed(tc.op, "open", tc.args)
+			} else {
+				_, err = env.invoke(tc.op, "open", tc.args)
+			}
+			if classOf(err) != "invalid-provider-response" {
+				t.Errorf("%s with id %s: class = %q, want invalid-provider-response", tc.op, rawID, classOf(err))
+			}
+		}
+	}
+}
+
+func TestExecutionsGetRefusesAForeignStringID(t *testing.T) {
+	var calls []call
+	env := executionIDEnvironment(t, &calls, `"1001"`, `1001`)
+	_, err := env.invoke(executionsGet.ID, "open", `{"execution_id":1000}`)
+	if classOf(err) != "invalid-provider-response" {
+		t.Fatalf("class = %q, want invalid-provider-response", classOf(err))
+	}
+}

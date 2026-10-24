@@ -606,7 +606,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	m := openApprovalModel(t, store, dir)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	change := toolsChange()
-	title := m.wrapped(titleStyle, "Approve gh?") + "\n\n"
+	title := m.wrapped(styles.title, "Approve gh?") + "\n\n"
 
 	view := m.approvalChangeView(title, change)
 	assertViewFits(t, view, m.width, m.height)

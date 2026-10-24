@@ -3454,32 +3454,6 @@ func sectionShortcut(key string) (section, bool) {
 	return section(key[0] - '1'), true
 }
 
-// The colours are few and taken from the terminal's own palette, so they follow its theme. None of them
-// carries meaning on its own: focus has its marker and its border, a result its "[ok]", "[failed]",
-// "warning:" or "error:" prefix, and a terminal without colour, or with NO_COLOR set, loses nothing.
-var (
-	accent       = lipgloss.Color("6")
-	titleStyle   = lipgloss.NewStyle().Bold(true)
-	activeStyle  = lipgloss.NewStyle().Bold(true).Foreground(accent)
-	hintStyle    = lipgloss.NewStyle().Faint(true)
-	okStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
-	failStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
-	warningStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
-	focusBorder  = lipgloss.NewStyle().Foreground(accent)
-	quietBorder  = lipgloss.NewStyle().Faint(true)
-	// activeRowStyle highlights the marked row of a table screen (a section list, the picker, the provider
-	// table) the full width of the row, reversing whatever foreground and background the terminal already
-	// has instead of naming a colour of its own. It never carries the selection alone: the '>' prefix of
-	// listRow still leads the row, so NO_COLOR or an ASCII terminal keeps showing which one is marked.
-	activeRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
-	// zebraStyle shades every other unmarked row of a table screen as a reading aid on top of the '>'
-	// prefix and the column layout, never instead of them; it is gone under NO_COLOR like every other
-	// colour here, which is fine because it never was the only way to tell a row apart.
-	zebraStyle = lipgloss.NewStyle().Background(lipgloss.Color("8"))
-	// keyStyle is the key of a footer hint (bold); the action after it keeps the plain hintStyle.
-	keyStyle = lipgloss.NewStyle().Bold(true)
-)
-
 // View renders the frame: the configuration path, the sections, and the workspace with the current screen.
 func (m *Model) View() string {
 	if m.quitting {
@@ -3573,7 +3547,7 @@ func (m *Model) editorView() string {
 		if m.wizard != nil {
 			b.WriteString(m.setupHeading(false))
 		} else {
-			b.WriteString(titleStyle.Render(what) + "\n\n")
+			b.WriteString(styles.title.Render(what) + "\n\n")
 		}
 		b.WriteString(m.otherProblems())
 		for i, f := range m.fields {
@@ -3582,7 +3556,7 @@ func (m *Model) editorView() string {
 			}
 			if m.window != nil && (i < m.window[0] || i > m.window[1]) {
 				if i == m.window[0]-1 || i == m.window[1]+1 {
-					b.WriteString(hintStyle.Render("  …") + "\n")
+					b.WriteString(styles.hint.Render("  …") + "\n")
 				}
 				continue
 			}
@@ -3597,16 +3571,16 @@ func (m *Model) editorView() string {
 			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
 			// an idle connection) matters whether or not the field is the one focused, so it always stands.
 			if warning := m.fieldWarning(f); warning != "" {
-				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
+				b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
 			}
 			// A refused save names its cause and its resolution under the row it concerns. The symbol, not
 			// only the colour, marks the line as an error.
 			for _, line := range m.fieldProblems(f) {
-				b.WriteString(m.indentedWith(failStyle, "[!] "+line) + "\n")
+				b.WriteString(m.indentedWith(styles.fail, "[!] "+line) + "\n")
 			}
 		}
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
-			b.WriteString("\n" + m.wrapped(hintStyle, m.copyNote()) + "\n")
+			b.WriteString("\n" + m.wrapped(styles.hint, m.copyNote()) + "\n")
 		}
 		if m.section == sectionTokens && m.wizard == nil {
 			b.WriteString(m.tokenFormNotes())
@@ -3644,7 +3618,7 @@ func (m *Model) editorView() string {
 			keys = strings.ReplaceAll(keys, " save", " create")
 		}
 		if m.payloadRemoveAsk {
-			b.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
+			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
 			keys = "y remove · n/esc keep · : cmds · ? help"
 		}
 		b.WriteString(m.keyHint(keys))
@@ -3653,7 +3627,7 @@ func (m *Model) editorView() string {
 		if m.credentialType() == config.CredentialTypeVault {
 			where = "the vault"
 		}
-		b.WriteString(titleStyle.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
+		b.WriteString(styles.title.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
 		b.WriteString(m.inputLine("  ", m.secretInput) + "\n")
 		b.WriteString(m.indented(
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
@@ -3670,8 +3644,8 @@ func (m *Model) editorView() string {
 			break
 		}
 		if m.decryptConfirm {
-			b.WriteString(titleStyle.Render("Turn the vault's encryption off?") + "\n\n")
-			b.WriteString(m.indentedWith(warningStyle,
+			b.WriteString(styles.title.Render("Turn the vault's encryption off?") + "\n\n")
+			b.WriteString(m.indentedWith(styles.warning,
 				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
 					"this machine's files can then read them") + "\n")
 			b.WriteString(m.keyHint("y turn off · n/esc keep it encrypted · : cmds · ? help"))
@@ -3783,7 +3757,7 @@ func (m *Model) leaveView() string {
 		discard = "d discard and quit"
 		why = "Quitting would lose them. Nothing was written yet."
 	}
-	return m.wrapped(warningStyle, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · : cmds · ? help") +
+	return m.wrapped(styles.warning, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · : cmds · ? help") +
 		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
 }
 
@@ -3831,7 +3805,7 @@ func (m *Model) notes() string {
 	var b strings.Builder
 	for _, note := range []string{m.busy, m.probing} {
 		if note != "" {
-			b.WriteString("\n\n" + m.wrapped(hintStyle, note+" ... (the editor stays usable)"))
+			b.WriteString("\n\n" + m.wrapped(styles.hint, note+" ... (the editor stays usable)"))
 		}
 	}
 	if m.fields == nil || m.screen == screenSummary {
@@ -3841,9 +3815,9 @@ func (m *Model) notes() string {
 		}
 	}
 	if m.fail != "" {
-		b.WriteString("\n\n" + m.wrapped(failStyle, "error: "+m.fail))
+		b.WriteString("\n\n" + m.wrapped(styles.fail, "error: "+m.fail))
 	} else if m.status != "" {
-		b.WriteString("\n\n" + m.wrapped(hintStyle, m.status))
+		b.WriteString("\n\n" + m.wrapped(styles.hint, m.status))
 	}
 	return b.String()
 }
@@ -3871,7 +3845,7 @@ func (m *Model) listView() string {
 // get the lines that are left, so a list of any length fits the terminal and only the rows scroll.
 func (m *Model) listFrame() (string, string) {
 	var head strings.Builder
-	title := titleStyle.Render(m.section.title())
+	title := styles.title.Render(m.section.title())
 	total, shown := len(m.list.all), len(m.list.matches)
 	filtered := m.list.editing || m.list.query() != ""
 	switch {
@@ -3889,13 +3863,13 @@ func (m *Model) listFrame() (string, string) {
 	if total > 0 {
 		t := m.listTable()
 		_, width := m.fit("  ")
-		head.WriteString(hintStyle.Render(clipCells("  "+t.header(t.layout(width)), m.usable(0))) + "\n")
+		head.WriteString(styles.hint.Render(clipCells("  "+t.header(t.layout(width)), m.usable(0))) + "\n")
 	}
 	switch {
 	case total == 0:
-		head.WriteString(m.wrapped(hintStyle, m.emptyHelp()) + "\n")
+		head.WriteString(m.wrapped(styles.hint, m.emptyHelp()) + "\n")
 	case shown == 0:
-		head.WriteString(m.wrapped(hintStyle,
+		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No entry matches %q. Press esc to clear the filter.", m.list.query())) + "\n")
 	}
 
@@ -3949,7 +3923,7 @@ func (m *Model) listFrame() (string, string) {
 		var idle strings.Builder
 		for _, name := range m.list.all {
 			if warning := m.cfg.IdleWarning(name); warning != "" {
-				idle.WriteString("\n" + m.wrapped(warningStyle, "warning: "+warning))
+				idle.WriteString("\n" + m.wrapped(styles.warning, "warning: "+warning))
 			}
 		}
 		foot = m.testLine() + idle.String() + foot
@@ -4092,7 +4066,7 @@ func (m *Model) pickerFrame() (string, string) {
 		ticked, all := m.pickerGroups.count(m.pickerMarks)
 		title = fmt.Sprintf("Choose %s  %d/%d ticked", f.label, ticked, all)
 	}
-	head.WriteString(m.wrapped(titleStyle, title) + "\n")
+	head.WriteString(m.wrapped(styles.title, title) + "\n")
 	head.WriteString(m.searchLine(&m.picker, "search: ") + "\n")
 	keys := "type to search · up/down move · enter choose · esc cancel"
 	if m.pickerMarks != nil {
@@ -4109,21 +4083,21 @@ func (m *Model) pickerFrame() (string, string) {
 			if m.pickerEffects != nil {
 				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · esc cancel"
 			}
-			head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
+			head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
 			keys = "type to search · up/down move · space tick · enter keep · esc cancel"
 		} else {
 			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · esc cancel"
 		}
 	} else {
-		head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, "current: "+choiceText(f.value())) + "\n")
 	}
 	if shown == 0 {
-		head.WriteString(m.wrapped(hintStyle,
+		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
 	}
 	if f.label == forwardLabel {
 		if note := m.forwardBindingNote(m.fieldValue("credential")); note != "" {
-			head.WriteString(m.wrapped(warningStyle, "warning: "+note) + "\n")
+			head.WriteString(m.wrapped(styles.warning, "warning: "+note) + "\n")
 		}
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
@@ -4284,17 +4258,17 @@ func (m *Model) sidebarLines() []string {
 		case s != m.section || m.wizard != nil:
 			lines = append(lines, "  "+text)
 		case m.screen == screenNav:
-			lines = append(lines, activeStyle.Render("> "+text))
+			lines = append(lines, styles.active.Render("> "+text))
 		default:
-			lines = append(lines, titleStyle.Render("* "+text))
+			lines = append(lines, styles.title.Render("* "+text))
 		}
 	}
 	setup := "  c guided setup"
 	if m.wizard != nil {
-		setup = activeStyle.Render("> c guided setup")
+		setup = styles.active.Render("> c guided setup")
 	}
 	lines = append(lines, "", setup, "  : cmds", "  ? help", "  q quit")
-	if next := render(hintStyle, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
+	if next := render(styles.hint, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(next, "\n")...)
 	}
@@ -4302,7 +4276,7 @@ func (m *Model) sidebarLines() []string {
 	// nothing to lock or unlock, see handleVaultLockKey), and only where the sidebar still has room left
 	// over for it, the same "wo Platz ist" rule the next: line above already follows.
 	if hint := m.vaultLockKeyHint(); hint != "" {
-		if extra := render(hintStyle, inner, hint); len(lines)+1+strings.Count(extra, "\n")+1 <= m.height {
+		if extra := render(styles.hint, inner, hint); len(lines)+1+strings.Count(extra, "\n")+1 <= m.height {
 			lines = append(lines, "")
 			lines = append(lines, strings.Split(extra, "\n")...)
 		}
@@ -4438,7 +4412,7 @@ func (m *Model) limitedHint(text string) string {
 		pieces[limit-1] = string(last) + "…"
 	}
 	for i, piece := range pieces {
-		pieces[i] = indent + hintStyle.Render(piece)
+		pieces[i] = indent + styles.hint.Render(piece)
 	}
 	return strings.Join(pieces, "\n")
 }
@@ -4524,13 +4498,13 @@ func (m *Model) testLine() string {
 	}
 	switch {
 	case m.testing:
-		return "\n" + m.wrapped(hintStyle, fmt.Sprintf("testing %s ... (esc cancels)", m.testName))
+		return "\n" + m.wrapped(styles.hint, fmt.Sprintf("testing %s ... (esc cancels)", m.testName))
 	case m.testClass == provider.ClassOK:
-		return "\n" + m.wrapped(okStyle,
+		return "\n" + m.wrapped(styles.ok,
 			fmt.Sprintf("[ok] %s: ok - %s accepted the connection", m.testName, providerName))
 	case m.testClass != "":
 		explanation := provider.Explain(m.testClass, providerName)
-		return "\n" + m.wrapped(failStyle,
+		return "\n" + m.wrapped(styles.fail,
 			fmt.Sprintf("[failed] %s: %s - %s", m.testName, m.testClass, explanation))
 	}
 	return ""

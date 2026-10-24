@@ -696,16 +696,16 @@ func (m *Model) importView() string {
 	}
 	switch e.step {
 	case importFile:
-		return m.wrapped(titleStyle, "Import: file") + "\n\n" + m.pathLines("  ", &e.input) +
+		return m.wrapped(styles.title, "Import: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to import, as an export wrote it; nothing changes before you confirm the preview") + "\n" +
 			m.importKeys(pathKeys(&e.input, "F2 or enter next · esc cancel, nothing imported")) + m.notes()
 	case importPassphrase:
-		return m.wrapped(titleStyle, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" +
+		return m.wrapped(styles.title, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" +
 			m.indented("the file is encrypted: type the passphrase it was exported with, not the vault passphrase") + "\n" +
 			m.importKeys("F2 or enter ok · esc back, nothing imported") + m.notes()
 	case importMode:
 		var b strings.Builder
-		b.WriteString(m.wrapped(titleStyle, "Import: mode") + "\n\n")
+		b.WriteString(m.wrapped(styles.title, "Import: mode") + "\n\n")
 		for i, row := range importModeRows {
 			b.WriteString(m.listRow(i == e.modeCursor, false, truncateCells(row.text, m.usable(2))) + "\n")
 		}
@@ -759,6 +759,6 @@ func (m *Model) importLeaveView() string {
 		discard, why = "d discard and quit", "Quitting would drop them. Nothing was written."
 	}
 	keys := save + " · " + discard + " · esc keep editing · : cmds · ? help"
-	return m.wrapped(warningStyle, "warning: the import is not finished") + m.keyHint(keys) + "\n\n" +
+	return m.wrapped(styles.warning, "warning: the import is not finished") + m.keyHint(keys) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), why)
 }

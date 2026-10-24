@@ -637,11 +637,11 @@ func (m *Model) vaultOfferView() string {
 	o := m.vaultOffer
 	var b strings.Builder
 	if !o.confirming {
-		b.WriteString(titleStyle.Render(o.title) + "\n\n")
+		b.WriteString(styles.title.Render(o.title) + "\n\n")
 		b.WriteString(m.inputLine("  ", o.input) + "\n")
 		b.WriteString(m.indented(o.hint) + "\n")
 	} else {
-		b.WriteString(titleStyle.Render("Confirm the vault passphrase") + "\n\n")
+		b.WriteString(styles.title.Render("Confirm the vault passphrase") + "\n\n")
 		b.WriteString(m.inputLine("  ", o.input) + "\n")
 		b.WriteString(m.indented("type it again to confirm it") + "\n")
 	}

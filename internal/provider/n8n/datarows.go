@@ -471,8 +471,19 @@ func rowsPath(tableID string) string {
 }
 
 type dataRowsPageJSON struct {
-	Data       []map[string]any `json:"data"`
-	NextCursor *string          `json:"nextCursor"`
+	Data       []json.RawMessage `json:"data"`
+	NextCursor *string           `json:"nextCursor"`
+}
+
+// decodeRow keeps the numbers of one row as n8n wrote them: a float64 would lose digits above 2^53.
+func decodeRow(raw json.RawMessage) (map[string]any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var row map[string]any
+	if err := decoder.Decode(&row); err != nil {
+		return nil, err
+	}
+	return row, nil
 }
 
 func boundedRowText(value string) string {
@@ -492,7 +503,7 @@ func scalarRow(row map[string]any) map[string]any {
 		switch v := value.(type) {
 		case string:
 			out[key] = boundedRowText(v)
-		case float64, bool, nil:
+		case json.Number, bool, nil:
 			out[key] = v
 		}
 	}
@@ -553,12 +564,15 @@ func invokeDataRowsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := client.get(ctx, op, rowsPath(input.DataTableID), query, &page, maxResponseBytes); err != nil {
 		return nil, dataTableError(err)
 	}
-	result := &DataTableRows{Rows: make([]map[string]any, 0, len(page.Data))}
-	for i, row := range page.Data {
-		if i >= limit {
-			break
+	result := &DataTableRows{Rows: make([]map[string]any, 0, min(len(page.Data), limit))}
+	for i, raw := range page.Data {
+		row, err := decodeRow(raw)
+		if err != nil {
+			return nil, invalidResponse(op, "n8n returned a data table row that is not an object")
 		}
-		result.Rows = append(result.Rows, scalarRow(row))
+		if i < limit {
+			result.Rows = append(result.Rows, scalarRow(row))
+		}
 	}
 	result.Count = len(result.Rows)
 	if page.NextCursor != nil && *page.NextCursor != "" {

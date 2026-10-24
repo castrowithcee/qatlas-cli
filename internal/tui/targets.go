@@ -347,10 +347,10 @@ func (m *Model) targetFrame() (string, string) {
 		title += fmt.Sprintf("  %d/%d", m.targetList.cursor+1, total)
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, title) + "\n")
-	head.WriteString(m.wrapped(hintStyle, m.providerTargetHint(m.formProvider())) + "\n\n")
+	head.WriteString(m.wrapped(styles.title, title) + "\n")
+	head.WriteString(m.wrapped(styles.hint, m.providerTargetHint(m.formProvider())) + "\n\n")
 	if total == 0 {
-		head.WriteString(m.wrapped(hintStyle, "("+emptyTargets(metadata)+")") + "\n")
+		head.WriteString(m.wrapped(styles.hint, "("+emptyTargets(metadata)+")") + "\n")
 	}
 
 	var foot strings.Builder
@@ -366,7 +366,7 @@ func (m *Model) targetFrame() (string, string) {
 	switch {
 	case m.labelEdit:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(hintStyle, "Label for "+target+"; leave it empty to remove the label") + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.hint, "Label for "+target+"; leave it empty to remove the label") + "\n")
 		foot.WriteString(m.inputLine("label: ", m.labelInput) + "\n")
 		keys = "enter take · " + save + " · esc cancel entry"
 	case m.targetEdit >= 0:
@@ -378,7 +378,7 @@ func (m *Model) targetFrame() (string, string) {
 		keys = "enter take · " + save + " · esc cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
+		foot.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
 		keys = "y remove · n/esc keep · : cmds · ? help"
 	}
 	foot.WriteString(m.keyHint(keys))

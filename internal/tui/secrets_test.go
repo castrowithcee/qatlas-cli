@@ -1212,7 +1212,7 @@ func TestWrappedTextUsesTheReportedWidth(t *testing.T) {
 	for _, width := range []int{1, 2, 3, 4, 5, 8, 20} {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 		parts := map[string]string{
-			"wrapped":  m.wrapped(hintStyle, long),
+			"wrapped":  m.wrapped(styles.hint, long),
 			"indented": m.indented(long),
 			"row":      m.row(true, long),
 		}

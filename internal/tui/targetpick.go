@@ -671,7 +671,7 @@ func (m *Model) pickFrame() (string, string) {
 		title += fmt.Sprintf(" · %d marked", len(p.marks))
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, title) + "\n")
+	head.WriteString(m.wrapped(styles.title, title) + "\n")
 	var where []string
 	for i, level := range p.levels {
 		if i > 0 {
@@ -683,24 +683,24 @@ func (m *Model) pickFrame() (string, string) {
 	if p.url != "" {
 		level = "the address you typed matched these entries"
 	}
-	head.WriteString(m.wrapped(hintStyle, level) + "\n")
+	head.WriteString(m.wrapped(styles.hint, level) + "\n")
 	head.WriteString(m.searchLine(&lv.list, "search: ") + "\n")
 	_, width := m.fit("  ")
 	if len(lv.list.all) > 0 {
-		head.WriteString(hintStyle.Render(clipCells("  "+lv.table.header(m.pickLayout(lv, width)), m.usable(0))) + "\n")
+		head.WriteString(styles.hint.Render(clipCells("  "+lv.table.header(m.pickLayout(lv, width)), m.usable(0))) + "\n")
 	}
 	switch {
 	case lv.err != "":
-		head.WriteString(m.wrapped(failStyle, "[!] "+lv.err+" (ctrl+r reads again)") + "\n")
+		head.WriteString(m.wrapped(styles.fail, "[!] "+lv.err+" (ctrl+r reads again)") + "\n")
 	case lv.loading:
-		head.WriteString(m.wrapped(hintStyle, "loading ...") + "\n")
+		head.WriteString(m.wrapped(styles.hint, "loading ...") + "\n")
 	case len(lv.list.all) == 0:
-		head.WriteString(m.wrapped(hintStyle, "(the provider lists no entry here)") + "\n")
+		head.WriteString(m.wrapped(styles.hint, "(the provider lists no entry here)") + "\n")
 	case len(lv.list.matches) == 0 && lv.next != "":
-		head.WriteString(m.wrapped(hintStyle,
+		head.WriteString(m.wrapped(styles.hint,
 			fmt.Sprintf("No loaded entry matches %q; down reads more.", lv.list.query())) + "\n")
 	case len(lv.list.matches) == 0:
-		head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("No entry matches %q.", lv.list.query())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("No entry matches %q.", lv.list.query())) + "\n")
 	}
 
 	keys := "type to search · up/down move · enter take"

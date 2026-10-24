@@ -49,19 +49,19 @@ func (m *Model) vaultHeaderText() string {
 		// Neither locked nor unlocked describes a vault whose state cannot even be read; this is closer to
 		// the unencrypted warning than to either of the other two, and keeps the line naming what is wrong
 		// instead of silently showing nothing.
-		return failStyle.Render("⚠ vault: " + m.redactor.Apply(err.Error()))
+		return styles.fail.Render("⚠ vault: " + m.redactor.Apply(err.Error()))
 	}
 	switch {
 	case state == vault.StateUnencrypted:
-		return failStyle.Render("⚠ vault unencrypted")
+		return styles.fail.Render("⚠ vault unencrypted")
 	case m.vaultDisplayUnlocked(state):
 		// A vault process elsewhere may hold it open while this window itself has never unlocked it; either
 		// way the admin abbreviation belongs here too, since every unlocked, encrypted vault shows one, and
 		// adminHeaderText already reads "admin off" (or the vault.admin_timeout: 0 text) on its own for a
 		// window that never started a session, since AdminSessionActive is false regardless of why.
-		return okStyle.Render("🔓 vault unlocked") + " · " + hintStyle.Render(m.adminHeaderText())
+		return styles.ok.Render("🔓 vault unlocked") + " · " + styles.hint.Render(m.adminHeaderText())
 	case state == vault.StateLocked:
-		return warningStyle.Render("🔒 vault locked")
+		return styles.warning.Render("🔒 vault locked")
 	}
 	return ""
 }
@@ -211,7 +211,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 // also starts admin mode, not the other way round.
 func (m *Model) vaultUnlockPromptView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Unlock vault") + "\n\n")
+	b.WriteString(styles.title.Render("Unlock vault") + "\n\n")
 	if m.restartNote != "" {
 		b.WriteString(m.indented(m.restartNote) + "\n\n")
 	}
@@ -387,7 +387,7 @@ func (m *Model) openVaultLockConfirm(back screen) {
 // vaultLockConfirmView draws the "Lock the vault now?" question.
 func (m *Model) vaultLockConfirmView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Lock the vault now?") + "\n\n")
+	b.WriteString(styles.title.Render("Lock the vault now?") + "\n\n")
 	b.WriteString(m.indented("running invokes stop working until it is unlocked again") + "\n")
 	b.WriteString(m.keyHint("y lock · n/esc stay unlocked · : cmds · ? help"))
 	return b.String()

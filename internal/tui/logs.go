@@ -63,7 +63,7 @@ func (s logStatus) label() string {
 }
 
 func (s logStatus) style() lipgloss.Style {
-	return [...]lipgloss.Style{okStyle, warningStyle, warningStyle, failStyle}[s]
+	return [...]lipgloss.Style{styles.ok, styles.warning, styles.warning, styles.fail}[s]
 }
 
 // logFocus is the part of the Logs screen the keys act on: the rows or one of the bar's two fields.
@@ -845,7 +845,7 @@ func (m *Model) logRowLine(i int, l layout) string {
 	tail := strings.TrimPrefix(rest, when)
 	base := lipgloss.NewStyle()
 	if i%2 == 1 {
-		base = zebraStyle
+		base = styles.zebra
 	}
 	return base.Render(blank+head) + base.Faint(true).Render(when) + base.Render(tail)
 }
@@ -857,7 +857,7 @@ func (m *Model) logsFrame() (string, string) {
 	lv := m.logs
 	focused := m.screen == screenLogs
 	width := m.usable(0)
-	status := hintStyle.Render("loading ...")
+	status := styles.hint.Render("loading ...")
 	if lv.loaded {
 		status = lv.worst.style().Render(lv.worst.label())
 	}
@@ -870,7 +870,7 @@ func (m *Model) logsFrame() (string, string) {
 	var chips []string
 	for mode := logModeDay; mode < logModeCount; mode++ {
 		if mode == lv.mode {
-			chips = append(chips, activeRowStyle.Render("["+mode.String()+"]"))
+			chips = append(chips, styles.activeRow.Render("["+mode.String()+"]"))
 			continue
 		}
 		chips = append(chips, mode.String())
@@ -883,7 +883,7 @@ func (m *Model) logsFrame() (string, string) {
 	case logModeRange:
 		dateField = marker(logFocusDate) + "Range: [" + lv.from + ".." + lv.to + "]"
 	default:
-		dateField = "  " + hintStyle.Render("(all recorded days)")
+		dateField = "  " + styles.hint.Render("(all recorded days)")
 	}
 	var bar []string
 	left := modeField + "  " + dateField
@@ -904,7 +904,7 @@ func (m *Model) logsFrame() (string, string) {
 	if lipgloss.Width(filterLine)+len("  f change") <= width {
 		filterLine += "  f change"
 	}
-	filterLine = hintStyle.Render(truncateCells(filterLine, width))
+	filterLine = styles.hint.Render(truncateCells(filterLine, width))
 
 	var search string
 	switch {
@@ -915,34 +915,34 @@ func (m *Model) logsFrame() (string, string) {
 		prefix, room := m.fit("  search: ")
 		search = prefix + truncateCells(lv.list.query(), room)
 	}
-	rule := quietBorder.Render(strings.Repeat("─", width))
+	rule := styles.quietBorder.Render(strings.Repeat("─", width))
 
 	var body []string
 	shown := len(lv.list.matches)
 	switch {
 	case lv.err != "":
-		body = append(body, m.wrapped(failStyle, "error: the log cannot be read: "+lv.err))
+		body = append(body, m.wrapped(styles.fail, "error: the log cannot be read: "+lv.err))
 	case !lv.loaded:
-		body = append(body, m.wrapped(hintStyle, "Reading the log ..."))
+		body = append(body, m.wrapped(styles.hint, "Reading the log ..."))
 	case len(lv.rows) == 0:
 		body = append(body, m.wrapped(lipgloss.NewStyle(), lv.emptyText()))
 	case shown == 0:
-		body = append(body, m.wrapped(hintStyle,
+		body = append(body, m.wrapped(styles.hint,
 			"No entry matches the filters and the search. f changes the filters, esc clears the search."))
 	case lv.stats && lv.sessions:
-		body = append(body, m.wrapped(hintStyle, "MCP sessions of the rows shown: the bytes of the JSON-RPC messages per "+
+		body = append(body, m.wrapped(styles.hint, "MCP sessions of the rows shown: the bytes of the JSON-RPC messages per "+
 			"area and tool, error responses included. ~tokens is an estimate (3.5 bytes per token); only the model "+
 			"knows the real count, and the agent's system prompt and thinking are not in it."))
 		if stats := m.logSessionStats(); len(stats.order) > 0 {
-			body = append(body, hintStyle.Render(clipCells("  "+stats.table.header(stats.layout), width)))
+			body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
 		}
 	case lv.stats:
 		stats := m.logStats()
-		body = append(body, m.wrapped(hintStyle, "Response sizes of the invokes shown, as estimated tokens (3.5 bytes per "+
+		body = append(body, m.wrapped(styles.hint, "Response sizes of the invokes shown, as estimated tokens (3.5 bytes per "+
 			"token): the sum (~tok), the largest, p50, and p95. no size counts invokes without a recorded size."))
-		body = append(body, hintStyle.Render(clipCells("  "+stats.table.header(stats.layout), width)))
+		body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
 	default:
-		body = append(body, hintStyle.Render(clipCells("  "+lv.table.header(m.logLayout()), width)))
+		body = append(body, styles.hint.Render(clipCells("  "+lv.table.header(m.logLayout()), width)))
 	}
 
 	keys := m.keyHint(m.logKeys())
@@ -955,7 +955,7 @@ func (m *Model) logsFrame() (string, string) {
 		if search != "" {
 			lines = append(lines, search)
 		} else if !compact {
-			lines = append(lines, hintStyle.Render(truncateCells("  / search", width)))
+			lines = append(lines, styles.hint.Render(truncateCells("  / search", width)))
 		}
 		if !compact {
 			lines = append(lines, rule)
@@ -970,7 +970,7 @@ func (m *Model) logsFrame() (string, string) {
 				(lv.list.cursor+1)*100/shown), width)
 		}
 		if lv.note != "" && lv.loaded && lv.hasUnchecked() {
-			foot = "\n" + m.wrapped(hintStyle, lv.note) + foot
+			foot = "\n" + m.wrapped(styles.hint, lv.note) + foot
 		}
 		return strings.Join(lines, "\n") + "\n", rule + foot + m.notes()
 	}
@@ -1056,10 +1056,10 @@ func withPosition(keys, pos string, width int) string {
 		return keys
 	}
 	if gap := width - lipgloss.Width(lines[1]) - lipgloss.Width(pos); gap >= 2 {
-		lines[1] += strings.Repeat(" ", gap) + hintStyle.Render(pos)
+		lines[1] += strings.Repeat(" ", gap) + styles.hint.Render(pos)
 		return strings.Join(lines, "\n")
 	}
-	return keys + "\n" + hintStyle.Render(truncateCells(pos, width))
+	return keys + "\n" + styles.hint.Render(truncateCells(pos, width))
 }
 
 // logStats is the summary of the rows the filters and the search keep: the table with a row per group and
@@ -1106,7 +1106,7 @@ func (m *Model) logStatLines(s logStats, room int) string {
 	var b strings.Builder
 	for i := range s.groups {
 		if i == room {
-			b.WriteString(hintStyle.Render(fmt.Sprintf("  ... %d more", len(s.groups)-i)) + "\n")
+			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.groups)-i)) + "\n")
 			break
 		}
 		b.WriteString(m.listRow(false, i%2 == 1, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
@@ -1195,7 +1195,7 @@ func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 	var b strings.Builder
 	for i := start; i < len(s.order); i++ {
 		if i-start == room {
-			b.WriteString(hintStyle.Render(fmt.Sprintf("  ... %d more", len(s.order)-i)) + "\n")
+			b.WriteString(styles.hint.Render(fmt.Sprintf("  ... %d more", len(s.order)-i)) + "\n")
 			break
 		}
 		b.WriteString(m.listRow(false, false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
@@ -1222,7 +1222,7 @@ func (m *Model) logDetailView() string {
 		title = "Log entry " + e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700")
 	}
 	var b strings.Builder
-	b.WriteString(m.wrapped(titleStyle, title) + "\n\n")
+	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	field := func(label, value string) { b.WriteString(m.formRow(false, label, value) + "\n") }
 	field("status", row.status.label()+" ("+m.logReason(row.line)+")")
 	field("UTC file", row.date)
@@ -1306,13 +1306,13 @@ func (m *Model) logDateDialogView() string {
 		title, labels = "Choose a range of local days", []string{"from", "to"}
 	}
 	var b strings.Builder
-	b.WriteString(m.wrapped(titleStyle, title) + "\n\n")
+	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	for i, in := range d.inputs {
 		b.WriteString(m.formRow(i == d.focus, labels[i], in.View()) + "\n")
 	}
 	b.WriteString(m.indented("YYYY-MM-DD in the system time zone") + "\n")
 	if d.err != "" {
-		b.WriteString(m.indentedWith(failStyle, "error: "+d.err) + "\n")
+		b.WriteString(m.indentedWith(styles.fail, "error: "+d.err) + "\n")
 	}
 	keys := "enter apply · esc cancel"
 	if len(d.inputs) == 2 {
@@ -1343,14 +1343,14 @@ func (m *Model) logPickFrame() (string, string) {
 		title = "Filter by " + logFilterNames[p.filter]
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("%s  %d/%d (%d total)", title,
+	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)", title,
 		min(p.list.cursor+1, shown), shown, total)) + "\n")
 	head.WriteString(m.searchLine(&p.list, "search: ") + "\n")
 	if p.filter >= 0 {
-		head.WriteString(m.wrapped(hintStyle, "current: "+filterText(m.logs.filters[p.filter])) + "\n")
+		head.WriteString(m.wrapped(styles.hint, "current: "+filterText(m.logs.filters[p.filter])) + "\n")
 	}
 	if shown == 0 {
-		head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("Nothing matches %q.", p.list.query())) + "\n")
+		head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("Nothing matches %q.", p.list.query())) + "\n")
 	}
 	keys := "type to search · up/down move · enter choose · esc close"
 	if p.filter >= 0 {

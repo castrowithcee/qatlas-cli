@@ -3,9 +3,11 @@ package n8n
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -163,19 +165,42 @@ var executionsGet = capability.Descriptor{
 	Examples: []capability.Example{{Description: "Read one execution", Arguments: json.RawMessage(`{"execution_id":123}`)}},
 }
 
+// executionID reads n8n's execution id from a JSON number or a decimal string: the public API spec types it
+// as a string while the service emits a number. It accepts positive int64 values only.
+type executionID int64
+
+func (id *executionID) UnmarshalJSON(data []byte) error {
+	text := strings.TrimSpace(string(data))
+	if text == "null" {
+		return nil
+	}
+	if len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		text = text[1 : len(text)-1]
+	}
+	if text == "" || strings.Trim(text, "0123456789") != "" {
+		return fmt.Errorf("invalid execution id")
+	}
+	v, err := strconv.ParseInt(text, 10, 64)
+	if err != nil || v <= 0 {
+		return fmt.Errorf("invalid execution id")
+	}
+	*id = executionID(v)
+	return nil
+}
+
 // executionJSON mirrors the subset of n8n's Execution resource this provider reads when includeData is
 // false (packages/cli/src/public-api/v1/handlers/executions/spec).
 type executionJSON struct {
-	ID             int64  `json:"id"`
-	WorkflowID     string `json:"workflowId"`
-	Status         string `json:"status"`
-	Mode           string `json:"mode"`
-	Finished       bool   `json:"finished"`
-	StartedAt      string `json:"startedAt"`
-	StoppedAt      string `json:"stoppedAt"`
-	WaitTill       string `json:"waitTill"`
-	RetryOf        string `json:"retryOf"`
-	RetrySuccessID string `json:"retrySuccessId"`
+	ID             executionID `json:"id"`
+	WorkflowID     string      `json:"workflowId"`
+	Status         string      `json:"status"`
+	Mode           string      `json:"mode"`
+	Finished       bool        `json:"finished"`
+	StartedAt      string      `json:"startedAt"`
+	StoppedAt      string      `json:"stoppedAt"`
+	WaitTill       string      `json:"waitTill"`
+	RetryOf        string      `json:"retryOf"`
+	RetrySuccessID string      `json:"retrySuccessId"`
 }
 
 // executionReadJSON adds what the two read tools take from the same answer. It is separate from
@@ -307,7 +332,7 @@ func executionDetailOf(e executionReadJSON) ExecutionDetail {
 
 func executionSummaryOf(e executionJSON) ExecutionSummary {
 	return ExecutionSummary{
-		ID: e.ID, WorkflowID: bounded(e.WorkflowID), Status: bounded(e.Status), Mode: bounded(e.Mode),
+		ID: int64(e.ID), WorkflowID: bounded(e.WorkflowID), Status: bounded(e.Status), Mode: bounded(e.Mode),
 		Finished: e.Finished, StartedAt: bounded(e.StartedAt), StoppedAt: bounded(e.StoppedAt),
 		WaitTill: bounded(e.WaitTill), RetryOf: bounded(e.RetryOf), RetrySuccessID: bounded(e.RetrySuccessID),
 	}
@@ -489,7 +514,7 @@ func (c *Client) GetExecution(ctx context.Context, executionID int64) (*Executio
 	if err := c.get(ctx, op, "/executions/"+strconv.FormatInt(executionID, 10), nil, &raw, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	if raw.ID != executionID {
+	if int64(raw.ID) != executionID {
 		return nil, invalidResponse(op, "n8n answered with an execution other than the one requested")
 	}
 	if err := c.checkExecutionScope(ctx, op, raw.executionJSON); err != nil {
@@ -620,7 +645,7 @@ func (c *Client) RetryExecution(ctx context.Context, executionID int64) (*Execut
 	if err := c.get(ctx, op, "/executions/"+strconv.FormatInt(executionID, 10), nil, &base, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	if base.ID != executionID {
+	if int64(base.ID) != executionID {
 		return nil, invalidResponse(op, "n8n answered with an execution other than the one requested")
 	}
 	if err := c.checkExecutionScope(ctx, op, base); err != nil {
@@ -666,7 +691,7 @@ func (c *Client) StopExecution(ctx context.Context, executionID int64) (*Executi
 	if err := c.get(ctx, op, "/executions/"+strconv.FormatInt(executionID, 10), nil, &base, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	if base.ID != executionID {
+	if int64(base.ID) != executionID {
 		return nil, invalidResponse(op, "n8n answered with an execution other than the one requested")
 	}
 	if err := c.checkExecutionScope(ctx, op, base); err != nil {

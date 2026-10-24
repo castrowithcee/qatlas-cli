@@ -291,7 +291,7 @@ func (m *Model) fieldProblems(f field) []string {
 func (m *Model) otherProblems() string {
 	var b strings.Builder
 	for _, line := range m.problems.other {
-		b.WriteString(m.wrapped(failStyle, "[!] "+line) + "\n")
+		b.WriteString(m.wrapped(styles.fail, "[!] "+line) + "\n")
 	}
 	return b.String()
 }
