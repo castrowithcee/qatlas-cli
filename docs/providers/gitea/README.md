@@ -199,7 +199,7 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
-- [Contents](contents.md): files, raw content, archives, and editor configuration of a repository
+- [Contents](contents.md): files, raw content, archives, editor configuration, and writing files as commits
 
 ## Not offered
 

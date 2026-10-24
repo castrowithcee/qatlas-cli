@@ -69,8 +69,9 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](gitea/branches.md).
 - Contents: `contents.get-ext` and `contents.get-many` do not exist, `archives.get` has no `paths`, and entries carry
-  `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. See
-  [Contents](gitea/contents.md).
+  `last_commit_when` instead of Gitea's commit dates, message, LFS, and mode members. `contents.change-files` has only
+  the operations `create` and `update`, and the new-branch overwrite is `force_overwrite_new_branch` instead of
+  `force_push`; neither is offered. See [Contents](gitea/contents.md).
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).

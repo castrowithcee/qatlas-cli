@@ -84,7 +84,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".branches.update-ref")
 		}
 		want = append(want, p.id+".contents.list", p.id+".contents.get", p.id+".contents.get-raw",
-			p.id+".archives.get", p.id+".editorconfig.get")
+			p.id+".archives.get", p.id+".editorconfig.get", p.id+".contents.create", p.id+".contents.update",
+			p.id+".contents.change-files", p.id+".contents.apply-diff", p.id+".contents.delete")
 		if p == gitea {
 			want = append(want, p.id+".contents.get-ext", p.id+".contents.get-many")
 		}
