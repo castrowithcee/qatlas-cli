@@ -56,3 +56,21 @@ connection is offered the tool, and the call checks the target again before a se
 (`SitesManager.getSitesGroups`; an empty name stands for websites without a group). With `group` it pages the
 websites of that group (`SitesManager.getSitesFromGroup`) and keeps only those inside the website targets, so an
 instance-only binding sees no website. The group names come from the whole instance and are not cut to the targets.
+
+## Website URLs, creation dates, and group names
+
+`matomo.site-urls.add` (`SitesManager.addSiteAliasUrls`) and `matomo.site-urls.set` (`SitesManager.setSiteAliasUrls`)
+need an admin right on the website. The URLs are an assignment for tracking only: up to 20 `http` or `https`
+addresses without user information, at most 2000 characters each, never fetched. Neither tool touches the main URL.
+`add` keeps the stored ones and skips duplicates; `set` replaces the whole list, and an empty list removes every
+alias URL. The `inserted` count is Matomo's.
+
+`matomo.sites.update-created-time` (`SitesManager.updateSiteCreatedTime`) takes 1 to 100 unique `idSites` and a
+`minDate` as `YYYY-MM-DD`; Matomo stores the day before. It needs an admin right on every website, and one ID outside
+the targets refuses the whole call before any secret is read. The method changes only the stored creation date.
+
+`matomo.site-groups.rename` (`SitesManager.renameGroup`) needs Super User rights and a connection whose targets name
+`instance`, like the group list. It renames the group on every website of the instance, also outside the website
+targets; the old name must not be empty (that would address all websites without a group), an empty new name removes
+the group. These write tools are in the `sites` profile, which is not recommended; the rename is in no profile.
+Each sends exactly one request and is never repeated after an unclear result.
