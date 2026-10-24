@@ -44,7 +44,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"is typed, a letter is text. pgup/pgdown and home/end jump in every list, picker, table, and the\n" +
 			"tab line. tab and shift+tab go to the next or previous field, or between the option bar and the\n" +
 			"list; in a path being typed, tab takes the suggested directory. space ticks in a multiple choice\n" +
-			"and does nothing else.\n" +
+			"and does nothing else. Under a focused field stands one line of hint; i opens its longer\n" +
+			"explanation, with the explanation of the term it belongs to (service, credential, connection,\n" +
+			"target, effect, profile, approval, token, vault), over the screen, and esc closes it. i works on\n" +
+			"every screen that takes no typed text and on a search line while it is empty. From 120 columns on,\n" +
+			"forms and pickers show the explanation of the focused field or entry in a pane at their right\n" +
+			"instead; below that, a field or entry that has one ends in (i).\n" +
 			"On the tab line left/right choose an area, wrapping from the last to the first and back; down\n" +
 			"moves the focus to the option bar of an area that has one, where left/right choose the part and\n" +
 			"up returns to the tab line; down, enter, or tab move the focus into the list, and up does\n" +
@@ -57,7 +62,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"connections, go activity, go access, go library, or go settings, and a part directly with go\n" +
 			"tokens, go approvals, go services, go credentials, go general, go vault, go defaults, go transfer,\n" +
 			"go update, go self-test, or go logs.\n" +
-			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
+			"In a list, / filters, n adds (in Connections n is the guided setup, which adds a missing service or\n" +
+			"credential on the way), enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
 			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
@@ -65,7 +71,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
 			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
 			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
-			"searchable list; c asks the same for the guided setup, which then starts from a connection. A\n" +
+			"searchable list; in Connections, n and c ask the same for the guided setup, which then starts\n" +
+			"from a connection. A\n" +
 			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
 			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +

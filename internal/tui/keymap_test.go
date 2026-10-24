@@ -19,7 +19,7 @@ func rebind(t *testing.T, a action, key string) {
 
 func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 	want := map[action]string{
-		actInfo: "", actSave: "f2", actHelp: "?", actCommand: ":", actLock: "ctrl+l", actBack: "esc", actDelete: "d",
+		actInfo: "i", actSave: "f2", actHelp: "?", actCommand: ":", actLock: "ctrl+l", actBack: "esc", actDelete: "d",
 	}
 	if len(keymap) != len(want) {
 		t.Fatalf("keymap has %d actions, want %d", len(keymap), len(want))
@@ -29,8 +29,8 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 			t.Errorf("action %q is bound to %q, want %q", a, keymap[a], key)
 		}
 	}
-	if keyIs(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")}, actInfo) || keyIs(tea.KeyMsg{}, actInfo) {
-		t.Error("the unbound info action matched a key")
+	if !keyIs(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")}, actInfo) || keyIs(tea.KeyMsg{}, actInfo) {
+		t.Error("the info action does not match exactly its key")
 	}
 	if keyLabel(actSave) != "F2" || keyLabel(actHelp) != "?" {
 		t.Errorf("labels = %q, %q", keyLabel(actSave), keyLabel(actHelp))

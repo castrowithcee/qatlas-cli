@@ -79,3 +79,37 @@ func TestTopicsExplainLocalFiles(t *testing.T) {
 		t.Error("the agents topic does not name the refusal no-local-files")
 	}
 }
+
+// The term IDs are a stable contract: the list is fixed here, so a rename or a removal fails this test.
+func TestTermIDsAreUniqueAndStable(t *testing.T) {
+	want := []string{"term.service", "term.credential", "term.connection", "term.target", "term.effect",
+		"term.profile", "term.approval", "term.token", "term.vault"}
+	terms := Terms()
+	if len(terms) != len(want) {
+		t.Fatalf("%d terms, want %d", len(terms), len(want))
+	}
+	seen := map[string]bool{}
+	for i, term := range terms {
+		if term.ID != want[i] {
+			t.Errorf("term %d has ID %q, want %q", i, term.ID, want[i])
+		}
+		if seen[term.ID] || term.Title == "" || term.Text == "" {
+			t.Errorf("term %q is repeated or empty", term.ID)
+		}
+		seen[term.ID] = true
+		if n := strings.Count(term.Text, ". ") + 1; n > 3 {
+			t.Errorf("term %q has %d sentences, want at most 3", term.ID, n)
+		}
+		for _, r := range term.Text {
+			if r > '~' || r < ' ' {
+				t.Errorf("term %q has the character %q", term.ID, r)
+			}
+		}
+		if got, ok := LookupTerm(term.ID); !ok || got != term {
+			t.Errorf("LookupTerm(%q) failed", term.ID)
+		}
+	}
+	if _, ok := LookupTerm("term.nothing"); ok {
+		t.Error("LookupTerm found an unknown ID")
+	}
+}

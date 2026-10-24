@@ -124,17 +124,25 @@ const (
 	storageEnv     = placeEnv
 )
 
-// storageHint says what each place for new secrets is for. The system keyring is named as this platform
-// calls it, so a user recognises it as something the machine already has rather than something to set up.
-var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-	"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
-	"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
+// storageHint is the one-line hint of the storage row. It names the platform keyring in full, as this
+// platform calls it, so a user recognises it as something the machine already has; it is a function because
+// platform may change in a test.
+func storageHint() string { return secret.StoreLabel(platform) + ": nothing to set up" }
+
+// storageDetail says what each place for new secrets is for.
+func storageDetail() string {
+	return "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
+		"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
+		"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
+}
 
 // storageField is the row that chooses where the secrets of a credential are kept: the system keyring, the
 // vault, or environment variables. Every credential offers the same three choices in the same order,
 // whichever it is now, so moving a secret from one place to another is one change to this row.
 func storageField(value string) field {
-	return choiceField(storageLabel, []string{storageKeyring, storageVault, storageEnv}, value).withHint(storageHint)
+	f := choiceField(storageLabel, []string{storageKeyring, storageVault, storageEnv}, value).withHint(storageHint())
+	f.detail = storageDetail()
+	return f
 }
 
 // storageType is the credential type the file stores for a choice of the storage row.
