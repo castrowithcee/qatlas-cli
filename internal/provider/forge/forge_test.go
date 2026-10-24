@@ -195,6 +195,8 @@ func testConfig(p *product) *config.Config {
 	}
 	cfg.Connections["reviews"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: reviewTools}
+	cfg.Connections["wiki-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".wiki-pages.delete", p.id + ".wiki-pages.get"}}
 	cfg.Connections["release-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
