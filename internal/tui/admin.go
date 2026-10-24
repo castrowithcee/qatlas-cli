@@ -10,7 +10,6 @@ package tui
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -100,6 +99,7 @@ func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		back := a.back
+		a.input.Reset()
 		m.adminAuth = nil
 		m.screen = back
 		m.status = "Cancelled"
@@ -171,9 +171,9 @@ func (m *Model) handleAdminVerified(msg adminVerifiedMsg) tea.Cmd {
 	return msg.action()
 }
 
-// adminAuthView draws the masked admin passphrase dialog, in the pattern of the masked vault passphrase
-// prompt (see vaultOfferView): a title, the masked line, an explanation, and enter/esc.
-func (m *Model) adminAuthView() string {
+// adminAuthPrompt is the masked admin passphrase dialog, in the pattern of the masked vault passphrase
+// prompt (see vaultOfferPrompt): a title, the masked line, an explanation, and enter/esc.
+func (m *Model) adminAuthPrompt() promptDialog {
 	a := m.adminAuth
 	title := "Admin passphrase needed to save"
 	hint := m.adminSessionHint()
@@ -183,13 +183,7 @@ func (m *Model) adminAuthView() string {
 		hint = "unlocks the vault and admin mode here only"
 		keys = "enter unlock · {back} cancel, nothing saved"
 	}
-
-	var b strings.Builder
-	b.WriteString(styles.title.Render(title) + "\n\n")
-	b.WriteString(m.inputLine("  ", a.input) + "\n")
-	b.WriteString(m.indented(hint) + "\n")
-	b.WriteString(m.keyHint(keys))
-	return b.String()
+	return promptDialog{title: title, input: m.inputLine("  ", a.input), hint: hint, keys: keys}
 }
 
 // adminSessionHint says how long this window's admin session will stay open once the passphrase proves it,

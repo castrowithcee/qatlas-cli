@@ -375,7 +375,7 @@ func TestAnExistingLabelIsNotOverwrittenAndTheLabelStaysEditable(t *testing.T) {
 
 	m = pickerModel(t, src)
 	openPicker(t, m)
-	pump(t, m, "enter", "i")
+	pump(t, m, "enter", "r")
 	if !m.labelEdit || m.labelInput.Value() != "Group a" {
 		t.Errorf("label edit %v value %q, want the provider's name to edit", m.labelEdit, m.labelInput.Value())
 	}

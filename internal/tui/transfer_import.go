@@ -693,15 +693,10 @@ func (m *Model) importView() string {
 	if e == nil {
 		return ""
 	}
+	if d, ok := m.importPrompt(); ok {
+		return m.promptView(d)
+	}
 	switch e.step {
-	case importFile:
-		return m.wrapped(styles.title, "Import: file") + "\n\n" + m.pathLines("  ", &e.input) +
-			m.indented("the file to import, as an export wrote it; nothing changes before you confirm the preview") + "\n" +
-			m.importKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")) + m.notes()
-	case importPassphrase:
-		return m.wrapped(styles.title, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" +
-			m.indented("the file is encrypted: type the passphrase it was exported with, not the vault passphrase") + "\n" +
-			m.importKeys("{save} or enter ok · {back} back, nothing imported") + m.notes()
 	case importMode:
 		var b strings.Builder
 		b.WriteString(m.wrapped(styles.title, "Import: mode") + "\n\n")
@@ -739,12 +734,42 @@ func (m *Model) importView() string {
 	return m.linesView(title, question, keys, lines, &e.offset)
 }
 
+// importPrompt is the one-line dialog the import is at, if it is at one.
+func (m *Model) importPrompt() (promptDialog, bool) {
+	e := m.imp
+	if e == nil {
+		return promptDialog{}, false
+	}
+	switch e.step {
+	case importFile:
+		return promptDialog{
+			title: "Import: file",
+			input: m.pathLines("  ", &e.input),
+			hint:  "the file to import, as an export wrote it; nothing changes before you confirm the preview",
+			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")),
+		}, true
+	case importPassphrase:
+		return promptDialog{
+			title: "Export passphrase",
+			input: m.inputLine("  ", e.input.Model),
+			hint:  "the file is encrypted: type the passphrase it was exported with, not the vault passphrase",
+			keys:  m.importDialogKeys("{save} or enter ok · {back} back, nothing imported"),
+		}, true
+	}
+	return promptDialog{}, false
+}
+
+// importDialogKeys is the key line of a dialog, or the wait while the import works.
+func (m *Model) importDialogKeys(keys string) string {
+	if m.imp != nil && m.imp.working != "" {
+		return m.imp.working + ", please wait"
+	}
+	return keys
+}
+
 // importKeys is the footer of a step that has no lines to scroll.
 func (m *Model) importKeys(keys string) string {
-	if m.imp != nil && m.imp.working != "" {
-		keys = m.imp.working + ", please wait"
-	}
-	return m.keyHint(keys)
+	return m.keyHint(m.importDialogKeys(keys))
 }
 
 // importLeaveView is the leave question over an unfinished import.

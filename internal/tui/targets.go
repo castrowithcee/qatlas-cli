@@ -13,7 +13,7 @@ import (
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
 // add, which offers known targets and a builder where there are any, enter edits the selected target, and d
-// removes it after asking. i labels the selected target for the person, in a line of its own; an empty
+// removes it after asking. r labels the selected target for the person, in a line of its own; an empty
 // label removes it. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
 // only from its summary. esc is one level back: it closes an unchanged list, cancels an unchanged entry,
@@ -140,7 +140,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
-	case "i":
+	case "r":
 		// The guided setup saves no labels, so it offers none.
 		if selected && m.wizard == nil {
 			m.editLabel(target)
@@ -359,7 +359,7 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "{save} next step"
 	}
-	keys := "a add · enter edit · i label · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
+	keys := "a add · enter edit · r label · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	if m.wizard != nil {
 		keys = "a add · enter edit · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	}

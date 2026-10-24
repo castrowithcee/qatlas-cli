@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -191,6 +190,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		back := u.back
+		u.input.Reset()
 		m.vaultUnlock = nil
 		m.screen = back
 		m.status = "Cancelled"
@@ -214,21 +214,18 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// vaultUnlockPromptView draws the masked 'ctrl+l' unlock dialog, in the pattern of every other masked
-// prompt this editor already shows (see adminAuthView, vaultOfferView): a title, the masked line, an
+// vaultUnlockPrompt is the masked 'ctrl+l' unlock dialog, in the pattern of every other masked
+// prompt this editor already shows (see adminAuthPrompt, vaultOfferPrompt): a title, the masked line, an
 // explanation, and enter/esc. The explanation is its own text (see vaultUnlockHint), not admin.go's
 // adminSessionHint: this dialog opens without a pending admin-gated action, so it reads as unlocking that
 // also starts admin mode, not the other way round.
-func (m *Model) vaultUnlockPromptView() string {
-	var b strings.Builder
-	b.WriteString(styles.title.Render("Unlock vault") + "\n\n")
+func (m *Model) vaultUnlockPrompt() promptDialog {
+	d := promptDialog{title: "Unlock vault", input: m.inputLine("  ", m.vaultUnlock.input),
+		hint: m.vaultUnlockHint(), keys: "enter unlock · {back} cancel"}
 	if m.restartNote != "" {
-		b.WriteString(m.indented(m.restartNote) + "\n\n")
+		d.notice = m.indented(m.restartNote)
 	}
-	b.WriteString(m.inputLine("  ", m.vaultUnlock.input) + "\n")
-	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
-	b.WriteString(m.keyHint("enter unlock · {back} cancel"))
-	return b.String()
+	return d
 }
 
 // vaultUnlockHint explains what answering the 'ctrl+l' unlock dialog does besides unlocking the vault

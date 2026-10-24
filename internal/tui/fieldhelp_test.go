@@ -87,8 +87,10 @@ func TestRoleHelpComesFromTheProviderOfTheCredential(t *testing.T) {
 	}
 }
 
-func TestFocusedFieldHintStandsWholeAndWrapped(t *testing.T) {
-	sizes := []struct{ w, h int }{{80, 40}, {75, 40}, {208, 60}, {120, 30}}
+// The hint under the focused row is one line, cut with "..." at the right and never wrapped. The long form
+// stands in the pane from helpPaneMinWidth on; a text row has no info key below it.
+func TestFocusedFieldHintIsOneLineAndTheLongFormIsInThePane(t *testing.T) {
+	sizes := []struct{ w, h int }{{80, 40}, {75, 40}, {helpPaneMinWidth - 1, 30}, {helpPaneMinWidth, 30}, {208, 60}}
 	for _, size := range sizes {
 		for _, credential := range []string{"a-cred", "b-cred", "c-cred"} {
 			m := roleCollisionModel(t)
@@ -104,13 +106,35 @@ func TestFocusedFieldHintStandsWholeAndWrapped(t *testing.T) {
 					t.Errorf("%dx%d %s: view lacks %q:\n%s", size.w, size.h, credential, want, view)
 				}
 			}
-			if strings.Contains(view, "…") || strings.Contains(view, "F1") {
-				t.Errorf("%dx%d %s: the hint is cut or names F1:\n%s", size.w, size.h, credential, view)
+			if strings.Contains(view, "F1") {
+				t.Errorf("%dx%d %s: the form names F1:\n%s", size.w, size.h, credential, view)
 			}
+			lines := formLines(m)
+			at := fieldLine(t, lines, "token")
+			height := 0
+			for j := at + 1; j < len(lines) && strings.HasPrefix(lines[j], "    "); j++ {
+				height++
+			}
+			if height != 1 {
+				t.Errorf("%dx%d %s: the hint takes %d lines, want one:\n%s", size.w, size.h, credential, height, view)
+			}
+			full := m.View()
+			flat := strings.Join(strings.Fields(full), " ")
 			if credential == "a-cred" {
-				flat := strings.Join(strings.Fields(view), " ")
-				if !strings.Contains(flat, "PERMISSION-LIST-TAIL") || !strings.Contains(flat, "Actions: write") {
-					t.Errorf("%dx%d: the hint is not whole:\n%s", size.w, size.h, view)
+				whole := strings.Contains(flat, "PERMISSION-LIST-TAIL")
+				if size.w >= helpPaneMinWidth {
+					if !strings.Contains(flat, "Alpha personal access token: classic") || strings.Contains(view, "(i)") {
+						t.Errorf("%dx%d: no explanation in the pane or a mark beside it:\n%s", size.w, size.h, full)
+					}
+				} else {
+					// The row takes typed text, so it has no info key and no mark that promises one.
+					if whole || strings.Contains(view, "(i)") {
+						t.Errorf("%dx%d: want the one-line hint without the long form or a mark:\n%s", size.w, size.h, full)
+					}
+					press(t, m, "i")
+					if m.infoOpen {
+						t.Errorf("%dx%d: i opened the info over a text row:\n%s", size.w, size.h, m.View())
+					}
 				}
 			}
 		}

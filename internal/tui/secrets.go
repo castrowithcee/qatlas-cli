@@ -124,17 +124,25 @@ const (
 	storageEnv     = placeEnv
 )
 
-// storageHint says what each place for new secrets is for. The system keyring is named as this platform
-// calls it, so a user recognises it as something the machine already has rather than something to set up.
-var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-	"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
-	"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
+// storageHint is the one-line hint of the storage row. It names the platform keyring in full, as this
+// platform calls it, so a user recognises it as something the machine already has; it is a function because
+// platform may change in a test.
+func storageHint() string { return secret.StoreLabel(platform) + ": nothing to set up" }
+
+// storageDetail says what each place for new secrets is for.
+func storageDetail() string {
+	return "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
+		"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
+		"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
+}
 
 // storageField is the row that chooses where the secrets of a credential are kept: the system keyring, the
 // vault, or environment variables. Every credential offers the same three choices in the same order,
 // whichever it is now, so moving a secret from one place to another is one change to this row.
 func storageField(value string) field {
-	return choiceField(storageLabel, []string{storageKeyring, storageVault, storageEnv}, value).withHint(storageHint)
+	f := choiceField(storageLabel, []string{storageKeyring, storageVault, storageEnv}, value).withHint(storageHint())
+	f.detail = storageDetail()
+	return f
 }
 
 // storageType is the credential type the file stores for a choice of the storage row.
@@ -505,6 +513,8 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		cancel := o.cancel
+		o.input.Reset()
+		o.first = ""
 		m.vaultOffer = nil
 		return cancel()
 	case "enter":
@@ -629,24 +639,18 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 // vaultFirstSecretHint explains the optional passphrase offer before the vault's very first secret.
 const vaultFirstSecretHint = "type it twice to encrypt; enter on empty keeps it unencrypted"
 
-// vaultOfferView draws a masked vault passphrase prompt, in the pattern of the masked secret prompt: a
+// vaultOfferPrompt is a masked vault passphrase prompt, in the pattern of the masked secret prompt: a
 // title, the masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry
 // (title and hint of its own) and its confirmation (always worded the same way), told apart by
 // vaultOffer.confirming.
-func (m *Model) vaultOfferView() string {
+func (m *Model) vaultOfferPrompt() promptDialog {
 	o := m.vaultOffer
-	var b strings.Builder
-	if !o.confirming {
-		b.WriteString(styles.title.Render(o.title) + "\n\n")
-		b.WriteString(m.inputLine("  ", o.input) + "\n")
-		b.WriteString(m.indented(o.hint) + "\n")
-	} else {
-		b.WriteString(styles.title.Render("Confirm the vault passphrase") + "\n\n")
-		b.WriteString(m.inputLine("  ", o.input) + "\n")
-		b.WriteString(m.indented("type it again to confirm it") + "\n")
+	d := promptDialog{title: o.title, input: m.inputLine("  ", o.input), hint: o.hint,
+		keys: "enter ok · {back} cancel, nothing saved"}
+	if o.confirming {
+		d.title, d.hint = "Confirm the vault passphrase", "type it again to confirm it"
 	}
-	b.WriteString(m.keyHint("enter ok · {back} cancel, nothing saved"))
-	return b.String()
+	return d
 }
 
 func joinSources(sources []secret.Source) string {

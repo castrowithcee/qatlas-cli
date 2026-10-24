@@ -108,9 +108,9 @@ func TestListShowsStateAndDisabledConnectionStaysTestable(t *testing.T) {
 func TestNewConnectionAndSetupStartActive(t *testing.T) {
 	m, _ := toolsModel(t, wikiRegistry(t), nil)
 	openSectionByName(t, m, sectionConnections)
-	pump(t, m, "n")
+	pressNew(t, m)
 	if m.screen != screenForm {
-		t.Fatalf("n did not open a form: screen %v", m.screen)
+		t.Fatalf("the new connection form did not open: screen %v", m.screen)
 	}
 	if got := m.fieldValue(stateLabel); got != stateActive {
 		t.Errorf("new connection state row = %q, want %q", got, stateActive)

@@ -674,7 +674,7 @@ func (r *Registry) checkGroups(provider string) error {
 // Tool is the configuration view of the operation: what a connection's effects and tools list are
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
-	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Effect(d.Risk.Effect),
+	return config.ToolMetadata{ID: d.ID, Title: d.Title, Description: d.Description, Effect: config.Effect(d.Risk.Effect),
 		RequiresToolAllowList: d.RequiresToolAllowList, Group: d.Group, LocalFiles: d.LocalFiles}
 }
 
