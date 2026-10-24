@@ -117,8 +117,9 @@ func Register(reg *capability.Registry) error {
 			// separate choice and not part of the recommended start.
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
-				"and locations, the live counters, and the time of the latest visit; changes nothing",
-			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID),
+				"and locations, the live counters, the time of the latest visit, and visitor profiles; changes nothing",
+			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
+				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website; every " +
@@ -144,6 +145,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: visitsList, Handler: capability.Handler(invokeVisitsList)},
 		capability.Operation{Descriptor: liveCountersGet, Handler: capability.Handler(invokeLiveCountersGet)},
 		capability.Operation{Descriptor: visitsGetLatestTime, Handler: capability.Handler(invokeVisitsGetLatestTime)},
+		capability.Operation{Descriptor: visitorsGetProfile, Handler: capability.Handler(invokeVisitorsGetProfile)},
+		capability.Operation{Descriptor: visitorsGetLatestID, Handler: capability.Handler(invokeVisitorsGetLatestID)},
+		capability.Operation{Descriptor: visitsGetFirst, Handler: capability.Handler(invokeVisitsGetFirst)},
 		capability.Operation{Descriptor: goalsList, Handler: capability.Handler(invokeGoalsList)},
 		capability.Operation{Descriptor: goalsGet, Handler: capability.Handler(invokeGoalsGet)},
 		capability.Operation{Descriptor: goalsAdd, Handler: capability.Handler(invokeGoalsAdd)},

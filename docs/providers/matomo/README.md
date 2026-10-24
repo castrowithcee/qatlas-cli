@@ -13,7 +13,7 @@ Matomo is a provider for one Matomo instance, on-premise or Matomo Cloud, throug
 Matomo 5. The API is the same for both, and the token carries the rights of its Matomo user. This page
 describes the foundation every Matomo tool shares: connection, targets, availability, errors, paging, and the
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
-[reports](reports.md), [live data](live.md), and [goals](goals.md).
+[reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), and [goals](goals.md).
 
 ## Configuration
 
@@ -134,10 +134,10 @@ refused. Methods without server paging are cut on the Qatlas side.
 ## Setup profiles
 
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
-report catalog, report, and segment tools as well as `matomo.goals.list` and `matomo.goals.get`. The profile `live` adds the three [live tools](live.md), because they
-carry personal data. The profile `goals` adds `matomo.goals.add` and `matomo.goals.update`; it is not
-recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in no profile, see
-[goals](goals.md).
+report catalog, report, and segment tools as well as `matomo.goals.list` and `matomo.goals.get`. The profile
+`live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md), because they carry personal
+data. The profile `goals` adds `matomo.goals.add` and `matomo.goals.update`; it is not recommended because it
+changes the goal configuration of a website. `matomo.goals.delete` is in no profile, see [goals](goals.md).
 
 ## Tools
 
@@ -154,6 +154,9 @@ recommended because it changes the goal configuration of a website. `matomo.goal
 | `matomo.visits.list` | [live](live.md) | reads the visit log of one website |
 | `matomo.live-counters.get` | [live](live.md) | reads visits, actions, visitors, and converted visits of the last minutes |
 | `matomo.visits.get-latest-time` | [live](live.md) | reads the time of the latest visit per website |
+| `matomo.visitors.get-profile` | [visitors](visitors.md) | reads the profile of one visitor, bounded; needs visitor profiles enabled |
+| `matomo.visitors.get-latest-id` | [visitors](visitors.md) | reads the visitor ID of the latest visit, optionally within a segment |
+| `matomo.visits.get-first` | [visitors](visitors.md) | reads the first visit of one visitor without actions; needs visitor profiles enabled |
 | `matomo.goals.list` | [goals](goals.md) | reads the goals of a website |
 | `matomo.goals.get` | [goals](goals.md) | reads one goal |
 | `matomo.goals.add` | [goals](goals.md) | creates a goal (effect `create`) |

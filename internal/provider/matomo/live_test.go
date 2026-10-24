@@ -278,6 +278,12 @@ func TestLiveToolsRefuseForeignWebsitesBeforeSecretAndRequest(t *testing.T) {
 		{"matomo.visits.get-latest-time", "two", `{"idSites":[1,3]}`},
 		{"matomo.visits.get-latest-time", "open", `{}`},
 		{"matomo.visits.get-latest-time", "general", `{}`},
+		{"matomo.visitors.get-profile", "one", `{"idSite":1}`},
+		{"matomo.visitors.get-profile", "two", `{"idSite":3,"visitor_id":"0123456789abcdef"}`},
+		{"matomo.visitors.get-latest-id", "two", `{"idSite":3}`},
+		{"matomo.visitors.get-latest-id", "instance", `{"idSite":1}`},
+		{"matomo.visits.get-first", "two", `{"idSite":3,"visitor_id":"0123456789abcdef"}`},
+		{"matomo.visits.get-first", "mixed", `{"idSite":9,"visitor_id":"0123456789abcdef"}`},
 	} {
 		_, err := env.invoke(tc.tool, tc.connection, tc.arguments)
 		if err == nil || !isInvalidRequest(err) && !isUnsupported(err) {
@@ -351,6 +357,9 @@ func TestLiveToolsMapErrorsAndNeverLeakTheMessage(t *testing.T) {
 	for _, tool := range []struct{ id, arguments string }{
 		{"matomo.visits.list", `{"idSite":1}`}, {"matomo.live-counters.get", `{"idSite":1,"last_minutes":5}`},
 		{"matomo.visits.get-latest-time", `{"idSites":[1]}`},
+		{"matomo.visitors.get-profile", `{"idSite":1,"visitor_id":"0123456789abcdef"}`},
+		{"matomo.visitors.get-latest-id", `{"idSite":1}`},
+		{"matomo.visits.get-first", `{"idSite":1,"visitor_id":"0123456789abcdef"}`},
 	} {
 		for name, tc := range map[string]struct {
 			message string
@@ -491,7 +500,8 @@ func TestLiveRequestsKeepASpacingBelowTheCloudLimit(t *testing.T) {
 
 func TestLiveToolsAreClassifiedAsPersonalData(t *testing.T) {
 	reg := registry(t)
-	for _, id := range []string{"matomo.visits.list", "matomo.live-counters.get", "matomo.visits.get-latest-time"} {
+	for _, id := range []string{"matomo.visits.list", "matomo.live-counters.get", "matomo.visits.get-latest-time",
+		"matomo.visitors.get-profile", "matomo.visitors.get-latest-id", "matomo.visits.get-first"} {
 		descriptor, _, found := reg.Lookup(id)
 		if !found {
 			t.Fatalf("%s is not registered", id)
