@@ -201,6 +201,13 @@ func testConfig(p *product) *config.Config {
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issue-times.delete", p.id + ".issue-times.reset"}}
+	notifyTools := []string{p.id + ".notifications.mark-all-read", p.id + ".repository-notifications.mark-read",
+		p.id + ".notifications.list", p.id + ".notifications.get", p.id + ".notifications.mark-thread",
+		p.id + ".notifications.check-new"}
+	cfg.Connections["notify-open"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Tools: notifyTools}
+	cfg.Connections["notify-repo"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: notifyTools}
 	if p == forgejo {
 		cfg.Connections["notes-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 			Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".git-notes.delete"}}
