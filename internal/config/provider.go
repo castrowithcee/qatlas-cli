@@ -398,6 +398,7 @@ func (t TargetMetadata) kindOf(target string) string {
 type ToolMetadata struct {
 	ID                    string
 	Title                 string
+	Description           string
 	Effect                Effect
 	RequiresToolAllowList bool
 	// Group is the ID of the provider's ToolGroup the tool belongs to; empty for a provider without Groups.

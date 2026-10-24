@@ -600,10 +600,13 @@ type Model struct {
 	wizard *setup
 
 	// window, while a form is being fitted to the terminal, is the first and last row index drawn; nil
-	// draws every row. hintCap is then how many lines the hint of the focused row may take; 0 means all
-	// of them (see fittedEditorView).
-	window  *[2]int
-	hintCap int
+	// draws every row (see fittedEditorView).
+	window *[2]int
+	// infoOpen is set while the explanation of infoShown stands as an overlay over the screen.
+	infoOpen bool
+	// inPane is set while the left part of a screen with a pane is drawn, whose width is already reduced.
+	inPane    bool
+	infoShown infoSubject
 	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
 	// returns to.
 	helpTopic  int
@@ -819,6 +822,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layoutWorkspace()
 		return m, nil
 	case tea.KeyMsg:
+		if m.infoOpen {
+			if msg.String() == "ctrl+c" {
+				return m, m.interrupt()
+			}
+			m.updateInfo(msg.String())
+			return m, nil
+		}
 		if m.activeScreenTooSmall() {
 			switch msg.String() {
 			case "ctrl+c":
@@ -853,6 +863,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keyIs(msg, actCommand) && m.helpReachable() {
 			m.openCommandLine()
+			return m, nil
+		}
+		if keyIs(msg, actInfo) && m.infoReachable() && m.openInfo() {
 			return m, nil
 		}
 		msg = m.moveKey(msg)
@@ -3501,6 +3514,9 @@ func (m *Model) View() string {
 		}
 		return m.resizeView()
 	}
+	if m.infoOpen {
+		return m.infoView()
+	}
 	if view, ok := m.modalView(); ok {
 		return view
 	}
@@ -3523,7 +3539,7 @@ func (m *Model) workspaceView() string {
 		width+m.termWidth-m.width, height+m.termHeight-m.height, footerKeys(way)), m.width))
 }
 
-// editorView renders the current screen. A form shows only the hint of the focused field, directly under
+// editorView renders the current screen. A form shows only the one-line hint of the focused field, directly under
 // it: the field a person is on is the one they need explained, and that is true whatever the terminal size
 // and however the screen was reached, so it never surprises with every hint at once. Validation errors and
 // warnings are not hints and stay visible regardless of focus.
@@ -3603,8 +3619,8 @@ func (m *Model) editorView() string {
 			// A read-only field can never be the one focused, so its hint would never show; it explains
 			// itself in its own value instead (see renderField), the way a read-only tool list already does.
 			if i == m.focus && !f.readOnly {
-				if hint := m.fieldDetail(f); hint != "" {
-					b.WriteString(m.limitedHint(hint) + "\n")
+				if hint := m.fieldHint(f); hint != "" {
+					b.WriteString(m.hintLine(hint, m.moreBehind(f, hint)) + "\n")
 				}
 			}
 			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
@@ -3662,6 +3678,9 @@ func (m *Model) editorView() string {
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
 			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
+		}
+		if !m.payloadRemoveAsk && m.infoWorks() {
+			keys += " · {info} info"
 		}
 		b.WriteString(m.keyHint(keys))
 	case screenSecret:
@@ -4101,6 +4120,9 @@ func (m *Model) pickerFrame() (string, string) {
 			head.WriteString(m.wrapped(styles.warning, "warning: "+note) + "\n")
 		}
 	}
+	if m.infoWorks() {
+		keys = strings.Replace(keys, " · {back} cancel", " · {info} info · {back} cancel", 1)
+	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
 
@@ -4127,7 +4149,8 @@ func (m *Model) pickerRow(i int) string {
 			text += "  (current)"
 		}
 	}
-	return m.listRow(i == m.picker.cursor, truncateCells(text, width))
+	mark := m.pickerMark(m.fields[m.focus], choice)
+	return m.listRow(i == m.picker.cursor, truncateCells(text, width-lipgloss.Width(mark))+mark)
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
@@ -4312,71 +4335,32 @@ func (m *Model) emptyHelp() string {
 	return "Nothing configured yet."
 }
 
-// fittedEditorView is editorView, and for a form taller than the terminal, only as many rows around the
-// focused one as fit. The hint of the focused row stands whole, so rows farther away give way first; only a
-// hint longer than the terminal itself is cut, as far as needed, so the form stays operable.
+// fittedEditorView is screenView, and for a form taller than the terminal, only as many rows around the
+// focused one as fit. The hint of the focused row is one line, so rows farther away give way first.
 func (m *Model) fittedEditorView() string {
-	view := m.editorView()
+	view := m.screenView()
 	if m.screen != screenForm || m.viewFits(view) {
 		return view
 	}
-	defer func() { m.window, m.hintCap = nil, 0 }()
+	defer func() { m.window = nil }()
 	lo, hi := 0, len(m.fields)-1
 	for lo < m.focus || hi > m.focus {
 		if lo < m.focus {
 			lo++
 		}
 		m.window = &[2]int{lo, hi}
-		if view = m.editorView(); m.viewFits(view) {
+		if view = m.screenView(); m.viewFits(view) {
 			return view
 		}
 		if hi > m.focus {
 			hi--
 			m.window = &[2]int{lo, hi}
-			if view = m.editorView(); m.viewFits(view) {
+			if view = m.screenView(); m.viewFits(view) {
 				return view
 			}
 		}
 	}
-	lines := strings.Count(view, "\n") + 1
-	for m.hintCap = lines; m.hintCap > minHintLines; m.hintCap-- {
-		if view = m.editorView(); m.viewFits(view) {
-			return view
-		}
-	}
-	m.hintCap = minHintLines
-	return m.editorView()
-}
-
-// minHintLines is the fewest lines a cut hint keeps.
-const minHintLines = 2
-
-// limitedHint is the hint of the focused row, wrapped into the workspace and, while hintCap is set, cut to
-// that many lines, the last one ending in an ellipsis.
-func (m *Model) limitedHint(text string) string {
-	indent, width := m.fit("    ")
-	var pieces []string
-	for _, line := range strings.Split(text, "\n") {
-		if lipgloss.Width(line) <= width {
-			pieces = append(pieces, line)
-			continue
-		}
-		for _, piece := range strings.Split(lipgloss.NewStyle().Width(width).Render(line), "\n") {
-			pieces = append(pieces, strings.TrimRight(piece, " "))
-		}
-	}
-	if limit := m.hintCap; limit > 0 && len(pieces) > limit {
-		pieces = pieces[:limit]
-		last := []rune(strings.TrimRight(pieces[limit-1], " ,;"))
-		for len(last) > 0 && lipgloss.Width(string(last)+"…") > width {
-			last = last[:len(last)-1]
-		}
-		pieces[limit-1] = string(last) + "…"
-	}
-	for i, piece := range pieces {
-		pieces[i] = indent + styles.hint.Render(piece)
-	}
-	return strings.Join(pieces, "\n")
+	return m.screenView()
 }
 
 // fieldHint is what one form row says about itself. A secret row adds the stages the resolver checked,

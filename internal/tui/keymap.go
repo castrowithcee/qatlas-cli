@@ -11,7 +11,6 @@ import (
 type action string
 
 const (
-	// actInfo has no key and no behavior yet; it exists so the binding table already lists it.
 	actInfo    action = "info"
 	actSave    action = "save"
 	actHelp    action = "help"
@@ -23,7 +22,7 @@ const (
 
 // keymap maps each action to the key string bubbletea reports for it (tea.KeyMsg.String); "" is unbound.
 var keymap = map[action]string{
-	actInfo:    "",
+	actInfo:    "i",
 	actSave:    "f2",
 	actHelp:    "?",
 	actCommand: ":",
@@ -56,7 +55,7 @@ var footerPlaceholders = []struct {
 	name string
 	act  action
 }{
-	{"{save}", actSave}, {"{help}", actHelp}, {"{command}", actCommand},
+	{"{save}", actSave}, {"{help}", actHelp}, {"{info}", actInfo}, {"{command}", actCommand},
 	{"{lock}", actLock}, {"{back}", actBack}, {"{delete}", actDelete},
 }
 
