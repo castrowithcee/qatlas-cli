@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo goal tools: reading goals, creating, replacing, and deleting them, the match attributes and pattern types, confirmation, and unclear outcomes.
+  Describes the Matomo goal tools: reading goals, creating, replacing, and deleting them, the match attributes and pattern types, goal recommendations, confirmation, and unclear outcomes.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -40,3 +40,31 @@ rules before it sends anything; Matomo checks them again and its answer decides.
 Every change needs the confirmation of the caller and is sent exactly once. After a result that is unclear (no
 answer in time, a reset connection, an answer Qatlas cannot read) the error says the change may have been applied
 and is never repeated; read the goal with `matomo.goals.get` before trying again.
+
+## Goal recommendations
+
+`matomo.goal-recommendations.list`, `.scan`, and `.dismiss` work on the recommendations that Matomo derives for a
+website. All three need a write right on the website (also the list, which is why it is not in the `read` profile
+and a token with a view right only gets a permission error), the Goals plugin, and the Goal recommendations feature
+of the instance; an instance without it reports the tools as unsupported.
+
+- `list` reads the result of the last scan from Matomo's stored options, without the recommendations dismissed one by
+  one. Nothing saved gives an empty result without `generatedAt`. It returns every documented member: `mode`, `goals`
+  (with the recommendation `id`, the goal definition members, `reason`, `source`, `needsSetup`,
+  `implementationNote`, `evidence`, `sourcePages`, and what else Matomo adds), `manualGoals`, `warnings`, `useAi`,
+  `generatedAt`, `remainingAiScans`, `providerName`, `aiAvailability`, and `privacyNote`. Texts and addresses are
+  untrusted and never fetched; lists and nested values are cut at fixed limits.
+- `scan` makes the Matomo server fetch the website's main URL and up to 50 pages of the same site (about 25 seconds
+  at most), score links, forms, and downloads, and replace the saved recommendations, which clears the single
+  dismissals. It creates no goal. It is not idempotent (each call crawls again), and a scan already running for the
+  website or the user is refused. A scan can outlast the 30 second limit of the call; the outcome is then unclear,
+  the call is not repeated, and `list` shows whether a result was saved. The result adds `aiError`, which Matomo
+  sets when the home page could not be analysed. The development-only `debug` member is not returned.
+- Qatlas never sends Matomo's AI option and offers no argument for it, so a scan sends no site data to an AI
+  provider; the AI members of the result only describe the instance.
+- `dismiss` takes exactly one of `recommendation_id` (a goal `id` from `list`: a match attribute, a colon, a
+  lower-case pattern, up to 300 characters) and `all: true`, which deletes all saved recommendations. A single
+  dismissal lasts until the next scan; an ID without a saved recommendation changes nothing and returns
+  `dismissed: false`. It is idempotent and needs confirmation.
+
+A recommended goal is created with `matomo.goals.add`. The `goals` profile selects all three tools.
