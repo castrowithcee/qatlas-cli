@@ -73,7 +73,7 @@ func testClass(err error) (provider.Class, error) {
 func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
-		segmentsGet.ID, annotationsList.ID, annotationsGet.ID}
+		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -178,6 +178,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: annotationsGet, Handler: capability.Handler(invokeAnnotationsGet)},
 		capability.Operation{Descriptor: annotationsAdd, Handler: capability.Handler(invokeAnnotationsAdd)},
 		capability.Operation{Descriptor: annotationsUpdate, Handler: capability.Handler(invokeAnnotationsUpdate)},
+		capability.Operation{Descriptor: annotationsDelete, Handler: capability.Handler(invokeAnnotationsDelete)},
+		capability.Operation{Descriptor: annotationsDeleteAll, Handler: capability.Handler(invokeAnnotationsDeleteAll)},
+		capability.Operation{Descriptor: annotationsCount, Handler: capability.Handler(invokeAnnotationsCount)},
 		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
 		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
 		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},

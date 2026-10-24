@@ -36,6 +36,8 @@ const goalConnections = `
   writer: {service: matomo, credential: token, effects: [read, create, update, delete, execute]}
   writer-two: {service: matomo, credential: token, effects: [read, create, update, execute], targets: [site/2]}
   deleter: {service: matomo, credential: token, tools: [matomo.goals.get, matomo.goals.delete], targets: [site/1]}
+  admin: {service: matomo, credential: token, tools: [matomo.annotations.delete-all, matomo.annotations.delete], targets: [site/1, instance]}
+  no-instance: {service: matomo, credential: token, tools: [matomo.annotations.delete-all], targets: [site/1]}
   reader: {service: matomo, credential: token, effects: [read]}
 `
 
