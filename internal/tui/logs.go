@@ -869,28 +869,17 @@ func (m *Model) logsFrame() (string, string) {
 	if lv.loaded {
 		status = lv.worst.style().Render(lv.worst.label())
 	}
-	marker := func(f logFocus) string {
-		if focused && lv.focus == f {
-			return "> "
-		}
-		return "  "
-	}
-	var chips []string
+	marker := func(f logFocus) string { return barMarker(focused && lv.focus == f) }
+	var modes []string
 	for mode := logModeDay; mode < logModeCount; mode++ {
-		if mode == lv.mode {
-			chips = append(chips, styles.activeRow.Render("["+mode.String()+"]"))
-			continue
-		}
-		chips = append(chips, mode.String())
+		modes = append(modes, mode.String())
 	}
-	modeField := marker(logFocusMode) + "Mode: " + strings.Join(chips, " ")
-	views := []string{"Table", "Heatmap"}
+	modeField := marker(logFocusMode) + "Mode: " + barChips(modes, int(lv.mode))
+	view := 0
 	if lv.heat {
-		views = []string{"Table", styles.activeRow.Render("[Heatmap]")}
-	} else {
-		views[0] = styles.activeRow.Render("[Table]")
+		view = 1
 	}
-	viewField := marker(logFocusView) + "View: " + strings.Join(views, " ")
+	viewField := marker(logFocusView) + "View: " + barChips([]string{"Table", "Heatmap"}, view)
 	var dateField string
 	switch lv.mode {
 	case logModeDay:
@@ -900,19 +889,7 @@ func (m *Model) logsFrame() (string, string) {
 	default:
 		dateField = "  " + styles.hint.Render("(all recorded days)")
 	}
-	var bar []string
-	left := modeField + "  " + dateField + "  " + viewField
-	pair := dateField + "  " + viewField
-	switch {
-	case lipgloss.Width(left)+2+lipgloss.Width(status) <= width:
-		bar = []string{left + strings.Repeat(" ", width-lipgloss.Width(left)-lipgloss.Width(status)) + status}
-	case lipgloss.Width(modeField) >= lipgloss.Width(pair) && lipgloss.Width(pair)+2+lipgloss.Width(status) <= width:
-		bar = []string{modeField, pair + "  " + status}
-	case lipgloss.Width(viewField)+2+lipgloss.Width(status) <= width:
-		bar = []string{modeField, dateField, viewField + "  " + status}
-	default:
-		bar = []string{modeField, dateField, viewField, "  " + status}
-	}
+	bar := packBar([]string{modeField, dateField, viewField}, status, width)
 
 	var filters []string
 	for k, value := range lv.filters {
