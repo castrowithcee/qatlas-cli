@@ -113,7 +113,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	deployKeysList, deployKeysGet, deployKeysDelete, userKeysList, userKeysGet, userKeysDelete, userGPGKeysList,
 	userGPGKeysGet, userGPGKeysDelete, accessTokensList, accessTokensGetCurrent, accessTokensDeleteCurrent,
 	oauth2AppsList, oauth2AppsGet, oauth2AppsDelete, quotaGet, quotaListArtifacts, quotaListAttachments,
-	quotaListPackages, quotaCheck}
+	quotaListPackages, quotaCheck, packagesList, packagesGet, packageFilesList, packageVersionsList,
+	packageVersionsGetLatest, packagesLink, packagesUnlink, packagesDeleteVersion, packagesDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

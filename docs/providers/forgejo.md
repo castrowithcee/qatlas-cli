@@ -128,6 +128,9 @@ not registered. See [Projects](gitea/projects.md).
   from 15, artifacts from 16. Runs, jobs, artifacts, and filters have Forgejo's own forms, there is no owner level,
   no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
   `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See [Actions](gitea/actions.md).
+- Packages: there is no `package-versions.list`, `package-versions.get-latest`, or `packages.delete`, `terraform` is
+  not a package type, and the size of a package file is `Size` in the API and `size` in the result. See
+  [Packages](gitea/packages.md).
 - Actions administration: secrets and variables carry no `description`, and `actions-secrets.list` reads the secrets
   of a user only from Forgejo 17. Runners have Forgejo's own members and a paged list, there is no
   `actions-runners.update` and no `workflows.enable` or `workflows.disable`, and `actions-runner-jobs.search` is

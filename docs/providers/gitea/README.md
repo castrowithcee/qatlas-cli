@@ -194,6 +194,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Pull requests](pull-requests.md): pull requests, their files, commits, and diffs
 - [Pull request reviews](pull-request-reviews.md): reviews, their inline comments, and requested reviewers
 - [Releases](releases.md): releases and their attached assets
+- [Packages](packages.md): the packages of a user or an organization, their files, linking to a repository, and
+  deleting versions
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
 - [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
