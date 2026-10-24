@@ -2,7 +2,7 @@
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
 // connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
 // response sizes summed up per tool and connection, m for the context cost of each MCP session; enter opens
-// one entry. Every
+// one entry; the View field of the bar swaps the rows for a heatmap of their days (activity.go). Every
 // row and the bar carry the status the hash chain and the check values give it, found by the same walk
 // 'qatlas vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
 // a command, never on the event loop, and never ask for a passphrase: a locked vault leaves the check values
@@ -73,6 +73,7 @@ const (
 	logFocusRows logFocus = iota
 	logFocusMode
 	logFocusDate
+	logFocusView
 )
 
 // The filters f offers, in the order of the filter line.
@@ -157,8 +158,9 @@ type logView struct {
 	layout      layout
 	layoutWidth int
 
-	// stats shows the summary of the shown rows instead of the rows themselves.
+	// stats shows the summary of the shown rows instead of the rows themselves, heat the heatmap of their days.
 	stats bool
+	heat  bool
 	// sessions makes the summary the one of the MCP sessions, scrolled down by scroll lines.
 	sessions bool
 	scroll   int
@@ -486,7 +488,7 @@ func (m *Model) openLogs() tea.Cmd {
 	m.testName, m.editing, m.confirmRole = "", "", ""
 	m.clearMessages()
 	lv := m.logs
-	lv.focus, lv.dialog, lv.pick, lv.stats, lv.sessions = logFocusRows, nil, nil, false, false
+	lv.focus, lv.dialog, lv.pick, lv.stats, lv.sessions, lv.heat = logFocusRows, nil, nil, false, false, false
 	m.screen = screenLogs
 	return m.loadLogs()
 }
@@ -542,22 +544,24 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 			return m.loadLogs()
 		case logFocusDate:
 			m.openLogDateDialog()
+		case logFocusView:
+			return m.setHeat(!lv.heat)
 		default:
 			if by < 0 {
 				m.focusNav()
 			}
 		}
 	case "s":
-		lv.stats, lv.sessions = !lv.stats, false
+		lv.stats, lv.sessions, lv.heat = !lv.stats, false, false
 	case "m":
 		on := !(lv.stats && lv.sessions)
-		lv.stats, lv.sessions, lv.scroll = on, on, 0
+		lv.stats, lv.sessions, lv.scroll, lv.heat = on, on, 0, false
 	case "enter":
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
 		case logFocusRows:
-			if row, ok := lv.list.selected(); ok && !lv.stats {
+			if row, ok := lv.list.selected(); ok && !lv.stats && !lv.heat {
 				lv.detail, _ = strconv.Atoi(row)
 				m.screen = screenLogDetail
 				m.clearMessages()
@@ -565,6 +569,9 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		}
 	case "up", "down", "pgup", "pgdown", "home", "end":
 		lv.focus = logFocusRows
+		if lv.heat {
+			break
+		}
 		if lv.stats && lv.sessions {
 			m.scrollSessions(key.String())
 			break
@@ -589,9 +596,9 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 
 // moveFocus steps through the bar's fields and the rows; All has no date field to stop at.
 func (lv *logView) moveFocus(by int) {
-	order := []logFocus{logFocusMode, logFocusDate, logFocusRows}
+	order := []logFocus{logFocusMode, logFocusDate, logFocusView, logFocusRows}
 	if lv.mode == logModeAll {
-		order = []logFocus{logFocusMode, logFocusRows}
+		order = []logFocus{logFocusMode, logFocusView, logFocusRows}
 	}
 	at := len(order) - 1
 	for i, f := range order {
@@ -809,6 +816,11 @@ func (m *Model) logsView() string {
 		b.WriteString(foot)
 		return b.String()
 	}
+	if lv.heat && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
+		b.WriteString(m.logHeatLines(m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1))
+		b.WriteString(foot)
+		return b.String()
+	}
 	start, end := m.logsWindow()
 	l := m.logLayout()
 	for i := start; i < end; i++ {
@@ -872,6 +884,13 @@ func (m *Model) logsFrame() (string, string) {
 		chips = append(chips, mode.String())
 	}
 	modeField := marker(logFocusMode) + "Mode: " + strings.Join(chips, " ")
+	views := []string{"Table", "Heatmap"}
+	if lv.heat {
+		views = []string{"Table", styles.activeRow.Render("[Heatmap]")}
+	} else {
+		views[0] = styles.activeRow.Render("[Table]")
+	}
+	viewField := marker(logFocusView) + "View: " + strings.Join(views, " ")
 	var dateField string
 	switch lv.mode {
 	case logModeDay:
@@ -882,14 +901,17 @@ func (m *Model) logsFrame() (string, string) {
 		dateField = "  " + styles.hint.Render("(all recorded days)")
 	}
 	var bar []string
-	left := modeField + "  " + dateField
+	left := modeField + "  " + dateField + "  " + viewField
+	pair := dateField + "  " + viewField
 	switch {
 	case lipgloss.Width(left)+2+lipgloss.Width(status) <= width:
 		bar = []string{left + strings.Repeat(" ", width-lipgloss.Width(left)-lipgloss.Width(status)) + status}
-	case lipgloss.Width(dateField)+2+lipgloss.Width(status) <= width:
-		bar = []string{modeField, dateField + "  " + status}
+	case lipgloss.Width(modeField) >= lipgloss.Width(pair) && lipgloss.Width(pair)+2+lipgloss.Width(status) <= width:
+		bar = []string{modeField, pair + "  " + status}
+	case lipgloss.Width(viewField)+2+lipgloss.Width(status) <= width:
+		bar = []string{modeField, dateField, viewField + "  " + status}
 	default:
-		bar = []string{modeField, dateField, "  " + status}
+		bar = []string{modeField, dateField, viewField, "  " + status}
 	}
 
 	var filters []string
@@ -925,6 +947,8 @@ func (m *Model) logsFrame() (string, string) {
 	case shown == 0:
 		body = append(body, m.wrapped(styles.hint,
 			"No entry matches the filters and the search. f changes the filters, esc clears the search."))
+	case lv.heat:
+		// The heatmap has no table header.
 	case lv.stats && lv.sessions:
 		body = append(body, m.wrapped(styles.hint, "MCP sessions of the rows shown: the bytes of the JSON-RPC messages per "+
 			"area and tool, error responses included. ~tokens is an estimate (3.5 bytes per token); only the model "+
@@ -961,7 +985,7 @@ func (m *Model) logsFrame() (string, string) {
 			return strings.Join(lines, "\n") + "\n", strings.TrimPrefix(keys, "\n") + m.notes()
 		}
 		foot := keys
-		if shown > 0 && focused && !lv.stats {
+		if shown > 0 && focused && !lv.stats && !lv.heat {
 			foot = withPosition(foot, fmt.Sprintf("%d/%d · %d%%", lv.list.cursor+1, shown,
 				(lv.list.cursor+1)*100/shown), width)
 		}
@@ -1014,7 +1038,9 @@ func (m *Model) logKeys() string {
 			return "left/right mode · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusDate:
 			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
-		case len(lv.list.matches) == 0:
+		case lv.focus == logFocusView:
+			return "left/right view · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		case len(lv.list.matches) == 0 || lv.heat:
 			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		}
 		return "enter detail · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
@@ -1034,7 +1060,9 @@ func (m *Model) logKeys() string {
 		return "left/right change mode · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusDate:
 		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
-	case len(lv.list.matches) == 0:
+	case lv.focus == logFocusView:
+		return "left/right change view · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+	case len(lv.list.matches) == 0 || lv.heat:
 		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
 	keys := "enter details · tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
