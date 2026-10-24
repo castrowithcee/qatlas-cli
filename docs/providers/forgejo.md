@@ -50,6 +50,9 @@ additional depth of defense: the targets of the connection stay the boundary.
 - The user object carries `pronouns` (Gitea 28 and later carries `type` instead), and `users.search` takes `sort`. See
   [Users](gitea/users.md). The repository object carries `wiki_branch` and `has_wiki_contents`.
 - `settings.get` with `repository` also carries `forks_disabled`.
+- Blocking an account user uses `list_blocked`, `block`, and `unblock`, lists only block entries, has no
+  `user-blocks.check`, and takes no `note`; `user-settings` also carries `pronouns`, `hide_pronouns`, and
+  `enable_repo_unit_hints`. See [Users](gitea/users.md).
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
