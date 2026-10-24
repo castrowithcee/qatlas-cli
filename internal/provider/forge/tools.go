@@ -112,7 +112,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	gitHooksGet, gitHooksDelete, pushMirrorsList, pushMirrorsGet, pushMirrorsSync, pushMirrorsDelete,
 	deployKeysList, deployKeysGet, deployKeysDelete, userKeysList, userKeysGet, userKeysDelete, userGPGKeysList,
 	userGPGKeysGet, userGPGKeysDelete, accessTokensList, accessTokensGetCurrent, accessTokensDeleteCurrent,
-	oauth2AppsList, oauth2AppsGet, oauth2AppsDelete}
+	oauth2AppsList, oauth2AppsGet, oauth2AppsDelete, quotaGet, quotaListArtifacts, quotaListAttachments,
+	quotaListPackages, quotaCheck}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
