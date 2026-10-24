@@ -201,6 +201,12 @@ func testConfig(p *product) *config.Config {
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issue-times.delete", p.id + ".issue-times.reset"}}
+	packageDelete := []string{p.id + ".packages.delete-version", p.id + ".packages.get"}
+	if p == gitea {
+		packageDelete = append(packageDelete, p.id+".packages.delete")
+	}
+	cfg.Connections["package-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"orgs/acme"}, Tools: packageDelete}
 	if p == forgejo {
 		cfg.Connections["notes-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 			Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".git-notes.delete"}}

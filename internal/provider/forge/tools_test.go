@@ -186,6 +186,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
+		want = append(want, p.id+".packages.list", p.id+".packages.get", p.id+".package-files.list",
+			p.id+".packages.link", p.id+".packages.unlink", p.id+".packages.delete-version")
+		if p == gitea {
+			want = append(want, p.id+".package-versions.list", p.id+".package-versions.get-latest",
+				p.id+".packages.delete")
+		}
 		want = append(want, accessToolIDs(p)...)
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
