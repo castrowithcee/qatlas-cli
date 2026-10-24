@@ -94,7 +94,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	repositoryAvatarsDelete, topicsSearch, repositoryTopicsList, repositoryTopicsSet,
 	repositoryTopicsAdd, repositoryTopicsRemove, gitignoreTemplatesList, gitignoreTemplatesGet, labelTemplatesList,
 	labelTemplatesGet, licenseTemplatesList, licenseTemplatesGet, repositoryLicensesList, wikiPagesList,
-	wikiPagesGet, wikiPagesCreate, wikiPagesUpdate, wikiPagesDelete, wikiRevisionsList}
+	wikiPagesGet, wikiPagesCreate, wikiPagesUpdate, wikiPagesDelete, wikiRevisionsList, orgsList,
+	orgsListMine, orgsListUser, orgsGet, orgsCreate, orgsUpdate, orgsRename, orgsDelete, orgAvatarsUpdate,
+	orgAvatarsDelete, orgActivitiesList, orgPermissionsGet}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

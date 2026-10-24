@@ -156,6 +156,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == gitea {
 			want = append(want, p.id+".repository-licenses.list")
 		}
+		want = append(want, p.id+".orgs.list", p.id+".orgs.list-mine", p.id+".orgs.list-user", p.id+".orgs.get",
+			p.id+".orgs.create", p.id+".orgs.update", p.id+".orgs.rename", p.id+".orgs.delete",
+			p.id+".org-avatars.update", p.id+".org-avatars.delete", p.id+".org-activities.list",
+			p.id+".org-permissions.get")
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
 		slices.Sort(want)

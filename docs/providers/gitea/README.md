@@ -198,6 +198,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Branches](branches.md): the branches of a repository
 - [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
   repositories, pull mirror syncs, and repository avatars
+- [Organizations](organizations.md): listing, reading, creating, changing, renaming, and deleting organizations, their
+  avatars, activity feeds, and a user's permissions
 - [Topics and templates](topics-templates.md): repository topics, the instance-wide topic search, and the gitignore,
   label, and license templates
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
@@ -210,9 +212,9 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 
 ## Not offered
 
-No tool of either provider covers ActivityPub and federation, repository migration, creating mirrors, creating
-tokens, keys, webhooks, or OAuth2 applications, creating users, adding email addresses, registering runners
-(including registration tokens), or acting as another user (Sudo).
+No tool of either provider covers ActivityPub and federation, repository migration, creating mirrors, deleting all
+repositories of an organization, creating tokens, keys, webhooks, or OAuth2 applications, creating users, adding
+email addresses, registering runners (including registration tokens), or acting as another user (Sudo).
 
 ## Setup profile
 
