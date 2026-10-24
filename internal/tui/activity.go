@@ -288,16 +288,16 @@ func (m *Model) overviewActivityLines(room, width int) []string {
 	grid, drawn := heatGrid(act.days, localDay(now), m.retentionStart(now), width, overviewHeatWeeks, false)
 	var lines []string
 	if len(grid) > 0 && room >= len(grid)+2 {
-		lines = append(lines, "  "+styles.hint.Render("Activity")+"  "+heatTotals(drawn))
+		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewActivity))+"  "+heatTotals(drawn))
 		for _, line := range grid {
 			lines = append(lines, "  "+line)
 		}
 		g := heatGlyphSet()
-		lines = append(lines, "  "+styles.hint.Render("less "+g.zero+strings.Join(g.levels[:], "")+" more"))
+		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewLess)+g.zero+strings.Join(g.levels[:], "")+tr(tOverviewMore)))
 		room -= len(grid) + 2
 	}
 	if len(act.recent) > 0 && room >= 2 {
-		lines = append(lines, "  "+styles.hint.Render("Latest calls"))
+		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewLatestCalls)))
 		for _, e := range act.recent[:min(len(act.recent), room-1)] {
 			lines = append(lines, "  "+truncateCells(m.recentCallText(e), width))
 		}

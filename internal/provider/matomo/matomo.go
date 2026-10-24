@@ -74,7 +74,7 @@ func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
 		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
-		siteSettingsGet.ID, consentManagerDetect.ID}
+		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID, referenceDataList.ID, ipRangesExpand.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -111,8 +111,9 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, their tracking code, settings, and consent manager, the goals, the saved segments, the " +
-				"annotations, the report and segment catalog of a website, and the data of its reports; changes nothing",
+			Description: "reads the instance version, the websites of the token, their tracking code, settings, and " +
+				"consent manager, the goals, the saved segments, the annotations, the custom dimensions, the report and " +
+				"segment catalog of a website, the data of its reports, reference data, and IP ranges; changes nothing",
 			Tools: readTools,
 		}, {
 			// Live data is personal data (visitor IDs, IP addresses, user IDs, locations), so it is a
@@ -146,6 +147,12 @@ func Register(reg *capability.Registry) error {
 			Description: "reads what the read profile reads and adds and updates the annotations of a website; " +
 				"every change needs its own confirmation",
 			Tools: append(slices.Clone(readTools), annotationsAdd.ID, annotationsUpdate.ID),
+		}, {
+			ID: "dimensions", Title: "Manage custom dimensions",
+			Description: "reads what the read profile reads, the dimension options, which need a write right, and " +
+				"adds and updates the custom dimensions of a website; every change needs its own confirmation, and a " +
+				"new dimension uses a slot for good because Matomo cannot delete one",
+			Tools: append(slices.Clone(readTools), dimensionOptionsList.ID, dimensionsAdd.ID, dimensionsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -187,6 +194,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: annotationsDelete, Handler: capability.Handler(invokeAnnotationsDelete)},
 		capability.Operation{Descriptor: annotationsDeleteAll, Handler: capability.Handler(invokeAnnotationsDeleteAll)},
 		capability.Operation{Descriptor: annotationsCount, Handler: capability.Handler(invokeAnnotationsCount)},
+		capability.Operation{Descriptor: dimensionsList, Handler: capability.Handler(invokeDimensionsList)},
+		capability.Operation{Descriptor: dimensionOptionsList, Handler: capability.Handler(invokeDimensionOptionsList)},
+		capability.Operation{Descriptor: dimensionsAdd, Handler: capability.Handler(invokeDimensionsAdd)},
+		capability.Operation{Descriptor: dimensionsUpdate, Handler: capability.Handler(invokeDimensionsUpdate)},
 		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
 		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
 		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},
@@ -197,5 +208,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: sitesUpdate, Handler: capability.Handler(invokeSitesUpdate)},
 		capability.Operation{Descriptor: sitesDelete, Handler: capability.Handler(invokeSitesDelete)},
 		capability.Operation{Descriptor: siteGroupsList, Handler: capability.Handler(invokeSiteGroupsList)},
+		capability.Operation{Descriptor: globalSettingsGet, Handler: capability.Handler(invokeGlobalSettingsGet)},
+		capability.Operation{Descriptor: referenceDataList, Handler: capability.Handler(invokeReferenceDataList)},
+		capability.Operation{Descriptor: ipRangesExpand, Handler: capability.Handler(invokeIPRangesExpand)},
 	)
 }

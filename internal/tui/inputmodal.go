@@ -58,7 +58,7 @@ func (m *Model) promptNotes() string {
 		b.WriteString("\n" + m.wrapped(styles.hint, m.busy+" ..."))
 	}
 	if m.fail != "" {
-		b.WriteString("\n" + m.wrapped(styles.fail, "error: "+m.fail))
+		b.WriteString("\n" + m.wrapped(styles.fail, tr(tNoteError, m.fail)))
 	}
 	return b.String()
 }

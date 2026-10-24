@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 )
 
 // Every masked passphrase dialog stays usable at the smallest supported size, with the vault header on its
@@ -28,17 +30,23 @@ func TestPassphraseDialogsFitMinimumSize(t *testing.T) {
 	}
 	for name, open := range cases {
 		t.Run(name, func(t *testing.T) {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
-			open(m)
-			sizedModel(m, minimumWidth, minimumHeight)
-			view := m.View()
-			if strings.Contains(view, "Resize terminal") {
-				t.Fatalf("resize hint at %dx%d:\n%s", minimumWidth, minimumHeight, view)
-			}
-			assertViewFits(t, view, minimumWidth, minimumHeight)
-			if !strings.Contains(view, "esc cancel") {
-				t.Errorf("view lacks the esc hint:\n%s", view)
-			}
+			eachLanguage(t, func(t *testing.T) {
+				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+				open(m)
+				sizedModel(m, minimumWidth, minimumHeight)
+				view := m.View()
+				if strings.Contains(view, "Resize terminal") || strings.Contains(view, "Terminal vergrößern") {
+					t.Fatalf("resize hint at %dx%d:\n%s", minimumWidth, minimumHeight, view)
+				}
+				assertViewFits(t, view, minimumWidth, minimumHeight)
+				esc := "esc cancel"
+				if uiLang == i18n.German {
+					esc = "esc abbrechen"
+				}
+				if !strings.Contains(view, esc) {
+					t.Errorf("view lacks the esc hint %q:\n%s", esc, view)
+				}
+			})
 		})
 	}
 }
