@@ -69,8 +69,8 @@ func (m *Model) tokensReport() (entries []tokenEntry, unavailable string) {
 	}
 	switch state {
 	case vault.StateAbsent, vault.StateUnencrypted:
-		return nil, fmt.Sprintf("Agent tokens need an encrypted vault. Open Vault (%d) to set a passphrase.",
-			int(sectionVault)+1)
+		return nil, fmt.Sprintf("Agent tokens need an encrypted vault. Open %s to set a passphrase.",
+			sectionVault.ref())
 	case vault.StateLocked:
 		return nil, "The vault is locked, so agent tokens cannot be listed; press enter or ctrl+l to unlock it."
 	}
@@ -212,7 +212,7 @@ func (m *Model) tokensBlocked() string {
 	}
 	if len(m.vorbildChoices()) == 0 {
 		return fmt.Sprintf("An agent token needs a connection that reads a vault credential as its vorbild. "+
-			"Press %d to open Connections.", int(sectionConnections)+1)
+			"Press %d to open Connections.", int(sectionConnections.area())+1)
 	}
 	return ""
 }

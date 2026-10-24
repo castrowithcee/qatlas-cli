@@ -54,7 +54,7 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 	if !strings.Contains(lines[0], "Qatlas setup") {
 		t.Errorf("the background header is gone:\n%s", view)
 	}
-	if !strings.Contains(view, "[1 Services]") {
+	if !strings.Contains(view, "[5 Library]") {
 		t.Errorf("the background tab line is gone:\n%s", view)
 	}
 	for _, line := range lines {
@@ -93,7 +93,7 @@ func TestModalBackgroundDoesNotChangeScrollState(t *testing.T) {
 }
 
 func TestQuestionTakesTheWholeWorkspaceBelowTheModalSize(t *testing.T) {
-	for _, size := range []struct{ width, height int }{{40, 12}, {59, 30}, {100, 19}} {
+	for _, size := range []struct{ width, height int }{{40, minimumHeight}, {59, 30}, {100, 19}} {
 		m, _, _ := newModel(t)
 		addService(t, m, "wiki", "https://wiki.example.invalid")
 		sizedModel(m, size.width, size.height)

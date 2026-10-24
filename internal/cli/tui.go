@@ -25,25 +25,34 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor is one screen: a tab line with the eight sections 1 Services, 2 Credentials,\n" +
-			"3 Connections, 4 Defaults, 5 Vault, 6 Approvals, 7 Tokens, and 8 Logs, and below it the\n" +
-			"workspace with the list, form, or setup step of the active section. The tab line has the same\n" +
-			"place at every width; the active section is in brackets, and a terminal too narrow for all names\n" +
-			"shows the others by their numbers. Below 40x12 the editor asks for a\n" +
-			"larger terminal and keeps everything as it was until it gets one.\n\n" +
-			"The editor opens with the focus on the tab line. The arrow keys move on every screen, and\n" +
+		Long: "The editor is one screen: a tab line with the six areas 1 Overview, 2 Connections, 3 Activity,\n" +
+			"4 Access, 5 Library, and 6 Settings, below it, for an area with several parts, an option bar\n" +
+			"(Access: Tokens, Approvals; Library: Services, Credentials; Settings: Vault, Defaults), and below\n" +
+			"that the workspace with the list, form, or setup step of the active part. The tab line has the\n" +
+			"same place at every width; the active area and part are in brackets, and a terminal too narrow\n" +
+			"for all names shows the other areas by their numbers and only the active part. Below 40x13 the\n" +
+			"editor asks for a larger terminal and keeps everything as it was until it gets one.\n\n" +
+			"The editor opens on the Overview with the focus on the tab line. The Overview shows the number of\n" +
+			"connections, services, credentials, agent tokens, and open approvals (tokens and approvals need an\n" +
+			"unlocked, encrypted vault), the vault state, a newer release, and the next steps, such as open\n" +
+			"approvals or an unencrypted vault; down moves into these lines, up and down select one, and enter\n" +
+			"opens the area and part that deals with it. It changes nothing itself. The arrow keys move on every screen, and\n" +
 			"h/j/k/l (left, down, up, right) do the same on every screen that takes no typed text; where text\n" +
 			"is typed, a letter is text. pgup/pgdown and home/end jump in every list, picker, table, and the\n" +
-			"tab line. tab and shift+tab go to the next or previous field, or between the tab line and the\n" +
+			"tab line. tab and shift+tab go to the next or previous field, or between the option bar and the\n" +
 			"list; in a path being typed, tab takes the suggested directory. space ticks in a multiple choice\n" +
 			"and does nothing else.\n" +
-			"On the tab line left/right choose a section, wrapping from the last to the first and back; down\n" +
-			"or enter or tab move the focus into the list, and up does nothing there. In that list, up/down\n" +
+			"On the tab line left/right choose an area, wrapping from the last to the first and back; down\n" +
+			"moves the focus to the option bar of an area that has one, where left/right choose the part and\n" +
+			"up returns to the tab line; down, enter, or tab move the focus into the list, and up does\n" +
+			"nothing on the tab line. In that list, up/down\n" +
 			"move the selection without wrapping, up at the first entry or in an empty list moves the focus\n" +
-			"back to the tab line, down stays at the last entry, and left/right leave the focus where it is;\n" +
-			"tab or esc still move it back.\n" +
-			"1-8 open a section directly from the tab line, a list, or the Logs screen; in a form, digits are\n" +
-			"text instead.\n" +
+			"back to the option bar or tab line, down stays at the last entry, and left/right leave the focus\n" +
+			"where it is; tab or esc still move it back.\n" +
+			"1-6 open an area directly, on its first part, from the tab line, a list, or the Logs screen; in a\n" +
+			"form, digits are text instead. The command line (:) opens an area with go overview, go\n" +
+			"connections, go activity, go access, go library, or go settings, and a part directly with go\n" +
+			"tokens, go approvals, go services, go credentials, go vault, go defaults, or go logs.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
@@ -101,11 +110,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"forward row, opened with enter to tick any number of existing payload secrets. While the vault\n" +
 			"is encrypted, forward_secrets and the fields of the listed payload secrets are part of the\n" +
 			"connection's approval, and a change is never approved by saving: the connection stays open until\n" +
-			"it is approved in 6 Approvals. Without an encrypted vault, and for a connection whose own\n" +
+			"it is approved in Access > Approvals (4). Without an encrypted vault, and for a connection whose own\n" +
 			"credential is not in it, no approval binds the release and only the forward_secrets list in the\n" +
 			"configuration limits it; the forms say so.\n\n" +
 			"While the vault is encrypted, the editor opens read-only: saving a form, deleting an entry,\n" +
-			"storing or removing a secret, and every action of 5 Vault (see below) each ask for the vault's\n" +
+			"storing or removing a secret, and every action of Settings > Vault (6, see below) each ask for the vault's\n" +
 			"passphrase the first time, masked in a screen of their own, never on this terminal. Answering it\n" +
 			"unlocks the vault where it was locked, and either way starts an admin session bound to this\n" +
 			"window: further managing actions run at once until vault.admin_timeout passes without a key\n" +
@@ -141,7 +150,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
 			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
-			"5 Vault is a settings form, not a list: it shows the vault's state (no vault yet, unencrypted, or\n" +
+			"Vault (6, first part of Settings) is a settings form, not a list: it shows the vault's state (no vault yet, unencrypted, or\n" +
 			"encrypted and locked or unlocked) and the actions that apply to it. Unencrypted offers to turn\n" +
 			"encryption on with a new passphrase, typed masked and twice; encrypted offers to change the\n" +
 			"passphrase (the current one once, then a new one twice) and to turn encryption off (the current\n" +
@@ -163,18 +172,18 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Saving a change while the vault is encrypted approves it automatically, without an extra\n" +
 			"step: the connection saved directly, in its own form or by the guided setup, and any other\n" +
 			"connection whose scope changed because of that same save, such as one sharing a service\n" +
-			"whose base_url just changed. 6 Approvals lists every connection still open otherwise, with\n" +
+			"whose base_url just changed. Approvals (4, second part of Access) lists every connection still open otherwise, with\n" +
 			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
 			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
 			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"7 Tokens lists the agent tokens of an encrypted vault with their vorbild connections and expiry,\n" +
+			"Tokens (4, first part of Access) lists the agent tokens of an encrypted vault with their vorbild connections and expiry,\n" +
 			"and marks an expired token, or a vorbild that covers nothing now, with ⚠ and words behind its\n" +
 			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
 			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
 			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +
 			"s shows its value and hides it again, only there and only while the session lasts; d revokes it\n" +
 			"after asking, y confirms and n or esc keeps it. While the vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"8 Logs shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
+			"Activity (3) shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
 			"bar on top reads Mode: Day, Range, or All and, for the first two, the date or the range of UTC\n" +
 			"days: tab moves the focus from the rows to the bar's fields and back, left/right change the\n" +
 			"mode, and enter or left/right on the date open a small dialog that takes one date, or from and\n" +

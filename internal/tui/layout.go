@@ -8,16 +8,24 @@ import (
 )
 
 // layoutWorkspace derives the room of the workspace from the terminal. It takes the full width; above it
-// stand the header, one tab line, and a rule.
+// stand the header, one tab line, the option bar of an area that has one, and a rule.
 func (m *Model) layoutWorkspace() {
 	m.width = max(m.termWidth, 1)
 	m.height = max(m.termHeight-3, 1)
+	if m.hasSubTabs() {
+		m.height = max(m.height-1, 1)
+	}
 }
 
-// frame puts the workspace under the header, the tab line, and a rule.
+// frame puts the workspace under the header, the tab line, the option bar, and a rule.
 func (m *Model) frame(workspace string) string {
 	lines := m.headerLines()
-	lines = append(lines, m.navLine(), styles.quietBorder.Render(strings.Repeat("─", m.termWidth)))
+	lines = append(lines, m.navLine())
+	if m.hasSubTabs() {
+		// The line stays, empty, during the guided setup so the workspace never changes height under it.
+		lines = append(lines, m.subNavLine())
+	}
+	lines = append(lines, styles.quietBorder.Render(strings.Repeat("─", m.termWidth)))
 	lines = append(lines, strings.Split(workspace, "\n")...)
 	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
@@ -74,19 +82,19 @@ func (m *Model) pathLine(vaultText string) string {
 // pathRoom is what the banner of a newer release leaves the path at least.
 const pathRoom = 12
 
-// navLine is the tab line: every section by number and name, the active one in brackets, and "> " in front
+// navLine is the tab line: every area by number and name, the active one in brackets, and "> " in front
 // while the tabs have the focus; the brackets and the marker, not the colour, say which one is active. A
 // terminal too narrow for all names closes the gaps first and then shortens the others to their numbers;
 // the active tab always stays whole.
 func (m *Model) navLine() string {
 	focus := "  "
-	if m.screen == screenNav {
+	if m.screen == screenNav && !m.navSub {
 		focus = "> "
 	}
 	var spaced, compact, short []string
-	for s := section(0); s < sectionCount; s++ {
+	for s := area(0); s < areaCount; s++ {
 		name := fmt.Sprintf("%d %s", int(s)+1, s.title())
-		if s == m.section && m.wizard == nil {
+		if s == m.section.area() && m.wizard == nil {
 			tab := "[" + name + "]"
 			spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
 			continue
