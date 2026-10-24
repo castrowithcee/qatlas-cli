@@ -411,7 +411,7 @@ func TestInstanceOnlyBindingOffersNoWebsiteTool(t *testing.T) {
 		t.Errorf("instance connection offers %v", got)
 	}
 	for _, connection := range []string{"open", "general", "one", "mixed"} {
-		if got := offered(connection); len(got) != 11 {
+		if got := offered(connection); len(got) != 13 {
 			t.Errorf("connection %s offers %v", connection, got)
 		}
 	}
