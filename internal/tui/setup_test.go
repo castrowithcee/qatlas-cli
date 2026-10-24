@@ -23,9 +23,16 @@ import (
 func walkSetup(t *testing.T, m *Model, until int) {
 	t.Helper()
 	m.screen = screenNav
-	press(t, m, "c")
+	walkSetupFrom(t, m, "c", until)
+}
+
+// walkSetupFrom starts the guided setup with key (c on the tab line, or n on the Connections list) and walks
+// its first until steps with a new service and a new credential.
+func walkSetupFrom(t *testing.T, m *Model, key string, until int) {
+	t.Helper()
+	press(t, m, key)
 	if m.wizard == nil || m.screen != screenProviders {
-		t.Fatalf("c did not open the guided setup on its provider table: screen %v, error %q", m.screen, m.fail)
+		t.Fatalf("%s did not open the guided setup on its provider table: screen %v, error %q", key, m.screen, m.fail)
 	}
 	steps := []func(){
 		func() { press(t, m, "enter") },
@@ -628,6 +635,113 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				t.Errorf("%s left %+v, want type %s resolving from %s", choice, viaSetup, storageType(choice), want)
 			}
 		})
+	}
+}
+
+// n on the Connections list is the guided setup: a connection with a new service and a new credential comes
+// out of one run, without a visit to the Library, and nothing is written before the summary's save.
+func TestNewInConnectionsRunsTheGuidedSetupWithNewServiceAndCredential(t *testing.T) {
+	m, store, path, _, mem := newStoreModel(t)
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+	if len(m.cfg.Services) != 0 || len(m.cfg.Credentials) != 0 {
+		t.Fatal("the fixture is not empty")
+	}
+	walkSetupFrom(t, m, "n", setupSteps-1)
+	if m.screen != screenSummary {
+		t.Fatalf("screen = %v, want the summary", m.screen)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("the configuration was written before the summary's save")
+	}
+	assertNoStoredSecret(t, mem, filepath.Dir(path))
+	pump(t, m, "f2")
+	if m.fail != "" || m.wizard.saved != "personal" {
+		t.Fatalf("save failed: %q", m.fail)
+	}
+	saved, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	if _, ok := saved.Services["wiki"]; !ok {
+		t.Errorf("services = %v, want the new wiki", saved.Services)
+	}
+	if _, ok := saved.Credentials["reader"]; !ok {
+		t.Errorf("credentials = %v, want the new reader", saved.Credentials)
+	}
+	if conn := saved.Connections["personal"]; conn.Service != "wiki" || conn.Credential != "reader" {
+		t.Errorf("connection = %+v", conn)
+	}
+	if got, err := mem.Get(context.Background(), secret.StoreKey("reader", "token-secret")); err != nil || got != canarySecret {
+		t.Errorf("the new credential's secret was not stored through the secret input: %v", err)
+	}
+	assertNoCanary(t, "the summary", screenOf(m))
+}
+
+// With connections present, n asks "empty or from existing" and an empty start still reaches the setup.
+func TestNewInConnectionsKeepsTheTemplateQuestion(t *testing.T) {
+	m, _ := templateModel(t)
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+	press(t, m, "n")
+	if m.screen != screenTemplate || m.template == nil || !m.template.setup {
+		t.Fatalf("n: screen %v, want the template question of the setup", m.screen)
+	}
+	press(t, m, "enter")
+	if m.wizard == nil || m.screen != screenProviders {
+		t.Fatalf("empty: screen %v, want the setup's provider table", m.screen)
+	}
+}
+
+// Leaving after the service step writes nothing: the new service exists only in the setup until the
+// summary's save, and esc asks once before dropping it.
+func TestCancellingAfterTheNewServiceWritesNothing(t *testing.T) {
+	m, _, path, _, mem := newStoreModel(t)
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+	walkSetupFrom(t, m, "n", stepCredential)
+	if m.wizard.step != stepCredential || m.wizard.plan.service != "wiki" {
+		t.Fatalf("step %d plan %+v, want the credential step after the new service", m.wizard.step, m.wizard.plan)
+	}
+	if _, ok := m.cfg.Services["wiki"]; ok {
+		t.Error("the new service is already in the loaded configuration")
+	}
+	press(t, m, "esc", "esc", "esc")
+	if m.screen != screenLeave {
+		t.Fatalf("esc did not ask before dropping the setup: screen %v", m.screen)
+	}
+	press(t, m, "d")
+	if m.wizard != nil || m.screen != screenList {
+		t.Fatalf("d did not drop the setup: screen %v", m.screen)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("the configuration was written")
+	}
+	if len(m.cfg.Services) != 0 {
+		t.Errorf("services = %v, want none", m.cfg.Services)
+	}
+	assertNoStoredSecret(t, mem, filepath.Dir(path))
+}
+
+// n in Connections still reuses a configured service and credential.
+func TestNewInConnectionsReusesAConfiguredService(t *testing.T) {
+	m, store, _, _, _ := newStoreModel(t)
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+	press(t, m, "n", "enter")
+	if m.fieldValue("service") != "wiki" {
+		t.Fatalf("service = %q, want the configured one first", m.fieldValue("service"))
+	}
+	press(t, m, "f2", "f2", "f2", "f2")
+	pump(t, m, "f2")
+	if m.fail != "" {
+		t.Fatalf("save failed: %q", m.fail)
+	}
+	saved, err := store.Load()
+	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
+		t.Fatalf("saved = %+v, %v", saved, err)
 	}
 }
 

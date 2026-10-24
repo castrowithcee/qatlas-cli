@@ -20,6 +20,11 @@ import (
 // starts a new entry from nothing.
 func pressNew(t *testing.T, m *Model) {
 	t.Helper()
+	if m.section == sectionConnections {
+		// n in Connections is the guided setup; these tests exercise the single connection form.
+		m.openForm("")
+		return
+	}
 	press(t, m, "n")
 	if m.screen == screenTemplate {
 		press(t, m, "enter")
@@ -246,8 +251,8 @@ func TestDuplicateSavesOnlyInAnAdminSession(t *testing.T) {
 	}
 }
 
-// n asks first. Empty opens the ordinary new form; "from existing" opens a picker with search, and enter
-// on a match opens the copy. esc steps back out.
+// n in Connections asks first, like c. Empty opens the guided setup; "from existing" opens a picker with
+// search, and enter on a match starts the setup from that connection. esc steps back out.
 func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	m, _ := templateModel(t, "alpha", "beta", "gamma")
 	openSectionByName(t, m, sectionConnections)
@@ -258,7 +263,7 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 		t.Fatalf("n: screen %v, want the question", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"New connection", "(•) empty", "( ) from existing connection...",
+	for _, want := range []string{"Guided setup", "(•) empty", "( ) from existing connection...",
 		"up/down move", "enter choose", "esc cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not show %q:\n%s", want, view)
@@ -270,11 +275,11 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	}
 
 	press(t, m, "n", "enter")
-	if m.screen != screenForm || m.copyFrom != "" || m.fieldValue("name") != "" {
-		t.Fatalf("empty: screen %v copyFrom %q name %q, want an empty new form", m.screen, m.copyFrom,
-			m.fieldValue("name"))
+	if m.screen != screenProviders || m.wizard == nil || m.wizard.template != "" {
+		t.Fatalf("empty: screen %v wizard %+v, want the setup at its provider table", m.screen, m.wizard)
 	}
 	press(t, m, "esc")
+	m.wizard = nil
 	m.screen = screenList
 
 	press(t, m, "n", "down", "enter")
@@ -295,9 +300,8 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	press(t, m, "enter")
 	typeText(t, m, "gam")
 	press(t, m, "enter")
-	if m.screen != screenForm || m.copyFrom != "gamma" || m.fieldValue("name") != "gamma-copy" {
-		t.Fatalf("picked: screen %v copyFrom %q name %q, want the copy of gamma", m.screen, m.copyFrom,
-			m.fieldValue("name"))
+	if m.wizard == nil || m.wizard.template != "gamma" || m.wizard.step != stepService {
+		t.Fatalf("picked: screen %v wizard %+v, want the setup from gamma", m.screen, m.wizard)
 	}
 }
 
@@ -452,9 +456,7 @@ func TestTemplateScreensFitANarrowTerminal(t *testing.T) {
 	press(t, m, "enter")
 	view = screenOf(m)
 	assertViewFits(t, view, 60, 30)
-	for _, want := range []string{"\nfrom github-ops", "github-ops-copy"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the narrow copied form does not show %q:\n%s", want, view)
-		}
+	if m.wizard == nil || m.wizard.template != "github-ops" {
+		t.Errorf("the narrow picker did not start the setup from github-ops:\n%s", view)
 	}
 }

@@ -982,8 +982,14 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 }
 
 // newEntry is n from the tab line or a list: the form of a new entry of the active section, unless a missing
-// prerequisite blocks it. A new agent token is a managing action from the start (see newToken).
+// prerequisite blocks it. A new agent token is a managing action from the start (see newToken). In
+// Connections n is the guided setup, the same flow as c, because it creates a missing service or credential
+// on the way instead of sending the person to the Library.
 func (m *Model) newEntry() tea.Cmd {
+	if m.section == sectionConnections {
+		m.askSetupTemplate()
+		return nil
+	}
 	if reason := m.newEntryBlocked(); reason != "" {
 		m.status = ""
 		m.fail = reason
@@ -1191,18 +1197,6 @@ func (m *Model) newEntryBlocked() string {
 
 func (m *Model) newEntryBlockedFor(s section) string {
 	switch s {
-	case sectionConnections:
-		var missing []string
-		if len(m.cfg.Services) == 0 {
-			missing = append(missing, "a service")
-		}
-		if len(m.cfg.Credentials) == len(manage.ForwardChoices(m.cfg)) {
-			missing = append(missing, "a credential")
-		}
-		if len(missing) > 0 {
-			return "Create " + strings.Join(missing, " and ") +
-				" before adding a connection. Press 5 to open the Library, or c for the guided setup."
-		}
 	case sectionDefaults:
 		if len(m.cfg.Connections) == 0 {
 			return "Create a connection before choosing a default. Press 2 to open Connections, or c for " +
@@ -4335,10 +4329,7 @@ func (m *Model) emptyHelp() string {
 	case sectionCredentials:
 		return "No credentials yet. Press n to add the roles required by a provider."
 	case sectionConnections:
-		if reason := m.newEntryBlocked(); reason != "" {
-			return reason
-		}
-		return "No connections yet. Press n to combine a service and credential."
+		return "No connections yet. Press n for the guided setup: it picks or adds the service and credential."
 	case sectionDefaults:
 		if reason := m.newEntryBlocked(); reason != "" {
 			return reason + " Defaults are optional."
