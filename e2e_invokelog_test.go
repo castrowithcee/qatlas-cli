@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -60,8 +62,8 @@ defaults:
 		"E2E_LOG_SECRET=" + canaryPrimarySecret,
 	}}
 
-	// argumentCanary is a page ID no page has, distinctive enough that its digits cannot appear anywhere
-	// else in the log, such as in a sequence number or a duration.
+	// argumentCanary is a page ID no page has. Its digits may still turn up inside a hash, MAC, or session
+	// ID, so the log check looks for it as a number of its own.
 	const argumentCanary = 774411
 
 	if code, _, stderr := c.run(t, "invoke", "bookstack.pages.list"); code != 0 {
@@ -149,10 +151,13 @@ defaults:
 			t.Fatalf("a CLI entry carries a session: %s", line)
 		}
 	}
-	for _, canary := range append(allCanaries(), fmt.Sprint(argumentCanary), queryCanary) {
+	for _, canary := range append(allCanaries(), queryCanary) {
 		if strings.Contains(string(data), canary) {
 			t.Fatalf("invocation log contains a canary %q: %s", canary, data)
 		}
+	}
+	if containsNumber(string(data), argumentCanary) {
+		t.Fatalf("invocation log contains the argument canary %d: %s", argumentCanary, data)
 	}
 
 	if code, stdout, stderr := c.run(t, "vault", "logs", "verify"); code != 0 {
@@ -175,5 +180,30 @@ defaults:
 	}
 	if stderr == "" {
 		t.Error("vault logs verify (tampered): stderr is empty, want a diagnostic naming the broken chain")
+	}
+}
+
+// containsNumber reports whether n stands in text as a number of its own, not as digits inside a longer
+// number or a hex value.
+func containsNumber(text string, n int) bool {
+	return regexp.MustCompile(`(?:^|[^0-9A-Za-z])` + strconv.Itoa(n) + `(?:$|[^0-9A-Za-z])`).MatchString(text)
+}
+
+func TestContainsNumberFindsOnlyANumberOfItsOwn(t *testing.T) {
+	for _, tt := range []struct {
+		text string
+		want bool
+	}{
+		{`{"prev_hash":"2b632bb2e6774411266d75d"}`, false},
+		{`{"session":"a774411b"}`, false},
+		{`{"seq":17744110}`, false},
+		{`{"id":774411}`, true},
+		{`{"arguments":{"id":"774411"}}`, true},
+		{"774411", true},
+		{"pages.get 774411\n", true},
+	} {
+		if got := containsNumber(tt.text, 774411); got != tt.want {
+			t.Errorf("containsNumber(%q) = %v, want %v", tt.text, got, tt.want)
+		}
 	}
 }

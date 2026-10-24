@@ -85,6 +85,8 @@ additional depth of defense: the targets of the connection stay the boundary.
 
 Forgejo has no project API, so the project board tools (`projects.*`, `project-columns.*`, `project-issues.*`) are
 not registered. See [Projects](gitea/projects.md).
+- `repository-licenses.list` is not registered either; Forgejo has no endpoint for the licenses of a repository. See
+  [Topics and templates](gitea/topics-templates.md).
 - Actions: the API grew in steps, so most run tools need Forgejo 16 or 17; runs, tasks, and dispatch are available
   from 15, artifacts from 16. Runs, jobs, artifacts, and filters have Forgejo's own forms, there is no owner level,
   no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
