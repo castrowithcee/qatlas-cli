@@ -731,9 +731,10 @@ func TestDirectSectionKeys(t *testing.T) {
 		t.Fatalf("2 on the tab line = screen %v section %v", m.screen, m.section)
 	}
 	press(t, m, "n")
-	if m.screen != screenList || !strings.Contains(m.fail, "Create a credential before adding a connection") {
-		t.Errorf("new without prerequisites: screen %v error %q", m.screen, m.fail)
+	if m.screen != screenProviders || m.wizard == nil || m.fail != "" {
+		t.Errorf("new without prerequisites: screen %v error %q, want the guided setup", m.screen, m.fail)
 	}
+	press(t, m, "esc")
 
 	// The guided setup is one key away from the list and from the tab line, and a setup without a provider
 	// yet closes with one escape.
@@ -782,9 +783,16 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	typeText(t, m, "WIKI_ID")
 	step("tab")
 	typeText(t, m, "WIKI_SECRET")
-	step("f2", "2", "n")
+	// n in Connections is the guided setup; it reuses the service and the credential made above.
+	step("f2", "2", "n", "enter", "f2", "f2")
+	clearField(t, m)
 	typeText(t, m, "wiki")
-	step("f2")
+	step("f2", "f2", "f2")
+	if m.wizard == nil || m.wizard.saved != "wiki" {
+		t.Fatalf("the setup did not save the connection: fail %q", m.fail)
+	}
+	// The saved setup is left with esc, which opens the Connections list; the walk itself used none.
+	press(t, m, "esc")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
@@ -1854,18 +1862,14 @@ func TestDependentSectionsExplainWhatMustBeCreatedFirst(t *testing.T) {
 
 	openSectionByName(t, m, sectionConnections)
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Create a service and a credential", "Press 5", "c for the guided setup"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("empty Connections does not contain %q:\n%s", want, view)
-		}
+	if !strings.Contains(view, "Press n for the guided setup") {
+		t.Errorf("empty Connections does not point to the guided setup:\n%s", view)
 	}
 	press(t, m, "n")
-	if m.screen != screenList {
-		t.Fatalf("screen = %v, want to stay on the list without prerequisites", m.screen)
+	if m.wizard == nil || m.screen != screenProviders || m.fail != "" {
+		t.Fatalf("n without a service and a credential: screen %v error %q, want the guided setup", m.screen, m.fail)
 	}
-	if !strings.Contains(m.fail, "Create a service and a credential") {
-		t.Errorf("error = %q", m.fail)
-	}
+	press(t, m, "esc")
 
 	openSectionByName(t, m, sectionDefaults)
 	if view := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(view, "Create a connection") ||

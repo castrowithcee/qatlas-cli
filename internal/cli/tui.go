@@ -57,7 +57,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"connections, go activity, go access, go library, or go settings, and a part directly with go\n" +
 			"tokens, go approvals, go services, go credentials, go general, go vault, go defaults, go transfer,\n" +
 			"go update, go self-test, or go logs.\n" +
-			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
+			"In a list, / filters, n adds (in Connections n is the guided setup, which adds a missing service or\n" +
+			"credential on the way), enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
 			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
@@ -65,7 +66,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
 			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
 			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
-			"searchable list; c asks the same for the guided setup, which then starts from a connection. A\n" +
+			"searchable list; in Connections, n and c ask the same for the guided setup, which then starts\n" +
+			"from a connection. A\n" +
 			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
 			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
