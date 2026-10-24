@@ -65,7 +65,7 @@ func TestLoadToleratesUnknownKeys(t *testing.T) {
 
 func TestSaveRoundTripLeavesNoTempFile(t *testing.T) {
 	dir := t.TempDir()
-	want := Prefs{Theme: ThemeLight, Start: "access", Icons: IconsNerdFont}
+	want := Prefs{Theme: ThemeLight, Start: "access", Icons: IconsNerdFont, Keys: DefaultKeys()}
 	if err := Save(Path(dir), want); err != nil {
 		t.Fatal(err)
 	}

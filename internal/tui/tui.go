@@ -188,6 +188,8 @@ const (
 	// fieldPayloadNew is the row of a payload secret that takes the name of a field to add; enter turns the
 	// name into a masked value row (see payload.go). It is typed like a text row.
 	fieldPayloadNew
+	// fieldKey holds the key of one global action in the General form; see keybinding.go.
+	fieldKey
 )
 
 type field struct {
@@ -227,6 +229,8 @@ type field struct {
 	action string
 	// stored marks the masked row of a payload field that already has a value: left empty, it keeps it.
 	stored bool
+	// bound is the key a fieldKey row holds.
+	bound string
 }
 
 // providerNoteLabel is the row of a service form that edits the note of the service's provider.
@@ -360,6 +364,9 @@ func (f field) withDetail(detail string) field {
 }
 
 func (f field) value() string {
+	if f.kind == fieldKey {
+		return f.bound
+	}
 	if f.kind == fieldVaultState || f.kind == fieldVaultAction {
 		// Neither kind holds anything to save: the state is read live from the vault when it is drawn, and
 		// an action runs at once on enter rather than being saved with the rest of the form.
@@ -686,8 +693,10 @@ type Model struct {
 
 	// prefs are the device-local preferences and savePrefs stores them; the latter is nil when they cannot be
 	// saved.
-	prefs     uiprefs.Prefs
-	savePrefs func(uiprefs.Prefs) error
+	prefs uiprefs.Prefs
+	// keyCapture is set while a key row of the General form waits for the key to bind; see keybinding.go.
+	keyCapture bool
+	savePrefs  func(uiprefs.Prefs) error
 	// start is the area the editor opens on; the Overview is where it already is.
 	start area
 }
@@ -881,6 +890,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 'ctrl+l' is global, ahead of every screen's own keys (see vaultheader.go): it never reaches a
 		// screen that already asks its own question, and is a no-op while vaultBusy, so it can never step on
 		// a passphrase dialog, a confirmation, or vault work already running.
+		if m.keyCapture {
+			if msg.String() != "ctrl+c" {
+				return m, m.captureKey(msg)
+			}
+			// ctrl+c ends the editor everywhere, so it ends the capture first and then acts as usual.
+			m.keyCapture = false
+		}
 		if keyIs(msg, actLock) && m.vaultLockKeyAllowed() {
 			return m, m.handleVaultLockKey()
 		}
@@ -899,7 +915,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openCommandLine()
 			return m, nil
 		}
-		if keyIs(msg, actInfo) && m.infoReachable() && m.openInfo() {
+		if m.infoPressed(msg) && m.openInfo() {
 			return m, nil
 		}
 		msg = m.moveKey(msg)
@@ -1725,6 +1741,10 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			m.fields[m.focus].expanded = false
 			return nil
 		}
+	case fieldKey:
+		if cmd, handled := m.keyRowKey(key); handled {
+			return cmd
+		}
 	case fieldVaultAction:
 		// An action row runs at once on enter, never deferred to F2 like the rest of the form.
 		switch key.String() {
@@ -1781,8 +1801,8 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
-	case fieldVaultState, fieldVaultAction:
-		// Neither kind holds anything to type into: the state is never focused (it is read-only), and an
+	case fieldVaultState, fieldVaultAction, fieldKey:
+		// None of these kinds holds anything to type into: the state is never focused (it is read-only), and an
 		// action already ran, if it was going to, above.
 		return nil
 	}
@@ -3289,7 +3309,7 @@ func (m *Model) trimFields() {
 		f := &m.fields[i]
 		if f.kind == fieldChoice || f.kind == fieldProvider || f.kind == fieldMultiChoice || f.kind == fieldToolList ||
 			f.kind == fieldMasked || f.kind == fieldTargets || f.kind == fieldPaths || f.kind == fieldVaultState ||
-			f.kind == fieldVaultAction {
+			f.kind == fieldVaultAction || f.kind == fieldKey {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -3303,7 +3323,7 @@ func (m *Model) applyFocus() {
 		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldProvider &&
 			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList &&
 			m.fields[i].kind != fieldTargets && m.fields[i].kind != fieldPaths && m.fields[i].kind != fieldVaultAction &&
-			!m.fields[i].readOnly {
+			m.fields[i].kind != fieldKey && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -3750,6 +3770,11 @@ func (m *Model) editorView() string {
 			keys = "enter edit list · right/left expand/collapse · tab next field · " + formKeys
 		case fieldVaultAction:
 			keys = "enter run · tab next field · " + formKeys
+		case fieldKey:
+			keys = "enter press new key · r standard · tab next field · " + formKeys
+		}
+		if m.keyCapture {
+			keys = "press the new key · {back} cancel"
 		}
 		if m.isPayloadForm() {
 			if payloadKeys := m.payloadKeys(); payloadKeys != "" {
@@ -4764,6 +4789,11 @@ func Run(opts Options) error {
 	model.prefs = prefs
 	model.savePrefs = opts.SavePrefs
 	warnings := opts.PrefsWarnings
+	if err := prefs.Keys.WithDefaults().Validate(); err != nil {
+		warnings = append(warnings, "keys: "+err.Error()+", using the standard keys")
+		prefs.Keys, model.prefs.Keys = uiprefs.DefaultKeys(), uiprefs.DefaultKeys()
+	}
+	applyKeys(prefs.Keys)
 	if start, ok := areaByName(prefs.Start); ok {
 		model.start = start
 	} else {
