@@ -106,6 +106,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".issue-pins.list", p.id+".issue-pins.check-allowed", p.id+".issue-pins.pin",
 			p.id+".issue-pins.unpin", p.id+".issue-pins.move", p.id+".issue-subscriptions.list",
 			p.id+".issue-subscriptions.check", p.id+".issue-subscriptions.add", p.id+".issue-subscriptions.remove")
+		want = append(want, p.id+".stars.list", p.id+".stars.check", p.id+".stars.add", p.id+".stars.remove",
+			p.id+".repository-stargazers.list", p.id+".repository-subscribers.list", p.id+".repository-subscriptions.get",
+			p.id+".repository-subscriptions.set", p.id+".repository-subscriptions.delete", p.id+".subscriptions.list")
 		want = append(want, p.id+".issue-locks.lock", p.id+".issue-locks.unlock")
 		want = append(want, p.id+".pull-request-reviews.list", p.id+".pull-request-reviews.get",
 			p.id+".pull-request-reviews.create", p.id+".pull-request-reviews.submit",
