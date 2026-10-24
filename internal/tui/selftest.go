@@ -98,6 +98,9 @@ func (m *Model) selftestUnavailable() string {
 	case m.selftest.run == nil && m.selftest.Worker.Program == "":
 		return "this build cannot start the selftest"
 	}
+	if m.section == sectionSelftest && m.screen == screenForm {
+		return ""
+	}
 	return onScreens("start a selftest", screenNav, screenList, screenSelftest)(m)
 }
 

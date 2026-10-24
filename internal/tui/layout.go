@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // layoutWorkspace derives the room of the workspace from the terminal. It takes the full width; above it
@@ -94,6 +96,10 @@ func (m *Model) navLine() string {
 	var spaced, compact, short []string
 	for s := area(0); s < areaCount; s++ {
 		name := fmt.Sprintf("%d %s", int(s)+1, s.title())
+		if m.prefs.Icons == uiprefs.IconsNerdFont {
+			// The icon comes before the name and never replaces it.
+			name = fmt.Sprintf("%d %s %s", int(s)+1, areaIcons[s], s.title())
+		}
 		if s == m.section.area() && m.wizard == nil {
 			tab := "[" + name + "]"
 			spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)

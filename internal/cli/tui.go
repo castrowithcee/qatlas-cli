@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/tui"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // noUpdateCheck is the environment variable that keeps the editor from looking for a newer release.
@@ -27,8 +29,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 		Short: "Set up connections and edit the configuration in a terminal interface",
 		Long: "The editor is one screen: a tab line with the six areas 1 Overview, 2 Connections, 3 Activity,\n" +
 			"4 Access, 5 Library, and 6 Settings, below it, for an area with several parts, an option bar\n" +
-			"(Access: Tokens, Approvals; Library: Services, Credentials; Settings: Vault, Defaults), and below\n" +
-			"that the workspace with the list, form, or setup step of the active part. The tab line has the\n" +
+			"(Access: Tokens, Approvals; Library: Services, Credentials; Settings: General, then after a bar\n" +
+			"Vault, Defaults, Transfer, Update, Self-test), and below that the workspace with the list, form,\n" +
+			"or setup step of the active part. The tab line has the\n" +
 			"same place at every width; the active area and part are in brackets, and a terminal too narrow\n" +
 			"for all names shows the other areas by their numbers and only the active part. Below 40x13 the\n" +
 			"editor asks for a larger terminal and keeps everything as it was until it gets one.\n\n" +
@@ -52,7 +55,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"1-6 open an area directly, on its first part, from the tab line, a list, or the Logs screen; in a\n" +
 			"form, digits are text instead. The command line (:) opens an area with go overview, go\n" +
 			"connections, go activity, go access, go library, or go settings, and a part directly with go\n" +
-			"tokens, go approvals, go services, go credentials, go vault, go defaults, or go logs.\n" +
+			"tokens, go approvals, go services, go credentials, go general, go vault, go defaults, go transfer,\n" +
+			"go update, go self-test, or go logs.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
@@ -150,7 +154,15 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
 			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
-			"Vault (6, first part of Settings) is a settings form, not a list: it shows the vault's state (no vault yet, unencrypted, or\n" +
+			"General (6, first part of Settings) holds the preferences of this device: the color scheme (auto,\n" +
+			"light, or dark; auto follows the terminal's background and NO_COLOR wins over all of them), the\n" +
+			"start view (the area the editor opens on the next start), and icons (none or nerdfont, an icon\n" +
+			"before each area name that needs a Nerd Font). They are chosen from lists and saved with F2, with\n" +
+			"no admin session. They live in tui.yaml beside the configuration, belong to this device, and are\n" +
+			"never exported or imported. Transfer, Update, and Self-test only start the export and import, the\n" +
+			"update, and the selftests that the commands and keys start too, under the same rules.\n\n" +
+			"Vault (Settings) is a settings form, not a list: it shows the vault's state (no vault yet,\n" +
+			"unencrypted, or\n" +
 			"encrypted and locked or unlocked) and the actions that apply to it. Unencrypted offers to turn\n" +
 			"encryption on with a new passphrase, typed masked and twice; encrypted offers to change the\n" +
 			"passphrase (the current one once, then a new one twice) and to turn encryption off (the current\n" +
@@ -326,11 +338,24 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			store := config.NewStore(path, reg)
 			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor).
 				WithTargetSource(targetSource(opts, reg))
-			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), secrets, opts.Redactor,
-				tuiUpdater(opts, buildVersion), tuiRestart(), tuiSelfTest(buildVersion), os.Stdin, os.Stdout))
+			// Device-local preferences live beside the configuration and are not part of it. A missing or
+			// damaged file never stops the editor; it opens with the defaults and says why.
+			prefsPath := tuiPrefsPath(path)
+			prefs, prefsWarnings := uiprefs.Load(prefsPath)
+			return classifyUserError(tui.Run(tui.Options{
+				Service: svc, Store: store, Tester: connectionTester(store, opts, reg), Secrets: secrets,
+				Redactor: opts.Redactor, Updater: tuiUpdater(opts, buildVersion), Restart: tuiRestart(),
+				SelfTest: tuiSelfTest(buildVersion), Prefs: prefs, PrefsWarnings: prefsWarnings,
+				SavePrefs: func(p uiprefs.Prefs) error { return uiprefs.Save(prefsPath, p) },
+				In:        os.Stdin, Out: os.Stdout,
+			}))
 		},
 	}
 }
+
+// tuiPrefsPath is the device-local preferences file beside the resolved configuration file, so it follows
+// QATLAS_CLI_HOME and QATLAS_CONFIG exactly as the configuration does.
+func tuiPrefsPath(configPath string) string { return uiprefs.Path(filepath.Dir(configPath)) }
 
 // tuiSecrets returns the resolver 'qatlas tui' reads and writes secrets through. Unlike every other command
 // it never asks a vault passphrase on this process's terminal: bubbletea holds that terminal in raw mode
