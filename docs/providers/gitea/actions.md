@@ -8,14 +8,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Actions
 
 The Actions tools observe and operate the workflow runs, jobs, artifacts, and workflows of one repository inside the
-connection's targets. They hold for Gitea and Forgejo alike unless a line names one product. Secrets, variables, and
-runners are not offered.
+connection's targets. They hold for Gitea and Forgejo alike unless a line names one product. Secrets and variables are
+described in [Actions administration](actions-admin.md); runners are not offered.
 
 ## Scopes
 

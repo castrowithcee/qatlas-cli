@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Gitea
@@ -196,6 +196,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
+- [Actions administration](actions-admin.md): the secrets and variables of a repository, an organization, or the
+  user behind the token
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
 - [Contents](contents.md): files, raw content, archives, and editor configuration of a repository

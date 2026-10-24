@@ -273,17 +273,22 @@ func (a allowlist) namesActionsOwner(owner target) bool {
 	return false
 }
 
-// chooseActionsLevel reads exactly one of repository and owner. Only Gitea has an owner level.
+// chooseActionsLevel reads exactly one of repository and owner. Only Gitea has an owner level for runs and jobs.
 func chooseActionsLevel(p *product, allowed allowlist, repository, owner string) (actionsLevel, error) {
+	if owner != "" && p != gitea {
+		return actionsLevel{}, invalidArgument("owner is a Gitea argument; " + p.name + " lists the runs of one repository")
+	}
+	return actionsLevelOf(allowed, repository, owner)
+}
+
+// actionsLevelOf reads exactly one of repository and owner, on any product.
+func actionsLevelOf(allowed allowlist, repository, owner string) (actionsLevel, error) {
 	if owner == "" {
 		repo, err := allowed.chooseRepository(repository)
 		if err != nil {
 			return actionsLevel{}, err
 		}
 		return repoLevel(repo), nil
-	}
-	if p != gitea {
-		return actionsLevel{}, invalidArgument("owner is a Gitea argument; " + p.name + " lists the runs of one repository")
 	}
 	if repository != "" {
 		return actionsLevel{}, invalidArgument("pass either repository or owner")
@@ -316,8 +321,8 @@ func (l actionsLevel) verify(ctx context.Context, c *Client, op string) error {
 		return provider.InvalidResponse(op, c.product.name+" returned an account without a login")
 	}
 	if !strings.EqualFold(login, l.login) {
-		return invalidArgument("the runs and jobs of a user can be listed for the account behind the token only; " +
-			"it is not the user in owner")
+		return invalidArgument("the user level acts on the account behind the token only; it is not the user in " +
+			"owner")
 	}
 	return nil
 }
