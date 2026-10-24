@@ -445,8 +445,8 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 
 // The provider table has no letter actions either, so it filters as you type and shows "Type to search"
 // until something is typed. Its marked row is highlighted the full width of the row under colour and,
-// without it, is still told apart by its leading '>' alone; an unmarked row beside it still gets its zebra
-// shade under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
+// without it, is still told apart by its leading '>' alone; an unmarked row beside it stays unshaded
+// under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
 // hold at.
 func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -474,8 +474,8 @@ func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyp
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
 			t.Errorf("width %d: the marked provider row shows no colour: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the alternating provider row shows no zebra colour: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the unmarked provider row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
 		lipgloss.SetColorProfile(3)

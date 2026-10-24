@@ -622,7 +622,7 @@ func (m *Model) exportRow(i int) string {
 		box = "[x] "
 	}
 	_, width := m.fit("  ")
-	return m.listRow(i == e.rows.cursor, i%2 == 1, truncateCells(box+m.exportRowText(key), width))
+	return m.listRow(i == e.rows.cursor, truncateCells(box+m.exportRowText(key), width))
 }
 
 func (m *Model) exportSelectFrame() (string, string) {
@@ -669,7 +669,7 @@ func (m *Model) exportView() string {
 			if blocked {
 				text += " (not possible)"
 			}
-			line := m.listRow(i == e.modeCursor, false, truncateCells(text, m.usable(2)))
+			line := m.listRow(i == e.modeCursor, truncateCells(text, m.usable(2)))
 			if blocked && i != e.modeCursor {
 				line = styles.hint.Render(line)
 			}
