@@ -44,8 +44,8 @@ func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 	switch state {
 	case vault.StateAbsent, vault.StateUnencrypted:
 		return approval.Report{}, fmt.Sprintf(
-			"Approvals are not used while the vault is unencrypted. Open Vault (%d) to set a passphrase.",
-			int(sectionVault)+1)
+			"Approvals are not used while the vault is unencrypted. Open %s to set a passphrase.",
+			sectionVault.ref())
 	case vault.StateLocked:
 		return approval.Report{}, "The vault is locked, so open approvals cannot be listed; " +
 			"press enter or ctrl+l to unlock it."
@@ -454,10 +454,10 @@ func approvalNote(res manage.ApprovalResult, redactor *redact.Redactor) string {
 	if res.StayedOpen != "" && res.ForwardChanged {
 		// A release of payload secrets is a decision of its own, never approved in passing.
 		note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
-			"Approvals (%d) releases", res.StayedOpen, int(sectionApprovals)+1)
+			"%s releases", res.StayedOpen, sectionApprovals.ref())
 	} else if res.StayedOpen != "" {
 		note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
-			"review it in Approvals (%d)", res.StayedOpen, int(sectionApprovals)+1)
+			"review it in %s", res.StayedOpen, sectionApprovals.ref())
 	}
 	switch {
 	case res.ApproveErr != nil:

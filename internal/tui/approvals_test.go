@@ -534,7 +534,7 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	for _, size := range []int{160, 80, 40} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Vault (5) to set a passphrase") {
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Settings > Vault (6) to set a passphrase") {
 			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.View())
 		}
 	}
@@ -549,7 +549,7 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	m.screen = screenNav
 	for _, size := range []int{160, 80, 40} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Approvals (6)") {
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Access > Approvals (4)") {
 			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.View())
 		}
 	}
@@ -592,19 +592,26 @@ func TestApprovalsSectionWhileLocked(t *testing.T) {
 	}
 }
 
-// Digit 6 opens Approvals from the tab line or the list, and the tab line offers it too.
+// Digit 4 opens the Access area, whose second sub-tab is Approvals; the narrow tab line still offers the
+// digit and the option bar still names the sub-tab.
 func TestApprovalsNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.screen = screenNav
-	press(t, m, "6")
-	if m.screen != screenList || m.section != sectionApprovals {
-		t.Fatalf("6 on the tab line = screen %v section %v", m.screen, m.section)
+	press(t, m, "4")
+	if m.screen != screenList || m.section != sectionTokens {
+		t.Fatalf("4 on the tab line = screen %v section %v, want the Tokens list", m.screen, m.section)
+	}
+	press(t, m, "tab", "right")
+	if m.screen != screenNav || m.section != sectionApprovals {
+		t.Fatalf("right on the option bar = screen %v section %v", m.screen, m.section)
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
 	view := m.View()
-	if !strings.Contains(view, "6") {
-		t.Errorf("the narrow navigation line does not offer digit 6:\n%s", view)
+	for _, want := range []string{"4", "[Approvals]"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the narrow navigation does not show %q:\n%s", want, view)
+		}
 	}
 }
 

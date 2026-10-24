@@ -272,14 +272,14 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	// The connection form itself needs more than twelve lines; the picker it opens does not.
 	press(t, m, "enter")
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
 	check := func(want string) {
 		t.Helper()
 		view := screenOf(m)
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the picker was replaced by the resize notice:\n%s", view)
 		}
-		assertViewFits(t, view, 40, 12)
+		assertViewFits(t, view, 40, minimumHeight)
 		if !strings.Contains(view, want) {
 			t.Fatalf("%q is not on screen:\n%s", want, view)
 		}
