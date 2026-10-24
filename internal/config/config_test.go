@@ -378,6 +378,7 @@ func TestDecodeRejects(t *testing.T) {
 		name    string
 		yaml    string
 		wantIn  string
+		wantNot []string  // parts of the input the message must not quote
 		replace [2]string // optional single replacement applied to the minimal config
 	}{
 		{
@@ -414,6 +415,18 @@ func TestDecodeRejects(t *testing.T) {
 			name:    "base url without scheme",
 			replace: [2]string{"base_url: https://wiki.example.invalid", "base_url: wiki.example.invalid"},
 			wantIn:  "must use scheme http or https",
+		},
+		{
+			name:    "base url with another scheme",
+			replace: [2]string{"base_url: https://wiki.example.invalid", "base_url: ftp://wiki.example.invalid"},
+			wantIn:  "must use scheme http or https",
+			wantNot: []string{"ftp"},
+		},
+		{
+			name:    "base url with credentials but no scheme",
+			replace: [2]string{"base_url: https://wiki.example.invalid", "base_url: tok3n:secret" + "@" + "wiki.example.invalid"},
+			wantIn:  "must use scheme http or https",
+			wantNot: []string{"tok3n", "secret"},
 		},
 		{
 			name:    "base url without host",
@@ -502,6 +515,11 @@ func TestDecodeRejects(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tt.wantIn) {
 				t.Errorf("error = %q, want it to contain %q", err, tt.wantIn)
+			}
+			for _, quoted := range tt.wantNot {
+				if strings.Contains(err.Error(), quoted) {
+					t.Errorf("error = %q, must not quote %q", err, quoted)
+				}
 			}
 		})
 	}
