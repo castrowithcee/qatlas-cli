@@ -1349,8 +1349,9 @@ func validateBaseURL(raw string) error {
 		return errors.New("is not a valid URL")
 	}
 	// http stays allowed so a local test server can be configured; providers enforce transport security.
+	// The scheme is not quoted: in "user:secret@host" the parser reads the user as the scheme.
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("must use scheme http or https, got %q", u.Scheme)
+		return errors.New("must use scheme http or https")
 	}
 	if u.Host == "" {
 		return errors.New("must contain a host")
