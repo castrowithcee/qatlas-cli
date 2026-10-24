@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
@@ -28,6 +30,8 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
 			"Running 'qatlas mcp', 'qatlas tui' and 'qatlas web' keep running the old version until they are\n" +
 			"restarted or reconnected.\n" +
+			"At a terminal, update shows how much of the archive has downloaded. A slow download goes on as\n" +
+			"long as data arrives; one that receives nothing for 30 seconds ends, and nothing is changed.\n" +
 			"Dev builds and symlink installations are not replaced. Use --check to report availability\n" +
 			"without changing files.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
@@ -88,9 +92,40 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 // or locked while it still can be, around the replacement, and only here, after the confirmation.
 func replaceProgram(c *cobra.Command, opts *Options, updater *selfupdate.Client) (selfupdate.Result, error) {
 	replacement := &vaultReplacement{opts: opts}
-	result, err := replacement.hooked(updater).Update(c.Context())
+	client := replacement.hooked(updater)
+	progress, endProgress := downloadProgress(c, opts)
+	if progress != nil {
+		client.Progress = progress
+	}
+	result, err := client.Update(c.Context())
+	endProgress()
 	printNote(c, replacement.finish())
 	return result, err
+}
+
+// downloadProgress shows the archive download as a percentage on one stderr line, and only where stderr
+// is a terminal: a pipe, a log, or an agent keeps the command's plain output. The second function ends the
+// line once anything was shown.
+func downloadProgress(c *cobra.Command, opts *Options) (func(done, total int64), func()) {
+	f, ok := c.ErrOrStderr().(*os.File)
+	if opts.Agent || !ok || !term.IsTerminal(int(f.Fd())) {
+		return nil, func() {}
+	}
+	last, shown := "", false
+	return func(done, total int64) {
+			line := fmt.Sprintf("qatlas: downloading %.1f MB", float64(done)/(1<<20))
+			if total > 0 {
+				line = fmt.Sprintf("qatlas: downloading %d%%", done*100/total)
+			}
+			if line != last {
+				last, shown = line, true
+				fmt.Fprint(f, "\r"+line)
+			}
+		}, func() {
+			if shown {
+				fmt.Fprintln(f)
+			}
+		}
 }
 
 // vaultReplacement carries a vault process through one installation, for the command and the editor alike.

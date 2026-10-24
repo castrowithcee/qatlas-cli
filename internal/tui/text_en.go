@@ -40,6 +40,8 @@ var textEN = map[textID]string{
 	tBannerUpdatedShort:                "Updated · restart",
 	tBannerUpdating:                    "Updating to %s …",
 	tBannerUpdatingShort:               "Updating …",
+	tBannerUpdatingPercent:             "Updating to %s … %d %%",
+	tBannerUpdatingPercentShort:        "Updating … %d %%",
 	tBannerAvailableFull:               "Update available %s → %s 🎉 · u update",
 	tBannerAvailable:                   "Update available %s → %s · u update",
 	tBannerAvailableLatest:             "Update available %s · u update",
