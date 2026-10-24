@@ -202,11 +202,9 @@ func (m *Model) updateRestartConfirm(key tea.KeyMsg) tea.Cmd {
 // restartView asks before the restart that would drop unsaved input.
 func (m *Model) restartView() string {
 	return m.questionText(question{
-		title: "Restart qatlas tui into " + m.updated + "?",
-		consequence: "Restarting replaces this editor with the new version and drops the input that is not " +
-			"saved yet.",
-		details: []string{m.wrapped(lipgloss.NewStyle(),
-			"The update is installed. Not now keeps editing on the old version.")},
-		keys: "y restart and discard · n/{back} not now · {command} cmds · {help} help",
+		title:       tr(tRestartQuestion, m.updated),
+		consequence: tr(tRestartConsequence),
+		details:     []string{m.wrapped(lipgloss.NewStyle(), tr(tRestartDetail))},
+		keys:        "y restart and discard · n/{back} not now · {command} cmds · {help} help",
 	})
 }

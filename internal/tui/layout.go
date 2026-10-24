@@ -55,9 +55,9 @@ func (m *Model) headerLines() []string {
 func (m *Model) pathLine(vaultText string) string {
 	suffix := ""
 	if !m.configExists {
-		suffix = " (created on first save)"
+		suffix = tr(tHeaderCreated)
 	}
-	title := "Qatlas setup  "
+	title := tr(tHeaderTitle)
 	if m.termWidth < 60 {
 		title = ""
 	}
@@ -71,7 +71,7 @@ func (m *Model) pathLine(vaultText string) string {
 		banner += "  "
 	}
 	rest := m.termWidth - reserved - lipgloss.Width(banner)
-	label := "Config: "
+	label := tr(tHeaderConfig)
 	if lipgloss.Width(label+suffix)+pathRoom > rest {
 		// A narrow line, whatever crowds it (the banner, or now the vault state beside it), keeps the end of
 		// the path and drops its label rather than the path itself.
@@ -108,7 +108,8 @@ func (m *Model) navLine() string {
 		spaced, compact, short = append(spaced, " "+name+" "), append(compact, name), append(short, fmt.Sprint(int(s)+1))
 	}
 	if m.wizard != nil {
-		spaced, compact, short = append(spaced, "[c setup]"), append(compact, "[c setup]"), append(short, "[c setup]")
+		tab := tr(tTabSetup)
+		spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
 	}
 	line := focus + strings.Join(spaced, " ")
 	for _, tabs := range [][]string{compact, short} {

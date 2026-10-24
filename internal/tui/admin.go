@@ -9,7 +9,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -102,7 +101,7 @@ func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 		a.input.Reset()
 		m.adminAuth = nil
 		m.screen = back
-		m.status = "Cancelled"
+		m.status = tr(tCancelled)
 		return nil
 	case "enter":
 		if m.vaultBusy {
@@ -115,7 +114,7 @@ func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 		a.input.Reset()
 		m.clearMessages()
 		if typed == "" {
-			m.fail = "a passphrase must not be empty"
+			m.fail = tr(tPassphraseEmpty)
 			return nil
 		}
 		return m.verifyAdminPassphrase(typed, a.locked, a.back, a.action)
@@ -135,11 +134,11 @@ func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 func (m *Model) verifyAdminPassphrase(passphrase string, locked bool, back screen, action func() tea.Cmd) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
-		m.fail = "no vault is configured for this run"
+		m.fail = tr(tVaultNone)
 		return nil
 	}
 	m.vaultBusy = true
-	m.busy = "checking the vault passphrase"
+	m.busy = tr(tBusyChecking)
 	return func() tea.Msg {
 		return adminVerifiedMsg{err: manage.VerifyAdmin(v, passphrase), locked: locked, back: back, action: action}
 	}
@@ -154,7 +153,7 @@ func (m *Model) handleAdminVerified(msg adminVerifiedMsg) tea.Cmd {
 	if msg.err != nil {
 		if errors.Is(msg.err, manage.ErrWrongPassphrase) {
 			m.openAdminPrompt(msg.locked, msg.back, msg.action)
-			m.fail = "wrong passphrase"
+			m.fail = tr(tPassphraseWrong)
 			return nil
 		}
 		m.fail = m.redactor.Apply(msg.err.Error())
@@ -175,12 +174,12 @@ func (m *Model) handleAdminVerified(msg adminVerifiedMsg) tea.Cmd {
 // prompt (see vaultOfferPrompt): a title, the masked line, an explanation, and enter/esc.
 func (m *Model) adminAuthPrompt() promptDialog {
 	a := m.adminAuth
-	title := "Admin passphrase needed to save"
+	title := tr(tAdminTitleSave)
 	hint := m.adminSessionHint()
 	keys := "enter ok · {back} cancel, nothing saved"
 	if a.locked {
-		title = "Unlock vault to continue"
-		hint = "unlocks the vault and admin mode here only"
+		title = tr(tAdminTitleUnlock)
+		hint = tr(tAdminHintUnlock)
 		keys = "enter unlock · {back} cancel, nothing saved"
 	}
 	return promptDialog{title: title, input: m.inputLine("  ", a.input), hint: hint, keys: keys}
@@ -191,10 +190,10 @@ func (m *Model) adminAuthPrompt() promptDialog {
 func (m *Model) adminSessionHint() string {
 	timeout := m.cfg.VaultAdminTimeout()
 	if timeout <= 0 {
-		return "vault.admin_timeout is 0: asks again on every change"
+		return tr(tAdminTimeoutZero)
 	}
 	minutes := int(timeout.Round(time.Minute) / time.Minute)
-	return fmt.Sprintf("unlocks admin mode here until %dm idle", minutes)
+	return tr(tAdminUnlocksUntil, minutes)
 }
 
 // startAdminSession begins, or renews, this window's admin session once a passphrase just proved it: through

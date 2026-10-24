@@ -153,12 +153,12 @@ func (m *Model) modalView() (string, bool) {
 		return "", false
 	}
 	inner := min(modalMaxInner, m.termWidth-8)
-	title := "Confirm"
+	title := tr(tModalConfirm)
 	var text string
 	if m.questionScreen() {
 		m.renderAs(m.screen, inner, func() { text = m.questionView() })
 		if m.screen == screenLeave {
-			title = "Unsaved changes"
+			title = tr(tModalUnsaved)
 		}
 	} else {
 		ok := false
