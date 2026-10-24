@@ -53,7 +53,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Blocking an account user uses `list_blocked`, `block`, and `unblock`, lists only block entries, has no
   `user-blocks.check`, and takes no `note`; `user-settings` also carries `pronouns`, `hide_pronouns`, and
   `enable_repo_unit_hints`. See [Users](gitea/users.md).
-- Quota: the `quota.*` tools exist on Forgejo only (Gitea has no quota). See [Quota](#quota).
+- Quota: the `quota.*` and `admin-quota-*` tools exist on Forgejo only (Gitea has no quota). See [Quota](#quota).
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
@@ -117,6 +117,33 @@ restricts further to the organization's owners; they are not confirmed against a
 - An instance can switch the quota off; it then does not serve the routes and answers 404, like it does for an
   organization or a token it does not reach. After a 404 the tool reads `GET /user` or `GET /orgs/NAME`: if that
   answers, the quota is reported as not available (`provider-error`), otherwise as `not-found`. A 403 is `not-found`.
+
+### Quota administration
+
+| Tool | Effect | Acts on |
+| --- | --- | --- |
+| `admin-quota-groups.list`, `admin-quota-groups.get` | read | quota groups with their rules |
+| `admin-quota-groups.create` | create | an empty group |
+| `admin-quota-groups.delete` | delete | a group |
+| `admin-quota-groups.add-rule`, `admin-quota-groups.remove-rule` | update | the rules of a group |
+| `admin-quota-group-users.list` | read | the users of a group |
+| `admin-quota-group-users.add`, `admin-quota-group-users.remove` | update | the users of a group |
+| `admin-quota-rules.list`, `admin-quota-rules.get` | read | quota rules |
+| `admin-quota-rules.create`, `admin-quota-rules.update` | create, update | a rule's `limit` and `subjects` |
+| `admin-quota-rules.delete` | delete | a rule |
+| `admin-user-quota.get` | read | groups, rules, and storage in use of one user |
+| `admin-user-quota.set-groups` | update | replaces all groups of one user |
+
+- They need site administration and the token scopes `read:admin` and `write:admin`; they reach every user, so only a
+  connection without targets may call them, and a connection with targets is refused before the token is read. They
+  are in no profile.
+- Every change needs `confirm` and has its own data classification; `admin-quota-groups.delete` and
+  `admin-quota-rules.delete` are listed-only: only a connection whose `tools` list names them offers them.
+  A group is created empty; its rules are added with `add-rule`.
+- The lists are not paged: they return at most 200 rows and set `has_more` when there are more.
+- A switched-off quota is detected as described under [Quota](#quota), but from a 404 on these routes: the tools read
+  the rule list to tell a missing group, rule, or user from missing routes, and then `GET /admin/users` with
+  `limit=1`, which exists with or without quota.
 
 ## Not on Forgejo
 
