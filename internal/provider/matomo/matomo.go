@@ -114,10 +114,10 @@ func Register(reg *capability.Registry) error {
 			// separate choice and not part of the recommended start.
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
-				"and locations, the live counters, and the time of the latest visit; changes nothing",
+				"and locations, the live counters, the time of the latest visit, and visitor profiles; changes nothing",
 			Tools: []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 				segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, visitsList.ID, liveCountersGet.ID,
-				visitsGetLatestTime.ID},
+				visitsGetLatestTime.ID, visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -137,5 +137,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: visitsList, Handler: capability.Handler(invokeVisitsList)},
 		capability.Operation{Descriptor: liveCountersGet, Handler: capability.Handler(invokeLiveCountersGet)},
 		capability.Operation{Descriptor: visitsGetLatestTime, Handler: capability.Handler(invokeVisitsGetLatestTime)},
+		capability.Operation{Descriptor: visitorsGetProfile, Handler: capability.Handler(invokeVisitorsGetProfile)},
+		capability.Operation{Descriptor: visitorsGetLatestID, Handler: capability.Handler(invokeVisitorsGetLatestID)},
+		capability.Operation{Descriptor: visitsGetFirst, Handler: capability.Handler(invokeVisitsGetFirst)},
 	)
 }
