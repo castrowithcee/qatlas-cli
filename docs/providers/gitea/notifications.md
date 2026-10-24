@@ -22,7 +22,7 @@ the account behind the token, not to a repository, so the targets bind a thread 
 | `notifications.mark-all-read`, `repository-notifications.mark-read` | update, listed-only | both |
 
 Watching a repository and the subscription to an issue are not part of this group; see
-[Issue subscriptions](issue-subscriptions.md).
+[Stars and watching](stars-and-watching.md) and [Issue subscriptions](issue-subscriptions.md).
 
 ## Scopes
 
