@@ -529,13 +529,13 @@ type processedReport struct {
 	ReportTotal    json.RawMessage `json:"reportTotal"`
 }
 
-type member struct {
+type jsonMember struct {
 	key   string
 	value json.RawMessage
 }
 
 // members reads a JSON object in document order; ok is false for anything but an object.
-func members(raw json.RawMessage) (out []member, ok bool) {
+func members(raw json.RawMessage) (out []jsonMember, ok bool) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
 		return nil, false
@@ -550,7 +550,7 @@ func members(raw json.RawMessage) (out []member, ok bool) {
 		if decoder.Decode(&value) != nil {
 			return nil, false
 		}
-		out = append(out, member{key: key, value: value})
+		out = append(out, jsonMember{key: key, value: value})
 	}
 	return out, true
 }
