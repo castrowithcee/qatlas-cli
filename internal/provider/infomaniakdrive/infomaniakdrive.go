@@ -486,6 +486,7 @@ func Register(reg *capability.Registry) error {
 				Description: "one kDrive of the bound account; optional, and may be listed more than once",
 				Forms:       []string{"drive/DRIVE_ID"},
 				Parents:     []string{"account"},
+				Top:         true,
 			}, {
 				Name: "files",
 				Description: "one folder or file of a bound drive, with everything below a folder; optional, and " +

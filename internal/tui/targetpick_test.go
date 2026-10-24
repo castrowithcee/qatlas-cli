@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -138,6 +139,38 @@ func TestPickerKindsFollowParentsAndTop(t *testing.T) {
 		if got := strings.Join(m.pickKindsUnder(c.parent), ","); got != c.want {
 			t.Errorf("kinds under %q = %q, want %q", c.parent, got, c.want)
 		}
+	}
+}
+
+func TestATopKindWithAParentIsListedFromTheBoundTargets(t *testing.T) {
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
+			{Name: "group", Forms: []string{"g/NAME"}},
+			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}, Top: true},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &listSource{list: func(req config.TargetListRequest) (config.TargetPage, error) {
+		if req.Kind != "item" || req.Parent != "" {
+			t.Errorf("the picker read %+v, want items without a parent", req)
+		}
+		return config.TargetPage{Entries: []config.TargetEntry{item("g/a", "1")}}, nil
+	}}
+	m := pickerModelOn(t, reg, src, "g/a")
+	pickRow(t, m, "choose a item from the provider's list")
+	pump(t, m, "enter")
+	if m.targetPick == nil || len(src.reqs) != 1 {
+		t.Fatalf("the picker did not open on the items:\n%s", screenOf(m))
+	}
+	if got := src.reqs[0]; got.Kind != "item" || got.Parent != "" || !slices.Contains(src.seen[0].Targets, "g/a") {
+		t.Fatalf("read %+v for %+v", got, src.seen[0])
+	}
+	if got := pickShown(m); len(got) != 1 || got[0] != "g/a/i/1" {
+		t.Fatalf("shown %v", got)
 	}
 }
 
