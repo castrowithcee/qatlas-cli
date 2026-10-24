@@ -1,9 +1,9 @@
 ---
 description: >
   Describes the Gitea and Forgejo team tools: listing, searching, reading, creating, changing, and deleting the
-  teams of an organization, their members, and their activity feeds. It covers the token scopes, how team IDs are
-  bound to the targets by a proof read, the settings that can be changed, differences between the products, and
-  the limits.
+  teams of an organization, their members, their repositories, and their activity feeds. It covers the token
+  scopes, how team IDs are bound to the targets by a proof read, the settings that can be changed, differences
+  between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -19,7 +19,8 @@ differences.
 ## Scopes
 
 A read needs `read:organization`, a change `write:organization`; `teams.list` without `organization` reads the
-account's own teams and needs `read:user`.
+account's own teams and needs `read:user`. The `repository-teams` tools use the repository routes and need
+`read:repository` and `write:repository`.
 
 ## Target binding
 
@@ -62,6 +63,27 @@ account's own teams and needs `read:user`.
   administrator). Gitea shows a team's detail, members, and feed
   to a token that may read the team's metadata, which its visibility and the organization's decide; Forgejo to a team
   member or a site administrator only.
+- `team-repositories.*` and `repository-teams.*` show and change the same assignment of teams to repositories from
+  two sides. Only a repository of the team's own organization can be assigned. A change needs both targets: the
+  repository (`repos/OWNER/REPO` or an owner target) and its organization as `orgs/NAME`; a connection that names
+  only the repository, or names no organization, refuses before the token is read. `repository` is `OWNER/REPO`
+  and, as with other repository tools, optional when the targets name exactly one.
+- `team-repositories.*` take the team `id`. Every one of them, `check` and the changes included, first reads the team
+  (also without targets), requires that its organization is named as `orgs/NAME` when targets exist, and refuses a
+  repository whose owner is not that organization with `not-found` and without a name; the instance ignores the
+  `{org}` segment and looks the repository up in the team's own organization, so the tool compares it itself.
+  `team-repositories.list` keeps only repositories inside the targets; a batch may be short or empty while
+  `has_more` is true.
+- `repository-teams.*` take the team name (letters, digits, `_`, `.`, `-`, at most 255) and send no proof read: the
+  repository's owner is the organization of every team they show or change. `repository-teams.list` returns the first
+  100 teams (the instance does not page) and needs no row check.
+- `*.check` reports a 404 as `false`, which also covers a team or repository the token does not reach; any other
+  refusal stays an error. The instance answers a hit with the repository (`team-repositories.check`) or the team
+  (`repository-teams.check`) object, which is not shown.
+- `team-repositories.add` and `.remove` need a member of the team or an owner of the organization on Gitea and a
+  member of the team (or site administrator) on Forgejo; `repository-teams.add` and `.remove` need an administrator of
+  the repository, and the instance answers 422 when the team already has access (`add`) or has none (`remove`).
+  A change is one request, never repeated, also not after a server error or a timeout.
 - The team object carries `visibility` (`public`, `limited`, `private`) on Gitea and takes it as a setting; Forgejo
   has none and refuses it before the token is read.
 
@@ -75,3 +97,5 @@ account's own teams and needs `read:user`.
 | `teams.delete` | delete, listed only | both |
 | `team-activities.list`, `team-members.list`, `team-members.check` | read | both |
 | `team-members.add`, `team-members.remove` | update | both |
+| `team-repositories.list`, `team-repositories.check`, `repository-teams.list`, `repository-teams.check` | read | both |
+| `team-repositories.add`, `team-repositories.remove`, `repository-teams.add`, `repository-teams.remove` | update | both |

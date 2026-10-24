@@ -99,7 +99,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	orgAvatarsDelete, orgActivitiesList, orgPermissionsGet, orgMembersList, orgMembersCheck, orgMembersRemove,
 	orgPublicMembersList, orgPublicMembersCheck, orgPublicMembersPublicize, orgPublicMembersConceal, orgBlocksList,
 	orgBlocksCheck, orgBlocksAdd, orgBlocksRemove, teamsList, teamsSearch, teamsGet, teamsCreate, teamsUpdate,
-	teamsDelete, teamActivitiesList, teamMembersList, teamMembersCheck, teamMembersAdd, teamMembersRemove}
+	teamsDelete, teamActivitiesList, teamMembersList, teamMembersCheck, teamMembersAdd, teamMembersRemove,
+	teamRepositoriesList, teamRepositoriesCheck, teamRepositoriesAdd, teamRepositoriesRemove, repositoryTeamsList,
+	repositoryTeamsCheck, repositoryTeamsAdd, repositoryTeamsRemove}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
