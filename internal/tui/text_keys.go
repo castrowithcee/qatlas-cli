@@ -40,6 +40,8 @@ const (
 	tBannerUpdatedShort                      textID = "BannerUpdatedShort"
 	tBannerUpdating                          textID = "BannerUpdating"
 	tBannerUpdatingShort                     textID = "BannerUpdatingShort"
+	tBannerUpdatingPercent                   textID = "BannerUpdatingPercent"
+	tBannerUpdatingPercentShort              textID = "BannerUpdatingPercentShort"
 	tBannerAvailableFull                     textID = "BannerAvailableFull"
 	tBannerAvailable                         textID = "BannerAvailable"
 	tBannerAvailableLatest                   textID = "BannerAvailableLatest"

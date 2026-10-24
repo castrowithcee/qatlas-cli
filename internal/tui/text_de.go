@@ -40,6 +40,8 @@ var textDE = map[textID]string{
 	tBannerUpdatedShort:                "Aktualisiert · Neustart",
 	tBannerUpdating:                    "Aktualisiere auf %s …",
 	tBannerUpdatingShort:               "Aktualisiere …",
+	tBannerUpdatingPercent:             "Aktualisiere auf %s … %d %%",
+	tBannerUpdatingPercentShort:        "Aktualisiere … %d %%",
 	tBannerAvailableFull:               "Update verfügbar %s → %s 🎉 · u Update",
 	tBannerAvailable:                   "Update verfügbar %s → %s · u Update",
 	tBannerAvailableLatest:             "Update verfügbar %s · u Update",

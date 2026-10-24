@@ -497,8 +497,17 @@ func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
 }
 
 func (u *lockingUpdater) Update(ctx context.Context) (selfupdate.Result, error) {
+	return u.UpdateProgress(ctx, nil)
+}
+
+// UpdateProgress installs like Update and reports the download of the release archive to progress.
+func (u *lockingUpdater) UpdateProgress(ctx context.Context, progress func(done, total int64)) (selfupdate.Result, error) {
 	replacement := &vaultReplacement{opts: u.opts}
-	result, err := replacement.hooked(u.client).Update(ctx)
+	client := replacement.hooked(u.client)
+	if progress != nil {
+		client.Progress = progress
+	}
+	result, err := client.Update(ctx)
 	u.note = replacement.finish()
 	return result, err
 }

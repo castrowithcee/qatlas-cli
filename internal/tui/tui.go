@@ -613,6 +613,8 @@ type Model struct {
 	updating   bool
 	updated    string
 	updateFrom screen
+	// updatePercent is how much of the release archive has arrived during an installation, -1 until known.
+	updatePercent int
 	// updateUnlocked is whether the vault was unlocked when the installation started; the restarted editor
 	// is told. restart replaces the process after an installation, nil where this platform cannot, and
 	// execute runs the command that does so with the terminal released. restartPath, restartFrom and
@@ -820,6 +822,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateCheckedMsg:
 		m.updateChecked(msg)
 		return m, nil
+	case updateProgressMsg:
+		m.updatePercent = msg.percent
+		return m, msg.next
 	case updateDoneMsg:
 		return m, m.updateDone(msg)
 	case selftestMsg:

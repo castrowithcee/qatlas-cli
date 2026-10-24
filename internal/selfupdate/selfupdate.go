@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -32,7 +33,13 @@ const (
 	maxArchiveBytes   = 128 << 20
 	maxExecutableSize = 64 << 20
 	maxManpageSize    = 2 << 20
+	// requestTimeout only bounds a request that keeps trickling; a slow download that moves goes on.
+	requestTimeout = 30 * time.Minute
 )
+
+// stallTimeout ends a request that receives no byte for this long, waiting for the answer included. A
+// variable only so a test need not wait it out.
+var stallTimeout = 30 * time.Second
 
 var ErrDevelopmentBuild = errors.New("self-update is unavailable in a dev build; install a tagged release first")
 
@@ -75,6 +82,9 @@ type Client struct {
 	// AfterReplace, when set, runs once the program is replaced, with the same release. The update is done
 	// by then, so it has no error to return; what it has to say, it keeps for its caller.
 	AfterReplace func(ctx context.Context, release Release)
+	// Progress, when set, is called while the release archive downloads, with the bytes received so far and
+	// the archive's size, or -1 when the server does not say.
+	Progress func(done, total int64)
 }
 
 // Release names the files of the verified release a hook of Client may read: copies in a private directory
@@ -128,13 +138,13 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	checksums, err := c.download(ctx, checksumURL, maxMetadataBytes)
+	checksums, err := c.download(ctx, checksumURL, maxMetadataBytes, nil)
 	if err != nil {
 		return Result{}, fmt.Errorf("download checksums: %w", err)
 	}
 	var signature []byte
 	if signatureURL != "" {
-		signature, err = c.download(ctx, signatureURL, maxMetadataBytes)
+		signature, err = c.download(ctx, signatureURL, maxMetadataBytes, nil)
 		if err != nil {
 			return Result{}, fmt.Errorf("download checksums signature: %w", err)
 		}
@@ -151,7 +161,7 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	archive, err := c.download(ctx, archiveURL, maxArchiveBytes)
+	archive, err := c.download(ctx, archiveURL, maxArchiveBytes, c.Progress)
 	if err != nil {
 		return Result{}, fmt.Errorf("download %s: %w", archiveName, err)
 	}
@@ -245,7 +255,7 @@ func (c *Client) latest(ctx context.Context) (release, error) {
 	if base == "" {
 		base = repositoryAPI
 	}
-	body, err := c.request(ctx, base+"/releases/latest", maxMetadataBytes, "application/vnd.github+json")
+	body, err := c.request(ctx, base+"/releases/latest", maxMetadataBytes, "application/vnd.github+json", nil)
 	if err != nil {
 		return release{}, fmt.Errorf("check latest release: %w", err)
 	}
@@ -259,14 +269,35 @@ func (c *Client) latest(ctx context.Context) (release, error) {
 	return r, nil
 }
 
-func (c *Client) download(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
+func (c *Client) download(ctx context.Context, rawURL string, limit int64, progress func(done, total int64)) ([]byte, error) {
 	if err := c.validateAssetURL(rawURL); err != nil {
 		return nil, err
 	}
-	return c.request(ctx, rawURL, limit, "application/octet-stream")
+	return c.request(ctx, rawURL, limit, "application/octet-stream", progress)
 }
 
-func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept string) ([]byte, error) {
+func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept string, progress func(done, total int64)) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	var stalled atomic.Bool
+	stall := time.AfterFunc(stallTimeout, func() {
+		stalled.Store(true)
+		cancel()
+	})
+	defer stall.Stop()
+	body, err := c.fetch(ctx, rawURL, limit, accept, func(done, total int64) {
+		stall.Reset(stallTimeout)
+		if progress != nil {
+			progress(done, total)
+		}
+	})
+	if err != nil && stalled.Load() {
+		return nil, fmt.Errorf("no data received for %s", stallTimeout)
+	}
+	return body, err
+}
+
+func (c *Client) fetch(ctx context.Context, rawURL string, limit int64, accept string, received func(done, total int64)) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
@@ -279,7 +310,8 @@ func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept
 	}
 	client := c.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		// No client timeout: it would also cut off a slow download that still moves; request bounds it.
+		client = &http.Client{}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -289,7 +321,8 @@ func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("GitHub returned %s", resp.Status)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	reader := &progressReader{r: resp.Body, total: resp.ContentLength, received: received}
+	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
 		return nil, err
 	}
@@ -297,6 +330,23 @@ func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept
 		return nil, fmt.Errorf("response exceeds %d bytes", limit)
 	}
 	return body, nil
+}
+
+// progressReader reports every read that brings bytes, with the running count and the announced total.
+type progressReader struct {
+	r        io.Reader
+	done     int64
+	total    int64
+	received func(done, total int64)
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.done += int64(n)
+		p.received(p.done, p.total)
+	}
+	return n, err
 }
 
 func (c *Client) token() string {
