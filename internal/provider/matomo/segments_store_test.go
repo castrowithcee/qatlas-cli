@@ -34,6 +34,7 @@ const segmentConnections = `
   seg-one: {service: matomo, credential: token, effects: [read, create, update], targets: [site/2]}
   seg-two: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1, site/2]}
   seg-instance: {service: matomo, credential: token, effects: [read, create, update], targets: [instance]}
+  seg-deleter: {service: matomo, credential: token, tools: [matomo.segments.get, matomo.segments.delete, matomo.segments.star, matomo.segments.unstar], targets: [site/1, site/2]}
 `
 
 func newSegmentsEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
@@ -102,6 +103,9 @@ func TestSegmentToolsAreRegisteredWithTheirRiskAndProfile(t *testing.T) {
 		"matomo.segments.get":    {capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone},
 		"matomo.segments.add":    {capability.EffectCreate, capability.IdempotencyNonIdempotent, capability.ConfirmationRequired},
 		"matomo.segments.update": {capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired},
+		"matomo.segments.star":   {capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired},
+		"matomo.segments.unstar": {capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired},
+		"matomo.segments.delete": {capability.EffectDelete, capability.IdempotencyIdempotent, capability.ConfirmationRequired},
 	}
 	for id, tc := range want {
 		d, _, ok := reg.Lookup(id)
@@ -109,7 +113,7 @@ func TestSegmentToolsAreRegisteredWithTheirRiskAndProfile(t *testing.T) {
 			t.Fatalf("%s is not registered", id)
 		}
 		if d.Risk.Effect != tc.effect || d.Risk.Idempotency != tc.idempotency || d.Risk.Confirmation != tc.confirm ||
-			!d.Risk.OpenWorld || d.Risk.DataSensitivity == "" || d.RequiresToolAllowList {
+			!d.Risk.OpenWorld || d.Risk.DataSensitivity == "" || d.RequiresToolAllowList != (id == "matomo.segments.delete") {
 			t.Errorf("%s: risk = %+v", id, d.Risk)
 		}
 	}
@@ -119,11 +123,14 @@ func TestSegmentToolsAreRegisteredWithTheirRiskAndProfile(t *testing.T) {
 		switch profile.ID {
 		case "segments":
 			if profile.Recommended || !strings.Contains(joined, "matomo.segments.add") ||
-				!strings.Contains(joined, "matomo.segments.update") || !strings.Contains(joined, "matomo.segments.get") {
+				!strings.Contains(joined, "matomo.segments.update") || !strings.Contains(joined, "matomo.segments.get") ||
+				!strings.Contains(joined, "matomo.segments.star") || !strings.Contains(joined, "matomo.segments.unstar") ||
+				strings.Contains(joined, "matomo.segments.delete") {
 				t.Errorf("segments profile = %+v", profile)
 			}
 		default:
-			if strings.Contains(joined, "matomo.segments.add") || strings.Contains(joined, "matomo.segments.update") {
+			if strings.Contains(joined, "matomo.segments.add") || strings.Contains(joined, "matomo.segments.update") ||
+				strings.Contains(joined, "matomo.segments.star") || strings.Contains(joined, "matomo.segments.delete") {
 				t.Errorf("profile %s selects a segment change", profile.ID)
 			}
 			if !strings.Contains(joined, "matomo.segments.list") || !strings.Contains(joined, "matomo.segments.get") {

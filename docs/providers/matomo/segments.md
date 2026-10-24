@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo saved-segment tools: reading, creating, and replacing segments, the binding of an instance-wide segment ID to the connection's targets, the checked definition, and the rights and configuration limits Matomo enforces.
+  Describes the Matomo saved-segment tools: reading, creating, replacing, starring, and deleting segments, the binding of an instance-wide segment ID to the connection's targets, the checked definition, and the rights and configuration limits Matomo enforces.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -11,7 +11,7 @@ updated: 2026-10-24
 
 The saved-segment tools of the [Matomo provider](README.md). The segment fields a definition can use come from
 `matomo.segments.fields`, see [reports](reports.md). The profiles are described under
-[Setup profiles](README.md#setup-profiles). All four tools need the SegmentEditor plugin.
+[Setup profiles](README.md#setup-profiles). All seven tools need the SegmentEditor plugin.
 
 A segment ID counts for the whole instance, not per website. What decides is `enable_only_idsite`, the website a
 segment belongs to; `0` stands for all websites.
@@ -69,3 +69,20 @@ Qatlas does not check rights; the answers of Matomo decide and end as `permissio
 Both changes are confirmed by the caller and sent exactly once. After an unclear result (no answer in time, a reset
 connection, an answer Qatlas cannot read) the error says the change may have been applied and is never repeated;
 read the segment with `matomo.segments.get` or `matomo.segments.list` before trying again.
+
+## Starring and deleting
+
+`matomo.segments.star` and `matomo.segments.unstar` set or clear the star of a segment; `matomo.segments.delete`
+deletes it. All three read the segment once with `SegmentEditor.get` and bind it to the targets exactly like
+`matomo.segments.update`; a segment Qatlas cannot reach is not found, without quoting any value.
+
+- The star is a property of the segment, not of the user: Matomo stores one flag and the login that set it, so
+  everyone who sees the segment sees the star. Starring and unstarring need the same right as editing (the creator
+  or a Super User; a segment for all websites needs a Super User). Both are idempotent and are in the `segments`
+  profile.
+- Deleting only marks the segment as deleted. It disappears for every user and from every report that uses it, and
+  Matomo cleans up its stored data later; the tool cannot restore it, and a segment created again gets a new ID.
+  Deleting needs the creator or a Super User (a segment for all websites needs a Super User). The tool is offered
+  only where a connection's `tools` list names it and is in no profile.
+
+Each change is confirmed and sent once; after an unclear result it is never repeated, see above.
