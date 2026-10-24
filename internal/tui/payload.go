@@ -398,5 +398,5 @@ func (m *Model) payloadCells(name string, cred config.Credential) []string {
 		}
 		parts = append(parts, field)
 	}
-	return []string{name, "(payload)", place, strings.Join(parts, ", ")}
+	return []string{name, place, "(payload) " + strings.Join(parts, ", ")}
 }
