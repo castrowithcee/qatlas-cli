@@ -23,7 +23,7 @@ func openVaultSection(t *testing.T, m *Model) {
 	}
 }
 
-// Digit 5 and the sidebar/narrow navigation name the fifth section Vault, with no entry count of its own.
+// Digit 5 and the tab line name the fifth section Vault.
 func TestVaultSectionInNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
@@ -34,9 +34,7 @@ func TestVaultSectionInNavigation(t *testing.T) {
 
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	if view := m.View(); !strings.Contains(view, "5 Vault") {
-		t.Errorf("sidebar does not name the Vault section:\n%s", view)
-	} else if strings.Contains(view, "5 Vault    0") || strings.Contains(view, "5 Vault  0") {
-		t.Errorf("sidebar shows an entry count for the settings form:\n%s", view)
+		t.Errorf("the tab line does not name the Vault section:\n%s", view)
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
@@ -45,8 +43,8 @@ func TestVaultSectionInNavigation(t *testing.T) {
 	}
 }
 
-// Vault has no list between the sidebar and its form: esc on the unchanged form returns directly to the
-// sidebar in one step, the way esc on an unchanged list would for any other section, and 'n' is refused
+// Vault has no list between the tab line and its form: esc on the unchanged form returns directly to the
+// tab line in one step, the way esc on an unchanged list would for any other section, and 'n' is refused
 // with a reason rather than opening a broken, nameless form.
 func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 	m, _, _ := newModel(t)
@@ -54,7 +52,7 @@ func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 
 	press(t, m, "esc")
 	if m.screen != screenNav || m.section != sectionVault {
-		t.Fatalf("esc on the unchanged vault form = screen %v section %v, want the sidebar", m.screen, m.section)
+		t.Fatalf("esc on the unchanged vault form = screen %v section %v, want the tab line", m.screen, m.section)
 	}
 
 	press(t, m, "n")
@@ -62,13 +60,13 @@ func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 		t.Errorf("n on the Vault section = screen %v fail %q, want it refused with a reason", m.screen, m.fail)
 	}
 
-	// enter, right, and tab from the sidebar all open the form directly, the same as they open a list's own
+	// enter, down, and tab from the tab line all open the form directly, the same as they open a list's own
 	// entry for any other section.
-	for _, key := range []string{"enter", "right", "l", "tab"} {
+	for _, key := range []string{"enter", "down", "j", "tab"} {
 		m.screen, m.section = screenNav, sectionVault
 		press(t, m, key)
 		if m.screen != screenForm || m.section != sectionVault {
-			t.Errorf("%q from the sidebar = screen %v section %v, want the vault form", key, m.screen, m.section)
+			t.Errorf("%q from the tab line = screen %v section %v, want the vault form", key, m.screen, m.section)
 		}
 	}
 }

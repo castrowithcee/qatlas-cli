@@ -66,7 +66,7 @@ func (m *Model) updateOffered() bool {
 	return m.updater != nil && m.release.UpdateAvailable && !m.updating && m.updated == ""
 }
 
-// askUpdate opens the update question over the sidebar or the list it was asked from.
+// askUpdate opens the update question over the tab line or the list it was asked from.
 func (m *Model) askUpdate() {
 	if !m.updateOffered() {
 		return

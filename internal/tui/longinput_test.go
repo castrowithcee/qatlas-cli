@@ -208,7 +208,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					if len(holding) != 1 {
 						t.Fatalf("%d lines hold the value, want 1:\n%s", len(holding), view)
 					}
-					// Only what the workspace frame holds counts: the sidebar draws its own marks.
+					// Only what the workspace frame holds counts: the tab line draws its own marks.
 					inner := holding[0]
 					if i, j := strings.Index(inner, "║"), strings.LastIndex(inner, "║"); i >= 0 && j > i {
 						inner = inner[i+len("║") : j]

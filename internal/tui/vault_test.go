@@ -358,7 +358,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	// The event loop stays responsive while the write is in flight.
 	press(t, m, "esc")
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "down", "up")
+	press(t, m, "down")
 	if m.screen != screenList || m.section != sectionServices {
 		t.Fatalf("the editor stopped reacting: screen %v section %v", m.screen, m.section)
 	}

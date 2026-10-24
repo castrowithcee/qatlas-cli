@@ -787,7 +787,7 @@ func (m *Model) updateLogPick(key tea.KeyMsg) tea.Cmd {
 }
 
 // logsView draws the Logs section: the bar, the filter and search lines, the table, and the keys. It is also
-// what the workspace shows beside the sidebar while the section is only marked there.
+// what the workspace shows below the tab line while the section is only marked there.
 func (m *Model) logsView() string {
 	lv := m.logs
 	if m.screen == screenLogs && lv.dialog != nil {

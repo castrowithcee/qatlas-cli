@@ -7,58 +7,31 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// layoutWorkspace derives the room of the workspace from the terminal. Above it stands one line with the
-// configuration path; beside it the sidebar with its frame, or above it one navigation line and a rule.
+// layoutWorkspace derives the room of the workspace from the terminal. It takes the full width; above it
+// stand the header, one tab line, and a rule.
 func (m *Model) layoutWorkspace() {
-	if m.sidebarLayout() {
-		m.width = max(m.termWidth-sidebarWidth-1-frameCells, 1)
-		m.height = max(m.termHeight-1-2, 1)
-		return
-	}
 	m.width = max(m.termWidth, 1)
 	m.height = max(m.termHeight-3, 1)
 }
 
-// frame puts the workspace into the editor's frame.
+// frame puts the workspace under the header, the tab line, and a rule.
 func (m *Model) frame(workspace string) string {
 	lines := m.headerLines()
-	content := strings.Split(workspace, "\n")
-	if !m.sidebarLayout() {
-		lines = append(lines, m.navLine(), styles.quietBorder.Render(strings.Repeat("─", m.termWidth)))
-		lines = append(lines, content...)
-		return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
-	}
-	title := m.section.title()
-	switch {
-	case m.screen == screenHelp:
-		title = "Help"
-	case m.screen == screenCommand:
-		title = "Commands"
-	case m.screen == screenSelftest:
-		title = "Selftest"
-	case m.screen == screenUpdate || m.screen == screenRestart:
-		title = "Update"
-	case m.wizard != nil:
-		title = "Guided setup"
-	}
-	left := box("Sections", m.sidebarLines(), sidebarWidth-frameCells, m.height, m.screen == screenNav)
-	right := box(title, content, m.width, m.height, m.screen != screenNav)
-	for i := range left {
-		lines = append(lines, left[i]+" "+right[i])
-	}
-	return strings.Join(lines, "\n")
+	lines = append(lines, m.navLine(), styles.quietBorder.Render(strings.Repeat("─", m.termWidth)))
+	lines = append(lines, strings.Split(workspace, "\n")...)
+	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 
 // headerLines are the header rows above the workspace: the path line alone for a run with no vault
 // configured, since showing a warning for something that does not exist yet would be misleading;
-// otherwise the vault state beside the path line from sidebarMinWidth up, or, in a narrower terminal, its
+// otherwise the vault state beside the path line from narrowWidth up, or, in a narrower terminal, its
 // own row above the path line, because the two together do not read well combined that narrow.
 func (m *Model) headerLines() []string {
 	vault := m.vaultHeaderText()
 	if vault == "" {
 		return []string{m.pathLine("")}
 	}
-	if m.sidebarLayout() {
+	if m.termWidth >= narrowWidth {
 		return []string{m.pathLine(vault)}
 	}
 	return []string{vault, m.pathLine("")}
@@ -67,7 +40,7 @@ func (m *Model) headerLines() []string {
 // pathLine names the configuration file the editor works on. A path too long for the line keeps its end,
 // the part that tells files apart. A newer release stands between the title and the path, in the longest
 // form that still leaves the path some room. vaultText is the vault state segment headerLines puts beside
-// it once the sidebar layout has room for both on one line; "" leaves this exactly the plain path line it
+// it once the terminal has room for both on one line; "" leaves this exactly the plain path line it
 // always was, which a run without a vault, and the narrow layout's own second row, both still use.
 func (m *Model) pathLine(vaultText string) string {
 	suffix := ""
@@ -101,29 +74,34 @@ func (m *Model) pathLine(vaultText string) string {
 // pathRoom is what the banner of a newer release leaves the path at least.
 const pathRoom = 12
 
-// navLine is the navigation of a narrow terminal: every section in one line, the active one in brackets,
-// and "> " in front while it has the focus. A terminal too narrow for the names keeps the active name and
-// the numbers of the others.
+// navLine is the tab line: every section by number and name, the active one in brackets, and "> " in front
+// while the tabs have the focus; the brackets and the marker, not the colour, say which one is active. A
+// terminal too narrow for all names closes the gaps first and then shortens the others to their numbers;
+// the active tab always stays whole.
 func (m *Model) navLine() string {
 	focus := "  "
 	if m.screen == screenNav {
 		focus = "> "
 	}
-	full, short := []string{}, []string{}
+	var spaced, compact, short []string
 	for s := section(0); s < sectionCount; s++ {
 		name := fmt.Sprintf("%d %s", int(s)+1, s.title())
 		if s == m.section && m.wizard == nil {
-			full, short = append(full, "["+name+"]"), append(short, "["+name+"]")
+			tab := "[" + name + "]"
+			spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
 			continue
 		}
-		full, short = append(full, " "+name+" "), append(short, fmt.Sprint(int(s)+1))
+		spaced, compact, short = append(spaced, " "+name+" "), append(compact, name), append(short, fmt.Sprint(int(s)+1))
 	}
 	if m.wizard != nil {
-		full, short = append(full, "[c setup]"), append(short, "[c setup]")
+		spaced, compact, short = append(spaced, "[c setup]"), append(compact, "[c setup]"), append(short, "[c setup]")
 	}
-	line := focus + strings.Join(full, " ")
-	if lipgloss.Width(line) > m.termWidth {
-		line = focus + strings.Join(short, " ")
+	line := focus + strings.Join(spaced, " ")
+	for _, tabs := range [][]string{compact, short} {
+		if lipgloss.Width(line) <= m.termWidth {
+			break
+		}
+		line = focus + strings.Join(tabs, " ")
 	}
 	return styles.active.Render(clipCells(line, m.termWidth))
 }

@@ -230,20 +230,19 @@ func TestUIsTextInAForm(t *testing.T) {
 	}
 }
 
-// The banner shortens with the terminal, and the frame stays in line however wide it is.
+// The banner shortens with the terminal, and the tab line stays below it however wide it is.
 func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 	m := startedWith(t, newerRelease())
 	for _, tt := range []struct {
 		width, height int
 		banner        string
-		sidebar       bool
 	}{
-		{width: 100, height: 28, banner: fullBanner, sidebar: true},
+		{width: 100, height: 28, banner: fullBanner},
 		{width: 60, height: 24, banner: "Update v0.5.0 · u"},
 		{width: 40, height: 12, banner: "Update v0.5.0 · u"},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
-		for _, screen := range []string{"sidebar", "help", "question"} {
+		for _, screen := range []string{"tab line", "help", "question"} {
 			m.screen = screenNav
 			switch screen {
 			case "help":
@@ -260,16 +259,8 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			if tt.width < 100 && strings.Contains(lines[0], "🎉") {
 				t.Errorf("%dx%d: a narrow top line keeps the emoji: %q", tt.width, tt.height, lines[0])
 			}
-			if !tt.sidebar {
-				continue
-			}
-			if len(lines) != tt.height {
-				t.Errorf("%dx%d %s: the frame has %d lines", tt.width, tt.height, screen, len(lines))
-			}
-			for i, line := range lines[1:] {
-				if got := lipgloss.Width(line); got != tt.width {
-					t.Errorf("%dx%d %s: frame line %d is %d cells wide: %q", tt.width, tt.height, screen, i+1, got, line)
-				}
+			if !strings.Contains(lines[1], "[1 Services]") || !strings.Contains(lines[2], "─") {
+				t.Errorf("%dx%d %s: the tab line and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:3])
 			}
 		}
 	}

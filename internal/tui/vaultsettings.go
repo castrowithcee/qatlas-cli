@@ -60,7 +60,7 @@ var vaultActionDone = map[string]string{
 // openVaultForm opens the vault section: a settings form without a list, over the vault's own state, built
 // fresh every time so it never shows anything but what the vault and the configuration hold right now. It
 // never clears status or fail itself, so a caller that just set one to report what it did is not undone by
-// the rebuild; showList clears them before opening the section fresh from the sidebar or a list.
+// the rebuild; showList clears them before opening the section fresh from the tab line or a list.
 func (m *Model) openVaultForm() tea.Cmd {
 	m.editing = ""
 	m.screen = screenForm

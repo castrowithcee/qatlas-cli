@@ -357,7 +357,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	}
 	press(t, m, "esc")
 	if m.screen != screenNav {
-		t.Errorf("esc without a search = screen %v, want the sidebar", m.screen)
+		t.Errorf("esc without a search = screen %v, want the tab line", m.screen)
 	}
 }
 
@@ -397,7 +397,7 @@ func TestLogsKeys(t *testing.T) {
 	}
 	pump(t, m, "enter")
 	if m.screen != screenLogs {
-		t.Errorf("enter on the sidebar = screen %v, want the Logs screen", m.screen)
+		t.Errorf("enter on the tab line = screen %v, want the Logs screen", m.screen)
 	}
 }
 
@@ -644,7 +644,7 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 		t.Fatalf("7 = screen %v section %v", m.screen, m.section)
 	}
 	view := m.View()
-	if !strings.Contains(view, noVault) || !strings.Contains(view, "7 Tokens       -") {
+	if !strings.Contains(view, noVault) || !strings.Contains(view, "7 Tokens") {
 		t.Errorf("Tokens does not say that there is no vault:\n%s", view)
 	}
 	for _, action := range []string{"n new", "enter show", "d revoke", "d delete", "/ filter"} {
@@ -836,9 +836,8 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	for name, cells := range want {
 		var got []string
 		for _, l := range strings.Split(view, "\n") {
-			_, cell, ok := strings.Cut(l, "║")
-			if fields := strings.Fields(strings.TrimSuffix(strings.TrimSpace(cell), "║")); ok &&
-				strings.HasPrefix(strings.TrimSpace(cell), name+" ") && len(fields) >= 5 {
+			cell := strings.TrimSpace(l)
+			if fields := strings.Fields(cell); strings.HasPrefix(cell, name+" ") && len(fields) >= 5 {
 				got = fields[len(fields)-5:]
 				break
 			}

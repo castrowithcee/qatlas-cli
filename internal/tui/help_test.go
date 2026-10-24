@@ -14,18 +14,18 @@ func firstWords(topic helptopics.Topic) string {
 	return strings.Join(strings.Fields(topic.Text)[:3], " ")
 }
 
-// ? opens the help from the sidebar and from the list, every topic is one key away, and esc returns to where
+// ? opens the help from the tab line and from the list, every topic is one key away, and esc returns to where
 // it was opened.
 func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	if keys := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(keys, ": cmds") || !strings.Contains(keys, "? help") {
-		t.Errorf("the sidebar keys do not offer ? help:\n%s", screenOf(m))
+		t.Errorf("the tab line keys do not offer ? help:\n%s", screenOf(m))
 	}
 
 	press(t, m, "?")
 	if m.screen != screenHelp {
-		t.Fatalf("? on the sidebar opened screen %v", m.screen)
+		t.Fatalf("? on the tab line opened screen %v", m.screen)
 	}
 	topics := helptopics.All()
 	for i, key := range []string{"right", "right", "right"} {
@@ -34,7 +34,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 		if !strings.Contains(view, "["+topic.Name+"]") || !strings.Contains(view, firstWords(topic)) {
 			t.Errorf("topic %s is not shown:\n%s", topic.Name, view)
 		}
-		if !strings.Contains(view, " Help ") {
+		if !strings.Contains(view, "Help  ") {
 			t.Errorf("the workspace is not titled Help:\n%s", view)
 		}
 		press(t, m, key)
@@ -52,7 +52,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 	}
 	press(t, m, "esc")
 	if m.screen != screenNav {
-		t.Fatalf("esc returned to screen %v, want the sidebar", m.screen)
+		t.Fatalf("esc returned to screen %v, want the tab line", m.screen)
 	}
 
 	press(t, m, "enter")

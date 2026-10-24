@@ -27,9 +27,9 @@ func TestColonOpensTheCommandLineAndEscClosesIt(t *testing.T) {
 	m := cmdModel(t)
 	seedServices(t, m, "a-one")
 	for name, screens := range map[string]func(){
-		"sidebar": func() { m.screen = screenNav },
-		"list":    func() { m.screen = screenList },
-		"logs":    func() { openSectionByName(t, m, sectionLogs) },
+		"tab line": func() { m.screen = screenNav },
+		"list":     func() { m.screen = screenList },
+		"logs":     func() { openSectionByName(t, m, sectionLogs) },
 	} {
 		screens()
 		from := m.screen

@@ -81,19 +81,11 @@ func TestALongListScrollsInsideTheTerminal(t *testing.T) {
 				press(t, m, "down")
 				check(names[i], i+1)
 			}
-			if size.width >= sidebarMinWidth {
-				// The sidebar layout wraps at both ends, like every other list of the editor.
-				press(t, m, "down")
-				check(names[0], 1)
-				press(t, m, "up")
-				check(names[119], 120)
-			} else {
-				// Below the sidebar width, down stops at the last entry instead of wrapping to the first.
-				press(t, m, "down")
-				check(names[119], 120)
-				press(t, m, "up")
-				check(names[118], 119)
-			}
+			// Down stops at the last entry instead of wrapping to the first, at every width.
+			press(t, m, "down")
+			check(names[119], 120)
+			press(t, m, "up")
+			check(names[118], 119)
 			press(t, m, "home")
 			check(names[0], 1)
 			press(t, m, "pgdown")
@@ -324,7 +316,7 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	}
 	press(t, m, "esc")
 	if m.screen != screenNav || m.section != sectionServices {
-		t.Fatalf("the second escape: screen %v section %v, want the sidebar on Services", m.screen, m.section)
+		t.Fatalf("the second escape: screen %v section %v, want the tab line on Services", m.screen, m.section)
 	}
 
 	// Opening a section again starts without the filter.

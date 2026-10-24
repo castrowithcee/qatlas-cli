@@ -734,7 +734,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	// The event loop stays responsive while the store is thinking.
 	press(t, m, "esc")
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "down", "up")
+	press(t, m, "down")
 	if m.screen != screenList || m.section != sectionServices {
 		t.Fatalf("the editor stopped reacting: screen %v section %v", m.screen, m.section)
 	}
@@ -829,7 +829,7 @@ func TestLongMessagesStayReadable(t *testing.T) {
 		press(t, m, "esc")
 		views["list"] = screenOf(m)
 		press(t, m, "esc")
-		views["sidebar"] = screenOf(m)
+		views["tab line"] = screenOf(m)
 		editEntry(t, m, "reader")
 
 		for name, view := range views {

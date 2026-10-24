@@ -25,30 +25,27 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor is one screen: a sidebar with the eight sections 1 Services, 2 Credentials,\n" +
-			"3 Connections, 4 Defaults, 5 Vault, 6 Approvals, 7 Tokens, and 8 Logs, and beside it a\n" +
-			"workspace with the list,\n" +
-			"form, or setup step of the active section. From 80 columns the sidebar stands on the left; a\n" +
-			"narrower terminal\n" +
-			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
+		Long: "The editor is one screen: a tab line with the eight sections 1 Services, 2 Credentials,\n" +
+			"3 Connections, 4 Defaults, 5 Vault, 6 Approvals, 7 Tokens, and 8 Logs, and below it the\n" +
+			"workspace with the list, form, or setup step of the active section. The tab line has the same\n" +
+			"place at every width; the active section is in brackets, and a terminal too narrow for all names\n" +
+			"shows the others by their numbers. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
-			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
-			"the workspace. The arrow keys move on every screen, and h/j/k/l (left, down, up, right) do the\n" +
-			"same on every screen that takes no typed text; where text is typed, a letter is text. pgup/pgdown\n" +
-			"and home/end jump in every list, picker, table, and the sidebar. tab and shift+tab go to the\n" +
-			"next or previous field, or between the sidebar and the list; in a path being typed, tab takes the\n" +
-			"suggested directory. space ticks in a multiple choice and does nothing else.\n" +
-			"From 80 columns up/down choose a section, and enter, right, or tab move the focus into the\n" +
-			"list; left, tab, or esc move the focus back to the navigation. Below 80 columns left/right\n" +
-			"choose a section instead, wrapping from the last to the first and back; down or enter or tab move\n" +
-			"the focus into the list, and up does nothing there. In that list, up/down move the selection\n" +
-			"without wrapping, up at the first entry or in an empty list moves the focus back to the\n" +
-			"navigation, down stays at the last entry, and left/right leave the focus where it is; tab or esc\n" +
-			"still move it back.\n" +
-			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
+			"The editor opens with the focus on the tab line. The arrow keys move on every screen, and\n" +
+			"h/j/k/l (left, down, up, right) do the same on every screen that takes no typed text; where text\n" +
+			"is typed, a letter is text. pgup/pgdown and home/end jump in every list, picker, table, and the\n" +
+			"tab line. tab and shift+tab go to the next or previous field, or between the tab line and the\n" +
+			"list; in a path being typed, tab takes the suggested directory. space ticks in a multiple choice\n" +
+			"and does nothing else.\n" +
+			"On the tab line left/right choose a section, wrapping from the last to the first and back; down\n" +
+			"or enter or tab move the focus into the list, and up does nothing there. In that list, up/down\n" +
+			"move the selection without wrapping, up at the first entry or in an empty list moves the focus\n" +
+			"back to the tab line, down stays at the last entry, and left/right leave the focus where it is;\n" +
+			"tab or esc still move it back.\n" +
+			"1-8 open a section directly from the tab line, a list, or the Logs screen; in a form, digits are\n" +
 			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
-			"the guided setup, and q quits, as it does from the sidebar and the Logs screen; on any other\n" +
+			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
 			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
 			"log entry, or leaves a form. backspace never goes back.\n\n" +
@@ -68,9 +65,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"input intact. Unchanged input closes at once. ctrl+c quits at once, and asks the same question\n" +
 			"when something unsaved would be lost; d then discards it and quits. A single-line dialog, such as\n" +
 			"a passphrase, a secret, a search, or the date of the Logs, is closed by esc without a question.\n\n" +
-			"Focus and state read without colour. The active section is marked > while the sidebar has the\n" +
-			"focus and * while the workspace has it, the pane with the focus has a double border, and the\n" +
-			"selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
+			"Focus and state read without colour. The active section is in brackets, and > in front of the\n" +
+			"tab line says it has the focus; the selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
 			"say warning: or error:. Colour only supports these marks; NO_COLOR turns it off.\n\n" +
 			"c sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
 			"access, and a summary that saves the connection and can test it right away. Each step offers\n" +
@@ -119,10 +115,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"other window, and no vault process a Linux or macOS build may hold unlocked outside this run,\n" +
 			"ever shares the session: the passphrase proves it, not merely an unlocked vault. An unencrypted\n" +
 			"vault, or one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
-			"The header above the sections always shows the vault's state, unlocked, locked, or unencrypted,\n" +
+			"The header above the tab line always shows the vault's state, unlocked, locked, or unencrypted,\n" +
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
 			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
-			"ctrl+l works on the sidebar, the lists, the forms, the pickers and tables, the target and path\n" +
+			"ctrl+l works on the tab line, the lists, the forms, the pickers and tables, the target and path\n" +
 			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
 			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
 			"it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
@@ -283,7 +279,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"configuration keeps only the concrete tool IDs, so a tool a later version adds joins no saved\n" +
 			"connection, and no local tick narrows what the credential itself may do at the provider.\n\n" +
 			"? shows the help topics start, agents, and configuration, the same text as 'qatlas help start'\n" +
-			"and the others, on every screen that takes no typed text: the sidebar, the lists, every question,\n" +
+			"and the others, on every screen that takes no typed text: the tab line, the lists, every question,\n" +
 			"the target and path lists, the setup summary, and the details of an approval, a token, and a log\n" +
 			"entry. It also opens on the provider table, the add menu of targets, and the template search while\n" +
 			"the search is empty. A form and every typed line keep ? as text, and name their keys in the footer.\n" +
@@ -292,7 +288,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"h/j/k/l letters.\n\n" +
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
-			"v0.5.0 · u update. u on the sidebar or in a list asks first and then installs it the way\n" +
+			"v0.5.0 · u update. u on the tab line or in a list asks first and then installs it the way\n" +
 			"'qatlas update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
 			"first, runs the new program at the same path with the same arguments, and says qatlas updated\n" +
 			"from one version to the other. If the vault was unlocked before, the new editor opens the\n" +
