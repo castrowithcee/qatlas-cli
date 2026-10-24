@@ -155,6 +155,13 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		} else {
 			want = append(want, p.id+".actions-runners.update", p.id+".workflows.enable", p.id+".workflows.disable")
 		}
+		want = append(want, p.id+".admin-runners.list", p.id+".admin-runners.get", p.id+".admin-runners.delete")
+		if p == forgejo {
+			want = append(want, p.id+".admin-runner-jobs.search")
+		} else {
+			want = append(want, p.id+".admin-runners.update", p.id+".admin-workflow-runs.list",
+				p.id+".admin-workflow-jobs.list", p.id+".admin-packages.list")
+		}
 		want = append(want, p.id+".topics.search", p.id+".repository-topics.list", p.id+".repository-topics.set",
 			p.id+".repository-topics.add", p.id+".repository-topics.remove", p.id+".gitignore-templates.list",
 			p.id+".gitignore-templates.get", p.id+".label-templates.list", p.id+".label-templates.get",
@@ -189,6 +196,12 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		}
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
+		want = append(want, p.id+".packages.list", p.id+".packages.get", p.id+".package-files.list",
+			p.id+".packages.link", p.id+".packages.unlink", p.id+".packages.delete-version")
+		if p == gitea {
+			want = append(want, p.id+".package-versions.list", p.id+".package-versions.get-latest",
+				p.id+".packages.delete")
+		}
 		want = append(want, accessToolIDs(p)...)
 		if p == forgejo {
 			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",

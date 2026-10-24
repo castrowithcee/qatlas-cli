@@ -706,7 +706,7 @@ func (m *Model) importView() string {
 		var b strings.Builder
 		b.WriteString(m.wrapped(styles.title, "Import: mode") + "\n\n")
 		for i, row := range importModeRows {
-			b.WriteString(m.listRow(i == e.modeCursor, false, truncateCells(row.text, m.usable(2))) + "\n")
+			b.WriteString(m.listRow(i == e.modeCursor, truncateCells(row.text, m.usable(2))) + "\n")
 		}
 		b.WriteString("\n" + m.indented("entries are matched by name; the preview shows what the mode does") + "\n")
 		return b.String() + m.importKeys("up/down move · {save} or enter preview · {back} back · {command} cmds · {help} help") + m.notes()

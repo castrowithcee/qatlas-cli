@@ -299,7 +299,7 @@ func (m *Model) templateFrame() (string, string) {
 
 func (m *Model) templateRow(i int) string {
 	_, width := m.fit("  ")
-	return m.listRow(i == m.templateList.cursor, i%2 == 1,
+	return m.listRow(i == m.templateList.cursor,
 		truncateCells(m.templateList.text(m.templateList.matches[i]), width))
 }
 

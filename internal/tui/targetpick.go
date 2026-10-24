@@ -746,7 +746,7 @@ func (m *Model) pickRow(i int) string {
 	if _, marked := p.marks[e.entry.Target]; marked {
 		cells[0] = "[x]" + strings.TrimPrefix(cells[0], "[ ]")
 	}
-	return m.listRow(i == lv.list.cursor, i%2 == 1, lv.table.line(cells, m.pickLayout(lv, width)))
+	return m.listRow(i == lv.list.cursor, lv.table.line(cells, m.pickLayout(lv, width)))
 }
 
 func (m *Model) pickWindow() (int, int) {
