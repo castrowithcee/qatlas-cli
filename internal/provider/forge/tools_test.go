@@ -172,6 +172,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			p.id+".team-repositories.list", p.id+".team-repositories.check", p.id+".team-repositories.add",
 			p.id+".team-repositories.remove", p.id+".repository-teams.list", p.id+".repository-teams.check",
 			p.id+".repository-teams.add", p.id+".repository-teams.remove")
+		want = append(want, p.id+".users.search", p.id+".users.get", p.id+".user-activities.list",
+			p.id+".user-heatmap.get", p.id+".user-followers.list", p.id+".user-following.list",
+			p.id+".user-following.check", p.id+".user-follows.add", p.id+".user-follows.remove")
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
 		slices.Sort(want)

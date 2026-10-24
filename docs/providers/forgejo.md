@@ -47,7 +47,8 @@ additional depth of defense: the targets of the connection stay the boundary.
   `org-blocks.check`, and takes no `note`. See [Organizations](gitea/organizations.md).
 - The team object and the team settings carry no `visibility`; every team route by ID requires membership of the team
   or site administration, not only the organization's ownership. See [Teams](gitea/teams.md).
-- The user object carries `pronouns`; the repository object carries `wiki_branch` and `has_wiki_contents`.
+- The user object carries `pronouns` (Gitea 28 and later carries `type` instead), and `users.search` takes `sort`. See
+  [Users](gitea/users.md). The repository object carries `wiki_branch` and `has_wiki_contents`.
 - `settings.get` with `repository` also carries `forks_disabled`.
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
