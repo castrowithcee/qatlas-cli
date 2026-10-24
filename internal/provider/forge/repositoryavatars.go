@@ -74,32 +74,10 @@ var repositoryAvatarsUpdate = &tool{
 		if err != nil {
 			return nil, nil, err
 		}
-		if a.LocalPath == nil {
-			return nil, nil, invalidArgument("local_path is required")
-		}
-		// The file is opened before the token is resolved, so a path outside the released directories is
-		// refused without secret access or a request.
-		upload, err := localfile.OpenForUpload(ctx, resolved, *a.LocalPath)
+		body, release, err := avatarBody(ctx, resolved, a.LocalPath, "set repository avatar")
 		if err != nil {
 			return nil, nil, err
 		}
-		release := func() { _ = upload.Close() }
-		if upload.Size < 1 || upload.Size > maxAvatarBytes {
-			release()
-			return nil, nil, invalidArgument("the image must be a file of 1 byte to 4 MiB")
-		}
-		// The image is read and recognized before the token is resolved, so a file that is no image is refused
-		// without secret access or a request.
-		content, err := io.ReadAll(io.LimitReader(upload, upload.Size+1))
-		if err != nil || int64(len(content)) != upload.Size {
-			release()
-			return nil, nil, provider.Fail("set repository avatar", "the local file could not be read completely")
-		}
-		if !isImage(content) {
-			release()
-			return nil, nil, invalidArgument("the file is not a PNG, JPEG, GIF, or WebP image")
-		}
-		body := map[string]any{"image": base64.StdEncoding.EncodeToString(content)}
 		return func(ctx context.Context, c *Client) (any, error) {
 			if err := c.change(ctx, "set repository avatar", http.MethodPost, repositoryPath(repo)+"/avatar", body,
 				nil); err != nil {
@@ -108,6 +86,35 @@ var repositoryAvatarsUpdate = &tool{
 			return map[string]any{"repository": fullName(repo), "updated": true}, nil
 		}, release, nil
 	},
+}
+
+// avatarBody opens the released image file and returns the request body of an avatar upload with the function
+// that releases the file. The file is opened and recognized before the token is resolved, so a path outside the
+// released directories or a file that is no image is refused without secret access or a request.
+func avatarBody(ctx context.Context, resolved *config.Resolved, localPath *string, op string) (map[string]any,
+	func(), error) {
+	if localPath == nil {
+		return nil, nil, invalidArgument("local_path is required")
+	}
+	upload, err := localfile.OpenForUpload(ctx, resolved, *localPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	release := func() { _ = upload.Close() }
+	if upload.Size < 1 || upload.Size > maxAvatarBytes {
+		release()
+		return nil, nil, invalidArgument("the image must be a file of 1 byte to 4 MiB")
+	}
+	content, err := io.ReadAll(io.LimitReader(upload, upload.Size+1))
+	if err != nil || int64(len(content)) != upload.Size {
+		release()
+		return nil, nil, provider.Fail(op, "the local file could not be read completely")
+	}
+	if !isImage(content) {
+		release()
+		return nil, nil, invalidArgument("the file is not a PNG, JPEG, GIF, or WebP image")
+	}
+	return map[string]any{"image": base64.StdEncoding.EncodeToString(content)}, release, nil
 }
 
 // isImage recognizes the formats an avatar can have by their signature, so a text or an archive never travels

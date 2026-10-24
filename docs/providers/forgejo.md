@@ -42,6 +42,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 - `nodeinfo.get` reads the NodeInfo document of the instance. Its `metadata` member is free-form and bounded in
   depth, length, and key count.
 - `repositories.list` takes `order_by` for the token's own repositories (not together with `owner`).
+- The organization object carries `created`. See [Organizations](gitea/organizations.md).
 - The user object carries `pronouns`; the repository object carries `wiki_branch` and `has_wiki_contents`.
 - `settings.get` with `repository` also carries `forks_disabled`.
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.

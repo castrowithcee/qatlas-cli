@@ -319,6 +319,7 @@ func TestIssueDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 				other.ID != p.toolID(pullRequestsMerge) && other.ID != p.toolID(pullRequestBranchesUpdate) &&
 				other.ID != p.toolID(issueTimesReset) && other.ID != p.id+".branches.update-ref" &&
 				other.ID != p.toolID(reviewsApprove) && other.ID != p.toolID(actionsSecretsSet) &&
+				other.ID != p.toolID(orgsRename) &&
 				!slices.Contains(lifecycleListedOnly(p), other.ID) {
 				t.Errorf("%s is listed-only too", other.ID)
 			}
