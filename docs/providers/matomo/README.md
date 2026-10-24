@@ -14,7 +14,8 @@ Matomo 5. The API is the same for both, and the token carries the rights of its 
 describes the foundation every Matomo tool shares: connection, targets, availability, errors, paging, and the
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
-[saved segments](segments.md), and [annotations](annotations.md).
+[saved segments](segments.md), [annotations](annotations.md), and
+[custom dimensions](dimensions.md).
 
 ## Configuration
 
@@ -136,15 +137,20 @@ refused. Methods without server paging are cut on the Qatlas side.
 
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
-`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, and `matomo.annotations.get`. The
-profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md), because they carry
-personal data. The profile `goals` adds `matomo.goals.add`, `matomo.goals.update`, and the [goal recommendation
-tools](goals.md#goal-recommendations), which need a write right; it is not recommended because it changes the goal
-configuration of a website. `matomo.goals.delete` is in no profile, see [goals](goals.md). The profile `segments`
-adds `matomo.segments.add`, `matomo.segments.update`, `matomo.segments.star`, and `matomo.segments.unstar`; it is
-not recommended because it changes the saved segments of the instance, and `matomo.segments.delete` is in no
-profile. The profile `annotations` adds `matomo.annotations.add` and `matomo.annotations.update`; it is not
-recommended because it changes the annotations of a website.
+`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
+`matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.site-settings.get`,
+`matomo.consent-manager.detect`, and `matomo.dimensions.list`; `matomo.site-groups.list` needs the `instance`
+target and is in no profile. The profile `live` adds the [live tools](live.md) and the [visitor profile
+tools](visitors.md), because they carry personal data. The profile `goals` adds `matomo.goals.add`,
+`matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
+right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
+no profile, see [goals](goals.md). The profile `segments` adds `matomo.segments.add`, `matomo.segments.update`,
+`matomo.segments.star`, and `matomo.segments.unstar`; it is not recommended because it changes the saved segments
+of the instance, and `matomo.segments.delete` is in no profile. The profile `annotations` adds
+`matomo.annotations.add` and `matomo.annotations.update`; it is not recommended because it changes the annotations
+of a website, and the annotation deletions are in no profile. The profile `dimensions` adds
+`matomo.dimension-options.list`, which needs a write right, `matomo.dimensions.add`, and
+`matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good.
 
 ## Tools
 
@@ -153,6 +159,10 @@ recommended because it changes the annotations of a website.
 | `matomo.version.get` | [sites](sites.md) | reads the instance version and, with `plugin`, whether that plugin is activated |
 | `matomo.sites.list` | [sites](sites.md) | reads websites of the token inside the targets, optionally matching `pattern` |
 | `matomo.sites.get` | [sites](sites.md) | reads one website with its addresses, time zone, currency, and tracking settings |
+| `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
+| `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
+| `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
+| `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
@@ -183,6 +193,13 @@ recommended because it changes the annotations of a website.
 | `matomo.annotations.get` | [annotations](annotations.md) | reads one annotation of a website |
 | `matomo.annotations.add` | [annotations](annotations.md) | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
 | `matomo.annotations.update` | [annotations](annotations.md) | changes the date, note, or star of an annotation (effect `update`) |
+| `matomo.annotations.count` | [annotations](annotations.md) | counts the annotations of a website per period, with starred counts |
+| `matomo.annotations.delete` | [annotations](annotations.md) | deletes one annotation for good (effect `delete`, only via `tools`) |
+| `matomo.annotations.delete-all` | [annotations](annotations.md) | deletes every annotation of a website; Super User, needs the `instance` target (effect `delete`, only via `tools`) |
+| `matomo.dimensions.list` | [dimensions](dimensions.md) | reads the custom dimensions of a website |
+| `matomo.dimension-options.list` | [dimensions](dimensions.md) | reads the scopes with free slots and the extraction sources; needs a write right |
+| `matomo.dimensions.add` | [dimensions](dimensions.md) | adds a custom dimension, using a slot for good (effect `create`) |
+| `matomo.dimensions.update` | [dimensions](dimensions.md) | changes or pauses a custom dimension; Matomo cannot delete one (effect `update`) |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

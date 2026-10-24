@@ -42,6 +42,7 @@ func TestAnnotationToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		"matomo.annotations.get":    {capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone},
 		"matomo.annotations.add":    {capability.EffectCreate, capability.IdempotencyNonIdempotent, capability.ConfirmationRequired},
 		"matomo.annotations.update": {capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired},
+		"matomo.annotations.count":  {capability.EffectRead, capability.IdempotencySafe, capability.ConfirmationNone},
 	}
 	for id, tc := range want {
 		d, _, found := reg.Lookup(id)
@@ -352,5 +353,180 @@ func TestInactiveAnnotationsPluginRefusesToolsWithoutFurtherRequests(t *testing.
 	_, err := env.invoke("matomo.annotations.get", "open", `{"idSite":1,"idNote":3}`)
 	if !isUnsupported(err) || countMethod(calls, "Annotations.get") != 0 {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+const countFixture = `{"1":[["2026-01-01",{"count":2,"starred":1}],["2026-02-01",{"count":1,"starred":"0","note":"Only &lt;one&gt;"}],
+["2026-03-01",{"count":0,"starred":0}]],"2":[["2026-01-01",{"count":9,"starred":9}]]}`
+
+func TestAnnotationsDeleteTools(t *testing.T) {
+	reg := registry(t)
+	for id, effect := range map[string]capability.Effect{"matomo.annotations.delete": capability.EffectDelete,
+		"matomo.annotations.delete-all": capability.EffectDelete} {
+		d, _, found := reg.Lookup(id)
+		if !found || d.Risk.Effect != effect || d.Risk.Confirmation != capability.ConfirmationRequired ||
+			!d.RequiresToolAllowList || !d.Risk.OpenWorld || d.Risk.DataSensitivity == "" {
+			t.Fatalf("%s: found %t, %+v", id, found, d)
+		}
+	}
+	all, _, _ := reg.Lookup("matomo.annotations.delete-all")
+	for _, part := range []string{"every annotation", "Super User", "cannot be undone"} {
+		if !strings.Contains(all.Description, part) {
+			t.Errorf("delete-all description lacks %q", part)
+		}
+	}
+	metadata, _ := reg.ProviderMetadata(Provider)
+	for _, profile := range metadata.Profiles {
+		joined := strings.Join(profile.Tools, " ")
+		if strings.Contains(joined, "matomo.annotations.delete") {
+			t.Errorf("profile %s selects a delete tool", profile.ID)
+		}
+		// Every profile builds on the read profile, which counts annotations.
+		if !strings.Contains(joined, "matomo.annotations.count") {
+			t.Errorf("profile %s lacks the annotation count", profile.ID)
+		}
+	}
+}
+
+func TestAnnotationsDeleteSendsOneRequestWithoutPriorRead(t *testing.T) {
+	var calls []call
+	env := newGoalsEnvironment(t, &calls, annotationAnswers(answers{
+		"Annotations.delete": func(c call) *http.Response {
+			if c.form.Get("idNote") == "9" {
+				return failure("There is no note with id '9' for site with id '1'.")
+			}
+			return ok(`{"result":"success","message":"ok"}`)
+		},
+	}).handler(t))
+	result, err := env.change("matomo.annotations.delete", "admin", `{"idSite":1,"idNote":3}`)
+	var out AnnotationDeleted
+	_ = json.Unmarshal([]byte(result), &out)
+	if err != nil || !out.Deleted || out.IDNote != 3 || out.IDSite != 1 {
+		t.Fatalf("result = %s, err = %v", result, err)
+	}
+	if sent := calls[len(calls)-1]; sent.form.Get("idSite") != "1" || sent.form.Get("idNote") != "3" ||
+		countMethod(calls, "Annotations.delete") != 1 || countMethod(calls, "Annotations.get") != 0 {
+		t.Errorf("request = %v", sent.form)
+	}
+	if _, err := env.change("matomo.annotations.delete", "admin", `{"idSite":1,"idNote":9}`); classOf(err) != provider.ClassNotFound {
+		t.Errorf("unknown note: err = %v", err)
+	}
+	if _, err := env.change("matomo.annotations.delete", "admin", `{"idSite":1}`); err == nil {
+		t.Error("a missing idNote was accepted")
+	}
+	if _, err := env.change("matomo.annotations.delete", "admin", `{"idSite":2,"idNote":3}`); err == nil || !isInvalidRequest(err) {
+		t.Errorf("foreign website: err = %v", err)
+	}
+}
+
+func TestAnnotationsDeleteUnclearAndPermission(t *testing.T) {
+	var calls []call
+	env := newGoalsEnvironment(t, &calls, annotationAnswers(answers{
+		"Annotations.delete": func(call) *http.Response { return respond(http.StatusBadGateway, "") },
+	}).handler(t))
+	_, err := env.change("matomo.annotations.delete", "admin", `{"idSite":1,"idNote":3}`)
+	if err == nil || countMethod(calls, "Annotations.delete") != 1 {
+		t.Fatalf("err = %v, sent %d times", err, countMethod(calls, "Annotations.delete"))
+	}
+	var calls2 []call
+	env = newGoalsEnvironment(t, &calls2, annotationAnswers(answers{
+		"Annotations.delete": func(call) *http.Response {
+			return failure("The current user is not allowed to modify or delete notes for site #1" + bodyCanary)
+		},
+		"Annotations.deleteAll": func(call) *http.Response { return ok(`[]`) },
+	}).handler(t))
+	_, err = env.change("matomo.annotations.delete", "admin", `{"idSite":1,"idNote":3}`)
+	if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), bodyCanary) {
+		t.Errorf("permission: err = %v", err)
+	}
+	_, err = env.change("matomo.annotations.delete-all", "admin", `{"idSite":1}`)
+	if err == nil || !strings.Contains(err.Error(), "never repeated") || countMethod(calls2, "Annotations.deleteAll") != 1 {
+		t.Errorf("unclear answer: err = %v", err)
+	}
+}
+
+func TestAnnotationsDeleteAllNeedsInstanceAndWebsite(t *testing.T) {
+	var calls []call
+	env := newGoalsEnvironment(t, &calls, annotationAnswers(answers{
+		"Annotations.deleteAll": func(c call) *http.Response {
+			if c.form.Get("idSite") != "1" {
+				t.Errorf("idSite = %q", c.form.Get("idSite"))
+			}
+			return ok(`{"result":"success"}`)
+		},
+	}).handler(t))
+	result, err := env.change("matomo.annotations.delete-all", "admin", `{"idSite":1}`)
+	var out AnnotationsDeleted
+	_ = json.Unmarshal([]byte(result), &out)
+	if err != nil || !out.Deleted || out.IDSite != 1 || countMethod(calls, "Annotations.deleteAll") != 1 {
+		t.Fatalf("result = %s, err = %v", result, err)
+	}
+	before, readsBefore := len(calls), *env.reads
+	if _, err := env.change("matomo.annotations.delete-all", "admin", `{"idSite":2}`); err == nil || !isInvalidRequest(err) ||
+		strings.Contains(err.Error(), "site/") {
+		t.Errorf("foreign website: err = %v", err)
+	}
+	if _, err := env.change("matomo.annotations.delete-all", "no-instance", `{"idSite":1}`); err == nil {
+		t.Error("delete-all ran on a connection without the instance")
+	}
+	if len(calls) != before || *env.reads != readsBefore {
+		t.Errorf("%d requests and %d secret reads before the refusal", len(calls)-before, *env.reads-readsBefore)
+	}
+	if ok, _ := reaches("matomo.annotations.delete-all", []string{"site/1"}); ok {
+		t.Error("delete-all reaches a connection without the instance")
+	}
+	if ok, _ := reaches("matomo.annotations.delete-all", []string{"instance"}); ok {
+		t.Error("delete-all reaches a connection without a website")
+	}
+	if ok, _ := reaches("matomo.annotations.delete-all", []string{"site", "instance"}); !ok {
+		t.Error("delete-all does not reach a connection with site and instance")
+	}
+}
+
+func TestAnnotationsCountReadsOneWebsite(t *testing.T) {
+	var calls []call
+	env := newGoalsEnvironment(t, &calls, annotationAnswers(answers{
+		"Annotations.getAnnotationCountForDates": func(call) *http.Response { return ok(countFixture) },
+	}).handler(t))
+	result, err := env.invoke("matomo.annotations.count", "open",
+		`{"idSite":1,"date":"2026-03-01","period":"month","lastN":3,"getAnnotationText":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out AnnotationCountsResult
+	_ = json.Unmarshal([]byte(result), &out)
+	if out.IDSite != 1 || len(out.Counts) != 3 || out.Counts[0] != (AnnotationCount{Date: "2026-01-01", Count: 2, Starred: 1}) ||
+		out.Counts[1].Note != "Only &lt;one&gt;" || out.Counts[1].Starred != 0 || out.Counts[2].Count != 0 {
+		t.Fatalf("out = %s", result)
+	}
+	sent := calls[len(calls)-1].form
+	if sent.Get("idSite") != "1" || sent.Get("period") != "month" || sent.Get("lastN") != "3" ||
+		sent.Get("getAnnotationText") != "1" || sent.Get("date") != "2026-03-01" {
+		t.Errorf("request = %v", sent)
+	}
+	for _, bad := range []string{`{"idSite":1,"period":"day"}`, `{"idSite":1,"date":"today"}`,
+		`{"idSite":1,"date":"today","period":"year"x}`, `{"idSite":1,"date":"2026-01-01,2026-01-05","period":"day"}`,
+		`{"idSite":1,"date":"today","period":"day","lastN":0}`, `{"idSite":"1,2","date":"today","period":"day"}`,
+		`{"idSite":2,"date":"today","period":"day"}`} {
+		before := len(calls)
+		if _, err := env.invoke("matomo.annotations.count", "one", bad); err == nil || len(calls) != before {
+			if err == nil && strings.Contains(bad, `"idSite":2`) {
+				continue
+			}
+			t.Errorf("%s: err = %v", bad, err)
+		}
+	}
+}
+
+func TestAnnotationsCountRejectsMalformedAnswers(t *testing.T) {
+	for _, body := range []string{`{"1":"x"}`, `{"1":[["2026-01-01"]]}`, `{"1":[["2026-01-01",{"count":"a"}]]}`} {
+		var calls []call
+		env := newGoalsEnvironment(t, &calls, annotationAnswers(answers{
+			"Annotations.getAnnotationCountForDates": func(call) *http.Response { return ok(body) },
+		}).handler(t))
+		_, err := env.invoke("matomo.annotations.count", "open", `{"idSite":1,"date":"today","period":"day"}`)
+		if classOf(err) != provider.ClassInvalidResponse {
+			t.Errorf("%s: err = %v", body, err)
+		}
 	}
 }
