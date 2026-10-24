@@ -281,13 +281,13 @@ func addConnection(t *testing.T, m *Model, name, service, credential string) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, name)
-	// The provider row stands between the name and the service; it narrows both rows below it, and the
-	// service the caller asks for names the provider it belongs to.
-	press(t, m, "tab")
+	// The provider row narrows the service and credential rows; the service the caller asks for names the
+	// provider it belongs to.
+	focusField(t, m, providerLabel)
 	selectChoice(t, m, m.cfg.Services[service].Provider)
-	press(t, m, "tab")
+	focusField(t, m, "service")
 	selectChoice(t, m, service)
-	press(t, m, "tab")
+	focusField(t, m, "credential")
 	selectChoice(t, m, credential)
 	press(t, m, "f2")
 }
@@ -1961,7 +1961,25 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 // rather than at the cells that fill it out.
 func formLines(m *Model) []string {
 	lines := strings.Split(screenOf(m), "\n")
+	entries := m.formSections()
+	list := 0
+	if m.sectionListFits(entries) {
+		_, list = m.sectionList(entries)
+		list += 2
+	}
 	for i, l := range lines {
+		// The section list stands left of the rows; the rows are read without it. A line that starts with an
+		// entry of the list is a row line beside it.
+		if runes := []rune(l); list > 0 && len(runes) >= list {
+			head := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(runes[:list])), ">"))
+			beside := head == ""
+			for _, e := range entries {
+				beside = beside || head == e.text()
+			}
+			if beside {
+				l = string(runes[list:])
+			}
+		}
 		lines[i] = strings.TrimRight(l, " ")
 	}
 	return lines

@@ -195,7 +195,7 @@ func (m *Model) providerTableWindow() (int, int) {
 // box that shows it is opened rather than stepped through, cut to what the terminal leaves beside the label.
 func (m *Model) providerValue(f field) string {
 	if len(f.choices) == 0 {
-		return "(nothing to choose)"
+		return emptyValue(wordNone)
 	}
 	id := f.value()
 	text := choiceText(id)
@@ -204,7 +204,7 @@ func (m *Model) providerValue(f field) string {
 	}
 	if m.width > 0 {
 		// The label column, the focus marker and the box around the text.
-		text = truncateCells(text, m.width-15-lipgloss.Width("[  ▾ ]"))
+		text = truncateCells(text, m.width-m.formIndent()-lipgloss.Width("[  ▾ ]"))
 	}
 	return "[ " + text + " ▾ ]"
 }

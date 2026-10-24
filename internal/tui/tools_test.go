@@ -192,7 +192,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	// The grouped picker starts on its all-groups row: the first space ticks everything, the second clears it.
 	press(t, m, "enter", " ", " ", "enter")
-	if !strings.Contains(screenOf(m), "none of 68 ticked: no tool is offered") {
+	if !strings.Contains(screenOf(m), "none: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")

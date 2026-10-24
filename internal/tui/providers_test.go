@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 					}
 					before := m.fieldValue(providerLabel)
 					view := screenOf(m)
-					if !strings.Contains(view, "provider     [ ") || strings.Contains(view, "provider     < ") ||
+					if !regexp.MustCompile(`provider +\[ `).MatchString(view) || regexp.MustCompile(`provider +< `).MatchString(view) ||
 						!strings.Contains(view, fmt.Sprintf("enter opens all %d providers", n)) {
 						t.Fatalf("the provider row does not show that it opens a table:\n%s", view)
 					}

@@ -336,23 +336,36 @@ func (m *Model) setupPrefill(step int, page []field) {
 	switch step {
 	case stepService:
 		if slices.Contains(page[0].choices, conn.Service) {
-			page[0] = choiceField("service", page[0].choices, conn.Service).withHint(page[0].hint).withDetail(page[0].detail)
+			page[0] = choiceField("service", page[0].choices, conn.Service).withHint(page[0].hint).withDetail(page[0].detail).inSection(page[0].section)
 		}
 	case stepCredential:
 		if slices.Contains(page[0].choices, conn.Credential) {
-			page[0] = choiceField("credential", page[0].choices, conn.Credential).withHint(page[0].hint).withDetail(page[0].detail)
+			page[0] = choiceField("credential", page[0].choices, conn.Credential).withHint(page[0].hint).withDetail(page[0].detail).inSection(page[0].section)
 		}
 	case stepScope:
 		taken := map[string]bool{}
 		for name := range m.cfg.Connections {
 			taken[name] = true
 		}
-		page[0].input.SetValue(freeCopyName(w.template, taken))
-		page[1].entries = slices.Clone(conn.TargetValues())
-		page[2].input.SetValue(conn.Description)
+		// The rows stand grouped by section, so they are found by their label.
+		for i := range page {
+			switch page[i].label {
+			case "name":
+				page[i].input.SetValue(freeCopyName(w.template, taken))
+			case targetsLabel:
+				page[i].entries = slices.Clone(conn.TargetValues())
+			case "description":
+				page[i].input.SetValue(conn.Description)
+			}
+		}
 	case stepEffects:
-		provider := w.provider
-		copy(page[1:], m.accessFields(provider, conn.Effects, slices.Clone(conn.Tools)))
+		for _, row := range m.accessFields(w.provider, conn.Effects, slices.Clone(conn.Tools)) {
+			for i := range page {
+				if page[i].label == row.label {
+					page[i] = row.inSection(page[i].section)
+				}
+			}
+		}
 	}
 }
 

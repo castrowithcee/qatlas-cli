@@ -81,7 +81,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 			t.Errorf("the profile row does not say %q: %q", want, hint)
 		}
 	}
-	if view := screenOf(m); !strings.Contains(view, "profile      < read >") {
+	if view := screenOf(m); !strings.Contains(view, "profile     < read >") {
 		t.Errorf("the profile row is not shown:\n%s", view)
 	}
 

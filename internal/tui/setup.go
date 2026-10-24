@@ -138,6 +138,7 @@ func (m *Model) setupShow(step int) {
 		}
 	}
 	m.fields = w.pages[step]
+	m.sectionPinned = nil
 	m.screen = screenForm
 	if fresh && step == stepEffects && w.template == "" {
 		// The access of a new connection starts on the provider's recommended profile, ticked and
@@ -153,8 +154,10 @@ func (m *Model) setupShow(step int) {
 	}
 }
 
-// setupPage builds the rows of one step for the chosen provider.
-func (m *Model) setupPage(step int) []field {
+// setupPage builds the rows of one step for the chosen provider, in the sections of the forms they belong to.
+func (m *Model) setupPage(step int) []field { return m.groupSections(m.setupRows(step), step) }
+
+func (m *Model) setupRows(step int) []field {
 	provider := m.wizard.provider
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	switch step {

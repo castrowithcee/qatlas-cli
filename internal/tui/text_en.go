@@ -130,7 +130,6 @@ var textEN = map[textID]string{
 	tSelftestDetail:                    "enter measures: %s",
 	tSelftestNone:                      "this build cannot start the selftest",
 	tValueRunsThis:                     "enter runs this",
-	tValueNothingToChoose:              "(nothing to choose)",
 	tOverviewVaultLocked:               "vault locked",
 	tOverviewNeedsVault:                "needs encrypted vault",
 	tOverviewVault:                     "Vault: %s",

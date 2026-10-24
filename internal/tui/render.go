@@ -210,11 +210,13 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldMasked && f.stored:
 		value = styles.hint.Render("(stored, unchanged)")
 	case f.kind == fieldMasked:
-		value = styles.hint.Render("(empty)")
+		value = emptyValue(wordEmpty)
 	case f.kind == fieldProvider:
 		value = m.providerValue(f)
 	case f.kind == fieldChoice && len(f.choices) == 0:
-		value = tr(tValueNothingToChoose)
+		value = emptyValue(wordNone)
+	case f.kind == fieldChoice && value == "":
+		value = "< " + emptyValue(wordNone) + " >"
 	case f.kind == fieldChoice:
 		value = "< " + valueText(f.label, value) + " >"
 	case f.kind == fieldText && f.readOnly && f.hint != "":
@@ -222,15 +224,15 @@ func (m *Model) renderField(f field, focused bool) string {
 		// itself on its own row instead, the way a read-only tool list already does below.
 		value += " (" + f.hint + ")"
 	case f.kind == fieldToolList && f.label == forwardLabel && len(f.marked()) == 0:
-		value = styles.hint.Render("(none released)")
+		value = emptyValue(wordNone)
 	case f.kind == fieldToolList && f.label == forwardLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && f.label == vorbilderLabel && len(f.marked()) == 0:
-		value = styles.hint.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
+		value = emptyValue(wordNone)
 	case f.kind == fieldToolList && f.label == vorbilderLabel:
 		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && len(f.marked()) == 0:
-		value = fmt.Sprintf("none of %d ticked: no tool is offered", len(f.choices))
+		value = emptyValue(wordNone) + ": no tool is offered"
 	case f.kind == fieldToolList && f.label == toolListLabel:
 		value = fmt.Sprintf("%d of %d", len(f.marked()), len(f.choices))
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
@@ -245,7 +247,10 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
 	case f.kind == fieldTargets && len(f.entries) == 0:
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
-		value = styles.hint.Render("(" + emptyTargets(metadata.Target) + ")")
+		value = emptyValue(wordAny)
+		if metadata.Target.Required {
+			value = emptyValue(wordRequired)
+		}
 	case f.kind == fieldTargets && f.expanded:
 		lines := make([]string, len(f.entries))
 		for i, target := range f.entries {
@@ -255,13 +260,13 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
-		value = styles.hint.Render("(none released)")
+		value = emptyValue(wordNone)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
 		value = listLines(f.entries, "directory", "directories")
 	case f.kind == fieldPaths && isFilesLabel(f.label):
 		value = listSummary(f.entries, "directories")
 	case f.kind == fieldPaths && len(f.entries) == 0:
-		value = styles.hint.Render("(none: every project)")
+		value = emptyValue(wordAny)
 	case f.kind == fieldPaths && f.expanded:
 		value = listLines(f.entries, "path", "paths")
 	case f.kind == fieldPaths:
@@ -278,7 +283,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		// A box is never split from its value: the row breaks between the values only.
 		var lines []string
 		for _, part := range parts {
-			if last := len(lines) - 1; last >= 0 && lipgloss.Width(lines[last]+"  "+part) <= m.usable(formIndent) {
+			if last := len(lines) - 1; last >= 0 && lipgloss.Width(lines[last]+"  "+part) <= m.usable(m.formIndent()) {
 				lines[last] += "  " + part
 				continue
 			}
@@ -294,27 +299,60 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldEnvName && value != "":
 		value += " (" + m.envSource(value) + ")"
 	case value == "":
-		value = styles.hint.Render("(empty)")
+		value = emptyValue(wordEmpty)
 	}
 	return value
 }
 
-// formIndent is where the value of a form row starts: the focus marker and the label column.
-const formIndent = 15
+// The words an empty row shows. The word itself carries the meaning, so the dimming is never the only
+// signal (NO_COLOR keeps the word): empty is a text with nothing in it, none a list or choice with nothing
+// in it, any a list whose being empty puts no limit on the connection, required a list that must not stay
+// empty.
+const (
+	wordEmpty    = "empty"
+	wordNone     = "none"
+	wordAny      = "any"
+	wordRequired = "required"
+)
 
-// formHead is the focus marker and the label of a form row. A label longer than its column pushes the value
-// further right.
-func formHead(active bool, label string) string {
+// emptyValue draws the empty value of a row of any kind the same way.
+func emptyValue(word string) string { return styles.hint.Render(word) }
+
+// shownLabel is the text a row label is drawn as, in the language of the editor. Every label of a form
+// passes through here, for its width as well as for its text, so the label column fits the drawn label.
+func (m *Model) shownLabel(label string) string { return labelText(label) }
+
+// labelColumn is the width of the label column of a form with the given labels: the longest label, so that
+// no value is pushed aside by a label that does not fit. A column is never wider than a third of the
+// workspace; a label beyond that pushes its own value, as it always did.
+func (m *Model) labelColumn(labels ...string) int {
+	longest := 0
+	for _, label := range labels {
+		longest = max(longest, lipgloss.Width(m.shownLabel(label)))
+	}
+	return min(longest, max(minLabelColumn, m.usable(0)/3))
+}
+
+// minLabelColumn is the narrowest cap the label column is cut to in a narrow terminal.
+const minLabelColumn = 12
+
+// formIndent is where the value of a form row starts: the focus marker and the label column.
+func (m *Model) formIndent() int { return 2 + m.formCol + 1 }
+
+// formHead is the focus marker and the label of a form row, padded to the label column of the form. A
+// label longer than its column pushes the value further right.
+func (m *Model) formHead(active bool, label string) string {
 	marker := "  "
 	if active {
 		marker = "> "
 	}
-	return fmt.Sprintf("%s%-12s ", marker, labelText(label))
+	label = m.shownLabel(label)
+	return marker + label + strings.Repeat(" ", max(m.formCol-lipgloss.Width(label), 0)) + " "
 }
 
 // valueRoom is the room a form row with the given label leaves for its value.
 func (m *Model) valueRoom(label string) int {
-	_, width := m.fit(strings.Repeat(" ", lipgloss.Width(formHead(false, label))))
+	_, width := m.fit(strings.Repeat(" ", lipgloss.Width(m.formHead(false, label))))
 	return width
 }
 
@@ -325,7 +363,7 @@ func (m *Model) formRow(active bool, label, value string) string {
 	if active {
 		style = styles.active
 	}
-	head := formHead(active, label)
+	head := m.formHead(active, label)
 	indent, width := m.fit(strings.Repeat(" ", lipgloss.Width(head)))
 	lines := strings.Split(render(style, width, value), "\n")
 	lines[0] = style.Render(head) + lines[0]

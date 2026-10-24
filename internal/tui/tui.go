@@ -239,6 +239,8 @@ type field struct {
 	stored bool
 	// bound is the key a fieldKey row holds.
 	bound string
+	// section is the form section the row belongs to ("" in a form without sections); see sections.go.
+	section string
 }
 
 // providerNoteLabel is the row of a service form that edits the note of the service's provider.
@@ -638,6 +640,11 @@ type Model struct {
 	// window, while a form is being fitted to the terminal, is the first and last row index drawn; nil
 	// draws every row (see fittedEditorView).
 	window *[2]int
+	// formCol is the width of the label column of the form being drawn (see labelColumn); 0 outside a draw.
+	formCol int
+	// sectionPinned holds the sections the user jumped into, which stay open while the form does even when
+	// nothing in them has a value (see sectionClosed).
+	sectionPinned map[string]bool
 	// infoOpen is set while the explanation of infoShown stands as an overlay over the screen.
 	infoOpen bool
 	// inPane is set while the left part of a screen with a pane is drawn, whose width is already reduced.
@@ -1685,7 +1692,7 @@ func (m *Model) saveAndLeave() tea.Cmd {
 			// answered; the form stays open until then.
 			return cmd
 		}
-		name := m.fields[0].value()
+		name := m.entryKey().value()
 		cmd := m.save(name)
 		if m.fail != "" {
 			return cmd
@@ -1780,6 +1787,13 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		return nil
 	case "shift+tab", "up":
 		m.moveFocus(-1)
+		return nil
+	case "pgdown":
+		// Page keys are unused on a form row, text rows included: they pick the next or previous section.
+		m.jumpSection(1)
+		return nil
+	case "pgup":
+		m.jumpSection(-1)
 		return nil
 	case "enter":
 		// A text row goes on to the next row; on the last one enter does nothing.
@@ -2274,7 +2288,7 @@ func (m *Model) applyProfile(id string) {
 		return
 	}
 	if mode := m.field(accessLabel); mode != nil {
-		*mode = choiceField(accessLabel, mode.choices, accessTools).withHint(mode.hint).withDetail(mode.detail)
+		*mode = choiceField(accessLabel, mode.choices, accessTools).withHint(mode.hint).withDetail(mode.detail).inSection(mode.section)
 	}
 	if list := m.field(toolListLabel); list != nil {
 		list.selected = map[string]bool{}
@@ -2334,7 +2348,7 @@ func (m *Model) syncProfile() {
 		return
 	}
 	profile, _ := findProfile(metadata, match)
-	*row = choiceField(profileLabel, row.choices, match)
+	*row = choiceField(profileLabel, row.choices, match).inSection(row.section)
 	row.hint, row.detail = profile.Title, profileText(metadata, profile)+"; "+profileHint
 	if profile.MutationReason != "" {
 		row.hint += " (preselects a change)"
@@ -2789,6 +2803,7 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	m.screen = screenForm
 	m.clearMessages()
 	m.problems = problemState{}
+	m.sectionPinned = nil
 	m.fields = m.buildFieldsFrom(name, source)
 	if m.section == sectionConnections {
 		// A new connection starts on the recommended profile, ticked and visible; a saved one opens as it
@@ -3002,7 +3017,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			choiceField("connection", m.entryNames(sectionConnections), m.cfg.Defaults.Connections[name]),
 		)
 	}
-	return fields
+	return m.groupSections(fields, -1)
 }
 
 // submit saves the form, unless the change first has to be checked against the places that keep secrets.
@@ -3037,7 +3052,7 @@ func (m *Model) submit() tea.Cmd {
 			return cmd
 		}
 		// The core owns every rule, including that a name must not be empty.
-		return m.save(m.fields[0].value())
+		return m.save(m.entryKey().value())
 	})
 }
 
@@ -3262,8 +3277,8 @@ func (m *Model) field(label string) *field {
 
 // hasNextField reports whether a row that takes focus follows the focused one.
 func (m *Model) hasNextField() bool {
-	for _, f := range m.fields[m.focus+1:] {
-		if !f.readOnly && !f.hidden {
+	for i := m.focus + 1; i < len(m.fields); i++ {
+		if !m.fields[i].readOnly && !m.skipped(i) {
 			return true
 		}
 	}
@@ -3281,7 +3296,7 @@ func (m *Model) moveFocus(by int) {
 	next := m.focus
 	for i := 0; i < len(m.fields); i++ {
 		next = wrap(next+by, len(m.fields))
-		if !m.fields[next].readOnly && !m.fields[next].hidden {
+		if !m.fields[next].readOnly && !m.skipped(next) {
 			break
 		}
 	}
@@ -3296,7 +3311,7 @@ func (m *Model) moveFocus(by int) {
 func (m *Model) firstEditable() int {
 	first := -1
 	for i := range m.fields {
-		if m.fields[i].readOnly || m.fields[i].hidden {
+		if m.fields[i].readOnly || m.skipped(i) {
 			continue
 		}
 		if m.fields[i].kind != fieldProvider {
@@ -3366,7 +3381,7 @@ func textField(label, value string, readOnly bool) field {
 // lead marks the first role row, the one that carries what all of them have in common.
 func (m *Model) roleField(provider, role, envName, credType string, lead bool) field {
 	f := textField(role, envName, false)
-	f.roleLead = lead
+	f.section, f.roleLead = secCredential, lead
 	f.kind = fieldEnvName
 	f.hint, f.detail = m.roleHints(provider, role, lead)
 	if credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault {
@@ -3734,35 +3749,7 @@ func (m *Model) editorView() string {
 			b.WriteString(styles.title.Render(what) + "\n\n")
 		}
 		b.WriteString(m.otherProblems())
-		for i, f := range m.fields {
-			if f.hidden {
-				continue
-			}
-			if m.window != nil && (i < m.window[0] || i > m.window[1]) {
-				if i == m.window[0]-1 || i == m.window[1]+1 {
-					b.WriteString(styles.hint.Render("  …") + "\n")
-				}
-				continue
-			}
-			b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
-			// A read-only field can never be the one focused, so its hint would never show; it explains
-			// itself in its own value instead (see renderField), the way a read-only tool list already does.
-			if i == m.focus && !f.readOnly {
-				if hint := m.fieldHint(f); hint != "" {
-					b.WriteString(m.hintLine(hint, m.moreBehind(f, hint)) + "\n")
-				}
-			}
-			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
-			// an idle connection) matters whether or not the field is the one focused, so it always stands.
-			if warning := m.fieldWarning(f); warning != "" {
-				b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
-			}
-			// A refused save names its cause and its resolution under the row it concerns. The symbol, not
-			// only the colour, marks the line as an error.
-			for _, line := range m.fieldProblems(f) {
-				b.WriteString(m.indentedWith(styles.fail, "[!] "+line) + "\n")
-			}
-		}
+		b.WriteString(m.formBody())
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
 			b.WriteString("\n" + m.wrapped(styles.hint, m.copyNote()) + "\n")
 		}
@@ -3813,6 +3800,12 @@ func (m *Model) editorView() string {
 		if !m.payloadRemoveAsk && m.infoWorks() {
 			keys += " · {info} info"
 		}
+		if len(m.formSections()) >= 2 && !m.payloadRemoveAsk && !m.keyCapture {
+			// The key to the sections is named only where that costs no extra footer line.
+			if with := keys + " · pgup/pgdn section"; len(m.keyHintLines(with)) <= len(m.keyHintLines(keys)) {
+				keys = with
+			}
+		}
 		b.WriteString(m.keyHint(keys))
 	case screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock:
 		d, _ := m.prompt()
@@ -3826,6 +3819,75 @@ func (m *Model) editorView() string {
 	}
 
 	b.WriteString(m.notes())
+	return b.String()
+}
+
+// formBody draws the rows of the open form. With two or more sections it puts the list of the sections at
+// the left where the terminal has room for it, and a heading above each section where it has not.
+func (m *Model) formBody() string {
+	entries := m.formSections()
+	if !m.sectionListFits(entries) {
+		return m.formRows(len(entries) >= 2, entries)
+	}
+	list, width := m.sectionList(entries)
+	full := m.width
+	m.width = full - width - 2
+	rows := m.formRows(false, entries)
+	m.width = full
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, list, "  ", strings.TrimSuffix(rows, "\n"))
+	return joined + "\n"
+}
+
+// formRows draws the rows of the open form in one label column, each with the hint, warning and problems that
+// belong under it. headings puts the name of a section above its rows; the rows of a closed section are left
+// out.
+func (m *Model) formRows(headings bool, entries []sectionEntry) string {
+	var b strings.Builder
+	m.formCol = m.labelColumn(m.fieldLabels()...)
+	defer func() { m.formCol = 0 }()
+	closed := map[string]bool{}
+	for _, e := range entries {
+		closed[e.name] = e.closed
+	}
+	last := ""
+	for i, f := range m.fields {
+		if f.hidden {
+			continue
+		}
+		outside := m.window != nil && (i < m.window[0] || i > m.window[1])
+		// Headings are the first thing given up when the form is cut to the rows around the focus.
+		if headings && m.window == nil && f.section != "" && f.section != last && !outside {
+			last = f.section
+			b.WriteString(m.sectionHeading(sectionEntry{f.section, closed[f.section]}) + "\n")
+		}
+		if f.section != "" && closed[f.section] {
+			continue
+		}
+		if outside {
+			if i == m.window[0]-1 || i == m.window[1]+1 {
+				b.WriteString(styles.hint.Render("  …") + "\n")
+			}
+			continue
+		}
+		b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
+		// A read-only field can never be the one focused, so its hint would never show; it explains
+		// itself in its own value instead (see renderField), the way a read-only tool list already does.
+		if i == m.focus && !f.readOnly {
+			if hint := m.fieldHint(f); hint != "" {
+				b.WriteString(m.hintLine(hint, m.moreBehind(f, hint)) + "\n")
+			}
+		}
+		// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
+		// an idle connection) matters whether or not the field is the one focused, so it always stands.
+		if warning := m.fieldWarning(f); warning != "" {
+			b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
+		}
+		// A refused save names its cause and its resolution under the row it concerns. The symbol, not
+		// only the colour, marks the line as an error.
+		for _, line := range m.fieldProblems(f) {
+			b.WriteString(m.indentedWith(styles.fail, "[!] "+line) + "\n")
+		}
+	}
 	return b.String()
 }
 

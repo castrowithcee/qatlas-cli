@@ -130,7 +130,6 @@ var textDE = map[textID]string{
 	tSelftestDetail:                    "enter misst: %s",
 	tSelftestNone:                      "Dieser Build kann den Selbsttest nicht starten",
 	tValueRunsThis:                     "enter führt dies aus",
-	tValueNothingToChoose:              "(nichts zur Auswahl)",
 	tOverviewVaultLocked:               "Tresor gesperrt",
 	tOverviewNeedsVault:                "braucht verschlüsselten Tresor",
 	tOverviewVault:                     "Tresor: %s",

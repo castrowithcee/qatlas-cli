@@ -661,7 +661,8 @@ func TestTheGuidedSetupReadsTheListAsADraft(t *testing.T) {
 	m.svc = m.svc.WithTargetSource(src.targetSource())
 	m.screen = screenNav
 	// Provider, existing service, existing credential, then the scope step with its targets row.
-	press(t, m, "c", "enter", "f2", "f2", "tab")
+	press(t, m, "c", "enter", "f2", "f2")
+	focusField(t, m, targetsLabel)
 	if m.fields[m.focus].label != targetsLabel {
 		t.Fatalf("focus on %q, want the targets row", m.fields[m.focus].label)
 	}
@@ -775,7 +776,9 @@ func keyCmd(m *Model, key string) tea.Cmd {
 func pickInSetup(t *testing.T, m *Model, take ...string) {
 	t.Helper()
 	m.screen = screenNav
-	press(t, m, "c", "enter", "f2", "f2", "tab", "enter", "a")
+	press(t, m, "c", "enter", "f2", "f2")
+	focusField(t, m, targetsLabel)
+	press(t, m, "enter", "a")
 	openPicker(t, m)
 	for range take {
 		press(t, m, "tab", "down")
