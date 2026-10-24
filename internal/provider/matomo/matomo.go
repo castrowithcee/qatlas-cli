@@ -106,9 +106,9 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, and the report and segment catalog of a website; changes nothing",
+			Description: "reads the instance version, the websites of the token, and the report and segment catalog of a website, and the data of its reports; changes nothing",
 			Tools: []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
-				segmentsFields.ID, segmentsSuggest.ID},
+				segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -122,6 +122,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: sitesGet, Handler: capability.Handler(invokeSitesGet)},
 		capability.Operation{Descriptor: reportsList, Handler: capability.Handler(invokeReportsList)},
 		capability.Operation{Descriptor: reportsDescribe, Handler: capability.Handler(invokeReportsDescribe)},
+		capability.Operation{Descriptor: reportsGet, Handler: capability.Handler(invokeReportsGet)},
 		capability.Operation{Descriptor: segmentsFields, Handler: capability.Handler(invokeSegmentsFields)},
 		capability.Operation{Descriptor: segmentsSuggest, Handler: capability.Handler(invokeSegmentsSuggest)},
 	)

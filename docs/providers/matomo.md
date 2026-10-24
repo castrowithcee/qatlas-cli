@@ -166,6 +166,48 @@ a report that is missing there is not available. Subtable reports are listed onl
   empty when Matomo has none, and always empty when the instance disables suggested values
   (`enable_segment_suggested_values`). Neither changes segments.
 
+## Reports
+
+`matomo.reports.get` reads one report of a website through `API.getProcessedReport`. The report must be in the
+catalog of the website (`report` is the catalog ID, an unknown one is `not-found` before any report is read);
+module, method, and report parameters such as `idGoal` or `idDimension` come from the catalog entry, so there is
+no argument for them. `period` and `date` are required: `day`, `week`, `month`, `year`, or `range` with a date,
+`today`, `yesterday`, a range `YYYY-MM-DD,YYYY-MM-DD`, `lastN`, or `previousN`.
+
+- **Row limits.** Matomo's own default comes from the instance (`API_datatable_default_limit`) and without
+  `filter_limit` it returns all rows, so Qatlas always sends `filter_limit` as `limit + 1` with `filter_offset`,
+  never `-1`. `limit` is 1 to 1000 and 100 when omitted; there is no way to ask for all rows. The extra row sets
+  `has_more`; Matomo reports no total, so a count of rows is not available. `next_cursor` is bound to the
+  arguments and to the `limit` of the first call, and offsets stop at 100000.
+- **Time series.** With `day`, `week`, `month`, or `year` and a date range or `lastN`/`previousN`, Matomo answers one
+  table per period in one call, and every row carries `period_label` (Matomo's localized period text, in
+  chronological order). The limit holds over all periods: `limit` times the number of periods must not exceed 1000,
+  otherwise the call is refused as `invalid-request` naming the largest `limit`; an omitted `limit` shrinks to fit
+  (for 30 days it is 33). A report without a dimension, such as `VisitsSummary_get`, returns one row per period.
+  `period=range` sums the dates into one table. Paging applies to every period's table alike.
+- **Columns and metadata.** `columns` becomes `showColumns` (the `label` column always stays, calculated metrics are
+  covered; with `flat` it needs Matomo 5.14.0). Values are raw numbers (`format_metrics=0`), strings are shortened
+  to 512 characters, and nested row members such as comparisons are dropped. Matomo's response always holds the
+  report metadata and the row metadata, and no parameter removes them, so Qatlas drops them on its side and returns
+  `metadata` and `row_metadata` (for example `idsubdatatable` for `subtable`, and URLs) only with
+  `include_metadata`. `hideMetricsDoc` is always on and the timer off. `totals` carries Matomo's report totals.
+- **Filters.** `sort_column`, `sort_order`, `filter_column` with `filter_pattern` (a regular expression of the
+  instance, up to 100 characters), `filter_excludelowpop` with `filter_excludelowpop_value`, `flat`, `subtable`, and
+  `label` (at most 10 labels) map to Matomo's generic filters. Matomo skips its row limit when `label` is set, so
+  Qatlas pages those rows itself. `segment` is checked for the shape of its terms; the fields are those of
+  `matomo.segments.fields`.
+- **Never sent.** `disable_generic_filters`, `disable_queued_filters`, `disable_root_datatable_post_processor`,
+  `callback`, `jsoncallback`, `filter_limit=-1`, `idSite=all`, several websites, and raw `apiParameters`; a catalog
+  parameter named like one of these makes the report unreadable instead of being sent.
+- **Archiving limits.** Matomo cuts large tables when it archives them (for example Actions to 500 rows and
+  Referrers to 1000, `datatable_archiving_maximum_rows_*`; `userid_users` to 50000) and sums the rest in a row
+  labelled `Others`. The cut rows are not available through the API at any `limit`. When the instance archives on
+  demand (`enable_browser_archiving_triggering`), a report, a `range` period, or a segment on a large website can run
+  into the timeout.
+- **Not covered.** Comparisons (`compareDates`, `comparePeriods`, `compareSegments`) are not offered.
+
+Row labels, titles, URLs, search terms, and event names are visitor data and untrusted.
+
 ## Tools
 
 | Tool | Reads |
@@ -175,6 +217,7 @@ a report that is missing there is not available. Subtable reports are listed onl
 | `matomo.sites.get` | one website with its addresses, time zone, currency, and tracking settings |
 | `matomo.reports.list` | the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | the details of one report of the catalog |
+| `matomo.reports.get` | one report of a website for a period, in bounded rows |
 | `matomo.segments.fields` | the segment fields of a website |
 | `matomo.segments.suggest-values` | frequent values of a segment field |
 
