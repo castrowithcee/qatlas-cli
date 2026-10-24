@@ -468,7 +468,7 @@ type Model struct {
 	// pathList, pathInput, pathEdit and pathRemove do for the path list of a connection what the target
 	// fields above do for its targets (see paths.go).
 	pathList   filterList
-	pathInput  textinput.Model
+	pathInput  pathField
 	pathEdit   int
 	pathRemove bool
 	// now is the clock the active-for row and the connection list read; nil means time.Now.
@@ -689,8 +689,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.targetInput = textField("", "", false).input
 	m.labelInput = textField("", "", false).input
 	m.pathList = newFilterList(func(path string) string { return path })
-	m.pathInput = textField("", "", false).input
-	m.pathInput.ShowSuggestions = true
+	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView()
 	// The editor opens on the sidebar, with the first section already shown beside it.
 	m.list.reset(m.entryNames(m.section))

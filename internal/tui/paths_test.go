@@ -257,3 +257,23 @@ func TestTabCompletesDirectoriesOnly(t *testing.T) {
 func wideEnoughFor(m *Model, dir string) {
 	m.Update(tea.WindowSizeMsg{Width: max(100, 2*len(dir)+80), Height: 60})
 }
+
+// A path typed with ~ is completed against the home directory and kept as typed.
+func TestTabCompletesFromTheHomeDirectory(t *testing.T) {
+	home := tempHome(t)
+	treeOf(t, home, "projects/", "notes.txt")
+	reg := wikiRegistry(t)
+	m, _ := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
+	openConnection(t, m, "wiki")
+	openPathList(t, m)
+	press(t, m, "a")
+	s := string(filepath.Separator)
+	typeText(t, m, "~"+s+"pr")
+	if view := screenOf(m); !strings.Contains(view, "~"+s+"projects"+s) || strings.Contains(view, "notes.txt") {
+		t.Fatalf("the home directories are not suggested:\n%s", view)
+	}
+	press(t, m, "tab")
+	if got := m.pathInput.Value(); got != "~"+s+"projects"+s {
+		t.Fatalf("tab gave %q", got)
+	}
+}
