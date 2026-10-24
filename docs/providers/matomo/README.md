@@ -136,16 +136,17 @@ refused. Methods without server paging are cut on the Qatlas side.
 
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
-`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`, and
-`matomo.annotations.count`. The profile `live` adds the [live tools](live.md) and the [visitor profile
-tools](visitors.md), because they carry personal data. The profile `goals` adds `matomo.goals.add`,
-`matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
-right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
-no profile, see [goals](goals.md). The profile `segments` adds `matomo.segments.add`, `matomo.segments.update`,
-`matomo.segments.star`, and `matomo.segments.unstar`; it is not recommended because it changes the saved segments
-of the instance, and `matomo.segments.delete` is in no profile. The profile `annotations` adds
-`matomo.annotations.add` and `matomo.annotations.update`; it is not recommended because it changes the annotations
-of a website, and the annotation deletions are in no profile.
+`matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
+`matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.site-settings.get`, and
+`matomo.consent-manager.detect`; `matomo.site-groups.list` needs the `instance` target and is in no profile. The
+profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md), because they carry
+personal data. The profile `goals` adds `matomo.goals.add`, `matomo.goals.update`, and the [goal recommendation
+tools](goals.md#goal-recommendations), which need a write right; it is not recommended because it changes the goal
+configuration of a website. `matomo.goals.delete` is in no profile, see [goals](goals.md). The profile `segments`
+adds `matomo.segments.add`, `matomo.segments.update`, `matomo.segments.star`, and `matomo.segments.unstar`; it is
+not recommended because it changes the saved segments of the instance, and `matomo.segments.delete` is in no
+profile. The profile `annotations` adds `matomo.annotations.add` and `matomo.annotations.update`; it is not
+recommended because it changes the annotations of a website, and the annotation deletions are in no profile.
 
 ## Tools
 
@@ -154,6 +155,10 @@ of a website, and the annotation deletions are in no profile.
 | `matomo.version.get` | [sites](sites.md) | reads the instance version and, with `plugin`, whether that plugin is activated |
 | `matomo.sites.list` | [sites](sites.md) | reads websites of the token inside the targets, optionally matching `pattern` |
 | `matomo.sites.get` | [sites](sites.md) | reads one website with its addresses, time zone, currency, and tracking settings |
+| `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
+| `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
+| `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
+| `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |

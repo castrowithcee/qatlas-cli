@@ -73,7 +73,8 @@ func testClass(err error) (provider.Class, error) {
 func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
-		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID}
+		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
+		siteSettingsGet.ID, consentManagerDetect.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -110,7 +111,7 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
-			Description: "reads the instance version, the websites of the token, the goals, the saved segments, the " +
+			Description: "reads the instance version, the websites of the token, their tracking code, settings, and consent manager, the goals, the saved segments, the " +
 				"annotations, the report and segment catalog of a website, and the data of its reports; changes nothing",
 			Tools: readTools,
 		}, {
@@ -184,5 +185,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: goalRecommendationsList, Handler: capability.Handler(invokeGoalRecommendationsList)},
 		capability.Operation{Descriptor: goalRecommendationsScan, Handler: capability.Handler(invokeGoalRecommendationsScan)},
 		capability.Operation{Descriptor: goalRecommendationsDismiss, Handler: capability.Handler(invokeGoalRecommendationsDismiss)},
+		capability.Operation{Descriptor: trackingCodeGet, Handler: capability.Handler(invokeTrackingCodeGet)},
+		capability.Operation{Descriptor: siteSettingsGet, Handler: capability.Handler(invokeSiteSettingsGet)},
+		capability.Operation{Descriptor: consentManagerDetect, Handler: capability.Handler(invokeConsentManagerDetect)},
+		capability.Operation{Descriptor: siteGroupsList, Handler: capability.Handler(invokeSiteGroupsList)},
 	)
 }
