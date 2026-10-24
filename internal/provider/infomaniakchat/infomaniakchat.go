@@ -125,6 +125,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -720,7 +721,12 @@ func invalidRequest(message string) error {
 func bounded(value string) string {
 	const maxValueLength = 1024
 	if len(value) > maxValueLength {
-		return value[:maxValueLength]
+		// Step back to a rune start so a multi-byte character is never cut.
+		end := maxValueLength
+		for end > 0 && !utf8.RuneStart(value[end]) {
+			end--
+		}
+		return value[:end]
 	}
 	return value
 }
