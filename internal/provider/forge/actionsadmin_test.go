@@ -83,8 +83,10 @@ func newAdminEnvironment(t *testing.T, p *product, v string, api func(call) *htt
 	cfg.Credentials[twoFieldRef] = config.Credential{Type: config.CredentialTypeKeyring, Forward: true,
 		Fields: []string{"a", "b"}}
 	var ids []string
-	for _, tl := range adminTools {
-		ids = append(ids, p.toolID(tl))
+	for _, tl := range append(slices.Clone(adminTools), runnerTools...) {
+		if _, ok := tl.since[p.id]; ok {
+			ids = append(ids, p.toolID(tl))
+		}
 	}
 	for name, targets := range map[string][]string{"admin-repo": {"repos/acme/widget"}, "admin-org": {"orgs/acme"},
 		"admin-user": {"users/alice"}, "admin-open": nil} {

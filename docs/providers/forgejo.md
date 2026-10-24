@@ -85,4 +85,6 @@ not registered. See [Projects](gitea/projects.md).
   no attempts, no `force-cancel`, `rerun-failed`, or `approve`, no `workflows.list` or `workflows.get`, and
   `workflow-job-logs.get` takes `attempt`, `step`, `q`, `qi`, and `format`. See [Actions](gitea/actions.md).
 - Actions administration: secrets and variables carry no `description`, and `actions-secrets.list` reads the secrets
-  of a user only from Forgejo 17. See [Actions administration](gitea/actions-admin.md).
+  of a user only from Forgejo 17. Runners have Forgejo's own members and a paged list, there is no
+  `actions-runners.update` and no `workflows.enable` or `workflows.disable`, and `actions-runner-jobs.search` is
+  Forgejo's own. See [Actions administration](gitea/actions-admin.md).

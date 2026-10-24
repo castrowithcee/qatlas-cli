@@ -197,8 +197,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Tags](tags.md): the tags of a repository
 - [Branches](branches.md): the branches of a repository
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
-- [Actions administration](actions-admin.md): the secrets and variables of a repository, an organization, or the
-  user behind the token
+- [Actions administration](actions-admin.md): the secrets, variables, and runners of a repository, an
+  organization, or the user behind the token, and the state of a workflow
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
 - [Contents](contents.md): files, raw content, archives, editor configuration, and writing files as commits
