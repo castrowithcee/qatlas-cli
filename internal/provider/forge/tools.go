@@ -101,7 +101,8 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	orgBlocksCheck, orgBlocksAdd, orgBlocksRemove, teamsList, teamsSearch, teamsGet, teamsCreate, teamsUpdate,
 	teamsDelete, teamActivitiesList, teamMembersList, teamMembersCheck, teamMembersAdd, teamMembersRemove,
 	teamRepositoriesList, teamRepositoriesCheck, teamRepositoriesAdd, teamRepositoriesRemove, repositoryTeamsList,
-	repositoryTeamsCheck, repositoryTeamsAdd, repositoryTeamsRemove}
+	repositoryTeamsCheck, repositoryTeamsAdd, repositoryTeamsRemove, usersSearch, usersGet, userActivitiesList,
+	userHeatmapGet, userFollowersList, userFollowingList, userFollowingCheck, userFollowsAdd, userFollowsRemove}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
