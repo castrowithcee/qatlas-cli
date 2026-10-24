@@ -8,8 +8,9 @@ import (
 )
 
 // detailPaneMinWidth is the workspace width from which the grouped lists show the marked entry in a pane
-// at their right. Narrower, the pane is left out and the table gives up its unimportant columns as before.
-const detailPaneMinWidth = 120
+// at their right, the same threshold as the help pane of forms. Narrower, the pane is left out and the table
+// gives up its unimportant columns as before.
+const detailPaneMinWidth = helpPaneMinWidth
 
 // paneGap separates the rows from the pane.
 const paneGap = " | "

@@ -145,7 +145,14 @@ func registry(t *testing.T) *capability.Registry {
 // testConfig decodes the connections of the tests with the provider catalog, so target rules apply.
 func testConfig(t *testing.T, reg *capability.Registry) *config.Config {
 	t.Helper()
-	document := `version: 1
+	cfg, err := config.Decode(strings.NewReader(testConfigDocument), reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+const testConfigDocument = `version: 1
 services:
   matomo:
     provider: matomo
@@ -164,12 +171,6 @@ connections:
   instance: {service: matomo, credential: token, effects: [read], targets: [instance]}
   mixed: {service: matomo, credential: token, effects: [read], targets: [site/2, instance]}
 `
-	cfg, err := config.Decode(strings.NewReader(document), reg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
-}
 
 type environment struct {
 	cfg   *config.Config
@@ -237,12 +238,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	for _, tool := range metadata.Tools {
-		if tool.Effect != config.EffectRead || tool.RequiresToolAllowList {
+		changes := strings.HasPrefix(tool.ID, "matomo.goals.") && tool.Effect != config.EffectRead
+		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList) {
 			t.Errorf("tool %+v, want an open read", tool)
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 8 || len(metadata.Tools) != 11 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 10 || len(metadata.Tools) != 19 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

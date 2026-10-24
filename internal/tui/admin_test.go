@@ -511,3 +511,32 @@ func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 		})
 	}
 }
+
+// A connection with a new service and a new credential, started with n in Connections, asks for the admin
+// passphrase once for the whole flow, at the summary's save, and writes all three entries then.
+func TestAdminSessionAsksOnceForNewInConnections(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+
+	walkSetupFrom(t, m, "n", setupSteps-1)
+	if m.screen != screenSummary || m.adminAuth != nil {
+		t.Fatalf("before the save: screen %v, admin dialog %v; the steps must not ask", m.screen, m.adminAuth)
+	}
+	press(t, m, "f2")
+	if m.screen != screenAdminAuth {
+		t.Fatalf("the save did not ask for the admin session: screen %v", m.screen)
+	}
+	typeText(t, m, "hunter2")
+	pump(t, m, "enter")
+	if m.fail != "" || m.wizard == nil || m.wizard.saved == "" {
+		t.Fatalf("saving failed: fail %q", m.fail)
+	}
+	loaded, err := loadTestConfig(t, store.Path())
+	mustNoError(t, err)
+	if _, ok := loaded.Services["wiki"]; !ok || loaded.Credentials["reader"].Type == "" ||
+		loaded.Connections["personal"].Service != "wiki" {
+		t.Errorf("saved configuration = %+v", loaded)
+	}
+}

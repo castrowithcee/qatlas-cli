@@ -364,9 +364,9 @@ func TestProviderMetadataListsTheRegisteredTools(t *testing.T) {
 	}
 	after, _ := reg.ProviderMetadata("fakewiki")
 	want := []config.ToolMetadata{
-		{ID: "fakewiki.pages.create", Title: "Create a page", Effect: config.EffectCreate},
-		{ID: "fakewiki.pages.get", Effect: config.EffectRead},
-		{ID: "fakewiki.pages.list", Effect: config.EffectRead},
+		{ID: "fakewiki.pages.create", Title: "Create a page", Description: "Read one page", Effect: config.EffectCreate},
+		{ID: "fakewiki.pages.get", Description: "Read one page", Effect: config.EffectRead},
+		{ID: "fakewiki.pages.list", Description: "List pages", Effect: config.EffectRead},
 	}
 	if !reflect.DeepEqual(after.Tools, want) {
 		t.Fatalf("tools = %+v, want %+v", after.Tools, want)

@@ -810,9 +810,9 @@ func TestATargetLabelIsSetChangedAndCleared(t *testing.T) {
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
 
-	press(t, m, "i")
+	press(t, m, "r")
 	if !m.labelEdit || !strings.Contains(strings.Join(strings.Fields(screenOf(m)), " "), "enter take") {
-		t.Fatalf("i did not open the label line:\n%s", screenOf(m))
+		t.Fatalf("r did not open the label line:\n%s", screenOf(m))
 	}
 	typeText(t, m, "Frontend")
 	press(t, m, "enter")
@@ -823,14 +823,14 @@ func TestATargetLabelIsSetChangedAndCleared(t *testing.T) {
 		t.Fatalf("the row does not show the label:\n%s", view)
 	}
 
-	press(t, m, "i")
+	press(t, m, "r")
 	clearField(t, m)
 	typeText(t, m, "Web")
 	press(t, m, "enter")
 	if m.targetLabels["repos/octo/a"] != "Web" {
 		t.Fatalf("label = %q, want it changed", m.targetLabels["repos/octo/a"])
 	}
-	press(t, m, "down", "i")
+	press(t, m, "down", "r")
 	typeText(t, m, "Backend")
 	press(t, m, "enter", "f2")
 	if m.fail != "" {
@@ -844,7 +844,7 @@ func TestATargetLabelIsSetChangedAndCleared(t *testing.T) {
 	// An emptied line removes the label.
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "i")
+	press(t, m, "r")
 	clearField(t, m)
 	press(t, m, "enter", "f2")
 	if got := savedConnection(t, path, reg, "gh").TargetLabels; !reflect.DeepEqual(got, map[string]string{"repos/octo/b": "Backend"}) {
@@ -854,7 +854,7 @@ func TestATargetLabelIsSetChangedAndCleared(t *testing.T) {
 	// esc closes the line without a question and keeps the label.
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "i")
+	press(t, m, "r")
 	typeText(t, m, "x")
 	press(t, m, "esc")
 	if m.screen != screenTargets || m.labelEdit || m.targetLabels["repos/octo/a"] != "" {
@@ -866,7 +866,7 @@ func TestChangedTargetLabelsAskBeforeLeaving(t *testing.T) {
 	m, path, reg := plainTargetsModel(t)
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "i")
+	press(t, m, "r")
 	typeText(t, m, "Frontend")
 	press(t, m, "enter", "esc")
 	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "target labels changed") {
@@ -893,7 +893,7 @@ func TestChangedTargetLabelsMakeTheFormUnsaved(t *testing.T) {
 	}
 	// A refused label stays in the row, so leaving the form asks.
 	openTargetList(t, m)
-	press(t, m, "i")
+	press(t, m, "r")
 	typeText(t, m, strings.Repeat("x", 300))
 	press(t, m, "enter", "f2")
 	if m.screen != screenForm || !m.formDirty() {
@@ -913,7 +913,7 @@ func TestARefusedTargetLabelStandsUnderTheTargetsRow(t *testing.T) {
 	m, path, reg := plainTargetsModel(t)
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "i")
+	press(t, m, "r")
 	typeText(t, m, strings.Repeat("x", 300))
 	press(t, m, "enter", "f2")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
@@ -958,5 +958,21 @@ func TestATargetLabelIsShownWithoutControlCharacters(t *testing.T) {
 	openTargetList(t, m)
 	if view := screenOf(m); strings.ContainsAny(view, "\x07") || strings.Contains(view, "bad\x1b[31m") {
 		t.Fatalf("the label is drawn raw: %q", view)
+	}
+}
+
+// The label of a target is edited with r, like a rename on a list; i explains the targets instead.
+func TestITargetsExplainsInsteadOfEditingTheLabel(t *testing.T) {
+	m, _, _ := plainTargetsModel(t)
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+
+	press(t, m, "i")
+	if m.labelEdit || !m.infoOpen {
+		t.Fatalf("i: label edit %v, overlay %v, want the explanation only:\n%s", m.labelEdit, m.infoOpen, screenOf(m))
+	}
+	press(t, m, "esc")
+	if m.infoOpen || m.screen != screenTargets {
+		t.Errorf("esc left overlay %v on screen %v, want the target list", m.infoOpen, m.screen)
 	}
 }

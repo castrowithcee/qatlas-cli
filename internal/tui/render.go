@@ -387,6 +387,22 @@ func (m *Model) hint(text string) string { return "\n" + m.wrapped(styles.hint, 
 // terminal is cut with "..." rather than left to overflow, which only a pathologically narrow terminal
 // should ever trigger.
 func (m *Model) keyHint(text string) string {
+	if strings.Contains(text, "{command} cmds") && !strings.Contains(text, "{info}") && m.infoWorks() {
+		text = strings.Replace(text, "{command} cmds", "{info} info · {command} cmds", 1)
+	}
+	if strings.Contains(text, "{info} info") {
+		// The info key is named only where that costs no extra footer line, so no screen needs more rows
+		// for it than it needed before.
+		without := strings.Replace(strings.Replace(text, " · {info} info", "", 1), "{info} info · ", "", 1)
+		if len(m.keyHintLines(text)) > len(m.keyHintLines(without)) {
+			text = without
+		}
+	}
+	return "\n" + strings.Join(m.keyHintLines(text), "\n")
+}
+
+// keyHintLines is the footer text broken into lines of whole groups.
+func (m *Model) keyHintLines(text string) []string {
 	text = footerKeys(text)
 	width := m.usable(0)
 	var lines []string
@@ -409,7 +425,7 @@ func (m *Model) keyHint(text string) string {
 	if lineWidth > 0 || len(lines) == 0 {
 		lines = append(lines, line)
 	}
-	return "\n" + strings.Join(lines, "\n")
+	return lines
 }
 
 // keyHintGroup styles one "key action" hint: the key (its first word) bold, the action after it faint.

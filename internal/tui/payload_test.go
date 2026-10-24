@@ -455,22 +455,6 @@ func TestConnectionFormWithoutPayloadSecretsStaysAsItWas(t *testing.T) {
 	if m.field(forwardLabel) != nil {
 		t.Fatal("a connection form shows the forward row although no payload secret exists")
 	}
-	if reason := m.newEntryBlockedFor(sectionConnections); reason != "" {
-		t.Fatalf("a provider credential exists, yet new connection is blocked: %q", reason)
-	}
-}
-
-func TestOnlyPayloadSecretsBlockANewConnection(t *testing.T) {
-	h := newPayloadHarness(t, false)
-	cfg := newTestConfig(t)
-	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
-	mustNoError(t, cfg.SetCredential("billing", config.Credential{
-		Type: config.CredentialTypeKeyring, Forward: true, Fields: []string{"username"}}))
-	h.m.cfg = cfg
-	syncRevision(t, h.m)
-	if !strings.Contains(h.m.newEntryBlockedFor(sectionConnections), "a credential") {
-		t.Fatal("a payload secret alone must not satisfy a connection's need for a credential")
-	}
 }
 
 func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
