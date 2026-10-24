@@ -147,8 +147,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 		t.Fatalf("screen after n and the passphrase = %v, want the token form", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"New agent token", "vorbilder", "expires", "each vorbild sets the ceiling",
-		"can never change or delete a vorbild connection itself", "F2 create"} {
+	for _, want := range []string{"New agent token", "vorbilder", "expires", "F2 create"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the token form does not show %q:\n%s", want, view)
 		}

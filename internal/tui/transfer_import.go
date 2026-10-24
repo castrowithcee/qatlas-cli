@@ -745,14 +745,14 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 		return promptDialog{
 			title: "Import: file",
 			input: m.pathLines("  ", &e.input),
-			hint:  "the file to import, as an export wrote it; nothing changes before you confirm the preview",
+			hint:  "the file to import",
 			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")),
 		}, true
 	case importPassphrase:
 		return promptDialog{
 			title: "Export passphrase",
 			input: m.inputLine("  ", e.input.Model),
-			hint:  "the file is encrypted: type the passphrase it was exported with, not the vault passphrase",
+			hint:  "the export passphrase, not the vault passphrase",
 			keys:  m.importDialogKeys("{save} or enter ok · {back} back, nothing imported"),
 		}, true
 	}

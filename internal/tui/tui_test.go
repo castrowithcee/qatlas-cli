@@ -1574,8 +1574,8 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, nameHint) {
 		t.Errorf("the service form does not show %q:\n%s", nameHint, view)
 	}
-	if !strings.Contains(screenOf(m), "--connection") {
-		t.Errorf("the name hint does not say what the field is for:\n%s", screenOf(m))
+	if detail := m.fieldDetail(m.fields[m.focus]); !strings.Contains(detail, "--connection") {
+		t.Errorf("the name detail does not say what the field is for: %q", detail)
 	}
 	focusField(t, m, "base url")
 	if view := screenOf(m); !strings.Contains(view, baseURLHint) || !strings.Contains(view, "http or https") {
@@ -1713,7 +1713,7 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 	}
 	view := listed()
 	for _, want := range []string{"wiki active wiki read all - " + undescribedMarker,
-		"wiki-2 active wiki read all - " + undescribedMarker, "sees only names and descriptions"} {
+		"wiki-2 active wiki read all - " + undescribedMarker, "add a line on what this route is for"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list does not say %q:\n%s", want, screenOf(m))
 		}
@@ -1806,7 +1806,8 @@ func TestServiceFormEditsTheProviderNote(t *testing.T) {
 	provider := saved().Services["wiki"].Provider
 
 	focusNote()
-	if hint := m.fieldHint(m.fields[m.focus]); !strings.Contains(hint, "never carry a secret") {
+	if hint := m.fieldHint(m.fields[m.focus]); !strings.Contains(hint, "no secrets") ||
+		!strings.Contains(m.fieldDetail(m.fields[m.focus]), "never carry a secret") {
 		t.Errorf("the note row does not warn that discovery publishes it: %q", hint)
 	}
 	typeText(t, m, " Wiki ")
@@ -1940,7 +1941,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 		t.Fatalf("focused field kind = %v, want a secret role", m.fields[m.focus].kind)
 	}
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Credential saved", "press enter on each role", "system keyring"} {
+	for _, want := range []string{"Credential saved", "enter on a role", "system keyring"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("continued credential form does not contain %q:\n%s", want, view)
 		}
@@ -2017,7 +2018,7 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	press(t, m, "enter")
 
 	view := screenOf(m)
-	if !strings.Contains(view, "read-only") || !strings.Contains(view, "press r on the list to rename it") {
+	if !strings.Contains(view, "read-only") || !strings.Contains(view, "rename with r on the list") {
 		t.Errorf("the locked field does not say that it is locked:\n%s", view)
 	}
 	if strings.Contains(view, "connections and --connection refer to it") {

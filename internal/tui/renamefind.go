@@ -185,12 +185,12 @@ func (m *Model) openFindings() tea.Cmd {
 	}
 	m.clearMessages()
 	if m.vaultLocked() {
-		m.status = "The vault is locked, so renames cannot be checked; press ctrl+l to unlock it."
+		m.status = "The vault is locked; ctrl+l unlocks it."
 		return nil
 	}
 	items := m.renameFindings()
 	if len(items) == 0 {
-		m.status = "No renames found in the vault: nothing is left under an old name."
+		m.status = "No renames found in the vault."
 		return nil
 	}
 	state := &findingsState{items: items}
@@ -258,7 +258,7 @@ func (m *Model) askFinding(revert bool) tea.Cmd {
 	m.clearMessages()
 	switch {
 	case f.ambiguous:
-		m.status = "Ambiguous: nothing is suggested, so there is no action; check the vault and the configuration by hand."
+		m.status = "Ambiguous: nothing is suggested; check by hand."
 		return nil
 	case revert && !f.canRevert():
 		m.status = "Only the unfinished rename of a credential can be put back."

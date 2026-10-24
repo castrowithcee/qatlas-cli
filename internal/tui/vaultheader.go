@@ -142,7 +142,7 @@ func (m *Model) handleVaultLockKey() tea.Cmd {
 	}
 	v := m.secrets.Vault()
 	if v == nil {
-		m.status = "no vault is configured for this run; there is nothing to lock or unlock"
+		m.status = "no vault is configured for this run"
 		return nil
 	}
 	state, err := v.State()

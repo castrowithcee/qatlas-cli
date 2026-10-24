@@ -218,7 +218,7 @@ func providerHint(f field) string {
 			providers++
 		}
 	}
-	lead := fmt.Sprintf("enter opens the table of all %d providers, with search", providers)
+	lead := fmt.Sprintf("enter opens all %d providers", providers)
 	if f.hint == "" {
 		return lead
 	}

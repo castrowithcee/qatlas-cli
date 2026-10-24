@@ -68,7 +68,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	}
 	openPathList(t, m)
 	if view := screenOf(m); !strings.Contains(view, "Paths of gh") ||
-		!strings.Contains(view, "applies in every project") {
+		!strings.Contains(view, "(none: every project)") {
 		t.Fatalf("the empty list does not say what it means:\n%s", view)
 	}
 	addPath(t, m, first)

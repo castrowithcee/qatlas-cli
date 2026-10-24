@@ -79,7 +79,7 @@ func (m *Model) commands() []command {
 		},
 		command{
 			name:    "renames",
-			desc:    "Review the renames found in the vault (f)",
+			desc:    "Review vault renames (f)",
 			aliases: []string{"adopt", "rename leftovers"},
 			unavailable: func(m *Model) string {
 				if r := onScreens("review renames", screenList)(m); r != "" {
@@ -107,28 +107,28 @@ func (m *Model) commands() []command {
 		},
 		command{
 			name:        "export",
-			desc:        "Export the configuration to a file, optionally with secrets",
+			desc:        "Export the configuration",
 			aliases:     []string{"export config", "backup"},
 			unavailable: onScreens("export", screenNav, screenList),
 			run:         func(m *Model) tea.Cmd { return m.askExport() },
 		},
 		command{
 			name:        "import",
-			desc:        "Import an exported configuration file, optionally with secrets",
+			desc:        "Import a configuration file",
 			aliases:     []string{"import config", "restore"},
 			unavailable: onScreens("import", screenNav, screenList),
 			run:         func(m *Model) tea.Cmd { return m.askImport() },
 		},
 		command{
 			name:        "view heatmap",
-			desc:        "Show the log as a heatmap of its days (View field)",
+			desc:        "Show the log as a heatmap",
 			aliases:     []string{"heatmap"},
 			unavailable: onScreens("change the view", screenLogs),
 			run:         func(m *Model) tea.Cmd { return m.setHeat(true) },
 		},
 		command{
 			name:        "view table",
-			desc:        "Show the log as a table (View field)",
+			desc:        "Show the log as a table",
 			aliases:     []string{"table"},
 			unavailable: onScreens("change the view", screenLogs),
 			run:         func(m *Model) tea.Cmd { return m.setHeat(false) },

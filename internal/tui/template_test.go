@@ -103,7 +103,7 @@ func TestDuplicateServiceFromTheList(t *testing.T) {
 		t.Errorf("name = %q readOnly %v, want an editable wiki-copy", got, m.fields[0].readOnly)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"New service, from wiki", "everything from wiki except the name"} {
+	for _, want := range []string{"New service, from wiki", "everything from wiki but the name"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the copied form does not show %q:\n%s", want, view)
 		}
