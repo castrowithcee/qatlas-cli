@@ -223,7 +223,7 @@ func TestUpdateFailuresAreReported(t *testing.T) {
 func TestUIsTextInAForm(t *testing.T) {
 	fake := newerRelease()
 	m := startedWith(t, fake)
-	press(t, m, "1", "n")
+	press(t, m, "5", "n")
 	typeText(t, m, "u")
 	if m.screen != screenForm || m.fieldValue("name") != "u" || fake.updates != 0 {
 		t.Errorf("u in a form was not typed: screen %v name %q", m.screen, m.fieldValue("name"))
@@ -239,7 +239,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 	}{
 		{width: 100, height: 28, banner: fullBanner},
 		{width: 60, height: 24, banner: "Update v0.5.0 · u"},
-		{width: 40, height: 12, banner: "Update v0.5.0 · u"},
+		{width: 40, height: minimumHeight, banner: "Update v0.5.0 · u"},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
 		for _, screen := range []string{"tab line", "help", "question"} {
@@ -259,8 +259,8 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			if tt.width < 100 && strings.Contains(lines[0], "🎉") {
 				t.Errorf("%dx%d: a narrow top line keeps the emoji: %q", tt.width, tt.height, lines[0])
 			}
-			if !strings.Contains(lines[1], "[1 Services]") || !strings.Contains(lines[2], "─") {
-				t.Errorf("%dx%d %s: the tab line and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:3])
+			if !strings.Contains(lines[1], "[5 Library]") || !strings.Contains(lines[2], "Library: ") || !strings.Contains(lines[3], "─") {
+				t.Errorf("%dx%d %s: the tab line, option bar and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:4])
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-// The Logs section (section 8, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
+// The Logs section (the Activity area, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
 // connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
 // response sizes summed up per tool and connection, m for the context cost of each MCP session; enter opens

@@ -449,7 +449,7 @@ func TestCtrlLIsHarmlessDuringOtherDialogs(t *testing.T) {
 }
 
 // The header's emoji, 🔓/🔒/⚠, are wide cells, not one column each; every width this editor is meant to hold
-// at, the minimum 40x12, the 79/80 header edge, and a normal terminal, still fits within its own bounds with
+// at, the minimum 40x13, the 79/80 header edge, and a normal terminal, still fits within its own bounds with
 // the vault header showing, in every one of its three states, the same way TestLayoutsFitTheirTerminal
 // already checks the rest of the frame.
 func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
@@ -471,7 +471,7 @@ func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
 			m := tt.build(t)
 			m.startAdminSession()
 			for _, size := range []struct{ width, height int }{
-				{40, 12}, {79, 24}, {80, 24}, {120, 28},
+				{40, minimumHeight}, {79, 24}, {80, 24}, {120, 28},
 			} {
 				m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 				view := m.View()
