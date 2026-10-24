@@ -470,7 +470,7 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 		switch key.String() {
 		case "t":
 			return m.testConnection(w.saved)
-		case "esc":
+		case keyOf(actBack):
 			if m.testing {
 				m.stopTest()
 				m.status = "Connection test cancelled"
@@ -481,9 +481,9 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		return m.setupEsc()
-	case "f2":
+	case keyOf(actSave):
 		return m.startSetupSave()
 	}
 	return nil
@@ -610,9 +610,9 @@ func (m *Model) setupStoreAdvice(err error) string {
 
 func setupKeys(step int) string {
 	if step == stepProvider {
-		return "F2 next · esc cancel setup"
+		return "{save} next · {back} cancel setup"
 	}
-	return "F2 next · esc back"
+	return "{save} next · {back} back"
 }
 
 // setupHeading is the title of the current step and, with withLead, what it decides. The per-field form
@@ -643,14 +643,14 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(styles.warning, "warning: "+warning) + "\n")
 	}
-	keys := "F2 save · esc back · : cmds · ? help"
+	keys := "{save} save · {back} back · {command} cmds · {help} help"
 	switch {
 	case w.saving:
-		keys = "ctrl+c quit · : cmds · ? help"
+		keys = "ctrl+c quit · {command} cmds · {help} help"
 	case w.saved != "" && m.testing:
-		keys = "esc cancel test · : cmds · ? help"
+		keys = "{back} cancel test · {command} cmds · {help} help"
 	case w.saved != "":
-		keys = "t test connection · esc connections list · : cmds · ? help"
+		keys = "t test connection · {back} connections list · {command} cmds · {help} help"
 	}
 	if w.saved != "" {
 		b.WriteString(m.testLine())

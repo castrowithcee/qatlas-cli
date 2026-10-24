@@ -21,7 +21,7 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 	topics := len(helptopics.All())
 	_, _, room := m.helpFrame()
 	switch key.String() {
-	case "esc", "?":
+	case keyOf(actBack), keyOf(actHelp):
 		m.screen = m.helpFrom
 	case "right", "tab":
 		m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
@@ -71,7 +71,7 @@ func (m *Model) helpFrame() (string, string, int) {
 	base := m.wrapped(styles.title, title) + "\n\n"
 	note := m.wrapped(styles.hint, macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
-	keys := "left/right topic · up/down scroll · pgup/pgdown page · esc/? close"
+	keys := "left/right topic · up/down scroll · pgup/pgdown page · {back}/{help} close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
 	// that gains the position line, which itself takes one of those lines.
 	layout := func(head string) (string, string, int) {

@@ -98,7 +98,7 @@ func (m *Model) openAdminPrompt(locked bool, back screen, action func() tea.Cmd)
 func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 	a := m.adminAuth
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		back := a.back
 		m.adminAuth = nil
 		m.screen = back
@@ -177,11 +177,11 @@ func (m *Model) adminAuthView() string {
 	a := m.adminAuth
 	title := "Admin passphrase needed to save"
 	hint := m.adminSessionHint()
-	keys := "enter ok · esc cancel, nothing saved"
+	keys := "enter ok · {back} cancel, nothing saved"
 	if a.locked {
 		title = "Unlock vault to continue"
 		hint = "unlocks the vault and admin mode here only"
-		keys = "enter unlock · esc cancel, nothing saved"
+		keys = "enter unlock · {back} cancel, nothing saved"
 	}
 
 	var b strings.Builder

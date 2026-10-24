@@ -182,10 +182,10 @@ func (m *Model) updateImport(key tea.KeyMsg) tea.Cmd {
 	if e.working != "" {
 		return nil
 	}
-	if key.String() == "esc" {
+	if key.String() == keyOf(actBack) {
 		return m.importBack()
 	}
-	if key.String() == "f2" {
+	if key.String() == keyOf(actSave) {
 		switch e.step {
 		case importFile, importPassphrase, importMode, importResult:
 			// F2 goes on like enter, which also confirms the one-line dialogs.
@@ -201,7 +201,7 @@ func (m *Model) updateImport(key tea.KeyMsg) tea.Cmd {
 		return m.updateImportMode(key)
 	case importPreview:
 		switch key.String() {
-		case "f2":
+		case keyOf(actSave):
 			m.clearMessages()
 			return m.requireAdmin(m.beginImportWrite)
 		default:
@@ -698,11 +698,11 @@ func (m *Model) importView() string {
 	case importFile:
 		return m.wrapped(styles.title, "Import: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to import, as an export wrote it; nothing changes before you confirm the preview") + "\n" +
-			m.importKeys(pathKeys(&e.input, "F2 or enter next · esc cancel, nothing imported")) + m.notes()
+			m.importKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")) + m.notes()
 	case importPassphrase:
 		return m.wrapped(styles.title, "Export passphrase") + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" +
 			m.indented("the file is encrypted: type the passphrase it was exported with, not the vault passphrase") + "\n" +
-			m.importKeys("F2 or enter ok · esc back, nothing imported") + m.notes()
+			m.importKeys("{save} or enter ok · {back} back, nothing imported") + m.notes()
 	case importMode:
 		var b strings.Builder
 		b.WriteString(m.wrapped(styles.title, "Import: mode") + "\n\n")
@@ -710,29 +710,29 @@ func (m *Model) importView() string {
 			b.WriteString(m.listRow(i == e.modeCursor, false, truncateCells(row.text, m.usable(2))) + "\n")
 		}
 		b.WriteString("\n" + m.indented("entries are matched by name; the preview shows what the mode does") + "\n")
-		return b.String() + m.importKeys("up/down move · F2 or enter preview · esc back · : cmds · ? help") + m.notes()
+		return b.String() + m.importKeys("up/down move · {save} or enter preview · {back} back · {command} cmds · {help} help") + m.notes()
 	}
-	title, question, keys := "Import preview", "Nothing is written until you confirm.", "F2 write · esc back · up/down scroll · : cmds · ? help"
+	title, question, keys := "Import preview", "Nothing is written until you confirm.", "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
 	lines := e.lines
 	switch e.step {
 	case importPreview:
 		if e.plan != nil {
 			if created, replaced, _ := e.plan.Count(); created+replaced == 0 {
-				keys = "esc back · up/down scroll · : cmds · ? help"
+				keys = "{back} back · up/down scroll · {command} cmds · {help} help"
 			}
 		}
 	case importResult:
-		title, question, keys = "Import written", "", "enter or esc done · up/down scroll · : cmds · ? help"
+		title, question, keys = "Import written", "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
 		if e.pendingApprove || e.pendingDelete {
-			keys = "enter, F2 or esc next question · up/down scroll · : cmds · ? help"
+			keys = "enter, {save} or {back} next question · up/down scroll · {command} cmds · {help} help"
 		}
 	case importApprove:
 		title, question, keys = "Import written", "Approve the imported connections now?",
-			"y approve · n/esc not now, nothing is approved · up/down scroll · : cmds · ? help"
+			"y approve · n/{back} not now, nothing is approved · up/down scroll · {command} cmds · {help} help"
 		lines = append(slices.Clone(lines), e.toApprove...)
 	case importDelete:
 		title, question, keys = "Import written", "Delete "+m.redactor.Apply(e.path)+", which holds secrets in plain text?",
-			"y delete the file · n/esc keep it · up/down scroll · : cmds · ? help"
+			"y delete the file · n/{back} keep it · up/down scroll · {command} cmds · {help} help"
 	}
 	if e.working != "" {
 		keys = e.working + ", please wait"
@@ -750,15 +750,15 @@ func (m *Model) importKeys(keys string) string {
 
 // importLeaveView is the leave question over an unfinished import.
 func (m *Model) importLeaveView() string {
-	save := "F2 next step"
+	save := "{save} next step"
 	if m.imp != nil && m.imp.step == importPreview {
-		save = "F2 write"
+		save = "{save} write"
 	}
 	discard, why := "d discard", "Leaving drops the typed file name and every answer, a typed passphrase included. Nothing was written."
 	if m.leaveQuit {
 		discard, why = "d discard and quit", "Quitting would drop them. Nothing was written."
 	}
-	keys := save + " · " + discard + " · esc keep editing · : cmds · ? help"
+	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
 	return m.wrapped(styles.warning, "warning: the import is not finished") + m.keyHint(keys) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), why)
 }

@@ -355,7 +355,7 @@ func (m *Model) askSecret(role string) {
 // updateSecret handles the masked prompt.
 func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.secretInput.Reset()
 		m.screen = screenForm
 		m.status = "Cancelled"
@@ -503,7 +503,7 @@ func (m *Model) openVaultOfferFor(title, hint string, optional, twice bool,
 func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 	o := m.vaultOffer
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		cancel := o.cancel
 		m.vaultOffer = nil
 		return cancel()
@@ -645,7 +645,7 @@ func (m *Model) vaultOfferView() string {
 		b.WriteString(m.inputLine("  ", o.input) + "\n")
 		b.WriteString(m.indented("type it again to confirm it") + "\n")
 	}
-	b.WriteString(m.keyHint("enter ok · esc cancel, nothing saved"))
+	b.WriteString(m.keyHint("enter ok · {back} cancel, nothing saved"))
 	return b.String()
 }
 
@@ -677,7 +677,7 @@ func (m *Model) explain(err error, credential, role string) string {
 	if errors.As(err, &remaining) {
 		// A delete that could not clear the keyring says first what may still be stored.
 		text = err.Error() + "; " + text
-		retry = "d"
+		retry = keyLabel(actDelete)
 	}
 	if state != secret.StoreOff {
 		text += ", then retry " + retry
@@ -941,15 +941,15 @@ func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 // the storage row now names.
 func (m *Model) secretKeys() string {
 	if m.credentialType() == config.CredentialTypeVault {
-		return "enter store in the " + placeVault + " · d remove"
+		return footerKeys("enter store in the " + placeVault + " · {delete} remove")
 	}
-	return "enter store in " + storageKeyring + " · d remove"
+	return footerKeys("enter store in " + storageKeyring + " · {delete} remove")
 }
 
 // secretRowKey handles the keys of a focused secret row.
 func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	action := key.String()
-	if action != "enter" && action != "d" {
+	if action != "enter" && action != keyOf(actDelete) {
 		return nil
 	}
 	if m.editing == "" {
@@ -970,7 +970,7 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	switch action {
 	case "enter":
 		m.askSecret(role)
-	case "d":
+	case keyOf(actDelete):
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here. A
 		// vault locked at this point is unlocked, masked and never on this process's own terminal, only once
 		// that confirmation is given and the removal itself is about to run (see requireAdmin in

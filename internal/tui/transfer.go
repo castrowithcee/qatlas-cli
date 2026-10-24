@@ -210,10 +210,10 @@ func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
 	if e.writing {
 		return nil
 	}
-	if key.String() == "esc" {
+	if key.String() == keyOf(actBack) {
 		return m.exportBack()
 	}
-	if key.String() == "f2" {
+	if key.String() == keyOf(actSave) {
 		switch e.step {
 		case exportSelect, exportMode, exportPassphrase, exportTarget:
 			// F2 goes on like enter, which also confirms the one-line dialogs.
@@ -242,7 +242,7 @@ func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
 		return m.updateExportTarget(key)
 	case exportPreview:
 		switch key.String() {
-		case "f2":
+		case keyOf(actSave):
 			m.clearMessages()
 			return m.requireAdmin(m.runExport)
 		default:
@@ -634,7 +634,7 @@ func (m *Model) exportSelectFrame() (string, string) {
 		head += m.wrapped(styles.hint, "everything is ticked: the single entries are not needed") + "\n"
 	}
 	head += "\n"
-	return head, "\n" + m.keyHint("up/down move · space tick · F2 or enter next · esc cancel · : cmds · ? help") + m.notes()
+	return head, "\n" + m.keyHint("up/down move · space tick · {save} or enter next · {back} cancel · {command} cmds · {help} help") + m.notes()
 }
 
 // exportTyping reports whether the export reads text now.
@@ -681,27 +681,27 @@ func (m *Model) exportView() string {
 		} else {
 			b.WriteString("\n" + m.indented("the secrets are read under the admin session; their values are never shown") + "\n")
 		}
-		return b.String() + m.keyHint("up/down move · F2 or enter choose · esc back · : cmds · ? help") + m.notes()
+		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
 	case exportPassphrase:
 		hint, title := "it protects the file, is not the vault passphrase, and is needed to import it; type it twice", "Export passphrase"
 		if e.confirming {
 			title, hint = "Confirm the export passphrase", "type it again to confirm it"
 		}
 		return m.wrapped(styles.title, title) + "\n\n" + m.inputLine("  ", e.input.Model) + "\n" + m.indented(hint) + "\n" +
-			m.keyHint("F2 or enter ok · esc back, nothing written") + m.notes()
+			m.keyHint("{save} or enter ok · {back} back, nothing written") + m.notes()
 	case exportPlainConfirm:
 		return m.wrapped(styles.title, "Write the secrets unencrypted?") + "\n\n" +
 			m.indentedWith(styles.warning, "warning: the file then holds every included secret in plain text; anyone "+
 				"who can read the file can use them. Delete it once it is imported.") + "\n" +
-			m.keyHint("y write unencrypted · n/esc back, nothing written · : cmds · ? help") + m.notes()
+			m.keyHint("y write unencrypted · n/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
 	case exportTarget:
 		return m.wrapped(styles.title, "Export: file") + "\n\n" + m.pathLines("  ", &e.input) +
 			m.indented("the file to write; it is created for you alone and an existing file is never replaced") + "\n" +
-			m.keyHint(pathKeys(&e.input, "F2 or enter preview · esc back")) + m.notes()
+			m.keyHint(pathKeys(&e.input, "{save} or enter preview · {back} back")) + m.notes()
 	}
-	title, question, keys := "Export preview", "Nothing is written until you confirm.", "F2 write · esc back · up/down scroll · : cmds · ? help"
+	title, question, keys := "Export preview", "Nothing is written until you confirm.", "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
 	if e.step == exportResult {
-		title, question, keys = "Export written", "", "enter or esc done · up/down scroll · : cmds · ? help"
+		title, question, keys = "Export written", "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
 	}
 	if e.writing {
 		keys = "writing, please wait"
@@ -733,18 +733,18 @@ func (m *Model) linesView(title, question, keys string, lines []string, offset *
 
 // exportLeaveView is the leave question over an unfinished export.
 func (m *Model) exportLeaveView() string {
-	save := "F2 next step"
+	save := "{save} next step"
 	if m.export != nil && m.export.step == exportPreview {
-		save = "F2 write"
+		save = "{save} write"
 	}
 	discard, why := "d discard", "Leaving drops the ticks and every answer, a typed passphrase included. Nothing was written."
 	if m.leaveQuit {
 		discard, why = "d discard and quit", "Quitting would drop them. Nothing was written."
 	}
-	keys := save + " · " + discard + " · esc keep editing · : cmds · ? help"
+	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
 	if m.export != nil && m.export.step == exportPlainConfirm {
 		// F2 does not answer the plain text question; only y does.
-		keys = discard + " · esc keep editing · : cmds · ? help"
+		keys = discard + " · {back} keep editing · {command} cmds · {help} help"
 	}
 	return m.wrapped(styles.warning, "warning: the export is not finished") + m.keyHint(keys) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), why)

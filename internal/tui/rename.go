@@ -98,7 +98,7 @@ func (m *Model) updateRename(key tea.KeyMsg) tea.Cmd {
 		switch key.String() {
 		case "y":
 			return m.requireAdmin(m.runRename)
-		case "n", "esc":
+		case "n", keyOf(actBack):
 			m.cancelRename()
 		case "down":
 			r.offset++
@@ -116,7 +116,7 @@ func (m *Model) updateRename(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.cancelRename()
 		return nil
 	case "enter":
@@ -358,7 +358,7 @@ func (m *Model) renameView() string {
 		return m.wrapped(styles.title, "Rename "+r.kind+" "+apply(r.old)) + "\n\n" +
 			m.inputLine("  ", r.input) + "\n" +
 			m.indented("the new name; the next step lists everything the rename touches and changes nothing") + "\n" +
-			m.keyHint("enter dry run · esc cancel") + m.notes()
+			m.keyHint("enter dry run · {back} cancel") + m.notes()
 	}
 	title, confirm := fmt.Sprintf("Rename %s %s to %s?", r.kind, apply(r.old), apply(r.plan.New)), "y rename"
 	switch {
@@ -374,7 +374,7 @@ func (m *Model) renameView() string {
 	if n := len(r.plan.LapsedTokens); n > 0 {
 		question += fmt.Sprintf(" The rename ends the cover of %d agent token(s) through it.", n)
 	}
-	keys := confirm + " · n/esc cancel · up/down scroll · : cmds · ? help"
+	keys := confirm + " · n/{back} cancel · up/down scroll · {command} cmds · {help} help"
 	foot := "\n" + m.wrapped(styles.hint, question) + m.keyHint(keys) + m.notes()
 	var body []string
 	for _, line := range m.renameLines(r.plan) {

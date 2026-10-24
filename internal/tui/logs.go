@@ -517,7 +517,7 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "q":
 		return m.quit()
-	case "esc":
+	case keyOf(actBack):
 		if lv.stats {
 			lv.stats, lv.sessions = false, false
 			return nil
@@ -606,7 +606,7 @@ func (lv *logView) moveFocus(by int) {
 func (m *Model) updateLogSearch(key tea.KeyMsg) tea.Cmd {
 	lv := m.logs
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		lv.list.clearFilter()
 	case "enter":
 		lv.list.stopFilter()
@@ -629,7 +629,7 @@ func (m *Model) updateLogDetail(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		m.screen = screenLogs
 	}
 	return nil
@@ -666,7 +666,7 @@ func (m *Model) openLogDateDialog() {
 func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
 	lv, d := m.logs, m.logs.dialog
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		lv.dialog = nil
 		return nil
 	case "tab", "shift+tab", "up", "down":
@@ -753,7 +753,7 @@ func filterText(value string) string {
 func (m *Model) updateLogPick(key tea.KeyMsg) tea.Cmd {
 	lv, p := m.logs, m.logs.pick
 	switch key.String() {
-	case "esc":
+	case keyOf(actBack):
 		if p.filter >= 0 {
 			m.openLogPick(-1)
 			m.logs.pick.list.selectName(strconv.Itoa(p.filter))
@@ -1009,41 +1009,41 @@ func (m *Model) logKeys() string {
 		// The short form names the same keys with shorter words.
 		switch {
 		case lv.stats && lv.sessions && !lv.list.editing:
-			return "up/down scroll · m or s rows · f filter · / search · 1-8 section · : cmds · ? help · q quit"
+			return "up/down scroll · m or s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 		case lv.stats && !lv.list.editing:
-			return "s rows · f filter · / search · 1-8 section · : cmds · ? help · q quit"
+			return "s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 		case lv.list.editing:
-			return "type to search · up/down move · enter keep · esc clear"
+			return "type to search · up/down move · enter keep · {back} clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+			return "left/right mode · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case len(lv.list.matches) == 0:
-			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		}
-		return "enter detail · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+		return "enter detail · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
 	if lv.stats && lv.sessions && m.screen != screenNav && !lv.list.editing {
-		return "up/down scroll · m or s or esc back to the rows · f filter · / search · 1-8 section · : cmds · ? help · q quit"
+		return "up/down scroll · m or s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 	}
 	if lv.stats && m.screen != screenNav && !lv.list.editing {
-		return "s or esc back to the rows · f filter · / search · 1-8 section · : cmds · ? help · q quit"
+		return "s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 	}
 	switch {
 	case m.screen == screenNav:
 		return m.navKeys()
 	case lv.list.editing:
-		return "type to search · up/down move · enter keep search · esc clear search"
+		return "type to search · up/down move · enter keep search · {back} clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+		return "left/right change mode · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case len(lv.list.matches) == 0:
-		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
-	keys := "enter details · tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · esc back · : cmds · ? help · q quit"
+	keys := "enter details · tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	if lv.list.query() != "" {
-		keys = strings.Replace(keys, "esc back", "esc clear search", 1)
+		keys = strings.Replace(keys, "{back} back", "{back} clear search", 1)
 	}
 	return keys
 }
@@ -1213,7 +1213,7 @@ func (m *Model) logsWindow() (int, int) {
 func (m *Model) logDetailView() string {
 	lv := m.logs
 	if lv.detail < 0 || lv.detail >= len(lv.rows) {
-		return m.keyHint("esc back · : cmds · ? help")
+		return m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	row := lv.rows[lv.detail]
 	e := row.line.Entry
@@ -1256,7 +1256,7 @@ func (m *Model) logDetailView() string {
 		field("request", formatBytes(e.ReqBytes))
 		field("response", formatBytes(e.RespBytes))
 	}
-	b.WriteString(m.keyHint("esc back · 1-8 section · : cmds · ? help"))
+	b.WriteString(m.keyHint("{back} back · 1-8 section · {command} cmds · {help} help"))
 	return b.String()
 }
 
@@ -1314,9 +1314,9 @@ func (m *Model) logDateDialogView() string {
 	if d.err != "" {
 		b.WriteString(m.indentedWith(styles.fail, "error: "+d.err) + "\n")
 	}
-	keys := "enter apply · esc cancel"
+	keys := "enter apply · {back} cancel"
 	if len(d.inputs) == 2 {
-		keys = "enter apply · tab next field · esc cancel"
+		keys = "enter apply · tab next field · {back} cancel"
 	}
 	b.WriteString(m.keyHint(keys))
 	return b.String()
@@ -1352,9 +1352,9 @@ func (m *Model) logPickFrame() (string, string) {
 	if shown == 0 {
 		head.WriteString(m.wrapped(styles.hint, fmt.Sprintf("Nothing matches %q.", p.list.query())) + "\n")
 	}
-	keys := "type to search · up/down move · enter choose · esc close"
+	keys := "type to search · up/down move · enter choose · {back} close"
 	if p.filter >= 0 {
-		keys = "type to search · up/down move · enter keep this value · esc back to the filters"
+		keys = "type to search · up/down move · enter keep this value · {back} back to the filters"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
