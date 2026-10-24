@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // openHelp shows the help topics in the workspace, over the tab line or the list it was opened from.
@@ -46,7 +47,11 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 
 // helpLines is the text of the current topic, wrapped into the workspace.
 func (m *Model) helpLines() []string {
-	text := helptopics.All()[m.helpTopic].Text
+	topic := helptopics.All()[m.helpTopic]
+	text := topic.Text
+	if topic.Name == helptopics.All()[0].Name {
+		text += "\n\n" + keyListText()
+	}
 	return strings.Split(helptopics.Wrap(text, m.usable(0)), "\n")
 }
 
@@ -108,4 +113,20 @@ func (m *Model) helpView() string {
 	lines := m.helpLines()
 	end := min(m.helpOffset+room, len(lines))
 	return head + strings.Join(lines[m.helpOffset:end], "\n") + "\n" + foot
+}
+
+// keyListText names the keys of the global actions as they are bound now, so the help is right whatever the
+// preferences changed.
+func keyListText() string {
+	lines := []string{"Keys in force on this device:"}
+	for _, r := range keyRows {
+		a := userActions[r.action]
+		key := keyName(keymap[a])
+		if r.action == uiprefs.ActionInfo {
+			a = actInfo
+			key = keyLabel(a)
+		}
+		lines = append(lines, "- "+strings.TrimSuffix(r.label, " key")+": "+key)
+	}
+	return strings.Join(lines, "\n")
 }

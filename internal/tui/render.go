@@ -194,6 +194,10 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = m.vaultStateText()
 	case f.kind == fieldVaultAction:
 		value = "enter runs this"
+	case f.kind == fieldKey && focused && m.keyCapture:
+		value = "press the new key"
+	case f.kind == fieldKey:
+		value = keyRowValue(f)
 	case f.kind == fieldSecret:
 		// A secret row shows where the role resolves from and nothing else: there is no value to draw,
 		// and the resolver would not hand one out.
@@ -403,7 +407,7 @@ func (m *Model) keyHint(text string) string {
 
 // keyHintLines is the footer text broken into lines of whole groups.
 func (m *Model) keyHintLines(text string) []string {
-	text = footerKeys(text)
+	text = footerKeys(strings.ReplaceAll(text, "{info}", m.infoLabel()))
 	width := m.usable(0)
 	var lines []string
 	var line string

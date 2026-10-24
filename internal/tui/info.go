@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -186,9 +187,32 @@ func (m *Model) infoReachable() bool {
 	return m.helpReachable()
 }
 
-// infoWorks reports whether the info key shows something right now, which is when footers name it.
+// infoPressed reports whether the key press asks for the explanation. The letter works only where the
+// screen reads no text; the extra key is none, so it works wherever there is something to explain.
+func (m *Model) infoPressed(key tea.KeyMsg) bool {
+	switch key.String() {
+	case keyOf(actInfo):
+		return m.infoReachable()
+	case infoExtra:
+		return infoExtra != "" && !m.infoOpen && !m.keyCapture
+	}
+	return false
+}
+
+// infoWorks reports whether an info key shows something right now, which is when footers name it.
 func (m *Model) infoWorks() bool {
-	return m.infoReachable() && !m.infoSubject().empty()
+	if m.keyCapture || m.infoSubject().empty() {
+		return false
+	}
+	return m.infoReachable() || (infoExtra != "" && !m.infoOpen)
+}
+
+// infoLabel names the info keys that work right now: the extra key alone where the letter is typed text.
+func (m *Model) infoLabel() string {
+	if infoExtra != "" && !m.infoReachable() {
+		return keyName(infoExtra)
+	}
+	return keyLabel(actInfo)
 }
 
 // openInfo opens the explanation as an overlay and reports whether there was one to open.
@@ -203,7 +227,7 @@ func (m *Model) openInfo() bool {
 
 // updateInfo handles the keys while the overlay is open: the key that closes it, and nothing else.
 func (m *Model) updateInfo(key string) {
-	if key == keyOf(actBack) || key == keyOf(actInfo) {
+	if key == keyOf(actBack) || key == keyOf(actInfo) || (infoExtra != "" && key == infoExtra) {
 		m.infoOpen = false
 	}
 }

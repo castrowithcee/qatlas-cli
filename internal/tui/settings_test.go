@@ -48,7 +48,7 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 		t.Fatalf("status %q fail %q, want it saved", m.status, m.fail)
 	}
 	got, warnings := uiprefs.Load(path)
-	want := uiprefs.Prefs{Theme: uiprefs.ThemeLight, Start: "connections", Icons: uiprefs.IconsNerdFont}
+	want := uiprefs.Prefs{Theme: uiprefs.ThemeLight, Start: "connections", Icons: uiprefs.IconsNerdFont, Keys: uiprefs.DefaultKeys()}
 	if got != want || len(warnings) != 0 {
 		t.Fatalf("stored = %+v %v, want %+v", got, warnings, want)
 	}
@@ -98,8 +98,8 @@ func TestGeneralHasNoFreeText(t *testing.T) {
 	m, _ := lockedVaultModel(t)
 	openSectionByName(t, m, sectionGeneral)
 	for _, f := range m.fields {
-		if f.kind != fieldChoice {
-			t.Errorf("row %q is not a choice", f.label)
+		if f.kind != fieldChoice && f.kind != fieldKey {
+			t.Errorf("row %q is neither a choice nor a key", f.label)
 		}
 	}
 }
