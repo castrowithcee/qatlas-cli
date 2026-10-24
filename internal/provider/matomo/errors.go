@@ -38,12 +38,16 @@ var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
+	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
 	{"permission", []string{"you can't access this resource", "requires 'view'", "requires 'write'",
-		"requires 'admin'", "requires 'superuser'", "super user", "not allowed to"}},
+		"requires 'admin'", "requires 'superuser'", "super user", "not allowed to", "required access level",
+		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
+		"pre-processed segments can only"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
-		"not found in the list of available reports", "there is no goal"}},
+		"not found in the list of available reports", "there is no goal", "requested segment not found",
+		"marked as deleted"}},
 }
 
 // applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
@@ -59,6 +63,8 @@ func applicationError(op string, data []byte) error {
 	var message string
 	_ = json.Unmarshal(answer.Message, &message)
 	switch classifyMessage(message) {
+	case "invalid":
+		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
 	case "missing":
 		return &missingError{}
 	case "auth":
