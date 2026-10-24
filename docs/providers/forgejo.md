@@ -53,6 +53,7 @@ additional depth of defense: the targets of the connection stay the boundary.
 - Blocking an account user uses `list_blocked`, `block`, and `unblock`, lists only block entries, has no
   `user-blocks.check`, and takes no `note`; `user-settings` also carries `pronouns`, `hide_pronouns`, and
   `enable_repo_unit_hints`. See [Users](gitea/users.md).
+- Quota: the `quota.*` tools exist on Forgejo only (Gitea has no quota). See [Quota](#quota).
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
@@ -92,6 +93,30 @@ additional depth of defense: the targets of the connection stay the boundary.
 
 - `issue-locks.*` exist from Forgejo 17 and send the lock reason as `reason`; Gitea names it `lock_reason`. Older
   versions report the tools as unavailable. See [Issue locks](gitea/issue-locks.md).
+
+## Quota
+
+| Tool | Effect | Reads |
+| --- | --- | --- |
+| `quota.get` | read | groups, rules, and storage in use |
+| `quota.list-artifacts`, `quota.list-attachments`, `quota.list-packages` | read | what counts towards the quota |
+| `quota.check` | read | whether an action on one `subject` is within the quota |
+
+All five read the quota of the account behind the token, or with `owner` (`orgs/NAME`) that of an organization. The
+scopes presumably are `read:user` for the account and `read:organization` for an organization, which the instance
+restricts further to the organization's owners; they are not confirmed against a live instance.
+
+- An organization must be named by an `orgs/NAME` target when the connection has targets; no `users/NAME` target is
+  needed. It is refused before the token is read and without naming it. The account needs, with targets, a
+  `users/NAME` target for it and no repository target, as for `user-settings.get`; it is then proven by reading
+  `GET /user` first.
+- In the lists, a row that names a repository outside the targets is dropped, and with targets so is a row that names
+  none; packages belong to their owner and are not filtered. A page may therefore hold fewer rows than `limit` and
+  still have a successor.
+- Names, versions, and addresses are untrusted data.
+- An instance can switch the quota off; it then does not serve the routes and answers 404, like it does for an
+  organization or a token it does not reach. After a 404 the tool reads `GET /user` or `GET /orgs/NAME`: if that
+  answers, the quota is reported as not available (`provider-error`), otherwise as `not-found`. A 403 is `not-found`.
 
 ## Not on Forgejo
 

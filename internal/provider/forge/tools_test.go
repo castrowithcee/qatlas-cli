@@ -190,6 +190,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".wiki-pages.list", p.id+".wiki-pages.get", p.id+".wiki-pages.create",
 			p.id+".wiki-pages.update", p.id+".wiki-pages.delete", p.id+".wiki-revisions.list")
 		want = append(want, accessToolIDs(p)...)
+		if p == forgejo {
+			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",
+				p.id+".quota.list-packages", p.id+".quota.check")
+		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
 			t.Errorf("%s tools = %v, want %v", p.id, ids, want)
@@ -236,6 +240,14 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 	}
 	if _, _, ok := reg.Lookup("gitea.nodeinfo.get"); ok {
 		t.Error("the Forgejo tool is registered for Gitea")
+	}
+	for _, action := range []string{"get", "list-artifacts", "list-attachments", "list-packages", "check"} {
+		if _, _, ok := reg.Lookup("forgejo.quota." + action); !ok {
+			t.Errorf("forgejo.quota.%s is missing", action)
+		}
+		if _, _, ok := reg.Lookup("gitea.quota." + action); ok {
+			t.Errorf("gitea.quota.%s is registered", action)
+		}
 	}
 	for _, shared := range []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, versionGet,
 		signingKeysGet, markdownRender, markupRender, issuesList, issuesSearch, issuesGet, issuesCreate, issuesUpdate,
