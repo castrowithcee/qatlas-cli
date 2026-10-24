@@ -316,11 +316,13 @@ func TestContentsChangeFilesSendsOneCommitAndKnowsGiteaOperations(t *testing.T) 
 		if call.method != http.MethodPost || call.path != writeRoute || !reflect.DeepEqual(bodyOf(t, call), want) {
 			t.Errorf("%s call = %+v", p.id, call)
 		}
-		giteaOnly := map[string]string{
-			"upload": `{"files":[{"operation":"upload","path":"a.bin","content":"A"}]}`,
-			"rename": `{"files":[{"operation":"rename","path":"b.md","from_path":"a.md"}]}`,
+		// Ordered so that the rename request is the last call checked below.
+		giteaOnly := []struct{ name, arguments string }{
+			{"upload", `{"files":[{"operation":"upload","path":"a.bin","content":"A"}]}`},
+			{"rename", `{"files":[{"operation":"rename","path":"b.md","from_path":"a.md"}]}`},
 		}
-		for name, arguments := range giteaOnly {
+		for _, c := range giteaOnly {
+			name, arguments := c.name, c.arguments
 			n := len(*e.calls)
 			_, err := e.invoke(t, contentsChangeFiles, "files", arguments)
 			if p == gitea {
