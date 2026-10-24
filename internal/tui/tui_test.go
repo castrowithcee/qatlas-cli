@@ -214,7 +214,7 @@ func openSectionByName(t *testing.T, m *Model, s section) {
 			pump(t, m, "esc")
 		}
 		if m.screen == screenList {
-			pump(t, m, "tab")
+			pump(t, m, "shift+tab")
 		}
 		if m.screen != screenNav || !m.navSub {
 			t.Fatalf("after the digit of %v: screen %v, section %v", s.area().title(), m.screen, m.section)
@@ -980,7 +980,7 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	if strings.Contains(view, "> 1 Overview") || strings.Contains(view, "> [2 Connections]") {
 		t.Errorf("the tab line is marked although the list has the focus:\n%s", view)
 	}
-	press(t, m, "tab")
+	press(t, m, "shift+tab")
 	view = m.View()
 	if !strings.Contains(strings.Join(strings.Fields(view), " "), "> 1 Overview [2 Connections] 3 Activity") ||
 		strings.Contains(view, "> wiki") ||

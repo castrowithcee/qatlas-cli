@@ -34,6 +34,8 @@ var (
 	annotationPeriods  = []string{"day", "week", "month", "year", "range"}
 )
 
+var annotationSentOnce = sentOnceFor("annotation", "matomo.annotations.list")
+
 func annotationsRequirement(tool string) requirement {
 	return requirement{tool: tool, plugin: "Annotations"}
 }
@@ -402,12 +404,12 @@ func invokeAnnotationsAdd(ctx context.Context, resolved *config.Resolved, secret
 		return nil, err
 	}
 	var answer json.RawMessage
-	if err := client.change(ctx, op, annotationsRequirement(annotationsAdd.ID), "Annotations.add", params, &answer); err != nil {
+	if err := client.change(ctx, op, annotationsRequirement(annotationsAdd.ID), "Annotations.add", params, annotationSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	created, ok := readAnnotation(answer, id)
 	if !ok {
-		return nil, unclearChange(op, "Matomo returned no usable annotation")
+		return nil, unclearChange(op, "Matomo returned no usable annotation", annotationSentOnce)
 	}
 	return &AnnotationAdded{IDSite: id, Annotation: created, Created: true}, nil
 }
@@ -458,12 +460,12 @@ func invokeAnnotationsUpdate(ctx context.Context, resolved *config.Resolved, sec
 	}
 	// Annotations.save reads the pair itself and refuses an ID the website does not have, so no read comes first.
 	var answer json.RawMessage
-	if err := client.change(ctx, op, annotationsRequirement(annotationsUpdate.ID), "Annotations.save", params, &answer); err != nil {
+	if err := client.change(ctx, op, annotationsRequirement(annotationsUpdate.ID), "Annotations.save", params, annotationSentOnce, &answer); err != nil {
 		return nil, err
 	}
 	updated, ok := readAnnotation(answer, id)
 	if !ok || updated.IDNote != noteID {
-		return nil, unclearChange(op, "Matomo returned no usable annotation")
+		return nil, unclearChange(op, "Matomo returned no usable annotation", annotationSentOnce)
 	}
 	return &AnnotationUpdated{IDSite: id, Annotation: updated, Updated: true}, nil
 }

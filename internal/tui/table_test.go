@@ -185,7 +185,7 @@ func TestNarrowTablesCutTheLongTextsButNeverTheName(t *testing.T) {
 	}
 }
 
-// The description gives way before any value that names something: at 120 columns every other cell of a
+// The description gives way before any value that names something: at 119 columns every other cell of a
 // connection stays whole beside a long description, and at 80 columns the optional columns are left out,
 // from the right, before a name or a service is cut. The storage column falls back to its short labels.
 func TestTheFreeTextGivesWayFirst(t *testing.T) {
@@ -195,7 +195,8 @@ func TestTheFreeTextGivesWayFirst(t *testing.T) {
 		columns []string
 		gone    []string
 	}{
-		{120, []string{"NAME", "STATE", "SERVICE", "EFFECTS", "TOOLS", "TARGETS"}, nil},
+		// One cell short of the detail pane, which would take the room of the optional columns.
+		{detailPaneMinWidth - 1, []string{"NAME", "STATE", "SERVICE", "EFFECTS", "TOOLS", "TARGETS"}, nil},
 		{57, []string{"NAME", "STATE", "SERVICE"}, []string{"EFFECTS", "TOOLS", "TARGETS"}},
 	} {
 		m := newTableModel(t, c.width)
