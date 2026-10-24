@@ -327,7 +327,7 @@ func findRow(view, text string) string {
 
 // The marked row of a section list is highlighted the full width of the row under colour, and, without it
 // (NO_COLOR or an ASCII terminal), is still told apart by its leading '>' alone; an unmarked row beside it
-// still gets its zebra shade under colour. No row is ever wider than the terminal, at any of the widths the
+// stays unshaded under colour. No row is ever wider than the terminal, at any of the widths the
 // design is meant to hold at.
 func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -337,7 +337,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 		m := newTableModel(t, width)
 		openSectionByName(t, m, sectionServices)
 		if len(m.list.matches) < 2 {
-			t.Fatalf("width %d: need at least two services for the marked row and its zebra neighbour", width)
+			t.Fatalf("width %d: need at least two services for the marked row and its neighbour", width)
 		}
 		marked, alt := m.list.matches[0], m.list.matches[1]
 
@@ -347,8 +347,8 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
 			t.Errorf("width %d: the marked row shows no colour: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the alternating row shows no zebra colour: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the unmarked row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
 		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces

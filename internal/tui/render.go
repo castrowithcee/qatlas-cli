@@ -355,23 +355,18 @@ func (m *Model) row(active bool, text string) string {
 // listRow draws one row of a table screen: a section list, the picker, or the provider table. text is
 // already cut to fit beside the marker: long cells are shortened before they ever reach here, never
 // wrapped. The marked row is highlighted the full width of the row, on top of the '>' prefix row already
-// gives it, so NO_COLOR or an ASCII terminal still shows which one it is; every other
-// row alternates a faint background as a secondary reading aid, never the only one.
-func (m *Model) listRow(active, alt bool, text string) string {
+// gives it, so NO_COLOR or an ASCII terminal still shows which one it is; every other row is plain.
+func (m *Model) listRow(active bool, text string) string {
 	blank, width := m.fit("  ")
 	marker := blank
 	if active && len(blank) == 2 {
 		marker = "> "
 	}
 	line := marker + padLine(text, width)
-	switch {
-	case active:
+	if active {
 		return styles.activeRow.Render(line)
-	case alt:
-		return styles.zebra.Render(line)
-	default:
-		return line
 	}
+	return line
 }
 
 // hint is the key line of a screen. Like every other prose line it is wrapped into the terminal instead of
