@@ -1,9 +1,9 @@
 ---
 description: >
   Describes the Gitea and Forgejo organization tools: listing, reading, creating, changing, renaming, and deleting
-  organizations, their avatars, activity feeds, and a user's permissions. It covers the token scopes, how
-  organizations are bound to the targets, the settings that can be changed, differences between the products, and
-  the limits.
+  organizations, their avatars, activity feeds, a user's permissions, members, public members, and blocked users.
+  It covers the token scopes, how organizations are bound to the targets, the settings that can be changed,
+  differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -51,6 +51,24 @@ A read needs `read:organization`, a change `write:organization`. `orgs.list-mine
   shared with `repository-activities.list`.
 - The organization object does not show the deprecated `username` member.
 
+## Members and blocking
+
+Scopes are `read:organization` for reads and `write:organization` for changes. The organization is bound as above;
+`username` is one user name that is not checked against the targets, since the answer concerns the organization.
+Lists and checks are personal data, in the class of `accounts.me`.
+
+- `org-members.list` shows the public members only to a token that is no member of the organization.
+  `org-members.check` then gets a redirect from the instance; the tool asks the public membership instead and sets
+  `public_only`. Every `check` reports a 404 as `false`, which also covers an organization the token does not reach;
+  any other refusal stays an error.
+- `org-members.remove` needs an owner token and withdraws every team of the organization from the user, with all
+  access those teams gave. `org-public-members.publicize` and `.conceal` need a member token that acts for the user
+  or owns the organization.
+- Blocking needs an owner token. Gitea serves `/blocks` (list, check, add, remove) and lists user objects; `add` takes
+  an optional `note` of at most 255 characters. Forgejo serves `list_blocked`, `block`, and `unblock`, lists only
+  `block_id` and `created_at` per entry, has no `check` and no `note`.
+- Each change sends one request and is never repeated.
+
 ## Tools
 
 | Tool | Effect | Provider |
@@ -63,6 +81,9 @@ A read needs `read:organization`, a change `write:organization`. `orgs.list-mine
 | `org-avatars.update` | update | both |
 | `org-avatars.delete` | delete | both |
 | `org-activities.list`, `org-permissions.get` | read | both |
+| `org-members.list`, `org-members.check`, `org-public-members.list`, `org-public-members.check`, `org-blocks.list` | read | both |
+| `org-blocks.check` | read | Gitea |
+| `org-members.remove`, `org-public-members.publicize`, `org-public-members.conceal`, `org-blocks.add`, `org-blocks.remove` | update | both |
 
 `orgs.rename` and `orgs.delete` are offered only to a connection whose `tools` list names them and are in no setup
 profile.
