@@ -198,6 +198,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Branches](branches.md): the branches of a repository
 - [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
   repositories, pull mirror syncs, and repository avatars
+- [Topics and templates](topics-templates.md): repository topics, the instance-wide topic search, and the gitignore,
+  label, and license templates
 - [Actions](actions.md): workflow runs, jobs, tasks, workflows, artifacts, logs, dispatching, and operating runs
 - [Actions administration](actions-admin.md): the secrets, variables, and runners of a repository, an
   organization, or the user behind the token, and the state of a workflow
