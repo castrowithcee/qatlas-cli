@@ -44,7 +44,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"is typed, a letter is text. pgup/pgdown and home/end jump in every list, picker, table, and the\n" +
 			"tab line. tab and shift+tab go to the next or previous field, or between the option bar and the\n" +
 			"list; in a path being typed, tab takes the suggested directory. space ticks in a multiple choice\n" +
-			"and does nothing else.\n" +
+			"and does nothing else. Under a focused field stands one line of hint; i opens its longer\n" +
+			"explanation, with the explanation of the term it belongs to (service, credential, connection,\n" +
+			"target, effect, profile, approval, token, vault), over the screen, and esc closes it. i works on\n" +
+			"every screen that takes no typed text and on a search line while it is empty. From 120 columns on,\n" +
+			"forms and pickers show the explanation of the focused field or entry in a pane at their right\n" +
+			"instead; below that, a field or entry that has one ends in (i).\n" +
 			"On the tab line left/right choose an area, wrapping from the last to the first and back; down\n" +
 			"moves the focus to the option bar of an area that has one, where left/right choose the part and\n" +
 			"up returns to the tab line; down, enter, or tab move the focus into the list, and up does\n" +

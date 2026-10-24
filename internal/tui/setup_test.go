@@ -3,12 +3,15 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -458,7 +461,7 @@ func TestSetupAndEditorOfferTheSameStorageRow(t *testing.T) {
 
 	want := []string{storageKeyring, storageVault, storageEnv}
 	for what, row := range map[string]field{"setup": setupRow, "editor": *editorRow} {
-		if !reflect.DeepEqual(row.choices, want) || row.value() != storageKeyring || row.hint != storageHint {
+		if !reflect.DeepEqual(row.choices, want) || row.value() != storageKeyring || row.hint != storageHint() {
 			t.Errorf("the %s row offers %v at %q with hint %q, want %v at %q with the shared hint", what,
 				row.choices, row.value(), row.hint, want, storageKeyring)
 		}
@@ -535,8 +538,8 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	assertNoRawStorageTerm(t, "the saved keyring credential form", screenOf(e))
 	openSectionByName(t, e, sectionCredentials)
 	assertNoRawStorageTerm(t, "the credential list", screenOf(e))
-	if words := strings.Join(strings.Fields(screenOf(e)), " "); !strings.Contains(words, "store (none) "+placeKeyring) ||
-		!strings.Contains(words, "vars (none) "+placeEnv) {
+	if words := strings.Join(strings.Fields(screenOf(e)), " "); !strings.Contains(words, "store "+placeKeyring) ||
+		!strings.Contains(words, "vars "+placeEnv) {
 		t.Errorf("the credential list does not say where the secrets are kept:\n%s", screenOf(e))
 	}
 }
@@ -739,5 +742,37 @@ func TestNewInConnectionsReusesAConfiguredService(t *testing.T) {
 	saved, err := store.Load()
 	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
 		t.Fatalf("saved = %+v, %v", saved, err)
+	}
+}
+
+// The storage row names the platform keyring in full on every platform and width; its longer sentence is
+// behind the info key.
+func TestStorageRowNamesThePlatformKeyringWhole(t *testing.T) {
+	for _, goos := range []string{"windows", "darwin", "linux"} {
+		for _, width := range []int{80, 120} {
+			t.Run(fmt.Sprintf("%s/%d", goos, width), func(t *testing.T) {
+				old := platform
+				platform = goos
+				t.Cleanup(func() { platform = old })
+				m, _, _, _, _ := newStoreModel(t)
+				m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+				walkSetup(t, m, stepCredential)
+				press(t, m, "tab")
+				typeText(t, m, "reader")
+				press(t, m, "tab")
+				if m.fields[m.focus].label != storageLabel {
+					t.Fatalf("focus on %q, want the storage row", m.fields[m.focus].label)
+				}
+				label := secret.StoreLabel(goos)
+				if words := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(words, label) {
+					t.Errorf("the storage row does not name %q:\n%s", label, screenOf(m))
+				}
+				press(t, m, "i")
+				if !m.infoOpen || !strings.Contains(m.infoShown.long, "environment variables suit CI and containers") ||
+					!strings.Contains(m.infoShown.long, label) {
+					t.Errorf("i does not show the long form:\n%s", m.View())
+				}
+			})
+		}
 	}
 }

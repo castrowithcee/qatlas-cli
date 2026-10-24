@@ -318,15 +318,6 @@ const (
 // credential may, and then it decides which secret roles exist.
 const providerLabel = "provider"
 
-// providerColumn is the provider column of the credential list. A credential whose provider is neither
-// named nor derivable says so rather than leaving an empty cell.
-func providerColumn(provider string) string {
-	if provider == "" {
-		return "(none)"
-	}
-	return provider
-}
-
 // The defaults bridge the first frame until the terminal reports its real size, which it does before a
 // person can press a key; they are generous so that frame is not squeezed.
 const (
@@ -425,6 +416,10 @@ type Model struct {
 	// navSub is set while screenNav stands on the option bar of the area instead of on the tab line.
 	navSub bool
 	list   filterList
+	// groups is the provider grouping of list while its section is grouped, nil otherwise; folds keeps
+	// the fold state of each grouped section (see listgroups.go).
+	groups *listGroups
+	folds  map[section]map[string]bool
 
 	editing string
 	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
@@ -600,10 +595,13 @@ type Model struct {
 	wizard *setup
 
 	// window, while a form is being fitted to the terminal, is the first and last row index drawn; nil
-	// draws every row. hintCap is then how many lines the hint of the focused row may take; 0 means all
-	// of them (see fittedEditorView).
-	window  *[2]int
-	hintCap int
+	// draws every row (see fittedEditorView).
+	window *[2]int
+	// infoOpen is set while the explanation of infoShown stands as an overlay over the screen.
+	infoOpen bool
+	// inPane is set while the left part of a screen with a pane is drawn, whose width is already reduced.
+	inPane    bool
+	infoShown infoSubject
 	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
 	// returns to.
 	helpTopic  int
@@ -712,7 +710,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.logs = newLogView()
 	// The editor opens on the tab line, with the Overview already shown below it.
 	m.section = sectionOverview
-	m.list.reset(m.entryNames(m.section))
+	m.list.reset(m.listItems(m.section))
 	return m, nil
 }
 
@@ -825,6 +823,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layoutWorkspace()
 		return m, nil
 	case tea.KeyMsg:
+		if m.infoOpen {
+			if msg.String() == "ctrl+c" {
+				return m, m.interrupt()
+			}
+			m.updateInfo(msg.String())
+			return m, nil
+		}
 		if m.activeScreenTooSmall() {
 			switch msg.String() {
 			case "ctrl+c":
@@ -859,6 +864,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keyIs(msg, actCommand) && m.helpReachable() {
 			m.openCommandLine()
+			return m, nil
+		}
+		if keyIs(msg, actInfo) && m.infoReachable() && m.openInfo() {
 			return m, nil
 		}
 		msg = m.moveKey(msg)
@@ -1080,6 +1088,8 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.list.jump(1)
 	case "pgup", "pgdown", "home", "end":
 		m.jumpList(key.String())
+	case "left", "right":
+		m.foldKey(key.String())
 	case "n":
 		return m.newEntry()
 	case "p":
@@ -1099,6 +1109,9 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			// unlocks it and starts the admin session together. The action itself writes nothing: it only
 			// rebuilds the list, now that Pending can read it.
 			return m.requireAdmin(func() tea.Cmd { return m.returnToList("") })
+		}
+		if m.foldKey("enter") {
+			return nil
 		}
 		name, ok := m.selected()
 		if !ok {
@@ -2548,7 +2561,7 @@ func (m *Model) stopTest() {
 func (m *Model) openSection(s section) tea.Cmd {
 	m.section = s
 	m.layoutWorkspace()
-	m.list.reset(m.entryNames(s))
+	m.resetList(s)
 	if s.isPage() {
 		// A settings page has no list: entering the section opens its form directly.
 		return m.enterPage()
@@ -2563,9 +2576,9 @@ func (m *Model) openSection(s section) tea.Cmd {
 // does the selection: on the named entry when it is shown, on the entry that was selected otherwise, or,
 // when that one is gone, on the one now in its place.
 func (m *Model) returnToList(name string) tea.Cmd {
-	m.list.setItems(m.entryNames(m.section))
+	m.list.setItems(m.listItems(m.section))
 	if name != "" {
-		m.list.selectName(name)
+		m.selectEntry(name)
 	}
 	return m.showList()
 }
@@ -2609,7 +2622,11 @@ func (m *Model) enterPage() tea.Cmd {
 	return m.openPageForm()
 }
 
-func (m *Model) selected() (string, bool) { return m.list.selected() }
+// selected is the entry under the cursor; a group row is no entry, so no action applies to it.
+func (m *Model) selected() (string, bool) {
+	name, ok := m.list.selected()
+	return name, ok && !isGroupRow(name)
+}
 
 func (m *Model) entryNames(s section) []string {
 	var names []string
@@ -3501,6 +3518,9 @@ func (m *Model) View() string {
 		}
 		return m.resizeView()
 	}
+	if m.infoOpen {
+		return m.infoView()
+	}
 	if view, ok := m.modalView(); ok {
 		return view
 	}
@@ -3523,7 +3543,7 @@ func (m *Model) workspaceView() string {
 		width+m.termWidth-m.width, height+m.termHeight-m.height, footerKeys(way)), m.width))
 }
 
-// editorView renders the current screen. A form shows only the hint of the focused field, directly under
+// editorView renders the current screen. A form shows only the one-line hint of the focused field, directly under
 // it: the field a person is on is the one they need explained, and that is true whatever the terminal size
 // and however the screen was reached, so it never surprises with every hint at once. Validation errors and
 // warnings are not hints and stay visible regardless of focus.
@@ -3603,8 +3623,8 @@ func (m *Model) editorView() string {
 			// A read-only field can never be the one focused, so its hint would never show; it explains
 			// itself in its own value instead (see renderField), the way a read-only tool list already does.
 			if i == m.focus && !f.readOnly {
-				if hint := m.fieldDetail(f); hint != "" {
-					b.WriteString(m.limitedHint(hint) + "\n")
+				if hint := m.fieldHint(f); hint != "" {
+					b.WriteString(m.hintLine(hint, m.moreBehind(f, hint)) + "\n")
 				}
 			}
 			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
@@ -3662,6 +3682,9 @@ func (m *Model) editorView() string {
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
 			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
+		}
+		if !m.payloadRemoveAsk && m.infoWorks() {
+			keys += " · {info} info"
 		}
 		b.WriteString(m.keyHint(keys))
 	case screenSecret:
@@ -3832,13 +3855,14 @@ func (m *Model) listView() string {
 func (m *Model) listFrame() (string, string) {
 	var head strings.Builder
 	title := styles.title.Render(m.section.title())
-	total, shown := len(m.list.all), len(m.list.matches)
+	total := m.entryTotal()
+	shown, pos := m.entryPosition()
 	filtered := m.list.editing || m.list.query() != ""
 	switch {
 	case filtered:
-		title += fmt.Sprintf("  %d/%d (%d total)", min(m.list.cursor+1, shown), shown, total)
+		title += fmt.Sprintf("  %d/%d (%d total)", pos, shown, total)
 	case total > 0:
-		title += fmt.Sprintf("  %d/%d", m.list.cursor+1, total)
+		title += fmt.Sprintf("  %d/%d", pos, total)
 	}
 	head.WriteString(title + "\n")
 	if filtered {
@@ -3848,8 +3872,9 @@ func (m *Model) listFrame() (string, string) {
 	}
 	if total > 0 {
 		t := m.listTable()
-		_, width := m.fit("  ")
-		head.WriteString(styles.hint.Render(clipCells("  "+t.header(t.layout(width)), m.usable(0))) + "\n")
+		indent := m.entryIndent()
+		_, width := m.fit(indent)
+		head.WriteString(styles.hint.Render(clipCells(indent+t.header(t.layout(width)), m.usable(0))) + "\n")
 	}
 	switch {
 	case total == 0:
@@ -3876,19 +3901,19 @@ func (m *Model) listFrame() (string, string) {
 		keys = "enter details · a approve all · " + findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
 		keys = "enter unlock · n new · " + back + " · {command} cmds · {help} help · q quit"
-	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
+	case m.section == sectionTokens && m.tokensBlocked() != "" && total == 0:
 		keys = back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens:
 		keys = "/ filter · n new · p duplicate · enter show · {delete} revoke · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · {delete} delete · t test · c setup · " +
+		keys = "/ filter · n new · p duplicate · enter edit/fold · r rename · {delete} delete · t test · c setup · " +
 			findKeys(finds) + back +
 			" · {command} cmds · {help} help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · r rename · {delete} delete · c setup · " +
+		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " +
 			findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter edit · r rename · {delete} delete · c setup · " + back +
+		keys = "/ filter · n new · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " + back +
 			" · {command} cmds · {help} help · q quit"
 	default:
 		keys = "/ filter · n new · enter edit · {delete} delete · c setup · " + back + " · {command} cmds · {help} help · q quit"
@@ -3902,7 +3927,7 @@ func (m *Model) listFrame() (string, string) {
 	foot := m.findingsNotice(finds) + m.keyHint(keys)
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
-			if m.needsDescription(name) {
+			if !isGroupRow(name) && m.needsDescription(name) {
 				foot = m.hint(undescribedHint) + foot
 				break
 			}
@@ -3911,6 +3936,9 @@ func (m *Model) listFrame() (string, string) {
 		// words 'qatlas config validate' uses.
 		var idle strings.Builder
 		for _, name := range m.list.all {
+			if isGroupRow(name) {
+				continue
+			}
 			if warning := m.cfg.IdleWarning(name); warning != "" {
 				idle.WriteString("\n" + m.wrapped(styles.warning, "warning: "+warning))
 			}
@@ -4001,12 +4029,26 @@ func (m *Model) inputLine(prefix string, in textinput.Model) string {
 // never shows two.
 func (m *Model) listRows() func(i int) string {
 	t := m.listTable()
-	_, width := m.fit("  ")
+	indent := m.entryIndent()
+	_, width := m.fit(indent)
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
-		return m.listRow(i == m.list.cursor && m.screen != screenNav, t.line(t.rows[name], layout))
+		active := i == m.list.cursor && m.screen != screenNav
+		if isGroupRow(name) {
+			return m.listRow(active, m.groups.rowText(name, m.groups.open(name) || m.list.query() != ""))
+		}
+		return m.listRow(active, indent[2:]+t.line(t.rows[name], layout))
 	}
+}
+
+// entryIndent is what an entry row is indented by behind the focus marker: below its group row, a grouped
+// list's entries stand two cells further in.
+func (m *Model) entryIndent() string {
+	if m.groups != nil {
+		return "    "
+	}
+	return "  "
 }
 
 // listWindow is the range of shown entries whose rows fit between the frame of the list screen.
@@ -4101,6 +4143,9 @@ func (m *Model) pickerFrame() (string, string) {
 			head.WriteString(m.wrapped(styles.warning, "warning: "+note) + "\n")
 		}
 	}
+	if m.infoWorks() {
+		keys = strings.Replace(keys, " · {back} cancel", " · {info} info · {back} cancel", 1)
+	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
 
@@ -4127,7 +4172,8 @@ func (m *Model) pickerRow(i int) string {
 			text += "  (current)"
 		}
 	}
-	return m.listRow(i == m.picker.cursor, truncateCells(text, width))
+	mark := m.pickerMark(m.fields[m.focus], choice)
+	return m.listRow(i == m.picker.cursor, truncateCells(text, width-lipgloss.Width(mark))+mark)
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
@@ -4309,71 +4355,32 @@ func (m *Model) emptyHelp() string {
 	return "Nothing configured yet."
 }
 
-// fittedEditorView is editorView, and for a form taller than the terminal, only as many rows around the
-// focused one as fit. The hint of the focused row stands whole, so rows farther away give way first; only a
-// hint longer than the terminal itself is cut, as far as needed, so the form stays operable.
+// fittedEditorView is screenView, and for a form taller than the terminal, only as many rows around the
+// focused one as fit. The hint of the focused row is one line, so rows farther away give way first.
 func (m *Model) fittedEditorView() string {
-	view := m.editorView()
+	view := m.screenView()
 	if m.screen != screenForm || m.viewFits(view) {
 		return view
 	}
-	defer func() { m.window, m.hintCap = nil, 0 }()
+	defer func() { m.window = nil }()
 	lo, hi := 0, len(m.fields)-1
 	for lo < m.focus || hi > m.focus {
 		if lo < m.focus {
 			lo++
 		}
 		m.window = &[2]int{lo, hi}
-		if view = m.editorView(); m.viewFits(view) {
+		if view = m.screenView(); m.viewFits(view) {
 			return view
 		}
 		if hi > m.focus {
 			hi--
 			m.window = &[2]int{lo, hi}
-			if view = m.editorView(); m.viewFits(view) {
+			if view = m.screenView(); m.viewFits(view) {
 				return view
 			}
 		}
 	}
-	lines := strings.Count(view, "\n") + 1
-	for m.hintCap = lines; m.hintCap > minHintLines; m.hintCap-- {
-		if view = m.editorView(); m.viewFits(view) {
-			return view
-		}
-	}
-	m.hintCap = minHintLines
-	return m.editorView()
-}
-
-// minHintLines is the fewest lines a cut hint keeps.
-const minHintLines = 2
-
-// limitedHint is the hint of the focused row, wrapped into the workspace and, while hintCap is set, cut to
-// that many lines, the last one ending in an ellipsis.
-func (m *Model) limitedHint(text string) string {
-	indent, width := m.fit("    ")
-	var pieces []string
-	for _, line := range strings.Split(text, "\n") {
-		if lipgloss.Width(line) <= width {
-			pieces = append(pieces, line)
-			continue
-		}
-		for _, piece := range strings.Split(lipgloss.NewStyle().Width(width).Render(line), "\n") {
-			pieces = append(pieces, strings.TrimRight(piece, " "))
-		}
-	}
-	if limit := m.hintCap; limit > 0 && len(pieces) > limit {
-		pieces = pieces[:limit]
-		last := []rune(strings.TrimRight(pieces[limit-1], " ,;"))
-		for len(last) > 0 && lipgloss.Width(string(last)+"…") > width {
-			last = last[:len(last)-1]
-		}
-		pieces[limit-1] = string(last) + "…"
-	}
-	for i, piece := range pieces {
-		pieces[i] = indent + styles.hint.Render(piece)
-	}
-	return strings.Join(pieces, "\n")
+	return m.screenView()
 }
 
 // fieldHint is what one form row says about itself. A secret row adds the stages the resolver checked,
@@ -4473,8 +4480,8 @@ func (m *Model) testLine() string {
 // is the first to give way, and a column that only adds detail to the others may be left out of a narrow
 // terminal.
 var sectionColumns = map[section][]column{
-	sectionServices: {{title: "NAME"}, {title: "PROVIDER", optional: true}, {title: "BASE URL", flex: true}},
-	sectionCredentials: {{title: "NAME"}, {title: "PROVIDER", optional: true},
+	sectionServices: {{title: "NAME"}, {title: "BASE URL", flex: true}},
+	sectionCredentials: {{title: "NAME"},
 		{title: "STORAGE", optional: true, short: map[string]string{
 			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"}},
 		{title: "SECRETS", flex: true}},
@@ -4489,7 +4496,9 @@ var sectionColumns = map[section][]column{
 func (m *Model) listTable() table {
 	t := table{columns: sectionColumns[m.section], rows: map[string][]string{}}
 	for _, name := range m.list.all {
-		t.rows[name] = m.cells(name)
+		if !isGroupRow(name) {
+			t.rows[name] = m.cells(name)
+		}
 	}
 	return t
 }
@@ -4498,6 +4507,10 @@ func (m *Model) listTable() table {
 // read can be found. It never holds a secret value.
 func (m *Model) describe(name string) string {
 	text := strings.Join(m.cells(name), columnGap)
+	if m.groups != nil {
+		// The provider is the group heading, not a column; it is found all the same.
+		text = m.groups.of[name] + columnGap + text
+	}
 	if m.section != sectionConnections {
 		return text
 	}
@@ -4514,7 +4527,7 @@ func (m *Model) cells(name string) []string {
 	switch m.section {
 	case sectionServices:
 		s := m.cfg.Services[name]
-		return []string{name, s.Provider, s.BaseURL}
+		return []string{name, s.BaseURL}
 	case sectionCredentials:
 		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.
@@ -4532,7 +4545,7 @@ func (m *Model) cells(name string) []string {
 			}
 			roles = append(roles, role+" "+secretState(source))
 		}
-		return []string{name, providerColumn(provider), m.storagePlace(name, cred), strings.Join(roles, ", ")}
+		return []string{name, m.storagePlace(name, cred), strings.Join(roles, ", ")}
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
 		effects := make([]string, 0, len(config.Effects()))
