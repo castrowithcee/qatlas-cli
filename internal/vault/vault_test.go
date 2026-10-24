@@ -291,3 +291,10 @@ func TestUnsupportedSchemaVersionIsRejected(t *testing.T) {
 		t.Fatalf("Set() against a future schema = %v, want the same refusal", err)
 	}
 }
+
+// A real vault key and an encrypted export keep age's own work factor; only a test binary lowers it.
+func TestProductionWorkFactorUnchanged(t *testing.T) {
+	if scryptLogN != 18 {
+		t.Fatalf("scryptLogN = %d, want 18", scryptLogN)
+	}
+}

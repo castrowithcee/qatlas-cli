@@ -505,7 +505,12 @@ func invalidRequest(message string) error {
 func bounded(value string) string {
 	const maxValueLength = 2048
 	if len(value) > maxValueLength {
-		return value[:maxValueLength]
+		// Step back to a rune start so a multi-byte character is never cut.
+		end := maxValueLength
+		for end > 0 && !utf8.RuneStart(value[end]) {
+			end--
+		}
+		return value[:end]
 	}
 	return value
 }
