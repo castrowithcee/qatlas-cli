@@ -152,8 +152,10 @@ of the instance, and `matomo.segments.delete` is in no profile. The profile `ann
 of a website, and the annotation deletions are in no profile. The profile `dimensions` adds
 `matomo.dimension-options.list`, which needs a write right, `matomo.dimensions.add`, and
 `matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good. The profile
-`sites` adds `matomo.sites.update`; it is not recommended because it changes the settings of a website, and
-`matomo.sites.add` (target `instance`) and `matomo.sites.delete` are in no profile.
+`sites` adds `matomo.sites.update`, `matomo.site-urls.add`, `matomo.site-urls.set`, and
+`matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
+`matomo.sites.add` (target `instance`) `matomo.sites.delete`, and `matomo.site-groups.rename` (target `instance`)
+are in no profile.
 
 ## Tools
 
@@ -165,6 +167,10 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 | `matomo.sites.add` | [sites](sites.md) | creates a website (Super User, target `instance`; effect `create`) |
 | `matomo.sites.update` | [sites](sites.md) | changes the settings of one website; lists not sent are kept (effect `update`) |
 | `matomo.sites.delete` | [sites](sites.md) | deletes a website and its configuration (Super User, targets `instance` and the website; effect `delete`, only via `tools`) |
+| `matomo.site-urls.add` | [sites](sites.md) | adds alias URLs to a website, an assignment for tracking only (effect `create`) |
+| `matomo.site-urls.set` | [sites](sites.md) | replaces the alias URL list of a website (effect `update`) |
+| `matomo.sites.update-created-time` | [sites](sites.md) | sets the creation date of up to 100 websites (effect `update`) |
+| `matomo.site-groups.rename` | [sites](sites.md) | renames a website group instance-wide (Super User, target `instance`; effect `update`) |
 | `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
 | `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
 | `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
