@@ -1224,6 +1224,9 @@ func (m *Model) logDetailView() string {
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
+	m.formCol = m.labelColumn("status", "UTC file", "sequence", "day", "kind", "through", "way", "client", "tool",
+		"connection", "effect", "result", "duration", "request", "response")
+	defer func() { m.formCol = 0 }()
 	field := func(label, value string) { b.WriteString(m.formRow(false, label, value) + "\n") }
 	field("status", row.status.label()+" ("+m.logReason(row.line)+")")
 	field("UTC file", row.date)
@@ -1308,6 +1311,8 @@ func (m *Model) logDateDialogView() string {
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
+	m.formCol = m.labelColumn(labels...)
+	defer func() { m.formCol = 0 }()
 	for i, in := range d.inputs {
 		b.WriteString(m.formRow(i == d.focus, labels[i], in.View()) + "\n")
 	}

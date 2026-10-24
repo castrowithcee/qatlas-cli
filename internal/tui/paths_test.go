@@ -63,7 +63,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "gh")
-	if view := screenOf(m); !strings.Contains(view, "(none: every project)") {
+	if view := screenOf(m); !strings.Contains(view, "paths       any") {
 		t.Fatalf("the empty row does not say what it means:\n%s", view)
 	}
 	openPathList(t, m)

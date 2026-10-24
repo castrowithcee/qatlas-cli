@@ -446,11 +446,13 @@ func (m *Model) tokenDetailView() string {
 	}
 	var b strings.Builder
 	b.WriteString(title)
+	m.formCol = m.labelColumn("value", vorbilderLabel, expiresLabel, "created")
+	defer func() { m.formCol = 0 }()
 	value, own := strings.Repeat("●", 24)+"  (s to reveal)", ""
 	if m.tokenValueShown() {
 		if v := m.tokenValue(name); v != "" {
 			value = v + "  (s to hide)"
-			if formIndent+lipgloss.Width(value) > m.usable(0) {
+			if m.formIndent()+lipgloss.Width(value) > m.usable(0) {
 				// Too narrow for the row: the value takes a line of its own, so it is not broken where it
 				// could be copied whole.
 				value, own = "(s to hide)", v

@@ -112,7 +112,7 @@ func (m *Model) problemRow(p config.Problem, name string) string {
 			label = problemRows[p.Section][""]
 		}
 		if label == "name" || label == "domain" {
-			label = m.fields[0].label
+			label = m.entryKey().label
 		}
 	default:
 		label = problemRows[p.Section][field]

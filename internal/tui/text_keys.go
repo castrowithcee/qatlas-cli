@@ -130,7 +130,6 @@ const (
 	tSelftestDetail         textID = "SelftestDetail"
 	tSelftestNone           textID = "SelftestNone"
 	tValueRunsThis          textID = "ValueRunsThis"
-	tValueNothingToChoose   textID = "ValueNothingToChoose"
 	tOverviewVaultLocked    textID = "OverviewVaultLocked"
 	tOverviewNeedsVault     textID = "OverviewNeedsVault"
 	tOverviewVault          textID = "OverviewVault"

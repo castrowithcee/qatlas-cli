@@ -115,7 +115,7 @@ func (m *Model) generalFields() []field {
 			withHint(tr(tLanguageHint)).
 			withDetail(tr(tLanguageDetail)),
 	}
-	return append(fields, keyFields(prefs.Keys)...)
+	return m.groupSections(append(fields, keyFields(prefs.Keys)...), -1)
 }
 
 // saveGeneral stores the preferences on this device. It needs neither an admin session nor the vault's

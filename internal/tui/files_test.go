@@ -125,8 +125,12 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 	in, out, more := filepath.Join(root, "in"), filepath.Join(root, "out"), filepath.Join(root, "more")
 
 	openConnection(t, m, "wiki")
+	if view := screenOf(m); strings.Contains(view, "uploads") || !strings.Contains(view, "Advanced (closed)") {
+		t.Fatalf("the empty file rows are not folded under Advanced:\n%s", view)
+	}
+	focusField(t, m, filesReadLabel)
 	if view := screenOf(m); !strings.Contains(view, "uploads") || !strings.Contains(view, "downloads") ||
-		!strings.Contains(view, "(none released)") {
+		!strings.Contains(view, "none") {
 		t.Fatalf("the form does not show the two rows and what empty means:\n%s", view)
 	}
 	openFilesList(t, m, filesReadLabel)

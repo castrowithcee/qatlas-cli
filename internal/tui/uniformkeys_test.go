@@ -95,17 +95,15 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 		if got := m.fieldValue("name"); got != "hjkl" {
 			t.Fatalf("name = %q, want the letters typed as text", got)
 		}
-		press(t, m, "tab")
-		if m.fields[m.focus].label != providerLabel {
-			t.Fatalf("tab reached %q, want the provider row", m.fields[m.focus].label)
-		}
+		// A choice row followed by another choice row: j and k move like the arrows there.
+		focusField(t, m, "service")
 		press(t, m, "j")
-		if m.fields[m.focus].label == providerLabel {
+		if m.fields[m.focus].label == "service" {
 			t.Fatal("j on a choice row did not move to the next row")
 		}
 		press(t, m, "k")
-		if m.fields[m.focus].label != providerLabel {
-			t.Fatalf("k reached %q, want the provider row again", m.fields[m.focus].label)
+		if m.fields[m.focus].label != "service" {
+			t.Fatalf("k reached %q, want the service row again", m.fields[m.focus].label)
 		}
 	})
 

@@ -421,11 +421,17 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 
 func focusField(t *testing.T, m *Model, label string) {
 	t.Helper()
-	for i := 0; i <= len(m.fields); i++ {
-		if m.fields[m.focus].label == label {
-			return
+	for pass := 0; pass < 2; pass++ {
+		for i := 0; i <= len(m.fields); i++ {
+			if m.fields[m.focus].label == label {
+				return
+			}
+			press(t, m, "tab")
 		}
-		press(t, m, "tab")
+		// A row of a closed section is reached the way a person reaches it: by jumping to the section.
+		for range sectionRank {
+			press(t, m, "pgdown")
+		}
 	}
 	t.Fatalf("the form has no field %q", label)
 }
