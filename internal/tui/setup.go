@@ -319,7 +319,7 @@ func (m *Model) finishSetup() tea.Cmd {
 	name := m.wizard.saved
 	m.wizard, m.fields = nil, nil
 	cmd := m.openSection(sectionConnections)
-	m.list.selectName(name)
+	m.selectEntry(name)
 	m.status = "Saved " + name
 	return cmd
 }

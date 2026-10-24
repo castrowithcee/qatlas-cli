@@ -23,7 +23,9 @@ type filterList struct {
 	text func(name string) string
 	// match, when set, decides which entries a (lower-case) query shows instead of the text lookup; the
 	// grouped tool picker uses it to show group rows and to hide the tools of collapsed groups.
-	match   func(name, query string) bool
+	match func(name, query string) bool
+	// begin, when set, runs before each refilter so a match function can drop what it cached.
+	begin   func()
 	cursor  int
 	offset  int
 	input   textinput.Model
@@ -58,6 +60,9 @@ func (l *filterList) query() string { return strings.TrimSpace(l.input.Value()) 
 func (l *filterList) refilter() {
 	previous, hadSelection := l.selected()
 	query := strings.ToLower(l.query())
+	if l.begin != nil {
+		l.begin()
+	}
 	l.matches = l.matches[:0]
 	for _, name := range l.all {
 		if l.shows(name, query) {
