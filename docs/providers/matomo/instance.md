@@ -23,8 +23,18 @@ need a view right on some website; the default time zone needs none. A missing r
 `idSite` filters `excluded-query-parameters` and `query-parameter-exclusion-type` for one website and must lie
 inside the connection's targets; for other sections it is refused. Lists are comma-separated untrusted text, cut at 8192
 bytes.
-Matomo answers `false` for a list that was never set; the tool returns an empty text. Writing global settings is not
-part of this group, and neither is `SitesManager.setGlobalExcludedQueryParameters`.
+Matomo answers `false` for a list that was never set; the tool returns an empty text.
+
+`matomo.global-settings.set-excluded-ips`, `-user-agents`, `-referrers`, and `-query-parameters` replace one global
+exclusion for every website of the instance, including websites outside the connection's website targets. Each needs
+Super User rights and a connection whose targets name `instance`, is in no profile, and sends one request that is never
+repeated. A list is sent whole and an empty list clears it, so read the current one first. Matomo trims entries and
+drops empty ones; Qatlas refuses entries Matomo would split or misread (commas, control characters) and checks IP
+entries as addresses, CIDR ranges, or IPv4 with trailing `*` octets, which is narrower than Matomo's own check.
+`-query-parameters` calls `SitesManager.setGlobalQueryParamExclusion`: the type `custom` takes the list, the Matomo
+types take none. A privacy policy of the instance can make Matomo keep the old type while it answers success.
+`SitesManager.setGlobalExcludedQueryParameters` is deprecated and not used. The other global settings cannot be
+written through this group.
 
 ## Reference data
 

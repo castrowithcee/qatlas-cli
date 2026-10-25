@@ -157,8 +157,8 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good. The profile
 `sites` adds `matomo.sites.update`, `matomo.site-urls.add`, `matomo.site-urls.set`, and
 `matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
-`matomo.sites.add` (target `instance`) `matomo.sites.delete`, and `matomo.site-groups.rename` (target `instance`)
-are in no profile.
+`matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), and the
+four `matomo.global-settings.set-excluded-*` tools (target `instance`) are in no profile.
 
 ## Tools
 
@@ -179,6 +179,10 @@ are in no profile.
 | `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
 | `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
 | `matomo.global-settings.get` | [instance](instance.md) | reads the global website settings (admin right, target `instance`) |
+| `matomo.global-settings.set-excluded-ips` | [instance](instance.md) | replaces the globally excluded IPs (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-user-agents` | [instance](instance.md) | replaces the globally excluded user agents (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-referrers` | [instance](instance.md) | replaces the globally excluded referrers (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-query-parameters` | [instance](instance.md) | sets the global query parameter exclusion type and list (Super User, target `instance`; effect `update`) |
 | `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
 | `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
