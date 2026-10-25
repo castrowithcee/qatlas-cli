@@ -1,31 +1,31 @@
 [1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                                   [2m[?] help[0m  [2m[:] cmd[0m
 [1m> [0m[1m[1 Overview][0m [2m 2 Connections [0m [2m 3 Activity [0m [2m 4 Access [0m [2m 5 Library [0m [2m 6 Settings [0m
 [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
-[1mOverview[0m
+[1mOverview[0m                                                                                                                       [2mWed, 18 Mar 2026  12:00[0m
+[2mSetup and recent activity[0m
+[2m╭─[0m[1m[0m[2m───────────────────────────╮[0m [2m╭─[0m[1m[0m[2m──────────────────────────╮[0m [2m╭─[0m[1m[0m[2m──────────────────────────╮[0m [2m╭─[0m[1m[0m[2m──────────────────────────╮[0m [2m╭─[0m[1m[0m[2m──────────────────────────╮[0m
+[2m│[0m [2mConnections[0m                [2m│[0m [2m│[0m [2mServices[0m                  [2m│[0m [2m│[0m [2mCredentials[0m               [2m│[0m [2m│[0m [2mTokens[0m                    [2m│[0m [2m│[0m [2mApprovals[0m                 [2m│[0m
+[2m│[0m [1m7[0m                          [2m│[0m [2m│[0m [1m7[0m                         [2m│[0m [2m│[0m [1m7[0m                         [2m│[0m [2m│[0m [1m0[0m                         [2m│[0m [2m│[0m [1m7[0m                         [2m│[0m
+[2m╰────────────────────────────╯[0m [2m╰───────────────────────────╯[0m [2m╰───────────────────────────╯[0m [2m╰───────────────────────────╯[0m [2m╰───────────────────────────╯[0m
 Vault: [1m●[0m vault unlocked  [2m●[0m admin off
-  Connections  7
-  Services     7
-  Credentials  7
-  Tokens       0
-  Approvals    7
-[2mNext steps[0m
-  open Access > Approvals (4)
-  open Connections and press t to test; Defaults are optional
-  [2mActivity[0m  Calls 180 · success 70% · errors 54
-  [2mMon[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m█[0m [2m·[0m [1m█[0m [1m░[0m [1m▓[0m [1m▒[0m
-  [2mTue[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m▓[0m [2m·[0m [1m▓[0m [1m▒[0m [1m░[0m
-  [2mWed[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▓[0m [1m▒[0m [1m░[0m [1m░[0m [1m█[0m [2m·[0m
-  [2mThu[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m█[0m [2m·[0m [1m█[0m [1m░[0m  
-  [2mFri[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m▓[0m [1m▒[0m [1m▓[0m  
-  [2mSat[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▓[0m [1m▒[0m [1m▓[0m [1m▒[0m [2m·[0m [1m░[0m  
-  [2mSun[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▒[0m [1m░[0m [1m░[0m [1m█[0m [2m·[0m [1m█[0m  
-  [2mless ·░▒▓█ more[0m
-  [2mLatest calls[0m
-  2026-03-17 10:14+00  twentycrm.people.list  crm-sales  ok  68ms
-  2026-03-17 08:01+00  github.issues.list  code-planning  ok  37ms
-  2026-03-16 16:54+00  bookstack.pages.update  wiki-main  timeout  178ms
-  2026-03-16 14:41+00  todoist.tasks.list  tasks-personal  invalid-request  147ms
-  2026-03-16 12:28+00  github.issues.read  code-planning  ok  116ms
+[2m╭─[0m[1m Next steps [0m[2m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m
+[2m│[0m   open Access > Approvals (4)                                                                                                                      [2m│[0m
+[2m│[0m   open Connections and press t to test; Defaults are optional                                                                                      [2m│[0m
+[2m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[1m Recent activity [0m[2m─────────────────────────────────────────────────────────────────────────────────────╮[0m [2m╭─[0m[1m Activity (12 weeks) [0m[2m────────────────────╮[0m
+[2m│[0m [2m03-17 10:14[0m  [1m✓[0m  twentycrm.people.list               crm-sales                 [1mok             [0m  [2m  68ms[0m [2m│[0m [2m│[0m [2mDec 29  5 12 19 26  2  9 16 23  2  9 16[0m  [2m│[0m
+[2m│[0m [2m03-17 08:01[0m  [1m✓[0m  github.issues.list                  code-planning             [1mok             [0m  [2m  37ms[0m [2m│[0m [2m│[0m [2mMon [0m·· ·· ·· ·· ·· ·· ██ ·· ██ ░░ ▓▓ ▒▒  [2m│[0m
+[2m│[0m [2m03-16 16:54[0m  [1m✗[0m  bookstack.pages.update              wiki-main                 [1mtimeout        [0m  [2m 178ms[0m [2m│[0m [2m│[0m [2mTue [0m·· ·· ·· ·· ·· ·· ░░ ▓▓ ·· ▓▓ ▒▒ ░░  [2m│[0m
+[2m│[0m [2m03-16 14:41[0m  [1m✗[0m  todoist.tasks.list                  tasks-personal            [1minvalid-request[0m  [2m 147ms[0m [2m│[0m [2m│[0m [2mWed [0m·· ·· ·· ·· ·· ·· ▓▓ ▒▒ ░░ ░░ ██ ··  [2m│[0m
+[2m│[0m [2m03-16 12:28[0m  [1m✓[0m  github.issues.read                  code-planning             [1mok             [0m  [2m 116ms[0m [2m│[0m [2m│[0m [2mThu [0m·· ·· ·· ·· ·· ·· ░░ ██ ·· ██ ░░     [2m│[0m
+[2m│[0m [2m03-16 10:15[0m  [1m✗[0m  telegram.messages.send              alerts-bot                [1mnot-found      [0m  [2m  85ms[0m [2m│[0m [2m│[0m [2mFri [0m·· ·· ·· ·· ·· ·· ·· ░░ ▓▓ ▒▒ ▓▓     [2m│[0m
+[2m│[0m [2m03-16 08:02[0m  [1m✓[0m  nextcloud.files.upload              cloud-files               [1mok             [0m  [2m  54ms[0m [2m│[0m [2m│[0m [2mSat [0m·· ·· ·· ·· ·· ▓▓ ▒▒ ▓▓ ▒▒ ·· ░░     [2m│[0m
+[2m│[0m [2m03-15 14:47[0m  [1m✓[0m  bookstack.pages.read                wiki-main                 [1mok             [0m  [2m 319ms[0m [2m│[0m [2m│[0m [2mSun [0m·· ·· ·· ·· ·· ▒▒ ░░ ░░ ██ ·· ██     [2m│[0m
+[2m│[0m [2m03-15 12:34[0m  [1m✗[0m  twentycrm.people.list               crm-sales                 [1mnot-found      [0m  [2m 288ms[0m [2m│[0m [2m│[0m [2mCalls 180 · success 70% · errors 54[0m      [2m│[0m
+[2m│[0m [2m03-15 10:21[0m  [1m✓[0m  github.issues.list                  code-planning             [1mok             [0m  [2m 257ms[0m [2m│[0m [2m│[0m [2mless [0m·· ░░ ▒▒ ▓▓ ██[2m more[0m                 [2m│[0m
+[2m╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m [2m╰──────────────────────────────────────────╯[0m
+
+
 
 
 

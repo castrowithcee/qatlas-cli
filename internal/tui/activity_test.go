@@ -281,15 +281,17 @@ func TestLogsHeatmapFitsSmallTerminals(t *testing.T) {
 	}
 }
 
-func TestOverviewShowsTheHeatmapAndLatestCallsAfterLoading(t *testing.T) {
+func TestOverviewShowsTheHeatmapAndRecentCallsAfterLoading(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := overviewModel(t, f.model(false, f.localToday()))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 46})
 	m.openSection(sectionOverview)
 	m.focusNav()
 	before := m.View()
-	if m.overviewAct.loaded || strings.Contains(before, "Latest calls") || !strings.Contains(before, "Connections") {
+	if m.overviewAct.loaded || strings.Contains(before, "wiki.pages.list") || !strings.Contains(before, "Connections") ||
+		strings.Count(before, "No calls logged yet") != 2 {
 		t.Fatalf("the Overview shows activity before it was read:\n%s", before)
 	}
 	start := time.Now()
@@ -299,9 +301,9 @@ func TestOverviewShowsTheHeatmapAndLatestCallsAfterLoading(t *testing.T) {
 	}
 	deliver(m, m.loadOverviewActivity())
 	view := m.View()
-	assertViewFits(t, view, 100, 28)
-	for _, want := range []string{"Activity", "Calls 18", "Mon", "less", "Latest calls", "wiki.pages.list", "wiki-main", "ok", "25ms",
-		"Connections", "Next steps"} {
+	assertViewFits(t, view, 100, 46)
+	for _, want := range []string{"Recent activity", "Activity (", "Calls 18", "Mon", "less", "wiki.pages.list", "wiki-main", "ok",
+		"25ms", "✓", "✗", "denied", "Connections", "Next steps"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the Overview lacks %q:\n%s", want, view)
 		}
@@ -325,7 +327,7 @@ func TestOverviewActivityGivesWayToTheCounts(t *testing.T) {
 		}
 	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
-	if view := m.View(); strings.Contains(view, "Latest calls") {
+	if view := m.View(); strings.Contains(view, "Recent activity") {
 		t.Errorf("the smallest Overview still has room for the activity:\n%s", view)
 	}
 }
