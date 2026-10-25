@@ -725,7 +725,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.labelInput = textField("", "", false).input
 	m.pathList = newFilterList(func(path string) string { return path })
 	m.pathInput = newPathField(pathDirectory)
-	m.logs = newLogView()
+	m.logs = newLogView(time.Now())
 	// The editor opens on the tab line, with the Overview already shown below it.
 	m.section = sectionOverview
 	m.list.reset(m.listItems(m.section))
@@ -3627,6 +3627,15 @@ func sectionShortcut(key string) (section, bool) {
 
 // View renders the frame: the configuration path, the sections, and the workspace with the current screen.
 func (m *Model) View() string {
+	view := m.renderView()
+	if !styles.filled || view == "" {
+		return view
+	}
+	return paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
+}
+
+// renderView is the frame before the background of the preference is applied.
+func (m *Model) renderView() string {
 	if m.quitting {
 		return ""
 	}
@@ -4416,7 +4425,7 @@ func (m *Model) pickerRow(i int) string {
 	// The ID and what follows it stand faint on rows that are not active; they stay text, so nothing depends
 	// on the faint style. A row without a title is faint from the ID on as well.
 	head := clipCells(line, 2+lipgloss.Width("[ ] ")+lipgloss.Width(m.toolLead(choice)))
-	return head + lipgloss.NewStyle().Faint(true).Render(strings.TrimPrefix(line, head))
+	return head + styles.hint.Render(strings.TrimPrefix(line, head))
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
@@ -4882,7 +4891,7 @@ func Run(opts Options) error {
 	}
 	// The colour scheme is settled before the program takes the terminal, so a background query never
 	// races the editor's own input.
-	applyColorScheme(prefs.Theme)
+	applyColorScheme(prefs.Theme, prefs.Background)
 	setLanguage(prefs.Language)
 	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
 	if err != nil {

@@ -23,11 +23,15 @@ import (
 // FileName is the name of the preferences file inside the configuration directory.
 const FileName = "tui.yaml"
 
-// Values of Prefs.Theme and Prefs.Icons.
+// Values of Prefs.Theme, Prefs.Background and Prefs.Icons.
 const (
 	ThemeAuto  = "auto"
 	ThemeLight = "light"
 	ThemeDark  = "dark"
+
+	// Background terminal leaves the terminal's own background; qatlas paints the whole screen.
+	BackgroundTerminal = "terminal"
+	BackgroundQatlas   = "qatlas"
 
 	IconsNone     = "none"
 	IconsNerdFont = "nerdfont"
@@ -51,8 +55,10 @@ const DefaultStart = "overview"
 // Prefs are the device-local preferences.
 type Prefs struct {
 	Theme string `yaml:"theme"`
-	Start string `yaml:"start"`
-	Icons string `yaml:"icons"`
+	// Background is empty in a Prefs built without it; every reader takes that as BackgroundTerminal.
+	Background string `yaml:"background"`
+	Start      string `yaml:"start"`
+	Icons      string `yaml:"icons"`
 	// Language is empty in a Prefs built without it; every reader takes that as LanguageEnglish.
 	Language string `yaml:"language"`
 	// MouseOff switches the mouse off; the zero value keeps it on, so a Prefs built without it has it on.
@@ -65,7 +71,7 @@ func (p Prefs) MouseEnabled() bool { return !p.MouseOff }
 
 // Default returns the preferences of a device that has none.
 func Default() Prefs {
-	return Prefs{Theme: ThemeAuto, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
+	return Prefs{Theme: ThemeAuto, Background: BackgroundTerminal, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
 }
 
 // Path returns the preferences file that belongs to the configuration directory dir.
@@ -84,12 +90,13 @@ func Load(path string) (Prefs, []string) {
 		return prefs, []string{fmt.Sprintf("cannot read %s, using the defaults: %v", path, err)}
 	}
 	var raw struct {
-		Theme    *string `yaml:"theme"`
-		Start    *string `yaml:"start"`
-		Icons    *string `yaml:"icons"`
-		Language *string `yaml:"language"`
-		Mouse    *string `yaml:"mouse"`
-		Keys     *struct {
+		Theme      *string `yaml:"theme"`
+		Background *string `yaml:"background"`
+		Start      *string `yaml:"start"`
+		Icons      *string `yaml:"icons"`
+		Language   *string `yaml:"language"`
+		Mouse      *string `yaml:"mouse"`
+		Keys       *struct {
 			Info    *string `yaml:"info"`
 			Save    *string `yaml:"save"`
 			Help    *string `yaml:"help"`
@@ -108,6 +115,15 @@ func Load(path string) (Prefs, []string) {
 		default:
 			warnings = append(warnings, fmt.Sprintf("%s: theme %q is not auto, light or dark, using %s",
 				path, *raw.Theme, ThemeAuto))
+		}
+	}
+	if raw.Background != nil {
+		switch *raw.Background {
+		case BackgroundTerminal, BackgroundQatlas:
+			prefs.Background = *raw.Background
+		default:
+			warnings = append(warnings, fmt.Sprintf("%s: background %q is not terminal or qatlas, using %s",
+				path, *raw.Background, BackgroundTerminal))
 		}
 	}
 	if raw.Start != nil {
@@ -160,6 +176,13 @@ func Save(path string, prefs Prefs) error {
 	case ThemeAuto, ThemeLight, ThemeDark:
 	default:
 		return fmt.Errorf("theme %q is not auto, light or dark", prefs.Theme)
+	}
+	switch prefs.Background {
+	case "":
+		prefs.Background = BackgroundTerminal
+	case BackgroundTerminal, BackgroundQatlas:
+	default:
+		return fmt.Errorf("background %q is not terminal or qatlas", prefs.Background)
 	}
 	switch prefs.Icons {
 	case IconsNone, IconsNerdFont:

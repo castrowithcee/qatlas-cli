@@ -33,11 +33,12 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 	if m.screen != screenForm || m.section != sectionGeneral {
 		t.Fatalf("General = screen %v section %v, want its form", m.screen, m.section)
 	}
-	labels := []string{m.fields[0].label, m.fields[1].label, m.fields[2].label}
-	if strings.Join(labels, ",") != "color scheme,start view,icons" {
+	labels := []string{m.fields[0].label, m.fields[1].label, m.fields[2].label, m.fields[3].label}
+	if strings.Join(labels, ",") != "color scheme,background,start view,icons" {
 		t.Fatalf("rows = %v", labels)
 	}
-	press(t, m, "right") // color scheme: light
+	press(t, m, "right")        // color scheme: light
+	press(t, m, "tab", "right") // background: qatlas
 	press(t, m, "tab", "right")
 	press(t, m, "tab", "right") // icons: nerdfont
 	pump(t, m, "f2")
@@ -48,7 +49,7 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 		t.Fatalf("status %q fail %q, want it saved", m.status, m.fail)
 	}
 	got, warnings := uiprefs.Load(path)
-	want := uiprefs.Prefs{Theme: uiprefs.ThemeLight, Start: "connections", Icons: uiprefs.IconsNerdFont,
+	want := uiprefs.Prefs{Theme: uiprefs.ThemeLight, Background: uiprefs.BackgroundQatlas, Start: "connections", Icons: uiprefs.IconsNerdFont,
 		Language: uiprefs.LanguageEnglish, Keys: uiprefs.DefaultKeys()}
 	if got != want || len(warnings) != 0 {
 		t.Fatalf("stored = %+v %v, want %+v", got, warnings, want)
@@ -56,11 +57,35 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 	if m.prefs != want {
 		t.Errorf("model prefs = %+v, want %+v", m.prefs, want)
 	}
-	if styles.active.GetForeground() != buildTheme(false, false).active.GetForeground() {
+	if styles.active.GetForeground() != buildTheme(false, false, false).active.GetForeground() {
 		t.Error("the colour scheme did not change at once")
+	}
+	if !styles.filled {
+		t.Error("the background did not change at once")
 	}
 	if m.formDirty() {
 		t.Error("the saved form still counts as changed")
+	}
+}
+
+func TestGeneralWithBackgroundFieldFitsSmallTerminal(t *testing.T) {
+	restoreRenderer(t)
+	m, _ := lockedVaultModel(t)
+	openSectionByName(t, m, sectionGeneral)
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	press(t, m, "tab") // background
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) > 14 || m.tooSmall {
+		t.Fatalf("%d lines at height 14, too small %v\n%s", len(lines), m.tooSmall, view)
+	}
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w > 40 {
+			t.Errorf("line %d is %d cells wide at width 40", i, w)
+		}
+	}
+	if !strings.Contains(view, "background") {
+		t.Errorf("the background field is not on screen:\n%s", view)
 	}
 }
 

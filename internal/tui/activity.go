@@ -174,7 +174,7 @@ func (m *Model) retentionStart(now time.Time) string {
 
 // heatSpan is the local days the Logs heatmap draws: the selected days, or, for All, the retention window.
 func (m *Model) heatSpan() (from, to string) {
-	now := time.Now()
+	now := m.timeNow()
 	from, to = m.logs.bounds()
 	if m.logs.mode == logModeAll {
 		from, to = m.retentionStart(now), localDay(now)
@@ -212,7 +212,7 @@ func (m *Model) setHeat(on bool) tea.Cmd {
 	if !on || lv.mode != logModeDay {
 		return nil
 	}
-	now := time.Now()
+	now := m.timeNow()
 	lv.mode, lv.from, lv.to = logModeRange, m.retentionStart(now), localDay(now)
 	return m.loadLogs()
 }
@@ -221,10 +221,10 @@ func (m *Model) setHeat(on bool) tea.Cmd {
 // smallest terminal keeps them.
 func (m *Model) logHeatLines(room int) string {
 	from, to := m.heatSpan()
-	today := localDay(time.Now())
+	today := localDay(m.timeNow())
 	days := invokelog.DailyActivity(m.logs.heatDays(), from, to)
 	width := m.usable(2)
-	grid, drawn := heatGrid(days, today, m.retentionStart(time.Now()), width, maxHeatWeeks, true)
+	grid, drawn := heatGrid(days, today, m.retentionStart(m.timeNow()), width, maxHeatWeeks, true)
 	lines := []string{heatTotals(drawn)}
 	if len(drawn) > 0 {
 		lines[0] += tr(tHeatSpan, drawn[0].Date, min(drawn[len(drawn)-1].Date, today))
@@ -256,7 +256,7 @@ type overviewActivityMsg struct {
 // Overview without the block.
 func (m *Model) loadOverviewActivity() tea.Cmd {
 	v := m.logVault()
-	now := time.Now()
+	now := m.timeNow()
 	from := localDay(now.AddDate(0, 0, -7*overviewHeatWeeks))
 	utcFrom, utcTo := invokelog.UTCFileBounds(from, localDay(now))
 	return func() tea.Msg {
@@ -291,7 +291,7 @@ func (m *Model) overviewActivityLines(room, width int) []string {
 	if !act.loaded || len(act.days) == 0 {
 		return nil
 	}
-	now := time.Now()
+	now := m.timeNow()
 	grid, drawn := heatGrid(act.days, localDay(now), m.retentionStart(now), width, overviewHeatWeeks, false)
 	var lines []string
 	if len(grid) > 0 && room >= len(grid)+2 {
