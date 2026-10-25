@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub Actions tools: the observer and operator tools, diagnosing a run, log and artifact limits, billable time, the listed-only deletion of run logs, executions, and the listed-only workflow maintainer and Actions administrator tools with their paths, settings, and credential.
+  Describes the GitHub Actions tools: the observer and operator tools, diagnosing a run, log and artifact limits, billable time, the listed-only deletion of run logs, executions, and the listed-only workflow maintainer and Actions administrator tools with their paths and settings.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -148,22 +148,7 @@ it sends nothing and answers `accepted: false` with the `status` and `conclusion
 completes between the read and the cancel, GitHub refuses the cancel; Qatlas reads the run again and answers
 the same way.
 
-## Tokens for Actions
-
-GitHub decides with every request. A refused Actions request names what such a request needs; it never
-claims what the configured token holds.
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| observer tools | `repo` for a private repository; a public repository needs no scope | Actions: read |
-| `github.workflows.dispatch` | `repo` | Actions: read and write, and Contents: read for the workflow file |
-| re-runs and cancel | `repo` | Actions: read and write |
-| `github.workflow-runs.usage` | `repo` for a private repository | Actions: read |
-| `github.workflow-run-logs.delete` | `repo` | Actions: write |
-
-A repository or organization policy may forbid an execution although the token would allow it. A classic
-token needs the `workflow` scope only to change workflow files, which only the listed-only
-`github.workflow-files.create` and `github.workflow-files.update` do.
+The token rights are listed under [GitHub Actions](setup.md#github-actions).
 
 ## Workflow maintenance and Actions administration
 
@@ -247,19 +232,8 @@ retried.
 
 ### Credential
 
-Give these connections a credential of their own, used by no other connection, ideally a fine-grained token
-limited to the one repository with only the permissions of the tools the connection lists. GitHub decides on
-every request and documents the requirements per endpoint; a refusal names what the request needs and never
-claims what the token holds. A branch protection or repository rule may refuse a file change although the
-token would allow it.
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.workflow-files.list`, `get` | `repo` for a private repository | Contents: read |
-| `github.workflow-files.create`, `update` | `repo` and `workflow` | Contents: read and write, and Workflows: read and write |
-| `github.workflows.enable`, `disable` | `repo` | Actions: read and write |
-| `github.actions-permissions.get`, `github.workflow-permissions.get` | `repo`, as a repository administrator | Administration: read |
-| `github.actions-permissions.update`, `github.workflow-permissions.update` | `repo`, as a repository administrator | Administration: read and write |
+The token rights are listed under [GitHub Actions](setup.md#github-actions), which also says why these connections
+get a credential of their own.
 
 ```yaml
 connections:

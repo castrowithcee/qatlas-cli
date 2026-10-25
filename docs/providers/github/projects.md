@@ -20,12 +20,7 @@ The project tools of the [GitHub provider](README.md). Every tool takes `project
 `query` searches them and `min_permission_level` keeps those the token holds at least that permission on. Its `project`
 value is what the other tools take as `project`. The targets decide what it shows: [owner lists](README.md#owner-lists).
 
-Reading the projects needs `read:project` on a classic token. A fine-grained token lists the projects of an organization
-with Projects read access, but not the projects of a user; GitHub refuses that with `permission`.
-
-The tools that change a project, its fields, views, status updates, collaborators, and items need `project` on a classic
-token, or Projects read and write access of the organization on a fine-grained token; the projects of a user need a
-classic token. The sections below name only what a tool needs beyond that.
+The token rights of the project tools are listed under [Projects](setup.md#projects).
 
 The read tools on this page report every member GitHub documents for their objects, except rendered variants, which
 repeat the text in another format and add no content, deprecated members a documented one replaces, lookups by argument
@@ -87,7 +82,7 @@ connections:
       github.projects.copy, github.projects.link, github.projects.unlink, github.projects.delete]
 ```
 
-A link or an unlink also needs a token that can see the repository. Deleting a project needs the rights of a project administrator. A copy takes
+A copy takes
 the views of its source along. No lifecycle tool deletes a field, an option, a view, or an item; the
 [fields](#project-fields) and the [views](#project-views) have tools of their own.
 
@@ -204,8 +199,8 @@ connection offers them only while its `tools` list names them, and no setup prof
 The `team` slug of an entry is what `github.projects.link-team` takes. A team reports its settings, its parent, and its
 first 10 ancestors, member statuses (each with its user as an account), and linked projects; its members, child teams,
 repositories, and invitations are counted only. A project of a user is linked to no team and lists none. GitHub shows
-teams only to a token that may read the organizations, even for a project of a user: without `read:org` on a classic
-token, or Members read access on a fine-grained one, the list ends with `permission`, and the message names that scope.
+teams only to a token that may read the organizations, even for a project of a user; without that right the list ends
+with `permission`, and the message names the scope.
 
 Collaborators left out stay unchanged. Qatlas grants no access to people outside the owning organization: a role other
 than `none` for a `user` needs a project of an organization and a user who is a member of it, which Qatlas checks live
@@ -219,8 +214,7 @@ named.
 Teams belong to an organization, so Qatlas refuses a team for a `users/LOGIN/projects/NUMBER` project, in
 `github.project-collaborators.update` and in the team links, with `invalid-request` before a secret is read. GitHub's
 API reads neither the collaborators of a project nor their roles, so there is no tool that lists them; check them in
-GitHub itself. Changing collaborators needs the rights of a project administrator; resolving a team or checking a
-membership also needs `read:org` on a classic token, or Members read access on a fine-grained one. Inviting people by
+GitHub itself. Inviting people by
 email, managing the teams themselves, and the settings of an organization are out of scope.
 
 ## Project automations
@@ -291,7 +285,7 @@ refuse an issue or pull request as `invalid-request`. `assignees` names logins a
 removes them all, an unknown login is `not-found`, and `body: ""` empties the body. `github.project-drafts.convert`
 creates the issue in `repository`, which the targets must allow beside the project, and answers with its number
 and URL. The item keeps its identifier, place, and field values, so a repeated conversion finds no draft and
-opens no second issue. The token needs write access to the issues of that repository besides the project.
+opens no second issue.
 
 ### Batches and partial results
 
