@@ -244,6 +244,28 @@ func visualShots() []visualShot {
 		{"33-activity-table", 80, 24, dark, term, false, activityTable},
 		{"34-activity-heatmap", 80, 24, dark, term, false, activityHeatmap},
 		{"35-activity-empty", 150, 42, dark, term, false, func(t *testing.T, m *Model) { pump(t, m, "3") }},
+		{"50-provider-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionConnections)
+			m.openForm("")
+			focusField(t, m, providerLabel)
+			pump(t, m, "enter")
+			pump(t, m, "down", "down")
+		}},
+		{"51-target-picker", 150, 42, dark, term, false, visualTargetPicker},
+		{"52-tool-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openEntryForm(t, m, sectionConnections, "wiki-main")
+			focusField(t, m, accessLabel)
+			selectChoice(t, m, accessTools)
+			focusField(t, m, toolListLabel)
+			pump(t, m, "enter")
+			pump(t, m, " ", "down", "down", "down", "down", "down", "right", "down", " ", "down", " ")
+		}},
+		{"53-setup-summary", 150, 42, dark, term, false, visualSetupSummary},
+		{"54-template-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionConnections)
+			m.askSetupTemplate()
+			pump(t, m, "down", "enter")
+		}},
 		{"24-connection-details-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "down")
@@ -477,4 +499,43 @@ func ansiToHTML(view, title string, pal htmlPalette) string {
 	flush()
 	b.WriteString("</pre></body></html>\n")
 	return b.String()
+}
+
+// visualTargetPicker opens the picker of the targets of a connection over a listing the test provides.
+func visualTargetPicker(t *testing.T, m *Model) {
+	src := &listSource{list: pickPage(
+		config.TargetEntry{Target: "Orders", Name: "Orders", Kind: "table", HasChildren: true},
+		config.TargetEntry{Target: "Customers", Name: "Customers", Kind: "table", HasChildren: true},
+		config.TargetEntry{Target: "Invoices", Name: "Invoices", Kind: "table"},
+		config.TargetEntry{Target: "Shipments", Name: "Shipments", Kind: "table"},
+	)}
+	source := src.targetSource()
+	source.Browses = func(string) bool { return true }
+	m.svc = m.svc.WithTargetSource(source)
+	openEntryForm(t, m, sectionConnections, "tables-ops")
+	openTargetList(t, m)
+	pump(t, m, "a")
+	pickRow(t, m, "from the provider's list")
+	pump(t, m, "enter")
+	if m.screen == screenAdminAuth {
+		typeText(t, m, visualPassphrase)
+		pump(t, m, "enter")
+	}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	deliver(m, cmd)
+	pump(t, m, "tab", "down", "down", "tab")
+}
+
+// visualSetupSummary walks the guided setup of a new connection to its summary.
+func visualSetupSummary(t *testing.T, m *Model) {
+	openSectionByName(t, m, sectionConnections)
+	m.startSetup()
+	pump(t, m, "enter")
+	for m.screen != screenSummary {
+		before := m.wizard.step
+		pump(t, m, "f2")
+		if m.wizard.step == before && m.screen != screenSummary {
+			t.Fatalf("the setup stays on step %d:\n%s", before, screenOf(m))
+		}
+	}
 }

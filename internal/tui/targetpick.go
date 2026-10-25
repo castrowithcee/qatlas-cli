@@ -672,7 +672,7 @@ func (m *Model) pickFrame() (string, string) {
 		title += tr(tPickMarked, len(p.marks))
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, title) + "\n")
+	head.WriteString(m.boxTop(title, ""))
 	var where []string
 	for i, level := range p.levels {
 		if i > 0 {
@@ -684,24 +684,23 @@ func (m *Model) pickFrame() (string, string) {
 	if p.url != "" {
 		level = tr(tPickTheAddressYouTypedMatched)
 	}
-	head.WriteString(m.wrapped(styles.hint, level) + "\n")
-	head.WriteString(m.searchLine(&lv.list, tr(tLogPickSearch)) + "\n")
-	_, width := m.fit("  ")
+	head.WriteString(m.boxText(styles.hint, level))
+	head.WriteString(m.boxSearch(&lv.list, tr(tLogPickSearch)))
+	_, width := m.fitIn(m.boxRoom(), "  ")
 	if len(lv.list.all) > 0 {
-		head.WriteString(styles.hint.Render(clipCells("  "+lv.table.header(m.pickLayout(lv, width)), m.usable(0))) + "\n")
+		head.WriteString(m.boxLine(styles.hint.Render(clipCells("  "+lv.table.header(m.pickLayout(lv, width)), m.boxRoom()))))
 	}
 	switch {
 	case lv.err != "":
-		head.WriteString(m.wrapped(styles.fail, "[!] "+lv.err+" "+tr(tPickCtrlRReadsAgain)) + "\n")
+		head.WriteString(m.boxText(styles.fail, "[!] "+lv.err+" "+tr(tPickCtrlRReadsAgain)))
 	case lv.loading:
-		head.WriteString(m.wrapped(styles.hint, tr(tLogLoading)) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tLogLoading)))
 	case len(lv.list.all) == 0:
-		head.WriteString(m.wrapped(styles.hint, tr(tPickTheProviderListsNoEntry)) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tPickTheProviderListsNoEntry)))
 	case len(lv.list.matches) == 0 && lv.next != "":
-		head.WriteString(m.wrapped(styles.hint,
-			tr(tPickNoLoadedEntryMatchesDown, lv.list.query())) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tPickNoLoadedEntryMatchesDown, lv.list.query())))
 	case len(lv.list.matches) == 0:
-		head.WriteString(m.wrapped(styles.hint, tr(tPickNoEntryMatches, lv.list.query())) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tPickNoEntryMatches, lv.list.query())))
 	}
 
 	keys := "type to search · up/down move · enter take"
@@ -726,7 +725,7 @@ func (m *Model) pickFrame() (string, string) {
 	if lv.list.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
-	return head.String(), m.keyHint(keys) + m.notes()
+	return head.String(), m.boxBottom() + m.keyHint(keys) + m.notes()
 }
 
 // pickLayout is the layout of the level's table for width cells, kept while the entries stay the same.
@@ -741,13 +740,18 @@ func (m *Model) pickLayout(lv *pickLevel, width int) layout {
 func (m *Model) pickRow(i int) string {
 	p := m.targetPick
 	lv := p.top()
-	_, width := m.fit("  ")
+	_, width := m.fitIn(m.boxRoom(), "  ")
 	e := lv.entries[lv.list.matches[i]]
 	cells := m.pickCells(e)
-	if _, marked := p.marks[e.entry.Target]; marked {
+	_, marked := p.marks[e.entry.Target]
+	if marked {
 		cells[0] = "[x]" + strings.TrimPrefix(cells[0], "[ ]")
 	}
-	return m.listRow(i == lv.list.cursor, lv.table.line(cells, m.pickLayout(lv, width)))
+	line := lv.table.line(cells, m.pickLayout(lv, width))
+	if marked {
+		line = colourTick(line, styles.cell)
+	}
+	return m.boxRow(m.listRowIn(m.boxRoom(), i == lv.list.cursor, line))
 }
 
 func (m *Model) pickWindow() (int, int) {

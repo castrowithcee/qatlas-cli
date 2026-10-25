@@ -248,14 +248,24 @@ func (m *Model) templateView() string {
 	if m.template.setup {
 		title = tr(tTemplateGuidedSetup)
 	}
-	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
+	if m.boxed() {
+		b.WriteString(m.boxTop(title, ""))
+	} else {
+		b.WriteString(m.wrapped(styles.title, title) + "\n\n")
+	}
 	rows := []string{tr(tFormTemplateEmpty), tr(tFormTemplateExisting, m.templateNoun())}
 	for i, row := range rows {
 		mark, style := "( ) ", styles.hint
 		if i == m.template.index {
 			mark, style = "(•) ", styles.active
 		}
-		text := m.indentedHanging(style, mark, row)
+		var text string
+		if m.boxed() {
+			_, width := m.fitIn(m.boxRoom(), "  ")
+			text = m.boxRow(m.listRowIn(m.boxRoom(), i == m.template.index, truncateCells(mark+row, width)))
+		} else {
+			text = m.indentedHanging(style, mark, row)
+		}
 		y, index := m.workspaceTop()+strings.Count(b.String(), "\n"), i
 		m.addHit(0, y, m.usable(0), y+strings.Count(text, "\n")+1, func() tea.Cmd {
 			if m.screen != screenTemplate || m.template == nil || m.template.picking {
@@ -266,7 +276,7 @@ func (m *Model) templateView() string {
 		})
 		b.WriteString(text + "\n")
 	}
-	b.WriteString(m.keyHint("up/down move · enter choose · {back} cancel · {command} cmds · {help} help") + m.notes())
+	b.WriteString(m.boxBottom() + m.keyHint("up/down move · enter choose · {back} cancel · {command} cmds · {help} help") + m.notes())
 	return b.String()
 }
 
@@ -288,24 +298,27 @@ func (m *Model) templateFrame() (string, string) {
 	l := &m.templateList
 	shown, total := len(l.matches), len(l.all)
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, tr(tTemplateNewFromExistingTotal,
-		m.templateNoun(), min(l.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.searchLine(l, tr(tLogPickSearch)) + "\n")
+	head.WriteString(m.boxTop(tr(tTemplateNewFromExistingTotal,
+		m.templateNoun(), min(l.cursor+1, shown), shown, total), ""))
+	head.WriteString(m.boxSearch(l, tr(tLogPickSearch)))
 	if shown == 0 {
-		head.WriteString(m.wrapped(styles.hint,
-			tr(tTemplateNoEntryMatchesEscGoes, l.query())) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tTemplateNoEntryMatchesEscGoes, l.query())))
 	}
 	keys := "type to search · up/down move · enter choose · {back} back"
 	if l.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
-	return head.String(), m.keyHint(keys) + m.notes()
+	return head.String(), m.boxBottom() + m.keyHint(keys) + m.notes()
 }
 
+// templateRow is one entry of the picker: its name, and what follows the name dimmed.
 func (m *Model) templateRow(i int) string {
-	_, width := m.fit("  ")
-	return m.listRow(i == m.templateList.cursor,
-		truncateCells(m.templateList.text(m.templateList.matches[i]), width))
+	_, width := m.fitIn(m.boxRoom(), "  ")
+	text := truncateCells(m.templateList.text(m.templateList.matches[i]), width)
+	if head, rest, ok := strings.Cut(text, "  "); ok && i != m.templateList.cursor {
+		text = styles.cell.Render(head) + "  " + styles.hint.Render(rest)
+	}
+	return m.boxRow(m.listRowIn(m.boxRoom(), i == m.templateList.cursor, text))
 }
 
 func (m *Model) templateWindow() (int, int) {

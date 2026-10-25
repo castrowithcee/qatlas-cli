@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -611,13 +612,32 @@ func (m *Model) setupHeading(withLead bool) string {
 	return heading + "\n"
 }
 
-// summaryView shows what the setup saves. It names where every secret goes, never what it is.
+// summaryView shows what the setup saves. It names where every secret goes, never what it is. Where the
+// terminal has room the pairs of label and value stand aligned in a panel, beside the list of the steps on a
+// wide one; otherwise they follow each other as plain rows.
 func (m *Model) summaryView() string {
 	w := m.wizard
 	var b strings.Builder
 	b.WriteString(m.setupHeading(true))
-	for _, row := range m.summaryRows() {
-		b.WriteString(m.row(false, row) + "\n")
+	pairs := m.summaryRows()
+	steps, stepsWidth := "", 0
+	if m.stepListFits(0) {
+		steps, stepsWidth = m.stepList()
+	}
+	room := m.usable(0)
+	if steps != "" {
+		room -= stepsWidth + 1
+	}
+	if lines := summaryLines(pairs, max(room-4, 1)); room >= tableFrameMinWidth && len(lines)+2+4 <= m.height {
+		box := strings.Join(panel(wordText(setupTitles[stepSummary]), lines, max(room-4, 1), len(lines), panelOpts{}), "\n")
+		if steps != "" {
+			box = lipgloss.JoinHorizontal(lipgloss.Top, steps, " ", box)
+		}
+		b.WriteString(box + "\n")
+	} else {
+		for _, pair := range pairs {
+			b.WriteString(m.row(false, padLine(pair.label, summaryLabelWidth)+" "+pair.value) + "\n")
+		}
 	}
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(styles.warning, warningLine(warning)) + "\n")
@@ -638,18 +658,58 @@ func (m *Model) summaryView() string {
 	return b.String()
 }
 
-func (m *Model) summaryRows() []string {
+// summaryLabelWidth is the width of the label column of the summary.
+const summaryLabelWidth = 12
+
+// summaryPair is one line of the summary: a label and what it says. A value may carry status marks.
+type summaryPair struct{ label, value string }
+
+// summaryLines draws the pairs aligned in width cells: the label dimmed in its column and the value beside it,
+// continued under itself where it does not fit.
+func summaryLines(pairs []summaryPair, width int) []string {
+	var lines []string
+	room := max(width-summaryLabelWidth-1, 1)
+	for _, pair := range pairs {
+		label := styles.hint.Render(padLine(truncateCells(pair.label, summaryLabelWidth), summaryLabelWidth))
+		for i, line := range strings.Split(render(lipgloss.NewStyle(), room, pair.value), "\n") {
+			if i > 0 {
+				label = strings.Repeat(" ", summaryLabelWidth)
+			}
+			lines = append(lines, label+" "+line)
+		}
+	}
+	return lines
+}
+
+// stepList is the numbered list of the steps of the guided setup, in the block the sections of a form use: the
+// step being set up leads with ">" and the ones still to come are dimmed.
+func (m *Model) stepList() (string, int) {
+	names := make([]string, setupSteps)
+	dim := make([]bool, setupSteps)
+	for i := range names {
+		names[i], dim[i] = wordText(setupTitles[i]), i > m.wizard.step
+	}
+	return numberedList(names, dim, m.wizard.step)
+}
+
+// stepListFits reports whether the steps stand as a list beside the rows, on a terminal wide and high enough
+// for it and for extra more lines of other lists under it.
+func (m *Model) stepListFits(extra int) bool {
+	return m.wizard != nil && m.width >= sectionListMinWidth && m.height >= setupSteps+extra+8
+}
+
+func (m *Model) summaryRows() []summaryPair {
 	w := m.wizard
 	cfg, plan := w.candidate, w.plan
 	metadata, _ := cfg.ProviderMetadata(w.provider)
 	conn := cfg.Connections[plan.connection]
 	state := func(added bool) string {
 		if added {
-			return tr(tSetupNew)
+			return statusMark(statusOK, tr(tSetupNew))
 		}
-		return tr(tSetupExistingUnchanged)
+		return statusMark(statusDim, tr(tSetupExistingUnchanged))
 	}
-	line := func(label, text string) string { return padLine(labelText(label), 12) + " " + text }
+	line := func(label, text string) summaryPair { return summaryPair{labelText(label), text} }
 
 	secrets := valueText(storageLabel, m.storagePlace(plan.credential, cfg.Credentials[plan.credential])) +
 		tr(tSetupItsSecretsStayWhereThey)
@@ -668,7 +728,7 @@ func (m *Model) summaryRows() []string {
 	}
 
 	// Only the field the access mode stores is listed; the effects of selected tools follow from them.
-	access := []string{line(accessLabel, valueText(accessLabel, accessEffects))}
+	access := []summaryPair{line(accessLabel, valueText(accessLabel, accessEffects))}
 	if conn.Tools == nil {
 		effects := config.FormatEffects(conn.Effects)
 		if conn.Effects == nil {
@@ -680,17 +740,17 @@ func (m *Model) summaryRows() []string {
 		if len(conn.Tools) > 0 {
 			tools = strings.Join(conn.Tools, ", ")
 		}
-		access = []string{
+		access = []summaryPair{
 			line(accessLabel, valueText(accessLabel, accessTools)),
 			line(toolListLabel, tools),
 			line(effectsLabel, config.FormatEffects(config.EffectsOfTools(metadata, conn.Tools))+" "+tr(tSetupFromTheTools)),
 		}
 	}
 
-	return append([]string{
+	return append([]summaryPair{
 		line("provider", metadata.Name),
-		line("service", fmt.Sprintf("%s (%s) · %s", plan.service, state(plan.newService), cfg.Services[plan.service].BaseURL)),
-		line("credential", fmt.Sprintf("%s (%s) · %s", plan.credential, state(plan.newCredential), secrets)),
+		line("service", fmt.Sprintf("%s %s · %s", plan.service, state(plan.newService), cfg.Services[plan.service].BaseURL)),
+		line("credential", fmt.Sprintf("%s %s · %s", plan.credential, state(plan.newCredential), secrets)),
 		line("connection", plan.connection),
 		line(targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
 		line("description", choiceText(conn.Description)),

@@ -4347,8 +4347,8 @@ func (m *Model) pickerFrame() (string, string) {
 		ticked, all := m.pickerGroups.count(m.pickerMarks)
 		title = tr(tFormChooseTicked, m.shownLabel(f.label), ticked, all)
 	}
-	head.WriteString(m.wrapped(styles.title, title) + "\n")
-	head.WriteString(m.searchLine(&m.picker, tr(tLogPickSearch)) + "\n")
+	head.WriteString(m.boxTop(title, ""))
+	head.WriteString(m.boxSearch(&m.picker, tr(tLogPickSearch)))
 	keys := "type to search · up/down move · enter choose · {back} cancel"
 	if m.pickerMarks != nil {
 		ticked := 0
@@ -4364,63 +4364,63 @@ func (m *Model) pickerFrame() (string, string) {
 			if m.pickerEffects != nil {
 				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · {back} cancel"
 			}
-			head.WriteString(m.wrapped(styles.hint, tr(tFormTickedOf, ticked, total)) + "\n")
+			head.WriteString(m.boxText(styles.hint, tr(tFormTickedOf, ticked, total)))
 			keys = "type to search · up/down move · space tick · enter keep · {back} cancel"
 		} else {
 			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · {back} cancel"
 		}
 	} else {
-		head.WriteString(m.wrapped(styles.hint, tr(tLogPickCurrent, m.choiceShown(f.value()))) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tLogPickCurrent, m.choiceShown(f.value()))))
 	}
 	if shown == 0 {
-		head.WriteString(m.wrapped(styles.hint,
-			tr(tFormNoValueMatchesEscKeeps, m.picker.query())) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tFormNoValueMatchesEscKeeps, m.picker.query())))
 	}
 	if f.label == forwardLabel {
 		if note := m.forwardBindingNote(m.fieldValue("credential")); note != "" {
-			head.WriteString(m.wrapped(styles.warning, warningLine(note)) + "\n")
+			head.WriteString(m.boxText(styles.warning, warningLine(note)))
 		}
 	}
 	if m.infoWorks() {
 		keys = strings.Replace(keys, " · {back} cancel", " · {info} info · {back} cancel", 1)
 	}
-	return head.String(), m.keyHint(keys) + m.notes()
+	return head.String(), m.boxBottom() + m.keyHint(keys) + m.notes()
 }
 
 // pickerRow draws the shown value at index i of the picker and marks the value the row holds now. Its text
 // is cut to fit beside the marker before listRow ever sees it, the way a table cell is cut rather than
 // wrapped.
-func (m *Model) pickerRow(i int) string {
-	_, width := m.fit("  ")
+func (m *Model) pickerRow(i int) string { return m.boxRow(m.pickerRowText(i)) }
+
+// pickerRowText is the row at index i without the frame of the panel.
+func (m *Model) pickerRowText(i int) string {
+	_, width := m.fitIn(m.boxRoom(), "  ")
 	choice := m.picker.matches[i]
+	active := i == m.picker.cursor
 	var text string
-	if m.pickerEffects != nil && isEffectRow(choice) {
-		text = m.pickerEffects.rowText(choice, m.pickerMarks)
-	} else if m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
-		text = m.pickerGroups.rowText(choice, m.pickerMarks, m.picker.query() != "")
-	} else if m.pickerMarks != nil {
-		mark := "[ ] "
-		if m.pickerMarks[choice] {
-			mark = "[x] "
+	switch {
+	case m.pickerEffects != nil && isEffectRow(choice):
+		text = m.pickerEffects.styledRow(choice, m.pickerMarks)
+	case m.pickerGroups != nil && m.pickerGroups.isRow(choice):
+		text = m.pickerGroups.styledRow(choice, m.pickerMarks, m.picker.query() != "")
+	case m.pickerMarks != nil:
+		text = tickBox(m.pickerMarks[choice]) + " "
+		rest := m.picker.text(choice)
+		if !active && m.fields[m.focus].label == toolListLabel {
+			// The ID and what follows it stand faint on rows that are not active; they stay text, so nothing
+			// depends on the faint style. A row without a title is faint from the ID on as well.
+			lead := clipCells(rest, lipgloss.Width(m.toolLead(choice)))
+			text += lead + styles.hint.Render(strings.TrimPrefix(rest, lead))
+		} else {
+			text += rest
 		}
-		text = mark + m.picker.text(choice)
-	} else {
+	default:
 		text = m.choiceShown(choice)
 		if choice == m.fields[m.focus].value() {
-			text += "  " + tr(tFormCurrent)
+			text += "  " + styles.ok.Render(tr(tFormCurrent))
 		}
 	}
 	mark := m.pickerMark(m.fields[m.focus], choice)
-	active := i == m.picker.cursor
-	line := m.listRow(active, truncateCells(text, width-lipgloss.Width(mark))+mark)
-	if active || m.pickerMarks == nil || m.fields[m.focus].label != toolListLabel || isEffectRow(choice) ||
-		(m.pickerGroups != nil && m.pickerGroups.isRow(choice)) {
-		return line
-	}
-	// The ID and what follows it stand faint on rows that are not active; they stay text, so nothing depends
-	// on the faint style. A row without a title is faint from the ID on as well.
-	head := clipCells(line, 2+lipgloss.Width("[ ] ")+lipgloss.Width(m.toolLead(choice)))
-	return head + styles.hint.Render(strings.TrimPrefix(line, head))
+	return m.listRowIn(m.boxRoom(), active, truncateCells(text, width-lipgloss.Width(mark))+mark)
 }
 
 // searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
