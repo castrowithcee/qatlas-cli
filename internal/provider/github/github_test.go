@@ -670,7 +670,7 @@ func serve(t *testing.T, f *fakeGitHub) string {
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)
 	previous := transport
-	transport = server.Client().Transport
+	transport = recordDocuments(server.Client().Transport)
 	t.Cleanup(func() { transport = previous })
 	t.Cleanup(limiters.Replace(tokenValue, freeLimiter()))
 	return server.URL + "/api/v3"
@@ -1666,6 +1666,10 @@ func TestProviderFailuresAreNormalized(t *testing.T) {
 		{"graphql partial data", func(w http.ResponseWriter) {
 			fmt.Fprint(w, `{"data":{"owner":{"projectV2":{"id":"PVT_x"}}},"errors":[{"message":"something"}]}`)
 		}, provider.ClassProviderError, "rejected the query"},
+		{"graphql schema validation", func(w http.ResponseWriter) {
+			fmt.Fprint(w, `{"errors":[{"message":"Selections can't be made directly on unions","path":["query"],`+
+				`"extensions":{"code":"selectionMismatch"}}]}`)
+		}, provider.ClassProviderError, "rejected the query as invalid for its schema"},
 		{"graphql without query support", func(w http.ResponseWriter) {
 			fmt.Fprint(w, `{"errors":[{"message":"Field 'items' doesn't accept argument 'query'"}]}`)
 		}, provider.ClassProviderError, "does not support filtered project item queries"},

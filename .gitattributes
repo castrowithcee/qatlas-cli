@@ -1,2 +1,4 @@
 # Visual snapshots hold raw terminal output; keep them byte for byte on every platform.
 internal/tui/testdata/visual/*.ans -text
+# The GitHub schema snapshot stays as published; keep its line endings on every platform.
+internal/provider/github/testdata/*.graphql -text

@@ -12,12 +12,15 @@ require (
 	github.com/emersion/go-vcard v0.1.0
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/spf13/cobra v1.10.2
+	github.com/vektah/gqlparser/v2 v2.5.31
 	github.com/zalando/go-keyring v0.2.8
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sys v0.38.0
 	golang.org/x/term v0.37.0
 )
+
+require github.com/agnivade/levenshtein v1.2.1 // indirect
 
 require (
 	filippo.io/hpke v0.4.0 // indirect
@@ -42,7 +45,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
+	github.com/muesli/termenv v0.16.0
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.9

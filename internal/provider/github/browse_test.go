@@ -134,7 +134,7 @@ func serveBrowse(t *testing.T, f *browseFake) string {
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)
 	previous := transport
-	transport = server.Client().Transport
+	transport = recordDocuments(server.Client().Transport)
 	t.Cleanup(func() { transport = previous })
 	t.Cleanup(limiters.Replace(tokenValue, freeLimiter()))
 	return server.URL + "/api/v3"

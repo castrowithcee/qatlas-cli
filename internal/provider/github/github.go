@@ -1253,9 +1253,20 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 // classification only and never copied, because GitHub echoes requested names into it. Path names the
 // aliased mutation of a batch the error belongs to.
 type graphQLError struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
-	Path    []any  `json:"path"`
+	Type       string `json:"type"`
+	Message    string `json:"message"`
+	Path       []any  `json:"path"`
+	Extensions struct {
+		Code string `json:"code"`
+	} `json:"extensions"`
+}
+
+// invalidForSchema reports a validation error: GitHub answers a document that breaks its schema with a
+// camel-case extensions code such as selectionMismatch and without the type of an execution error. Limit
+// errors carry upper-case codes and stay in the generic refusal.
+func (e graphQLError) invalidForSchema() bool {
+	code := e.Extensions.Code
+	return e.Type == "" && code != "" && code[0] >= 'a' && code[0] <= 'z'
 }
 
 // graphQLEnvelope is the answer of one GraphQL request before its data is read.
@@ -1324,10 +1335,17 @@ func (c *Client) graphQLFailure(op string, errs []graphQLError, variables map[st
 				Message: "this GitHub server does not support filtered project item queries"}
 		}
 	}
-	if change {
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the change"}
+	invalid := ""
+	for _, e := range errs {
+		if e.invalidForSchema() {
+			invalid = " as invalid for its schema"
+			break
+		}
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the query"}
+	if change {
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the change" + invalid}
+	}
+	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the query" + invalid}
 }
 
 func permissionMessage(s subject, change bool) string {
