@@ -121,7 +121,7 @@ func TestFilterIgnoresCaseAndLeavesTheConfigurationAlone(t *testing.T) {
 	press(t, m, "/")
 	typeText(t, m, "WIKI")
 	view := screenOf(m)
-	for _, want := range []string{"Wiki-Primary", "wiki-archive", "1/2 (103 total)", "filter: WIKI"} {
+	for _, want := range []string{"Wiki-Primary", "wiki-archive", "1/2 (103 total)", "/ WIKI"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the filtered list does not show %q:\n%s", want, view)
 		}

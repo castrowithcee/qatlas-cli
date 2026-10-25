@@ -140,7 +140,7 @@ func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := f.model(false, f.localToday())
-	if view := m.View(); !strings.Contains(view, "View: [Table] Heatmap") {
+	if view := m.View(); !strings.Contains(view, "View: Table ▾") {
 		t.Fatalf("the bar lacks the View field:\n%s", view)
 	}
 	pump(t, m, "a")
@@ -148,11 +148,11 @@ func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 		t.Fatalf("a switched to the heatmap; the key must stay unbound on Activity")
 	}
 	press(t, m, "tab", "tab", "tab")
-	if m.logs.focus != logFocusView || !strings.Contains(m.View(), "> View:") {
+	if m.logs.focus != logFocusView || !strings.Contains(m.View(), ">  View:") {
 		t.Fatalf("tab x3 = focus %v, want the View field:\n%s", m.logs.focus, m.View())
 	}
 	pump(t, m, "right")
-	if !m.logs.heat || !strings.Contains(m.View(), "View: Table [Heatmap]") {
+	if !m.logs.heat || !strings.Contains(m.View(), "View: Heatmap ▾") {
 		t.Fatalf("right = heat %v, want the heatmap:\n%s", m.logs.heat, m.View())
 	}
 	if m.logs.mode != logModeRange {

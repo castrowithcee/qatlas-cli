@@ -109,7 +109,13 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	if wheel {
+		if m.dd != nil {
+			return nil
+		}
 		return m.wheel(event)
+	}
+	if m.dd != nil {
+		return m.clickDropdown(event.X, event.Y)
 	}
 	hits := append(append([]hit{}, m.frameHits...), m.hits...)
 	for i := len(hits) - 1; i >= 0; i-- {
@@ -351,6 +357,8 @@ type barSpec struct {
 	values []string
 	active int
 	choose func(i int) tea.Cmd
+	// id names the field for the list that opens under it (see noteField); "" for a field with none.
+	id string
 	// whole, when set, makes the whole field one target; the field has no alternatives then.
 	whole func() tea.Cmd
 }
@@ -366,6 +374,9 @@ func (m *Model) hitBar(lines []string, top int, specs []barSpec) {
 				continue
 			}
 			x := ansi.StringWidth(plain[:at]) + spec.prefix
+			if spec.id != "" {
+				m.noteField(spec.id, x-spec.prefix, top+row)
+			}
 			if spec.whole != nil {
 				m.addHit(x-spec.prefix, top+row, x-spec.prefix+ansi.StringWidth(spec.field), top+row+1, spec.whole)
 			}
@@ -384,8 +395,8 @@ func (m *Model) hitBar(lines []string, top int, specs []barSpec) {
 
 // hitList makes the rows of the list screen, and its filter bar, clickable.
 func (m *Model) hitList(header string, start, end int, row func(i int) string) {
-	if m.listBarShown() && (m.barFocus > 0 || !(m.list.editing || m.list.query() != "")) {
-		m.hitBarFields(m.barLine(m.listWidth()), m.workspaceTop()+1)
+	if m.listBarShown() && !m.list.editing {
+		m.hitBarFields(m.workspaceTop() + 1)
 	}
 	m.hitRows(m.hitTop(header), m.listWidth(), start, end, row, m.clickListRow)
 }
@@ -514,41 +525,43 @@ func (m *Model) logBarGuard() (tea.Cmd, bool) {
 	return nil, false
 }
 
-// logBarTargets are the fields of the bar of the Logs screen: a click on an alternative does what left and
-// right do on the field, and one on the date opens the dialog enter opens.
-func (m *Model) logBarTargets(modeField, dateField, viewField string, modes []string, view int) []barSpec {
+// logBarTargets are the fields of the bar and of the filter line of the Logs screen, by their plain text: a
+// click on the mode or the view opens its list, on the date the dialog enter opens, on a filter the picker of
+// its values, and on the search field starts the search, as the keys do.
+func (m *Model) logBarTargets(mode, date, view string, filters []string, search string) []barSpec {
 	lv := m.logs
-	specs := []barSpec{
-		{field: ansi.Strip(modeField), prefix: ansi.StringWidth(tr(tLogBarMode)) + 2, values: modes, active: int(lv.mode),
-			choose: func(i int) tea.Cmd {
-				lead, ok := m.logBarGuard()
-				if !ok {
-					return lead
-				}
-				lv.focus, lv.mode = logFocusMode, logMode(i)
-				return tea.Batch(lead, m.loadLogs())
-			}},
-		{field: ansi.Strip(viewField), prefix: ansi.StringWidth(tr(tLogBarView)) + 2,
-			values: []string{tr(tLogViewTable), tr(tLogViewHeatmap)}, active: view,
-			choose: func(i int) tea.Cmd {
-				lead, ok := m.logBarGuard()
-				if !ok {
-					return lead
-				}
-				lv.focus = logFocusView
-				return tea.Batch(lead, m.setHeat(i == 1))
-			}},
-	}
-	if lv.mode != logModeAll {
-		specs = append(specs, barSpec{field: ansi.Strip(dateField), whole: func() tea.Cmd {
+	guarded := func(act func() tea.Cmd) func() tea.Cmd {
+		return func() tea.Cmd {
 			lead, ok := m.logBarGuard()
 			if !ok {
 				return lead
 			}
+			return tea.Batch(lead, act())
+		}
+	}
+	specs := []barSpec{
+		{field: mode, id: "logmode", whole: guarded(func() tea.Cmd { m.openLogBarDropdown(logFocusMode); return nil })},
+		{field: view, id: "logview", whole: guarded(func() tea.Cmd { m.openLogBarDropdown(logFocusView); return nil })},
+	}
+	if lv.mode != logModeAll {
+		specs = append(specs, barSpec{field: date, whole: guarded(func() tea.Cmd {
 			lv.focus = logFocusDate
 			m.openLogDateDialog()
-			return lead
-		}})
+			return nil
+		})})
+	}
+	for k, text := range filters {
+		specs = append(specs, barSpec{field: text, whole: guarded(func() tea.Cmd {
+			m.openLogPick(k)
+			return nil
+		})})
+	}
+	if search != "" {
+		specs = append(specs, barSpec{field: strings.TrimRight(search, " "), whole: guarded(func() tea.Cmd {
+			lv.focus = logFocusRows
+			lv.list.startFilter()
+			return nil
+		})})
 	}
 	return specs
 }

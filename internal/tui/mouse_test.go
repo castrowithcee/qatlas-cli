@@ -124,11 +124,19 @@ func TestClickOnARowFromTheTabLineTakesTheFocus(t *testing.T) {
 func TestClickOnTheFilterBarChoosesAValue(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	openSectionByName(t, m, sectionConnections)
-	clickOn(t, m, "None")
-	if !m.opts(sectionConnections).flat {
+	clickOn(t, m, "Group: Provider")
+	if m.dd == nil || m.barFocus != 1 {
+		t.Fatalf("the click on Group did not open its list; the bar reads:\n%s", ansi.Strip(m.View()))
+	}
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "> Provider") || !strings.Contains(view, "  None") {
+		t.Fatalf("the list does not show the values:\n%s", view)
+	}
+	clickOn(t, m, "  None")
+	if m.dd != nil || !m.opts(sectionConnections).flat {
 		t.Fatalf("the click on None left the grouping on; the bar reads:\n%s", ansi.Strip(m.View()))
 	}
-	clickOn(t, m, "Inactive")
+	clickOn(t, m, "State: All")
+	clickOn(t, m, "  Inactive")
 	if m.opts(sectionConnections).state != 2 {
 		t.Errorf("state = %d, want Inactive", m.opts(sectionConnections).state)
 	}
@@ -477,19 +485,13 @@ func TestAFailedRestartTurnsTheMouseOnAgainOnlyWhenItIsOn(t *testing.T) {
 func TestClickOnALogRowAndTheBarOfTheLogs(t *testing.T) {
 	m := sizedModel(groupModel(t), 140, 40)
 	openSectionByName(t, m, sectionLogs)
-	clickOn(t, m, "[Day]")
-	if m.logs.mode != logModeDay {
-		t.Fatalf("mode = %v", m.logs.mode)
+	clickOn(t, m, "Mode: Day")
+	if m.dd == nil || m.logs.mode != logModeDay {
+		t.Fatalf("the click on Mode did not open its list: mode %v", m.logs.mode)
 	}
-	// A click on another alternative of the mode field chooses it, as the arrow keys do.
-	row := func() int { _, y := cellOf(t, m, "Mode:"); return y }()
-	x := cellInRow(t, m, row, "Mode:") + len("Mode: ")
-	line := frameLines(m)[row]
-	if !strings.Contains(line[x:], "Range") {
-		t.Skipf("the bar reads %q", line)
-	}
-	clickAt(t, m, cellInRow(t, m, row, "Range"), row)
-	if m.logs.mode != logModeRange {
+	// A click on an entry of the list chooses it, as enter does.
+	clickOn(t, m, "  Range")
+	if m.dd != nil || m.logs.mode != logModeRange {
 		t.Errorf("mode = %v, want the range", m.logs.mode)
 	}
 }

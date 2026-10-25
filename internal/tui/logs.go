@@ -25,6 +25,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -602,6 +603,8 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
+		case logFocusMode, logFocusView:
+			m.openLogBarDropdown(lv.focus)
 		case logFocusRows:
 			if row, ok := lv.list.selected(); ok && !lv.stats && !lv.heat {
 				lv.detail, _ = strconv.Atoi(row)
@@ -649,6 +652,30 @@ func (lv *logView) moveFocus(by int) {
 		}
 	}
 	lv.focus = order[wrap(at+by, len(order))]
+}
+
+// openLogBarDropdown opens the list of the bar's mode or view field, which takes the focus.
+func (m *Model) openLogBarDropdown(f logFocus) {
+	lv := m.logs
+	lv.focus = f
+	if f == logFocusMode {
+		var modes []string
+		for mode := logModeDay; mode < logModeCount; mode++ {
+			modes = append(modes, mode.String())
+		}
+		m.openDropdown("logmode", modes, int(lv.mode), func(i int) tea.Cmd {
+			lv.mode = logMode(i)
+			return m.loadLogs()
+		})
+		return
+	}
+	active := 0
+	if lv.heat {
+		active = 1
+	}
+	m.openDropdown("logview", []string{tr(tLogViewTable), tr(tLogViewHeatmap)}, active, func(i int) tea.Cmd {
+		return m.setHeat(i == 1)
+	})
 }
 
 // updateLogSearch is the Logs screen while its search is typed; every printable key is search text.
@@ -914,47 +941,50 @@ func (m *Model) logsFrame() (string, string) {
 		status = lv.worst.style().Render(lv.worst.label())
 	}
 	marker := func(f logFocus) string { return barMarker(focused && lv.focus == f) }
+	barLabel := func(id textID) string { return strings.TrimRight(tr(id), ": ") }
 	var modes []string
 	for mode := logModeDay; mode < logModeCount; mode++ {
 		modes = append(modes, mode.String())
 	}
-	modeField := marker(logFocusMode) + tr(tLogBarMode) + barChips(modes, int(lv.mode))
+	field := func(f logFocus, label, value string) (string, string) {
+		text := dropdownField(label, value, focused && lv.focus == f, width-2)
+		return marker(f) + text, ansi.Strip(text)
+	}
+	modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
 	view := 0
 	if lv.heat {
 		view = 1
 	}
-	viewField := marker(logFocusView) + tr(tLogBarView) + barChips([]string{tr(tLogViewTable), tr(tLogViewHeatmap)}, view)
-	var dateField string
+	views := []string{tr(tLogViewTable), tr(tLogViewHeatmap)}
+	viewField, viewPlain := field(logFocusView, barLabel(tLogBarView), views[view])
+	var dateField, datePlain string
 	switch lv.mode {
-	case logModeDay:
-		dateField = marker(logFocusDate) + tr(tLogBarDate, lv.day)
-	case logModeRange:
-		dateField = marker(logFocusDate) + tr(tLogBarRange, lv.from, lv.to)
+	case logModeDay, logModeRange:
+		text := tr(tLogBarDate, lv.day)
+		if lv.mode == logModeRange {
+			text = tr(tLogBarRange, lv.from, lv.to)
+		}
+		label, value, _ := strings.Cut(text, ": ")
+		dateField, datePlain = field(logFocusDate, label, strings.Trim(value, "[]"))
 	default:
 		dateField = "  " + styles.hint.Render(tr(tLogBarAll))
 	}
 	bar := packBar([]string{modeField, dateField, viewField}, status, width)
-	m.logBarSpecs = m.logBarTargets(modeField, dateField, viewField, modes, view)
 
-	var filters []string
+	var filterFields, filterPlain []string
 	for k, value := range lv.filters {
-		filters = append(filters, tr(logFilterShort[k])+"="+filterText(value))
+		label := []rune(tr(logFilterShort[k]))
+		text := dropdownField(strings.ToUpper(string(label[:1]))+string(label[1:]), filterText(value), false, min(width-2, 24))
+		filterFields = append(filterFields, text)
+		filterPlain = append(filterPlain, ansi.Strip(text))
 	}
-	filterLine := tr(tLogFilterLine, strings.Join(filters, " "))
-	if change := tr(tLogFilterChange); lipgloss.Width(filterLine)+lipgloss.Width(change) <= width {
-		filterLine += change
+	filterRows, searchPlain := fieldRows(filterFields, func(room int) string { return searchContent(&lv.list, room) }, width)
+	// A compact frame keeps one line of the filter line: the search while it is typed, else the first fields.
+	compactRows := filterRows[:1]
+	if lv.list.editing || lv.list.query() != "" {
+		compactRows = []string{searchField(searchContent(&lv.list, width-2), width-2)}
 	}
-	filterLine = styles.hint.Render(truncateCells(filterLine, width))
-
-	var search string
-	switch {
-	case lv.list.editing:
-		prefix, room := m.fit(tr(tLogSearchPrefix))
-		search = prefix + fitInput(lv.list.input, room).View()
-	case lv.list.query() != "":
-		prefix, room := m.fit(tr(tLogSearchPrefix))
-		search = prefix + truncateCells(lv.list.query(), room)
-	}
+	m.logBarSpecs = m.logBarTargets(modePlain, datePlain, viewPlain, filterPlain, searchPlain)
 	rule := styles.quietBorder.Render(strings.Repeat("─", width))
 
 	var body []string
@@ -989,11 +1019,10 @@ func (m *Model) logsFrame() (string, string) {
 	// the rules, the idle search line, the position, and the note, which the detail repeats.
 	build := func(compact bool) (string, string) {
 		lines := append([]string{}, bar...)
-		lines = append(lines, filterLine)
-		if search != "" {
-			lines = append(lines, search)
-		} else if !compact {
-			lines = append(lines, styles.hint.Render(truncateCells(tr(tLogSearchIdle), width)))
+		if compact {
+			lines = append(lines, compactRows...)
+		} else {
+			lines = append(lines, filterRows...)
 		}
 		if !compact {
 			lines = append(lines, rule)
@@ -1052,11 +1081,11 @@ func (m *Model) logKeys() string {
 		case lv.list.editing:
 			return "type to search · up/down move · enter keep · {back} clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "left/right mode · enter open · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusDate:
 			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusView:
-			return "left/right view · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "left/right view · enter open · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case len(lv.list.matches) == 0 || lv.heat:
 			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		}
@@ -1074,11 +1103,11 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · {back} clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "left/right change mode · enter open · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusDate:
 		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusView:
-		return "left/right change view · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "left/right change view · enter open · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case len(lv.list.matches) == 0 || lv.heat:
 		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}

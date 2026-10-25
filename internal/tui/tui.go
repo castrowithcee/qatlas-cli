@@ -412,6 +412,8 @@ type Model struct {
 	// (1-based), 0 while the rows do (see listbar.go).
 	listOpts map[section]*listOptions
 	barFocus int
+	// dd is the open list of a dropdown field of a bar (see dropdown.go).
+	dd *dropdown
 
 	editing string
 	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
@@ -898,6 +900,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "ctrl+c" {
 			return m, m.interrupt()
+		}
+		if m.dd != nil {
+			return m, m.updateDropdown(msg)
 		}
 		if m.testResultShown() {
 			m.testResultKey(msg)
@@ -3650,6 +3655,9 @@ func (m *Model) renderView() string {
 		return ""
 	}
 	m.hits, m.frameHits, m.tooSmall = nil, nil, false
+	if m.dd != nil {
+		m.dd.placed = false
+	}
 	m.screenKeys, m.screenPos = "", ""
 	m.layoutWorkspace()
 	if m.terminalTooSmall() {
@@ -3674,7 +3682,7 @@ func (m *Model) renderView() string {
 		m.footerHits()
 		return view
 	}
-	return m.frame(m.workspaceView())
+	return m.overlayDropdown(m.frame(m.workspaceView()))
 }
 
 // promptScreen reports whether the current screen is a short input dialog or a connection test result.
@@ -4108,8 +4116,8 @@ func (m *Model) listFrame() (string, string) {
 	head.WriteString(title + "\n")
 	bar := m.listBarShown()
 	switch {
-	case bar && m.barFocus > 0 || bar && !filtered:
-		// The bar takes the line of the filter, so a filter costs no row; it shows again once the bar is left.
+	case bar:
+		// The search field stands in the line of the bar, so a filter costs no row.
 		head.WriteString(m.barLine(m.listWidth()) + "\n")
 	case filtered:
 		head.WriteString(m.filterLine(&m.list) + "\n")

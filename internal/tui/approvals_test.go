@@ -778,7 +778,7 @@ func TestApprovalDetailLogsKeyOpensTheFilteredLogs(t *testing.T) {
 	}
 	view := screenOf(m)
 	if !strings.Contains(view, "config.connectio") || !strings.Contains(view, "1/1") || strings.Contains(view, "elsewhere") ||
-		!strings.Contains(view, "conn=personal") {
+		!strings.Contains(view, "Conn: personal ▾") {
 		t.Errorf("the Logs view is not filtered on personal:\n%s", view)
 	}
 }

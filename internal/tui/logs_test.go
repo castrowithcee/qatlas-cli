@@ -144,9 +144,9 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	view := m.View()
-	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: [Day] Range All", "Date: [" + f.localToday() + "]",
+	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: Day ▾", "Date: " + f.localToday() + " ▾",
 		"status", "time", "way", "client", "tool", "connection", "result", "dur.", "codex", "MCP", "CLI",
-		"12ms", "filter: way=all client=all tool=all conn=all effect=all result=all"} {
+		"12ms", "Way: all ▾", "Client: all ▾", "Conn: all ▾", "Result: all ▾", "/ search…"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view does not show %q:\n%s", want, view)
 		}
@@ -251,12 +251,12 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 		t.Errorf("Day shows other days:\n%s", view)
 	}
 	press(t, m, "tab")
-	if m.logs.focus != logFocusMode || !strings.Contains(m.View(), "> Mode:") {
+	if m.logs.focus != logFocusMode || !strings.Contains(m.View(), ">  Mode:") {
 		t.Fatalf("tab = focus %v, want the Mode field marked:\n%s", m.logs.focus, m.View())
 	}
 	pump(t, m, "right")
-	if m.logs.mode != logModeRange || !strings.Contains(m.View(), "Mode: Day [Range] All") ||
-		!strings.Contains(m.View(), "Range: [") {
+	if m.logs.mode != logModeRange || !strings.Contains(m.View(), "Mode: Range ▾") ||
+		!strings.Contains(m.View(), "Range: ") {
 		t.Fatalf("right = mode %v, want Range:\n%s", m.logs.mode, m.View())
 	}
 	press(t, m, "tab", "enter")
@@ -276,13 +276,13 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	typeText(t, m, today)
 	pump(t, m, "enter")
 	view := m.View()
-	if m.logs.dialog != nil || !strings.Contains(view, "Range: [2020-01-01.."+today+"]") ||
+	if m.logs.dialog != nil || !strings.Contains(view, "Range: 2020-01-01.."+today+" ▾") ||
 		!strings.Contains(view, today+" ") || !strings.Contains(view, "op.old") || !strings.Contains(view, "op.new") {
 		t.Fatalf("the range does not show both days with their dates:\n%s", view)
 	}
 	press(t, m, "shift+tab")
 	pump(t, m, "right")
-	if view := m.View(); !strings.Contains(view, "Mode: Day Range [All]") || !strings.Contains(view, "(all recorded days)") ||
+	if view := m.View(); !strings.Contains(view, "Mode: All ▾") || !strings.Contains(view, "(all recorded days)") ||
 		!strings.Contains(view, "op.old") {
 		t.Fatalf("All does not show every day:\n%s", view)
 	}
@@ -300,7 +300,7 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	typeText(t, m, "2021-05-05")
 	pump(t, m, "enter")
 	view = m.View()
-	for _, want := range []string{"Date: [2021-05-05]", "No entries for 2021-05-05.", "✓ verified"} {
+	for _, want := range []string{"Date: 2021-05-05 ▾", "No entries for 2021-05-05.", "✓ verified"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the empty day does not show %q:\n%s", want, view)
 		}
@@ -329,7 +329,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	typeText(t, m, "codex")
 	press(t, m, "enter")
 	view := m.View()
-	if m.logs.pick != nil || !strings.Contains(view, "client=codex") || !strings.Contains(view, "wiki.pages.get") ||
+	if m.logs.pick != nil || !strings.Contains(view, "Client: codex ▾") || !strings.Contains(view, "wiki.pages.get") ||
 		strings.Contains(view, "wiki.pages.create") || strings.Contains(view, "chat.send") {
 		t.Fatalf("the client filter does not keep codex alone:\n%s", view)
 	}
@@ -345,7 +345,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	typeText(t, m, "denied")
 	press(t, m, "enter")
 	view = m.View()
-	if !strings.Contains(view, "search: denied") || len(m.logs.list.matches) != 1 ||
+	if !strings.Contains(view, "/ denied") || len(m.logs.list.matches) != 1 ||
 		m.logs.row(m.logs.list.matches[0]).values[logFilterTool] != "wiki.pages.create" ||
 		!strings.Contains(view, "wiki.pages.cre") ||
 		strings.Contains(view, "wiki.pages.get") {
@@ -443,7 +443,7 @@ func TestLogsNarrowLayout(t *testing.T) {
 
 	view := m.View()
 	assertViewFits(t, view, 60, 20)
-	for _, want := range []string{"Mode: [Day] Range All", "Date: [" + f.localToday() + "]", "✓ verified", "github.issues"} {
+	for _, want := range []string{"Mode: Day ▾", "Date: " + f.localToday() + " ▾", "✓ verified", "github.issues"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("narrow view does not show %q:\n%s", want, view)
 		}

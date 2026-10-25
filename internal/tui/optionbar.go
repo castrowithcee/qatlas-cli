@@ -17,20 +17,6 @@ func barMarker(focused bool) string {
 	return "  "
 }
 
-// barChips draws the alternatives of one field, the active one in brackets and highlighted, so the
-// brackets and not the colour say which one it is.
-func barChips(values []string, active int) string {
-	chips := make([]string, len(values))
-	for i, v := range values {
-		if i == active {
-			chips[i] = styles.activeRow.Render("[" + v + "]")
-			continue
-		}
-		chips[i] = v
-	}
-	return strings.Join(chips, " ")
-}
-
 // packBar sets the fields and the status of a bar into lines of width cells: on one line where they fit,
 // otherwise field by field, the status ending the last line.
 func packBar(fields []string, status string, width int) []string {
