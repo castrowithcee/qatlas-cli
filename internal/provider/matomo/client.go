@@ -198,6 +198,10 @@ func (c *Client) call(ctx context.Context, op string, req requirement, method st
 func (c *Client) refuseMissing(req requirement, err error) error {
 	var missing *missingError
 	if errors.As(err, &missing) {
+		if missing.granular {
+			return c.unavailable(req, "Matomo's granular compliance feature is not enabled; a Super User sets "+
+				`[FeatureFlags] GranularPrivacyCompliance_feature = "enabled" in the Matomo configuration`)
+		}
 		return c.unavailable(req, "the instance does not provide the method this tool calls")
 	}
 	return err

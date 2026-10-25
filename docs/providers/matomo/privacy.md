@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo privacy tools: finding, exporting, and deleting the visits of one person, reading the privacy settings, and reading the compliance policies, with their rights, targets, caps, and the data they leave out.
+  Describes the Matomo privacy tools: finding, exporting, and deleting the visits of one person, reading the privacy settings, and reading and changing the compliance policies, with their rights, targets, caps, and the data they leave out.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -9,11 +9,11 @@ updated: 2026-10-25
 
 # Matomo privacy and data subject requests
 
-The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). Four tools
-only read. `matomo.data-subjects.find` and `matomo.data-subjects.export` carry personal data of other people and need
-admin rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
-`matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits). None of the five tools
-is in a setup profile.
+The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
+`matomo.data-subjects.find` and `matomo.data-subjects.export` carry personal data of other people and need admin
+rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
+`matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits), and the
+[compliance setters](#changing-compliance-policies) change the policies. None of these tools is in a setup profile.
 
 ## Finding and exporting a person
 
@@ -91,6 +91,39 @@ Users only. `extra_metadata` appears only when a compliance policy controls a se
 `status` is deprecated in Matomo 6; it is offered as long as Matomo 5 has it. `settings` ends as
 `unsupported-capability` when Matomo's granular compliance feature is not enabled. An unknown `policy` ends as
 `not-found`. `idSite` must lie inside the website targets of the connection; `all_sites` reads the instance-wide state.
+
+## Changing compliance policies
+
+Three tools change the compliance state; all need Super User rights, a confirmation, and a connection that names
+`instance`, also for one website, because a change for a website can rewrite the state of the instance and of every
+other website. They take `policy` and `idSite` or `all_sites` like `matomo.compliance.get`, never ask for a password
+(Matomo requires one only for session tokens), and send one request that is not repeated. A policy that Matomo's
+configuration file controls ends as `permission`.
+
+| Tool | Method | From | Feature flag |
+| --- | --- | --- | --- |
+| `matomo.compliance.set-policy-settings` | `setCompliancePolicySettings` | Matomo 5.14.0 | yes |
+| `matomo.compliance.enforce` | `enforceCompliancePolicySettings` | Matomo 5.14.0 | yes |
+| `matomo.compliance.set-status` | `setComplianceStatus` | Matomo 5.9.0 | no |
+
+The flag `GranularPrivacyCompliance` is off by default. While it is off, the granular tools and the `settings` kind of
+`matomo.compliance.get` end as `unsupported-capability`; a Super User enables it with `[FeatureFlags]
+GranularPrivacyCompliance_feature = "enabled"` in the Matomo configuration.
+
+- **`set-policy-settings`.** Stores for each named setting only the state enforced or not; the setting itself stays
+  unchanged and is overridden when read. `true` is additive across instance and website, an explicit `false` releases
+  the policy for that level. A setting ID that is unknown or not toggleable ends as `invalid-request`, and Matomo then
+  writes nothing. The answer has the form of `matomo.compliance.get` with kind `settings`.
+- **`enforce`.** Enforces every toggleable setting of the policy at once, for `cnil_v1` among others IP anonymization,
+  referrer shortening, user ID and visitor log off, and raw data kept at most 759 days. The data effect is final: data
+  anonymized meanwhile stays anonymized, and the scheduled purge then deletes raw data older than 759 days when
+  deleting is active and was set longer. Releasing the settings later sets them to explicitly not enforced; the earlier
+  inherited state cannot be restored through the API. The tool is `execute`, in no profile, and offered only where a
+  connection's `tools` list names it.
+- **`set-status`.** The older whole-policy switch, deprecated in Matomo 6: while on, every setting without a state of
+  its own counts as enforced, and off for a website under an active instance also turns the instance off. Matomo only
+  echoes the value sent, so the result is read with `matomo.compliance.get`. Mixing it with `set-policy-settings`
+  gives states that are hard to follow.
 
 ## Availability
 

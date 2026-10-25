@@ -187,7 +187,7 @@ func (m *Model) clickDropdown(x, y int) tea.Cmd {
 	return nil
 }
 
-// fieldRows sets styled fields, each behind a two-cell marker column and two cells apart, into lines of width
+// fieldRows sets styled fields, each led by its own two-cell marker column and two cells apart, into lines of width
 // cells, and the search field at the right end of the first line it fits (the last line otherwise). It returns
 // the lines and the plain search field.
 func fieldRows(fields []string, search func(room int) string, width int) ([]string, string) {
@@ -199,15 +199,15 @@ func fieldRows(fields []string, search func(room int) string, width int) ([]stri
 	}
 	for _, f := range fields {
 		w := lipgloss.Width(f)
-		if used > 0 && used+2+2+w > width {
+		if used > 0 && used+2+w > width {
 			flush()
 		}
 		if used > 0 {
 			cur += "  "
 			used += 2
 		}
-		cur += "  " + f
-		used += 2 + w
+		cur += f
+		used += w
 	}
 	if used > 0 || len(lines) == 0 {
 		flush()

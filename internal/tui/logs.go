@@ -1,9 +1,9 @@
 // The Logs section (the Activity area, see the sectionLogs comment in tui.go): the invocation log, read only. A bar on
 // top chooses a day, a range of days, or every recorded day; f narrows the rows by way, MCP client, tool,
-// connection, effect, and result in a picker; / searches the text of the rows; s swaps the rows for the
-// response sizes summed up per tool and connection, m for the context cost of each MCP session; enter opens
-// one entry; the View field of the bar swaps the rows for a heatmap of their days (activity.go). Every
-// row and the bar carry the status the hash chain and the check values give it, found by the same walk
+// connection, effect, and result in a picker; / searches the text of the rows; the tabs of the bar show the
+// rows (Table), a heatmap of their days (Activity, activity.go), or the response sizes summed up per tool and
+// connection (Details; s toggles it, m shows the context cost of each MCP session instead); enter opens one
+// entry. Every row and the bar carry the status the hash chain and the check values give it, found by the same walk
 // 'qatlas vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
 // a command, never on the event loop, and never ask for a passphrase: a locked vault leaves the check values
 // unchecked, which shows as unverified.
@@ -69,15 +69,55 @@ func (s logStatus) style() lipgloss.Style {
 	return [...]lipgloss.Style{styles.ok, styles.warning, styles.warning, styles.fail}[s]
 }
 
-// logFocus is the part of the Logs screen the keys act on: the rows or one of the bar's two fields.
+// logFocus is the part of the Logs screen the keys act on: the rows, the tabs, or one of the bar's two fields.
 type logFocus int
 
 const (
 	logFocusRows logFocus = iota
+	logFocusTabs
 	logFocusMode
 	logFocusDate
-	logFocusView
 )
+
+// logTab is what the tabs of the Logs screen select: the rows, the heatmap of their days, or the summary.
+type logTab int
+
+const (
+	logTabTable logTab = iota
+	logTabActivity
+	logTabDetails
+	logTabCount
+)
+
+// logTabWords are the names of the tabs in the language of the editor.
+func logTabWords() []string {
+	return []string{tr(tLogTabTable), tr(tLogTabActivity), tr(tLogTabDetails)}
+}
+
+// tab is the tab the view shows.
+func (lv *logView) tab() logTab {
+	switch {
+	case lv.heat:
+		return logTabActivity
+	case lv.stats:
+		return logTabDetails
+	}
+	return logTabTable
+}
+
+// setLogTab shows a tab: the rows, the heatmap, or the summary of the rows (the MCP sessions of it follow m).
+func (m *Model) setLogTab(tab logTab) tea.Cmd {
+	lv := m.logs
+	switch tab {
+	case logTabActivity:
+		return m.setHeat(true)
+	case logTabDetails:
+		lv.stats, lv.sessions, lv.heat, lv.scroll = true, false, false, 0
+	default:
+		lv.stats, lv.sessions, lv.heat = false, false, false
+	}
+	return nil
+}
 
 // The filters f offers, in the order of the filter line.
 const (
@@ -125,22 +165,44 @@ func logLabel(english string) string {
 	return labelText(english)
 }
 
-// logColumnTitles draws the column titles of a table of the Logs section in the editor's language.
+// logColumnTitles draws the column titles of a table of the Logs section in the editor's language, in capitals.
 func logColumnTitles(columns []column) []column {
 	out := make([]column, len(columns))
 	for i, c := range columns {
-		c.title = columnText(c.title)
+		c.title = strings.ToUpper(columnText(c.title))
 		out[i] = c
 	}
 	return out
 }
 
 // logColumns are the columns of the log table. The status leads and is never cut; the tool is the free
-// text; the duration goes first in a narrow terminal, then the connection, then the client.
+// text; the duration goes first in a narrow terminal, then the size, the connection, and the client.
 var logColumns = []column{
-	{title: "status"}, {title: "time"}, {title: "way"}, {title: "client", optional: true},
-	{title: "tool", flex: true}, {title: "connection", optional: true}, {title: "result"},
-	{title: "dur.", optional: true}, {title: "resp.", optional: true},
+	{title: "status", tone: logStatusTone}, {title: "time", tone: toneDim}, {title: "way", tone: toneDim},
+	{title: "client", optional: true, tone: toneText}, {title: "tool", flex: true, tone: toneText},
+	{title: "connection", optional: true, tone: toneText}, {title: "result", tone: logResultTone},
+	{title: "resp.", optional: true, tone: toneDim}, {title: "dur.", optional: true, right: true, tone: toneText},
+}
+
+// logStatusTone colours the status of a row by what it says; the word stays in the cell.
+func logStatusTone(cell string) lipgloss.Style {
+	for s := logVerified; s <= logAltered; s++ {
+		if cell == s.label() {
+			return s.style()
+		}
+	}
+	return styles.cell
+}
+
+// logResultTone colours the result of a call: ok in the success colour, anything but ok in the failure colour.
+func logResultTone(cell string) lipgloss.Style {
+	switch cell {
+	case "ok":
+		return styles.ok
+	case "-", "":
+		return styles.hint
+	}
+	return styles.fail
 }
 
 // logStatColumns are the columns of the summary s shows. The count leads and is never cut; the sizes are
@@ -201,9 +263,12 @@ type logView struct {
 	layout      layout
 	layoutWidth int
 
-	// stats shows the summary of the shown rows instead of the rows themselves, heat the heatmap of their days.
+	// stats shows the summary of the shown rows instead of the rows themselves, heat the heatmap of their days;
+	// the tab says which (see tab).
 	stats bool
 	heat  bool
+	// framed says that the last frame drew the rows in a panel.
+	framed bool
 	// sessions makes the summary the one of the MCP sessions, scrolled down by scroll lines.
 	sessions bool
 	scroll   int
@@ -440,7 +505,7 @@ func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) 
 			size = estimateTokens(*e.RespBytes)
 		}
 	}
-	row.cells = []string{row.status.label(), when, way, client, tool, conn, result, dur, size}
+	row.cells = []string{row.status.label(), when, way, client, tool, conn, result, size, dur}
 	row.values = [logFilterCount]string{way, client, tool, conn, effect, result}
 	return row
 }
@@ -587,8 +652,8 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 			return m.loadLogs()
 		case logFocusDate:
 			m.openLogDateDialog()
-		case logFocusView:
-			return m.setHeat(!lv.heat)
+		case logFocusTabs:
+			return m.setLogTab(logTab(min(max(int(lv.tab())+by, 0), int(logTabCount)-1)))
 		default:
 			if by < 0 {
 				m.focusNav()
@@ -603,8 +668,10 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
-		case logFocusMode, logFocusView:
-			m.openLogBarDropdown(lv.focus)
+		case logFocusMode:
+			m.openLogBarDropdown()
+		case logFocusTabs:
+			lv.focus = logFocusRows
 		case logFocusRows:
 			if row, ok := lv.list.selected(); ok && !lv.stats && !lv.heat {
 				lv.detail, _ = strconv.Atoi(row)
@@ -641,9 +708,9 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 
 // moveFocus steps through the bar's fields and the rows; All has no date field to stop at.
 func (lv *logView) moveFocus(by int) {
-	order := []logFocus{logFocusMode, logFocusDate, logFocusView, logFocusRows}
+	order := []logFocus{logFocusTabs, logFocusMode, logFocusDate, logFocusRows}
 	if lv.mode == logModeAll {
-		order = []logFocus{logFocusMode, logFocusView, logFocusRows}
+		order = []logFocus{logFocusTabs, logFocusMode, logFocusRows}
 	}
 	at := len(order) - 1
 	for i, f := range order {
@@ -654,27 +721,17 @@ func (lv *logView) moveFocus(by int) {
 	lv.focus = order[wrap(at+by, len(order))]
 }
 
-// openLogBarDropdown opens the list of the bar's mode or view field, which takes the focus.
-func (m *Model) openLogBarDropdown(f logFocus) {
+// openLogBarDropdown opens the list of the bar's mode field, which takes the focus.
+func (m *Model) openLogBarDropdown() {
 	lv := m.logs
-	lv.focus = f
-	if f == logFocusMode {
-		var modes []string
-		for mode := logModeDay; mode < logModeCount; mode++ {
-			modes = append(modes, mode.String())
-		}
-		m.openDropdown("logmode", modes, int(lv.mode), func(i int) tea.Cmd {
-			lv.mode = logMode(i)
-			return m.loadLogs()
-		})
-		return
+	lv.focus = logFocusMode
+	var modes []string
+	for mode := logModeDay; mode < logModeCount; mode++ {
+		modes = append(modes, mode.String())
 	}
-	active := 0
-	if lv.heat {
-		active = 1
-	}
-	m.openDropdown("logview", []string{tr(tLogViewTable), tr(tLogViewHeatmap)}, active, func(i int) tea.Cmd {
-		return m.setHeat(i == 1)
+	m.openDropdown("logmode", modes, int(lv.mode), func(i int) tea.Cmd {
+		lv.mode = logMode(i)
+		return m.loadLogs()
 	})
 }
 
@@ -862,8 +919,9 @@ func (m *Model) updateLogPick(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// logsView draws the Logs section: the bar, the filter and search lines, the table, and the keys. It is also
-// what the workspace shows below the tab line while the section is only marked there.
+// logsView draws the Logs section: the tabs, the filter and search lines, the panel with the table, the heatmap
+// or the summary, and the keys. It is also what the workspace shows below the tab line while the section is only
+// marked there.
 func (m *Model) logsView() string {
 	lv := m.logs
 	if m.screen == screenLogs && lv.dialog != nil {
@@ -876,18 +934,18 @@ func (m *Model) logsView() string {
 	var b strings.Builder
 	b.WriteString(head)
 	m.hitBar(strings.Split(head, "\n"), m.workspaceTop(), m.logBarSpecs)
+	room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
 	if lv.stats && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
-		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
 		if lv.sessions {
-			b.WriteString(m.sessionStatLines(m.logSessionStats(), room))
+			b.WriteString(m.logInside(m.sessionStatLines(m.logSessionStats(), room)))
 		} else {
-			b.WriteString(m.logStatLines(m.logStats(), room))
+			b.WriteString(m.logInside(m.logStatLines(m.logStats(), room)))
 		}
 		b.WriteString(foot)
 		return b.String()
 	}
 	if lv.heat && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
-		b.WriteString(m.logHeatLines(m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1))
+		b.WriteString(m.logHeatLines(room))
 		b.WriteString(foot)
 		return b.String()
 	}
@@ -901,10 +959,44 @@ func (m *Model) logsView() string {
 	return b.String()
 }
 
+// logRoom is the width of the lines inside the panel of the last frame, or of the whole workspace where the
+// frame drew none.
+func (m *Model) logRoom() int {
+	if m.logs.framed {
+		return max(m.usable(0)-4, 1)
+	}
+	return m.usable(0)
+}
+
+// logPanelFocused reports whether the frame of the panel shows the focus: the rows have it.
+func (m *Model) logPanelFocused() bool {
+	return m.screen == screenLogs && m.logs.focus == logFocusRows
+}
+
+// logSide puts one line into the frame of the panel, where the last frame drew one.
+func (m *Model) logSide(line string) string {
+	if !m.logs.framed {
+		return line
+	}
+	return panelSide(line, m.logRoom(), m.logPanelFocused(), "")
+}
+
+// logInside puts every line of text, each ended by a line break, into the frame of the panel.
+func (m *Model) logInside(text string) string {
+	if !m.logs.framed || text == "" {
+		return text
+	}
+	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+	for i, line := range lines {
+		lines[i] = m.logSide(line)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
 // logLayout lays the table out for the workspace, once per width and load.
 func (m *Model) logLayout() layout {
 	lv := m.logs
-	_, width := m.fit("  ")
+	_, width := m.fitIn(m.logRoom(), "  ")
 	if lv.layoutWidth != width {
 		lv.layout, lv.layoutWidth = lv.table.layout(width), width
 	}
@@ -912,26 +1004,18 @@ func (m *Model) logLayout() layout {
 }
 
 // logRowLine draws the shown row at index i. The marked row carries "> " and the full-width highlight while
-// the rows have the focus; on the other rows the time is faint.
+// the rows have the focus; the cells carry their own colours.
 func (m *Model) logRowLine(i int, l layout) string {
 	lv := m.logs
 	row := lv.row(lv.list.matches[i])
 	active := m.screen == screenLogs && lv.focus == logFocusRows && i == lv.list.cursor
-	if active {
-		return m.listRow(true, lv.table.line(row.cells, l))
-	}
-	blank, width := m.fit("  ")
-	line := padLine(lv.table.line(row.cells, l), width)
-	head := clipCells(line, l.widths[0]+lipgloss.Width(columnGap))
-	rest := strings.TrimPrefix(line, head)
-	when := clipCells(rest, l.widths[1])
-	tail := strings.TrimPrefix(rest, when)
-	return blank + head + styles.hint.Render(when) + tail
+	return m.logSide(m.listRowIn(m.logRoom(), active, lv.table.line(row.cells, l)))
 }
 
-// logsFrame is everything of the Logs screen except its rows. The bar stands on one line where it fits and
-// field by field where it does not; a terminal too low for the rows drops the rules and the idle search line
-// first.
+// logsFrame is everything of the Logs screen except its rows. The tab line carries the status of the chain;
+// the filter line holds the mode, the date, the filters and the search, and wraps where it must. The rows stand
+// in a panel where there is room; a terminal too low for them drops the panel, the rules and the idle search
+// line first.
 func (m *Model) logsFrame() (string, string) {
 	lv := m.logs
 	focused := m.screen == screenLogs
@@ -950,13 +1034,13 @@ func (m *Model) logsFrame() (string, string) {
 		text := dropdownField(label, value, focused && lv.focus == f, width-2)
 		return marker(f) + text, ansi.Strip(text)
 	}
-	modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
-	view := 0
-	if lv.heat {
-		view = 1
+	strip, spans := tabStrip(logTabWords(), int(lv.tab()), focused && lv.focus == logFocusTabs)
+	tabsPlain := make([]string, len(spans))
+	for i, span := range spans {
+		tabsPlain[i] = ansi.Cut(ansi.Strip(strip), span[0], span[1])
 	}
-	views := []string{tr(tLogViewTable), tr(tLogViewHeatmap)}
-	viewField, viewPlain := field(logFocusView, barLabel(tLogBarView), views[view])
+	tabLine := packBar([]string{marker(logFocusTabs) + strip}, status, width)
+	modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
 	var dateField, datePlain string
 	switch lv.mode {
 	case logModeDay, logModeRange:
@@ -969,65 +1053,97 @@ func (m *Model) logsFrame() (string, string) {
 	default:
 		dateField = "  " + styles.hint.Render(tr(tLogBarAll))
 	}
-	bar := packBar([]string{modeField, dateField, viewField}, status, width)
 
-	var filterFields, filterPlain []string
+	// The fields stand behind a marker column of two cells: the mode and the date carry their own, the filters
+	// leave it blank.
+	fields := []string{modeField, dateField}
+	var filterPlain []string
 	for k, value := range lv.filters {
 		label := []rune(tr(logFilterShort[k]))
 		text := dropdownField(strings.ToUpper(string(label[:1]))+string(label[1:]), filterText(value), false, min(width-2, 24))
-		filterFields = append(filterFields, text)
+		fields = append(fields, "  "+text)
 		filterPlain = append(filterPlain, ansi.Strip(text))
 	}
-	filterRows, searchPlain := fieldRows(filterFields, func(room int) string { return searchContent(&lv.list, room) }, width)
+	filterRows, searchPlain := fieldRows(fields, func(room int) string { return searchContent(&lv.list, room) }, width)
 	// A compact frame keeps one line of the filter line: the search while it is typed, else the first fields.
 	compactRows := filterRows[:1]
 	if lv.list.editing || lv.list.query() != "" {
 		compactRows = []string{searchField(searchContent(&lv.list, width-2), width-2)}
 	}
-	m.logBarSpecs = m.logBarTargets(modePlain, datePlain, viewPlain, filterPlain, searchPlain)
+	m.logBarSpecs = m.logBarTargets(modePlain, datePlain, tabsPlain, filterPlain, searchPlain)
 	rule := styles.quietBorder.Render(strings.Repeat("─", width))
 
-	var body []string
 	shown := len(lv.list.matches)
-	switch {
-	case lv.err != "":
-		body = append(body, m.wrapped(styles.fail, tr(tLogError, lv.err)))
-	case !lv.loaded:
-		body = append(body, m.wrapped(styles.hint, tr(tLogReading)))
-	case len(lv.rows) == 0:
-		body = append(body, m.wrapped(lipgloss.NewStyle(), lv.emptyText()))
-	case shown == 0:
-		body = append(body, m.wrapped(styles.hint, tr(tLogNoMatch)))
-	case lv.heat:
-		// The heatmap has no table header.
-	case lv.stats && lv.sessions:
-		body = append(body, m.wrapped(styles.hint, tr(tLogSessionsHelp)))
-		if stats := m.logSessionStats(); len(stats.order) > 0 {
-			body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
+	// body is the lines between the top and the bottom of the panel, drawn for the room of its inside.
+	body := func(room int, framed bool) []string {
+		var lines []string
+		note := func(style lipgloss.Style, text string) {
+			if framed {
+				lines = append(lines, strings.Split(render(style, room, text), "\n")...)
+				return
+			}
+			lines = append(lines, m.wrapped(style, text))
 		}
-	case lv.stats:
-		stats := m.logStats()
-		body = append(body, m.wrapped(styles.hint, tr(tLogStatsHelp)))
-		body = append(body, styles.hint.Render(clipCells("  "+stats.table.header(stats.layout), width)))
-	default:
-		body = append(body, styles.hint.Render(clipCells("  "+lv.table.header(m.logLayout()), width)))
+		header := func(t table, l layout) string {
+			return styles.hint.Render(clipCells("  "+t.header(l), room))
+		}
+		switch {
+		case lv.err != "":
+			note(styles.fail, tr(tLogError, lv.err))
+		case !lv.loaded:
+			note(styles.hint, tr(tLogReading))
+		case len(lv.rows) == 0:
+			note(lipgloss.NewStyle(), lv.emptyText())
+		case shown == 0:
+			note(styles.hint, tr(tLogNoMatch))
+		case lv.heat:
+			// The heatmap has no table header.
+		case lv.stats && lv.sessions:
+			note(styles.hint, tr(tLogSessionsHelp))
+			if stats := m.logSessionStats(); len(stats.order) > 0 {
+				lines = append(lines, header(stats.table, stats.layout))
+			}
+		case lv.stats:
+			stats := m.logStats()
+			note(styles.hint, tr(tLogStatsHelp))
+			lines = append(lines, header(stats.table, stats.layout))
+		default:
+			lines = append(lines, header(lv.table, m.logLayout()))
+		}
+		if framed {
+			for i, line := range lines {
+				lines[i] = panelSide(line, room, focused && lv.focus == logFocusRows, "")
+			}
+		}
+		return lines
 	}
 
 	keys := m.keyHint(m.logKeys())
 
 	// Every part ends its line itself, so the rows stand right above the foot; a compact frame leaves out
-	// the rules, the idle search line, the position, and the note, which the detail repeats.
+	// the panel, the rules, the idle search line, the position, and the note, which the detail repeats.
 	build := func(compact bool) (string, string) {
-		lines := append([]string{}, bar...)
+		framed := !compact && m.tableFramed()
+		lv.framed = framed
+		room := width
+		if framed {
+			room = max(width-4, 1)
+		}
+		lines := append([]string{}, tabLine...)
 		if compact {
 			lines = append(lines, compactRows...)
 		} else {
 			lines = append(lines, filterRows...)
 		}
-		if !compact {
+		bottom := rule
+		switch {
+		case framed:
+			lines = append(lines, panelTop("", "", room, focused && lv.focus == logFocusRows))
+			bottom = panelBottom(room, focused && lv.focus == logFocusRows)
+		case !compact:
 			lines = append(lines, rule)
 		}
-		lines = append(lines, body...)
+		lines = append(lines, body(room, framed)...)
 		if compact {
 			return strings.Join(lines, "\n") + "\n", strings.TrimPrefix(keys, "\n") + m.notes()
 		}
@@ -1038,7 +1154,7 @@ func (m *Model) logsFrame() (string, string) {
 		if lv.note != "" && lv.loaded && lv.hasUnchecked() {
 			foot = "\n" + m.wrapped(styles.hint, lv.note) + foot
 		}
-		return strings.Join(lines, "\n") + "\n", rule + foot + m.notes()
+		return strings.Join(lines, "\n") + "\n", bottom + foot + m.notes()
 	}
 	head, f := build(false)
 	if shown > 0 && m.height-strings.Count(head, "\n")-strings.Count(f, "\n")-1 < 1 {
@@ -1084,8 +1200,8 @@ func (m *Model) logKeys() string {
 			return "left/right mode · enter open · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusDate:
 			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
-		case lv.focus == logFocusView:
-			return "left/right view · enter open · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		case lv.focus == logFocusTabs:
+			return "left/right tab · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case len(lv.list.matches) == 0 || lv.heat:
 			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		}
@@ -1106,8 +1222,8 @@ func (m *Model) logKeys() string {
 		return "left/right change mode · enter open · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusDate:
 		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
-	case lv.focus == logFocusView:
-		return "left/right change view · enter open · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+	case lv.focus == logFocusTabs:
+		return "left/right change tab · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case len(lv.list.matches) == 0 || lv.heat:
 		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
@@ -1149,7 +1265,7 @@ func (m *Model) logStats() logStats {
 		}
 		s.table.rows[strconv.Itoa(i)] = cells
 	}
-	_, width := m.fit("  ")
+	_, width := m.fitIn(m.logRoom(), "  ")
 	s.layout = s.table.layout(width)
 	return s
 }
@@ -1165,7 +1281,7 @@ func (m *Model) logStatLines(s logStats, room int) string {
 			b.WriteString(styles.hint.Render(tr(tLogMore, len(s.groups)-i)) + "\n")
 			break
 		}
-		b.WriteString(m.listRow(false, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
+		b.WriteString(m.listRowIn(m.logRoom(), false, s.table.line(s.table.rows[strconv.Itoa(i)], s.layout)) + "\n")
 	}
 	return b.String()
 }
@@ -1209,7 +1325,7 @@ func (m *Model) logSessionStats() logSessionStats {
 			}
 		}
 	}
-	_, width := m.fit("  ")
+	_, width := m.fitIn(m.logRoom(), "  ")
 	s.layout = s.table.layout(width)
 	return s
 }
@@ -1240,7 +1356,7 @@ func (m *Model) scrollSessions(key string) {
 // rows shown hold no MCP session; a last line says how many lines it left below.
 func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 	if len(s.order) == 0 {
-		return m.wrapped(lipgloss.NewStyle(), tr(tLogNoSession)) + "\n"
+		return render(lipgloss.NewStyle(), m.logRoom(), tr(tLogNoSession)) + "\n"
 	}
 	start := min(max(m.logs.scroll, 0), max(len(s.order)-1, 0))
 	if len(s.order)-start > room {
@@ -1252,7 +1368,7 @@ func (m *Model) sessionStatLines(s logSessionStats, room int) string {
 			b.WriteString(styles.hint.Render(tr(tLogMore, len(s.order)-i)) + "\n")
 			break
 		}
-		b.WriteString(m.listRow(false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
+		b.WriteString(m.listRowIn(m.logRoom(), false, s.table.line(s.table.rows[s.order[i]], s.layout)) + "\n")
 	}
 	return b.String()
 }
