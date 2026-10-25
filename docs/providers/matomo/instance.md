@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the Matomo tools for instance-wide website settings and reference data: global settings, reference lists, and IP range expansion.
+  Describes the Matomo tools for instance-wide website settings and reference data: global settings, reference lists, IP range expansion, and the database statistics.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # Matomo instance settings and reference data
@@ -56,3 +56,13 @@ measurable type pass on as Matomo describes them and are cut to text above 16384
 Matomo checks no right for it, so the tool is offered to connections that reach websites and is in the `read` profile.
 Qatlas accepts only an IP address or CIDR notation (IPv4 or IPv6, up to 64 characters) and refuses wildcards, dashes,
 and zones before any request. A range Matomo cannot read is an invalid request.
+
+## Database statistics
+
+`matomo.database-statistics.get` reads the `DBStats` plugin of the instance. It needs Super User rights and a connection
+whose targets name `instance`, is in no profile, and is offered only where the `tools` list of the connection names
+it. The eleven Matomo methods are `section` values and one section is one request, because the individual summaries
+group every archive table by name and are slow on a large database; `force_cache` recalculates them and applies
+only to `individual-reports` and `individual-metrics`. The result is only sizes and counts of tables and report
+names, with the status of the database server; it holds no table content. Table sections are cut at `limit`
+(1 to 1000, 100 when omitted) and continued with `next_cursor`; `general-information` and `status` take neither.
