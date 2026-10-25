@@ -244,14 +244,24 @@ func (m *Model) detailMark(name string) string {
 // detailTabStrip draws the tabs of the pane, the shown one in brackets and highlighted, and returns the cells
 // each takes. Without colour the brackets still tell the shown tab.
 func detailTabStrip(active detailTab, focused bool) (string, [][2]int) {
+	words := make([]string, tabCount)
+	for tab := range words {
+		words[tab] = wordText(tabWords[tab])
+	}
+	return tabStrip(words, int(active), focused)
+}
+
+// tabStrip draws a row of tabs, the active one in brackets and highlighted, and returns the cells each takes,
+// counted from the first cell of the strip. It is the one strip of the detail pane and of the Activity screen.
+func tabStrip(words []string, active int, focused bool) (string, [][2]int) {
 	var b strings.Builder
-	spans := make([][2]int, 0, tabCount)
+	spans := make([][2]int, 0, len(words))
 	x := 0
-	for tab := detailTab(0); tab < tabCount; tab++ {
-		text := " " + wordText(tabWords[tab]) + " "
+	for tab, word := range words {
+		text := " " + word + " "
 		style := styles.hint
 		if tab == active {
-			text = "[" + wordText(tabWords[tab]) + "]"
+			text = "[" + word + "]"
 			style = styles.active
 			if focused {
 				style = styles.activeRow

@@ -196,7 +196,9 @@ type column struct {
 	title    string
 	optional bool
 	flex     bool
-	short    map[string]string
+	// right aligns the cells and the title at the right edge of the column.
+	right bool
+	short map[string]string
 	// shown draws a value of the column in the language of the editor; nil draws it as it is.
 	shown func(string) string
 	// tone picks the style a cell is drawn in from its drawn value; nil leaves the cell unstyled. Only the
@@ -314,7 +316,7 @@ func (t table) header(l layout) string {
 	var parts []string
 	for i, c := range t.columns {
 		if l.widths[i] > 0 {
-			parts = append(parts, padLine(truncateCells(c.title, l.widths[i]), l.widths[i]))
+			parts = append(parts, c.align(truncateCells(c.title, l.widths[i]), l.widths[i]))
 		}
 	}
 	return strings.TrimRight(strings.Join(parts, columnGap), " ")
@@ -330,8 +332,16 @@ func (t table) line(cells []string, l layout) string {
 			if tone := t.columns[i].tone; tone != nil && text != "" {
 				text = tone(shown).Render(text)
 			}
-			parts = append(parts, padLine(text, l.widths[i]))
+			parts = append(parts, t.columns[i].align(text, l.widths[i]))
 		}
 	}
 	return strings.TrimRight(strings.Join(parts, columnGap), " ")
+}
+
+// align pads text to width cells on the side the column keeps its values on.
+func (c column) align(text string, width int) string {
+	if c.right {
+		return strings.Repeat(" ", max(width-lipgloss.Width(text), 0)) + text
+	}
+	return padLine(text, width)
 }
