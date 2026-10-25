@@ -208,7 +208,9 @@ func (r *updateRig) startUpdate() int {
 
 	// The editor refuses the question while the vault process is still starting; u asks again once that
 	// refusal is the last thing shown, never blind. The screen is redrawn as a whole now and then, so an
-	// earlier refusal may show again after the question: the last of the two decides.
+	// earlier refusal may show again after the question: the last of the two decides. The next attempt
+	// continues where the deciding look ended, not where the screen stands by then: the answer to the
+	// last u may already be in between.
 	for attempt := 0; ; attempt++ {
 		r.typeKeys("u")
 		var question, refused bool
@@ -220,8 +222,10 @@ func (r *updateRig) startUpdate() int {
 			}
 			asked, wait := strings.LastIndex(s[at:], "Update qatlas to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
 			question, refused = asked >= 0 && asked > wait, wait >= 0 && wait > asked
+			if question || refused {
+				at = len(s)
+			}
 		}
-		at = len(r.screen())
 		if question {
 			break
 		}
