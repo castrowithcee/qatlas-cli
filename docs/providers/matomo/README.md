@@ -149,7 +149,10 @@ because they carry personal data. The [privacy tools](privacy.md) `matomo.data-s
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete` is in no profile either and is offered only
-via `tools`.
+via `tools`. The
+[compliance setters](privacy.md#changing-compliance-policies) `matomo.compliance.set-policy-settings` and
+`matomo.compliance.set-status` (target `instance`) are in no profile either; `matomo.compliance.enforce` is offered
+only via `tools`.
 The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
 `matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
 offered only via `tools`.
@@ -218,6 +221,9 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.data-subjects.delete` | [privacy](privacy.md) | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
 | `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
 | `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
+| `matomo.compliance.set-policy-settings` | [privacy](privacy.md#changing-compliance-policies) | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
+| `matomo.compliance.set-status` | [privacy](privacy.md#changing-compliance-policies) | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
+| `matomo.compliance.enforce` | [privacy](privacy.md#changing-compliance-policies) | enforces every toggleable setting of a policy, with final data effects (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |

@@ -162,16 +162,9 @@ func invokeComplianceGet(ctx context.Context, resolved *config.Resolved, secrets
 		if args.Policy == nil || !validPolicy(*args.Policy) {
 			return nil, invalidArgument("policy must hold 1 to 64 letters, digits, and the characters _ . -")
 		}
-		if (args.IDSite == nil) == !args.AllSites {
-			return nil, invalidArgument("exactly one of idSite and all_sites is required")
-		}
-		site := "all"
-		if args.IDSite != nil {
-			id, err := selectSite(resolved, args.IDSite)
-			if err != nil {
-				return nil, err
-			}
-			site = strconv.Itoa(id)
+		site, err := complianceSite(resolved, args.IDSite, args.AllSites)
+		if err != nil {
+			return nil, err
 		}
 		params.Set("idSite", site)
 		if kind == "status" {
@@ -217,6 +210,22 @@ func invokeComplianceGet(ctx context.Context, resolved *config.Resolved, secrets
 		result.Settings = complianceSettingsOf(settings)
 	}
 	return result, nil
+}
+
+// complianceSite settles the website of a compliance call before any secret is read: the checked idSite, or
+// all for the instance-wide state.
+func complianceSite(resolved *config.Resolved, idSite *int, allSites bool) (string, error) {
+	if (idSite == nil) == !allSites {
+		return "", invalidArgument("exactly one of idSite and all_sites is required")
+	}
+	if idSite == nil {
+		return "all", nil
+	}
+	id, err := selectSite(resolved, idSite)
+	if err != nil {
+		return "", err
+	}
+	return strconv.Itoa(id), nil
 }
 
 func validPolicy(policy string) bool {

@@ -250,14 +250,15 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.users.delete" || tool.ID == "matomo.users.logout" ||
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
 			tool.ID == "matomo.data-subjects.delete" ||
-			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename") &&
+			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
+			tool.ID == "matomo.compliance.enforce") &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
 			t.Errorf("tool %+v, want an open read", tool)
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 84 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 87 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
@@ -496,6 +497,10 @@ func TestMessagePatterns(t *testing.T) {
 		"User 'not enabled' doesn't exist.":                                                    "not-found",
 		"User 'o'brien' doesn't exist.":                                                        "not-found",
 		"NoDataForAction":                                                                      "not-found",
+		"Granular compliance configuration is not enabled":                                     "granular-off",
+		"The compliance policy is controlled by the config file and cannot be changed":         "config-controlled",
+		`The setting "Core.token" is unknown or cannot be toggled`:                             "unknown-setting",
+		`The setting "Core.not enabled" is unknown or cannot be toggled`:                       "unknown-setting",
 		"Username 'tokenx' already exists.":                                                    "",
 		"Ein unbekannter Fehler":                                                               "",
 		"":                                                                                     "",
