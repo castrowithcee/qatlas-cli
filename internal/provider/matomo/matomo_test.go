@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -231,6 +230,11 @@ func with(base answers, extra answers) answers {
 	return merged
 }
 
+// listedReads are the reads that only a connection's tools list offers.
+var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.distinct-counts.get": true,
+	"matomo.multi-sites.get": true, "matomo.report-glossary.list": true, "matomo.insights.list": true,
+	"matomo.transitions.get": true, "matomo.bot-realtime.get": true, "matomo.database-statistics.get": true}
+
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
 	metadata, ok := reg.ProviderMetadata(Provider)
@@ -238,16 +242,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		metadata.DefaultBaseURL != "" || metadata.Target.Required || !metadata.Target.Multiple {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	// Listed-only reads are in no profile; a connection offers them only when its tools list names them.
-	listedReads := []string{"matomo.reports.evolution", "matomo.distinct-counts.get", "matomo.multi-sites.get",
-		"matomo.report-glossary.list"}
 	for _, tool := range metadata.Tools {
-		if slices.Contains(listedReads, tool.ID) {
-			if tool.Effect != config.EffectRead || !tool.RequiresToolAllowList {
-				t.Errorf("tool %+v, want a listed-only read", tool)
-			}
-			continue
-		}
 		changes := (strings.HasPrefix(tool.ID, "matomo.goals.") || strings.HasPrefix(tool.ID, "matomo.segments.") ||
 			strings.HasPrefix(tool.ID, "matomo.annotations.") || strings.HasPrefix(tool.ID, "matomo.dimensions.") ||
 			strings.HasPrefix(tool.ID, "matomo.goal-recommendations.") || strings.HasPrefix(tool.ID, "matomo.sites.") ||
@@ -256,12 +251,12 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename") &&
 			tool.Effect != config.EffectRead
-		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList) {
+		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
 			t.Errorf("tool %+v, want an open read", tool)
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 79 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 83 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
@@ -499,6 +494,7 @@ func TestMessagePatterns(t *testing.T) {
 		"User 'deactivated' doesn't exist.":                                                    "not-found",
 		"User 'not enabled' doesn't exist.":                                                    "not-found",
 		"User 'o'brien' doesn't exist.":                                                        "not-found",
+		"NoDataForAction":                                                                      "not-found",
 		"Username 'tokenx' already exists.":                                                    "",
 		"Ein unbekannter Fehler":                                                               "",
 		"":                                                                                     "",
