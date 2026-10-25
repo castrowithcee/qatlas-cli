@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub pull request tools: pull request reads and changes, the listed-only merge and its conflicts, conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, the listed-only approve, pull request search, Copilot reviews, and the token each needs.
+  Describes the GitHub pull request tools: pull request reads and changes, the listed-only merge and its conflicts, conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, the listed-only approve, pull request search, and Copilot reviews.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -160,14 +160,7 @@ connections:
 `pull-merger` offers only the read `github.pull-requests.get` and the merge, so a caller reads the current head
 commit and merges with it in two calls on the same connection.
 
-### Tokens for pull requests
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.pull-requests.list`, `get`, `github.pull-request-files.list`, `github.pull-request-commits.list`, `github.pull-request-diffs.get` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
-| `github.pull-request-checks.list` | `repo` | Checks: read, and Commit statuses: read |
-| `github.pull-requests.create`, `update`, `close`, `reopen`, `github.pull-request-branches.update` | `repo` | Pull requests: read and write |
-| `github.pull-requests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
+The token rights are listed under [Pull requests](setup.md#pull-requests).
 
 ## Pull request reviews and comments
 
@@ -253,14 +246,6 @@ at least one and at most 15 together, and answer with the pull request itself, t
 `github.pull-requests.get` reports, so `requested_reviewers` is read back after the change. A reviewer already
 requested, one not requested, and the pull request's own author are all left as they are.
 
-### Tokens for pull request reviews and comments
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.pull-request-reviews.list`, `github.pull-request-review-comments.list`, `github.pull-request-review-threads.list` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
-| `github.pull-request-reviews.create`, `.approve`, `github.pull-request-review-comments.reply`, `github.pull-request-review-threads.resolve`, `.unresolve`, `github.pull-request-reviewers.request`, `.remove` | `repo` | Pull requests: read and write |
-| `github.pull-request-comments.list`, `.create` | as `github.comments.*`: `repo` or `public_repo` | Pull requests or Issues: read; read and write for `.create` |
-
 ## Pull request search
 
 `github.pull-requests.search` searches pull requests, never plain issues: it forces `is:pr` ahead of `terms`, next
@@ -282,10 +267,6 @@ setting as the likely reason.
 
 It covers the official tool `request_copilot_review` of the GitHub MCP server (MIT, `pkg/github/copilot.go` at
 commit 85598ba). It needs a user token, never a GitHub App installation token, like the
-[Copilot assignment](issues.md#copilot-assignments).
-
-| Tool | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.copilot-reviews.request` | `repo`, and write access to the repository | Pull requests: read and write, and write access to the repository |
+[Copilot assignment](issues.md#copilot-assignments); the rights are listed under [Pull requests](setup.md#pull-requests).
 
 Source: <https://docs.github.com/en/rest/pulls/review-requests>.
