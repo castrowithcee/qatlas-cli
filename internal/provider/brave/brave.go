@@ -1,7 +1,6 @@
 // Package brave implements read-only access to the Brave Search API with one subscription key: LLM
-// Context, web, news, video, and image search today, and the other search endpoints of the same API as
-// further tools of this package.
-// tools of this package.
+// Context, web, news, video, and image search and rich results today, and the other search endpoints of the
+// same API as further tools of this package.
 //
 // A connection binds one API key, sent only in the X-Subscription-Token header, and takes no target: a key
 // reaches the endpoints of its plan, and the connection's effects and tools decide which of them an agent may
@@ -42,6 +41,7 @@ func operations() []capability.Operation {
 	return []capability.Operation{
 		{Descriptor: llmContext, Handler: handle("get llm context", prepareLLMContext)},
 		{Descriptor: newsSearch, Handler: handle("search news", prepareNewsSearch)},
+		{Descriptor: richGet, Handler: handle("get rich result", prepareRichGet)},
 		{Descriptor: webSearch, Handler: handle("search web", prepareWebSearch)},
 		{Descriptor: videosSearch, Handler: handle("search videos", prepareVideosSearch)},
 		{Descriptor: imagesSearch, Handler: handle("search images", prepareImagesSearch)},
@@ -49,7 +49,8 @@ func operations() []capability.Operation {
 }
 
 // searchTools are the tools of the search profile, the Search plan of Brave.
-var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID, videosSearch.ID, imagesSearch.ID}
+var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID, videosSearch.ID, imagesSearch.ID,
+	richGet.ID}
 
 // probe is the smallest request that proves a key for one tool.
 type probe struct {
