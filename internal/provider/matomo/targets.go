@@ -120,7 +120,8 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 // instanceTools are the instance-wide tools: they need Super User rights, not a website, and are offered only
 // to a connection whose targets name instance.
 var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.ID: true, sitesAdd.ID: true,
-	siteGroupsRename.ID: true}
+	siteGroupsRename.ID: true, globalSettingsSetExcludedIPs.ID: true, globalSettingsSetExcludedUserAgents.ID: true,
+	globalSettingsSetExcludedReferrers.ID: true, globalSettingsSetExcludedQueryParameters.ID: true}
 
 // reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide
 // tool needs the instance target, and the website tools need a binding that reaches websites. A binding to the
