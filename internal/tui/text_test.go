@@ -177,7 +177,8 @@ func TestGermanFrameTexts(t *testing.T) {
 	if got := m.fields[0].label; got != "color scheme" {
 		t.Errorf("the row label = %q, want the internal key", got)
 	}
-	if view := m.View(); !strings.Contains(view, "Farbschema") || !strings.Contains(view, "< auto >") {
+	if view := formView(m); !strings.Contains(view, "Farbschema") || !strings.Contains(view, "auto") ||
+		!strings.Contains(screenOf(m), "▾") {
 		t.Errorf("the German General page lacks its labels:\n%s", view)
 	}
 }
@@ -256,6 +257,7 @@ func TestGermanKeyRows(t *testing.T) {
 	m, _ := lockedVaultModel(t)
 	sizedModel(m, 100, 40)
 	openSectionByName(t, m, sectionGeneral)
+	m.enterSection(secKeys)
 	view := m.View()
 	for _, want := range []string{"Speichertaste", "Hilfetaste", "Befehlstaste", "Sperrtaste", "Info-Taste", "F2 (Standard)", "nur i (keine zweite Taste)"} {
 		if !strings.Contains(view, want) {

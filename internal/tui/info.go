@@ -259,7 +259,12 @@ func (m *Model) screenView() string {
 	m.width, m.inPane = full-helpPaneWidth, true
 	left := m.editorView()
 	m.width, m.inPane = full, false
-	pane := m.pane(helpPaneWidth-2, max(m.height, helpPaneMinRows))
+	// A form's pane starts level with its rows, below the title.
+	off := 0
+	if m.screen == screenForm {
+		off = max(min(m.formTop-m.workspaceTop(), m.height-helpPaneMinRows), 0)
+	}
+	pane := strings.Repeat("\n", off) + m.pane(helpPaneWidth-2, max(m.height-off, helpPaneMinRows))
 	return lipgloss.JoinHorizontal(lipgloss.Top, padBlock(left, full-helpPaneWidth), "  ", pane)
 }
 
@@ -282,6 +287,11 @@ func (m *Model) pane(width, rows int) string {
 		lines = infoSubject{long: tr(tInfoNoFurtherExplanationForThis)}.lines(inner)
 	}
 	rows = max(rows-2, 1)
+	title := truncateDots(s.title, inner-2)
+	if m.screen == screenForm {
+		// A form's pane is as high as its text.
+		rows, title = min(rows, max(len(lines), 1)), tr(tFormHelpTitle)
+	}
 	if len(lines) > rows {
 		lines = lines[:rows]
 		lines[rows-1] = truncateDots(lines[rows-1]+" ...", inner)
@@ -289,7 +299,7 @@ func (m *Model) pane(width, rows int) string {
 	for i, l := range lines {
 		lines[i] = styles.hint.Render(l)
 	}
-	return strings.Join(panel(truncateDots(s.title, inner-2), lines, inner, rows, panelOpts{}), "\n")
+	return strings.Join(panel(title, lines, inner, rows, panelOpts{}), "\n")
 }
 
 // truncateDots cuts text to width cells, ending in "..." when it was cut.
@@ -306,7 +316,7 @@ func truncateDots(text string, width int) string {
 // hintLine is the one-line hint under the focused row: cut to the workspace with "..." at its right and,
 // where the pane is not shown, ending in the info mark when a longer explanation is behind the info key.
 func (m *Model) hintLine(hint string, more bool) string {
-	indent, width := m.fit("    ")
+	indent, width := m.fit(m.hintIndent())
 	hint = strings.Join(strings.Fields(hint), " ")
 	mark := ""
 	if more && !m.paneShown() && m.infoReachable() {
@@ -319,7 +329,7 @@ func (m *Model) hintLine(hint string, more bool) string {
 // text of its own, it does not fit the line, or a term belongs to the row.
 func (m *Model) moreBehind(f field, hint string) bool {
 	s := infoSubject{long: m.fieldDetail(f)}.withTerm(m.fieldTerm(f))
-	_, width := m.fit("    ")
+	_, width := m.fit(m.hintIndent())
 	one := strings.Join(strings.Fields(hint), " ")
 	return s.term.ID != "" || (strings.TrimSpace(s.long) != "" &&
 		(f.detail != "" || lipgloss.Width(one) > width-lipgloss.Width(infoMark)))

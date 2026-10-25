@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -1493,6 +1494,9 @@ func TestNameWithASpaceIsRefused(t *testing.T) {
 func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	const url = "https://wiki.example.invalid"
 
+	// The frame of the field pads its line, so the cursor cell shows only as the reverse video it is drawn in.
+	restoreRenderer(t)
+	lipgloss.SetColorProfile(termenv.ANSI)
 	m, _, _ := newModel(t)
 	noPane(m)
 	openSectionByName(t, m, sectionServices)
@@ -1507,8 +1511,9 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	if !strings.Contains(atEnd, url) {
 		t.Fatalf("the typed value is missing from the form:\n%s", atEnd)
 	}
-	// The cursor sits past the last character, so the text input draws one more cell after the value.
-	if !strings.Contains(atEnd, url+" \n") {
+	// The cursor sits past the last character, so the text input draws one more cell after the value; the
+	// frame of the field pads the line, so the cell is looked for as the input draws it.
+	if !strings.Contains(atEnd, m.fields[m.focus].input.View()) {
 		t.Errorf("no cursor cell behind the value, the field is drawn from the plain value:\n%s", atEnd)
 	}
 
@@ -1969,38 +1974,61 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	}
 }
 
-// formLines is the view without the padding the styles add, so a test can look at the shape of the form
-// rather than at the cells that fill it out.
+// formLines is the view without the padding the styles add and without the frames of the panels and fields,
+// so a test can look at the shape of the form (a row is its label and its value, a hint is indented under
+// it) rather than at the cells that fill it out.
 func formLines(m *Model) []string {
 	lines := strings.Split(screenOf(m), "\n")
 	entries := m.formSections()
 	list := 0
+	full := m.width
+	if m.paneShown() {
+		m.width -= helpPaneWidth
+	}
 	if m.sectionListFits(entries) {
 		_, list = m.sectionList(entries)
-		list += 2
+		list++
 	}
-	for i, l := range lines {
-		// The section list stands left of the rows; the rows are read without it. A line that starts with an
-		// entry of the list is a row line beside it.
+	m.width = full
+	var out []string
+	for _, l := range lines {
 		if runes := []rune(l); list > 0 && len(runes) >= list {
-			head := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(runes[:list])), ">"))
-			beside := head == ""
-			for _, e := range entries {
-				beside = beside || head == e.text()
-			}
-			if beside {
+			// The section list stands left of the section panel; the rows are read without them.
+			if head := strings.TrimSpace(string(runes[:list])); head == "" || strings.HasPrefix(head, "│") ||
+				strings.HasPrefix(head, "╭") || strings.HasPrefix(head, "╰") {
 				l = string(runes[list:])
 			}
 		}
-		lines[i] = strings.TrimRight(l, " ")
+		l = strings.TrimRight(l, " ")
+		if r := []rune(l); list > 0 && len(r) > 2 && r[0] == '│' && r[len(r)-1] == '│' {
+			// A line of the section panel.
+			l = strings.TrimRight(string(r[2:len(r)-1]), " ")
+		}
+		if t := strings.TrimSpace(l); strings.HasPrefix(t, "╭") || strings.HasPrefix(t, "╰") {
+			continue
+		}
+		if i := strings.Index(l, "│ "); i > 0 && strings.HasSuffix(l, "│") {
+			// A framed field: its label, then its value without the frame and the arrow.
+			l = l[:i] + strings.TrimRight(strings.TrimSuffix(strings.TrimRight(l[i+len("│ "):len(l)-len("│")], " "), "▾"), " ")
+		}
+		out = append(out, strings.TrimRight(l, " "))
 	}
-	return lines
+	return out
 }
 
 // fieldLine is the line the given field is drawn on. Field lines carry the two-cell margin or the focus
 // marker; hint lines are indented further, so they cannot be mistaken for one.
 func fieldLine(t *testing.T, lines []string, label string) int {
 	t.Helper()
+	at, ok := findFieldLine(lines, label)
+	if !ok {
+		t.Fatalf("field %q is not on screen:\n%s", label, strings.Join(lines, "\n"))
+	}
+	return at
+}
+
+// findFieldLine is fieldLine for a field that may stand in another section than the one shown.
+func findFieldLine(lines []string, label string) (int, bool) {
 	for i, l := range lines {
 		body := strings.TrimPrefix(l, "> ")
 		if body == l {
@@ -2010,11 +2038,10 @@ func fieldLine(t *testing.T, lines []string, label string) int {
 			}
 		}
 		if strings.HasPrefix(body, labelText(label)) {
-			return i
+			return i, true
 		}
 	}
-	t.Fatalf("field %q is not on screen:\n%s", label, strings.Join(lines, "\n"))
-	return -1
+	return -1, false
 }
 
 // hintBlocks collects every hint of the form, each one joined back into the sentence it was wrapped from.
@@ -2174,8 +2201,8 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 				if other.label == f.label || other.readOnly {
 					continue
 				}
-				oat := fieldLine(t, lines, other.label)
-				if oat+1 < len(lines) && strings.HasPrefix(lines[oat+1], "    ") {
+				oat, shown := findFieldLine(lines, other.label)
+				if shown && oat+1 < len(lines) && strings.HasPrefix(lines[oat+1], "    ") {
 					t.Errorf("width %d: field %q keeps a hint while %q is focused:\n%s",
 						width, other.label, f.label, strings.Join(lines, "\n"))
 				}
@@ -2403,4 +2430,23 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 	if strings.Join(roles, ",") != "token-id,token-secret" {
 		t.Errorf("roles = %v, want only the BookStack pair", roles)
 	}
+}
+
+// formView is the form as formLines reads it: rows and hints without the frames around fields and panels.
+func formView(m *Model) string { return strings.Join(formLines(m), "\n") }
+
+// sectionViews is the form as formView reads it with every open section shown in turn; the focus ends where
+// it began.
+func sectionViews(m *Model) string {
+	focus := m.focus
+	var b strings.Builder
+	for _, e := range m.formSections() {
+		if !e.closed {
+			m.enterSection(e.name)
+			b.WriteString(formView(m) + "\n")
+		}
+	}
+	m.focus = focus
+	m.applyFocus()
+	return b.String()
 }

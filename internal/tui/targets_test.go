@@ -917,7 +917,7 @@ func TestARefusedTargetLabelStandsUnderTheTargetsRow(t *testing.T) {
 	press(t, m, "r")
 	typeText(t, m, strings.Repeat("x", 300))
 	press(t, m, "enter", "f2")
-	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	view := flatText(formView(m))
 	if m.fail == "" || !strings.Contains(view, "Shorten the label") {
 		t.Fatalf("the refusal is not shown with its hint (fail %q):\n%s", m.fail, screenOf(m))
 	}

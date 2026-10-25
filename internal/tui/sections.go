@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -163,28 +164,45 @@ func (m *Model) skipped(i int) bool {
 type sectionEntry struct {
 	name   string
 	closed bool
+	// alert marks a section with a warning or a problem under one of its rows: the section list shows only the
+	// rows of one section, so this is how the others say that something stands there.
+	alert bool
 }
+
+// alertMark ends the entry of a section that holds a warning or a problem.
+const alertMark = " [!]"
 
 // formSections are the sections that have a shown row (a section whose rows are all hidden is not listed), in
 // the order of the form.
 func (m *Model) formSections() []sectionEntry {
 	var out []sectionEntry
-	seen := map[string]bool{}
+	at := map[string]int{}
 	for _, f := range m.fields {
-		if f.hidden || f.section == "" || seen[f.section] {
+		if f.hidden || f.section == "" {
 			continue
 		}
-		seen[f.section] = true
-		out = append(out, sectionEntry{f.section, m.sectionClosed(f.section)})
+		i, seen := at[f.section]
+		if !seen {
+			at[f.section] = len(out)
+			i = len(out)
+			out = append(out, sectionEntry{name: f.section, closed: m.sectionClosed(f.section)})
+		}
+		if !out[i].alert && (m.fieldWarning(f) != "" || len(m.fieldProblems(f)) > 0) {
+			out[i].alert = true
+		}
 	}
 	return out
 }
 
 func (e sectionEntry) text() string {
+	text := sectionText(e.name)
 	if e.closed {
-		return sectionText(e.name) + tr(tSectionClosedMark)
+		text += tr(tSectionClosedMark)
 	}
-	return sectionText(e.name)
+	if e.alert {
+		text += alertMark
+	}
+	return text
 }
 
 // currentSection is the section of the focused row.
@@ -195,33 +213,34 @@ func (m *Model) currentSection() string {
 	return m.fields[m.focus].section
 }
 
-// sectionList draws the list of the sections and returns it with its width. The section of the focused row
-// leads with ">" like a focused row does.
+// sectionList draws the numbered list of the sections in a panel and returns it with its width. The section
+// of the focused row leads with ">" like a focused row does and stands as a filled bar.
 func (m *Model) sectionList(entries []sectionEntry) (string, int) {
 	current := m.currentSection()
-	width := 0
-	for _, e := range entries {
-		width = max(width, 2+lipgloss.Width(e.text()))
+	texts := make([]string, len(entries))
+	inner := 0
+	for i, e := range entries {
+		texts[i] = fmt.Sprintf("%d %s", i+1, e.text())
+		inner = max(inner, 2+lipgloss.Width(texts[i]))
 	}
 	lines := make([]string, len(entries))
 	for i, e := range entries {
-		line := "  " + e.text()
-		style := lipgloss.NewStyle()
+		line := padLine("  "+texts[i], inner)
 		switch {
 		case e.name == current:
-			line, style = "> "+e.text(), styles.active
+			line = styles.activeRow.Render(padLine("> "+texts[i], inner))
 		case e.closed:
-			style = styles.hint
+			line = styles.hint.Render(line)
 		}
-		lines[i] = style.Render(line + strings.Repeat(" ", width-lipgloss.Width(line)))
+		lines[i] = line
 	}
-	return strings.Join(lines, "\n"), width
+	return strings.Join(panel("", lines, inner, len(lines), panelOpts{}), "\n"), inner + 4
 }
 
 // sectionListFits reports whether the sections stand as a list beside the rows: there are two or more of them
 // and the workspace has the width and the height for the list.
 func (m *Model) sectionListFits(entries []sectionEntry) bool {
-	return len(entries) >= 2 && m.width >= sectionListMinWidth && m.height >= len(entries)+6
+	return len(entries) >= 2 && m.width >= sectionListMinWidth && m.height >= len(entries)+8
 }
 
 // sectionHeading is the heading above the rows of a section where the list does not fit.

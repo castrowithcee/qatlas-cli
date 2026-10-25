@@ -193,9 +193,9 @@ func TestPayloadFormShowsProblemUnderItsRow(t *testing.T) {
 	if h.m.fail != "1 problem; nothing was saved" || h.m.screen != screenForm {
 		t.Fatalf("status = %q, screen %v", h.m.fail, h.m.screen)
 	}
-	view := screenOf(h.m)
+	view := formView(h.m)
 	if len(h.m.problems.rows["name"]) != 1 || !strings.Contains(view, "[!] ") ||
-		!strings.Contains(view, "Rename the entry") {
+		!strings.Contains(flatText(view), "Rename the entry") {
 		t.Fatalf("no problem with its resolution under the name row:\n%s", view)
 	}
 	assertNoLocation(t, view)
