@@ -1,7 +1,6 @@
 package github
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -72,7 +71,6 @@ var issueListBaseSelection = `number title state updatedAt ` +
 	issueConnection("suggestedActors", issueConnectionFirst, `... on Actor{`+gqlAccountSelection+`}`) + ` ` +
 	issueConnection("trackedInIssues", issueConnectionFirst, gqlReferenceSelection) + ` ` +
 	issueConnection("trackedIssues", issueConnectionFirst, gqlReferenceSelection) + ` ` +
-	issueConnection("issueFieldValues", issueConnectionFirst, issueFieldValueSelection) + ` ` +
 	`comments{totalCount} subIssues{totalCount} blockedBy{totalCount} blocking{totalCount} ` +
 	`timelineItems{totalCount} userContentEdits{totalCount} reactions{totalCount} ` +
 	pendingSuggestionsSelection + ` ` +
@@ -173,13 +171,6 @@ func (r *pendingSuggestionRaw) project() *IssuePendingSuggestion {
 	return s
 }
 
-// issueFieldValueSelection selects an issue field value of any type. The value members differ in type and
-// nullability between the five value types, so each has its own response name.
-const issueFieldValueSelection = `... on IssueFieldValueCommon{field{... on Node{id} ... on IssueFieldCommon{name dataType}}} ` +
-	`... on IssueFieldTextValue{value} ... on IssueFieldDateValue{dateValue:value} ` +
-	`... on IssueFieldNumberValue{numberValue:value} ... on IssueFieldSingleSelectValue{optionValue:value} ` +
-	`... on IssueFieldMultiSelectValue{multiValue:value}`
-
 // gqlConnectionRaw is the first page of a connection with its total.
 type gqlConnectionRaw[T any] struct {
 	TotalCount *int64 `json:"totalCount"`
@@ -270,47 +261,6 @@ func (r *issueProjectRaw) project() *IssueProject {
 		Closed: r.Closed}
 }
 
-type issueFieldValueNodeRaw struct {
-	Field *struct {
-		ID       *string `json:"id"`
-		Name     *string `json:"name"`
-		DataType *string `json:"dataType"`
-	} `json:"field"`
-	Value       *string      `json:"value"`
-	DateValue   *string      `json:"dateValue"`
-	NumberValue *json.Number `json:"numberValue"`
-	OptionValue *string      `json:"optionValue"`
-	MultiValue  *string      `json:"multiValue"`
-}
-
-// GraphQLIssueFieldValue is the value of one issue field on an issue. A number stays a number with the
-// digits GitHub sent; the other types are text, a multi-select value being the option names joined by commas.
-type GraphQLIssueFieldValue struct {
-	FieldID   *string `json:"field_id,omitempty"`
-	FieldName *string `json:"field_name,omitempty"`
-	DataType  *string `json:"data_type,omitempty"`
-	Value     any     `json:"value,omitempty"`
-}
-
-func (r *issueFieldValueNodeRaw) project() *GraphQLIssueFieldValue {
-	v := &GraphQLIssueFieldValue{}
-	if r.Field != nil {
-		v.FieldID, v.FieldName, v.DataType = gqlName(r.Field.ID), gqlName(r.Field.Name), gqlName(r.Field.DataType)
-	}
-	if r.NumberValue != nil {
-		v.Value = *r.NumberValue
-	}
-	for _, text := range []*string{r.Value, r.DateValue, r.OptionValue, r.MultiValue} {
-		if t := gqlText(text); t != nil {
-			v.Value = *t
-		}
-	}
-	if v.FieldID == nil && v.FieldName == nil && v.DataType == nil && v.Value == nil {
-		return nil
-	}
-	return v
-}
-
 type issuePinnedCommentRaw struct {
 	ID             *string        `json:"id"`
 	DatabaseID     *int64         `json:"databaseId"`
@@ -360,80 +310,79 @@ type issueDependenciesSummaryRaw struct {
 
 // issueNodeRaw is one Issue as issueListSelection asks for it.
 type issueNodeRaw struct {
-	Number                             int                                       `json:"number"`
-	Title                              string                                    `json:"title"`
-	State                              string                                    `json:"state"`
-	UpdatedAt                          string                                    `json:"updatedAt"`
-	Assignees                          *gqlConnectionRaw[gqlAccountRaw]          `json:"assignees"`
-	Labels                             *gqlConnectionRaw[gqlLabelRaw]            `json:"labels"`
-	IssueType                          *gqlIssueTypeRaw                          `json:"issueType"`
-	ID                                 *string                                   `json:"id"`
-	DatabaseID                         *int64                                    `json:"databaseId"`
-	FullDatabaseID                     *gqlBigInt                                `json:"fullDatabaseId"`
-	URL                                *string                                   `json:"url"`
-	Author                             *gqlAccountRaw                            `json:"author"`
-	AuthorAssociation                  *string                                   `json:"authorAssociation"`
-	Body                               *string                                   `json:"body"`
-	BodyResourcePath                   *string                                   `json:"bodyResourcePath"`
-	BodyURL                            *string                                   `json:"bodyUrl"`
-	Closed                             *bool                                     `json:"closed"`
-	ClosedAt                           *string                                   `json:"closedAt"`
-	CreatedAt                          *string                                   `json:"createdAt"`
-	CreatedViaEmail                    *bool                                     `json:"createdViaEmail"`
-	IncludesCreatedEdit                *bool                                     `json:"includesCreatedEdit"`
-	LastEditedAt                       *string                                   `json:"lastEditedAt"`
-	PublishedAt                        *string                                   `json:"publishedAt"`
-	Editor                             *gqlAccountRaw                            `json:"editor"`
-	Locked                             *bool                                     `json:"locked"`
-	ActiveLockReason                   *string                                   `json:"activeLockReason"`
-	StateReason                        *string                                   `json:"stateReason"`
-	IsPinned                           *bool                                     `json:"isPinned"`
-	IsReadByViewer                     *bool                                     `json:"isReadByViewer"`
-	Milestone                          *gqlMilestoneRaw                          `json:"milestone"`
-	Parent                             *gqlReferenceRaw                          `json:"parent"`
-	DuplicateOf                        *gqlReferenceRaw                          `json:"duplicateOf"`
-	PinnedIssueComment                 *issuePinnedCommentRaw                    `json:"pinnedIssueComment"`
-	SubIssuesSummary                   *issueSubIssuesSummaryRaw                 `json:"subIssuesSummary"`
-	IssueDependenciesSummary           *issueDependenciesSummaryRaw              `json:"issueDependenciesSummary"`
-	ReactionGroups                     []*gqlReactionGroupRaw                    `json:"reactionGroups"`
-	TrackedIssuesCount                 *int64                                    `json:"trackedIssuesCount"`
-	ResourcePath                       *string                                   `json:"resourcePath"`
-	AssignedActors                     *gqlConnectionRaw[gqlAccountRaw]          `json:"assignedActors"`
-	ClosedByPullRequestsReferences     *gqlConnectionRaw[gqlReferenceRaw]        `json:"closedByPullRequestsReferences"`
-	LinkedBranches                     *gqlConnectionRaw[issueLinkedBranchRaw]   `json:"linkedBranches"`
-	Participants                       *gqlConnectionRaw[gqlAccountRaw]          `json:"participants"`
-	ProjectsV2                         *gqlConnectionRaw[issueProjectRaw]        `json:"projectsV2"`
-	RelatesTo                          *gqlConnectionRaw[gqlReferenceRaw]        `json:"relatesTo"`
-	SuggestedActors                    *gqlConnectionRaw[gqlAccountRaw]          `json:"suggestedActors"`
-	TrackedInIssues                    *gqlConnectionRaw[gqlReferenceRaw]        `json:"trackedInIssues"`
-	TrackedIssues                      *gqlConnectionRaw[gqlReferenceRaw]        `json:"trackedIssues"`
-	IssueFieldValues                   *gqlConnectionRaw[issueFieldValueNodeRaw] `json:"issueFieldValues"`
-	PendingSuggestions                 []*pendingSuggestionRaw                   `json:"pendingSuggestions"`
-	Comments                           *countRaw                                 `json:"comments"`
-	SubIssues                          *countRaw                                 `json:"subIssues"`
-	BlockedBy                          *countRaw                                 `json:"blockedBy"`
-	Blocking                           *countRaw                                 `json:"blocking"`
-	TimelineItems                      *countRaw                                 `json:"timelineItems"`
-	UserContentEdits                   *countRaw                                 `json:"userContentEdits"`
-	Reactions                          *countRaw                                 `json:"reactions"`
-	ProjectItems                       *countRaw                                 `json:"projectItems"`
-	ViewerCanAssign                    *bool                                     `json:"viewerCanAssign"`
-	ViewerCanClose                     *bool                                     `json:"viewerCanClose"`
-	ViewerCanDelete                    *bool                                     `json:"viewerCanDelete"`
-	ViewerCanLabel                     *bool                                     `json:"viewerCanLabel"`
-	ViewerCanReact                     *bool                                     `json:"viewerCanReact"`
-	ViewerCanReopen                    *bool                                     `json:"viewerCanReopen"`
-	ViewerCanSetFields                 *bool                                     `json:"viewerCanSetFields"`
-	ViewerCanSetMilestone              *bool                                     `json:"viewerCanSetMilestone"`
-	ViewerCanSubscribe                 *bool                                     `json:"viewerCanSubscribe"`
-	ViewerCanType                      *bool                                     `json:"viewerCanType"`
-	ViewerCanUpdate                    *bool                                     `json:"viewerCanUpdate"`
-	ViewerCanUpdateMetadata            *bool                                     `json:"viewerCanUpdateMetadata"`
-	ViewerCannotUpdateReasons          []*string                                 `json:"viewerCannotUpdateReasons"`
-	ViewerDidAuthor                    *bool                                     `json:"viewerDidAuthor"`
-	ViewerSubscription                 *string                                   `json:"viewerSubscription"`
-	ViewerThreadSubscriptionFormAction *string                                   `json:"viewerThreadSubscriptionFormAction"`
-	ViewerThreadSubscriptionStatus     *string                                   `json:"viewerThreadSubscriptionStatus"`
+	Number                             int                                     `json:"number"`
+	Title                              string                                  `json:"title"`
+	State                              string                                  `json:"state"`
+	UpdatedAt                          string                                  `json:"updatedAt"`
+	Assignees                          *gqlConnectionRaw[gqlAccountRaw]        `json:"assignees"`
+	Labels                             *gqlConnectionRaw[gqlLabelRaw]          `json:"labels"`
+	IssueType                          *gqlIssueTypeRaw                        `json:"issueType"`
+	ID                                 *string                                 `json:"id"`
+	DatabaseID                         *int64                                  `json:"databaseId"`
+	FullDatabaseID                     *gqlBigInt                              `json:"fullDatabaseId"`
+	URL                                *string                                 `json:"url"`
+	Author                             *gqlAccountRaw                          `json:"author"`
+	AuthorAssociation                  *string                                 `json:"authorAssociation"`
+	Body                               *string                                 `json:"body"`
+	BodyResourcePath                   *string                                 `json:"bodyResourcePath"`
+	BodyURL                            *string                                 `json:"bodyUrl"`
+	Closed                             *bool                                   `json:"closed"`
+	ClosedAt                           *string                                 `json:"closedAt"`
+	CreatedAt                          *string                                 `json:"createdAt"`
+	CreatedViaEmail                    *bool                                   `json:"createdViaEmail"`
+	IncludesCreatedEdit                *bool                                   `json:"includesCreatedEdit"`
+	LastEditedAt                       *string                                 `json:"lastEditedAt"`
+	PublishedAt                        *string                                 `json:"publishedAt"`
+	Editor                             *gqlAccountRaw                          `json:"editor"`
+	Locked                             *bool                                   `json:"locked"`
+	ActiveLockReason                   *string                                 `json:"activeLockReason"`
+	StateReason                        *string                                 `json:"stateReason"`
+	IsPinned                           *bool                                   `json:"isPinned"`
+	IsReadByViewer                     *bool                                   `json:"isReadByViewer"`
+	Milestone                          *gqlMilestoneRaw                        `json:"milestone"`
+	Parent                             *gqlReferenceRaw                        `json:"parent"`
+	DuplicateOf                        *gqlReferenceRaw                        `json:"duplicateOf"`
+	PinnedIssueComment                 *issuePinnedCommentRaw                  `json:"pinnedIssueComment"`
+	SubIssuesSummary                   *issueSubIssuesSummaryRaw               `json:"subIssuesSummary"`
+	IssueDependenciesSummary           *issueDependenciesSummaryRaw            `json:"issueDependenciesSummary"`
+	ReactionGroups                     []*gqlReactionGroupRaw                  `json:"reactionGroups"`
+	TrackedIssuesCount                 *int64                                  `json:"trackedIssuesCount"`
+	ResourcePath                       *string                                 `json:"resourcePath"`
+	AssignedActors                     *gqlConnectionRaw[gqlAccountRaw]        `json:"assignedActors"`
+	ClosedByPullRequestsReferences     *gqlConnectionRaw[gqlReferenceRaw]      `json:"closedByPullRequestsReferences"`
+	LinkedBranches                     *gqlConnectionRaw[issueLinkedBranchRaw] `json:"linkedBranches"`
+	Participants                       *gqlConnectionRaw[gqlAccountRaw]        `json:"participants"`
+	ProjectsV2                         *gqlConnectionRaw[issueProjectRaw]      `json:"projectsV2"`
+	RelatesTo                          *gqlConnectionRaw[gqlReferenceRaw]      `json:"relatesTo"`
+	SuggestedActors                    *gqlConnectionRaw[gqlAccountRaw]        `json:"suggestedActors"`
+	TrackedInIssues                    *gqlConnectionRaw[gqlReferenceRaw]      `json:"trackedInIssues"`
+	TrackedIssues                      *gqlConnectionRaw[gqlReferenceRaw]      `json:"trackedIssues"`
+	PendingSuggestions                 []*pendingSuggestionRaw                 `json:"pendingSuggestions"`
+	Comments                           *countRaw                               `json:"comments"`
+	SubIssues                          *countRaw                               `json:"subIssues"`
+	BlockedBy                          *countRaw                               `json:"blockedBy"`
+	Blocking                           *countRaw                               `json:"blocking"`
+	TimelineItems                      *countRaw                               `json:"timelineItems"`
+	UserContentEdits                   *countRaw                               `json:"userContentEdits"`
+	Reactions                          *countRaw                               `json:"reactions"`
+	ProjectItems                       *countRaw                               `json:"projectItems"`
+	ViewerCanAssign                    *bool                                   `json:"viewerCanAssign"`
+	ViewerCanClose                     *bool                                   `json:"viewerCanClose"`
+	ViewerCanDelete                    *bool                                   `json:"viewerCanDelete"`
+	ViewerCanLabel                     *bool                                   `json:"viewerCanLabel"`
+	ViewerCanReact                     *bool                                   `json:"viewerCanReact"`
+	ViewerCanReopen                    *bool                                   `json:"viewerCanReopen"`
+	ViewerCanSetFields                 *bool                                   `json:"viewerCanSetFields"`
+	ViewerCanSetMilestone              *bool                                   `json:"viewerCanSetMilestone"`
+	ViewerCanSubscribe                 *bool                                   `json:"viewerCanSubscribe"`
+	ViewerCanType                      *bool                                   `json:"viewerCanType"`
+	ViewerCanUpdate                    *bool                                   `json:"viewerCanUpdate"`
+	ViewerCanUpdateMetadata            *bool                                   `json:"viewerCanUpdateMetadata"`
+	ViewerCannotUpdateReasons          []*string                               `json:"viewerCannotUpdateReasons"`
+	ViewerDidAuthor                    *bool                                   `json:"viewerDidAuthor"`
+	ViewerSubscription                 *string                                 `json:"viewerSubscription"`
+	ViewerThreadSubscriptionFormAction *string                                 `json:"viewerThreadSubscriptionFormAction"`
+	ViewerThreadSubscriptionStatus     *string                                 `json:"viewerThreadSubscriptionStatus"`
 }
 
 // IssueListWidth holds the members of GitHub's issue the list adds to its compact view.
@@ -502,9 +451,6 @@ type IssueListWidth struct {
 	TrackedIssues                            []GraphQLReference            `json:"tracked_issues,omitempty"`
 	TrackedIssuesTotalCount                  *int64                        `json:"tracked_issues_total_count,omitempty"`
 	TrackedIssuesTruncated                   bool                          `json:"tracked_issues_truncated,omitempty"`
-	IssueFieldValues                         []GraphQLIssueFieldValue      `json:"issue_field_values,omitempty"`
-	IssueFieldValuesTotalCount               *int64                        `json:"issue_field_values_total_count,omitempty"`
-	IssueFieldValuesTruncated                bool                          `json:"issue_field_values_truncated,omitempty"`
 	PendingSuggestions                       []IssuePendingSuggestion      `json:"pending_suggestions,omitempty"`
 	PendingSuggestionsTruncated              bool                          `json:"pending_suggestions_truncated,omitempty"`
 	CommentsTotalCount                       *int64                        `json:"comments_total_count,omitempty"`
@@ -595,8 +541,6 @@ func (n *issueNodeRaw) width() IssueListWidth {
 		connectionPage(n.TrackedInIssues, issueConnectionFirst, (*gqlReferenceRaw).project)
 	w.TrackedIssues, w.TrackedIssuesTotalCount, w.TrackedIssuesTruncated =
 		connectionPage(n.TrackedIssues, issueConnectionFirst, (*gqlReferenceRaw).project)
-	w.IssueFieldValues, w.IssueFieldValuesTotalCount, w.IssueFieldValuesTruncated =
-		connectionPage(n.IssueFieldValues, issueConnectionFirst, (*issueFieldValueNodeRaw).project)
 	shown := 0
 	for _, suggestion := range n.PendingSuggestions {
 		if suggestion == nil {
@@ -950,7 +894,6 @@ var issueListWidthProperties = `"author":{"type":"string"},"milestone":{"type":"
 	issueConnectionProperties("suggested_actors", false, gqlAccountSchema) + `,` +
 	issueConnectionProperties("tracked_in_issues", false, gqlReferenceSchema) + `,` +
 	issueConnectionProperties("tracked_issues", false, gqlReferenceSchema) + `,` +
-	issueConnectionProperties("issue_field_values", false, issueFieldValueSchemaOutput) + `,` +
 	`"pending_suggestions":{"type":"array","items":` + issuePendingSuggestionSchema + `},` +
 	`"pending_suggestions_truncated":{"type":"boolean"},` +
 	`"comments_total_count":{"type":"integer"},"sub_issues_total_count":{"type":"integer"},` +
@@ -986,9 +929,6 @@ var issueLinkedBranchSchema = objectSchema(`"id":{"type":"string"},"ref_name":{"
 
 var issueProjectSchema = objectSchema(`"id":{"type":"string"},"number":{"type":"integer"},` +
 	`"title":{"type":"string"},"url":{"type":"string"},"closed":{"type":"boolean"}`)
-
-var issueFieldValueSchemaOutput = objectSchema(`"field_id":{"type":"string"},"field_name":{"type":"string"},` +
-	`"data_type":{"type":"string"},"value":{"anyOf":[{"type":"string"},{"type":"number"}]}`)
 
 // issueConnectionProperties are the schema members of a connection read with its first page: the entries
 // (named name_details for a list behind a flat field, as detailName says), the total, and the marker.
@@ -1073,8 +1013,6 @@ var issueListWidthFields = slices.Concat(
 	issueConnectionFields("suggested_actors", "Accounts suggested for assignment", 10),
 	issueConnectionFields("tracked_in_issues", "Issues that track the issue", 10),
 	issueConnectionFields("tracked_issues", "Issues tracked inside the issue", 10),
-	issueConnectionFields("issue_field_values", "Issue field values: field_id, field_name, data_type, and value "+
-		"(a number, or text; a multi-select value lists the option names joined by commas)", 10),
 	[]capability.Field{
 		{Name: "pending_suggestions", Description: "Pending suggestions for the issue, the first 10, untrusted data: " +
 			"type (PendingAssigneeSuggestion, PendingCloseSuggestion, PendingFieldSuggestion, PendingLabelSuggestion, " +
