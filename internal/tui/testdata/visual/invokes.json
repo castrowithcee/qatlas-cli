@@ -1,0 +1,1802 @@
+[
+ {
+  "days_ago": 39,
+  "time": "08:39",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 283
+ },
+ {
+  "days_ago": 39,
+  "time": "10:52",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 314
+ },
+ {
+  "days_ago": 39,
+  "time": "12:05",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 345
+ },
+ {
+  "days_ago": 39,
+  "time": "14:18",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 376
+ },
+ {
+  "days_ago": 39,
+  "time": "16:31",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 407
+ },
+ {
+  "days_ago": 39,
+  "time": "08:44",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 38
+ },
+ {
+  "days_ago": 39,
+  "time": "10:57",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 69
+ },
+ {
+  "days_ago": 38,
+  "time": "08:38",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 266
+ },
+ {
+  "days_ago": 38,
+  "time": "10:51",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 297
+ },
+ {
+  "days_ago": 38,
+  "time": "12:04",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 328
+ },
+ {
+  "days_ago": 38,
+  "time": "14:17",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 359
+ },
+ {
+  "days_ago": 37,
+  "time": "08:37",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 249
+ },
+ {
+  "days_ago": 37,
+  "time": "10:50",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 280
+ },
+ {
+  "days_ago": 37,
+  "time": "12:03",
+  "path": "cli",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 311
+ },
+ {
+  "days_ago": 37,
+  "time": "14:16",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 342
+ },
+ {
+  "days_ago": 37,
+  "time": "16:29",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 373
+ },
+ {
+  "days_ago": 37,
+  "time": "08:42",
+  "path": "cli",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 404
+ },
+ {
+  "days_ago": 37,
+  "time": "10:55",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 35
+ },
+ {
+  "days_ago": 37,
+  "time": "12:08",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 66
+ },
+ {
+  "days_ago": 37,
+  "time": "14:21",
+  "path": "cli",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 97
+ },
+ {
+  "days_ago": 37,
+  "time": "16:34",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 128
+ },
+ {
+  "days_ago": 37,
+  "time": "08:47",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 159
+ },
+ {
+  "days_ago": 37,
+  "time": "10:00",
+  "path": "cli",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 190
+ },
+ {
+  "days_ago": 36,
+  "time": "08:36",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 232
+ },
+ {
+  "days_ago": 35,
+  "time": "08:35",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 215
+ },
+ {
+  "days_ago": 35,
+  "time": "10:48",
+  "path": "cli",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 246
+ },
+ {
+  "days_ago": 35,
+  "time": "12:01",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 277
+ },
+ {
+  "days_ago": 35,
+  "time": "14:14",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 308
+ },
+ {
+  "days_ago": 35,
+  "time": "16:27",
+  "path": "cli",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 339
+ },
+ {
+  "days_ago": 35,
+  "time": "08:40",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 370
+ },
+ {
+  "days_ago": 34,
+  "time": "08:34",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 198
+ },
+ {
+  "days_ago": 34,
+  "time": "10:47",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 229
+ },
+ {
+  "days_ago": 34,
+  "time": "12:00",
+  "path": "cli",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 260
+ },
+ {
+  "days_ago": 32,
+  "time": "08:32",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 164
+ },
+ {
+  "days_ago": 32,
+  "time": "10:45",
+  "path": "cli",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 195
+ },
+ {
+  "days_ago": 32,
+  "time": "12:58",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 226
+ },
+ {
+  "days_ago": 32,
+  "time": "14:11",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 257
+ },
+ {
+  "days_ago": 32,
+  "time": "16:24",
+  "path": "cli",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 288
+ },
+ {
+  "days_ago": 31,
+  "time": "08:31",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 147
+ },
+ {
+  "days_ago": 31,
+  "time": "10:44",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 178
+ },
+ {
+  "days_ago": 29,
+  "time": "08:29",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 113
+ },
+ {
+  "days_ago": 29,
+  "time": "10:42",
+  "path": "cli",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 144
+ },
+ {
+  "days_ago": 29,
+  "time": "12:55",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 175
+ },
+ {
+  "days_ago": 29,
+  "time": "14:08",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 206
+ },
+ {
+  "days_ago": 29,
+  "time": "16:21",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 237
+ },
+ {
+  "days_ago": 29,
+  "time": "08:34",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 268
+ },
+ {
+  "days_ago": 29,
+  "time": "10:47",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 299
+ },
+ {
+  "days_ago": 28,
+  "time": "08:28",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 96
+ },
+ {
+  "days_ago": 28,
+  "time": "10:41",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 127
+ },
+ {
+  "days_ago": 28,
+  "time": "12:54",
+  "path": "cli",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 158
+ },
+ {
+  "days_ago": 28,
+  "time": "14:07",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 189
+ },
+ {
+  "days_ago": 27,
+  "time": "08:27",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 79
+ },
+ {
+  "days_ago": 27,
+  "time": "10:40",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 110
+ },
+ {
+  "days_ago": 27,
+  "time": "12:53",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 141
+ },
+ {
+  "days_ago": 27,
+  "time": "14:06",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 172
+ },
+ {
+  "days_ago": 27,
+  "time": "16:19",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 203
+ },
+ {
+  "days_ago": 27,
+  "time": "08:32",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 234
+ },
+ {
+  "days_ago": 27,
+  "time": "10:45",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 265
+ },
+ {
+  "days_ago": 27,
+  "time": "12:58",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 296
+ },
+ {
+  "days_ago": 27,
+  "time": "14:11",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 327
+ },
+ {
+  "days_ago": 27,
+  "time": "16:24",
+  "path": "cli",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 358
+ },
+ {
+  "days_ago": 27,
+  "time": "08:37",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 389
+ },
+ {
+  "days_ago": 27,
+  "time": "10:50",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 20
+ },
+ {
+  "days_ago": 26,
+  "time": "08:26",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 62
+ },
+ {
+  "days_ago": 25,
+  "time": "08:25",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 45
+ },
+ {
+  "days_ago": 25,
+  "time": "10:38",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 76
+ },
+ {
+  "days_ago": 25,
+  "time": "12:51",
+  "path": "cli",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 107
+ },
+ {
+  "days_ago": 25,
+  "time": "14:04",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 138
+ },
+ {
+  "days_ago": 25,
+  "time": "16:17",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 169
+ },
+ {
+  "days_ago": 25,
+  "time": "08:30",
+  "path": "cli",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 200
+ },
+ {
+  "days_ago": 24,
+  "time": "08:24",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 28
+ },
+ {
+  "days_ago": 24,
+  "time": "10:37",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 59
+ },
+ {
+  "days_ago": 24,
+  "time": "12:50",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 90
+ },
+ {
+  "days_ago": 23,
+  "time": "08:23",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 411
+ },
+ {
+  "days_ago": 23,
+  "time": "10:36",
+  "path": "cli",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 42
+ },
+ {
+  "days_ago": 23,
+  "time": "12:49",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 73
+ },
+ {
+  "days_ago": 23,
+  "time": "14:02",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 104
+ },
+ {
+  "days_ago": 23,
+  "time": "16:15",
+  "path": "cli",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 135
+ },
+ {
+  "days_ago": 23,
+  "time": "08:28",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 166
+ },
+ {
+  "days_ago": 23,
+  "time": "10:41",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 197
+ },
+ {
+  "days_ago": 23,
+  "time": "12:54",
+  "path": "cli",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 228
+ },
+ {
+  "days_ago": 23,
+  "time": "14:07",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 259
+ },
+ {
+  "days_ago": 21,
+  "time": "08:21",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 377
+ },
+ {
+  "days_ago": 21,
+  "time": "10:34",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 408
+ },
+ {
+  "days_ago": 19,
+  "time": "08:19",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 343
+ },
+ {
+  "days_ago": 19,
+  "time": "10:32",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 374
+ },
+ {
+  "days_ago": 19,
+  "time": "12:45",
+  "path": "cli",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 405
+ },
+ {
+  "days_ago": 19,
+  "time": "14:58",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 36
+ },
+ {
+  "days_ago": 19,
+  "time": "16:11",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 67
+ },
+ {
+  "days_ago": 19,
+  "time": "08:24",
+  "path": "cli",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 98
+ },
+ {
+  "days_ago": 19,
+  "time": "10:37",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 129
+ },
+ {
+  "days_ago": 18,
+  "time": "08:18",
+  "path": "cli",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 326
+ },
+ {
+  "days_ago": 18,
+  "time": "10:31",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 357
+ },
+ {
+  "days_ago": 18,
+  "time": "12:44",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 388
+ },
+ {
+  "days_ago": 18,
+  "time": "14:57",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 419
+ },
+ {
+  "days_ago": 17,
+  "time": "08:17",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 309
+ },
+ {
+  "days_ago": 17,
+  "time": "10:30",
+  "path": "cli",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 340
+ },
+ {
+  "days_ago": 17,
+  "time": "12:43",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 371
+ },
+ {
+  "days_ago": 17,
+  "time": "14:56",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 402
+ },
+ {
+  "days_ago": 17,
+  "time": "16:09",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 33
+ },
+ {
+  "days_ago": 17,
+  "time": "08:22",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 64
+ },
+ {
+  "days_ago": 17,
+  "time": "10:35",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 95
+ },
+ {
+  "days_ago": 17,
+  "time": "12:48",
+  "path": "cli",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 126
+ },
+ {
+  "days_ago": 17,
+  "time": "14:01",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 157
+ },
+ {
+  "days_ago": 17,
+  "time": "16:14",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 188
+ },
+ {
+  "days_ago": 17,
+  "time": "08:27",
+  "path": "cli",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 219
+ },
+ {
+  "days_ago": 17,
+  "time": "10:40",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 250
+ },
+ {
+  "days_ago": 16,
+  "time": "08:16",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 292
+ },
+ {
+  "days_ago": 15,
+  "time": "08:15",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 275
+ },
+ {
+  "days_ago": 15,
+  "time": "10:28",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "invalid-request",
+  "duration_ms": 306
+ },
+ {
+  "days_ago": 15,
+  "time": "12:41",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 337
+ },
+ {
+  "days_ago": 15,
+  "time": "14:54",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 368
+ },
+ {
+  "days_ago": 15,
+  "time": "16:07",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 399
+ },
+ {
+  "days_ago": 15,
+  "time": "08:20",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 30
+ },
+ {
+  "days_ago": 14,
+  "time": "08:14",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 258
+ },
+ {
+  "days_ago": 14,
+  "time": "10:27",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 289
+ },
+ {
+  "days_ago": 14,
+  "time": "12:40",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 320
+ },
+ {
+  "days_ago": 13,
+  "time": "08:13",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 241
+ },
+ {
+  "days_ago": 13,
+  "time": "10:26",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 272
+ },
+ {
+  "days_ago": 13,
+  "time": "12:39",
+  "path": "cli",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 303
+ },
+ {
+  "days_ago": 13,
+  "time": "14:52",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "invalid-request",
+  "duration_ms": 334
+ },
+ {
+  "days_ago": 13,
+  "time": "16:05",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 365
+ },
+ {
+  "days_ago": 13,
+  "time": "08:18",
+  "path": "cli",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 396
+ },
+ {
+  "days_ago": 13,
+  "time": "10:31",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 27
+ },
+ {
+  "days_ago": 13,
+  "time": "12:44",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 58
+ },
+ {
+  "days_ago": 13,
+  "time": "14:57",
+  "path": "cli",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 89
+ },
+ {
+  "days_ago": 12,
+  "time": "08:12",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 224
+ },
+ {
+  "days_ago": 12,
+  "time": "10:25",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 255
+ },
+ {
+  "days_ago": 12,
+  "time": "12:38",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 286
+ },
+ {
+  "days_ago": 12,
+  "time": "14:51",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 317
+ },
+ {
+  "days_ago": 12,
+  "time": "16:04",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 348
+ },
+ {
+  "days_ago": 9,
+  "time": "08:09",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 173
+ },
+ {
+  "days_ago": 9,
+  "time": "10:22",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 204
+ },
+ {
+  "days_ago": 9,
+  "time": "12:35",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 235
+ },
+ {
+  "days_ago": 9,
+  "time": "14:48",
+  "path": "cli",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 266
+ },
+ {
+  "days_ago": 9,
+  "time": "16:01",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 297
+ },
+ {
+  "days_ago": 9,
+  "time": "08:14",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 328
+ },
+ {
+  "days_ago": 9,
+  "time": "10:27",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 359
+ },
+ {
+  "days_ago": 8,
+  "time": "08:08",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 156
+ },
+ {
+  "days_ago": 8,
+  "time": "10:21",
+  "path": "cli",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 187
+ },
+ {
+  "days_ago": 8,
+  "time": "12:34",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 218
+ },
+ {
+  "days_ago": 8,
+  "time": "14:47",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 249
+ },
+ {
+  "days_ago": 7,
+  "time": "08:07",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 139
+ },
+ {
+  "days_ago": 7,
+  "time": "10:20",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 170
+ },
+ {
+  "days_ago": 7,
+  "time": "12:33",
+  "path": "cli",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 201
+ },
+ {
+  "days_ago": 7,
+  "time": "14:46",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 232
+ },
+ {
+  "days_ago": 7,
+  "time": "16:59",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 263
+ },
+ {
+  "days_ago": 7,
+  "time": "08:12",
+  "path": "cli",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 294
+ },
+ {
+  "days_ago": 7,
+  "time": "10:25",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 325
+ },
+ {
+  "days_ago": 7,
+  "time": "12:38",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 356
+ },
+ {
+  "days_ago": 7,
+  "time": "14:51",
+  "path": "cli",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 387
+ },
+ {
+  "days_ago": 7,
+  "time": "16:04",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "invalid-request",
+  "duration_ms": 418
+ },
+ {
+  "days_ago": 7,
+  "time": "08:17",
+  "path": "mcp",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 49
+ },
+ {
+  "days_ago": 7,
+  "time": "10:30",
+  "path": "cli",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 80
+ },
+ {
+  "days_ago": 6,
+  "time": "08:06",
+  "path": "cli",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 122
+ },
+ {
+  "days_ago": 5,
+  "time": "08:05",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 105
+ },
+ {
+  "days_ago": 5,
+  "time": "10:18",
+  "path": "cli",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 136
+ },
+ {
+  "days_ago": 5,
+  "time": "12:31",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 167
+ },
+ {
+  "days_ago": 5,
+  "time": "14:44",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 198
+ },
+ {
+  "days_ago": 5,
+  "time": "16:57",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 229
+ },
+ {
+  "days_ago": 5,
+  "time": "08:10",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 260
+ },
+ {
+  "days_ago": 4,
+  "time": "08:04",
+  "path": "mcp",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 88
+ },
+ {
+  "days_ago": 4,
+  "time": "10:17",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 119
+ },
+ {
+  "days_ago": 4,
+  "time": "12:30",
+  "path": "cli",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 150
+ },
+ {
+  "days_ago": 3,
+  "time": "08:03",
+  "path": "cli",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 71
+ },
+ {
+  "days_ago": 3,
+  "time": "10:16",
+  "path": "mcp",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 102
+ },
+ {
+  "days_ago": 3,
+  "time": "12:29",
+  "path": "mcp",
+  "operation": "seatable.rows.list",
+  "connection": "tables-ops",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 133
+ },
+ {
+  "days_ago": 3,
+  "time": "14:42",
+  "path": "cli",
+  "operation": "bookstack.pages.list",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "timeout",
+  "duration_ms": 164
+ },
+ {
+  "days_ago": 3,
+  "time": "16:55",
+  "path": "mcp",
+  "operation": "nextcloud.files.list",
+  "connection": "cloud-files",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 195
+ },
+ {
+  "days_ago": 3,
+  "time": "08:08",
+  "path": "mcp",
+  "operation": "todoist.tasks.create",
+  "connection": "tasks-personal",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 226
+ },
+ {
+  "days_ago": 3,
+  "time": "10:21",
+  "path": "cli",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 257
+ },
+ {
+  "days_ago": 3,
+  "time": "12:34",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "not-found",
+  "duration_ms": 288
+ },
+ {
+  "days_ago": 3,
+  "time": "14:47",
+  "path": "mcp",
+  "operation": "bookstack.pages.read",
+  "connection": "wiki-main",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 319
+ },
+ {
+  "days_ago": 2,
+  "time": "08:02",
+  "path": "mcp",
+  "operation": "nextcloud.files.upload",
+  "connection": "cloud-files",
+  "effect": "write",
+  "result": "success",
+  "duration_ms": 54
+ },
+ {
+  "days_ago": 2,
+  "time": "10:15",
+  "path": "cli",
+  "operation": "telegram.messages.send",
+  "connection": "alerts-bot",
+  "effect": "write",
+  "result": "not-found",
+  "duration_ms": 85
+ },
+ {
+  "days_ago": 2,
+  "time": "12:28",
+  "path": "mcp",
+  "operation": "github.issues.read",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 116
+ },
+ {
+  "days_ago": 2,
+  "time": "14:41",
+  "path": "mcp",
+  "operation": "todoist.tasks.list",
+  "connection": "tasks-personal",
+  "effect": "read",
+  "result": "invalid-request",
+  "duration_ms": 147
+ },
+ {
+  "days_ago": 2,
+  "time": "16:54",
+  "path": "cli",
+  "operation": "bookstack.pages.update",
+  "connection": "wiki-main",
+  "effect": "write",
+  "result": "timeout",
+  "duration_ms": 178
+ },
+ {
+  "days_ago": 1,
+  "time": "08:01",
+  "path": "mcp",
+  "operation": "github.issues.list",
+  "connection": "code-planning",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 37
+ },
+ {
+  "days_ago": 1,
+  "time": "10:14",
+  "path": "mcp",
+  "operation": "twentycrm.people.list",
+  "connection": "crm-sales",
+  "effect": "read",
+  "result": "success",
+  "duration_ms": 68
+ }
+]

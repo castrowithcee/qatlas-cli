@@ -1,0 +1,30 @@
+[1mQatlas setup  [0m[1m🔓 vault unlocked[0m · [2madmin off[0m  [1m[0m[2mConfig: config.yaml[0m
+[1m> [1 Overview]  2 Connections   3 Activity   4 Access   5 Library   6 Settings [0m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+[1mOverview[0m
+Vault: [1m🔓 vault unlocked[0m · [2madmin off[0m
+  Connections  7
+  Services     7
+  Credentials  7
+  Tokens       0
+  Approvals    7
+[2mNext steps[0m
+  open Access > Approvals (4)
+  open Connections and press t to test; Defaults are optional
+  [2mActivity[0m  Calls 180 · success 70% · errors 54
+  [2mMon[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m█[0m [2m·[0m [1m█[0m [1m░[0m [1m▓[0m [1m▒[0m
+  [2mTue[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m▓[0m [2m·[0m [1m▓[0m [1m▒[0m [1m░[0m
+  [2mWed[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▓[0m [1m▒[0m [1m░[0m [1m░[0m [1m█[0m [2m·[0m
+  [2mThu[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m█[0m [2m·[0m [1m█[0m [1m░[0m  
+  [2mFri[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m░[0m [1m▓[0m [1m▒[0m [1m▓[0m  
+  [2mSat[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▓[0m [1m▒[0m [1m▓[0m [1m▒[0m [2m·[0m [1m░[0m  
+  [2mSun[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [2m·[0m [1m▒[0m [1m░[0m [1m░[0m [1m█[0m [2m·[0m [1m█[0m  
+  [2mless ·░▒▓█ more[0m
+  [2mLatest calls[0m
+  2026-03-17 10:14+00  twentycrm.people.list  crm-sales  ok  68ms
+  2026-03-17 08:01+00  github.issues.list  code-planning  ok  37ms
+  2026-03-16 16:54+00  bookstack.pages.update  wiki-main  timeout  178ms
+  2026-03-16 14:41+00  todoist.tasks.list  tasks-personal  invalid-request  147ms
+  2026-03-16 12:28+00  github.issues.read  code-planning  ok  116ms
+
+[1m←/→[0m[2m move[0m[2m · [0m[1mdown[0m[2m open[0m[2m · [0m[1m1-6[0m[2m open[0m[2m · [0m[1mc[0m[2m setup[0m[2m · [0m[1mctrl+l[0m[2m lock vault[0m[2m · [0m[1m:[0m[2m cmds[0m[2m · [0m[1m?[0m[2m help[0m[2m · [0m[1mq[0m[2m quit[0m

@@ -39,14 +39,14 @@ func TestLoadUnreadablePathGivesDefaultsAndWarning(t *testing.T) {
 
 func TestLoadInvalidValuesFallBackPerField(t *testing.T) {
 	path := Path(t.TempDir())
-	data := "theme: purple\nstart: connections\nicons: emoji\n"
+	data := "theme: purple\nbackground: neon\nstart: connections\nicons: emoji\n"
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
 	want := Default()
 	want.Start = "connections"
-	if got != want || len(warnings) != 2 {
+	if got != want || len(warnings) != 3 {
 		t.Fatalf("Load() = %+v, %v; want %+v and two warnings", got, warnings, want)
 	}
 }
@@ -65,7 +65,7 @@ func TestLoadToleratesUnknownKeys(t *testing.T) {
 
 func TestSaveRoundTripLeavesNoTempFile(t *testing.T) {
 	dir := t.TempDir()
-	want := Prefs{Theme: ThemeLight, Start: "access", Icons: IconsNerdFont, Language: LanguageGerman, Keys: DefaultKeys()}
+	want := Prefs{Theme: ThemeLight, Background: BackgroundQatlas, Start: "access", Icons: IconsNerdFont, Language: LanguageGerman, Keys: DefaultKeys()}
 	if err := Save(Path(dir), want); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != "theme: light\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
+	if got := string(data); got != "theme: light\nbackground: terminal\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
 		t.Fatalf("file = %q", got)
 	}
 }
@@ -105,6 +105,7 @@ func TestSaveInvalidWritesNothing(t *testing.T) {
 		{Theme: "x", Start: "overview", Icons: IconsNone},
 		{Theme: ThemeAuto, Start: "", Icons: IconsNone},
 		{Theme: ThemeAuto, Start: "overview", Icons: "x"},
+		{Theme: ThemeAuto, Background: "x", Start: "overview", Icons: IconsNone},
 		{Theme: ThemeAuto, Start: "overview", Icons: IconsNone, Language: "fr"},
 	} {
 		if err := Save(Path(dir), bad); err == nil {
@@ -195,5 +196,26 @@ func TestLoadWarnsForAMouseValueThatIsNoBoolean(t *testing.T) {
 	got, warnings := Load(path)
 	if len(warnings) != 1 || !got.MouseEnabled() {
 		t.Fatalf("Load() = %+v, %v; want the mouse on and one warning", got, warnings)
+	}
+}
+
+func TestBackgroundLoadsAndFallsBack(t *testing.T) {
+	path := Path(t.TempDir())
+	if got, _ := Load(path); got.Background != BackgroundTerminal {
+		t.Fatalf("default background = %q, want terminal", got.Background)
+	}
+	if err := os.WriteFile(path, []byte("background: qatlas\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, warnings := Load(path); got.Background != BackgroundQatlas || len(warnings) != 0 {
+		t.Fatalf("Load() = %+v, %v; want background qatlas", got, warnings)
+	}
+	if err := os.WriteFile(path, []byte("background: neon\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if got.Background != BackgroundTerminal || len(warnings) != 1 ||
+		!strings.Contains(warnings[0], `background "neon" is not terminal or qatlas`) {
+		t.Fatalf("Load() = %+v, %v; want the default and one warning", got, warnings)
 	}
 }

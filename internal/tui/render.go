@@ -56,19 +56,36 @@ func truncateLeft(text string, width int) string {
 	return "…"
 }
 
+// clipCells cuts text to width visible cells. Escape sequences count no cells and are never split; when
+// the cut leaves a style open, a reset ends it. Text without escapes stays a true prefix of its input.
 func clipCells(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
 	var b strings.Builder
-	used := 0
-	for _, r := range text {
-		cells := lipgloss.Width(string(r))
-		if used+cells > width {
-			break
+	parser := ansi.NewParser()
+	state := byte(ansi.NormalState)
+	used, styled := 0, false
+	for rest := text; rest != ""; {
+		seq, w, n, next := ansi.DecodeSequence(rest, state, parser)
+		state = next
+		if w == 0 && ansi.HasCsiPrefix(seq) && strings.HasSuffix(seq, "m") {
+			// An SGR sequence: keep it whole; a bare reset leaves nothing open.
+			b.WriteString(seq)
+			styled = seq != "\x1b[m" && seq != "\x1b[0m"
+		} else if w == 0 && strings.HasPrefix(seq, "\x1b") {
+			b.WriteString(seq)
+		} else {
+			if used+w > width {
+				if styled {
+					b.WriteString("\x1b[m")
+				}
+				return b.String()
+			}
+			b.WriteString(seq)
+			used += w
 		}
-		b.WriteRune(r)
-		used += cells
+		rest = rest[n:]
 	}
 	return b.String()
 }

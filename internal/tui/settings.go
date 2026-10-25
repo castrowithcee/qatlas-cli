@@ -21,11 +21,12 @@ var areaIcons = [areaCount]string{
 
 // Labels of the General form.
 const (
-	themeLabel = "color scheme"
-	startLabel = "start view"
-	iconsLabel = "icons"
-	langLabel  = "language"
-	mouseLabel = "mouse"
+	themeLabel      = "color scheme"
+	backgroundLabel = "background"
+	startLabel      = "start view"
+	iconsLabel      = "icons"
+	langLabel       = "language"
+	mouseLabel      = "mouse"
 )
 
 // Actions of the Transfer, Update and Self-test pages, run by a fieldVaultAction row.
@@ -103,6 +104,10 @@ func (m *Model) generalFields() []field {
 	if language == "" {
 		language = uiprefs.LanguageEnglish
 	}
+	background := prefs.Background
+	if background == "" {
+		background = uiprefs.BackgroundTerminal
+	}
 	mouse := uiprefs.ChoiceMouseOn
 	if !prefs.MouseEnabled() {
 		mouse = uiprefs.ChoiceMouseOff
@@ -111,6 +116,9 @@ func (m *Model) generalFields() []field {
 		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
 			withHint(tr(tThemeHint)).
 			withDetail(tr(tThemeDetail)),
+		choiceField(backgroundLabel, []string{uiprefs.BackgroundTerminal, uiprefs.BackgroundQatlas}, background).
+			withHint(tr(tBackgroundHint)).
+			withDetail(tr(tBackgroundDetail)),
 		choiceField(startLabel, areas, start).
 			withHint(tr(tStartHint)),
 		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
@@ -131,7 +139,7 @@ func (m *Model) generalFields() []field {
 // which goes on to the tab line afterwards.
 func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	next := uiprefs.Prefs{
-		Theme: m.fieldValue(themeLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
+		Theme: m.fieldValue(themeLabel), Background: m.fieldValue(backgroundLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
 		Language: m.fieldValue(langLabel), MouseOff: m.fieldValue(mouseLabel) == uiprefs.ChoiceMouseOff, Keys: m.keysOfForm(),
 	}
 	if err := next.Keys.Validate(); err != nil {
@@ -148,7 +156,7 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	}
 	mouseWas := m.mouseEnabled()
 	m.prefs = next
-	applyColorScheme(next.Theme)
+	applyColorScheme(next.Theme, next.Background)
 	applyKeys(next.Keys)
 	// The language applies at once: the messages and the form below are drawn in it.
 	setLanguage(next.Language)
