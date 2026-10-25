@@ -1,6 +1,6 @@
 // Package brave implements read-only access to the Brave Search API with one subscription key: LLM
-// Context, web, news, video, and image search, rich results, the places of the local index, and AI answers
-// today, and the other endpoints of the same API as further tools of this package.
+// Context, web, news, video, and image search, rich results, the places of the local index, AI answers,
+// query suggestions, and spellcheck.
 //
 // A connection binds one API key, sent only in the X-Subscription-Token header, and takes no target: a key
 // reaches the endpoints of its plan, and the connection's effects and tools decide which of them an agent may
@@ -48,6 +48,8 @@ func operations() []capability.Operation {
 		{Descriptor: placesSearch, Handler: handle("search places", preparePlacesSearch)},
 		{Descriptor: poisGet, Handler: handle("get places", preparePOIs)},
 		{Descriptor: poiDescriptionsGet, Handler: handle("get place descriptions", preparePOIDescriptions)},
+		{Descriptor: suggestionsList, Handler: handle("list suggestions", prepareSuggestionsList)},
+		{Descriptor: spellcheckCheck, Handler: handle("check spelling", prepareSpellcheckCheck)},
 		{Descriptor: answersAsk, Handler: handle(answersOp, prepareAnswersAsk)},
 	}
 }
@@ -55,6 +57,9 @@ func operations() []capability.Operation {
 // searchTools are the tools of the search profile, the Search plan of Brave.
 var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID, videosSearch.ID, imagesSearch.ID,
 	richGet.ID, placesSearch.ID, poisGet.ID, poiDescriptionsGet.ID}
+
+// autosuggestTools are the tools of the autosuggest profile, the Autosuggest and Spellcheck plans of Brave.
+var autosuggestTools = []string{suggestionsList.ID, spellcheckCheck.ID}
 
 // probe is the smallest request that proves a key for one tool.
 type probe struct {
@@ -67,6 +72,8 @@ type probe struct {
 // the test spends one billed request on the first endpoint the connection offers. Answers is never probed:
 // its cost varies with the answer.
 var probes = []probe{
+	{tool: spellcheckCheck.ID, path: spellcheckPath, query: url.Values{"q": {"brave"}}},
+	{tool: suggestionsList.ID, path: suggestPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 	{tool: "brave.news.search", path: newsPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 	{tool: llmContext.ID, path: llmPath,
 		query: url.Values{"q": {"brave"}, "count": {"1"}, "maximum_number_of_urls": {"1"}}},
@@ -168,6 +175,11 @@ func Register(reg *capability.Registry) error {
 			Description: "asks Brave for AI-written, cited answers with the Answers plan; each answer is billed " +
 				"by searches and tokens, and nothing is changed",
 			Tools: []string{answersAsk.ID},
+		}, {
+			ID: "autosuggest", Title: "Autosuggest and spellcheck",
+			Description: "completes queries and corrects their spelling with the Autosuggest and Spellcheck plans " +
+				"of Brave; every request is billed and nothing is changed",
+			Tools: autosuggestTools,
 		}},
 	}, TestConnection); err != nil {
 		return err
