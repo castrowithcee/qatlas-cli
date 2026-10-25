@@ -1,6 +1,6 @@
 // Package brave implements read-only access to the Brave Search API with one subscription key: LLM
-// Context and news search today, and the other search endpoints of the same API as further tools of this
-// package.
+// Context, web search, and news search today, and the other search endpoints of the same API as further
+// tools of this package.
 //
 // A connection binds one API key, sent only in the X-Subscription-Token header, and takes no target: a key
 // reaches the endpoints of its plan, and the connection's effects and tools decide which of them an agent may
@@ -41,11 +41,12 @@ func operations() []capability.Operation {
 	return []capability.Operation{
 		{Descriptor: llmContext, Handler: handle("get llm context", prepareLLMContext)},
 		{Descriptor: newsSearch, Handler: handle("search news", prepareNewsSearch)},
+		{Descriptor: webSearch, Handler: handle("search web", prepareWebSearch)},
 	}
 }
 
 // searchTools are the tools of the search profile, the Search plan of Brave.
-var searchTools = []string{llmContext.ID, newsSearch.ID}
+var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID}
 
 // probe is the smallest request that proves a key for one tool.
 type probe struct {
@@ -60,6 +61,7 @@ var probes = []probe{
 	{tool: "brave.news.search", path: newsPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 	{tool: llmContext.ID, path: llmPath,
 		query: url.Values{"q": {"brave"}, "count": {"1"}, "maximum_number_of_urls": {"1"}}},
+	{tool: webSearch.ID, path: webPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 }
 
 // probeFor returns the probe of the first tool the connection offers: by its tools list when it has one,
@@ -143,8 +145,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "search", Title: "Search", Recommended: true,
-			Description: "searches the web for agents and searches news with the Search plan of Brave; every request is billed and nothing " +
-				"is changed",
+			Description: "searches the web for agents and for people and searches news with the Search plan of Brave; " +
+				"every request is billed and nothing is changed",
 			Tools: searchTools,
 		}},
 	}, TestConnection); err != nil {

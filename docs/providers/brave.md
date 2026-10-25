@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context and News tools.
+  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context, News, and Web Search tools.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -10,7 +10,7 @@ updated: 2026-10-25
 # Brave Search
 
 Brave Search is a provider for the Brave Search API with one subscription key. It reads the web for agents
-(LLM Context) and news. It changes nothing: every tool is a read, and the connection takes no target,
+(LLM Context), the web for people (Web Search), and news. It changes nothing: every tool is a read, and the connection takes no target,
 because a key reaches the endpoints of its plan and not a part of an account.
 
 ## Configuration
@@ -44,8 +44,8 @@ Brave sells separate plans (Search, Answers, Spellcheck, Autosuggest, Enterprise
 the endpoints of the plans on its account. Brave offers no way to ask which plans a key has, so Qatlas
 cannot hide an endpoint the key lacks: a call to it ends with `permission` or `not-found`.
 
-The profile `search` is the Search plan: `brave.llm-context.get` and `brave.news.search`. It is the
-recommended profile.
+The profile `search` is the Search plan: `brave.llm-context.get`, `brave.news.search`, and
+`brave.web.search`. It is the recommended profile.
 
 Qatlas manages no subscription, payment, or key.
 
@@ -73,14 +73,15 @@ and is not read.
 ## Connection test
 
 `qatlas connection test` sends one real request to the cheapest endpoint the connection offers: News with
-`q=brave` and `count=1`, or LLM Context with `maximum_number_of_urls=1` where only that tool is allowed.
+`q=brave` and `count=1`, otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search with
+`count=1`, whichever tool the connection allows first.
 Brave has no free key check, so the test spends one billed request. Success proves that the key is valid
 for that endpoint only; it shows neither the plan nor any other endpoint. A `422` is never taken as proof
 of a valid key, because Brave answers it for invalid parameters and for rejected keys alike.
 
 ## Goggles
 
-Both tools take up to three goggles, which re-rank the results. A value is either an `https` address of a
+Every tool takes up to three goggles, which re-rank the results. A value is either an `https` address of a
 goggle hosted on a code host and registered with Brave, or the inline rules themselves. Brave fetches a
 hosted address; Qatlas never does. Qatlas refuses other schemes, user information in an address, control
 characters outside inline rules, and values over 2048 characters.
@@ -122,15 +123,15 @@ and claim neither. An unreadable, oversized (over 4 MB), or non-JSON answer is `
 
 ## Boundary
 
-The provider reaches only the two endpoints below. It offers no passthrough of method, path, header, or
-body. Not offered: Web Search, Images, Videos, Place Search, Answers, Suggest, and Spellcheck.
+The provider reaches only the three endpoints below. It offers no passthrough of method, path, header, or
+body. Not offered: Images, Videos, Place Search, Answers, Suggest, and Spellcheck.
 
 Left out on purpose:
 
 - `Api-Version` is not sent, so Brave answers with its latest version. A change that Brave marks as
   compatible reaches the tools; one that removes or renames a field needs a new tool version.
 - `goggles_id`, deprecated by Brave, is not offered.
-- A result shows only the fields below. Fields Brave adds later are ignored.
+- A result shows only the fields Brave documents for it. Fields Brave adds later are ignored.
 - Result addresses (page, profile, favicon, thumbnail, icon) that are not absolute `http` or `https`
   addresses without user information, or are longer than 2048 bytes, are dropped from the result.
 - A `no_cache` argument asks Brave to skip its cache by `Cache-Control: no-cache`, on a best-effort basis.
@@ -171,3 +172,35 @@ agent, not a person, reads the result. It has no pages; the size of the answer i
 - Brave sends no end signal for news. `has_more` is true while `offset` is below 9 and the page was not
   empty, so the last page may be empty, and consecutive pages may overlap.
 - `include_fetch_metadata` adds fetch metadata such as `page_fetched` to the articles.
+
+## brave.web.search
+
+`GET /res/v1/web/search`. It returns the search page as a person sees it, in Brave's own groups and member
+names: `web`, `discussions`, `infobox`, `locations`, `news`, `videos`, `faq`, `mixed`, `summarizer`, `rich`,
+and `query`. For an agent that answers a question from the web, prefer `brave.llm-context.get`. The tool
+needs the Search plan, as does `enable_rich_callback`.
+
+- `q` takes at most 600 characters and 75 words. `safesearch` is `moderate` when omitted.
+- `count` (1 through 20) limits the web results only; every other group arrives as Brave sends it. No list is
+  longer than 20 entries, `extra_snippets` and `icons` are cut at 5 and 10, and `mixed` at 50.
+- `result_filter` is a list of kinds, sent comma-separated in the order given. `query` and `type` are in
+  every answer.
+- `offset` and `cursor` work as for News, with the difference that the end is Brave's signal:
+  `has_more` is true while `query.more_results_available` is true and `offset` is below 9. An answer
+  without the signal ends the list. Consecutive pages may overlap. A cursor is also bound to the location,
+  `timezone`, and every filter.
+- `text_decorations` is sent as `false` unless set, because Brave marks highlights in snippets by default.
+- `summary` sends `summary=1` and yields `summarizer.key` and `query.summary_key`; `enable_rich_callback`
+  yields `rich.hint.callback_key`. No tool uses either key yet.
+- The location arguments become the `X-Loc-*` headers. `timezone` (an IANA name such as `Europe/Berlin`,
+  checked by its shape, not against a zone database) becomes `X-Loc-Timezone` and exists only here.
+  `locations.results[].id` identifies a place for the points-of-interest endpoints.
+- Not offered: `goggles_id` and the deprecated `restaurant` of web and discussion results, which `location`
+  replaces.
+- A member of another JSON type than the reference documents is left out of the result; the request was
+  billed and is not refused.
+- Brave leaves the type of some members open. They are shown as bounded JSON: nested at most 6 levels, 20
+  entries per list, 30 members per object, texts cut at 1500 characters, and texts that look like an
+  unsafe address dropped. These members are `schemas`, `product`, and `meta_url` of web, discussion, news,
+  and deep news results; `coordinates` and `opening_hours.days` of a place; `infobox.results[].profiles`; and
+  `locations.provider`.

@@ -217,7 +217,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Errorf("tool %+v, want a read that needs no allow-list", tool)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"brave.llm-context.get", "brave.news.search"}) {
+	if !reflect.DeepEqual(ids, []string{"brave.llm-context.get", "brave.news.search", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -232,8 +232,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
-		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search"}) {
-		t.Errorf("profiles = %+v, want the recommended search profile with both tools", metadata.Profiles)
+		!reflect.DeepEqual(metadata.Profiles[0].Tools,
+			[]string{"brave.llm-context.get", "brave.news.search", "brave.web.search"}) {
+		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
 	}
 }
 
@@ -504,6 +505,7 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 		{"news listed", config.Resolved{Tools: []string{"brave.news.search"}}, "brave.news.search"},
 		{"both listed", config.Resolved{Tools: []string{"brave.llm-context.get", "brave.news.search"}}, "brave.news.search"},
 		{"only llm context", config.Resolved{Tools: []string{"brave.llm-context.get"}}, "brave.llm-context.get"},
+		{"only web", config.Resolved{Tools: []string{"brave.web.search"}}, "brave.web.search"},
 		{"none", config.Resolved{Tools: []string{}}, ""},
 	} {
 		got, ok := probeFor(&tc.resolved)
@@ -514,5 +516,8 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 	if probes[1].path != "/res/v1/llm/context" || probes[1].query.Get("maximum_number_of_urls") != "1" ||
 		probes[1].query.Get("count") != "1" || probes[1].query.Get("q") != "brave" {
 		t.Errorf("llm context probe = %+v", probes[1])
+	}
+	if probes[2].path != "/res/v1/web/search" || probes[2].query.Get("count") != "1" || probes[2].query.Get("q") != "brave" {
+		t.Errorf("web probe = %+v", probes[2])
 	}
 }
