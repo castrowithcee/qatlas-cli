@@ -346,11 +346,20 @@ func (m *Model) infoView() string {
 		lines = lines[:maxRows]
 		lines[maxRows-1] = truncateDots(lines[maxRows-1]+" ...", inner)
 	}
-	lines = append(lines, "", footerText("esc close"))
+	if s.term.ID != "" {
+		// The term the text ends with is named in bold where its paragraph starts.
+		head := termName(s.term) + ": "
+		for i, l := range lines {
+			if strings.HasPrefix(l, head) {
+				lines[i] = styles.title.Render(termName(s.term)) + l[len(head)-2:]
+			}
+		}
+	}
+	lines = append(lines, "", keyHintGroupFoot(footerText("esc close")))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "")
 	}
-	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true})
+	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true, fill: true})
 	background := m.frame(m.workspaceView())
 	return overlay(background, dialog, m.termWidth, m.termHeight)
 }

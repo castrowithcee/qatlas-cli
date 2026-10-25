@@ -618,7 +618,7 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 				tabs = 2
 			}
 			if !strings.Contains(strings.Join(strings.Fields(lines[tabs]), " "), strings.Join(strings.Fields(tt.tabs), " ")) ||
-				!strings.Contains(lines[tabs+1], "Library: [Services]") || !strings.Contains(lines[tabs+2], "─") {
+				!strings.Contains(lines[tabs+1], "[Services]  Credentials") || !strings.Contains(lines[tabs+2], "─") {
 				t.Errorf("the tab line %q does not stand above the option bar, a rule and the workspace:\n%s", tt.tabs, view)
 			}
 			// The table stands in a frame where the terminal has room for it, and in the compact form without.

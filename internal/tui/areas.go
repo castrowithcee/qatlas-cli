@@ -10,7 +10,7 @@ import (
 
 // An area is a task the person came to do. It is the top level of the tab line; the section stays the
 // object model beneath it, so every list, form and save keeps working on its own section. An area with
-// several sections shows them as sub-tabs in an option bar below the tab line.
+// several sections shows them as sub-tabs in a tab row below the tab line.
 type area int
 
 const (
@@ -79,7 +79,7 @@ func (s section) index() int {
 	return 0
 }
 
-// hasSubTabs says whether the active area shows an option bar.
+// hasSubTabs says whether the active area shows a tab row.
 func (m *Model) hasSubTabs() bool { return len(areaSections[m.section.area()]) > 1 }
 
 // previewArea makes a the active area, on its first section, while the tab line keeps the focus.
@@ -94,23 +94,23 @@ func (m *Model) previewArea(a area) tea.Cmd {
 // program itself.
 const advancedStart = sectionVault
 
-// subNavLine is the option bar of the active area: "Area: [active] other", with "> " in front while it has
-// the focus. A terminal too narrow for every name shows the active one alone.
+// subNavLine is the tab row of the active area, drawn like the tabs of the detail pane, with "> " in front
+// while it has the focus. A terminal too narrow for every name shows the active one alone.
 func (m *Model) subNavLine() string {
 	if !m.hasSubTabs() || m.wizard != nil {
 		return ""
 	}
 	line, _ := m.subNavBar()
-	return styles.active.Render(clipCells(line, m.termWidth))
+	return clipCells(line, m.termWidth)
 }
 
-// subNavItem is a part on the option bar and the cells it stands in.
+// subNavItem is a part on the tab row and the cells it stands in.
 type subNavItem struct {
 	section section
 	navSpan
 }
 
-// subNavSpans are the cells of the parts on the option bar.
+// subNavSpans are the cells of the parts on the tab row.
 func (m *Model) subNavSpans() []subNavItem {
 	if !m.hasSubTabs() || m.wizard != nil {
 		return nil
@@ -119,39 +119,38 @@ func (m *Model) subNavSpans() []subNavItem {
 	return items
 }
 
-// subNavBar is the text of the option bar and the cells of its parts.
+// subNavBar is the text of the tab row and the cells of its parts.
 func (m *Model) subNavBar() (string, []subNavItem) {
 	focus := "  "
-	if m.screen == screenNav && m.navSub {
+	focused := m.screen == screenNav && m.navSub
+	if focused {
 		focus = "> "
 	}
-	a := m.section.area()
-	var all, active []string
+	var words []string
 	var sections []section
-	for _, s := range areaSections[a] {
+	active := 0
+	for _, s := range areaSections[m.section.area()] {
 		if s == advancedStart {
 			// The advanced pages follow the preferences after a bar, so the split reads at any width.
-			all, sections = append(all, "|"), append(sections, -1)
+			words, sections = append(words, "|"), append(sections, -1)
 		}
-		sections = append(sections, s)
 		if s == m.section {
-			all, active = append(all, "["+s.subTitle()+"]"), append(active, "["+s.subTitle()+"]")
-			continue
+			active = len(words)
 		}
-		all = append(all, s.subTitle())
+		words, sections = append(words, s.subTitle()), append(sections, s)
 	}
-	prefix := focus + a.title() + ": "
-	line, items := prefix+strings.Join(all, " "), all
-	if lipgloss.Width(line) > m.termWidth {
-		line, items, sections = prefix+strings.Join(active, " "), active, []section{m.section}
+	strip, spans := tabStrip(words, active, focused)
+	if lipgloss.Width(focus)+lipgloss.Width(strip) > m.termWidth {
+		words, sections = words[active:active+1], sections[active:active+1]
+		strip, spans = tabStrip(words, 0, focused)
 	}
 	var out []subNavItem
-	for i, span := range spanItems(items, lipgloss.Width(prefix), " ", m.termWidth) {
+	for i, span := range spans {
 		if sections[i] >= 0 {
-			out = append(out, subNavItem{sections[i], span})
+			out = append(out, subNavItem{sections[i], navSpan{min(span[0]+len(focus), m.termWidth), min(span[1]+len(focus), m.termWidth)}})
 		}
 	}
-	return line, out
+	return focus + strip, out
 }
 
 // ref names s for a message that points at it: its sub-tab inside its area, with the digit that opens the

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -45,14 +46,69 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// helpLines is the text of the current topic, wrapped into the workspace.
+// helpMaxInner is the widest text of the help overlay.
+const helpMaxInner = 72
+
+// helpOverlay reports whether the help stands as an overlay over the screen it was opened from: the terminal
+// has the room a modal needs. Smaller, it fills the workspace.
+func (m *Model) helpOverlay() bool {
+	return m.termWidth >= modalMinWidth && m.termHeight >= modalMinHeight
+}
+
+// helpInner is the width the help text is wrapped into.
+func (m *Model) helpInner() int {
+	if m.helpOverlay() {
+		return min(m.termWidth-8, helpMaxInner)
+	}
+	return m.usable(0)
+}
+
+// helpLines is the text of the current topic, wrapped into the width the help has.
 func (m *Model) helpLines() []string {
 	topic := helptopics.All()[m.helpTopic]
 	text := topic.Text
 	if topic.Name == helptopics.All()[0].Name {
 		text += "\n\n" + keyListText()
 	}
-	return strings.Split(helptopics.Wrap(text, m.usable(0)), "\n")
+	return strings.Split(helptopics.Wrap(text, m.helpInner()), "\n")
+}
+
+// keysHeading is the first line of the list of keys; helpLine draws it as a heading.
+const keysHeading = "Keys in force on this device:"
+
+// isHeading reports whether a line of a topic is a heading: short, without indent, ending in a colon.
+func isHeading(line string) bool {
+	return strings.HasSuffix(line, ":") && !strings.HasPrefix(line, " ") && lipgloss.Width(line) <= 40
+}
+
+// helpLine draws one wrapped line of a topic: a heading is bold, and in the list of keys the key is in the
+// accent colour. headings are the headings of the unwrapped text, so the end of a long wrapped sentence that
+// happens to be short is no heading.
+func helpLine(line string, headings map[string]bool) string {
+	switch {
+	case strings.HasPrefix(line, "- ") && strings.Contains(line, ": "):
+		i := strings.LastIndex(line, ": ") + 2
+		return line[:i] + styles.active.Render(line[i:])
+	case headings[line]:
+		return styles.title.Render(line)
+	}
+	return line
+}
+
+// helpHeadings are the headings of the text of the current topic.
+func (m *Model) helpHeadings() map[string]bool {
+	topic := helptopics.All()[m.helpTopic]
+	text := topic.Text
+	if topic.Name == helptopics.All()[0].Name {
+		text += "\n\n" + keyListText()
+	}
+	headings := map[string]bool{}
+	for _, line := range strings.Split(text, "\n") {
+		if isHeading(line) {
+			headings[line] = true
+		}
+	}
+	return headings
 }
 
 // macOSFunctionKeyNote explains why F2, used throughout the editor, might not reach it on a Mac
@@ -60,32 +116,60 @@ func (m *Model) helpLines() []string {
 const macOSFunctionKeyNote = "On macOS, hold fn for F-keys, or turn on 'Use F1, F2, etc. keys as standard " +
 	"function keys' in System Settings."
 
+// helpKeys is the key line of the help: at the foot of the overlay, with the keys in the accent colour, or, in
+// the workspace, the footer of the frame.
+func (m *Model) helpKeys(keys string) string {
+	if !m.inModal {
+		return m.keyHint(keys)
+	}
+	return "\n" + strings.Join(m.keyHintLinesWith(keys, keyHintGroupFoot), "\n")
+}
+
+// keyLineCount is how many lines the key line takes in the overlay, whatever is logged for the mouse.
+func (m *Model) keyLineCount(keys string) int {
+	log := m.footerLog
+	m.footerLog = nil
+	defer func() { m.footerLog = log }()
+	return len(m.keyHintLines(keys))
+}
+
+// helpTopics draws the topics with the current one in brackets, like the tabs of a detail pane.
+func (m *Model) helpTopics() string {
+	var names []string
+	for _, topic := range helptopics.All() {
+		names = append(names, topic.Name)
+	}
+	strip, _ := tabStrip(names, m.helpTopic, true)
+	return strip
+}
+
 // helpFrame is everything of the help screen except the text: above it the topics with the current one in
 // brackets, and the macOS note where it fits, below it the position in the text and the keys. room is the
 // number of text lines between them.
 func (m *Model) helpFrame() (string, string, int) {
-	var names []string
-	for i, topic := range helptopics.All() {
-		if i == m.helpTopic {
-			names = append(names, "["+topic.Name+"]")
-			continue
-		}
-		names = append(names, topic.Name)
+	strip := m.helpTopics()
+	base := styles.title.Render("Help") + "  " + strip + "\n\n"
+	if m.helpOverlay() {
+		base = strip + "\n\n"
 	}
-	title := "Help  " + strings.Join(names, "  ")
-	base := m.wrapped(styles.title, title) + "\n\n"
-	note := m.wrapped(styles.hint, macOSFunctionKeyNote) + "\n\n"
+	note := render(styles.hint, m.helpInner(), macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
 	keys := "left/right topic · up/down scroll · pgup/pgdown page · {back}/{help} close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
 	// that gains the position line, which itself takes one of those lines.
 	layout := func(head string) (string, string, int) {
-		foot := m.keyHint(keys)
-		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
+		foot := m.helpKeys(keys)
+		var room int
+		if m.helpOverlay() {
+			// The dialog keeps two rows free around it; the key line is set off by a blank line.
+			room = m.termHeight - 6 - strings.Count(head, "\n") - m.keyLineCount(keys) - 1
+		} else {
+			room = m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
+		}
 		if lines > room {
 			room--
 			first := min(m.helpOffset+1, lines)
-			foot = "\n" + m.wrapped(styles.hint, fmt.Sprintf("lines %d-%d of %d", first,
+			foot = "\n" + render(styles.hint, m.helpInner(), fmt.Sprintf("lines %d-%d of %d", first,
 				min(m.helpOffset+max(room, 1), lines), lines)) + foot
 		}
 		return head, foot, room
@@ -112,13 +196,18 @@ func (m *Model) helpView() string {
 	head, foot, room := m.helpFrame()
 	lines := m.helpLines()
 	end := min(m.helpOffset+room, len(lines))
-	return head + strings.Join(lines[m.helpOffset:end], "\n") + "\n" + foot
+	shown := make([]string, 0, end-m.helpOffset)
+	headings := m.helpHeadings()
+	for _, line := range lines[m.helpOffset:end] {
+		shown = append(shown, helpLine(line, headings))
+	}
+	return head + strings.Join(shown, "\n") + "\n" + foot
 }
 
 // keyListText names the keys of the global actions as they are bound now, so the help is right whatever the
 // preferences changed.
 func keyListText() string {
-	lines := []string{"Keys in force on this device:"}
+	lines := []string{keysHeading}
 	for _, r := range keyRows {
 		a := userActions[r.action]
 		key := keyName(keymap[a])
