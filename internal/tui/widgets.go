@@ -41,17 +41,43 @@ func panel(title string, lines []string, inner, rows int, o panelOpts) []string 
 	out := []string{style.Render(c[0]+h) + styles.title.Render(label) +
 		style.Render(strings.Repeat(h, max(inner+1-lipgloss.Width(label), 0))+c[1])}
 	body := lipgloss.NewStyle()
+	bg := lipgloss.Color("")
 	if o.fill && styles.palette.panel != "" {
-		body = body.Background(styles.palette.panel)
+		bg = styles.palette.panel
+		body = body.Background(bg)
 	}
 	for i := 0; i < rows; i++ {
 		text := ""
 		if i < len(lines) {
-			text = clipCells(lines[i], inner)
+			text = keepBackground(clipCells(lines[i], inner), bg)
 		}
 		out = append(out, style.Render(v)+body.Render(" "+padLine(text, inner)+" ")+style.Render(v))
 	}
 	return append(out, style.Render(c[2]+strings.Repeat(h, inner+2)+c[3]))
+}
+
+// keepBackground makes a finished line keep the background bg across the resets of its own styles, so a
+// filled area stays filled behind styled text. Without a colour it returns the line as it is.
+func keepBackground(text string, bg lipgloss.Color) string {
+	if bg == "" || !strings.Contains(text, "\x1b[") {
+		return text
+	}
+	set := lipgloss.NewStyle().Background(bg).Render("x")
+	set = set[:strings.Index(set, "x")]
+	if set == "" {
+		return text
+	}
+	return set + strings.ReplaceAll(text, "\x1b[0m", "\x1b[0m"+set)
+}
+
+// surfaceRow draws a finished input row as a field: cut or padded to width cells on the surface colour.
+// Without a colour the row is only padded.
+func surfaceRow(text string, width int) string {
+	text = padLine(clipCells(text, width), width)
+	if styles.palette.surface == "" {
+		return text
+	}
+	return lipgloss.NewStyle().Background(styles.palette.surface).Render(keepBackground(text, styles.palette.surface))
 }
 
 // card is a bordered figure: the label dimmed above a large value. Width is the total width in cells.

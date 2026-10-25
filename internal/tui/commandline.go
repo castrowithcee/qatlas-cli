@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // The command line (':') runs the editor's recurring actions by name. It is a register, not a second set of
@@ -19,6 +23,10 @@ type command struct {
 	aliases []string
 	// hidden keeps the command out of the empty line's list; it still matches what is typed.
 	hidden bool
+	// shortcut returns the key that already does the same, or "" where there is none.
+	shortcut func() string
+	// icon is the Nerd Font glyph shown before the name, or "" where there is none.
+	icon string
 	// unavailable returns the reason the command cannot run on m.screen now, or "" where it can.
 	unavailable func(m *Model) string
 	// run performs the action on the screen the command line was opened from.
@@ -42,6 +50,8 @@ func (m *Model) commands() []command {
 		list = append(list, command{
 			name:        "go " + title,
 			desc:        tr(tCmdGoArea, a.title(), int(a)+1),
+			icon:        areaIcons[a],
+			shortcut:    func() string { return fmt.Sprint(int(a) + 1) },
 			aliases:     []string{title},
 			unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
 			run:         func(m *Model) tea.Cmd { return m.openSection(first) },
@@ -136,6 +146,7 @@ func (m *Model) commands() []command {
 		command{
 			name:        "lock vault",
 			desc:        tr(tCmdLock),
+			shortcut:    func() string { return keyName(keyOf(actLock)) },
 			aliases:     []string{"lock"},
 			unavailable: (*Model).lockUnavailable,
 			run:         func(m *Model) tea.Cmd { return m.handleVaultLockKey() },
@@ -143,6 +154,7 @@ func (m *Model) commands() []command {
 		command{
 			name:        "help",
 			desc:        tr(tCmdHelp),
+			shortcut:    func() string { return keyName(keyOf(actHelp)) },
 			unavailable: func(m *Model) string { return "" },
 			run:         func(m *Model) tea.Cmd { m.openHelp(); return nil },
 		},
@@ -228,7 +240,8 @@ func matchCommands(list []command, query string) []command {
 // openCommandLine shows the command line over the current screen.
 func (m *Model) openCommandLine() {
 	in := textinput.New()
-	in.Prompt = ": "
+	in.Prompt = "/ "
+	in.Placeholder = tr(tCmdPlaceholder)
 	in.Focus()
 	m.cmdline = &commandLine{from: m.screen, input: in}
 	m.screen = screenCommand
@@ -312,4 +325,86 @@ func (m *Model) commandLineView() string {
 		rows = append(rows, prefix+text)
 	}
 	return head + strings.Join(rows, "\n") + "\n" + foot
+}
+
+// paletteMaxRows caps the entries the palette shows at once; the list scrolls with the cursor.
+const paletteMaxRows = 12
+
+// paletteLines is the palette as the content of its overlay panel, inner cells wide, and the index of the
+// match each line shows (-1 for the other lines). Room is the most lines the panel may take.
+func (m *Model) paletteLines(inner, room int) ([]string, []int) {
+	cl := m.cmdline
+	matches := matchCommands(m.commands(), cl.input.Value())
+	foot := strings.Split(strings.TrimLeft(m.keyHint("type to search · up/down or tab choose · enter run · {back} close"), "\n"), "\n")
+	var msg []string
+	if cl.msg != "" {
+		msg = strings.Split(render(styles.fail, inner, tr(tNoteError, cl.msg)), "\n")
+	}
+	field := cl.input
+	field.Width = max(inner-3, 1)
+	lines := []string{surfaceRow(" "+field.View(), inner), ""}
+	index := []int{-1, -1}
+	fixed := len(lines) + 1 + len(foot) + len(msg)
+	rows := max(min(room-fixed, paletteMaxRows, max(len(matches), 1)), 1)
+	if len(matches) == 0 {
+		lines, index = append(lines, styles.hint.Render(tr(tCmdNoMatch))), append(index, -1)
+	} else {
+		cursor := min(cl.cursor, len(matches)-1)
+		start := max(min(cursor-rows/2, len(matches)-rows), 0)
+		end := min(start+rows, len(matches))
+		nerd := m.prefs.Icons == uiprefs.IconsNerdFont
+		for i := start; i < end; i++ {
+			lines, index = append(lines, m.paletteRow(matches[i], i == cursor, nerd, inner)), append(index, i)
+		}
+	}
+	lines, index = append(lines, ""), append(index, -1)
+	for _, l := range append(msg, foot...) {
+		lines, index = append(lines, l), append(index, -1)
+	}
+	return lines, index
+}
+
+// paletteRow is one entry: marker, icon, name and description at the left, the shortcut at the right.
+func (m *Model) paletteRow(c command, chosen, nerd bool, width int) string {
+	right := ""
+	if c.shortcut != nil {
+		right = c.shortcut()
+	}
+	prefix := "  "
+	if chosen {
+		prefix = "> "
+	}
+	left := fmt.Sprintf("%-14s %s", c.name, c.desc)
+	if nerd {
+		icon := c.icon
+		if icon == "" {
+			icon = " "
+		}
+		left = icon + " " + left
+	}
+	avail := max(width-len(prefix)-lipgloss.Width(right)-1, 1)
+	left = padLine(truncateCells(left, avail), avail)
+	switch {
+	case m.unavailableFrom(c, m.cmdline.from) != "":
+		left = styles.hint.Render(left)
+	case chosen:
+		left = styles.active.Render(left)
+	}
+	if right != "" {
+		right = styles.hint.Render(right)
+	}
+	row := prefix + left + " " + right
+	if chosen {
+		return surfaceRow(row, width)
+	}
+	return row
+}
+
+// pickCommand is a click on the i-th match: it chooses the entry and runs it as enter does.
+func (m *Model) pickCommand(i int) tea.Cmd {
+	if m.cmdline == nil {
+		return nil
+	}
+	m.cmdline.cursor = i
+	return m.updateCommandLine(tea.KeyMsg{Type: tea.KeyEnter})
 }

@@ -282,6 +282,7 @@ func (m *Model) pathPrompt() promptDialog {
 	return promptDialog{
 		title: title,
 		input: m.pathLines("  ", &m.pathInput),
+		field: true,
 		keys:  pathKeys(&m.pathInput, "enter take · {save} save · {back} cancel entry"),
 	}
 }

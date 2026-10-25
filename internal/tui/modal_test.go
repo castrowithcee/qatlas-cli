@@ -9,18 +9,24 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// dialogRows returns the first and last row of the modal frame, and the column of its left edge; the title
-// in its top border tells it from the frame of the workspace behind it.
-func dialogRows(view string, title string) (top, bottom, left int, ok bool) {
+// dialogRows returns the first and last row of the modal frame of a question, and the column of its left
+// edge; the warning mark in the row under its top border tells it from the frame of the workspace behind it.
+func dialogRows(view string) (top, bottom, left int, ok bool) {
 	top = -1
-	for i, line := range strings.Split(view, "\n") {
-		if at := strings.Index(line, "╭─ "+title+" "); at >= 0 {
+	rows := strings.Split(view, "\n")
+	for i, line := range rows {
+		if at := strings.Index(line, "╭─"); at >= 0 && i+1 < len(rows) && strings.Contains(rows[i+1], "│ "+warnMark+" ") {
 			top, left = i, lipgloss.Width(line[:at])
 		} else if at := strings.Index(line, "╰"); at >= 0 && top >= 0 && i > top && lipgloss.Width(line[:at]) == left {
 			return top, i, left, true
 		}
 	}
 	return 0, 0, 0, false
+}
+
+func hasQuestionModal(view string) bool {
+	_, _, _, ok := dialogRows(view)
+	return ok
 }
 
 func TestQuestionIsCentredOverItsBackground(t *testing.T) {
@@ -38,7 +44,7 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 	if !strings.Contains(view, `Delete "wiki"?`) || !strings.Contains(view, "y remove") {
 		t.Fatalf("the question or its keys are missing:\n%s", view)
 	}
-	top, bottom, left, ok := dialogRows(view, "Confirm")
+	top, bottom, left, ok := dialogRows(view)
 	if !ok {
 		t.Fatalf("no modal frame found:\n%s", view)
 	}
@@ -101,7 +107,7 @@ func TestQuestionTakesTheWholeWorkspaceBelowTheModalSize(t *testing.T) {
 		press(t, m, "d")
 		view := m.View()
 		assertViewFits(t, view, size.width, size.height)
-		if _, _, _, ok := dialogRows(view, "Confirm"); ok {
+		if _, _, _, ok := dialogRows(view); ok {
 			t.Errorf("%dx%d shows a modal:\n%s", size.width, size.height, view)
 		}
 		if !strings.Contains(view, `Delete "wiki"?`) || !strings.Contains(view, "y remove") {
@@ -251,10 +257,8 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 					t.Errorf("%s: question row %d, consequence row %d, keys row %d, want ascending:\n%s",
 						name, q, c, k, view)
 				}
-				if _, _, _, boxed := dialogRows(view, "Confirm"); name == "modal" && !boxed {
-					if _, _, _, boxed = dialogRows(view, "Unsaved changes"); !boxed {
-						t.Errorf("%s: no modal frame:\n%s", name, view)
-					}
+				if _, _, _, boxed := dialogRows(view); name == "modal" && !boxed {
+					t.Errorf("%s: no modal frame:\n%s", name, view)
 				}
 			}
 		})
@@ -269,7 +273,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	sizedModel(m, 100, 30)
 	startRename(t, m, sectionServices, "wiki", "handbook")
 	pump(t, m, "enter")
-	if view := m.View(); !strings.Contains(view, "╭─ Confirm ") {
+	if view := m.View(); !hasQuestionModal(view) {
 		t.Fatalf("a short plan is not a modal:\n%s", view)
 	}
 
@@ -278,7 +282,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	}
 	view := m.View()
 	assertViewFits(t, view, 100, 30)
-	if strings.Contains(view, "╭─ Confirm ") {
+	if hasQuestionModal(view) {
 		t.Fatalf("a plan taller than the screen is a modal:\n%s", view)
 	}
 	if !strings.Contains(view, "connections.c00.service") || strings.Contains(view, "connections.c59.service") {

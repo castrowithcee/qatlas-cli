@@ -204,6 +204,7 @@ func (m *Model) restartView() string {
 	return m.questionText(question{
 		title:       tr(tRestartQuestion, m.updated),
 		consequence: tr(tRestartConsequence),
+		danger:      true,
 		details:     []string{m.wrapped(lipgloss.NewStyle(), tr(tRestartDetail))},
 		keys:        "y restart and discard · n/{back} not now · {command} cmds · {help} help",
 	})
