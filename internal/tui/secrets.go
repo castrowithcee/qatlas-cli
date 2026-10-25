@@ -636,7 +636,7 @@ func vaultFirstSecretHint() string { return tr(tVaultFirstSecretHint) }
 // vaultOffer.confirming.
 func (m *Model) vaultOfferPrompt() promptDialog {
 	o := m.vaultOffer
-	d := promptDialog{title: o.title, input: m.inputLine("  ", o.input), hint: o.hint,
+	d := promptDialog{title: o.title, input: m.inputLine("  ", o.input), field: true, hint: o.hint,
 		keys: "enter ok · {back} cancel, nothing saved"}
 	if o.confirming {
 		d.title, d.hint = tr(tVaultConfirmTitle), tr(tVaultConfirmHint)

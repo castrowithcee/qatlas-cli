@@ -228,7 +228,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 // adminSessionHint: this dialog opens without a pending admin-gated action, so it reads as unlocking that
 // also starts admin mode, not the other way round.
 func (m *Model) vaultUnlockPrompt() promptDialog {
-	d := promptDialog{title: tr(tUnlockTitle), input: m.inputLine("  ", m.vaultUnlock.input),
+	d := promptDialog{title: tr(tUnlockTitle), input: m.inputLine("  ", m.vaultUnlock.input), field: true,
 		hint: m.vaultUnlockHint(), keys: "enter unlock · {back} cancel"}
 	if m.restartNote != "" {
 		d.notice = m.indented(m.restartNote)

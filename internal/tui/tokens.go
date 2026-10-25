@@ -476,6 +476,7 @@ func (m *Model) tokenRevokeView() string {
 	return m.questionText(question{
 		title:       tr(tTokenRevokeTitle, m.tokenRevoke),
 		consequence: tr(tTokenRevokeConsequence),
+		danger:      true,
 		keys:        "y revoke · n/{back} keep · {command} cmds · {help} help",
 	})
 }

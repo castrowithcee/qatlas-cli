@@ -19,6 +19,8 @@ type promptDialog struct {
 	// hint is the explanation under the input.
 	hint string
 	keys string
+	// field says the first input row is a text field, which a modal draws as a surface.
+	field bool
 }
 
 // promptText draws a dialog. The modal carries the title in its border, so titled is false there.
@@ -36,13 +38,32 @@ func (m *Model) promptText(d promptDialog, titled bool) string {
 		b.WriteString(d.notice + "\n\n")
 	}
 	if d.input != "" {
-		b.WriteString(strings.TrimRight(d.input, "\n") + "\n")
+		input := strings.TrimRight(d.input, "\n")
+		if m.inModal && d.field {
+			input = m.surfaced(input)
+		}
+		b.WriteString(input + "\n")
 	}
 	if d.hint != "" {
 		b.WriteString(m.indented(d.hint) + "\n")
 	}
+	if m.inModal {
+		return m.withButtons(b.String(), d.keys, false, nil)
+	}
 	b.WriteString(m.keyHint(d.keys))
 	return b.String()
+}
+
+// surfaced draws the first row of finished input rows as a field on the surface colour across the room of
+// the dialog; the rows below it (a path's suggestions) stay as they are.
+func (m *Model) surfaced(input string) string {
+	first, rest, more := strings.Cut(input, "\n")
+	lead := len(first) - len(strings.TrimLeft(first, " "))
+	first = first[:lead] + surfaceRow(first[lead:], m.usable(lead))
+	if more {
+		return first + "\n" + rest
+	}
+	return first
 }
 
 // promptView is a dialog as a whole screen, with the notes every editor screen ends in.

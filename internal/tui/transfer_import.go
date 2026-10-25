@@ -742,6 +742,7 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 		return promptDialog{
 			title: tr(tImportFileTitle),
 			input: m.pathLines("  ", &e.input),
+			field: true,
 			hint:  tr(tImportFileHint),
 			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")),
 		}, true
@@ -749,6 +750,7 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 		return promptDialog{
 			title: tr(tExportPassTitle),
 			input: m.inputLine("  ", e.input.Model),
+			field: true,
 			hint:  tr(tImportPassHint),
 			keys:  m.importDialogKeys("{save} or enter ok · {back} back, nothing imported"),
 		}, true
@@ -810,7 +812,7 @@ func (m *Model) importLeaveView() string {
 	if m.leaveQuit {
 		title, discard, why = tr(tImportQuitTitle), "d discard and quit", tr(tTransferQuitWhy)
 	}
-	return m.questionText(question{title: title, consequence: why,
+	return m.questionText(question{title: title, consequence: why, danger: true,
 		details: []string{m.indentedWith(styles.warning, tr(tImportLeaveWarn)),
 			m.indented(tr(tTransferNothingWritten))},
 		keys: save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"})

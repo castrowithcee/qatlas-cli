@@ -182,7 +182,7 @@ func (m *Model) adminAuthPrompt() promptDialog {
 		hint = tr(tAdminHintUnlock)
 		keys = "enter unlock · {back} cancel, nothing saved"
 	}
-	return promptDialog{title: title, input: m.inputLine("  ", a.input), hint: hint, keys: keys}
+	return promptDialog{title: title, input: m.inputLine("  ", a.input), field: true, hint: hint, keys: keys}
 }
 
 // adminSessionHint says how long this window's admin session will stay open once the passphrase proves it,

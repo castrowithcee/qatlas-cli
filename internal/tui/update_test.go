@@ -259,7 +259,11 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			if tt.width < 100 && strings.Contains(lines[0], "🎉") {
 				t.Errorf("%dx%d: a narrow top line keeps the emoji: %q", tt.width, tt.height, lines[0])
 			}
-			if !strings.Contains(lines[1], "[5 Library]") || !strings.Contains(lines[2], "Library: ") || !strings.Contains(lines[3], "─") {
+			// A modal may stand over the option bar and the rule of a small terminal; its background keeps the
+			// tab line.
+			covered := screen == "question" && tt.height < 28
+			if !strings.Contains(lines[1], "[5 Library]") ||
+				!covered && (!strings.Contains(lines[2], "Library: ") || !strings.Contains(lines[3], "─")) {
 				t.Errorf("%dx%d %s: the tab line, option bar and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:4])
 			}
 		}

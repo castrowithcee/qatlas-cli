@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -67,6 +68,10 @@ func (m *Model) screenBeneath(s screen) (screen, bool) {
 		// question (see exportView).
 		if _, ok := m.importPrompt(); ok {
 			return m.imp.from, true
+		}
+	case screenCommand:
+		if m.cmdline != nil {
+			return m.cmdline.from, true
 		}
 	case screenLeave:
 		return m.leaveFrom, true
@@ -153,29 +158,33 @@ func (m *Model) modalView() (string, bool) {
 		return "", false
 	}
 	inner := min(modalMaxInner, m.termWidth-8)
-	title := tr(tModalConfirm)
 	var text string
 	var footers []footerLine
-	m.footerLog = &footers
-	defer func() { m.footerLog = nil }()
-	if m.questionScreen() {
+	m.footerLog, m.inModal = &footers, true
+	defer func() { m.footerLog, m.inModal = nil, false }()
+	var palette []string
+	var paletteIndex []int
+	title := ""
+	if m.screen == screenCommand {
+		inner = min(modalMaxInner-4, m.termWidth-8)
+		title = tr(tCmdHead)
+		m.renderAs(m.screen, inner, func() { palette, paletteIndex = m.paletteLines(inner, m.termHeight-4) })
+		text = strings.Join(palette, "\n")
+	} else if m.questionScreen() {
 		m.renderAs(m.screen, inner, func() { text = m.questionView() })
-		if m.screen == screenLeave {
-			title = tr(tModalUnsaved)
-		}
 	} else {
 		ok := false
 		m.renderAs(m.screen, inner, func() {
 			var d promptDialog
 			if d, ok = m.prompt(); ok {
-				title, text = d.title, m.promptText(d, false)+m.promptNotes()
+				text = m.wrapped(styles.title, d.title) + "\n\n" + m.promptText(d, false) + m.promptNotes()
 			}
 		})
 		if !ok {
 			return "", false
 		}
 	}
-	m.footerLog = nil
+	m.footerLog, m.inModal = nil, false
 	base := m.baseScreen()
 	if base == screenForm && m.fields == nil {
 		return "", false
@@ -187,7 +196,7 @@ func (m *Model) modalView() (string, bool) {
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, inner, "")
 	}
-	dialog := panel(title, lines, inner, len(lines), panelOpts{focused: true})
+	dialog := panel(title, lines, inner, len(lines), panelOpts{focused: true, fill: true})
 
 	var background string
 	m.renderAs(base, 0, func() {
@@ -197,6 +206,11 @@ func (m *Model) modalView() (string, bool) {
 	})
 	top, left := dialogOrigin(dialog, m.termWidth, m.termHeight)
 	m.hitDialog(lines, footers, top, left)
+	for i, match := range paletteIndex {
+		if match >= 0 {
+			m.addHit(left+1, top+1+i, left+inner+3, top+2+i, func() tea.Cmd { return m.pickCommand(match) })
+		}
+	}
 	return overlay(background, dialog, m.termWidth, m.termHeight), true
 }
 
@@ -241,9 +255,26 @@ type question struct {
 	consequence string
 	// warn draws the consequence as a warning.
 	warn bool
+	// danger draws the answer that destroys something (y or d) as the dangerous button.
+	danger bool
+	// labels name buttons by their key where the key line's words do not fit a button.
+	labels map[string]string
 	// details are finished lines (they may span several rows) between the consequence and the keys.
 	details []string
 	keys    string
+}
+
+// questionHeading is the question of a modal with the warning mark at its left.
+func (m *Model) questionHeading(title string) string {
+	lines := strings.Split(render(styles.title, m.usable(2), title), "\n")
+	for i, line := range lines {
+		lead := "  "
+		if i == 0 {
+			lead = styles.warning.Render(warnMark) + " "
+		}
+		lines[i] = lead + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m *Model) questionText(q question) string {
@@ -252,10 +283,17 @@ func (m *Model) questionText(q question) string {
 		style = styles.warning
 	}
 	var b strings.Builder
-	b.WriteString(m.wrapped(styles.title, q.title) + "\n\n")
+	if m.inModal {
+		b.WriteString(m.questionHeading(q.title) + "\n\n")
+	} else {
+		b.WriteString(m.wrapped(styles.title, q.title) + "\n\n")
+	}
 	b.WriteString(m.indentedWith(style, q.consequence) + "\n")
 	for _, d := range q.details {
 		b.WriteString(strings.TrimRight(d, "\n") + "\n")
+	}
+	if m.inModal {
+		return m.withButtons(b.String(), q.keys, q.danger, q.labels)
 	}
 	b.WriteString(m.keyHint(q.keys))
 	return b.String()
