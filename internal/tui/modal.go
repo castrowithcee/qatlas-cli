@@ -73,6 +73,10 @@ func (m *Model) screenBeneath(s screen) (screen, bool) {
 		if m.cmdline != nil {
 			return m.cmdline.from, true
 		}
+	case screenHelp:
+		if m.helpOverlay() {
+			return m.helpFrom, true
+		}
 	case screenLeave:
 		return m.leaveFrom, true
 	case screenUpdate:
@@ -170,6 +174,12 @@ func (m *Model) modalView() (string, bool) {
 		title = tr(tCmdHead)
 		m.renderAs(m.screen, inner, func() { palette, paletteIndex = m.paletteLines(inner, m.termHeight-4) })
 		text = strings.Join(palette, "\n")
+	} else if m.screen == screenHelp {
+		if !m.helpOverlay() {
+			return "", false
+		}
+		inner, title = m.helpInner(), "Help"
+		m.renderAs(m.screen, inner, func() { text = m.helpView() })
 	} else if m.questionScreen() {
 		m.renderAs(m.screen, inner, func() { text = m.questionView() })
 	} else {

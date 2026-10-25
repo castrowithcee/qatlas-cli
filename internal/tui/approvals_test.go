@@ -10,6 +10,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -642,13 +645,13 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	m := openApprovalModel(t, store, dir)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	change := toolsChange()
-	title := m.wrapped(styles.title, "Approve gh?") + "\n\n"
+	title := "Approve gh?"
 
 	view := m.approvalChangeView(title, change)
 	assertViewFits(t, view, m.width, m.height)
 	view = withFooter(m, view)
 	for _, want := range []string{
-		"tools       2 new, 1 removed",
+		"tools:        2 new, 1 removed",
 		"+ github.pull-request-checks.list", "+ github.pull-requests.get", "- github.repositories.archive",
 		"unchanged: 57", "e unchanged",
 	} {
@@ -663,7 +666,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 		strings.Index(view, "- github.repositories.archive") > strings.Index(view, "unchanged: 57") {
 		t.Errorf("unchanged comes before new or removed:\n%s", view)
 	}
-	if !strings.Contains(view, "credential  unchanged") {
+	if !strings.Contains(view, "credential:   unchanged") {
 		t.Errorf("an unchanged field is not one compact line:\n%s", view)
 	}
 
@@ -681,8 +684,10 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	seen := map[string]bool{}
 	for step := 0; step < 80 && len(seen) < 57; step++ {
 		for _, line := range strings.Split(m.approvalChangeView(title, change), "\n") {
-			if name := strings.TrimSpace(line); strings.HasPrefix(name, "github.issues.operation") {
-				seen[name] = true
+			for _, name := range strings.Fields(line) {
+				if strings.HasPrefix(name, "github.issues.operation") {
+					seen[name] = true
+				}
 			}
 		}
 		press(t, m, "pgdown")
@@ -815,5 +820,75 @@ func TestApprovalDetailShowsRenames(t *testing.T) {
 	}
 	if strings.Contains(got, "new") || strings.Contains(got, "+ ") {
 		t.Errorf("a rename is counted as new:\n%s", got)
+	}
+}
+
+// colourOf is the sequence that starts the style, found by drawing a letter with it.
+func colourOf(style lipgloss.Style) string {
+	set := style.Render("x")
+	return set[:strings.Index(set, "x")]
+}
+
+// What a change newly asks for stands in the colour of a gain and what falls away in the colour of a loss, and
+// the "+" and "-" in front say the same without any colour.
+func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
+	restoreRenderer(t)
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, "correct horse battery staple")
+	m := openApprovalModel(t, store, dir)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Setenv("NO_COLOR", "")
+	applyColorScheme("dark", "")
+	view := m.approvalChangeView("Approve gh?", toolsChange())
+	for plus, style := range map[string]lipgloss.Style{"+ github.pull-requests.get": styles.ok, "- github.repositories.archive": styles.fail} {
+		found := false
+		for _, line := range strings.Split(view, "\n") {
+			if strings.Contains(ansi.Strip(line), plus) {
+				found = strings.Contains(line, colourOf(style))
+			}
+		}
+		if !found {
+			t.Errorf("%q is not drawn in the colour of its change:\n%q", plus, view)
+		}
+	}
+
+	withNoColor(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	view = m.approvalChangeView("Approve gh?", toolsChange())
+	if ansi.Strip(view) != view {
+		t.Errorf("NO_COLOR still emits escape sequences:\n%q", view)
+	}
+	for _, want := range []string{"+ github.pull-requests.get", "- github.repositories.archive"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("without colour the change lacks %q:\n%s", want, view)
+		}
+	}
+}
+
+// The detail of an open approval names its state in words at every size, 40x16 included, with and without
+// colour.
+func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
+	const passphrase = "correct horse battery staple"
+	for _, noColor := range []bool{false, true} {
+		dir := filepath.Join(t.TempDir(), "qatlas")
+		store, _, _ := newApprovalFixture(t, dir, passphrase)
+		m := openApprovalDetail(t, dir, passphrase, store)
+		if noColor {
+			withNoColor(t)
+		}
+		for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 16}} {
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			view := m.View()
+			assertViewFits(t, view, size.width, size.height)
+			plain := ansi.Strip(view)
+			if !strings.Contains(plain, "Approve personal?") || !strings.Contains(plain, "● open") {
+				t.Errorf("%dx%d noColor=%v: the detail lacks its title or its state word:\n%s", size.width, size.height, noColor, plain)
+			}
+			if noColor && plain != view {
+				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
+			}
+		}
 	}
 }

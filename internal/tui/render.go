@@ -209,7 +209,7 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldVaultState:
 		// Read live, never cached: the very act of running an action rebuilds the form (see vaultsettings.go),
 		// but reading it fresh here as well costs nothing and can never go stale.
-		value = m.vaultStateText()
+		value = m.vaultStateMark()
 	case f.kind == fieldVaultAction:
 		value = tr(tValueRunsThis)
 	case f.kind == fieldKey && focused && m.keyCapture:
@@ -490,7 +490,10 @@ func (m *Model) dialogKeyHint(text string) string {
 }
 
 // keyHintLines is the footer text broken into lines of whole groups.
-func (m *Model) keyHintLines(text string) []string {
+func (m *Model) keyHintLines(text string) []string { return m.keyHintLinesWith(text, keyHintGroup) }
+
+// keyHintLinesWith is keyHintLines with each group drawn by style.
+func (m *Model) keyHintLinesWith(text string, style func(group string) string) []string {
 	text = keyPlaceholders(strings.ReplaceAll(footerText(text), "{info}", m.infoLabel()))
 	width := m.usable(0)
 	var lines []string
@@ -510,7 +513,7 @@ func (m *Model) keyHintLines(text string) []string {
 			lineWidth += lipgloss.Width(" · ")
 		}
 		current = append(current, footerSpan{lineWidth, lineWidth + gw, footerKey(group)})
-		line += keyHintGroup(group)
+		line += style(group)
 		lineWidth += gw
 	}
 	if lineWidth > 0 || len(lines) == 0 {
