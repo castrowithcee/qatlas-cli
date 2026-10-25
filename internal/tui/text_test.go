@@ -230,9 +230,9 @@ func TestCommandPaletteFitsInGerman(t *testing.T) {
 		sizedModel(m, 80, 24)
 		press(t, m, ":")
 		view := m.View()
-		want, name := "Commands", "go overview"
+		want, name := "Command Palette", "go overview"
 		if uiLang == i18n.German {
-			want = "Befehle"
+			want = "Befehlspalette"
 		}
 		if !strings.Contains(view, want) || !strings.Contains(view, name) {
 			t.Errorf("the palette lacks %q or %q:\n%s", want, name, view)

@@ -335,6 +335,7 @@ func (m *Model) migrateResultView() string {
 	return m.questionText(question{
 		title:       tr(tMigrateDeleteTitle),
 		consequence: m.migrateResult,
+		danger:      true,
 		keys:        "y delete · n/{back} keep the file · {command} cmds · {help} help",
 	})
 }

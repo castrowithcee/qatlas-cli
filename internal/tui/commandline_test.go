@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,7 +37,7 @@ func TestColonOpensTheCommandLineAndEscClosesIt(t *testing.T) {
 		screens()
 		from := m.screen
 		press(t, m, ":")
-		if m.screen != screenCommand || !strings.Contains(screenOf(m), "Commands") {
+		if m.screen != screenCommand || !strings.Contains(screenOf(m), "Command Palette") {
 			t.Fatalf("%s: : opened screen %v:\n%s", name, m.screen, screenOf(m))
 		}
 		press(t, m, "esc")
@@ -266,5 +269,112 @@ func TestEveryFooterWithoutTextEntryNamesTheCommandLine(t *testing.T) {
 		if flat := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(flat, ": cmds") {
 			t.Errorf("screen %v footer lacks ': cmds':\n%s", s, screenOf(m))
 		}
+	}
+}
+
+func paletteModel(t *testing.T, w, h int) *Model {
+	t.Helper()
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	m.screen = screenNav
+	press(t, m, ":")
+	return m
+}
+
+func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
+	m := paletteModel(t, 150, 42)
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"Command Palette", "/ search or run a command...", "Open Connections (2)", "close"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("palette lacks %q:\n%s", want, view)
+		}
+	}
+	lines := strings.Split(view, "\n")
+	for _, l := range lines {
+		if strings.Contains(l, "Open Connections") {
+			if !strings.HasSuffix(strings.TrimRight(l, " │"), "2") && !strings.Contains(l, "2 │") {
+				t.Errorf("shortcut not at the right: %q", l)
+			}
+			if !strings.Contains(l, "> ") && !strings.Contains(l, "  ") {
+				t.Errorf("row %q", l)
+			}
+		}
+		if strings.Contains(l, "╭") && ansi.StringWidth(l) < 150 {
+			continue
+		}
+	}
+	if !strings.Contains(view, "qatlas") && len(lines) != 42 {
+		t.Errorf("the screen below is gone: %d lines", len(lines))
+	}
+	width := 0
+	for _, l := range lines {
+		if strings.Contains(l, "Command Palette") {
+			trimmed := strings.TrimSpace(l)
+			width = ansi.StringWidth(trimmed[strings.Index(trimmed, "╭") : strings.LastIndex(trimmed, "╮")+len("╮")])
+		}
+	}
+	if width == 0 || width > 60 {
+		t.Errorf("palette width %d, want 1..60", width)
+	}
+	press(t, m, "c", "o", "n")
+	view = ansi.Strip(m.View())
+	if strings.Contains(view, "search or run a command") || !strings.Contains(view, "/ con") {
+		t.Errorf("typed text not in the field:\n%s", view)
+	}
+}
+
+func TestPaletteScrollKeepsTheCursorVisible(t *testing.T) {
+	m := paletteModel(t, 80, 24)
+	n := len(matchCommands(m.commands(), ""))
+	for i := 0; i < n-1; i++ {
+		press(t, m, "down")
+	}
+	last := matchCommands(m.commands(), "")[n-1]
+	view := ansi.Strip(m.View())
+	found := false
+	for _, l := range strings.Split(view, "\n") {
+		if strings.Contains(l, "> ") && strings.Contains(l, last.name) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("cursor row %q not visible:\n%s", last.name, view)
+	}
+}
+
+func TestPaletteClickRunsTheEntry(t *testing.T) {
+	m := paletteModel(t, 150, 42)
+	clickOn(t, m, "Open Connections")
+	if m.screen == screenCommand || m.cmdline != nil {
+		t.Fatalf("click left the palette open on screen %v", m.screen)
+	}
+}
+
+func TestPaletteReadsWithoutColour(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	prior := styles
+	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Setenv("NO_COLOR", "1")
+	applyColorScheme("", "")
+	lipgloss.SetColorProfile(termenv.Ascii)
+	m := paletteModel(t, 150, 42)
+	view := m.View()
+	if strings.Contains(view, "\x1b[") {
+		t.Errorf("colour sequence in the palette: %q", view)
+	}
+	if !strings.Contains(view, "> ") || !strings.Contains(view, "Command Palette") {
+		t.Errorf("selection lost:\n%s", view)
+	}
+}
+
+func TestPaletteStaysUsableAtTheSmallestSize(t *testing.T) {
+	m := paletteModel(t, 40, 13)
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "> ") {
+		t.Fatalf("no cursor at 40x13:\n%s", view)
+	}
+	press(t, m, "h", "e", "l", "p", "enter")
+	if m.screen != screenHelp {
+		t.Errorf("enter did not run help, screen %v", m.screen)
 	}
 }
