@@ -199,7 +199,15 @@ type column struct {
 	short    map[string]string
 	// shown draws a value of the column in the language of the editor; nil draws it as it is.
 	shown func(string) string
+	// tone picks the style a cell is drawn in from its drawn value; nil leaves the cell unstyled. Only the
+	// colour and weight of a cell come from it: the cell text always carries the meaning, so a terminal
+	// without colour loses nothing.
+	tone func(cell string) lipgloss.Style
 }
+
+// toneText styles the cells that carry content, toneDim the ones that only add detail.
+func toneText(string) lipgloss.Style { return styles.cell }
+func toneDim(string) lipgloss.Style  { return styles.hint }
 
 // flexFloor is the narrowest a free text column is cut to before anything else of the row gives way.
 const flexFloor = 12
@@ -317,7 +325,12 @@ func (t table) line(cells []string, l layout) string {
 	var parts []string
 	for i := range cells {
 		if l.widths[i] > 0 {
-			parts = append(parts, padLine(truncateCells(t.cell(cells, i, l), l.widths[i]), l.widths[i]))
+			shown := t.cell(cells, i, l)
+			text := truncateCells(shown, l.widths[i])
+			if tone := t.columns[i].tone; tone != nil && text != "" {
+				text = tone(shown).Render(text)
+			}
+			parts = append(parts, padLine(text, l.widths[i]))
 		}
 	}
 	return strings.TrimRight(strings.Join(parts, columnGap), " ")

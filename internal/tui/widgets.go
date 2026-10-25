@@ -29,31 +29,72 @@ func frameChars(focused bool) (h, v string, corners [4]string) {
 // title in the top border.
 func panel(title string, lines []string, inner, rows int, o panelOpts) []string {
 	inner = max(inner, 0)
-	style := styles.quietBorder
-	if o.focused {
-		style = styles.focusBorder
-	}
-	h, v, c := frameChars(o.focused)
-	label := truncateCells(" "+title+" ", inner+1)
-	if title == "" {
-		label = ""
-	}
-	out := []string{style.Render(c[0]+h) + styles.title.Render(label) +
-		style.Render(strings.Repeat(h, max(inner+1-lipgloss.Width(label), 0))+c[1])}
-	body := lipgloss.NewStyle()
+	out := []string{panelTop(title, "", inner, o.focused)}
 	bg := lipgloss.Color("")
 	if o.fill && styles.palette.panel != "" {
 		bg = styles.palette.panel
-		body = body.Background(bg)
 	}
 	for i := 0; i < rows; i++ {
 		text := ""
 		if i < len(lines) {
-			text = keepBackground(clipCells(lines[i], inner), bg)
+			text = lines[i]
 		}
-		out = append(out, style.Render(v)+body.Render(" "+padLine(text, inner)+" ")+style.Render(v))
+		out = append(out, panelSide(text, inner, o.focused, bg))
 	}
-	return append(out, style.Render(c[2]+strings.Repeat(h, inner+2)+c[3]))
+	return append(out, panelBottom(inner, o.focused))
+}
+
+// panelStyle is the style of the frame lines.
+func panelStyle(focused bool) lipgloss.Style {
+	if focused {
+		return styles.focusBorder
+	}
+	return styles.quietBorder
+}
+
+// panelTop is the top border of a panel of inner content width, with its title in it and, dimmed at the right
+// end, an optional note.
+func panelTop(title, note string, inner int, focused bool) string {
+	inner = max(inner, 0)
+	style := panelStyle(focused)
+	h, _, c := frameChars(focused)
+	label := truncateCells(" "+title+" ", inner+1)
+	if title == "" {
+		label = ""
+	}
+	tail := ""
+	if note != "" {
+		tail = " " + note + " "
+		if room := inner + 1 - lipgloss.Width(label) - 2; lipgloss.Width(tail) > room {
+			tail = ""
+		}
+	}
+	rule := max(inner+1-lipgloss.Width(label)-lipgloss.Width(tail), 0)
+	if tail != "" {
+		return style.Render(c[0]+h) + styles.title.Render(label) + style.Render(strings.Repeat(h, rule-1)) +
+			styles.hint.Render(tail) + style.Render(h+c[1])
+	}
+	return style.Render(c[0]+h) + styles.title.Render(label) + style.Render(strings.Repeat(h, rule)+c[1])
+}
+
+// panelSide is one content line of a panel: cut or padded to inner cells between the side borders. A
+// background colour fills the content area.
+func panelSide(text string, inner int, focused bool, bg lipgloss.Color) string {
+	inner = max(inner, 0)
+	style := panelStyle(focused)
+	_, v, _ := frameChars(focused)
+	body := lipgloss.NewStyle()
+	if bg != "" {
+		body = body.Background(bg)
+	}
+	text = keepBackground(clipCells(text, inner), bg)
+	return style.Render(v) + body.Render(" "+padLine(text, inner)+" ") + style.Render(v)
+}
+
+// panelBottom is the bottom border of a panel of inner content width.
+func panelBottom(inner int, focused bool) string {
+	h, _, c := frameChars(focused)
+	return panelStyle(focused).Render(c[2] + strings.Repeat(h, max(inner, 0)+2) + c[3])
 }
 
 // keepBackground makes a finished line keep the background bg across the resets of its own styles, so a
@@ -68,6 +109,20 @@ func keepBackground(text string, bg lipgloss.Color) string {
 		return text
 	}
 	return set + strings.ReplaceAll(text, "\x1b[0m", "\x1b[0m"+set)
+}
+
+// keepStyle makes a finished line keep style across the resets of its own styles, like keepBackground does
+// for a background alone.
+func keepStyle(text string, style lipgloss.Style) string {
+	if !strings.Contains(text, "\x1b[") {
+		return text
+	}
+	set := style.Render("x")
+	set = set[:strings.Index(set, "x")]
+	if set == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, "\x1b[0m", "\x1b[0m"+set)
 }
 
 // surfaceRow draws a finished input row as a field: cut or padded to width cells on the surface colour.

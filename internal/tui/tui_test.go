@@ -620,13 +620,19 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 				!strings.Contains(lines[tabs+1], "Library: [Services]") || !strings.Contains(lines[tabs+2], "─") {
 				t.Errorf("the tab line %q does not stand above the option bar, a rule and the workspace:\n%s", tt.tabs, view)
 			}
-			for _, want := range []string{"Services  1/1", "wiki"} {
+			// The table stands in a frame where the terminal has room for it, and in the compact form without.
+			framed := tt.width >= tableFrameMinWidth && tt.height >= tableFrameMinHeight
+			title := "Services  1/1"
+			if framed {
+				title = "Services (1)"
+			}
+			for _, want := range []string{title, "wiki"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("view does not contain %q:\n%s", want, view)
 				}
 			}
-			if strings.ContainsAny(view, "║│╔╭") {
-				t.Errorf("the workspace is still framed:\n%s", view)
+			if strings.ContainsAny(view, "║│╔╭") != framed {
+				t.Errorf("the table is framed %v at %dx%d, want %v:\n%s", !framed, tt.width, tt.height, framed, view)
 			}
 			for _, secretValue := range []string{canaryID, canarySecret} {
 				if strings.Contains(view, secretValue) {
@@ -1912,7 +1918,7 @@ func TestDependentSectionsExplainWhatMustBeCreatedFirst(t *testing.T) {
 	press(t, m, "esc")
 
 	openSectionByName(t, m, sectionDefaults)
-	if view := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(view, "Create a connection") ||
+	if view := strings.Join(strings.Fields(strings.NewReplacer("│", " ", "║", " ").Replace(screenOf(m))), " "); !strings.Contains(view, "Create a connection") ||
 		!strings.Contains(view, "Defaults are optional") {
 		t.Errorf("empty Defaults does not explain its prerequisite:\n%s", view)
 	}

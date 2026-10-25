@@ -55,9 +55,14 @@ type theme struct {
 	focusBorder lipgloss.Style
 	quietBorder lipgloss.Style
 	// activeRow highlights the marked row of a table screen (a section list, the picker, the provider
-	// table) the full width of the row. It never carries the selection alone: the '>' prefix of listRow
-	// still leads the row, so NO_COLOR or an ASCII terminal keeps showing which one is marked.
+	// table) the full width of the row. It never carries the selection alone: the mark of listRow (an accent
+	// bar under colour, '>' without) still leads the row, so NO_COLOR or an ASCII terminal keeps showing which one
+	// is marked.
 	activeRow lipgloss.Style
+	// cell is the text of a table cell that carries content (names, urls, descriptions); the dimmed cells use
+	// hint. selMark is the narrow accent bar that leads the marked row, on the colour of the bar.
+	cell    lipgloss.Style
+	selMark lipgloss.Style
 	// key is the key of a footer hint (bold); the action after it keeps the plain hint style.
 	key lipgloss.Style
 	// footKey is the key of the footer line: the accent colour, bold.
@@ -83,6 +88,8 @@ func buildTheme(dark, noColor, filled bool) theme {
 			focusBorder: lipgloss.NewStyle(),
 			quietBorder: lipgloss.NewStyle().Faint(true),
 			activeRow:   lipgloss.NewStyle().Bold(true).Reverse(true),
+			cell:        lipgloss.NewStyle(),
+			selMark:     lipgloss.NewStyle().Bold(true).Reverse(true),
 			key:         lipgloss.NewStyle().Bold(true),
 			footKey:     lipgloss.NewStyle().Bold(true),
 		}
@@ -102,6 +109,8 @@ func buildTheme(dark, noColor, filled bool) theme {
 		focusBorder: lipgloss.NewStyle().Foreground(p.borderFocus),
 		quietBorder: lipgloss.NewStyle().Foreground(p.border),
 		activeRow:   lipgloss.NewStyle().Bold(true).Foreground(p.text).Background(p.selection),
+		cell:        lipgloss.NewStyle().Foreground(p.text),
+		selMark:     lipgloss.NewStyle().Bold(true).Foreground(p.accent).Background(p.selection),
 		key:         lipgloss.NewStyle().Bold(true).Foreground(p.text),
 		footKey:     lipgloss.NewStyle().Bold(true).Foreground(p.accent),
 		filled:      filled,
