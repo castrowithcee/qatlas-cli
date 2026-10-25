@@ -68,12 +68,13 @@ func activityLog(t *testing.T) *logFixture {
 	return f
 }
 
-// heatRows are the weekday rows of a view: the grid without the header, the totals, and the legend.
+// heatRows are the week rows of a view: the grid without the weekday header, the totals, and the legend.
 func heatRows(view string) string {
 	var rows []string
 	for _, line := range strings.Split(view, "\n") {
-		for _, day := range heatWeekdays {
-			if strings.HasPrefix(strings.TrimLeft(line, " "), day+" ") {
+		line = strings.TrimLeft(strings.TrimPrefix(strings.TrimLeft(line, " "), "│"), " ")
+		for _, month := range strings.Split(textEN[tHeatMonths], ",") {
+			if strings.HasPrefix(line, month+" ") && len(line) > len(month)+3 && line[len(month)+1] >= '0' && line[len(month)+1] <= '3' {
 				rows = append(rows, line)
 			}
 		}
@@ -89,7 +90,7 @@ func heatModel(t *testing.T, f *logFixture) *Model {
 	m.logs.from = localDay(time.Now().AddDate(0, 0, -20))
 	m.logs.to = localDay(time.Now())
 	deliver(m, m.loadLogs())
-	m.logs.focus = logFocusView
+	m.logs.focus = logFocusTabs
 	pump(t, m, "right")
 	if !m.logs.heat {
 		t.Fatalf("a = heat %v, want the heatmap", m.logs.heat)
@@ -135,24 +136,24 @@ func TestLogsHeatmapShowsLevelsLegendAndTotals(t *testing.T) {
 	}
 }
 
-// The heatmap is a value of the bar's View field, reached by tab, and a command; the letter a is not bound.
+// The heatmap is the Activity tab of the bar, reached by tab, and a command; the letter a is not bound.
 func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := f.model(false, f.localToday())
-	if view := m.View(); !strings.Contains(view, "View: Table ▾") {
-		t.Fatalf("the bar lacks the View field:\n%s", view)
+	if view := m.View(); !strings.Contains(view, "[Table]  Activity   Details") {
+		t.Fatalf("the bar lacks the tabs:\n%s", view)
 	}
 	pump(t, m, "a")
 	if m.logs.heat {
 		t.Fatalf("a switched to the heatmap; the key must stay unbound on Activity")
 	}
-	press(t, m, "tab", "tab", "tab")
-	if m.logs.focus != logFocusView || !strings.Contains(m.View(), ">  View:") {
-		t.Fatalf("tab x3 = focus %v, want the View field:\n%s", m.logs.focus, m.View())
+	press(t, m, "tab")
+	if m.logs.focus != logFocusTabs || !strings.Contains(m.View(), "> [Table]") {
+		t.Fatalf("tab = focus %v, want the tabs:\n%s", m.logs.focus, m.View())
 	}
 	pump(t, m, "right")
-	if !m.logs.heat || !strings.Contains(m.View(), "View: Heatmap ▾") {
+	if !m.logs.heat || !strings.Contains(m.View(), "[Activity]") {
 		t.Fatalf("right = heat %v, want the heatmap:\n%s", m.logs.heat, m.View())
 	}
 	if m.logs.mode != logModeRange {
@@ -238,7 +239,7 @@ func TestLogsHeatmapMarksDaysOutsideRetention(t *testing.T) {
 	if !strings.Contains(grid, "x") {
 		t.Errorf("no day is marked as outside the retention of 5 days:\n%s", grid)
 	}
-	if strings.Contains(grid, "x") && strings.Count(grid, "x") > 20 {
+	if strings.Contains(grid, "x") && strings.Count(grid, "x") > 20*heatWideCell {
 		t.Errorf("too many days marked:\n%s", grid)
 	}
 }

@@ -10,7 +10,10 @@ import (
 
 // missingError is Matomo's answer for a method, module, or plugin the instance lacks. It never leaves the
 // package: call turns it into the refusal of the tool.
-type missingError struct{}
+type missingError struct {
+	// granular marks the answer of a switched-off feature flag, which has its own hint.
+	granular bool
+}
 
 func (*missingError) Error() string { return "the Matomo instance lacks the method" }
 
@@ -39,6 +42,10 @@ var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
+	// These three come first: their texts also hold words of the groups below, and the third quotes a setting ID.
+	{"granular-off", []string{"granular compliance configuration is not enabled"}},
+	{"config-controlled", []string{"controlled by the config file"}},
+	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
 	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
@@ -67,6 +74,14 @@ func applicationError(op string, data []byte) error {
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
 	case "missing":
 		return &missingError{}
+	case "granular-off":
+		return &missingError{granular: true}
+	case "config-controlled":
+		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
+			Message: "the compliance policy is controlled by the Matomo configuration file and cannot be changed " +
+				"through the API; change it there"}}
+	case "unknown-setting":
+		return &provider.InvalidRequestError{Message: "Matomo refused a setting ID: it is unknown for this policy or cannot be toggled"}
 	case "auth":
 		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op, Message: "Matomo rejected the token"}}
 	case "permission":

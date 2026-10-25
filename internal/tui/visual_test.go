@@ -147,10 +147,29 @@ type visualShot struct {
 	show          func(t *testing.T, m *Model)
 }
 
+// activityHeatmap opens the Activity tab over every recorded day.
+func activityHeatmap(t *testing.T, m *Model) {
+	pump(t, m, "3")
+	for m.logs.mode != logModeAll {
+		m.logs.focus = logFocusMode
+		pump(t, m, "right")
+	}
+	m.logs.focus = logFocusTabs
+	pump(t, m, "right")
+}
+
 func visualShots() []visualShot {
 	dark, term := uiprefs.ThemeDark, uiprefs.BackgroundTerminal
 	overview := func(*testing.T, *Model) {}
 	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	activityTable := func(t *testing.T, m *Model) {
+		pump(t, m, "3")
+		for m.logs.mode != logModeAll {
+			m.logs.focus = logFocusMode
+			pump(t, m, "right")
+		}
+	}
+	activityDetails := func(t *testing.T, m *Model) { activityTable(t, m); pump(t, m, "s") }
 	return []visualShot{
 		{"01-overview", 150, 42, dark, term, false, overview},
 		{"02-connections", 150, 42, dark, term, false, connections},
@@ -169,15 +188,7 @@ func visualShots() []visualShot {
 				pump(t, m, "right")
 			}
 		}},
-		{"06-activity-heatmap", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
-			pump(t, m, "3")
-			for m.logs.mode != logModeAll {
-				m.logs.focus = logFocusMode
-				pump(t, m, "right")
-			}
-			m.logs.focus = logFocusView
-			pump(t, m, "right")
-		}},
+		{"06-activity-heatmap", 150, 42, dark, term, false, activityHeatmap},
 		{"07-palette", 150, 42, dark, term, false, func(t *testing.T, m *Model) { press(t, m, ":") }},
 		{"08-library", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
 		{"09-access", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionTokens) }},
@@ -227,6 +238,12 @@ func visualShots() []visualShot {
 			pump(t, m, "right")
 			pump(t, m, "right")
 		}},
+		{"30-activity-details", 150, 42, dark, term, false, activityDetails},
+		{"31-activity-table-no-color", 150, 42, dark, term, true, activityTable},
+		{"32-activity-heatmap-no-color", 150, 42, dark, term, true, activityHeatmap},
+		{"33-activity-table", 80, 24, dark, term, false, activityTable},
+		{"34-activity-heatmap", 80, 24, dark, term, false, activityHeatmap},
+		{"35-activity-empty", 150, 42, dark, term, false, func(t *testing.T, m *Model) { pump(t, m, "3") }},
 		{"24-connection-details-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "down")

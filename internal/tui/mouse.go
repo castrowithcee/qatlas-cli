@@ -526,10 +526,10 @@ func (m *Model) logBarGuard() (tea.Cmd, bool) {
 	return nil, false
 }
 
-// logBarTargets are the fields of the bar and of the filter line of the Logs screen, by their plain text: a
-// click on the mode or the view opens its list, on the date the dialog enter opens, on a filter the picker of
-// its values, and on the search field starts the search, as the keys do.
-func (m *Model) logBarTargets(mode, date, view string, filters []string, search string) []barSpec {
+// logBarTargets are the tabs, the fields of the filter line of the Logs screen, by their plain text: a click on a
+// tab shows it, on the mode opens its list, on the date the dialog enter opens, on a filter the picker of its
+// values, and on the search field starts the search, as the keys do.
+func (m *Model) logBarTargets(mode, date string, tabs []string, filters []string, search string) []barSpec {
 	lv := m.logs
 	guarded := func(act func() tea.Cmd) func() tea.Cmd {
 		return func() tea.Cmd {
@@ -540,10 +540,14 @@ func (m *Model) logBarTargets(mode, date, view string, filters []string, search 
 			return tea.Batch(lead, act())
 		}
 	}
-	specs := []barSpec{
-		{field: mode, id: "logmode", whole: guarded(func() tea.Cmd { m.openLogBarDropdown(logFocusMode); return nil })},
-		{field: view, id: "logview", whole: guarded(func() tea.Cmd { m.openLogBarDropdown(logFocusView); return nil })},
+	var specs []barSpec
+	for i, text := range tabs {
+		specs = append(specs, barSpec{field: text, whole: guarded(func() tea.Cmd {
+			lv.focus = logFocusTabs
+			return m.setLogTab(logTab(i))
+		})})
 	}
+	specs = append(specs, barSpec{field: mode, id: "logmode", whole: guarded(func() tea.Cmd { m.openLogBarDropdown(); return nil })})
 	if lv.mode != logModeAll {
 		specs = append(specs, barSpec{field: date, whole: guarded(func() tea.Cmd {
 			lv.focus = logFocusDate

@@ -1,7 +1,6 @@
 // Package brave implements read-only access to the Brave Search API with one subscription key: LLM
-// Context, web, news, video, and image search today, and the other search endpoints of the same API as
-// further tools of this package.
-// tools of this package.
+// Context, web, news, video, and image search, rich results, and the places of the local index today, and
+// the other search endpoints of the same API as further tools of this package.
 //
 // A connection binds one API key, sent only in the X-Subscription-Token header, and takes no target: a key
 // reaches the endpoints of its plan, and the connection's effects and tools decide which of them an agent may
@@ -42,14 +41,19 @@ func operations() []capability.Operation {
 	return []capability.Operation{
 		{Descriptor: llmContext, Handler: handle("get llm context", prepareLLMContext)},
 		{Descriptor: newsSearch, Handler: handle("search news", prepareNewsSearch)},
+		{Descriptor: richGet, Handler: handle("get rich result", prepareRichGet)},
 		{Descriptor: webSearch, Handler: handle("search web", prepareWebSearch)},
 		{Descriptor: videosSearch, Handler: handle("search videos", prepareVideosSearch)},
 		{Descriptor: imagesSearch, Handler: handle("search images", prepareImagesSearch)},
+		{Descriptor: placesSearch, Handler: handle("search places", preparePlacesSearch)},
+		{Descriptor: poisGet, Handler: handle("get places", preparePOIs)},
+		{Descriptor: poiDescriptionsGet, Handler: handle("get place descriptions", preparePOIDescriptions)},
 	}
 }
 
 // searchTools are the tools of the search profile, the Search plan of Brave.
-var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID, videosSearch.ID, imagesSearch.ID}
+var searchTools = []string{llmContext.ID, newsSearch.ID, webSearch.ID, videosSearch.ID, imagesSearch.ID,
+	richGet.ID, placesSearch.ID, poisGet.ID, poiDescriptionsGet.ID}
 
 // probe is the smallest request that proves a key for one tool.
 type probe struct {
@@ -67,6 +71,8 @@ var probes = []probe{
 	{tool: webSearch.ID, path: webPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 	{tool: videosSearch.ID, path: videosPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 	{tool: imagesSearch.ID, path: imagesPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
+	// The place endpoints that take ids cannot be probed: an id is only known from a search.
+	{tool: placesSearch.ID, path: placesPath, query: url.Values{"q": {"brave"}, "count": {"1"}}},
 }
 
 // probeFor returns the probe of the first tool the connection offers: by its tools list when it has one,
@@ -128,7 +134,7 @@ func noTarget(string) error {
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Brave Search", DefaultBaseURL: apiRoot,
-		Description:    "Web, news, and AI-grounding search through the Brave Search API with a subscription key",
+		Description:    "Web, news, local, and AI-grounding search through the Brave Search API with a subscription key",
 		DefaultEffects: []config.Effect{config.EffectRead},
 		ValidateBaseURL: func(raw string) error {
 			if !isAPIRoot(raw) {
@@ -150,7 +156,7 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "search", Title: "Search", Recommended: true,
-			Description: "searches the web for agents and for people and searches news, videos, and images with " +
+			Description: "searches the web for agents and for people and searches news, videos, images, and places with " +
 				"the Search plan of Brave; every request is billed and nothing is changed",
 			Tools: searchTools,
 		}},

@@ -139,14 +139,14 @@ func TestDropdownReadsWithoutColour(t *testing.T) {
 	}
 }
 
-// Activity: enter opens the list of the mode and the view, the date keeps its dialog, and a click on a filter
-// field opens its picker.
+// Activity: enter opens the list of the mode, the tabs change with left and right, the date keeps its dialog, and
+// a click on a filter field opens its picker.
 func TestActivityDropdowns(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("mcp", "codex", "wiki.pages.get", "wiki", "success")
 	m := f.model(true, f.localToday())
 
-	press(t, m, "tab", "right")
+	press(t, m, "tab", "tab", "right")
 	if m.dd != nil || m.logs.mode != logModeRange {
 		t.Fatalf("right on Mode: open %v mode %v", m.dd != nil, m.logs.mode)
 	}
@@ -162,13 +162,9 @@ func TestActivityDropdowns(t *testing.T) {
 	if m.dd != nil || m.logs.mode != logModeAll {
 		t.Fatalf("enter did not take All: mode %v", m.logs.mode)
 	}
-	press(t, m, "tab", "enter")
-	if m.dd == nil || m.logs.focus != logFocusView {
-		t.Fatalf("enter on View did not open its list")
-	}
-	press(t, m, "down", "enter")
-	if !m.logs.heat {
-		t.Error("the heatmap was not chosen")
+	press(t, m, "shift+tab", "right")
+	if m.dd != nil || m.logs.focus != logFocusTabs || !m.logs.heat {
+		t.Error("right on the tabs did not show the heatmap")
 	}
 
 	clickOn(t, m, "Client: all")

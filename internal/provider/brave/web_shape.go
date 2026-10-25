@@ -59,25 +59,15 @@ var (
 	reviewShape  = object(p("title", title), p("description", body), p("date", short), p("rating", ratingShape),
 		p("author", thingShape), p("review_url", addr), p("language", short))
 
+	webReviewsShape = object(p("results", list(reviewShape)), p("viewMoreUrl", addr),
+		p("reviews_in_foreign_language", boolean))
 	// placeProps are the members of a place, a location in a result and an entry of locations alike.
-	placeProps = join(pageProps, []prop{p("type", short), p("provider_url", addr), p("coordinates", anyJSON),
-		p("zoom_level", integer), p("thumbnail", thumbnailShape),
-		p("postal_address", object(p("type", short), p("country", short), p("postalCode", short),
-			p("streetAddress", title), p("addressRegion", title), p("addressLocality", title),
-			p("displayAddress", title))),
-		p("opening_hours", object(
-			p("current_day", list(object(p("abbr_name", short), p("full_name", short), p("opens", short),
-				p("closes", short)))), p("days", anyJSON))),
-		p("contact", object(p("email", short), p("telephone", short))), p("price_range", short),
-		p("rating", ratingShape), p("distance", object(p("value", decimal), p("units", short))),
-		p("profiles", list(object(p("type", short), p("name", title), p("url", addr), p("long_name", title),
-			p("img", addr)))),
-		p("reviews", object(p("results", list(reviewShape)), p("viewMoreUrl", addr),
-			p("reviews_in_foreign_language", boolean))),
-		p("pictures", object(p("viewMoreUrl", addr), p("results", list(pictureShape)))),
-		p("action", object(p("type", short), p("url", addr))), p("serves_cuisine", list(short)),
-		p("categories", list(short)), p("icon_category", short), p("timezone", short),
-		p("timezone_offset", integer)})
+	placeProps = placeMembers(webReviewsShape)
+
+	postalAddressShape = object(p("type", short), p("country", short), p("postalCode", short),
+		p("streetAddress", title), p("addressRegion", title), p("addressLocality", title),
+		p("displayAddress", title))
+	distanceShape = object(p("value", decimal), p("units", short))
 	locationShape = object(join(placeProps, []prop{p("id", short), p("results", list(object(
 		join(pageProps, []prop{p("meta_url", metaURLShape)})...)))})...)
 
@@ -179,3 +169,21 @@ var (
 		p("rich", object(p("type", short), p("hint", object(p("vertical", short), p("callback_key", short))))),
 	)
 )
+
+// placeMembers returns the members of a place; the endpoints differ only in how far they show the reviews.
+func placeMembers(reviews *shape) []prop {
+	return join(pageProps, []prop{p("type", short), p("provider_url", addr), p("coordinates", anyJSON),
+		p("zoom_level", integer), p("thumbnail", thumbnailShape), p("postal_address", postalAddressShape),
+		p("opening_hours", object(
+			p("current_day", list(object(p("abbr_name", short), p("full_name", short), p("opens", short),
+				p("closes", short)))), p("days", anyJSON))),
+		p("contact", object(p("email", short), p("telephone", short))), p("price_range", short),
+		p("rating", ratingShape), p("distance", distanceShape),
+		p("profiles", list(object(p("type", short), p("name", title), p("url", addr), p("long_name", title),
+			p("img", addr)))),
+		p("reviews", reviews),
+		p("pictures", object(p("viewMoreUrl", addr), p("results", list(pictureShape)))),
+		p("action", object(p("type", short), p("url", addr))), p("serves_cuisine", list(short)),
+		p("categories", list(short)), p("icon_category", short), p("timezone", short),
+		p("timezone_offset", integer)})
+}

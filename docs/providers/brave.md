@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context, News, Web Search, Videos, and Images tools.
+  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context, News, Web Search, Videos, Images, Rich, Place Search, Place Details, and Place Descriptions tools.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -10,9 +10,9 @@ updated: 2026-10-25
 # Brave Search
 
 Brave Search is a provider for the Brave Search API with one subscription key. It reads the web for agents
-(LLM Context), the web for people (Web Search), news, videos, and images. It changes nothing: every tool is
-a read, and the connection takes no target, because a key reaches the endpoints of its plan and not a part
-of an account.
+(LLM Context), the web for people (Web Search), news, videos, images, places, and the real-time rich results
+that a web search announces. It changes nothing: every tool is a read, and the connection takes no target,
+because a key reaches the endpoints of its plan and not a part of an account.
 
 ## Configuration
 
@@ -46,7 +46,9 @@ the endpoints of the plans on its account. Brave offers no way to ask which plan
 cannot hide an endpoint the key lacks: a call to it ends with `permission` or `not-found`.
 
 The profile `search` is the Search plan: `brave.llm-context.get`, `brave.news.search`, `brave.web.search`,
-`brave.videos.search`, and `brave.images.search`. It is the recommended profile.
+`brave.videos.search`, `brave.images.search`, `brave.rich.get`, `brave.places.search`, `brave.pois.get`, and
+`brave.poi-descriptions.get`. It is the recommended profile. Brave names the plan only for Place Search;
+whether a key reaches the other two place endpoints is shown by the call.
 
 Qatlas manages no subscription, payment, or key.
 
@@ -54,7 +56,8 @@ Qatlas manages no subscription, payment, or key.
 
 Brave bills every successful request to the key's plan. Qatlas never repeats a request on its own, so one
 tool call is at most one billed request. Each tool description says so. Current prices are on the Brave
-pricing page.
+pricing page. Brave names no plan or price for `brave.pois.get` and `brave.poi-descriptions.get`; their
+descriptions say so.
 
 ## Rate limits and quota
 
@@ -74,15 +77,16 @@ and is not read.
 ## Connection test
 
 `qatlas connection test` sends one real request to the cheapest endpoint the connection offers: News with
-`q=brave` and `count=1`, otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, or Images with
-`count=1`, whichever tool the connection allows first.
+`q=brave` and `count=1`, otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, Images, or Place Search
+(`q=brave`) with `count=1`, whichever tool the connection allows first. The two endpoints that take place ids
+are not tested, because an id is known only from a search.
 Brave has no free key check, so the test spends one billed request. Success proves that the key is valid
 for that endpoint only; it shows neither the plan nor any other endpoint. A `422` is never taken as proof
 of a valid key, because Brave answers it for invalid parameters and for rejected keys alike.
 
 ## Goggles
 
-Every tool takes up to three goggles, which re-rank the results. A value is either an `https` address of a
+LLM Context, News, and Web Search take up to three goggles, which re-rank the results. A value is either an `https` address of a
 goggle hosted on a code host and registered with Brave, or the inline rules themselves. Brave fetches a
 hosted address; Qatlas never does. Qatlas refuses other schemes, user information in an address, control
 characters outside inline rules, and values over 2048 characters.
@@ -124,8 +128,8 @@ and claim neither. An unreadable, oversized (over 4 MB), or non-JSON answer is `
 
 ## Boundary
 
-The provider reaches only the five endpoints below. It offers no passthrough of method, path, header, or
-body. Not offered: Place Search, Answers, Suggest, and Spellcheck.
+The provider reaches only the nine endpoints below. It offers no passthrough of method, path, header, or
+body. Not offered: Answers, Suggest, and Spellcheck.
 
 Left out on purpose:
 
@@ -191,8 +195,8 @@ needs the Search plan, as does `enable_rich_callback`.
   without the signal ends the list. Consecutive pages may overlap. A cursor is also bound to the location,
   `timezone`, and every filter.
 - `text_decorations` is sent as `false` unless set, because Brave marks highlights in snippets by default.
-- `summary` sends `summary=1` and yields `summarizer.key` and `query.summary_key`; `enable_rich_callback`
-  yields `rich.hint.callback_key`. No tool uses either key yet.
+- `summary` sends `summary=1` and yields `summarizer.key` and `query.summary_key`, which no tool uses;
+  `enable_rich_callback` yields `rich.hint.callback_key`, which `brave.rich.get` reads.
 - The location arguments become the `X-Loc-*` headers. `timezone` (an IANA name such as `Europe/Berlin`,
   checked by its shape, not against a zone database) becomes `X-Loc-Timezone` and exists only here.
   `locations.results[].id` identifies a place for the points-of-interest endpoints.
@@ -227,3 +231,74 @@ no `cursor`, and no `ui_lang`.
 - `thumbnail.src` and `properties.placeholder` are addresses served by Brave's image proxy, and
   `properties.url` is the original address. All are bounded text; Qatlas fetches no image and returns no
   binary content. `confidence` is passed as Brave names it, and `extra.might_be_offensive` is passed on.
+
+## brave.rich.get
+
+`GET /res/v1/web/rich`. It returns the real-time result that `brave.web.search` announces with
+`enable_rich_callback` in `rich.hint.callback_key`. The Search plan is needed, and every request is billed.
+
+- `callback_key` is a key, not an address: 1 to 128 letters, digits, underscores, or hyphens, checked
+  before the API key is read. Brave documents neither the form nor the lifetime of the key, so Qatlas reads
+  the form narrowly and cannot say how long a key lasts. An expired or unknown key ends with the error
+  class of the status Brave gives, see Errors.
+- The answer keeps Brave's members: `type`, `results`, and `response_callback_info`. A result has `type`,
+  `subtype` (the vertical), `provider`, `language`, and the object of its vertical: `calculator`,
+  `cryptocurrency`, `currency`, `definitions`, `formula1`, `news`, `packagetracker`, `american_football`,
+  `football`, `baseball`, `basketball`, `ice_hockey`, `cricket`, `stock`, `unitconversion`,
+  `unixtimestamp`, or `weather`. Every member the reference documents for them is shown.
+  `callback_status` is `success` or `failure`; a failed callback is a normal answer with no result.
+- Lists are cut at 100 entries and the time series of cryptocurrency and currency at 500. No other
+  limit differs from Web Search.
+- The reference does not type some members. They are shown as bounded JSON, cut as for Web Search:
+  `calculator.answer`, `cryptocurrency.amount`, the entries of every `ts_*` time series, the `distance` of
+  Formula 1 races, `news.articles[].bo_debug`, `football.content.statistics[].home` and `.away`,
+  `football.content.aggregate_score.scores`, the `id` of leagues, games, and teams of every sport, and
+  `cricket.content.games[].score.home` and `.away`. The reference types the `content` of the sports and the
+  `conversion` of Unix time as any but lists their members; they are shown as objects with those members.
+- No member of the reference is left out.
+- Brave takes the data from third parties that require attribution when the data is shown: Wordnik
+  (definitions), FMP (stock), Fixer (currency), CoinGecko (cryptocurrency), OpenWeatherMap (weather), Stats
+  Perform (American football, cricket), and API Sports (baseball, basketball, football, ice hockey,
+  Formula 1). Qatlas shows no attribution; whoever shows the data owns that duty, as a limit on reusing it.
+
+## brave.places.search
+
+`GET /res/v1/local/place_search`. It returns places in one answer, up to 100 (`count`), with no paging.
+Brave names the Search plan for it. The answer has the groups `results`, `cities`, `countries`, `regions`,
+`neighborhoods`, `addresses`, `streets` (with `pois` and `pois_nearby`), `mixed`, `location`, and `query`.
+
+- The area is given by `latitude` with `longitude`, which must come together, or by `location`, a name such
+  as `tokyo japan`; both together are refused. Neither is needed: without them the search is global.
+  Qatlas never derives a position. `radius` is a bias in meters, not a limit.
+- `q` is optional and takes at most 400 characters and 50 words. Without it Brave returns general places of
+  the area.
+- `geoloc` is `<latitude>x<longitude>` such as `52.52x13.405`, checked for form and range. It only serves the
+  distance values and does not select the area.
+- `safesearch` is `strict` and `units` `metric` when omitted.
+- A place `id` expires after about 8 hours. Qatlas does not store ids. They feed `brave.pois.get` and
+  `brave.poi-descriptions.get`.
+- Lists are cut at 20 entries, except `results` at 100 and `mixed` at 200. The reviews of a place are cut
+  to 10, each at 1000 characters. `coordinates` and `opening_hours.days` are bounded JSON as for the web
+  search.
+
+## brave.pois.get
+
+`GET /res/v1/local/pois`. It returns the details of places by id: the members of a place of the place
+search plus `reviews`, `pictures`, `action`, `icon_category`, and `timezone_offset`.
+
+- `ids` takes 1 through 20 different ids and sends each as a repeated `ids` parameter. An id is letters,
+  digits, `-`, `_`, and trailing `=`, up to 128 characters before the padding. Ids come from
+  `brave.places.search` or from `locations.results[].id` of `brave.web.search`, and expire after about 8
+  hours.
+- `latitude` with `longitude`, together or not at all, becomes `X-Loc-Lat` and `X-Loc-Long`. Brave
+  documents no `radius`, `count`, `country`, or `safesearch` here.
+- Brave names neither plan nor price for this endpoint. Reviews and the other limits are as for Place
+  Search.
+
+## brave.poi-descriptions.get
+
+`GET /res/v1/local/descriptions`. It returns one description per id, written by Brave's AI and so not
+necessarily right.
+
+- `ids` is as for `brave.pois.get`. Brave names neither plan nor price. A description is cut at 1500
+  characters.
