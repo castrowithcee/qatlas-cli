@@ -163,6 +163,9 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterTargetBrowser(Provider, targetBrowser()); err != nil {
 		return err
 	}
+	if err := reg.Register(Provider, globalSetOperations()...); err != nil {
+		return err
+	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: versionGet, Handler: capability.Handler(invokeVersionGet)},
 		capability.Operation{Descriptor: sitesList, Handler: capability.Handler(invokeSitesList)},
@@ -218,5 +221,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: globalSettingsGet, Handler: capability.Handler(invokeGlobalSettingsGet)},
 		capability.Operation{Descriptor: referenceDataList, Handler: capability.Handler(invokeReferenceDataList)},
 		capability.Operation{Descriptor: ipRangesExpand, Handler: capability.Handler(invokeIPRangesExpand)},
+		capability.Operation{Descriptor: usersList, Handler: capability.Handler(invokeUsersList)},
+		capability.Operation{Descriptor: usersGet, Handler: capability.Handler(invokeUsersGet)},
+		capability.Operation{Descriptor: usersGetAccess, Handler: capability.Handler(invokeUsersGetAccess)},
+		capability.Operation{Descriptor: rolesList, Handler: capability.Handler(invokeRolesList)},
 	)
 }
