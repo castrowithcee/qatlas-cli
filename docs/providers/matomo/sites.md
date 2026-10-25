@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo version and website tools: instance version and plugin activation, websites inside the targets, tracking code, website settings, consent manager detection, and website groups.
+  Describes the Matomo version and website tools: instance version and plugin activation, websites inside the targets, tracking code, tracking failures, opt-out code, website settings, consent manager detection, and website groups.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -30,6 +30,31 @@ code stays HTML-encoded as Matomo returns it. `piwikUrl` is only written into th
 without user information, query, or fragment, at most 2048 characters. Without it the JavaScript tag uses the address
 Matomo knows for itself and the image code the connection's base URL (Matomo adds the scheme itself, so the address
 goes without one).
+
+## Tracking failures
+
+`matomo.tracking-failures.list` calls `CoreAdminHome.getTrackingFailures` and needs an admin right. Matomo answers for
+every website the token administers, and for a Super User also for websites that do not exist, so Qatlas drops the rows
+outside the connection's website targets before paging; an optional `idSite` narrows the list further. The request text
+and the address come from visitors or attackers: they are untrusted, cut at 2048 characters, and never fetched, and the
+request text can hold personal data, so the tool is in the `live` profile rather than `read`.
+
+`matomo.tracking-failures.delete` removes the failure `idFailure` of one `idSite`, checked against the targets before
+any secret is read; the ID counts per website. `matomo.tracking-failures.delete-all` takes no website, because the
+Matomo method acts on the whole token: a Super User clears the entire table, any other admin every administered
+website. It therefore needs a connection whose targets name `instance` and is offered only where the `tools` list names
+it. Both send one request and never repeat it; an unclear result is read back with `matomo.tracking-failures.list`.
+
+## Opt-out code
+
+`matomo.opt-out-code.get` takes `kind`: `js` calls `CoreAdminHome.getOptOutJSEmbedCode` and `self-contained` calls
+`CoreAdminHome.getOptOutSelfContainedEmbedCode`. Matomo checks no right and no website for either, so the tool is offered
+to connections that reach websites and is in the `read` profile. The result is untrusted text for a person to review,
+cut at 65536 bytes (`truncated`), and never run. Colors, size, and font are applied only with `applyStyling` and are
+refused unless they fit a narrow form without quotes, semicolons, or brackets, narrower than Matomo's own check,
+because Matomo writes them unescaped into the code. `matomoUrl` and `language` belong to `js` only, `cookiePath`,
+`cookieDomain`, and `cookieSameSite` to `self-contained` only. `matomoUrl` follows the rules of `piwikUrl` above and
+defaults to the connection's base URL. The self-contained code always speaks the language of the token's user.
 
 ## Website settings
 
