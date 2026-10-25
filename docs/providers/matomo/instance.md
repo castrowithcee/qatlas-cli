@@ -25,16 +25,18 @@ inside the connection's targets; for other sections it is refused. Lists are com
 bytes.
 Matomo answers `false` for a list that was never set; the tool returns an empty text.
 
-`matomo.global-settings.set-excluded-ips`, `-user-agents`, `-referrers`, and `-query-parameters` replace one global
-exclusion for every website of the instance, including websites outside the connection's website targets. Each needs
-Super User rights and a connection whose targets name `instance`, is in no profile, and sends one request that is never
-repeated. A list is sent whole and an empty list clears it, so read the current one first. Matomo trims entries and
-drops empty ones; Qatlas refuses entries Matomo would split or misread (commas, control characters) and checks IP
-entries as addresses, CIDR ranges, or IPv4 with trailing `*` octets, which is narrower than Matomo's own check.
-`-query-parameters` calls `SitesManager.setGlobalQueryParamExclusion`: the type `custom` takes the list, the Matomo
-types take none. A privacy policy of the instance can make Matomo keep the old type while it answers success.
-`SitesManager.setGlobalExcludedQueryParameters` is deprecated and not used. The other global settings cannot be
-written through this group.
+The eight `matomo.global-settings.set-*` tools replace one global default for every website of the instance, including
+websites outside the connection's website targets. Each needs Super User rights and a connection whose targets name
+`instance`, is in no profile, and sends one request that is never repeated. A list is sent whole and an empty list
+clears it, so read the current value first. Matomo trims entries and drops empty ones; Qatlas refuses entries Matomo
+would split or misread (commas, control characters) and checks IP entries as addresses, CIDR ranges, or IPv4 with
+trailing `*` octets, which is narrower than Matomo's own check.
+`-excluded-query-parameters` calls `SitesManager.setGlobalQueryParamExclusion`: the type `custom` takes the list, the
+Matomo types take none. A privacy policy of the instance can make Matomo keep the old type while it answers success.
+`SitesManager.setGlobalExcludedQueryParameters` is deprecated and not used.
+`-search-parameters` sends both the keyword and the category list. `-default-currency` takes three capital letters and
+`-default-timezone` takes text without spaces; Matomo checks both against its own lists, which
+`matomo.reference-data.list` shows, and a rejected value ends as an error.
 
 ## Reference data
 
