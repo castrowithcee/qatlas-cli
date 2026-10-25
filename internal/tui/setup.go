@@ -358,14 +358,18 @@ func (m *Model) setupDraft(upto int) (manage.ConnectionDraft, manage.ConnectionS
 			} else {
 				plan.secrets = map[string]string{}
 			}
-			// The first empty row is held back, so the core finds its role missing; any later one is handed on
-			// as typed.
+			// The first empty row of a required role is held back, so the core finds its role missing; any
+			// later one is handed on as typed. An empty optional row is left out, of the summary too: nothing is
+			// missing there.
 			held := false
 			for _, f := range page {
 				if f.hidden || (f.kind != fieldEnvName && f.kind != fieldMasked) {
 					continue
 				}
 				value := f.value()
+				if value == "" && m.cfg.SecretRoleOptional(w.provider, f.label) {
+					continue
+				}
 				plan.roles = append(plan.roles, f.label)
 				if value == "" && !held {
 					held = true

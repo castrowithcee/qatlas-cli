@@ -53,6 +53,8 @@ const (
 	SourcePlaintext Source = "plaintext file"
 	SourceVault     Source = "vault"
 	SourceMissing   Source = "missing"
+	// SourceNotSet is an optional role every stage answered for without a value (see ResolveOptional).
+	SourceNotSet Source = "not set"
 )
 
 // Value is a resolved secret together with the stage that produced it and the stages that were tried
@@ -81,6 +83,9 @@ type MissingSecretError struct {
 	Type       string
 	Checked    []string
 	Err        error
+	// absent is whether every stage answered that it holds nothing, as opposed to a stage that could not be
+	// asked and may hold the value; only then is an optional role simply not set (see ResolveOptional).
+	absent bool
 }
 
 func (e *MissingSecretError) Error() string {
@@ -532,7 +537,7 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	// to a file would let something local answer for a variable that is simply not set, which is exactly
 	// the CI and headless case this type exists for.
 	if cred.Type == config.CredentialTypeEnv {
-		return Value{}, missing(credential, cred, role, checked, nil)
+		return Value{}, absent(missing(credential, cred, role, checked, nil))
 	}
 
 	// A vault credential is resolved from the vault alone: it never falls through to the system keyring or
@@ -548,17 +553,23 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 			return Value{}, err
 		case err != nil:
 			checked = append(checked, stage(SourceVault, "unavailable"))
+			if errors.Is(err, errNoVault) {
+				// A resolver built without a vault, such as one whose values stand in for the whole cascade,
+				// has nothing that could hold the value.
+				return Value{}, absent(missing(credential, cred, role, checked, err))
+			}
 			return Value{}, missing(credential, cred, role, checked, err)
 		case found:
 			return r.deliver(value, SourceVault, checked), nil
 		default:
 			checked = append(checked, stage(SourceVault, "no entry"))
-			return Value{}, missing(credential, cred, role, checked, nil)
+			return Value{}, absent(missing(credential, cred, role, checked, nil))
 		}
 	}
 
 	// A machine without a running secret service must not be a dead end, so an unreachable store is one
 	// more stage that did not deliver rather than a failure.
+	settled := true
 	switch value, state := r.fromStore(ctx, StoreKey(credential, role)); {
 	case state == StoreHolds && value != "":
 		return r.deliver(value, SourceStore, checked), nil
@@ -566,6 +577,9 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 		checked = append(checked, stage(SourceStore, string(StoreEmpty)))
 	default:
 		checked = append(checked, stage(SourceStore, string(state)))
+		// A store switched off holds nothing for this run by choice; a locked, unreachable or silent one
+		// may hold the value.
+		settled = state == StoreEmpty || state == StoreOff
 	}
 
 	value, err := r.fallback(credential, role)
@@ -585,11 +599,37 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 		// The refusal is actionable and names no content, so it is carried into the message and stays
 		// reachable for whoever classifies the error.
 		cause = tooOpen
+		settled = false
 	default:
 		checked = append(checked, stage(SourcePlaintext, "unreadable"))
+		settled = false
 	}
 
+	if settled {
+		return Value{}, absent(missing(credential, cred, role, checked, cause))
+	}
 	return Value{}, missing(credential, cred, role, checked, cause)
+}
+
+// ResolveOptional resolves a role its provider declares optional. found is false with a nil error when
+// every stage of the cascade answered that it holds no value: the role is simply not set for this
+// credential. A stage that could not be asked, such as a locked keyring or vault, an unreadable fallback
+// file, or a vault that has not approved the connection, is still an error, since it may hold the value. A
+// value found is registered with the redactor like that of any other role.
+func (r *Resolver) ResolveOptional(ctx context.Context, credential string, cred config.Credential,
+	role string) (value Value, found bool, err error) {
+	value, err = r.Resolve(ctx, credential, cred, role)
+	var missing *MissingSecretError
+	switch {
+	case errors.As(err, &missing) && missing.absent:
+		return Value{}, false, nil
+	case err != nil:
+		return Value{}, false, err
+	case value.Secret == "":
+		// A vault entry may hold an empty value; for an optional role that is a role without a value.
+		return Value{}, false, nil
+	}
+	return value, true, nil
 }
 
 // ForwardRef names one forward credential and its configuration entry: the reference a tool argument carries.
@@ -730,6 +770,9 @@ func (r *Resolver) storeAnswered() {
 	r.failed = StoreNotAsked
 }
 
+// errNoVault is what fromVault reports for a resolver built without WithVault.
+var errNoVault = errors.New("no vault is configured for this resolver")
+
 // fromVault asks the vault for one credential role. An encrypted vault locked in this process is asked of
 // its vault process first; only where none runs is it unlocked interactively. A resolver built without
 // WithVault reports the vault unavailable rather than reaching into a nil pointer, which is every test that
@@ -740,7 +783,7 @@ func (r *Resolver) storeAnswered() {
 // check. An unencrypted vault binds no connection.
 func (r *Resolver) fromVault(ctx context.Context, credential, role string) (string, bool, error) {
 	if r.vault == nil {
-		return "", false, errors.New("no vault is configured for this resolver")
+		return "", false, errNoVault
 	}
 	scope, bound := scopeFrom(ctx)
 	refused := &ApprovalRequiredError{Credential: credential}
@@ -853,10 +896,16 @@ func (r *Resolver) Usable(ctx context.Context, resolved *config.Resolved) error 
 	return nil
 }
 
-func missing(credential string, cred config.Credential, role string, checked []string, cause error) error {
+func missing(credential string, cred config.Credential, role string, checked []string, cause error) *MissingSecretError {
 	return &MissingSecretError{
 		Credential: credential, Role: role, Type: cred.Type, Checked: checked, Err: cause,
 	}
+}
+
+// absent marks a missing secret every stage answered for.
+func absent(err *MissingSecretError) error {
+	err.absent = true
+	return err
 }
 
 // Status reports which stage would deliver, without handing the value to the caller. A user interface asks
@@ -870,6 +919,22 @@ func (r *Resolver) Status(credential string, cred config.Credential, role string
 func (r *Resolver) StatusContext(ctx context.Context, credential string, cred config.Credential,
 	role string) (Source, []string) {
 	value, err := r.Resolve(ctx, credential, cred, role)
+	return statusOf(value, err)
+}
+
+// OptionalStatusContext is StatusContext for a role its provider declares optional: a role that is simply
+// not set reports SourceNotSet instead of SourceMissing.
+func (r *Resolver) OptionalStatusContext(ctx context.Context, credential string, cred config.Credential,
+	role string) (Source, []string) {
+	value, err := r.Resolve(ctx, credential, cred, role)
+	var missing *MissingSecretError
+	if errors.As(err, &missing) && missing.absent {
+		return SourceNotSet, missing.Checked
+	}
+	return statusOf(value, err)
+}
+
+func statusOf(value Value, err error) (Source, []string) {
 	var missing *MissingSecretError
 	if errors.As(err, &missing) {
 		return SourceMissing, missing.Checked

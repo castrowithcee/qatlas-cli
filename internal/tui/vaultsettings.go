@@ -157,6 +157,26 @@ func (m *Model) vaultStateText() string {
 	return string(state)
 }
 
+// vaultStateMark is the state row of the vault form as a status mark: the colour of the dot follows the state,
+// the word is the one vaultStateText gives.
+func (m *Model) vaultStateMark() string {
+	text := m.vaultStateText()
+	v := m.secrets.Vault()
+	if v == nil {
+		return statusMark(statusDim, text)
+	}
+	state, err := v.State()
+	switch {
+	case err != nil:
+		return statusMark(statusFail, text)
+	case state == vault.StateUnlocked:
+		return statusMark(statusOK, text)
+	case state == vault.StateLocked || state == vault.StateUnencrypted:
+		return statusMark(statusWarn, text)
+	}
+	return statusMark(statusDim, text)
+}
+
 // vaultStateWarning names the one state worth a person's attention, in the same words 'qatlas vault status'
 // uses, so the two never drift apart.
 func (m *Model) vaultStateWarning() string {

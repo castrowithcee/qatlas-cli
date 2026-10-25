@@ -273,6 +273,29 @@ func visualShots() []visualShot {
 			pump(t, m, "tab")
 			pump(t, m, "right")
 		}},
+		{"40-tokens", 150, 42, dark, term, false, func(t *testing.T, m *Model) { visualTokens(t, m) }},
+		{"41-approvals", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionApprovals)
+		}},
+		{"42-approval-detail", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			mustNoError(t, os.Chtimes("config.yaml", visualNow, visualNow))
+			openSectionByName(t, m, sectionApprovals)
+			pump(t, m, "enter")
+		}},
+		{"44-library-credentials", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionCredentials)
+		}},
+		{"45-settings-vault", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionVault) }},
+		{"46-help", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			press(t, m, "?")
+		}},
+		{"47-info", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionGeneral)
+			press(t, m, "i")
+		}},
+		{"48-library-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"49-library-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
 	}
 }
 
@@ -538,4 +561,17 @@ func visualSetupSummary(t *testing.T, m *Model) {
 			t.Fatalf("the setup stays on step %d:\n%s", before, screenOf(m))
 		}
 	}
+}
+
+// visualTokens opens the Tokens list over two demo tokens, one of them expired.
+func visualTokens(t *testing.T, m *Model) {
+	t.Helper()
+	v := m.secrets.Vault()
+	// Fixed dates far from any clock the editor reads, so the state of a token never depends on today.
+	past, future := time.Date(2000, time.January, 2, 3, 4, 0, 0, time.UTC), time.Date(2099, time.January, 2, 3, 4, 0, 0, time.UTC)
+	_, err := v.CreateToken("ci-agent", []string{"wiki-main", "code-planning"}, &future)
+	mustNoError(t, err)
+	_, err = v.CreateToken("old-agent", []string{"tasks-personal"}, &past)
+	mustNoError(t, err)
+	openSectionByName(t, m, sectionTokens)
 }

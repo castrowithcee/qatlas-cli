@@ -33,6 +33,10 @@ var (
 	timezonePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$`)
 )
 
+// timezoneSchema is the input schema of a time zone argument; checkTimezone checks the same again.
+const timezoneSchema = `{"type":"string","minLength":1,"maxLength":64,` +
+	`"pattern":"^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$","x-form":"IANA name such as Europe/Berlin"}`
+
 // webOutputSchema is the answer in Brave's member names, grouped by kind of result, with the paging
 // members of the provider.
 var webOutputSchema = `{"type":"object","properties":{` + webAnswerShape.propertiesSchema() +
@@ -56,8 +60,7 @@ var webSearch = descriptor("web", "search", "Search the Brave web",
 		enumSchema(webResultFilters)+`},"units":`+enumSchema(unitSystems)+`,"goggles":`+gogglesSchema+`,`+
 		`"extra_snippets":`+booleanSchema+`,"summary":`+booleanSchema+`,"enable_rich_callback":`+booleanSchema+`,`+
 		`"include_fetch_metadata":`+booleanSchema+`,"operators":`+booleanSchema+`,`+
-		`"timezone":{"type":"string","minLength":1,"maxLength":64,`+
-		`"pattern":"^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$","x-form":"IANA name such as Europe/Berlin"},`+
+		`"timezone":`+timezoneSchema+`,`+
 		locationInput+`,"no_cache":`+booleanSchema+`},"required":["q"],"additionalProperties":false}`,
 	json.RawMessage(webOutputSchema),
 	[]capability.Argument{

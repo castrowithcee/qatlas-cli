@@ -339,8 +339,8 @@ func IsInputError(err error) bool {
 }
 
 // NewCredential describes a credential to create. Only the saved configuration passed to CreateCredential
-// decides what is accepted: the provider's roles (see AcceptedRoles) are exactly the keys of Secrets or
-// EnvNames, none missing and none extra.
+// decides what is accepted: the keys of Secrets or EnvNames are the provider's roles (see AcceptedRoles),
+// none extra and none of its required ones missing; an optional role may be left out or empty.
 type NewCredential struct {
 	Name, Provider string
 	// Type is the storage: keyring, vault or env.
@@ -400,14 +400,16 @@ func (s *Service) CreateCredential(cfg *config.Config, rev config.Revision, n Ne
 		return res, &UnknownRoleError{Credential: n.Name, Role: extra[0], Provider: n.Provider, Accepted: roles}
 	}
 	for _, role := range roles {
-		if given[role] == "" {
+		if given[role] == "" && !cfg.SecretRoleOptional(n.Provider, role) {
 			return res, &MissingValueError{Role: role, Env: n.Type == config.CredentialTypeEnv}
 		}
 	}
 	if n.Type == config.CredentialTypeEnv {
 		cred.Values = make(map[string]string, len(roles))
 		for _, role := range roles {
-			cred.Values[role] = n.EnvNames[role]
+			if name := n.EnvNames[role]; name != "" {
+				cred.Values[role] = name
+			}
 		}
 	}
 
@@ -428,7 +430,8 @@ func (s *Service) CreateCredential(cfg *config.Config, rev config.Revision, n Ne
 		res.Warning = warning
 		return res, nil
 	}
-	warning, err := s.CommitSecrets(candidate, rev, n.Name, n.Type == config.CredentialTypeVault, roles, n.Secrets, n.Offer)
+	warning, err := s.CommitSecrets(candidate, rev, n.Name, n.Type == config.CredentialTypeVault, roles,
+		typedSecrets(n.Secrets), n.Offer)
 	if err != nil {
 		return CreatedCredential{}, err
 	}

@@ -59,10 +59,14 @@ func FormatEffects(permissions []Effect) string {
 	return strings.Join(values, ", ")
 }
 
-// SecretRole describes one provider-defined credential value without ever carrying that value.
+// SecretRole describes one provider-defined credential value without ever carrying that value. Optional
+// marks a role a credential may leave without a value: it is still a role of the provider, stored, resolved
+// and redacted like every other, but a connection is complete without it. The provider reads it with
+// secret.Resolver.ResolveOptional.
 type SecretRole struct {
 	Name        string
 	Description string
+	Optional    bool
 }
 
 // TargetMetadata describes the non-secret target bound to a connection. Validate, when set, checks the

@@ -116,7 +116,7 @@ type ConnectionCandidate struct {
 	NewService, NewCredential bool
 	// Storage is the credential type of a new credential, "" for a reused one.
 	Storage string
-	// Roles are the secret roles of a new credential, in ascending order.
+	// Roles are the secret roles of a new credential, in ascending order, optional ones included.
 	Roles []string
 }
 
@@ -126,14 +126,15 @@ func (c ConnectionCandidate) StoresSecrets() bool {
 	return c.NewCredential && c.Storage != config.CredentialTypeEnv
 }
 
-// MissingSecret is the first role of a new keyring or vault credential without a value, in role order, or
-// nil.
+// MissingSecret is the first required role of a new keyring or vault credential without a value, in role
+// order, or nil. An optional role may stay empty.
 func (c ConnectionCandidate) MissingSecret(secrets map[string]string) error {
 	if !c.StoresSecrets() {
 		return nil
 	}
+	provider := c.Config.Credentials[c.Credential].Provider
 	for _, role := range c.Roles {
-		if secrets[role] == "" {
+		if secrets[role] == "" && !c.Config.SecretRoleOptional(provider, role) {
 			return &RoleMissingError{Role: role}
 		}
 	}
@@ -202,7 +203,9 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 			if d.Storage == config.CredentialTypeEnv {
 				cred.Values = map[string]string{}
 				for _, role := range roles {
-					if value, ok := d.EnvNames[role]; ok {
+					// An optional role left empty names no variable; an empty required one is written so
+					// the validation refuses it.
+					if value, ok := d.EnvNames[role]; ok && (value != "" || !cand.Config.SecretRoleOptional(d.Provider, role)) {
 						cred.Values[role] = value
 					}
 				}
@@ -285,7 +288,7 @@ func (s *Service) SaveConnectionSetup(before *config.Config, c ConnectionCandida
 			return res, err
 		}
 		toVault := c.Storage == config.CredentialTypeVault
-		warning, err := s.CommitSecrets(c.Config, base, c.Credential, toVault, c.Roles, secrets, offer)
+		warning, err := s.CommitSecrets(c.Config, base, c.Credential, toVault, c.Roles, typedSecrets(secrets), offer)
 		if err != nil {
 			return res, err
 		}
@@ -321,4 +324,16 @@ func checkSetupProviders(before *config.Config, c ConnectionCandidate) error {
 		return &UnknownEntryError{KindCredential, conn.Credential, provider}
 	}
 	return nil
+}
+
+// typedSecrets is values without the roles left empty, so an optional role nobody typed is not stored as an
+// empty secret. A required role has been checked to carry one before.
+func typedSecrets(values map[string]string) map[string]string {
+	typed := make(map[string]string, len(values))
+	for role, value := range values {
+		if value != "" {
+			typed[role] = value
+		}
+	}
+	return typed
 }
