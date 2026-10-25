@@ -1,7 +1,7 @@
 // The activity heatmap: the days of the invocation log as a grid of weekdays by weeks, one cell per local day,
 // leveled by the number of invokes. The Logs section shows it for the rows its filters keep, the Overview as a
-// small grid of the latest weeks with the latest invokes. The counts come from invokelog.DailyActivity on the
-// lines the check read (invokelog.VerifyLines); nothing here reads a log file.
+// coloured grid of the latest weeks (heatmap.go) beside the latest invokes. The counts come from
+// invokelog.DailyActivity on the lines the check read (invokelog.VerifyLines); nothing here reads a log file.
 package tui
 
 import (
@@ -20,9 +20,9 @@ import (
 const (
 	// maxHeatWeeks bounds the weeks one grid spans, however long the chosen range is.
 	maxHeatWeeks = 53
-	// overviewHeatWeeks is the width of the Overview's grid; overviewRecent the invokes it lists.
+	// overviewHeatWeeks is the most weeks of the Overview's grid; overviewRecent the most invokes it lists.
 	overviewHeatWeeks = 12
-	overviewRecent    = 5
+	overviewRecent    = 10
 )
 
 // heatGlyphs are the cells of a grid. Every state has a glyph of its own, so the colour only repeats what
@@ -80,6 +80,20 @@ func heatMonthNames() []string   { return strings.Split(tr(tHeatMonths), ",") }
 // heatWeekdays are the English names of the weekdays, which the catalog holds.
 var heatWeekdays = strings.Split(textEN[tHeatWeekdays], ",")
 
+// heatWeeks keeps the latest days of days that fill at most weeks Monday-first weeks. It returns them with the
+// weekday row of the first kept day and the number of weeks they span.
+func heatWeeks(days []invokelog.DayActivity, weeks int) (kept []invokelog.DayActivity, offset, total int) {
+	first, _ := time.ParseInLocation(invokelog.DateLayout, days[0].Date, time.Local)
+	offset = (int(first.Weekday()) + 6) % 7
+	total = (offset + len(days) + 6) / 7
+	if total > weeks {
+		// Drop the oldest weeks: the days before the Monday of the first week kept.
+		skip := (total-weeks)*7 - offset
+		return days[skip:], 0, weeks
+	}
+	return days, offset, total
+}
+
 // heatGrid draws days (consecutive local days) as seven weekday rows of weeks, Monday first, behind a month
 // header when months is set, at most as wide as width. It keeps the latest weeks that fit and returns the days
 // it drew. A day after today has no cell.
@@ -92,16 +106,7 @@ func heatGrid(days []invokelog.DayActivity, today, retentionStart string, width,
 	if weeks < 1 {
 		return nil, nil
 	}
-	first, _ := time.ParseInLocation(invokelog.DateLayout, days[0].Date, time.Local)
-	offset := (int(first.Weekday()) + 6) % 7
-	total := (offset + len(days) + 6) / 7
-	if total > weeks {
-		// Drop the oldest weeks: the days before the Monday of the first week kept.
-		skip := (total-weeks)*7 - offset
-		days = days[skip:]
-		offset = 0
-		total = weeks
-	}
+	days, offset, total := heatWeeks(days, weeks)
 	levels := invokelog.ActivityLevel(days)
 	g := heatGlyphSet()
 	weekdays, monthNames := heatWeekdayNames(), heatMonthNames()
@@ -246,6 +251,16 @@ type overviewActivity struct {
 	recent []invokelog.Entry
 }
 
+// hasActivity reports whether the log read holds a call, or an entry the check flagged, in the days shown.
+func (a overviewActivity) hasActivity() bool {
+	for _, d := range a.days {
+		if d.Calls > 0 || d.Altered || d.Gap {
+			return true
+		}
+	}
+	return a.loaded && len(a.recent) > 0
+}
+
 // overviewActivityMsg carries the Overview's activity back into the event loop.
 type overviewActivityMsg struct {
 	days   []invokelog.DayActivity
@@ -282,42 +297,4 @@ func (m *Model) loadOverviewActivity() tea.Cmd {
 
 func (m *Model) handleOverviewActivity(msg overviewActivityMsg) {
 	m.overviewAct = overviewActivity{loaded: true, days: msg.days, recent: msg.recent}
-}
-
-// overviewActivityLines are the grid and the latest invokes for room lines; each part comes whole or not at
-// all, the grid first.
-func (m *Model) overviewActivityLines(room, width int) []string {
-	act := m.overviewAct
-	if !act.loaded || len(act.days) == 0 {
-		return nil
-	}
-	now := m.timeNow()
-	grid, drawn := heatGrid(act.days, localDay(now), m.retentionStart(now), width, overviewHeatWeeks, false)
-	var lines []string
-	if len(grid) > 0 && room >= len(grid)+2 {
-		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewActivity))+"  "+heatTotals(drawn))
-		for _, line := range grid {
-			lines = append(lines, "  "+line)
-		}
-		g := heatGlyphSet()
-		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewLess)+g.zero+strings.Join(g.levels[:], "")+tr(tOverviewMore)))
-		room -= len(grid) + 2
-	}
-	if len(act.recent) > 0 && room >= 2 {
-		lines = append(lines, "  "+styles.hint.Render(tr(tOverviewLatestCalls)))
-		for _, e := range act.recent[:min(len(act.recent), room-1)] {
-			lines = append(lines, "  "+truncateCells(m.recentCallText(e), width))
-		}
-	}
-	return lines
-}
-
-// recentCallText is one latest invoke: time, tool, connection, result, and duration.
-func (m *Model) recentCallText(e invokelog.Entry) string {
-	result := orDash(m.logText(e.Result))
-	if e.Result == "success" {
-		result = "ok"
-	}
-	return fmt.Sprintf("%s  %s  %s  %s  %s", logTableTime(e.Time, true), orDash(m.logText(e.Operation)),
-		orDash(m.logText(e.Connection)), result, formatDuration(e.DurationMS))
 }

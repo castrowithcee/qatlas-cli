@@ -414,15 +414,15 @@ func (m *Model) clickListRow(i int) tea.Cmd {
 	return m.press(tea.KeyMsg{Type: tea.KeyEnter})
 }
 
-// hitOverview makes the selectable lines of the Overview clickable.
+// hitOverview makes the selectable items of the Overview, its cards and lines, clickable.
 func (m *Model) hitOverview() {
 	top := m.workspaceTop()
-	for i, line := range m.overviewRowLines {
-		m.addHit(0, top+line, m.usable(0), top+line+1, func() tea.Cmd { return m.clickOverview(i) })
+	for i, h := range m.overviewHits {
+		m.addHit(h.x0, top+h.y0, h.x1, top+h.y1, func() tea.Cmd { return m.clickOverview(i) })
 	}
 }
 
-// clickOverview is a click on a line of the Overview: it opens the area of the line, as enter does.
+// clickOverview is a click on an item of the Overview: it opens its area, as enter does.
 func (m *Model) clickOverview(i int) tea.Cmd {
 	switch m.screen {
 	case screenNav:
