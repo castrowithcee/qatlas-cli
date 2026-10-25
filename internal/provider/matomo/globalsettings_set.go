@@ -296,10 +296,11 @@ var globalListKinds = []globalListKind{
 }
 
 func globalSetOperations() []capability.Operation {
-	ops := make([]capability.Operation, 0, len(globalListKinds)+1)
+	ops := make([]capability.Operation, 0, len(globalListKinds)+1+len(globalDefaultKinds))
 	for _, kind := range globalListKinds {
 		ops = append(ops, capability.Operation{Descriptor: kind.descriptor, Handler: capability.Handler(kind.invoke)})
 	}
-	return append(ops, capability.Operation{Descriptor: globalSettingsSetExcludedQueryParameters,
+	ops = append(ops, capability.Operation{Descriptor: globalSettingsSetExcludedQueryParameters,
 		Handler: capability.Handler(invokeSetExcludedQueryParameters)})
+	return append(ops, globalDefaultOperations()...)
 }
