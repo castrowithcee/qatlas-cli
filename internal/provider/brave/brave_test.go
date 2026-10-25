@@ -218,7 +218,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search",
-		"brave.videos.search", "brave.web.search"}) {
+		"brave.rich.get", "brave.videos.search", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -234,7 +234,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search",
-			"brave.web.search", "brave.videos.search", "brave.images.search"}) {
+			"brave.web.search", "brave.videos.search", "brave.images.search", "brave.rich.get"}) {
 		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
 	}
 }
