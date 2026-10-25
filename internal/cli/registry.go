@@ -4,6 +4,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/baserow"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/brave"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/excalidrawplus"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/forge"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
@@ -87,6 +88,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := matomo.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := brave.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	// Rename tables and tool profiles name registered tools, so they are checked once every provider has

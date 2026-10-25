@@ -288,12 +288,12 @@ defaults:
 		// is, the note the configuration keeps on it, how many tools it offers, how many configured
 		// connections can run them, and how many are configured. A provider without a route is visible
 		// as exactly that.
-		if !strings.HasPrefix(stdout, "providers[21]{provider,description,note,tools,connections,configured}:\n") {
+		if !strings.HasPrefix(stdout, "providers[22]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		lines := strings.Split(strings.TrimSpace(stdout), "\n")[1:]
-		if len(lines) != 21 {
-			t.Errorf("%d provider rows, want 21:\n%s", len(lines), stdout)
+		if len(lines) != 22 {
+			t.Errorf("%d provider rows, want 22:\n%s", len(lines), stdout)
 		}
 		rows := map[string][3]string{}
 		for _, line := range lines {
