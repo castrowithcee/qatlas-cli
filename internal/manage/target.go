@@ -321,6 +321,8 @@ func (s *Service) draftSecrets(cfg *config.Config, newCredential bool,
 		switch {
 		case err != nil || state != vault.StateUnlocked:
 			return nil, &TargetChoiceError{Code: "vault-locked-here"}
+		case (!found || value == "") && cfg.SecretRoleOptional(resolved.Provider, role):
+			continue
 		case !found || value == "":
 			return nil, &TargetChoiceError{Code: "unsaved-secret"}
 		}

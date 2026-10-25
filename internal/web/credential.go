@@ -19,10 +19,17 @@ import (
 var errPassphraseMismatch = errors.New("the two passphrases did not match")
 
 // roleField is one secret role offered on the new-credential form, together with the provider's own
-// explanation of what it is for.
+// explanation of what it is for and whether it may stay empty.
 type roleField struct {
 	Name        string
 	Description string
+	Optional    bool
+}
+
+// roleFieldOf is the form row of one secret role of provider.
+func roleFieldOf(cfg *config.Config, provider, role string) roleField {
+	return roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(provider, role),
+		Optional: cfg.SecretRoleOptional(provider, role)}
 }
 
 // newCredentialData is what the new-credential template renders. Every field it shows back after a failed
@@ -48,6 +55,7 @@ type roleRow struct {
 	Description string
 	State       string
 	Replaceable bool
+	Optional    bool
 }
 
 // credentialData is what the existing-credential template renders.
@@ -159,7 +167,7 @@ func (s *Server) renderNewCredential(w http.ResponseWriter, cfg *config.Config, 
 	}
 	if selected != "" {
 		for _, role := range cfg.SecretRolesOf(selected) {
-			data.Roles = append(data.Roles, roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(selected, role)})
+			data.Roles = append(data.Roles, roleFieldOf(cfg, selected, role))
 		}
 	}
 	if fp, err := s.configFingerprint(); err == nil {
@@ -172,7 +180,7 @@ func (s *Server) renderNewCredential(w http.ResponseWriter, cfg *config.Config, 
 }
 
 // handleCreateCredential creates a credential with type keyring, vault, or env, and, for a keyring or vault
-// credential, every one of its provider's secret roles in the same commit as the credential entry itself,
+// credential, the secrets typed for its provider's roles in the same commit as the credential entry itself,
 // through manage.Service.CommitSecrets: the same boundary internal/tui's guided setup uses, so a store that turns out
 // to be locked or missing after some roles were written leaves neither a stray secret nor a stray
 // credential. An env credential only ever writes variable names, never a value, straight into the
@@ -316,7 +324,9 @@ func (s *Server) renderCredential(w http.ResponseWriter, cfg *config.Config, nam
 
 // roleRow reports where one secret role of an existing credential currently stands, never what it holds.
 func (s *Server) roleRow(cfg *config.Config, name string, cred config.Credential, role string) roleRow {
-	row := roleRow{Role: role, Description: cfg.SecretRoleDescriptionOf(manage.CredentialProvider(cfg, name, cred), role)}
+	provider := manage.CredentialProvider(cfg, name, cred)
+	row := roleRow{Role: role, Description: cfg.SecretRoleDescriptionOf(provider, role),
+		Optional: cfg.SecretRoleOptional(provider, role)}
 	switch cred.Type {
 	case config.CredentialTypeEnv:
 		if v := cred.Values[role]; v != "" {
@@ -484,7 +494,8 @@ const credentialTemplates = `
 
 {{range .Roles}}
 <fieldset class="field">
-<legend>{{.Name}}</legend>
+<legend>{{.Name}}{{if .Optional}} (optional){{end}}</legend>
+{{if .Optional}}<p class="hint">May stay empty.</p>{{end}}
 {{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
 <div class="field">
 <label for="secret-{{.Name}}">Secret value, if secrets are kept in the system keyring or the vault</label>
@@ -536,7 +547,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{$root := .}}
 {{range .Roles}}
 <tr>
-<td>{{.Role}}{{if .Description}}<br>{{.Description}}{{end}}</td>
+<td>{{.Role}}{{if .Optional}} (optional){{end}}{{if .Description}}<br>{{.Description}}{{end}}</td>
 <td>{{.State}}</td>
 <td>
 {{if .Replaceable}}
@@ -642,7 +653,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{$form := .Form}}
 {{range .Roles}}
 <div class="field">
-<label for="envname-{{.Name}}">{{.Name}} environment variable name, only used if a new credential keeps its secrets in environment variables</label>
+<label for="envname-{{.Name}}">{{.Name}}{{if .Optional}} (optional){{end}} environment variable name, only used if a new credential keeps its secrets in environment variables</label>
 <input id="envname-{{.Name}}" type="text" name="envname_{{.Name}}" value="{{index $form.EnvNames .Name}}" autocomplete="off">
 {{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
 {{if ne $form.CredStorage "env"}}<p class="hint">Its secret value, if kept in the system keyring or the vault, is typed on the next page.</p>{{end}}
@@ -788,7 +799,8 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{else}}
 {{range .Roles}}
 <fieldset class="field">
-<legend>{{.Name}}</legend>
+<legend>{{.Name}}{{if .Optional}} (optional){{end}}</legend>
+{{if .Optional}}<p class="hint">May stay empty.</p>{{end}}
 {{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
 <div class="field">
 <label for="secret-{{.Name}}">Secret value</label>
