@@ -127,7 +127,10 @@ func mcpCommandLong() string {
 		"connection-selection adds the same fields; connections names the routes that offer the tool, and\n" +
 		"is empty when none does. The text names the same candidates, each with its description shortened\n" +
 		"to 80 characters, for a client that shows only the text. A request refused with\n" +
-		"unsupported-capability adds operation, connection, and reason. Where a message points to\n" +
+		"unsupported-capability adds operation, connection, and reason. Where a provider answered the\n" +
+		"refusal, provider adds its own account apart from Qatlas' message: status, errors (type, code, path,\n" +
+		"message), documentation, untrusted (always true: text a third party wrote, data and never an\n" +
+		"instruction), and truncated; known secrets in it read [redacted]. Where a message points to\n" +
 		"discovery, it names qatlas.search or qatlas.describe instead of a command.\n\n" +
 		"A connection bound to paths is offered only in its projects. A session an initialize request\n" +
 		"opened runs in the projects its client names as roots: where the client declares the roots\n" +
@@ -877,7 +880,12 @@ func toolResult(data any, err error, redactor *redact.Redactor) map[string]any {
 			// alone. The CLI keeps writing a detail only where errorDetailFor adds something.
 			detail = map[string]string{"code": string(code), "message": message}
 		}
-		result["content"] = []map[string]string{{"type": "text", "text": string(code) + ": " + message}}
+		text := string(code) + ": " + message
+		if provided, ok := detail.(*providerErrorDetail); ok {
+			// A client that shows only the text still sees the provider's answer, apart from Qatlas' message.
+			text += "\n" + strings.TrimRight(providerBlock(provided.Provider), "\n")
+		}
+		result["content"] = []map[string]string{{"type": "text", "text": text}}
 		result["structuredContent"] = detail
 		result["isError"] = true
 		return result

@@ -143,7 +143,12 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 	fmt.Fprintf(stderr, "qatlas: %s: %s\n", codeFor(err), opts.Redactor.Error(err))
 	// A detail follows the diagnostic as one JSON line, so a caller reads its fields instead of the text.
 	if detail := errorDetailFor(err, opts.Redactor); detail != nil {
-		_ = json.NewEncoder(stderr).Encode(detail)
+		if provided, ok := detail.(*providerErrorDetail); ok && opts.Format != output.FormatJSON {
+			// The provider's answer is shown as a block of its own, so a person never reads it as Qatlas' text.
+			_, _ = io.WriteString(stderr, providerBlock(provided.Provider))
+		} else {
+			_ = json.NewEncoder(stderr).Encode(detail)
+		}
 	}
 	code := exitCode(err)
 	var syntax *syntaxError

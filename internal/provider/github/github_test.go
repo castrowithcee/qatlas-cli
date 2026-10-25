@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1701,6 +1702,61 @@ func TestProviderFailuresAreNormalized(t *testing.T) {
 			}
 			if strings.Contains(red.Error(err), tokenValue) || strings.Contains(err.Error(), tokenValue) {
 				t.Errorf("the error carries the token: %v", err)
+			}
+		})
+	}
+}
+
+// GitHub's own account of a refusal travels apart from Qatlas' message: GraphQL errors with type, code, path
+// and message, REST errors with status, message, listed errors, and documentation link.
+func TestFailuresCarryTheProvidersOwnAnswer(t *testing.T) {
+	tests := []struct {
+		name   string
+		answer func(w http.ResponseWriter)
+		want   provider.Original
+	}{
+		{"graphql scopes", func(w http.ResponseWriter) {
+			fmt.Fprint(w, `{"data":null,"errors":[{"type":"INSUFFICIENT_SCOPES","path":["node","items","name"],`+
+				`"message":"The 'name' field requires one of the following scopes: ['read:org'], but your token `+
+				`has only been granted the: ['repo'] scopes."}]}`)
+		}, provider.Original{Entries: []provider.OriginalEntry{{Type: "INSUFFICIENT_SCOPES", Path: "node.items.name",
+			Message: "The 'name' field requires one of the following scopes: ['read:org'], but your token has only " +
+				"been granted the: ['repo'] scopes."}}}},
+		{"graphql schema validation", func(w http.ResponseWriter) {
+			fmt.Fprint(w, `{"errors":[{"message":"Selections can't be made directly on unions","path":["query"],`+
+				`"extensions":{"code":"selectionMismatch"}}]}`)
+		}, provider.Original{Entries: []provider.OriginalEntry{{Code: "selectionMismatch", Path: "query",
+			Message: "Selections can't be made directly on unions"}}}},
+		{"rest validation", func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			fmt.Fprint(w, `{"message":"Validation Failed","errors":[{"resource":"Issue","field":"title",`+
+				`"code":"missing_field"},"plain"],"documentation_url":"https://docs.github.com/rest"}`)
+		}, provider.Original{Status: 422, Documentation: "https://docs.github.com/rest", Entries: []provider.OriginalEntry{
+			{Message: "Validation Failed"}, {Code: "missing_field", Path: "Issue.title"}, {Message: "plain"}}}},
+		{"rest text", func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusBadGateway)
+			fmt.Fprint(w, "upstream down")
+		}, provider.Original{Status: 502, Entries: []provider.OriginalEntry{{Message: "upstream down"}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakeGitHub{failure: func(w http.ResponseWriter, _ *http.Request) bool { tt.answer(w); return true }}
+			base := serve(t, f)
+			red := &redact.Redactor{}
+			c, err := open(context.Background(), resolvedConnection("gh", base, projectTarget), resolver(red, nil), red, freeLimiter())
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = c.ListItems(context.Background(), ItemListOptions{})
+			var failure *provider.Error
+			if !errors.As(err, &failure) || failure.Original == nil {
+				t.Fatalf("err = %v carries no original answer", err)
+			}
+			if !reflect.DeepEqual(*failure.Original, tt.want) {
+				t.Errorf("original = %+v, want %+v", *failure.Original, tt.want)
+			}
+			if strings.Contains(failure.Error(), "Validation Failed") || strings.Contains(failure.Error(), "requires one of") {
+				t.Errorf("Qatlas' message copies the provider text: %v", failure)
 			}
 		})
 	}
