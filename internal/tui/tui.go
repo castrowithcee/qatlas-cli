@@ -649,8 +649,8 @@ type Model struct {
 	// formTop and formLeft are where the rows of the form being drawn start; sectionListWidth is the width of
 	// the list of its sections, 0 where there is none.
 	formTop, formLeft, sectionListWidth int
-	// overviewRowLines are the lines of the Overview that hold its selectable items.
-	overviewRowLines []int
+	// overviewHits are the cells of the Overview that select each of its items, in the order of the items.
+	overviewHits []overviewHit
 	// logBarSpecs are the fields of the bar of the Logs screen as the last frame drew them.
 	logBarSpecs []barSpec
 	// updateText is what the update question says an installation does, set when it opens.

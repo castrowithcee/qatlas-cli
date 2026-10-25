@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -53,31 +54,52 @@ func TestEditorStartsOnTheOverview(t *testing.T) {
 	}
 }
 
-// The counts follow the configuration and the areas that hold them.
+// The counts follow the configuration and the areas that hold them; a card shows the label above the value.
 func TestOverviewCountsMatchTheAreas(t *testing.T) {
 	m, _, _ := newEnvModel2(t)
 	overviewModel(t, m)
-	view := strings.Join(strings.Fields(m.View()), " ")
-	for _, want := range []string{"Connections 0", "Services 0", "Credentials 0", "Tokens needs encrypted vault",
-		"Approvals needs encrypted vault"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the empty Overview does not show %q:\n%s", want, m.View())
-		}
+	for _, want := range []overviewItem{{label: "Connections", value: "0"}, {label: "Services", value: "0"},
+		{label: "Credentials", value: "0"}, {label: "Tokens", value: "needs encrypted vault", dim: true},
+		{label: "Approvals", value: "needs encrypted vault", dim: true}} {
+		assertCard(t, m, want)
 	}
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
 	addConnection(t, m, "personal", "wiki", "reader")
 	overviewModel(t, m)
-	view = strings.Join(strings.Fields(m.View()), " ")
-	for _, want := range []string{"Connections 1", "Services 1", "Credentials 1"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the Overview does not show %q:\n%s", want, m.View())
-		}
+	for _, want := range []overviewItem{{label: "Connections", value: "1"}, {label: "Services", value: "1"},
+		{label: "Credentials", value: "1"}} {
+		assertCard(t, m, want)
 	}
 	if len(m.cfg.Connections) != 1 || len(m.cfg.Services) != 1 || len(m.cfg.Credentials) != 1 {
 		t.Fatalf("configuration = %d connections, %d services, %d credentials", len(m.cfg.Connections),
 			len(m.cfg.Services), len(m.cfg.Credentials))
 	}
+}
+
+// assertCard checks the tile of the label and that the view shows its value on the line under its label.
+func assertCard(t *testing.T, m *Model, want overviewItem) {
+	t.Helper()
+	var got *overviewItem
+	for _, tile := range m.overviewTiles() {
+		if tile.label == want.label {
+			got = &tile
+		}
+	}
+	if got == nil || got.value != want.value || got.dim != want.dim {
+		t.Fatalf("tile %q = %+v, want value %q (dim %v)", want.label, got, want.value, want.dim)
+	}
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	for i, line := range lines {
+		at := strings.Index(line, "│ "+want.label+" ")
+		if at < 0 || i+1 >= len(lines) {
+			continue
+		}
+		if next := lines[i+1]; strings.HasPrefix(next[at:], "│ "+want.value) {
+			return
+		}
+	}
+	t.Errorf("no card %q over %q:\n%s", want.label, want.value, m.View())
 }
 
 // newEnvModel2 is newModel with the secrets the connection walk needs.
@@ -124,10 +146,9 @@ func TestOverviewNamesOpenApprovalsAndEnterOpensThem(t *testing.T) {
 	overviewModel(t, m)
 
 	view := strings.Join(strings.Fields(m.View()), " ")
-	for _, want := range []string{"Approvals 1", "open Access > Approvals (4)"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("the Overview does not show %q:\n%s", want, m.View())
-		}
+	assertCard(t, m, overviewItem{label: "Approvals", value: "1"})
+	if want := "open Access > Approvals (4)"; !strings.Contains(view, want) {
+		t.Fatalf("the Overview does not show %q:\n%s", want, m.View())
 	}
 	for _, label := range []string{"Approvals", "open Access"} {
 		overviewModel(t, m)
