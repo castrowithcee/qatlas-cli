@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -237,7 +238,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		metadata.DefaultBaseURL != "" || metadata.Target.Required || !metadata.Target.Multiple {
 		t.Fatalf("metadata = %+v", metadata)
 	}
+	// Listed-only reads are in no profile; a connection offers them only when its tools list names them.
+	listedReads := []string{"matomo.reports.evolution", "matomo.distinct-counts.get", "matomo.multi-sites.get",
+		"matomo.report-glossary.list"}
 	for _, tool := range metadata.Tools {
+		if slices.Contains(listedReads, tool.ID) {
+			if tool.Effect != config.EffectRead || !tool.RequiresToolAllowList {
+				t.Errorf("tool %+v, want a listed-only read", tool)
+			}
+			continue
+		}
 		changes := (strings.HasPrefix(tool.ID, "matomo.goals.") || strings.HasPrefix(tool.ID, "matomo.segments.") ||
 			strings.HasPrefix(tool.ID, "matomo.annotations.") || strings.HasPrefix(tool.ID, "matomo.dimensions.") ||
 			strings.HasPrefix(tool.ID, "matomo.goal-recommendations.") || strings.HasPrefix(tool.ID, "matomo.sites.") ||
@@ -250,7 +260,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 72 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 76 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
