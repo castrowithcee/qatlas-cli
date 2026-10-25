@@ -62,7 +62,6 @@ func unencryptedVaultModel(t *testing.T) *Model {
 // narrowWidth up, and its own row above it in a narrower terminal.
 func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 	for _, width := range []int{100, 60} {
-		narrow := width < narrowWidth
 		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
 			none, _, _ := newModel(t)
 			none.Update(tea.WindowSizeMsg{Width: width, Height: 30})
@@ -96,15 +95,12 @@ func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 					if !strings.Contains(joined, tt.want) {
 						t.Fatalf("header = %q, want it to contain %q", joined, tt.want)
 					}
+					// The header stays on one line while the path keeps its room beside the marks.
 					switch {
-					case narrow && len(lines) != 2:
-						t.Fatalf("narrow headerLines() = %d lines, want 2: %q", len(lines), lines)
-					case narrow && (!strings.Contains(lines[0], tt.want) || strings.Contains(lines[0], "Config:")):
-						t.Errorf("narrow line 1 = %q, want the vault state alone", lines[0])
-					case !narrow && len(lines) != 1:
-						t.Fatalf("wide headerLines() = %d lines, want 1: %q", len(lines), lines)
-					case !narrow && !strings.Contains(lines[0], "Config:"):
-						t.Errorf("wide header = %q, want the path still on the same line", lines[0])
+					case len(lines) != 1:
+						t.Fatalf("headerLines() = %d lines, want 1: %q", len(lines), lines)
+					case !strings.Contains(lines[0], "config.yaml"):
+						t.Errorf("header = %q, want the end of the path on the same line", lines[0])
 					}
 				})
 			}
@@ -399,6 +395,10 @@ func TestKeyLineNamesTheLockKey(t *testing.T) {
 		} {
 			tt.m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
 			for _, scr := range []screen{screenNav, screenList} {
+				if width < 80 && scr == screenList && tt.want != "" {
+					// One line of 40 cells holds the way back and the help key; the lock key stays on the tab line.
+					continue
+				}
 				tt.m.screen = scr
 				view := strings.Join(strings.Fields(tt.m.View()), " ")
 				if tt.want == "" && strings.Contains(view, "ctrl+l") {

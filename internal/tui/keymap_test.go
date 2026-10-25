@@ -45,7 +45,7 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 
 	view := m.View()
-	if !strings.Contains(view, "ctrl+k cmds · ctrl+g help") || strings.Contains(view, "? help") || strings.Contains(view, ": cmds") {
+	if !strings.Contains(flatText(view), "ctrl+k cmds ctrl+g help") || strings.Contains(view, "? help") || strings.Contains(view, ": cmds") {
 		t.Fatalf("the footer does not follow the keymap:\n%s", view)
 	}
 	press(t, m, "?")

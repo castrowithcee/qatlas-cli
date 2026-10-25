@@ -15,7 +15,7 @@ import (
 // inModal reports whether text stands on a row of the modal's frame.
 func inModal(view, text string) bool {
 	for _, line := range strings.Split(view, "\n") {
-		if strings.Contains(line, text) && (strings.Contains(line, "║") || strings.Contains(line, "╔")) {
+		if strings.Contains(line, text) && (strings.Contains(line, "│") || strings.Contains(line, "╭")) {
 			return true
 		}
 	}
@@ -156,7 +156,7 @@ func TestPassphraseDialogsFitBothSizes(t *testing.T) {
 		if !strings.Contains(view, "wrong passphrase") || !strings.Contains(view, "esc cancel") {
 			t.Errorf("%dx%d lacks the error or the esc hint:\n%s", size.w, size.h, view)
 		}
-		if modal := strings.Contains(view, "╔"); modal != (size.w >= modalMinWidth && size.h >= modalMinHeight) {
+		if modal := strings.Contains(view, "╭"); modal != (size.w >= modalMinWidth && size.h >= modalMinHeight) {
 			t.Errorf("%dx%d modal = %v:\n%s", size.w, size.h, modal, view)
 		}
 	}

@@ -638,6 +638,12 @@ type Model struct {
 	tooSmall bool
 	// footerLog, when set, collects the footer lines a dialog draws, to make its keys clickable.
 	footerLog *[]footerLine
+	// screenKeys is the key text the screen drawn last hands to the footer of the frame.
+	screenKeys string
+	// screenPos is the position in the list of the screen drawn last, for the right end of the footer.
+	screenPos string
+	// footerSpans are the cells of the key groups in the footer drawn last.
+	footerSpans []footerSpan
 	// formTop and formLeft are where the rows of the form being drawn start; sectionListWidth is the width of
 	// the list of its sections, 0 where there is none.
 	formTop, formLeft, sectionListWidth int
@@ -758,6 +764,8 @@ func (m *Model) Init() tea.Cmd {
 // Update handles one event. It is the whole editor logic and needs no terminal.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.keepScrollPosition()
+	// Deferred last, so it runs first: the vault or admin state, and with it the header, may have changed.
+	defer m.layoutWorkspace()
 	switch msg := msg.(type) {
 	case testDoneMsg:
 		m.finishTest(msg)
@@ -3640,8 +3648,14 @@ func (m *Model) renderView() string {
 		return ""
 	}
 	m.hits, m.frameHits, m.tooSmall = nil, nil, false
+	m.screenKeys, m.screenPos = "", ""
+	m.layoutWorkspace()
 	if m.terminalTooSmall() {
 		if m.screen == screenLeave {
+			// With no frame there is no footer: the question keeps its keys.
+			var footers []footerLine
+			m.footerLog = &footers
+			defer func() { m.footerLog = nil }()
 			return m.boundKeepingKeys(m.leaveView(), m.termWidth, m.termHeight)
 		}
 		return m.resizeView()
@@ -3653,13 +3667,9 @@ func (m *Model) renderView() string {
 		return view
 	}
 	if m.questionScreen() || m.promptScreen() {
-		// A dialog that has no room for a modal fills the workspace; its keys are buttons there as well.
-		var footers []footerLine
-		m.footerLog = &footers
-		workspace := m.workspaceView()
-		m.footerLog = nil
-		view := m.frame(workspace)
-		m.hitFooters(strings.Split(workspace, "\n"), footers, m.workspaceTop(), 0)
+		// A dialog that has no room for a modal fills the workspace; its keys stand in the footer, as buttons.
+		view := m.frame(m.workspaceView())
+		m.footerHits()
 		return view
 	}
 	return m.frame(m.workspaceView())
@@ -4184,24 +4194,7 @@ func (m *Model) listFrame() (string, string) {
 		foot = m.testLine() + idle.String() + foot
 	}
 	foot += m.notes()
-	if next := m.nextLine(); next != "" &&
-		m.height-strings.Count(head.String(), "\n")-strings.Count(foot+next, "\n")-1 >= minRowsWithNext {
-		foot += next
-	}
 	return head.String(), foot
-}
-
-// minRowsWithNext is how many rows a list keeps at least once the next step takes lines of its own; below
-// that the next step is left out, so a small terminal keeps its entries.
-const minRowsWithNext = 3
-
-// nextLine is the status line of the lists while nothing else reports: the next step, until the overview
-// takes over that job.
-func (m *Model) nextLine() string {
-	if m.fail != "" || m.status != "" || m.list.editing {
-		return ""
-	}
-	return "\n\n" + m.wrapped(styles.hint, tr(tNextLine, m.nextStep()))
 }
 
 // findKeys is the key that reviews the renames found, with its separator, where there are any.
@@ -4541,9 +4534,6 @@ func (m *Model) needsDescription(name string) bool {
 	}
 	return false
 }
-
-// nextStep is the one thing the status line of the lists points at: the first of nextSteps.
-func (m *Model) nextStep() string { return m.nextSteps()[0].text }
 
 // nextStepItem is one thing to do next and the section that deals with it.
 type nextStepItem struct {

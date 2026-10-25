@@ -146,7 +146,7 @@ func TestTicksAndAHalfBuiltTargetAskTheSameQuestion(t *testing.T) {
 	typeText(t, m, "create")
 	press(t, m, " ", "esc")
 	if view := screenOf(m); m.screen != screenLeave ||
-		!strings.Contains(view, "F2 save · d discard · esc keep editing") {
+		!strings.Contains(flatText(view), "F2 save d discard esc keep editing") {
 		t.Fatalf("changed ticks did not ask the common question: screen %v\n%s", m.screen, view)
 	}
 	press(t, m, "esc")
@@ -163,7 +163,7 @@ func TestTicksAndAHalfBuiltTargetAskTheSameQuestion(t *testing.T) {
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "esc")
 	if view := screenOf(m); m.screen != screenLeave ||
-		!strings.Contains(view, "F2 save · d discard · esc keep editing") {
+		!strings.Contains(flatText(view), "F2 save d discard esc keep editing") {
 		t.Fatalf("a half-built target did not ask the common question: screen %v\n%s", m.screen, view)
 	}
 }
@@ -173,7 +173,7 @@ func TestTheFormQuestionHasOneSetOfKeys(t *testing.T) {
 	m, path := startServiceForm(t)
 	press(t, m, "esc")
 	view := screenOf(m)
-	if m.screen != screenLeave || !strings.Contains(view, "F2 save · d discard · esc keep editing") {
+	if m.screen != screenLeave || !strings.Contains(flatText(view), "F2 save d discard esc keep editing") {
 		t.Fatalf("esc on a changed form: screen %v\n%s", m.screen, view)
 	}
 	pump(t, m, "f2")
