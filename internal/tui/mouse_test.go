@@ -79,6 +79,40 @@ func TestClickOnATabAndAPartOfTheOptionBar(t *testing.T) {
 	}
 }
 
+// The sub-tabs of Library are drawn like the tabs of the detail pane, the active one in brackets, and work by
+// key and by click; without colour the brackets and the words still tell them apart, at the smallest size too.
+func TestLibrarySubTabsAreTabsForKeyAndClick(t *testing.T) {
+	for _, noColor := range []bool{false, true} {
+		if noColor {
+			withNoColor(t)
+		}
+		for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight}, {80, 24}, {130, 40}} {
+			m := sizedModel(groupModel(t), size.w, size.h)
+			openSectionByName(t, m, sectionServices)
+			m.screen = screenNav
+			row := len(m.headerLines()) + 1
+			line := ansi.Strip(frameLines(m)[row])
+			if !strings.Contains(line, "[Services]") || !strings.Contains(line, "Credentials") || strings.Contains(line, "Library:") {
+				t.Fatalf("%dx%d: the sub-tabs read %q, want the active one in brackets", size.w, size.h, line)
+			}
+			if noColor && strings.Split(m.View(), "\n")[row] != line {
+				t.Errorf("%dx%d: NO_COLOR still emits escape sequences in the sub-tabs", size.w, size.h)
+			}
+			clickAt(t, m, cellInRow(t, m, row, "Credentials"), row)
+			if m.section != sectionCredentials || !m.navSub {
+				t.Fatalf("%dx%d: the click on Credentials opened %v", size.w, size.h, m.section)
+			}
+			if line := ansi.Strip(frameLines(m)[row]); !strings.Contains(line, "[Credentials]") {
+				t.Errorf("%dx%d: the sub-tabs after the click read %q", size.w, size.h, line)
+			}
+			press(t, m, "left")
+			if m.section != sectionServices {
+				t.Errorf("%dx%d: left on the sub-tabs opened %v", size.w, size.h, m.section)
+			}
+		}
+	}
+}
+
 func TestClickOnATabAsksBeforeUnsavedInputIsDropped(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	openSectionByName(t, m, sectionServices)

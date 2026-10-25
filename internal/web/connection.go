@@ -358,7 +358,7 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 
 	var roles []roleField
 	for _, role := range cfg.SecretRolesOf(f.Provider) {
-		roles = append(roles, roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(f.Provider, role)})
+		roles = append(roles, roleFieldOf(cfg, f.Provider, role))
 	}
 
 	permissionNames := make([]string, len(metadata.SupportedEffects))
@@ -497,7 +497,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 	var roles []roleField
 	if newCredential && storage != config.CredentialTypeEnv {
 		for _, role := range cfg.SecretRolesOf(f.Provider) {
-			roles = append(roles, roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(f.Provider, role)})
+			roles = append(roles, roleFieldOf(cfg, f.Provider, role))
 		}
 	}
 

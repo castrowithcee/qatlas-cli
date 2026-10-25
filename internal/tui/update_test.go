@@ -261,9 +261,10 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			}
 			// A modal may stand over the option bar and the rule of a small terminal; its background keeps the
 			// tab line.
-			covered := screen == "question" && tt.height < 28
+			covered := screen == "question" && tt.height < 28 ||
+				screen == "help" && tt.width >= modalMinWidth && tt.height >= modalMinHeight
 			if !strings.Contains(lines[1], "[5 Library]") ||
-				!covered && (!strings.Contains(lines[2], "Library: ") || !strings.Contains(lines[3], "─")) {
+				!covered && (!strings.Contains(lines[2], "[Services]") || !strings.Contains(lines[3], "─")) {
 				t.Errorf("%dx%d %s: the tab line, option bar and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:4])
 			}
 		}

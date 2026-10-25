@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -38,6 +39,7 @@ type recorded struct {
 	query        url.Values
 	header       http.Header
 	rawQuery     string
+	body         string
 }
 
 // fakeBrave answers the routes this provider uses and records every request.
@@ -49,9 +51,10 @@ type fakeBrave struct {
 }
 
 func (f *fakeBrave) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
 	f.mu.Lock()
 	f.requests = append(f.requests, recorded{method: r.Method, path: r.URL.Path, query: r.URL.Query(),
-		header: r.Header.Clone(), rawQuery: r.URL.RawQuery})
+		header: r.Header.Clone(), rawQuery: r.URL.RawQuery, body: string(body)})
 	f.mu.Unlock()
 	if f.answer != nil {
 		f.answer(w, r)
@@ -156,9 +159,10 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"brave": {Provider: Provider, BaseURL: apiRoot}},
 		Credentials: map[string]config.Credential{"brave-key": credential()},
 		Connections: map[string]config.Connection{
-			"search": {Service: "brave", Credential: "brave-key"},
-			"listed": {Service: "brave", Credential: "brave-key", Tools: []string{"brave.news.search"}},
-			"bound":  {Service: "brave", Credential: "brave-key", Target: "somewhere"},
+			"search":  {Service: "brave", Credential: "brave-key"},
+			"listed":  {Service: "brave", Credential: "brave-key", Tools: []string{"brave.news.search"}},
+			"answers": {Service: "brave", Credential: "brave-key", Tools: []string{"brave.answers.ask"}},
+			"bound":   {Service: "brave", Credential: "brave-key", Target: "somewhere"},
 		},
 	}
 }
@@ -213,13 +217,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	var ids []string
 	for _, tool := range metadata.Tools {
 		ids = append(ids, tool.ID)
-		if tool.Effect != config.EffectRead || tool.RequiresToolAllowList {
-			t.Errorf("tool %+v, want a read that needs no allow-list", tool)
+		// Answers costs by searches and tokens, so only a tools list offers it.
+		if tool.Effect != config.EffectRead || tool.RequiresToolAllowList != (tool.ID == "brave.answers.ask") {
+			t.Errorf("tool %+v, want a read that needs an allow-list only for answers", tool)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search",
-		"brave.places.search", "brave.poi-descriptions.get", "brave.pois.get", "brave.rich.get",
-		"brave.videos.search", "brave.web.search"}) {
+	if !reflect.DeepEqual(ids, []string{"brave.answers.ask", "brave.images.search", "brave.llm-context.get",
+		"brave.news.search", "brave.places.search", "brave.poi-descriptions.get", "brave.pois.get",
+		"brave.rich.get", "brave.videos.search", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -233,11 +238,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			}
 		}
 	}
-	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
+	if len(metadata.Profiles) != 2 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search",
 			"brave.web.search", "brave.videos.search", "brave.images.search", "brave.rich.get",
-			"brave.places.search", "brave.pois.get", "brave.poi-descriptions.get"}) {
-		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
+			"brave.places.search", "brave.pois.get", "brave.poi-descriptions.get"}) ||
+		metadata.Profiles[1].ID != "answers" || metadata.Profiles[1].Recommended ||
+		!reflect.DeepEqual(metadata.Profiles[1].Tools, []string{"brave.answers.ask"}) {
+		t.Errorf("profiles = %+v, want the recommended search profile and the answers profile", metadata.Profiles)
 	}
 }
 

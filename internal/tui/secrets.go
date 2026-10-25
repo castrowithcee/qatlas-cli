@@ -909,13 +909,7 @@ func (m *Model) secretNextStep(credential, role string) string {
 // env credential carries there; the stages differ per role, so every row keeps its own. The key line at the
 // foot of the form repeats the keys for whichever row the focus is on.
 func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
-	var parts []string
-	if description := m.cfg.SecretRoleDescriptionOf(m.formProvider(), role); description != "" {
-		if !full {
-			description = shortDescription(description)
-		}
-		parts = append(parts, description)
-	}
+	parts := m.roleDescription(m.formProvider(), role, full)
 	if lead {
 		parts = append(parts, m.secretKeys()+tr(tSecretTypingIsMasked))
 	}

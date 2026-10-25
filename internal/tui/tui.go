@@ -3415,13 +3415,7 @@ func (m *Model) roleHints(provider, role string, lead bool) (hint, detail string
 // roleHintText joins the description of a role with what its first row adds (lead); full keeps the whole
 // description instead of its short form.
 func (m *Model) roleHintText(provider, role string, lead textID, isLead, full bool) string {
-	var parts []string
-	if description := m.cfg.SecretRoleDescriptionOf(provider, role); description != "" {
-		if !full {
-			description = shortDescription(description)
-		}
-		parts = append(parts, description)
-	}
+	parts := m.roleDescription(provider, role, full)
 	if isLead && (full || len(parts) == 0) {
 		// The sentence all env rows share is the detail; the line itself keeps it only when there is no
 		// description to show.
@@ -3431,6 +3425,22 @@ func (m *Model) roleHintText(provider, role string, lead textID, isLead, full bo
 		parts = append(parts, tr(lead))
 	}
 	return strings.Join(parts, "; ")
+}
+
+// roleDescription is the help a provider authors for one of its roles, in its short form unless full, after
+// the note that the role may stay empty when the provider declares it optional.
+func (m *Model) roleDescription(provider, role string, full bool) []string {
+	var parts []string
+	if m.cfg.SecretRoleOptional(provider, role) {
+		parts = append(parts, tr(tFormOptionalRole))
+	}
+	if description := m.cfg.SecretRoleDescriptionOf(provider, role); description != "" {
+		if !full {
+			description = shortDescription(description)
+		}
+		parts = append(parts, description)
+	}
+	return parts
 }
 
 // shortLeads are the one-line forms of the sentences the first role row adds.
@@ -4650,13 +4660,7 @@ func (m *Model) fieldDetail(f field) string {
 func (m *Model) fieldHintText(f field, full bool) string {
 	if f.kind == fieldSecret {
 		if m.editing == "" {
-			var parts []string
-			if description := m.cfg.SecretRoleDescriptionOf(m.formProvider(), f.label); description != "" {
-				if !full {
-					description = shortDescription(description)
-				}
-				parts = append(parts, description)
-			}
+			parts := m.roleDescription(m.formProvider(), f.label, full)
 			if f.roleLead && (full || len(parts) == 0) {
 				lead := tr(tFormSaveTheCredentialWithF2)
 				if full {
@@ -4825,7 +4829,11 @@ func (m *Model) cells(name string) []string {
 			if cred.Type == config.CredentialTypeKeyring || cred.Type == config.CredentialTypeVault {
 				source = m.roleState(name, role, cred.Type)
 			}
-			roles = append(roles, role+" "+secretState(source))
+			state := secretState(source)
+			if state == tr(tSecretMissing) && m.cfg.SecretRoleOptional(provider, role) {
+				state = tr(tSecretOptionalNotSet)
+			}
+			roles = append(roles, role+" "+state)
 		}
 		return []string{name, m.storagePlace(name, cred), strings.Join(roles, ", ")}
 	case sectionConnections:
