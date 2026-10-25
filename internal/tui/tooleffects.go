@@ -117,3 +117,18 @@ func (e *toolEffects) rowText(row string, marks map[string]bool) string {
 	}
 	return fmt.Sprintf("%s %s %d/%d", box, strings.TrimPrefix(row, effectRowPrefix), ticked, total)
 }
+
+// styledRow is rowText drawn for the screen: the box coloured, the effect in the accent colour as the title of
+// a group, and its counts dimmed. Without colour it reads exactly as rowText does.
+func (e *toolEffects) styledRow(row string, marks map[string]bool) string {
+	ticked, total := countTicks(e.tools(row), marks)
+	box := styles.active.Render("[-]")
+	switch ticked {
+	case 0:
+		box = "[ ]"
+	case total:
+		box = styles.ok.Render("[x]")
+	}
+	return box + " " + styles.active.Render(strings.TrimPrefix(row, effectRowPrefix)) +
+		styles.hint.Render(fmt.Sprintf(" %d/%d", ticked, total))
+}
