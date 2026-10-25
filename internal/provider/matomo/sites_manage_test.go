@@ -19,6 +19,8 @@ const siteManageConnections = `
   sm-noinst: {service: matomo, credential: token, tools: [matomo.sites.delete, matomo.sites.get], targets: [site]}
   sm-deleter: {service: matomo, credential: token, tools: [matomo.sites.delete, matomo.sites.get], targets: [site/1, instance]}
   um-deleter: {service: matomo, credential: token, tools: [matomo.users.delete], targets: [instance]}
+  um-rights: {service: matomo, credential: token, tools: [matomo.access.set, matomo.capabilities.add, matomo.capabilities.remove], targets: [site/1, site/2]}
+  um-rights-instance: {service: matomo, credential: token, tools: [matomo.access.set], targets: [instance]}
   sm-instance: {service: matomo, credential: token, effects: [read, create], targets: [instance]}
 `
 

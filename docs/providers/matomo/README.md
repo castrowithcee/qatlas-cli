@@ -169,7 +169,8 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
 `matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
 eight `matomo.global-settings.set-*` tools (target `instance`), and `matomo.users.logout` (target `instance`) are in
-no profile; `matomo.users.delete` (target `instance`) is in no profile either and is offered only via `tools`.
+no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`, and
+`matomo.capabilities.remove` are in no profile either and are offered only via `tools`.
 
 ## Tools
 
@@ -206,6 +207,9 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.users.get-access` | [users](users.md) | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
 | `matomo.users.delete` | [users](users.md) | deletes a user (admin or Super User, target `instance`; effect `delete`, only via `tools`) |
 | `matomo.users.logout` | [users](users.md) | ends the web sessions of a user (Super User, target `instance`; effect `execute`) |
+| `matomo.access.set` | [users](users.md) | sets or removes the role of a user on websites (admin; effect `update`, only via `tools`) |
+| `matomo.capabilities.add` | [users](users.md) | adds capabilities of a user on websites (admin; effect `update`, only via `tools`) |
+| `matomo.capabilities.remove` | [users](users.md) | removes capabilities of a user on websites (admin; effect `update`, only via `tools`) |
 | `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
 | `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
 | `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
