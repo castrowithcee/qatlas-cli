@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo privacy tools: finding and exporting the visits of one person, reading the privacy settings, and reading and changing the compliance policies, with their rights, targets, caps, and the data they leave out.
+  Describes the Matomo privacy tools: finding, exporting, and deleting the visits of one person, reading the privacy settings, and reading and changing the compliance policies, with their rights, targets, caps, and the data they leave out.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -9,10 +9,11 @@ updated: 2026-10-25
 
 # Matomo privacy and data subject requests
 
-The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). Apart from
-the [compliance setters](#changing-compliance-policies) they only read. `matomo.data-subjects.find` and
-`matomo.data-subjects.export` carry personal data of other people and need admin rights; `matomo.privacy-settings.get`
-and `matomo.compliance.get` need Super User rights for most of their modes. None of these tools is in a setup profile.
+The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
+`matomo.data-subjects.find` and `matomo.data-subjects.export` carry personal data of other people and need admin
+rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
+`matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits), and the
+[compliance setters](#changing-compliance-policies) change the policies. None of these tools is in a setup profile.
 
 ## Finding and exporting a person
 
@@ -45,8 +46,20 @@ columns Matomo returns.
   `token_auth=` URL parameter, or a nested member named like one), because they are access values, not data about the
   person. Empty values are left out.
 
-Both tools carry the data classification `matomo-data-subjects`. `deleteDataSubjects` and the anonymization of raw
-data are not offered.
+Both tools carry the data classification `matomo-data-subjects`.
+
+## Deleting visits
+
+`matomo.data-subjects.delete` calls `PrivacyManager.deleteDataSubjects` with the visits of `find`, given as `visits`
+entries of `idSite` and `idVisit`, at most 401 and without repeats. It cannot be undone, is offered only where a
+connection's `tools` list names it, needs `confirm`, sends exactly one request, and never repeats it after a timeout, a
+5xx, or an unreadable answer; the error says so, and `find` shows the state before the call is repeated. It needs an
+admin right on every website of the list. Every `idSite` is checked against the targets before a secret is read; one
+foreign website refuses the whole call without naming it. A personal token needs no password confirmation, so the tool
+takes no password. The answer gives the rows Matomo deleted per storage area (`areas`, ordered by name, cut at 100 with
+`truncated`), and no area when Matomo reports none.
+
+The anonymization of raw data and the data purge are not offered: Matomo asks for a password confirmation there.
 
 ## Privacy settings
 
