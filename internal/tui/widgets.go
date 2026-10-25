@@ -135,6 +135,35 @@ func surfaceRow(text string, width int) string {
 	return lipgloss.NewStyle().Background(styles.palette.surface).Render(keepBackground(text, styles.palette.surface))
 }
 
+// tabStrip draws a row of tabs, the active one in brackets and highlighted, the others dimmed, and returns
+// the cells each takes, counted from the first cell of the row. A word "|" is a separator, not a tab. The
+// brackets still tell the active tab without colour; focused marks the active one as the focus.
+func tabStrip(words []string, active int, focused bool) (string, [][2]int) {
+	var b strings.Builder
+	spans := make([][2]int, 0, len(words))
+	x := 0
+	for i, word := range words {
+		text, style := " "+word+" ", styles.hint
+		switch {
+		case word == "|":
+			text = word
+		case i == active:
+			text, style = "["+word+"]", styles.active
+			if focused {
+				style = styles.activeRow
+			}
+		}
+		if i > 0 {
+			b.WriteString(" ")
+			x++
+		}
+		b.WriteString(style.Render(text))
+		spans = append(spans, [2]int{x, x + lipgloss.Width(text)})
+		x += lipgloss.Width(text)
+	}
+	return b.String(), spans
+}
+
 // card is a bordered figure: the label dimmed above a large value. Width is the total width in cells.
 func card(label, value string, width int) []string {
 	inner := max(width-4, 0)

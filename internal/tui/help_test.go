@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 )
@@ -34,7 +35,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 		if !strings.Contains(view, "["+topic.Name+"]") || !strings.Contains(view, firstWords(topic)) {
 			t.Errorf("topic %s is not shown:\n%s", topic.Name, view)
 		}
-		if !strings.Contains(view, "Help  ") {
+		if !strings.Contains(view, " Help ") {
 			t.Errorf("the workspace is not titled Help:\n%s", view)
 		}
 		press(t, m, key)
@@ -126,5 +127,53 @@ func TestQuestionMarkIsTextWhereTextIsTyped(t *testing.T) {
 	press(t, list, "enter", "/", "?")
 	if list.screen != screenList || list.list.query() != "?" {
 		t.Errorf("? in a filter was not typed: screen %v query %q", list.screen, list.list.query())
+	}
+}
+
+// The help stands as a centred panel over the screen it was opened from where the terminal has the room for a
+// modal, and fills the workspace below that; the topics are tabs, a heading is bold and a key is in the accent
+// colour, and without colour everything is still there.
+func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
+	for _, noColor := range []bool{false, true} {
+		restoreRenderer(t)
+		t.Setenv("NO_COLOR", "")
+		applyColorScheme("dark", "")
+		if noColor {
+			withNoColor(t)
+		}
+		m, _, _ := newModel(t)
+		for _, size := range []struct{ width, height int }{{100, 28}, {modalMinWidth, modalMinHeight}, {modalMinWidth - 1, modalMinHeight}, {40, minimumHeight}} {
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			m.screen = screenNav
+			press(t, m, "?")
+			view := m.View()
+			assertViewFits(t, view, size.width, size.height)
+			plain := ansi.Strip(view)
+			framed := strings.Contains(plain, "╭─ Help ") || strings.Contains(plain, "╔═ Help ")
+			if framed != (size.width >= modalMinWidth && size.height >= modalMinHeight) {
+				t.Errorf("%dx%d: panel over the screen = %v:\n%s", size.width, size.height, framed, plain)
+			}
+			if !strings.Contains(plain, "[start]") || !strings.Contains(plain, "close") {
+				t.Errorf("%dx%d: the help lacks its topics or its keys:\n%s", size.width, size.height, plain)
+			}
+			if noColor && plain != view {
+				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
+			}
+			if framed && !noColor {
+				if !strings.Contains(view, colourOf(styles.footKey)+"left/right") {
+					t.Errorf("%dx%d: the keys are not in the accent colour:\n%q", size.width, size.height, view)
+				}
+				// The list of keys comes with its heading in bold.
+				for i, line := range m.helpLines() {
+					if line == keysHeading {
+						m.helpOffset = i
+					}
+				}
+				if !strings.Contains(m.View(), colourOf(styles.title)+keysHeading) {
+					t.Errorf("%dx%d: the heading of the keys is not bold:\n%q", size.width, size.height, m.View())
+				}
+			}
+			press(t, m, "esc")
+		}
 	}
 }
