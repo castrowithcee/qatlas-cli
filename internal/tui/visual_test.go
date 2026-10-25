@@ -212,6 +212,28 @@ func visualShots() []visualShot {
 			connections(t, m)
 			pump(t, m, "enter")
 		}},
+		{"22-connection-details", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			pump(t, m, "down")
+			pump(t, m, "down")
+			pump(t, m, "tab")
+			pump(t, m, "right")
+		}},
+		{"23-connection-raw", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			pump(t, m, "down")
+			pump(t, m, "down")
+			pump(t, m, "tab")
+			pump(t, m, "right")
+			pump(t, m, "right")
+		}},
+		{"24-connection-details-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
+			connections(t, m)
+			pump(t, m, "down")
+			pump(t, m, "down")
+			pump(t, m, "tab")
+			pump(t, m, "right")
+		}},
 	}
 }
 

@@ -265,6 +265,7 @@ func (m *Model) selectEntry(name string) {
 // resetList fills the list with the entries of s and puts the cursor on the first entry, below its group row.
 func (m *Model) resetList(s section) {
 	m.barFocus = 0
+	m.leaveDetail()
 	m.list.reset(m.listItems(s))
 	if len(m.list.matches) > 1 && isGroupRow(m.list.matches[0]) {
 		m.list.cursor = 1

@@ -679,6 +679,7 @@ const (
 	tActiveLeft                              textID = "ActiveLeft"
 	tDetailMore                              textID = "DetailMore"
 	tDetailRunning                           textID = "DetailRunning"
+	tDetailConnections                       textID = "DetailConnections"
 	tInfoNoFurtherExplanationForThis         textID = "InfoNoFurtherExplanationForThis"
 	tPathPathKept                            textID = "PathPathKept"
 	tPathAPathMustNotBe                      textID = "PathAPathMustNotBe"
