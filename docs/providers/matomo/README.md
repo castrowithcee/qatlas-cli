@@ -158,8 +158,8 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `sites` adds `matomo.sites.update`, `matomo.site-urls.add`, `matomo.site-urls.set`, and
 `matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
 `matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
-four `matomo.global-settings.set-excluded-*` tools (target `instance`), and `matomo.users.logout` (target `instance`)
-are in no profile; `matomo.users.delete` (target `instance`) is in no profile either and is offered only via `tools`.
+eight `matomo.global-settings.set-*` tools (target `instance`), and `matomo.users.logout` (target `instance`) are in
+no profile; `matomo.users.delete` (target `instance`) is in no profile either and is offered only via `tools`.
 
 ## Tools
 
@@ -184,6 +184,10 @@ are in no profile; `matomo.users.delete` (target `instance`) is in no profile ei
 | `matomo.global-settings.set-excluded-user-agents` | [instance](instance.md) | replaces the globally excluded user agents (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-excluded-referrers` | [instance](instance.md) | replaces the globally excluded referrers (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-excluded-query-parameters` | [instance](instance.md) | sets the global query parameter exclusion type and list (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-search-parameters` | [instance](instance.md) | replaces the global site search keyword and category parameters (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-keep-url-fragments` | [instance](instance.md) | sets whether URL fragments are kept by default (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-default-currency` | [instance](instance.md) | sets the default currency (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-default-timezone` | [instance](instance.md) | sets the default time zone (Super User, target `instance`; effect `update`) |
 | `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
 | `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
