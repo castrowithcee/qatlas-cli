@@ -81,7 +81,7 @@ func decodeObject(t *testing.T, text string) map[string]any {
 	return out
 }
 
-func lastCall(calls []call) call { return calls[len(calls)-1] }
+func finalCall(calls []call) call { return calls[len(calls)-1] }
 
 func TestInsightsListSendsTheFixedMethodPerKind(t *testing.T) {
 	var calls []call
@@ -116,7 +116,7 @@ func TestInsightsListSendsTheFixedMethodPerKind(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tc.method, err)
 		}
-		got := lastCall(calls)
+		got := finalCall(calls)
 		if got.api() != tc.method || got.auth != "Bearer "+tokenValue || got.form.Get("format") != "JSON" || got.form.Has("token_auth") {
 			t.Errorf("%s: request = %+v", tc.method, got)
 		}
@@ -144,7 +144,7 @@ func TestInsightsListSendsTheFixedMethodPerKind(t *testing.T) {
 	if err != nil || !strings.Contains(text, `"can_generate":true`) || strings.Contains(text, `"idSite"`) {
 		t.Fatalf("can-generate: %s, %v", text, err)
 	}
-	if got := lastCall(calls); got.form.Has("idSite") || got.api() != "Insights.canGenerateInsights" {
+	if got := finalCall(calls); got.form.Has("idSite") || got.api() != "Insights.canGenerateInsights" {
 		t.Errorf("can-generate request = %+v", got)
 	}
 }
@@ -244,7 +244,7 @@ func TestTransitionsGetSendsTheFixedMethodAndPagesEachList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := lastCall(calls)
+	got := finalCall(calls)
 	if got.api() != "Transitions.getTransitionsForPageUrl" || got.form.Get("pageUrl") != "https://shop.example.test/cart" ||
 		got.form.Get("idSite") != "1" || got.form.Get("period") != "month" || got.form.Get("date") != "2026-09-01" ||
 		got.form.Get("segment") != "browserName==Firefox" || got.form.Get("limitBeforeGrouping") != "10" ||
@@ -289,7 +289,7 @@ func TestTransitionsGetSendsTheFixedMethodAndPagesEachList(t *testing.T) {
 		if _, err := env.invoke("matomo.transitions.get", "rm-sites", arguments); err != nil {
 			t.Fatal(err)
 		}
-		got := lastCall(calls)
+		got := finalCall(calls)
 		if got.api() != want.method {
 			t.Errorf("method = %s, want %s", got.api(), want.method)
 		}
@@ -356,7 +356,7 @@ func TestBotRealtimeGetNeedsVersionAndPluginWithoutFurtherRequests(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := lastCall(calls)
+	got := finalCall(calls)
 	if got.api() != "BotTracking.getAIChatbotsRealTime" || got.form.Get("idSite") != "1" || got.form.Get("lastMinutes") != "60" {
 		t.Fatalf("request = %+v", got)
 	}
@@ -369,7 +369,7 @@ func TestBotRealtimeGetNeedsVersionAndPluginWithoutFurtherRequests(t *testing.T)
 	if err != nil || !strings.Contains(text, `"label":"shop.example.test/cart"`) || strings.Contains(text, "last_minutes") {
 		t.Fatalf("top-pages: %s, %v", text, err)
 	}
-	if lastCall(calls).form.Has("lastMinutes") {
+	if finalCall(calls).form.Has("lastMinutes") {
 		t.Error("lastMinutes was sent without being asked for")
 	}
 	for _, arguments := range []string{`{"idSite":1,"kind":"x"}`, `{"idSite":1,"kind":"chatbots","last_minutes":0}`,
@@ -444,7 +444,7 @@ func TestDatabaseStatisticsGetUsesOneMethodPerSection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", section, err)
 		}
-		got := lastCall(calls)
+		got := finalCall(calls)
 		if got.api() != "DBStats."+method || got.auth != "Bearer "+tokenValue || got.form.Has("token_auth") ||
 			got.form.Has("forceCache") || decodeObject(t, text)["section"] != section {
 			t.Errorf("%s: request = %+v, result = %s", section, got, text)
@@ -459,8 +459,8 @@ func TestDatabaseStatisticsGetUsesOneMethodPerSection(t *testing.T) {
 		t.Errorf("status = %s", text)
 	}
 	text, _ = env.invoke("matomo.database-statistics.get", "rm-db", `{"section":"individual-reports","force_cache":true}`)
-	if lastCall(calls).form.Get("forceCache") != "true" || !strings.Contains(text, `"blob_size":900`) {
-		t.Errorf("individual-reports = %s, form = %v", text, lastCall(calls).form)
+	if finalCall(calls).form.Get("forceCache") != "true" || !strings.Contains(text, `"blob_size":900`) {
+		t.Errorf("individual-reports = %s, form = %v", text, finalCall(calls).form)
 	}
 	text, err := env.invoke("matomo.database-statistics.get", "rm-db", `{"section":"tracker-tables","limit":2}`)
 	result := decodeObject(t, text)

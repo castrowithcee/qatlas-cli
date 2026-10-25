@@ -258,7 +258,11 @@ func (m *Model) barLine(width int) string {
 // list, which enter does on the focused field, and one on the search field starts the search, as / does.
 // row is the screen row of the bar.
 func (m *Model) hitBarFields(row int) {
-	line, parts, search := m.barLayout(m.listWidth())
+	line, parts, search := m.barLayout(m.tableRoom())
+	if m.tableFramed() {
+		// The bar stands behind the side of the frame and its blank.
+		line = "  " + line
+	}
 	var specs []barSpec
 	for _, p := range parts {
 		field := p.field

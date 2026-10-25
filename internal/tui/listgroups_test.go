@@ -36,7 +36,7 @@ func TestListsAreGroupedByProvider(t *testing.T) {
 		}
 	}
 	view := screenOf(m)
-	for _, want := range []string{"▾ bookstack (1)", "▾ tracker (1)", "▾ no provider (1)"} {
+	for _, want := range []string{"▾ ■ bookstack (1)", "▾ ■ tracker (1)", "▾ ■ no provider (1)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the credential list lacks %q:\n%s", want, view)
 		}
@@ -57,7 +57,7 @@ func TestGroupsFoldAndUnfold(t *testing.T) {
 	if got := shownNames(m); strings.Join(got, ",") != groupRow("bookstack")+","+groupRow("tracker")+",tracker-issues,tracker-triage" {
 		t.Fatalf("after left: %q", got)
 	}
-	if view := screenOf(m); !strings.Contains(view, "▸ bookstack (1)") || strings.Contains(view, "wiki-docs  ") {
+	if view := screenOf(m); !strings.Contains(view, "▸ ■ bookstack (1)") || strings.Contains(view, "wiki-docs  ") {
 		t.Errorf("a folded group must read as folded and hide its entries:\n%s", view)
 	}
 	press(t, m, "right")
@@ -114,7 +114,7 @@ func TestFilterOpensGroupsWithHits(t *testing.T) {
 	if got := strings.Join(m.list.matches, ","); got != groupRow("bookstack")+",wiki-docs" {
 		t.Errorf("filter shows %q, want the folded group open with its hit", got)
 	}
-	if view := screenOf(m); !strings.Contains(view, "▾ bookstack (1)") || !strings.Contains(view, "1/1 (3 total)") {
+	if view := screenOf(m); !strings.Contains(view, "▾ ■ bookstack (1)") || !strings.Contains(view, "1/1 (3 total)") {
 		t.Errorf("filtered view:\n%s", view)
 	}
 	// The provider name is searchable although it is no column.
@@ -134,19 +134,19 @@ func TestFilterOpensGroupsWithHits(t *testing.T) {
 func TestPositionCountsEntriesOnly(t *testing.T) {
 	m := groupModel(t)
 	openSectionByName(t, m, sectionConnections)
-	if view := screenOf(m); !strings.Contains(view, "Connections  1/3") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
 		t.Errorf("first entry:\n%s", view)
 	}
 	press(t, m, "down", "down") // group row of tracker, then tracker-issues
-	if view := screenOf(m); !strings.Contains(view, "Connections  2/3") {
+	if view := screenOf(m); !strings.Contains(view, " 2/3 ") {
 		t.Errorf("second entry:\n%s", view)
 	}
 	press(t, m, "up")
-	if view := screenOf(m); !strings.Contains(view, "Connections  1/3") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
 		t.Errorf("on a group row the position is that of the entry above:\n%s", view)
 	}
 	press(t, m, "left") // fold tracker: total stays 3
-	if view := screenOf(m); !strings.Contains(view, "Connections  1/3") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
 		t.Errorf("folded:\n%s", view)
 	}
 }
@@ -179,7 +179,7 @@ func TestACredentialWithoutProviderHasItsOwnGroup(t *testing.T) {
 	if m.groups.of["loose"] != "" || m.groups.of["wiki-reader"] != "bookstack" {
 		t.Errorf("groups = %v", m.groups.of)
 	}
-	if got := m.groups.rowText(groupRow(""), true); got != "▾ no provider (1)" {
+	if got := m.groups.rowText(groupRow(""), true); got != "▾ ■ no provider (1)" {
 		t.Errorf("row = %q", got)
 	}
 	if m.list.matches[len(m.list.matches)-2] != groupRow("") {

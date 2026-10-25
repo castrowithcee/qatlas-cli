@@ -231,8 +231,9 @@ func with(base answers, extra answers) answers {
 }
 
 // listedReads are the reads that only a connection's tools list offers.
-var listedReads = map[string]bool{"matomo.insights.list": true, "matomo.transitions.get": true,
-	"matomo.bot-realtime.get": true, "matomo.database-statistics.get": true}
+var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.distinct-counts.get": true,
+	"matomo.multi-sites.get": true, "matomo.report-glossary.list": true, "matomo.insights.list": true,
+	"matomo.transitions.get": true, "matomo.bot-realtime.get": true, "matomo.database-statistics.get": true}
 
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
@@ -254,7 +255,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 76 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 80 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

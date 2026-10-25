@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo report tools: the report catalog, report details, segment fields and suggested values, reading one report for a period with bounded rows, filters, and archiving limits, and the insights, transitions, and real-time AI chatbot reads.
+  Describes the Matomo report tools: the report catalog, report details, segment fields and suggested values, reading one report for a period with bounded rows, filters, and archiving limits, the reads that API.getProcessedReport does not cover: row evolution, distinct counts, the website comparison, and the glossary, and the insights, transitions, and real-time AI chatbot reads.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -82,6 +82,32 @@ no argument for them. `period` and `date` are required: `day`, `week`, `month`, 
 - **Not covered.** Comparisons (`compareDates`, `comparePeriods`, `compareSegments`) are not offered.
 
 Row labels, titles, URLs, search terms, and event names are visitor data and untrusted.
+
+## Reads beyond `getProcessedReport`
+
+Four tools read what `API.getProcessedReport` does not return. Each calls fixed methods of the Matomo API, takes no
+module, method, or URL as an argument, and is offered only through the `tools` list of a connection, in no profile:
+their answers can be large, and archiving them on demand can be slow.
+
+- **Row evolution.** `matomo.reports.evolution` follows rows of a catalog report over time (`API.getRowEvolution`).
+  The report comes from the catalog like in `matomo.reports.get`; only a report with a dimension can be followed,
+  and of its catalog parameters only the entity IDs `idGoal` and `idDimension` are sent. `label` is required, so a
+  call never reads every row of a report. `date` must name several periods, and `period` is `day`, `week`, `month`,
+  or `year`; a single date and `period=range` are refused, because Matomo cannot answer them. The bound is the one of
+  `matomo.reports.get`: labels times periods must not exceed 1000, so one label can cover up to 1000 periods and
+  ten labels up to 100. One label answers every metric of the report, several labels answer one `column`. Matomo's
+  comparison naming (`labelSeries`) is not offered.
+- **Distinct counts.** `matomo.distinct-counts.get` reads one number per period; `kind` picks the Referrers or
+  UserCountry method. A kind the instance lacks, because its plugin is inactive or its release is older, ends as
+  `unsupported-capability`; AI assistants need Matomo 5.5.0, the release that made them a referrer type.
+- **Website comparison.** `matomo.multi-sites.get` reads the MultiSites plugin. It is not instance-wide and needs no
+  `instance` target, but Matomo computes the comparison for every website of the token. Rows outside the `site`
+  targets are therefore dropped here, row by row, and a batch can be shorter than `limit` or empty while
+  `has_more` is true. With targets that name single websites, the group rows, `num_sites`, and `totals` of the
+  groups view are left out, because Matomo sums them over all websites of the token. Only one period per call is
+  read, as Matomo's comparison refuses several.
+- **Glossary.** `matomo.report-glossary.list` reads the explanation of the reports or of the metrics of a website.
+  Matomo answers the whole glossary at once; Qatlas reads at most 2000 entries of it and returns them in batches.
 
 ## Insights, transitions, and AI chatbots
 

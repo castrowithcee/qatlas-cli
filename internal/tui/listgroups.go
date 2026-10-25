@@ -64,18 +64,32 @@ func (g *listGroups) items() []string {
 	return items
 }
 
-// rowText is how a group row reads: the fold marker, the provider and the number of its entries.
+// rowText is how a group row reads: the fold marker, the mark of the provider, the provider and the number
+// of its entries.
 func (g *listGroups) rowText(row string, open bool) string {
-	key := strings.TrimPrefix(row, groupRowPrefix)
-	title := key
+	key, title, arrow := g.rowParts(row, open)
+	return fmt.Sprintf("%s■ %s (%d)", arrow, title, len(g.members[key]))
+}
+
+// styledRow is rowText drawn for the screen: the mark in the colour of the provider, its name in the accent
+// colour and the count dimmed. Without colour it reads exactly as rowText does.
+func (g *listGroups) styledRow(row string, open bool) string {
+	key, title, arrow := g.rowParts(row, open)
+	return styles.hint.Render(arrow) + providerMark(key) + " " + styles.active.Render(title) +
+		styles.hint.Render(fmt.Sprintf(" (%d)", len(g.members[key])))
+}
+
+func (g *listGroups) rowParts(row string, open bool) (key, title, arrow string) {
+	key = strings.TrimPrefix(row, groupRowPrefix)
+	title = key
 	if key == "" {
 		title = wordText(noProviderGroup)
 	}
-	arrow := "▸ "
+	arrow = "▸ "
 	if open {
 		arrow = "▾ "
 	}
-	return fmt.Sprintf("%s%s (%d)", arrow, title, len(g.members[key]))
+	return key, title, arrow
 }
 
 // open reports whether the group of the row is shown unfolded.

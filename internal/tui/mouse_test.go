@@ -97,11 +97,11 @@ func TestClickOnAListRowOpensItAndOnAGroupFoldsIt(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	openSectionByName(t, m, sectionServices)
 	before := len(m.list.matches)
-	clickOn(t, m, "▾ tracker (1)")
+	clickOn(t, m, "▾ ■ tracker (1)")
 	if len(m.list.matches) != before-1 {
 		t.Fatalf("a click on a group row left %d rows, want %d", len(m.list.matches), before-1)
 	}
-	clickOn(t, m, "▸ tracker (1)")
+	clickOn(t, m, "▸ ■ tracker (1)")
 	if len(m.list.matches) != before {
 		t.Fatalf("a second click left %d rows, want %d", len(m.list.matches), before)
 	}

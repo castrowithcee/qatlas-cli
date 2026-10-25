@@ -148,6 +148,9 @@ or Super User rights. The profile `live` adds the [live tools](live.md) and the 
 because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights.
+The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
+`matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
+offered only via `tools`.
 The [insights, transitions, and AI chatbot reads](reports.md#insights-transitions-and-ai-chatbots)
 `matomo.insights.list`, `matomo.transitions.get`, and `matomo.bot-realtime.get` and the
 [database statistics](instance.md#database-statistics) `matomo.database-statistics.get` (target `instance`) are in no
@@ -211,6 +214,10 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
+| `matomo.reports.evolution` | [reports](reports.md) | reads how rows of a report develop over periods (only via `tools`) |
+| `matomo.distinct-counts.get` | [reports](reports.md) | reads how many different search engines, social networks, keywords, campaigns, referring websites, AI assistants, or countries a period had (only via `tools`) |
+| `matomo.multi-sites.get` | [reports](reports.md) | reads the comparison of the websites of the token inside the targets (only via `tools`) |
+| `matomo.report-glossary.list` | [reports](reports.md) | reads the explanation of the reports or metrics of a website (only via `tools`) |
 | `matomo.insights.list` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the notable changes between two periods: insights, movers and shakers, their overviews, or whether a comparison period exists (only via `tools`) |
 | `matomo.transitions.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the previous and following pages, outlinks, downloads, and external referrers of one page (only via `tools`) |
 | `matomo.bot-realtime.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the AI chatbots and the pages they requested within the last minutes; needs Matomo 5.12.0 and the BotTracking plugin (only via `tools`) |
