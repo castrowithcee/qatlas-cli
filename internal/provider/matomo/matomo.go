@@ -221,5 +221,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: globalSettingsGet, Handler: capability.Handler(invokeGlobalSettingsGet)},
 		capability.Operation{Descriptor: referenceDataList, Handler: capability.Handler(invokeReferenceDataList)},
 		capability.Operation{Descriptor: ipRangesExpand, Handler: capability.Handler(invokeIPRangesExpand)},
+		capability.Operation{Descriptor: usersList, Handler: capability.Handler(invokeUsersList)},
+		capability.Operation{Descriptor: usersGet, Handler: capability.Handler(invokeUsersGet)},
+		capability.Operation{Descriptor: usersGetAccess, Handler: capability.Handler(invokeUsersGetAccess)},
+		capability.Operation{Descriptor: rolesList, Handler: capability.Handler(invokeRolesList)},
 	)
 }
