@@ -974,4 +974,6 @@ const (
 	tFormTemplateEmpty                       textID = "FormTemplateEmpty"
 	tFormTemplateExisting                    textID = "FormTemplateExisting"
 	tSectionClosedMark                       textID = "SectionClosedMark"
+	tMouseHint                               textID = "MouseHint"
+	tMouseDetail                             textID = "MouseDetail"
 )

@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // The filter bar of the grouped lists (Connections, Services, Credentials) changes only what the list shows
@@ -90,7 +91,11 @@ func boolIndex(b bool) int {
 // stepBar changes the value of field k by one alternative, wrapping.
 func (m *Model) stepBar(k barKind, by int) {
 	_, values, active := m.barField(k)
-	next := wrap(active+by, len(values))
+	m.setBar(k, wrap(active+by, len(values)))
+}
+
+// setBar gives field k the alternative next.
+func (m *Model) setBar(k barKind, next int) {
 	o := m.opts(m.section)
 	switch k {
 	case barGroup:
@@ -140,6 +145,21 @@ func (m *Model) barNames(s section, names []string) []string {
 		})
 	}
 	return names
+}
+
+// hitBarFields makes the alternatives of the filter bar clickable. line is the bar as drawn, on screen row row.
+func (m *Model) hitBarFields(line string, row int) {
+	var specs []barSpec
+	for i, k := range barKinds(m.section) {
+		k := k
+		label, values, active := m.barField(k)
+		head := barMarker(m.screen == screenList && m.barFocus == i+1) + label + ": "
+		specs = append(specs, barSpec{
+			field: ansi.Strip(head + barChips(values, active)), prefix: lipgloss.Width(head), values: values, active: active,
+			choose: func(j int) tea.Cmd { m.setBar(k, j); return nil },
+		})
+	}
+	m.hitBar([]string{line}, row, specs)
 }
 
 // barLine draws the bar on one line of width cells. Where its fields do not all fit, the focused field

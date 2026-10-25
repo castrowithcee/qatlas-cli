@@ -631,6 +631,20 @@ type Model struct {
 	// backdrop is set while a screen is drawn as the background of a dialog: the dialog shows what the
 	// screen would show for its own input.
 	backdrop bool
+	// The click targets of the frame drawn last; see mouse.go.
+	hits      []hit
+	frameHits []hit
+	// tooSmall is set while the workspace is replaced by the size notice, which has nothing to click.
+	tooSmall bool
+	// footerLog, when set, collects the footer lines a dialog draws, to make its keys clickable.
+	footerLog *[]footerLine
+	// formTop and formLeft are where the rows of the form being drawn start; sectionListWidth is the width of
+	// the list of its sections, 0 where there is none.
+	formTop, formLeft, sectionListWidth int
+	// overviewRowLines are the lines of the Overview that hold its selectable items.
+	overviewRowLines []int
+	// logBarSpecs are the fields of the bar of the Logs screen as the last frame drew them.
+	logBarSpecs []barSpec
 	// updateText is what the update question says an installation does, set when it opens.
 	updateText string
 
@@ -817,7 +831,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSelftest(msg)
 	case restartFailedMsg:
 		m.restartFailed(msg)
-		return m, nil
+		// The terminal was released for the replacement, which turned the mouse off; it stays this editor's.
+		return m, m.mouseResume()
+	case tea.MouseMsg:
+		return m, m.updateMouse(msg)
 	case tea.WindowSizeMsg:
 		// A zero dimension is also how focused tests report only the dimension they exercise. Real size
 		// messages carry both; keep the last known value until a non-zero replacement arrives.
@@ -3613,6 +3630,7 @@ func (m *Model) View() string {
 	if m.quitting {
 		return ""
 	}
+	m.hits, m.frameHits, m.tooSmall = nil, nil, false
 	if m.terminalTooSmall() {
 		if m.screen == screenLeave {
 			return m.boundKeepingKeys(m.leaveView(), m.termWidth, m.termHeight)
@@ -3625,7 +3643,23 @@ func (m *Model) View() string {
 	if view, ok := m.modalView(); ok {
 		return view
 	}
+	if m.questionScreen() || m.promptScreen() {
+		// A dialog that has no room for a modal fills the workspace; its keys are buttons there as well.
+		var footers []footerLine
+		m.footerLog = &footers
+		workspace := m.workspaceView()
+		m.footerLog = nil
+		view := m.frame(workspace)
+		m.hitFooters(strings.Split(workspace, "\n"), footers, m.workspaceTop(), 0)
+		return view
+	}
 	return m.frame(m.workspaceView())
+}
+
+// promptScreen reports whether the current screen is a short input dialog or a connection test result.
+func (m *Model) promptScreen() bool {
+	_, ok := m.prompt()
+	return ok
 }
 
 // workspaceView is the current screen, or, when it cannot fit the workspace, what it needs and the way out
@@ -3635,6 +3669,7 @@ func (m *Model) workspaceView() string {
 	if m.screen == screenLeave || m.viewFits(view) {
 		return view
 	}
+	m.tooSmall = true
 	width, height := lipgloss.Width(view), lipgloss.Height(view)
 	way := "{back} leave, asking first if anything changed"
 	if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
@@ -3716,6 +3751,7 @@ func (m *Model) editorView() string {
 			b.WriteString(styles.title.Render(what) + "\n\n")
 		}
 		b.WriteString(m.otherProblems())
+		m.formTop = m.workspaceTop() + strings.Count(b.String(), "\n")
 		b.WriteString(m.formBody())
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
 			b.WriteString("\n" + m.wrapped(styles.hint, m.copyNote()) + "\n")
@@ -3793,12 +3829,18 @@ func (m *Model) editorView() string {
 // the left where the terminal has room for it, and a heading above each section where it has not.
 func (m *Model) formBody() string {
 	entries := m.formSections()
+	m.formLeft, m.sectionListWidth = 0, 0
 	if !m.sectionListFits(entries) {
 		return m.formRows(len(entries) >= 2, entries)
 	}
 	list, width := m.sectionList(entries)
+	for i, e := range entries {
+		name := e.name
+		m.addHit(0, m.formTop+i, width, m.formTop+i+1, func() tea.Cmd { return m.clickSection(name) })
+	}
 	full := m.width
 	m.width = full - width - 2
+	m.formLeft, m.sectionListWidth = width+2, width
 	rows := m.formRows(false, entries)
 	m.width = full
 	joined := lipgloss.JoinHorizontal(lipgloss.Top, list, "  ", strings.TrimSuffix(rows, "\n"))
@@ -3825,6 +3867,9 @@ func (m *Model) formRows(headings bool, entries []sectionEntry) string {
 		// Headings are the first thing given up when the form is cut to the rows around the focus.
 		if headings && m.window == nil && f.section != "" && f.section != last && !outside {
 			last = f.section
+			name := f.section
+			y := m.formTop + strings.Count(b.String(), "\n")
+			m.addHit(m.formLeft, y, m.formLeft+m.width, y+1, func() tea.Cmd { return m.clickSection(name) })
 			b.WriteString(m.sectionHeading(sectionEntry{f.section, closed[f.section]}) + "\n")
 		}
 		if f.section != "" && closed[f.section] {
@@ -3836,12 +3881,23 @@ func (m *Model) formRows(headings bool, entries []sectionEntry) string {
 			}
 			continue
 		}
-		b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
+		row := m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus))
+		if !f.readOnly {
+			y, index := m.formTop+strings.Count(b.String(), "\n"), i
+			m.addHit(m.formLeft, y, m.formLeft+m.width, y+strings.Count(row, "\n")+1,
+				func() tea.Cmd { return m.clickField(index) })
+		}
+		b.WriteString(row + "\n")
 		// A read-only field can never be the one focused, so its hint would never show; it explains
 		// itself in its own value instead (see renderField), the way a read-only tool list already does.
 		if i == m.focus && !f.readOnly {
 			if hint := m.fieldHint(f); hint != "" {
-				b.WriteString(m.hintLine(hint, m.moreBehind(f, hint)) + "\n")
+				line := m.hintLine(hint, m.moreBehind(f, hint))
+				m.hitInfoMark(line, m.formTop+strings.Count(b.String(), "\n"), m.formLeft, func() tea.Cmd {
+					m.openInfo()
+					return nil
+				})
+				b.WriteString(line + "\n")
 			}
 		}
 		// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
@@ -4002,6 +4058,7 @@ func (m *Model) listView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(row(i) + "\n")
 	}
+	m.hitList(header, start, end, row)
 	if m.paneWidth() > 0 {
 		room := m.height - strings.Count(footer, "\n") - 1
 		lines := m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), room)
@@ -4255,6 +4312,7 @@ func (m *Model) pickerView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.pickerRow(i) + "\n")
 	}
+	m.hitPicker(header, start, end)
 	b.WriteString(footer)
 	return b.String()
 }
@@ -4852,7 +4910,11 @@ func Run(opts Options) error {
 	if predecessor != nil {
 		model.adopt(predecessor)
 	}
-	_, err = tea.NewProgram(model, tea.WithInput(opts.In), tea.WithOutput(opts.Out)).Run()
+	programOptions := []tea.ProgramOption{tea.WithInput(opts.In), tea.WithOutput(opts.Out)}
+	if prefs.MouseEnabled() {
+		programOptions = append(programOptions, tea.WithMouseCellMotion())
+	}
+	_, err = tea.NewProgram(model, programOptions...).Run()
 	return err
 }
 

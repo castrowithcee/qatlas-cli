@@ -155,6 +155,9 @@ func (m *Model) modalView() (string, bool) {
 	inner := min(modalMaxInner, m.termWidth-8)
 	title := tr(tModalConfirm)
 	var text string
+	var footers []footerLine
+	m.footerLog = &footers
+	defer func() { m.footerLog = nil }()
 	if m.questionScreen() {
 		m.renderAs(m.screen, inner, func() { text = m.questionView() })
 		if m.screen == screenLeave {
@@ -172,6 +175,7 @@ func (m *Model) modalView() (string, bool) {
 			return "", false
 		}
 	}
+	m.footerLog = nil
 	base := m.baseScreen()
 	if base == screenForm && m.fields == nil {
 		return "", false
@@ -191,6 +195,8 @@ func (m *Model) modalView() (string, bool) {
 		defer func() { m.backdrop = false }()
 		background = m.frame(m.workspaceView())
 	})
+	top, left := dialogOrigin(dialog, m.termWidth, m.termHeight)
+	m.hitDialog(lines, footers, top, left)
 	return overlay(background, dialog, m.termWidth, m.termHeight), true
 }
 
@@ -207,7 +213,7 @@ func overlay(background string, dialog []string, width, height int) string {
 	for _, line := range dialog {
 		dialogWidth = max(dialogWidth, ansi.StringWidth(line))
 	}
-	top, left := max((height-len(dialog))/2, 0), max((width-dialogWidth)/2, 0)
+	top, left := dialogOrigin(dialog, width, height)
 	for i, row := range rows {
 		plain := ansi.Strip(row)
 		plain += strings.Repeat(" ", max(width-ansi.StringWidth(plain), 0))

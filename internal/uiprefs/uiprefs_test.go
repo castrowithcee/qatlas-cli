@@ -94,7 +94,7 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != "theme: light\nstart: overview\nicons: none\nlanguage: english\n" {
+	if got := string(data); got != "theme: light\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
 		t.Fatalf("file = %q", got)
 	}
 }
@@ -159,5 +159,41 @@ func TestLanguageLoadsAndFallsBack(t *testing.T) {
 	}
 	if Default().Language != LanguageEnglish {
 		t.Fatalf("default language = %q, want english", Default().Language)
+	}
+}
+
+func TestMouseIsOnByDefaultAndSurvivesARoundTrip(t *testing.T) {
+	if !Default().MouseEnabled() || !(Prefs{}).MouseEnabled() {
+		t.Fatal("the mouse is not on in the defaults")
+	}
+	path := Path(t.TempDir())
+	off := Default()
+	off.MouseOff = true
+	if err := Save(path, off); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "mouse: false\n") {
+		t.Fatalf("file = %q, want mouse: false", data)
+	}
+	got, warnings := Load(path)
+	if len(warnings) != 0 || got.MouseEnabled() {
+		t.Fatalf("Load() = %+v, %v; want the mouse off and no warning", got, warnings)
+	}
+	if err := Save(path, Default()); err != nil {
+		t.Fatal(err)
+	}
+	if got, warnings := Load(path); len(warnings) != 0 || !got.MouseEnabled() {
+		t.Fatalf("Load() = %+v, %v; want the mouse on and no warning", got, warnings)
+	}
+}
+
+func TestLoadWarnsForAMouseValueThatIsNoBoolean(t *testing.T) {
+	path := Path(t.TempDir())
+	if err := os.WriteFile(path, []byte("mouse: sometimes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if len(warnings) != 1 || !got.MouseEnabled() {
+		t.Fatalf("Load() = %+v, %v; want the mouse on and one warning", got, warnings)
 	}
 }

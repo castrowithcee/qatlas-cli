@@ -32,13 +32,25 @@ import (
 
 var ansiSequence = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07)`)
 
-// TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog updates a running editor with an unlocked vault to a
-// release served by the test: the editor replaces itself with the new program at the same path, tells
-// which versions it updated between, and opens the unlock dialog; esc leaves the vault locked.
-func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
-	if testing.Short() {
-		t.Skip("the acceptance run starts the editor on a pseudo-terminal")
-	}
+// mouseOn is the sequence that turns on the cell motion mouse mode of the terminal.
+const mouseOn = "\x1b[?1002h"
+
+// updateRig is an editor with an unlocked-able vault running on a pseudo-terminal, beside a release server
+// that offers v2.0.0 as the program it is given.
+type updateRig struct {
+	t       *testing.T
+	bin     string
+	program string
+	master  *os.File
+	cmd     *exec.Cmd
+	mu      sync.Mutex
+	raw     strings.Builder
+}
+
+// newUpdateRig starts the editor with the given content of tui.yaml (none where empty). program is the file the
+// release installs; empty stands for a program that starts this test binary again, as the newer version.
+func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
+	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +75,9 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 
 	// The release: a program that starts this test binary again, as the newer version.
 	const latest = "v2.0.0"
-	program := fmt.Sprintf("#!/bin/sh\nexport %s=v2.0.0\nexec %q \"$@\"\n", tuiVersionEnv, self)
+	if program == "" {
+		program = fmt.Sprintf("#!/bin/sh\nexport %s=v2.0.0\nexec %q \"$@\"\n", tuiVersionEnv, self)
+	}
 	archiveName := fmt.Sprintf("qatlas_%s_linux_%s.tar.gz", latest, runtime.GOARCH)
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
@@ -101,6 +115,11 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("version: 3\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if prefs != "" {
+		if err := os.WriteFile(filepath.Join(dir, "tui.yaml"), []byte(prefs), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := vault.New(dir).Set("seed", "role", "canary-seed",
 		func(string) (string, error) { return tuiPassphraseIn, nil }); err != nil {
 		t.Fatalf("seeding the vault: %v", err)
@@ -109,7 +128,7 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	t.Cleanup(func() { killProcessesIn(runtimeDir) })
 
 	master, slave := openTestPTY(t)
-	defer master.Close()
+	t.Cleanup(func() { _ = master.Close() })
 	size := struct{ rows, cols, x, y uint16 }{30, 120, 0, 0}
 	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCSWINSZ,
 		uintptr(unsafe.Pointer(&size))); errno != 0 {
@@ -127,100 +146,191 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	_ = slave.Close()
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 
-	var mu sync.Mutex
-	var raw strings.Builder
+	r := &updateRig{t: t, bin: bin, program: program, master: master, cmd: cmd}
 	go func() {
 		buf := make([]byte, 4096)
 		for {
 			n, err := master.Read(buf)
-			mu.Lock()
-			raw.Write(buf[:n])
-			mu.Unlock()
+			r.mu.Lock()
+			r.raw.Write(buf[:n])
+			r.mu.Unlock()
 			if err != nil {
 				return
 			}
 		}
 	}()
-	screen := func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return ansiSequence.ReplaceAllString(raw.String(), "")
-	}
-	// wait looks for text written after the first from bytes of the screen.
-	wait := func(from int, text string) int {
-		t.Helper()
-		for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-			if s := screen(); from <= len(s) && strings.Contains(s[from:], text) {
-				return len(s)
-			}
-			if time.Now().After(deadline) {
-				t.Fatalf("no %q on the terminal; it shows:\n%s", text, screen())
-			}
-		}
-	}
-	typeKeys := func(s string) {
-		t.Helper()
-		if _, err := io.WriteString(master, s); err != nil {
-			t.Fatal(err)
-		}
-	}
+	return r
+}
 
-	at := wait(0, "Update available v1.0.0 → v2.0.0")
-	typeKeys("\x0c") // ctrl+l unlocks the vault
-	at = wait(at, "Unlock vault")
-	for deadline := time.Now().Add(10 * time.Second); !echoDisabled(master); time.Sleep(10 * time.Millisecond) {
+// bytes is everything the editor wrote to the terminal so far, escape sequences included.
+func (r *updateRig) bytes() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.raw.String()
+}
+
+func (r *updateRig) screen() string { return ansiSequence.ReplaceAllString(r.bytes(), "") }
+
+// wait looks for text written after the first from bytes of the screen.
+func (r *updateRig) wait(from int, text string) int {
+	r.t.Helper()
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if s := r.screen(); from <= len(s) && strings.Contains(s[from:], text) {
+			return len(s)
+		}
+		if time.Now().After(deadline) {
+			r.t.Fatalf("no %q on the terminal; it shows:\n%s", text, r.screen())
+		}
+	}
+}
+
+func (r *updateRig) typeKeys(s string) {
+	r.t.Helper()
+	if _, err := io.WriteString(r.master, s); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// startUpdate unlocks the vault, asks for the update and answers y, and returns where the screen stood then.
+func (r *updateRig) startUpdate() int {
+	t := r.t
+	t.Helper()
+	at := r.wait(0, "Update available v1.0.0 → v2.0.0")
+	r.typeKeys("\x0c") // ctrl+l unlocks the vault
+	at = r.wait(at, "Unlock vault")
+	for deadline := time.Now().Add(10 * time.Second); !echoDisabled(r.master); time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the editor did not read the passphrase masked")
 		}
 	}
-	typeKeys(tuiPassphraseIn + "\r")
-	at = wait(at, "The vault is unlocked")
+	r.typeKeys(tuiPassphraseIn + "\r")
+	at = r.wait(at, "The vault is unlocked")
 
 	// The editor refuses the question while the vault process is still starting; u asks again once that
 	// refusal is the last thing shown, never blind. The screen is redrawn as a whole now and then, so an
 	// earlier refusal may show again after the question: the last of the two decides.
 	for attempt := 0; ; attempt++ {
-		typeKeys("u")
+		r.typeKeys("u")
 		var question, refused bool
 		for deadline := time.Now().Add(30 * time.Second); !question && !refused && time.Now().Before(deadline); {
 			time.Sleep(20 * time.Millisecond)
-			s := screen()
+			s := r.screen()
 			if at > len(s) {
 				continue
 			}
 			asked, wait := strings.LastIndex(s[at:], "Update qatlas to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
 			question, refused = asked >= 0 && asked > wait, wait >= 0 && wait > asked
 		}
-		at = len(screen())
+		at = len(r.screen())
 		if question {
 			break
 		}
 		if !refused || attempt >= 50 {
-			t.Fatalf("u neither asked nor was refused; the terminal shows:\n%s", screen())
+			t.Fatalf("u neither asked nor was refused; the terminal shows:\n%s", r.screen())
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	typeKeys("y")
-	wait(at, "qatlas updated from v1.0.0 to v2.0.0")
-	at = wait(at, "Unlock vault")
-	if content, err := os.ReadFile(bin); err != nil || string(content) != program {
+	r.typeKeys("y")
+	return at
+}
+
+// TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog updates a running editor with an unlocked vault to a
+// release served by the test: the editor replaces itself with the new program at the same path, tells
+// which versions it updated between, and opens the unlock dialog; esc leaves the vault locked.
+func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
+	if testing.Short() {
+		t.Skip("the acceptance run starts the editor on a pseudo-terminal")
+	}
+	r := newUpdateRig(t, "", "")
+	at := r.startUpdate()
+	r.wait(at, "qatlas updated from v1.0.0 to v2.0.0")
+	at = r.wait(at, "Unlock vault")
+	if content, err := os.ReadFile(r.bin); err != nil || string(content) != r.program {
 		t.Errorf("the installed program is not the release: %v", err)
 	}
-	typeKeys("\x1b") // esc leaves the vault locked
-	wait(at, "Cancelled")
-	typeKeys("q")
+	r.typeKeys("\x1b") // esc leaves the vault locked
+	r.wait(at, "Cancelled")
+	r.typeKeys("q")
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() { done <- r.cmd.Wait() }()
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Errorf("the restarted editor ended with %v", err)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatalf("the restarted editor did not end on q:\n%s", screen())
+		t.Fatalf("the restarted editor did not end on q:\n%s", r.screen())
 	}
-	if strings.Contains(screen(), tuiPassphraseIn) {
+	if strings.Contains(r.screen(), tuiPassphraseIn) {
 		t.Error("the passphrase reached the terminal")
+	}
+	// Both runs of the editor took the mouse, as the default says.
+	if got := strings.Count(r.bytes(), mouseOn); got < 2 {
+		t.Errorf("the mouse mode was turned on %d times, want once per run", got)
+	}
+}
+
+// The mouse mode is on by default and off where tui.yaml says so: the terminal is told only what the
+// preference allows.
+func TestTUITakesTheMouseOnlyWhenThePreferenceAllowsIt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("the acceptance run starts the editor on a pseudo-terminal")
+	}
+	for _, c := range []struct {
+		name, prefs string
+		want        bool
+	}{
+		{"default", "", true},
+		{"on", "mouse: true\n", true},
+		{"off", "mouse: false\n", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newUpdateRig(t, "", c.prefs)
+			r.wait(0, "Update available v1.0.0 → v2.0.0")
+			if got := strings.Contains(r.bytes(), mouseOn); got != c.want {
+				t.Errorf("mouse mode sequence present = %v, want %v", got, c.want)
+			}
+			r.typeKeys("q")
+			done := make(chan error, 1)
+			go func() { done <- r.cmd.Wait() }()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatalf("the editor did not end on q:\n%s", r.screen())
+			}
+		})
+	}
+}
+
+// A restart that fails leaves the editor running on the terminal it had released; Bubble Tea does not turn
+// the mouse mode on again after that, so the editor does.
+func TestTUIKeepsTheMouseAfterAFailedRestart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("the acceptance run starts the editor on a pseudo-terminal")
+	}
+	for _, c := range []struct {
+		name, prefs string
+		want        int
+	}{
+		{"mouse on", "", 2},
+		{"mouse off", "mouse: false\n", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// A program whose interpreter does not exist: it is a regular executable file, so the editor tries
+			// the replacement, and the replacement fails.
+			r := newUpdateRig(t, "#!/nonexistent/qatlas-interpreter\n", c.prefs)
+			at := r.startUpdate()
+			r.wait(at, "restart failed")
+			// The failure is shown once the terminal is the editor's again; the mouse follows with it.
+			deadline := time.Now().Add(5 * time.Second)
+			for strings.Count(r.bytes(), mouseOn) < c.want && time.Now().Before(deadline) {
+				time.Sleep(20 * time.Millisecond)
+			}
+			if got := strings.Count(r.bytes(), mouseOn); got != c.want {
+				t.Errorf("the mouse mode was turned on %d times, want %d", got, c.want)
+			}
+			r.typeKeys("q")
+		})
 	}
 }
 

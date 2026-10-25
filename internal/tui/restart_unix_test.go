@@ -5,6 +5,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,8 +138,13 @@ func TestAFailedExecKeepsTheEditorRunning(t *testing.T) {
 		t.Fatal("the recorded exec did not fail")
 	}
 	_, cmd := m.Update(r.done(err))
-	if cmd != nil || m.quitting {
+	if m.quitting {
 		t.Errorf("a failed restart ended the editor")
+	}
+	// The terminal was released for the replacement, which turned the mouse off: the editor turns it on again,
+	// and nothing else.
+	if cmd == nil || !strings.Contains(fmt.Sprintf("%T", cmd()), "enableMouseCellMotion") {
+		t.Errorf("a failed restart left the mouse off; the command is %v", cmd)
 	}
 	if m.status != "Updated to v0.5.0. Restart qatlas tui to use it." || m.fail != "restart failed: exec format error" {
 		t.Errorf("status %q, fail %q; want the hint and the failure", m.status, m.fail)

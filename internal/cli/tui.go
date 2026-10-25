@@ -165,7 +165,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"light, or dark; auto follows the terminal's background and NO_COLOR wins over all of them), the\n" +
 			"start view (the area the editor opens on the next start), icons (none or nerdfont, an icon\n" +
 			"before each area name that needs a Nerd Font), and language (english, deutsch, or system, which\n" +
-			"follows the device; it applies at once and covers the editor's own texts only). They are chosen from lists and saved with F2, with\n" +
+			"follows the device; it applies at once and covers the editor's own texts only), and mouse (on by\n" +
+			"default, or off; it applies at once: a click does what its key does, the wheel scrolls, and with it\n" +
+			"on, text is selected with Shift held, in macOS Terminal with fn, in iTerm2 with Option, in VS Code on\n" +
+			"macOS with Option-click). They are chosen from lists and saved with F2, with\n" +
 			"no admin session. General also binds the keys of save, help, command line, lock, and info (info may\n" +
 			"take a second key besides i): enter on a row, then press the new key; a taken key, ctrl+c, esc, tab,\n" +
 			"a digit, a letter, or a character for save, lock, or the extra info key is refused with its\n" +

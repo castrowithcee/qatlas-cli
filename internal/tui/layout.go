@@ -21,6 +21,7 @@ func (m *Model) layoutWorkspace() {
 
 // frame puts the workspace under the header, the tab line, the option bar, and a rule.
 func (m *Model) frame(workspace string) string {
+	m.registerBars()
 	lines := m.headerLines()
 	lines = append(lines, m.navLine())
 	if m.hasSubTabs() {
@@ -88,7 +89,16 @@ const pathRoom = 12
 // while the tabs have the focus; the brackets and the marker, not the colour, say which one is active. A
 // terminal too narrow for all names closes the gaps first and then shortens the others to their numbers;
 // the active tab always stays whole.
-func (m *Model) navLine() string {
+func (m *Model) navLine() string { return m.navTabs().line }
+
+// navBar is the tab line as drawn, and the cells of the tab of each area in it (a tab cut off by the edge of
+// the terminal has none).
+type navBar struct {
+	line  string
+	spans []navSpan
+}
+
+func (m *Model) navTabs() navBar {
 	focus := "  "
 	if m.screen == screenNav && !m.navSub {
 		focus = "> "
@@ -111,14 +121,18 @@ func (m *Model) navLine() string {
 		tab := tr(tTabSetup)
 		spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
 	}
-	line := focus + strings.Join(spaced, " ")
+	line, items := focus+strings.Join(spaced, " "), spaced
 	for _, tabs := range [][]string{compact, short} {
 		if lipgloss.Width(line) <= m.termWidth {
 			break
 		}
-		line = focus + strings.Join(tabs, " ")
+		line, items = focus+strings.Join(tabs, " "), tabs
 	}
-	return styles.active.Render(clipCells(line, m.termWidth))
+	bar := navBar{line: styles.active.Render(clipCells(line, m.termWidth))}
+	if m.wizard == nil {
+		bar.spans = spanItems(items, lipgloss.Width(focus), " ", m.termWidth)
+	}
+	return bar
 }
 
 // box draws a frame of inner width by rows around lines, with its title in the top border. The frame with

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -449,22 +450,30 @@ func (m *Model) keyHintLines(text string) []string {
 	var lines []string
 	var line string
 	lineWidth := 0
+	var current []footerSpan
+	var spanned [][]footerSpan
 	for _, group := range strings.Split(text, " · ") {
 		group = truncateCells(group, width)
 		gw := lipgloss.Width(group)
 		if lineWidth > 0 && lineWidth+lipgloss.Width(" · ")+gw > width {
-			lines = append(lines, line)
-			line, lineWidth = "", 0
+			lines, spanned = append(lines, line), append(spanned, current)
+			line, lineWidth, current = "", 0, nil
 		}
 		if lineWidth > 0 {
 			line += styles.hint.Render(" · ")
 			lineWidth += lipgloss.Width(" · ")
 		}
+		current = append(current, footerSpan{lineWidth, lineWidth + gw, footerKey(group)})
 		line += keyHintGroup(group)
 		lineWidth += gw
 	}
 	if lineWidth > 0 || len(lines) == 0 {
-		lines = append(lines, line)
+		lines, spanned = append(lines, line), append(spanned, current)
+	}
+	if m.footerLog != nil {
+		for i, l := range lines {
+			*m.footerLog = append(*m.footerLog, footerLine{plain: ansi.Strip(l), spans: spanned[i]})
+		}
 	}
 	return lines
 }
