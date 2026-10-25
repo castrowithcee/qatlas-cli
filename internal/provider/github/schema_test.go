@@ -25,7 +25,8 @@ import (
 // The GraphQL documents of this provider are validated against a snapshot of GitHub's public schema
 // (https://docs.github.com/public/fpt/schema.docs.graphql), because GitHub rejects a document that breaks
 // the schema as a whole. Two sets are checked: the documents that are constants of the package, and the
-// documents the other tests of the package send, which covers those composed at run time. Refresh the
+// documents the other tests of the package send, which covers those composed at run time. A constant document
+// is checked with every scope gate kept and with every one dropped. Refresh the
 // snapshot by downloading that file again.
 const schemaSnapshot = "testdata/github.schema.graphql"
 
@@ -149,7 +150,9 @@ func constantDocuments(t *testing.T) []string {
 					}
 					text := strings.TrimSpace(goconstant.StringVal(known))
 					if (strings.HasPrefix(text, "query") || strings.HasPrefix(text, "mutation")) && balanced(text) {
-						seen[text] = true
+						for _, variant := range scopeVariants(text) {
+							seen[variant] = true
+						}
 					}
 				}
 			}
@@ -201,14 +204,19 @@ func TestConstantDocumentsMatchSchema(t *testing.T) {
 	}
 }
 
-// TestItemDocumentsMatchSchema covers the project item documents, which are composed from methods.
+// TestItemDocumentsMatchSchema covers the project item and issue list documents, which are composed from
+// methods, for a token with every scope and one without any.
 func TestItemDocumentsMatchSchema(t *testing.T) {
 	schema, err := loadSchema()
 	if err != nil {
 		t.Fatalf("loadSchema() = %v", err)
 	}
 	c := &Client{target: target{scope: "orgs"}}
-	for _, failure := range schemaErrors(schema, []string{itemsQuery, c.itemQuery(), c.projectQuery()}) {
+	var documents []string
+	for _, document := range []string{itemsQuery, c.itemQuery(), c.projectQuery(), issuesQuery(true)} {
+		documents = append(documents, scopeVariants(document)...)
+	}
+	for _, failure := range schemaErrors(schema, documents) {
 		t.Errorf("document breaks the GitHub schema: %s", failure)
 	}
 }

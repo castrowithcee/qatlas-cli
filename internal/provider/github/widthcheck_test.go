@@ -76,7 +76,7 @@ func assertSelectionMatchesOutput(t *testing.T, selection string, output, schema
 	}
 	raw := map[string]bool{}
 	outputMemberNames(value, raw)
-	members := selectionMembers(selection)
+	members := selectionMembers(fullDocument(selection))
 	skipOutput, skipQuery := map[string]bool{}, map[string]bool{}
 	for _, name := range outputOnly {
 		skipOutput[norm(name)] = true

@@ -85,6 +85,10 @@ type fakeGitHub struct {
 	// memberStatus is the status the organization membership route answers for a login of octo-org; a login
 	// it lacks is a member (204).
 	memberStatus map[string]int
+	// scopes replaces the X-OAuth-Scopes header every answer carries, fullScopes by default; noScopes leaves the
+	// header out like GitHub does for a fine-grained token.
+	scopes   string
+	noScopes bool
 	// noTeams refuses the team list like GitHub does for a token without read:org.
 	noTeams bool
 	// orgTeamsForbidden refuses the organization team and team member routes like GitHub does for a token
@@ -142,6 +146,13 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.requests = append(f.requests, record)
 	f.mu.Unlock()
 
+	if !f.noScopes {
+		scopes := f.scopes
+		if scopes == "" {
+			scopes = fullScopes
+		}
+		w.Header().Set("X-OAuth-Scopes", scopes)
+	}
 	if f.failure != nil && f.failure(w, r) {
 		return
 	}
@@ -673,6 +684,7 @@ func serve(t *testing.T, f *fakeGitHub) string {
 	transport = recordDocuments(server.Client().Transport)
 	t.Cleanup(func() { transport = previous })
 	t.Cleanup(limiters.Replace(tokenValue, freeLimiter()))
+	setTestScopes(t, fullScopes)
 	return server.URL + "/api/v3"
 }
 

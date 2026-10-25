@@ -46,6 +46,14 @@ can read the first project or repository the
 connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
 scope again on each call, so a passing test does not authorize every tool.
 
+GitHub refuses a whole GraphQL query when it asks for a member the token lacks the scope for. Qatlas reads
+the scopes of a classic token from GitHub and leaves such members out of every result instead: a user's email
+without `user:email` or `read:user`, an organization's details beyond its login and addresses without
+`read:org` (where GitHub names the organization itself, everything but its type), team reviewers without
+`read:org` or `read:discussion`, enterprise team reviewers without `read:org` or `read:enterprise`, and
+enterprise user accounts without `read:enterprise`. A token GitHub reports no scopes for, such as a
+fine-grained token, gets none of these members.
+
 ### Targets
 
 `targets` is an optional allow-list. A connection without it reaches every repository and project its token

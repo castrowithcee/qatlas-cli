@@ -150,7 +150,7 @@ func TestIssueListCarriesTheFullIssue(t *testing.T) {
 	}
 	assertJSON(t, json.RawMessage(got), `{"issues":[`+widthIssueView+`],"has_more":false,"repository":"octo-org/example"}`)
 	requests := f.recorded()
-	if len(requests) != 1 || !strings.Contains(requests[0].document, issueListSelection(true)) {
+	if len(requests) != 1 || !strings.Contains(requests[0].document, fullDocument(issueListSelection(true))) {
 		t.Fatalf("requests = %d, want one query with the issue list selection", len(requests))
 	}
 
@@ -426,7 +426,7 @@ func TestIssueListReadsProjectsOnlyOnRequest(t *testing.T) {
 		if has := strings.Contains(string(got), "projects_v2") || strings.Contains(string(got), "project_items_total_count"); has != tc.projects {
 			t.Errorf("%s: output carries projects = %t, want %t", tc.arguments, has, tc.projects)
 		}
-		if document != issuesQuery(tc.projects) {
+		if document != fullDocument(issuesQuery(tc.projects)) {
 			t.Errorf("%s: the query is not the selection of project_details %t", tc.arguments, tc.projects)
 		}
 	}

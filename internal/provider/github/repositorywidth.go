@@ -76,7 +76,8 @@ func gqlLinkKeys(keys ...string) []string { return keys }
 
 // gqlOwnerSelection selects the owner of a repository, which is a User or an Organization.
 const gqlOwnerSelection = `__typename login avatarUrl url resourcePath ` +
-	`... on User{id databaseId name email isSiteAdmin} ... on Organization{id databaseId name email}`
+	`... on User{id databaseId name ` + gateUserEmail + `email` + gateEnd + ` isSiteAdmin} ` +
+	gateOrganization + `... on Organization{id databaseId name email}` + gateEnd
 
 const gqlNestedRepositorySelection = `id databaseId fullDatabaseId name nameWithOwner description url createdAt ` +
 	`updatedAt pushedAt archivedAt visibility isPrivate isFork isArchived isTemplate isMirror isLocked isDisabled ` +

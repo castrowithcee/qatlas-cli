@@ -94,7 +94,7 @@ func TestBlameCarriesTheFullCommit(t *testing.T) {
 	if !strings.Contains(blameDetailQuery, selection) {
 		t.Fatalf("blameDetailQuery lacks %q", selection)
 	}
-	if last := f.recorded(); last[len(last)-1].document != blameDetailQuery {
+	if last := f.recorded(); last[len(last)-1].document != fullDocument(blameDetailQuery) {
 		t.Errorf("commit_details did not send the detail query")
 	}
 	assertSelectionMatchesOutput(t, selection, first, entrySchema(t, blameGet.OutputSchema, "ranges"),
@@ -177,7 +177,7 @@ func TestBlameCommitDetailsAreOptIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	document := f.recorded()[0].document
-	if document != blameQuery {
+	if document != fullDocument(blameQuery) {
 		t.Errorf("default query is not the compact one")
 	}
 	for _, detail := range []string{"messageBody", "signature", "status", "tree", "tarballUrl", "additions", "message "} {
