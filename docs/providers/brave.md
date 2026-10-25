@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context and News tools.
+  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the rules of the LLM Context, News, Videos, and Images tools.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -10,7 +10,7 @@ updated: 2026-10-25
 # Brave Search
 
 Brave Search is a provider for the Brave Search API with one subscription key. It reads the web for agents
-(LLM Context) and news. It changes nothing: every tool is a read, and the connection takes no target,
+(LLM Context), news, videos, and images. It changes nothing: every tool is a read, and the connection takes no target,
 because a key reaches the endpoints of its plan and not a part of an account.
 
 ## Configuration
@@ -44,8 +44,8 @@ Brave sells separate plans (Search, Answers, Spellcheck, Autosuggest, Enterprise
 the endpoints of the plans on its account. Brave offers no way to ask which plans a key has, so Qatlas
 cannot hide an endpoint the key lacks: a call to it ends with `permission` or `not-found`.
 
-The profile `search` is the Search plan: `brave.llm-context.get` and `brave.news.search`. It is the
-recommended profile.
+The profile `search` is the Search plan: `brave.llm-context.get`, `brave.news.search`,
+`brave.videos.search`, and `brave.images.search`. It is the recommended profile.
 
 Qatlas manages no subscription, payment, or key.
 
@@ -122,8 +122,8 @@ and claim neither. An unreadable, oversized (over 4 MB), or non-JSON answer is `
 
 ## Boundary
 
-The provider reaches only the two endpoints below. It offers no passthrough of method, path, header, or
-body. Not offered: Web Search, Images, Videos, Place Search, Answers, Suggest, and Spellcheck.
+The provider reaches only the four endpoints below. It offers no passthrough of method, path, header, or
+body. Not offered: Web Search, Place Search, Answers, Suggest, and Spellcheck.
 
 Left out on purpose:
 
@@ -131,7 +131,7 @@ Left out on purpose:
   compatible reaches the tools; one that removes or renames a field needs a new tool version.
 - `goggles_id`, deprecated by Brave, is not offered.
 - A result shows only the fields below. Fields Brave adds later are ignored.
-- Result addresses (page, profile, favicon, thumbnail, icon) that are not absolute `http` or `https`
+- Result addresses (page, profile, favicon, thumbnail, icon, author, image) that are not absolute `http` or `https`
   addresses without user information, or are longer than 2048 bytes, are dropped from the result.
 - A `no_cache` argument asks Brave to skip its cache by `Cache-Control: no-cache`, on a best-effort basis.
 - `country_code` of the location is checked as two upper-case letters, not against Brave's list of
@@ -171,3 +171,25 @@ agent, not a person, reads the result. It has no pages; the size of the answer i
 - Brave sends no end signal for news. `has_more` is true while `offset` is below 9 and the page was not
   empty, so the last page may be empty, and consecutive pages may overlap.
 - `include_fetch_metadata` adds fetch metadata such as `page_fetched` to the articles.
+
+## brave.videos.search
+
+`GET /res/v1/videos/search`. It returns videos, up to 50 per page.
+
+- `q` takes at most 400 characters and 50 words. `safesearch` is `moderate` when omitted; there are no
+  `goggles` and no `extra_snippets`.
+- Paging works as for News: `offset` or a bound `cursor`, from 0 through 9, no end signal from Brave, so
+  `has_more` is true while `offset` is below 9 and the page was not empty.
+- `video` carries `requires_subscription`, `views`, `tags` (at most 20), and `author`. `extra` carries
+  `might_be_offensive`.
+
+## brave.images.search
+
+`GET /res/v1/images/search`. It returns up to 200 images in one answer; there is no paging, no `offset`,
+no `cursor`, and no `ui_lang`.
+
+- `q` takes at most 400 characters and 50 words. `safesearch` is `off` or `strict`, `strict` when omitted.
+  `off` applies no filter except for illegal content and can return adult content.
+- `thumbnail.src` and `properties.placeholder` are addresses served by Brave's image proxy, and
+  `properties.url` is the original address. All are bounded text; Qatlas fetches no image and returns no
+  binary content. `confidence` is passed as Brave names it, and `extra.might_be_offensive` is passed on.

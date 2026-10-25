@@ -217,7 +217,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Errorf("tool %+v, want a read that needs no allow-list", tool)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"brave.llm-context.get", "brave.news.search"}) {
+	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search", "brave.videos.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -232,7 +232,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
-		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search"}) {
+		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search", "brave.videos.search", "brave.images.search"}) {
 		t.Errorf("profiles = %+v, want the recommended search profile with both tools", metadata.Profiles)
 	}
 }
@@ -502,7 +502,7 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 	}{
 		{"by effect", config.Resolved{Effects: []config.Effect{config.EffectRead}}, "brave.news.search"},
 		{"news listed", config.Resolved{Tools: []string{"brave.news.search"}}, "brave.news.search"},
-		{"both listed", config.Resolved{Tools: []string{"brave.llm-context.get", "brave.news.search"}}, "brave.news.search"},
+		{"both listed", config.Resolved{Tools: []string{"brave.llm-context.get", "brave.news.search", "brave.videos.search", "brave.images.search"}}, "brave.news.search"},
 		{"only llm context", config.Resolved{Tools: []string{"brave.llm-context.get"}}, "brave.llm-context.get"},
 		{"none", config.Resolved{Tools: []string{}}, ""},
 	} {
