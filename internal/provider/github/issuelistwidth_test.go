@@ -90,12 +90,6 @@ var widthIssue = `{"number":42,"title":"Crash","state":"CLOSED","updatedAt":"202
 	`"suggestedActors":` + widthConnection(1, false, widthUser) + `,` +
 	`"trackedInIssues":` + widthConnection(1, false, widthIssueRef) + `,` +
 	`"trackedIssues":` + widthConnection(1, false, widthIssueRef) + `,` +
-	`"issueFieldValues":` + widthConnection(5, true,
-	`{"field":{"id":"IFT_1","name":"Notes","dataType":"TEXT"},"value":"remember"}`,
-	`{"field":{"id":"IFN_1","name":"Estimate","dataType":"NUMBER"},"numberValue":2.50}`,
-	`{"field":{"id":"IFD_1","name":"Due","dataType":"DATE"},"dateValue":"2026-04-01"}`,
-	`{"field":{"id":"IFS_1","name":"Priority","dataType":"SINGLE_SELECT"},"optionValue":"High"}`,
-	`{"field":{"id":"IFM_1","name":"Areas","dataType":"MULTI_SELECT"},"multiValue":"api,ui"}`) + `,` +
 	`"pendingSuggestions":` + widthSuggestions + `,"comments":{"totalCount":4},"subIssues":{"totalCount":2},"blockedBy":{"totalCount":1},"blocking":{"totalCount":2},` +
 	`"timelineItems":{"totalCount":9},"userContentEdits":{"totalCount":3},"reactions":{"totalCount":3},` +
 	`"projectItems":{"totalCount":1},"viewerCanAssign":true,"viewerCanClose":true,"viewerCanDelete":false,` +
@@ -132,12 +126,6 @@ var widthIssueView = `{"number":42,"title":"Crash","state":"closed","updated_at"
 	`"suggested_actors":[` + widthUserView + `],"suggested_actors_total_count":1,` +
 	`"tracked_in_issues":[` + widthIssueRefView + `],"tracked_in_issues_total_count":1,` +
 	`"tracked_issues":[` + widthIssueRefView + `],"tracked_issues_total_count":1,` +
-	`"issue_field_values":[{"field_id":"IFT_1","field_name":"Notes","data_type":"TEXT","value":"remember"},` +
-	`{"field_id":"IFN_1","field_name":"Estimate","data_type":"NUMBER","value":2.50},` +
-	`{"field_id":"IFD_1","field_name":"Due","data_type":"DATE","value":"2026-04-01"},` +
-	`{"field_id":"IFS_1","field_name":"Priority","data_type":"SINGLE_SELECT","value":"High"},` +
-	`{"field_id":"IFM_1","field_name":"Areas","data_type":"MULTI_SELECT","value":"api,ui"}],` +
-	`"issue_field_values_total_count":5,"issue_field_values_truncated":true,` +
 	`"pending_suggestions":` + widthSuggestionsView + `,"comments_total_count":4,"sub_issues_total_count":2,"blocked_by_total_count":1,"blocking_total_count":2,` +
 	`"timeline_items_total_count":9,"user_content_edits_total_count":3,"reactions_total_count":3,` +
 	`"project_items_total_count":1,"viewer_can_assign":true,"viewer_can_close":true,"viewer_can_delete":false,` +
@@ -176,7 +164,7 @@ func TestIssueListCarriesTheFullIssue(t *testing.T) {
 			"assigned_actors_total_count", "assignees_details", "assignees_total_count", "assignees_truncated",
 			"author_detail", "blocked_by_total_count", "blocking_total_count",
 			"closed_by_pull_requests_references_total_count", "comments_total_count", "count", "field_id",
-			"field_name", "issue_comment_id", "issue_field_values_total_count", "issue_field_values_truncated",
+			"field_name", "issue_comment_id",
 			"issue_type_detail", "labels_details", "labels_total_count", "linked_branches_total_count", "links",
 			"milestone_detail", "participants_total_count", "project_items_total_count", "projects_v2_total_count",
 			"reactions_total_count", "ref_name", "relates_to_total_count", "sub_issues_total_count",
@@ -255,8 +243,8 @@ func TestIssueListQueryStaysBelowTheNodeLimit(t *testing.T) {
 		perIssue += first
 	}
 	// The pending suggestions have no first value; count them as 100 per issue.
-	if nodes := maxLimit + maxLimit*(perIssue+100); nodes != 23100 || nodes >= 500000 {
-		t.Errorf("a full page asks for %d nodes, want 23100 and below 500000", nodes)
+	if nodes := maxLimit + maxLimit*(perIssue+100); nodes != 22100 || nodes >= 500000 {
+		t.Errorf("a full page asks for %d nodes, want 22100 and below 500000", nodes)
 	}
 	if issueConnectionFirst > 10 || issueAssigneesFirst > 10 || issueLabelsFirst != 20 {
 		t.Error("the connections are not capped at 10 entries, the labels at 20 as before")
