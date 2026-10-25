@@ -140,14 +140,14 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 
 	lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
 	faint := "\x1b[" + strings.TrimSuffix(strings.TrimPrefix(styles.hint.Render("x"), "\x1b["), "mx\x1b[0m") + "m"
-	row := m.pickerRow(index)
+	row := m.pickerRowText(index)
 	at := strings.Index(row, faint)
 	if at < 0 || !strings.HasPrefix(row[at+len(faint):], "bookstack.pages.list") ||
 		strings.Index(row, "List BookStack pages") > at {
 		t.Errorf("the inactive row does not dim from the ID on: %q", row)
 	}
 	lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
-	if row := m.pickerRow(index); strings.Contains(row, "\x1b[") ||
+	if row := m.pickerRowText(index); strings.Contains(row, "\x1b[") ||
 		!strings.Contains(row, "List BookStack pages  bookstack.pages.list  read") {
 		t.Errorf("without colour the row is not plain readable text: %q", row)
 	}
@@ -156,7 +156,7 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 		press(t, m, "down")
 	}
 	lipgloss.SetColorProfile(2)
-	if row := m.pickerRow(index); !strings.Contains(row, "\x1b[") || strings.Contains(row, faint) {
+	if row := m.pickerRowText(index); !strings.Contains(row, "\x1b[") || strings.Contains(row, faint) {
 		t.Errorf("the active row is not highlighted as the other picker rows are: %q", row)
 	}
 }

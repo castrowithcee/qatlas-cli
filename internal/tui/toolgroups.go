@@ -201,3 +201,32 @@ func (g *toolGroups) rowText(row string, marks map[string]bool, searching bool) 
 	}
 	return row
 }
+
+// styledRow is rowText drawn for the screen, in the style of the group rows of the lists: the fold marker dimmed,
+// the title in the accent colour and the counts dimmed. Without colour it reads exactly as rowText does.
+func (g *toolGroups) styledRow(row string, marks map[string]bool, searching bool) string {
+	var lead, title string
+	var ticked, total int
+	if row == allGroupsRow {
+		lead, title = "  ", tr(tToolGroupAllGroups)
+		ticked, total = g.count(marks)
+	} else {
+		id := strings.TrimPrefix(row, groupRowPrefix)
+		found := false
+		for _, group := range g.groups {
+			if group.ID == id {
+				lead, title, found = "▸ ", fmt.Sprintf("%s (%d)", group.Title, len(g.members[id])), true
+				if searching || !g.collapsed[id] {
+					lead = "▾ "
+				}
+			}
+		}
+		if !found {
+			return row
+		}
+		ticked, total = countTicks(g.members[id], marks)
+	}
+	pad := strings.Repeat(" ", max(g.titleCol-lipgloss.Width(lead+title), 0))
+	return styles.hint.Render(lead) + styles.active.Render(title) + pad + "  " +
+		styles.hint.Render(fmt.Sprintf("%d/%d", ticked, total))
+}

@@ -224,7 +224,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ids, []string{"brave.answers.ask", "brave.images.search", "brave.llm-context.get",
 		"brave.news.search", "brave.places.search", "brave.poi-descriptions.get", "brave.pois.get",
-		"brave.rich.get", "brave.videos.search", "brave.web.search"}) {
+		"brave.rich.get", "brave.spellcheck.check", "brave.suggestions.list", "brave.videos.search",
+		"brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -238,7 +239,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			}
 		}
 	}
-	if len(metadata.Profiles) != 2 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
+	if len(metadata.Profiles) != 3 || metadata.Profiles[2].ID != "autosuggest" || metadata.Profiles[2].Recommended ||
+		!reflect.DeepEqual(metadata.Profiles[2].Tools, []string{"brave.suggestions.list", "brave.spellcheck.check"}) {
+		t.Errorf("profiles = %+v, want a not recommended autosuggest profile with both tools", metadata.Profiles)
+	}
+	if metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search",
 			"brave.web.search", "brave.videos.search", "brave.images.search", "brave.rich.get",
 			"brave.places.search", "brave.pois.get", "brave.poi-descriptions.get"}) ||
@@ -467,10 +472,10 @@ func TestConnectionTest(t *testing.T) {
 	f := &fakeBrave{}
 	class, err := run(f, resolved(nil, config.EffectRead))
 	requests := f.recorded()
-	if err != nil || class != provider.ClassOK || len(requests) != 1 || requests[0].path != "/res/v1/news/search" ||
-		requests[0].query.Get("q") != "brave" || requests[0].query.Get("count") != "1" ||
+	if err != nil || class != provider.ClassOK || len(requests) != 1 || requests[0].path != "/res/v1/spellcheck/search" ||
+		requests[0].query.Get("q") != "brave" ||
 		requests[0].header.Get("X-Subscription-Token") != tokenValue {
-		t.Fatalf("success: class = %q, err = %v, requests = %+v, want one minimal news request", class, err, requests)
+		t.Fatalf("success: class = %q, err = %v, requests = %+v, want one minimal spellcheck request", class, err, requests)
 	}
 	for _, tc := range []struct {
 		status int
@@ -511,9 +516,11 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 		resolved config.Resolved
 		want     string
 	}{
-		{"by effect", config.Resolved{Effects: []config.Effect{config.EffectRead}}, "brave.news.search"},
+		{"by effect", config.Resolved{Effects: []config.Effect{config.EffectRead}}, "brave.spellcheck.check"},
 		{"news listed", config.Resolved{Tools: []string{"brave.news.search"}}, "brave.news.search"},
 		{"both listed", config.Resolved{Tools: []string{"brave.llm-context.get", "brave.news.search", "brave.videos.search", "brave.images.search"}}, "brave.news.search"},
+		{"spellcheck listed", config.Resolved{Tools: []string{"brave.news.search", "brave.suggestions.list", "brave.spellcheck.check"}}, "brave.spellcheck.check"},
+		{"only suggestions", config.Resolved{Tools: []string{"brave.suggestions.list", "brave.web.search"}}, "brave.suggestions.list"},
 		{"only llm context", config.Resolved{Tools: []string{"brave.llm-context.get"}}, "brave.llm-context.get"},
 		{"only web", config.Resolved{Tools: []string{"brave.web.search"}}, "brave.web.search"},
 		{"only videos", config.Resolved{Tools: []string{"brave.videos.search"}}, "brave.videos.search"},
@@ -527,15 +534,21 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 			t.Errorf("%s: probe = %q, %v, want %q", tc.name, got.tool, ok, tc.want)
 		}
 	}
-	if probes[1].path != "/res/v1/llm/context" || probes[1].query.Get("maximum_number_of_urls") != "1" ||
-		probes[1].query.Get("count") != "1" || probes[1].query.Get("q") != "brave" {
-		t.Errorf("llm context probe = %+v", probes[1])
+	if probes[0].path != "/res/v1/spellcheck/search" || probes[0].query.Get("q") != "brave" {
+		t.Errorf("spellcheck probe = %+v", probes[0])
 	}
-	if probes[2].path != "/res/v1/web/search" || probes[2].query.Get("count") != "1" || probes[2].query.Get("q") != "brave" {
-		t.Errorf("web probe = %+v", probes[2])
+	if probes[1].path != "/res/v1/suggest/search" || probes[1].query.Get("count") != "1" || probes[1].query.Get("q") != "brave" {
+		t.Errorf("suggest probe = %+v", probes[1])
 	}
-	for i, path := range map[int]string{3: "/res/v1/videos/search", 4: "/res/v1/images/search",
-		5: "/res/v1/local/place_search"} {
+	if probes[3].path != "/res/v1/llm/context" || probes[3].query.Get("maximum_number_of_urls") != "1" ||
+		probes[3].query.Get("count") != "1" || probes[3].query.Get("q") != "brave" {
+		t.Errorf("llm context probe = %+v", probes[3])
+	}
+	if probes[4].path != "/res/v1/web/search" || probes[4].query.Get("count") != "1" || probes[4].query.Get("q") != "brave" {
+		t.Errorf("web probe = %+v", probes[4])
+	}
+	for i, path := range map[int]string{5: "/res/v1/videos/search", 6: "/res/v1/images/search",
+		7: "/res/v1/local/place_search"} {
 		if probes[i].path != path || probes[i].query.Get("count") != "1" || probes[i].query.Get("q") != "brave" {
 			t.Errorf("probe %d = %+v", i, probes[i])
 		}

@@ -124,7 +124,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 				}
 				view := screenOf(m)
 				for _, want := range []string{"hoose provider", fmt.Sprintf("1/%d (%d total)", total, total),
-					"search: ", "NAME", "ID", "current: ", "> (*) "} {
+					"Type to search", "NAME", "ID", "current: ", "> (*) "} {
 					if !strings.Contains(view, want) {
 						t.Errorf("the table does not show %q:\n%s", want, view)
 					}
@@ -350,7 +350,7 @@ func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 		t.Fatalf("c opened screen %v, want the provider table", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"Setup step 1 of 6 · choose provider  1/8 (8 total)", "search: ", "NAME",
+	for _, want := range []string{"Setup step 1 of 6 · choose provider", "1/8 (8 total)", "Type to search", "NAME",
 		"> (*) BookStack", "( ) Telegram", "telegram"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the setup table does not show %q:\n%s", want, view)

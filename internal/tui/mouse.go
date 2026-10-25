@@ -463,7 +463,7 @@ func (m *Model) hitPicker(header string, start, end int) {
 	y := m.hitTop(header)
 	for i := start; i < end; i++ {
 		text := m.pickerRow(i)
-		m.hitInfoMark(text, y, 0, func() tea.Cmd {
+		m.hitInfoMark(m.pickerRowText(i), y, m.boxX(), func() tea.Cmd {
 			m.picker.cursor = i
 			m.openInfo()
 			return nil

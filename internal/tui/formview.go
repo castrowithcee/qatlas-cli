@@ -149,27 +149,52 @@ func flatField(text string, width int, active bool) string {
 func (m *Model) formBody() string {
 	entries := m.formSections()
 	m.formLeft, m.sectionListWidth = 0, 0
-	if !m.sectionListFits(entries) {
+	sections := m.sectionListFits(entries)
+	steps := m.stepListFits(0)
+	if steps && sections && !m.stepListFits(len(entries)+4) {
+		// Steps and sections do not fit under each other: the sections go back to headings above their rows.
+		sections = false
+	}
+	if !sections && !steps {
 		return m.formRows(len(entries) >= 2, entries, "")
 	}
-	current := m.currentSection()
-	list, width := m.sectionList(entries)
-	for i, e := range entries {
-		name := e.name
-		m.addHit(0, m.formTop+1+i, width, m.formTop+2+i, func() tea.Cmd { return m.clickSection(name) })
+	var list string
+	width, stepsHeight := 0, 0
+	if steps {
+		list, width = m.stepList()
+		stepsHeight = setupSteps + 2
+	}
+	if sections {
+		sectionsList, sectionsWidth := m.sectionList(entries)
+		for i, e := range entries {
+			name := e.name
+			m.addHit(0, m.formTop+1+stepsHeight+i, sectionsWidth, m.formTop+2+stepsHeight+i,
+				func() tea.Cmd { return m.clickSection(name) })
+		}
+		if steps {
+			list = lipgloss.JoinVertical(lipgloss.Left, list, sectionsList)
+		} else {
+			list = sectionsList
+		}
+		width = max(width, sectionsWidth)
 	}
 	full, top := m.width, m.formTop
 	inner := full - width - 1 - 4
-	head := []string{styles.title.Render(sectionText(current))}
-	if lead := m.sectionLead(current); lead != "" {
-		head = append(head, styles.hint.Render(truncateDots(lead, inner)))
-	}
-	if !m.formFlat {
-		head = append(head, "")
+	var head []string
+	current := ""
+	if sections {
+		current = m.currentSection()
+		head = []string{styles.title.Render(sectionText(current))}
+		if lead := m.sectionLead(current); lead != "" {
+			head = append(head, styles.hint.Render(truncateDots(lead, inner)))
+		}
+		if !m.formFlat {
+			head = append(head, "")
+		}
 	}
 	m.width, m.formTop = inner, top+1+len(head)
 	m.formLeft, m.sectionListWidth = width+1+2, width
-	rows := m.formRows(false, entries, current)
+	rows := m.formRows(!sections && len(entries) >= 2, entries, current)
 	m.width, m.formTop = full, top
 	lines := append(head, strings.Split(strings.TrimSuffix(rows, "\n"), "\n")...)
 	panelLines := panel("", lines, inner, len(lines), panelOpts{})

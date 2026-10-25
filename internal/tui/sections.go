@@ -218,18 +218,34 @@ func (m *Model) currentSection() string {
 func (m *Model) sectionList(entries []sectionEntry) (string, int) {
 	current := m.currentSection()
 	texts := make([]string, len(entries))
+	dim := make([]bool, len(entries))
+	at := -1
+	for i, e := range entries {
+		texts[i], dim[i] = e.text(), e.closed
+		if e.name == current {
+			at = i
+		}
+	}
+	return numberedList(texts, dim, at)
+}
+
+// numberedList draws numbered entries in a panel and returns it with its width: the one at index current
+// leads with ">" and stands as a filled bar, a dimmed one is drawn faint. The list of the sections of a form
+// and the list of the steps of the guided setup are both drawn by it.
+func numberedList(entries []string, dim []bool, current int) (string, int) {
+	texts := make([]string, len(entries))
 	inner := 0
 	for i, e := range entries {
-		texts[i] = fmt.Sprintf("%d %s", i+1, e.text())
+		texts[i] = fmt.Sprintf("%d %s", i+1, e)
 		inner = max(inner, 2+lipgloss.Width(texts[i]))
 	}
 	lines := make([]string, len(entries))
-	for i, e := range entries {
+	for i := range entries {
 		line := padLine("  "+texts[i], inner)
 		switch {
-		case e.name == current:
+		case i == current:
 			line = styles.activeRow.Render(padLine("> "+texts[i], inner))
-		case e.closed:
+		case dim[i]:
 			line = styles.hint.Render(line)
 		}
 		lines[i] = line

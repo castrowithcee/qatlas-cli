@@ -72,7 +72,7 @@ func (t *providerTable) row(id string, width int) string {
 	nameWidth, idWidth := t.columns(width)
 	mark := "( ) "
 	if id == t.current {
-		mark = "(*) "
+		mark = styles.ok.Render("(*)") + " "
 	}
 	ids := id
 	if id == "" {
@@ -162,30 +162,29 @@ func (m *Model) providerTableFrame() (string, string) {
 		keys = "type to search · up/down · enter next · {back} cancel setup"
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, fmt.Sprintf("%s  %d/%d (%d total)",
-		title, min(t.list.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.searchLine(&t.list, tr(tLogPickSearch)) + "\n")
+	head.WriteString(m.boxTop(title, fmt.Sprintf("%d/%d (%d total)", min(t.list.cursor+1, shown), shown, total)))
+	head.WriteString(m.boxSearch(&t.list, tr(tLogPickSearch)))
 	current := t.name(t.current)
 	if t.current != "" {
 		current += " (" + t.current + ")"
 	}
-	head.WriteString(m.wrapped(styles.hint, tr(tLogPickCurrent, current)) + "\n")
-	_, width := m.fit("  ")
-	head.WriteString(styles.hint.Render(clipCells("  "+t.header(width), m.usable(0))) + "\n")
+	head.WriteString(m.boxText(styles.hint, tr(tLogPickCurrent, current)))
+	_, width := m.fitIn(m.boxRoom(), "  ")
+	head.WriteString(m.boxLine(styles.hint.Render(clipCells("  "+t.header(width), m.boxRoom()))))
 	if shown == 0 {
-		head.WriteString(m.wrapped(styles.hint,
-			tr(tProviderNoProviderMatchesEscKeeps, t.list.query())) + "\n")
+		head.WriteString(m.boxText(styles.hint, tr(tProviderNoProviderMatchesEscKeeps, t.list.query())))
 	}
 	if t.list.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
-	return head.String(), m.keyHint(keys) + m.notes()
+	return head.String(), m.boxBottom() + m.keyHint(keys) + m.notes()
 }
 
 // providerTableRow draws the shown provider at index i of the table.
 func (m *Model) providerTableRow(i int) string {
-	_, width := m.fit("  ")
-	return m.listRow(i == m.providers.list.cursor, m.providers.row(m.providers.list.matches[i], width))
+	_, width := m.fitIn(m.boxRoom(), "  ")
+	return m.boxRow(m.listRowIn(m.boxRoom(), i == m.providers.list.cursor,
+		m.providers.row(m.providers.list.matches[i], width)))
 }
 
 func (m *Model) providerTableWindow() (int, int) {
