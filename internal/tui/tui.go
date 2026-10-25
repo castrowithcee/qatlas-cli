@@ -412,6 +412,9 @@ type Model struct {
 	// (1-based), 0 while the rows do (see listbar.go).
 	listOpts map[section]*listOptions
 	barFocus int
+	// detailFocus is set while the detail pane of a list has the focus, detailTab is the tab it shows then.
+	detailFocus bool
+	detailTab   detailTab
 	// dd is the open list of a dropdown field of a bar (see dropdown.go).
 	dd *dropdown
 
@@ -1110,6 +1113,11 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return cmd
 		}
 	}
+	if m.detailFocused() {
+		if cmd, done := m.updateDetail(key); done {
+			return cmd
+		}
+	}
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
@@ -1128,8 +1136,10 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		}
 		m.focusNav()
 	case "tab":
-		// The stops run rows, the fields of the filter bar, the tab line.
-		if m.listBarShown() {
+		// The stops run rows, the detail pane, the fields of the filter bar, the tab line.
+		if m.paneWidth() > 0 {
+			m.detailFocus, m.detailTab = true, tabOverview
+		} else if m.listBarShown() {
 			m.barFocus = 1
 		} else {
 			m.focusNav()
@@ -1416,6 +1426,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 // tab line. The workspace keeps showing the list of the active section.
 func (m *Model) focusNav() {
 	m.barFocus = 0
+	m.leaveDetail()
 	m.screen = screenNav
 	m.navSub = m.hasSubTabs()
 	m.clearMessages()
@@ -3996,6 +4007,9 @@ func (m *Model) listView() string {
 	if m.section == sectionOverview {
 		return m.overviewView()
 	}
+	if m.detailFocus && !m.detailFocused() {
+		m.leaveDetail()
+	}
 	header, footer := m.listFrame()
 	row := m.listRows()
 	var b strings.Builder
@@ -4007,8 +4021,7 @@ func (m *Model) listView() string {
 	m.hitList(header, start, end, row)
 	if m.paneWidth() > 0 {
 		room := m.height - strings.Count(footer, "\n") - 1
-		lines := m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), room)
-		return strings.Join(lines, "\n") + "\n" + footer
+		return m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room)
 	}
 	b.WriteString(footer)
 	return b.String()
@@ -4097,6 +4110,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = "type to filter · up/down move · enter keep filter · {back} clear filter"
 	case m.barFocus > 0:
 		keys = m.barKeys()
+	case m.detailFocused():
+		keys = "←/→ tab · tab next · shift+tab rows · up/down move · enter edit · {back} rows · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals:
@@ -4167,7 +4182,7 @@ func (m *Model) tableFramed() bool {
 }
 
 // tableFocused reports whether the frame of the table shows the focus: the list has it, not the tab line.
-func (m *Model) tableFocused() bool { return m.screen != screenNav }
+func (m *Model) tableFocused() bool { return m.screen != screenNav && !m.detailFocused() }
 
 // tableRoom is the width of the rows of the list screen: what the list leaves, less the frame.
 func (m *Model) tableRoom() int {

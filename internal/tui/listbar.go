@@ -324,6 +324,9 @@ func (m *Model) updateBar(key tea.KeyMsg) (tea.Cmd, bool) {
 		m.barFocus++
 	case "shift+tab":
 		m.barFocus--
+		if m.barFocus == 0 && m.paneWidth() > 0 {
+			m.detailFocus, m.detailTab = true, tabOverview
+		}
 	case "enter":
 		m.openBarDropdown(field)
 	case "down":
