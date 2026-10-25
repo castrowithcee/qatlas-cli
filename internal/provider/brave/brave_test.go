@@ -218,7 +218,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search",
-		"brave.rich.get", "brave.videos.search", "brave.web.search"}) {
+		"brave.places.search", "brave.poi-descriptions.get", "brave.pois.get", "brave.rich.get",
+		"brave.videos.search", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -234,7 +235,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search",
-			"brave.web.search", "brave.videos.search", "brave.images.search", "brave.rich.get"}) {
+			"brave.web.search", "brave.videos.search", "brave.images.search", "brave.rich.get",
+			"brave.places.search", "brave.pois.get", "brave.poi-descriptions.get"}) {
 		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
 	}
 }
@@ -509,6 +511,8 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 		{"only web", config.Resolved{Tools: []string{"brave.web.search"}}, "brave.web.search"},
 		{"only videos", config.Resolved{Tools: []string{"brave.videos.search"}}, "brave.videos.search"},
 		{"only images", config.Resolved{Tools: []string{"brave.images.search"}}, "brave.images.search"},
+		{"only places", config.Resolved{Tools: []string{"brave.places.search"}}, "brave.places.search"},
+		{"only place details", config.Resolved{Tools: []string{"brave.pois.get", "brave.poi-descriptions.get"}}, ""},
 		{"none", config.Resolved{Tools: []string{}}, ""},
 	} {
 		got, ok := probeFor(&tc.resolved)
@@ -523,7 +527,8 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 	if probes[2].path != "/res/v1/web/search" || probes[2].query.Get("count") != "1" || probes[2].query.Get("q") != "brave" {
 		t.Errorf("web probe = %+v", probes[2])
 	}
-	for i, path := range map[int]string{3: "/res/v1/videos/search", 4: "/res/v1/images/search"} {
+	for i, path := range map[int]string{3: "/res/v1/videos/search", 4: "/res/v1/images/search",
+		5: "/res/v1/local/place_search"} {
 		if probes[i].path != path || probes[i].query.Get("count") != "1" || probes[i].query.Get("q") != "brave" {
 			t.Errorf("probe %d = %+v", i, probes[i])
 		}
