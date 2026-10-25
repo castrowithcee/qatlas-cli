@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub notification tools: the notification threads of the account behind a token, marking them read or done, thread and repository subscriptions, how targets apply to notifications, and the classic-token requirement.
+  Describes the GitHub notification tools: the notification threads of the account behind a token, marking them read or done, thread and repository subscriptions, and how targets apply to notifications.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -16,11 +16,8 @@ The notification tools of the [GitHub provider](README.md).
 Five tools read and manage the notification threads of the account behind the connection's token and their
 subscriptions; the repository subscription is described with the
 [repositories](repositories.md#repository-subscriptions). GitHub supports the notification endpoints only
-with a personal access token (classic) that has the `notifications` (or `repo`) scope: "These endpoints only
-support authentication using a personal access token (classic)" and "All calls to these endpoints require the
-`notifications` or `repo` scopes" (https://docs.github.com/en/rest/activity/notifications). A fine-grained
-token (`github_pat_...`) is therefore refused with a `permission` failure before any request, and GitHub's own
-403 names the same requirement.
+with a classic token and Qatlas refuses any other token before a request; see
+[Notifications](setup.md#notifications).
 
 | Tool | Does |
 | --- | --- |
@@ -63,7 +60,3 @@ because the pre-read no longer finds the thread.
 
 The not-recommended setup profile `notifications` ticks the list, the get, the dismiss, and both subscription
 tools, the repository subscription included; `github.notifications.mark-all` stays unticked, and the recommended profile `read` is unchanged.
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| the thread tools, `github.notifications.list`, `.get`, `.dismiss`, `.mark-all`, and `github.thread-subscriptions.set` | `notifications` or `repo` | not supported, refused by Qatlas |

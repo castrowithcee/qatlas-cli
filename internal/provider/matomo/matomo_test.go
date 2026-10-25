@@ -491,8 +491,16 @@ func TestMessagePatterns(t *testing.T) {
 		"The method 'X.y' does not exist or is not available in the module 'X'.":               "missing",
 		"The plugin Goals is not activated.":                                                   "missing",
 		"Requested report A.b for Website id=1 not found in the list of available reports. \n": "not-found",
-		"Ein unbekannter Fehler": "",
-		"":                       "",
+		"User 'tokenadmin' doesn't exist.":                                                     "not-found",
+		"User 'loginbot' doesn't exist.":                                                       "not-found",
+		"User 'password1' doesn't exist.":                                                      "not-found",
+		"User 'super user' doesn't exist.":                                                     "not-found",
+		"User 'deactivated' doesn't exist.":                                                    "not-found",
+		"User 'not enabled' doesn't exist.":                                                    "not-found",
+		"User 'o'brien' doesn't exist.":                                                        "not-found",
+		"Username 'tokenx' already exists.":                                                    "",
+		"Ein unbekannter Fehler":                                                               "",
+		"":                                                                                     "",
 	} {
 		if got := classifyMessage(message); got != want {
 			t.Errorf("classifyMessage(%q) = %q, want %q", message, got, want)
