@@ -50,13 +50,16 @@ const itemReviewerSelection = `__typename ` +
 	`... on EnterpriseTeam{id fullDatabaseId name slug combinedSlug description privacy notificationSetting ` +
 	`createdAt updatedAt}`
 
-const itemIssueFieldSelection = `__typename id field{__typename ... on IssueFieldCommon{name dataType} ... on Node{id}} ` +
+// itemIssueFieldSelection selects an issue field value. The union ProjectV2IssueFieldValues takes no field of
+// its own, so the members its types share are asked for through their interfaces.
+const itemIssueFieldSelection = `__typename ... on Node{id} ` +
+	`... on IssueFieldValueCommon{field{__typename ... on IssueFieldCommon{name dataType} ... on Node{id}}} ` +
 	`... on IssueFieldTextValue{value} ... on IssueFieldDateValue{value} ... on IssueFieldNumberValue{value} ` +
 	`... on IssueFieldSingleSelectValue{value name optionId color description} ` +
 	`... on IssueFieldMultiSelectValue{value options{id databaseId fullDatabaseId name color description priority}}`
 
 // itemFieldValueSelection selects the field values of an item: the members every value type has, then those
-// of each type. The field of a value is a member of the project field union.
+// of each type. The field of a value is a member of the project field union. The users of a value are Users.
 const itemFieldValueSelection = `__typename ` +
 	`... on ProjectV2ItemFieldValueCommon{id databaseId createdAt updatedAt ` + itemCreatorFields + `} ` +
 	`... on ProjectV2ItemFieldSingleSelectValue{name optionId color description ` + fieldRef + `} ` +
@@ -72,7 +75,7 @@ const itemFieldValueSelection = `__typename ` +
 	`... on ProjectV2ItemFieldRepositoryValue{repository{` + gqlNestedRepositorySelection + `} ` + fieldRef + `} ` +
 	`... on ProjectV2ItemFieldReviewerValue{reviewers(first:` + itemValueListFirst + `){totalCount nodes{` + itemReviewerSelection + `}} ` +
 	fieldRef + `} ` +
-	`... on ProjectV2ItemFieldUserValue{users(first:` + itemValueListFirst + `){totalCount nodes{` + gqlAccountSelection + `}} ` + fieldRef + `} ` +
+	`... on ProjectV2ItemFieldUserValue{users(first:` + itemValueListFirst + `){totalCount nodes{` + gqlUserSelection + `}} ` + fieldRef + `} ` +
 	`... on ProjectV2ItemIssueFieldValue{issueFieldValue{` + itemIssueFieldSelection + `} ` + fieldRef + `}`
 
 // ---- Raw nodes

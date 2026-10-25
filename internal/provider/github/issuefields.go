@@ -220,7 +220,9 @@ func (t target) issueFieldsLocate(value any, err error) (any, error) {
 
 const issueFieldOptionSelection = `id name description color priority databaseId fullDatabaseId`
 
-const issueFieldSelection = `id name description dataType visibility createdAt fullDatabaseId ` +
+// issueFieldSelection reads the members of the union IssueFields through the interface its types share.
+const issueFieldSelection = `... on Node{id} ` +
+	`... on IssueFieldCommon{name description dataType visibility createdAt fullDatabaseId} ` +
 	`... on IssueFieldSingleSelect{options{` + issueFieldOptionSelection + `}} ` +
 	`... on IssueFieldMultiSelect{options{` + issueFieldOptionSelection + `}}`
 

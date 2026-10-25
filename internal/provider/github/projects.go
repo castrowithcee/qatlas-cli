@@ -288,7 +288,7 @@ func (c *Client) projectQuery() string {
 func (c *Client) itemQuery() string {
 	return `query($owner:String!,$number:Int!,$item:ID!){owner:` + c.target.ownerField() +
 		`(login:$owner){projectV2(number:$number){id ` + fieldSelection + `}} ` +
-		`item:node(id:$item){... on ProjectV2Item{...itemFields project{id}}} ` + itemFragment
+		`item:node(id:$item){... on ProjectV2Item{...itemFields project{id}}}} ` + itemFragment
 }
 
 func (c *Client) projectVariables() map[string]any {
