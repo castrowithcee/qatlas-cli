@@ -192,7 +192,7 @@ func (m *Model) indented(text string) string {
 }
 
 func (m *Model) indentedWith(style lipgloss.Style, text string) string {
-	indent, width := m.fit("    ")
+	indent, width := m.fit(m.hintIndent())
 	lines := strings.Split(render(style, width, text), "\n")
 	for i, l := range lines {
 		lines[i] = indent + l
@@ -234,9 +234,9 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldChoice && len(f.choices) == 0:
 		value = emptyValue(wordNone)
 	case f.kind == fieldChoice && value == "":
-		value = "< " + emptyValue(wordNone) + " >"
+		value = emptyValue(wordNone)
 	case f.kind == fieldChoice:
-		value = "< " + valueText(f.label, value) + " >"
+		value = valueText(f.label, value)
 	case f.kind == fieldText && f.readOnly && f.hint != "":
 		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
 		// itself on its own row instead, the way a read-only tool list already does below.
@@ -301,7 +301,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		// A box is never split from its value: the row breaks between the values only.
 		var lines []string
 		for _, part := range parts {
-			if last := len(lines) - 1; last >= 0 && lipgloss.Width(lines[last]+"  "+part) <= m.usable(m.formIndent()) {
+			if last := len(lines) - 1; last >= 0 && lipgloss.Width(lines[last]+"  "+part) <= m.rowRoom() {
 				lines[last] += "  " + part
 				continue
 			}
@@ -370,6 +370,9 @@ func (m *Model) formHead(active bool, label string) string {
 
 // valueRoom is the room a form row with the given label leaves for its value.
 func (m *Model) valueRoom(label string) int {
+	if m.formBox {
+		return m.formValueW - 4
+	}
 	_, width := m.fit(strings.Repeat(" ", lipgloss.Width(m.formHead(false, label))))
 	return width
 }

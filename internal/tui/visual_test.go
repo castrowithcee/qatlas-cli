@@ -187,6 +187,31 @@ func visualShots() []visualShot {
 		{"13-overview-light", 150, 42, uiprefs.ThemeLight, term, false, overview},
 		{"14-overview-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, overview},
 		{"15-overview-no-color", 150, 42, dark, term, true, overview},
+		{"16-connection-form-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			pump(t, m, "enter")
+		}},
+		{"17-service-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionServices)
+			m.openForm("")
+		}},
+		{"18-credential-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionCredentials)
+			m.openForm("")
+		}},
+		{"19-token-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			openSectionByName(t, m, sectionTokens)
+			m.openForm("")
+		}},
+		{"20-setup-step", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			m.startSetup()
+			pump(t, m, "enter")
+		}},
+		{"21-connection-form-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
+			connections(t, m)
+			pump(t, m, "enter")
+		}},
 	}
 }
 

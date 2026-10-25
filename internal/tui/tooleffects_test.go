@@ -158,7 +158,7 @@ func TestTheToolsRowSummarisesCountAndEffects(t *testing.T) {
 	_, total := m.pickerGroups.count(nil)
 	openCreate, _ := effectSplit(t, m, config.EffectCreate)
 	want := fmt.Sprintf("%d of %d · read, create", len(open)+len(openCreate), total)
-	if view := screenOf(m); !strings.Contains(view, want) {
+	if view := sectionViews(m); !strings.Contains(view, want) {
 		t.Fatalf("form lacks %q:\n%s", want, view)
 	}
 	pump(t, m, "f2")
@@ -169,7 +169,7 @@ func TestTheToolsRowSummarisesCountAndEffects(t *testing.T) {
 		t.Fatalf("saved %d tools", got)
 	}
 	openEntryForm(t, m, sectionConnections, "repo")
-	if view := screenOf(m); !strings.Contains(view, want) {
+	if view := sectionViews(m); !strings.Contains(view, want) {
 		t.Fatalf("reopened form lacks %q:\n%s", want, view)
 	}
 }

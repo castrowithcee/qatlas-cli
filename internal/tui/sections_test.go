@@ -38,7 +38,7 @@ func TestSectionListAndJumpToASection(t *testing.T) {
 		}
 		view := screenOf(m)
 		for _, line := range strings.Split(view, "\n") {
-			if strings.HasPrefix(line, "> "+sectionText(secGeneral)) {
+			if strings.Contains(line, "> 1 "+sectionText(secGeneral)) {
 				goto marked
 			}
 		}
@@ -122,10 +122,15 @@ func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 		if m.sectionClosed(secAdvanced) {
 			t.Fatal("a problem in Advanced left it closed")
 		}
+		if view := screenOf(m); !strings.Contains(view, sectionText(secAdvanced)+alertMark) {
+			t.Fatalf("the section list does not say that a problem stands in Advanced:\n%s", view)
+		}
+		m.enterSection(secAdvanced)
 		if view := screenOf(m); !strings.Contains(view, "[!] refused") {
 			t.Fatalf("the problem is not shown under its row:\n%s", view)
 		}
-		m.problems = problemState{}
+		m.problems, m.sectionPinned, m.focus = problemState{}, nil, 0
+		m.applyFocus()
 		if !m.sectionClosed(secAdvanced) {
 			t.Fatal("Advanced stays open without a value or a problem")
 		}
@@ -216,7 +221,7 @@ func TestSectionedFormsFitEverySize(t *testing.T) {
 func TestEmptyValuesAreOneWord(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		m := connectionFormModel(t, 110, 40)
-		view := screenOf(m)
+		view := sectionViews(m)
 		// The labels stand in a column as wide as the longest one, description.
 		row := func(label, word string) string {
 			return labelText(label) + strings.Repeat(" ", lipgloss.Width(labelText("description"))-lipgloss.Width(labelText(label))) + " " + wordText(word)

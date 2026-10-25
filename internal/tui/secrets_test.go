@@ -598,7 +598,7 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 			}
 
 			editEntry(t, m, "reader")
-			view := screenOf(m)
+			view := formView(m)
 			words := strings.Join(strings.Fields(view), " ")
 			if !strings.Contains(words, "token-id ("+tt.state+")") {
 				t.Errorf("the row does not say %q:\n%s", tt.state, view)

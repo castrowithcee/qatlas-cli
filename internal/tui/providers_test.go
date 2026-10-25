@@ -106,7 +106,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 					}
 					before := m.fieldValue(providerLabel)
 					view := screenOf(m)
-					if !regexp.MustCompile(`provider +\[ `).MatchString(view) || regexp.MustCompile(`provider +< `).MatchString(view) ||
+					if !regexp.MustCompile(`provider +\S.*▾`).MatchString(view) || regexp.MustCompile(`provider +< `).MatchString(view) ||
 						!strings.Contains(view, fmt.Sprintf("enter opens all %d providers", n)) {
 						t.Fatalf("the provider row does not show that it opens a table:\n%s", view)
 					}
@@ -257,7 +257,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 			t.Errorf("the tool list still holds %q of another provider", tool)
 		}
 	}
-	if view := screenOf(m); !strings.Contains(view, "[ Telegram (telegram) ▾ ]") {
+	if view := formView(m); !strings.Contains(view, "Telegram (telegram)") {
 		t.Errorf("the provider row does not show the taken provider:\n%s", view)
 	}
 }
@@ -431,7 +431,8 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	m.cfg.Connections["tasks"] = config.Connection{Service: "svc-todoist", Credential: "cred-todoist", Target: "*"}
 	m.section, m.screen, m.editing = sectionConnections, screenForm, "tasks"
 	m.fields = m.buildFields("tasks")
-	if view := screenOf(m); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
+	m.enterSection(secTargets)
+	if view := flatText(formView(m)); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
 		t.Fatalf("the account wildcard shows no warning:\n%s", view)
 	}
 	m.field(targetsLabel).entries = []string{"6XGgm6PHrGgMpCFX", "6Jf8VQXxpwv56VQ7"}
