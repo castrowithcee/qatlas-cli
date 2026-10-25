@@ -115,11 +115,12 @@ func (f *logFixture) model(unlocked bool, day string) *Model {
 	return m
 }
 
-// barLine is the line of the view that holds the bar's Mode field.
+// barLine is the lines of the view that hold the tabs, the status, and the bar's Mode field.
 func barLine(view string) string {
-	for _, line := range strings.Split(view, "\n") {
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
 		if strings.Contains(line, "Mode:") {
-			return line
+			return strings.Join(lines[max(i-2, 0):i+1], "\n")
 		}
 	}
 	return ""
@@ -145,7 +146,7 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 
 	view := m.View()
 	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: Day ▾", "Date: " + f.localToday() + " ▾",
-		"status", "time", "way", "client", "tool", "connection", "result", "dur.", "codex", "MCP", "CLI",
+		"STATUS", "TIME", "WAY", "CLIENT", "TOOL", "CONNECTION", "RESULT", "DUR.", "codex", "MCP", "CLI",
 		"12ms", "Way: all ▾", "Client: all ▾", "Conn: all ▾", "Result: all ▾", "/ search…"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view does not show %q:\n%s", want, view)
@@ -250,7 +251,7 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	if view := m.View(); !strings.Contains(view, "op.new") || strings.Contains(view, "op.old") {
 		t.Errorf("Day shows other days:\n%s", view)
 	}
-	press(t, m, "tab")
+	press(t, m, "tab", "tab")
 	if m.logs.focus != logFocusMode || !strings.Contains(m.View(), ">  Mode:") {
 		t.Fatalf("tab = focus %v, want the Mode field marked:\n%s", m.logs.focus, m.View())
 	}
@@ -448,7 +449,7 @@ func TestLogsNarrowLayout(t *testing.T) {
 			t.Errorf("narrow view does not show %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "dur.") || strings.Contains(view, "12ms") {
+	if strings.Contains(view, "DUR.") || strings.Contains(view, "12ms") {
 		t.Errorf("the narrow table keeps the duration:\n%s", view)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
@@ -687,8 +688,9 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 		t.Errorf("zero row lacks ~0 tok: %q", line)
 	}
 	for _, op := range []string{"op.old", "op.failed"} {
-		if line := rowLine(t, view, op); !strings.HasSuffix(strings.TrimRight(strings.TrimSuffix(strings.TrimRight(line, " "), "│"), " "), "-") ||
-			strings.Contains(line, "tok") {
+		// The size stands before the duration, which ends the row.
+		fields := strings.Fields(strings.Trim(rowLine(t, view, op), "│ "))
+		if line := rowLine(t, view, op); len(fields) < 2 || fields[len(fields)-2] != "-" || strings.Contains(line, "tok") {
 			t.Errorf("row %s does not show - for the size: %q", op, line)
 		}
 	}
@@ -731,7 +733,7 @@ func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
 
 	press(t, m, "s")
 	view := m.View()
-	if !m.logs.stats || !strings.Contains(view, "p95") || !strings.Contains(view, "estimated tokens") ||
+	if !m.logs.stats || !strings.Contains(view, "P95") || !strings.Contains(view, "estimated tokens") ||
 		!strings.Contains(view, "wiki.pages.get") || !strings.Contains(view, "chat.send") {
 		t.Fatalf("s did not show the summary:\n%s", view)
 	}
@@ -758,7 +760,7 @@ func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
 	if m.logs.stats || m.screen != screenLogs {
 		t.Fatalf("esc = stats %v screen %v, want the rows again", m.logs.stats, m.screen)
 	}
-	if view := m.View(); !strings.Contains(view, "chat.send") || strings.Contains(view, "p95") {
+	if view := m.View(); !strings.Contains(view, "chat.send") || strings.Contains(view, "P95") {
 		t.Errorf("the rows did not come back:\n%s", view)
 	}
 }
@@ -815,9 +817,11 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	if !m.logs.stats || !m.logs.sessions {
 		t.Fatalf("m did not open the session summary:\n%s", view)
 	}
+	// The panel wraps the note, so the words are compared without its frame and line breaks.
+	flat := strings.Join(strings.Fields(strings.ReplaceAll(view, "│", " ")), " ")
 	for _, want := range []string{"~tokens", "estimate", "system prompt and thinking", "session " + sessionNew,
 		"m or s or esc back to the rows"} {
-		if !strings.Contains(view, want) {
+		if !strings.Contains(flat, want) {
 			t.Errorf("the session summary lacks %q:\n%s", want, view)
 		}
 	}
@@ -836,7 +840,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	for name, cells := range want {
 		var got []string
 		for _, l := range strings.Split(view, "\n") {
-			cell := strings.TrimSpace(l)
+			cell := strings.TrimSpace(strings.Trim(strings.TrimSpace(l), "│"))
 			if fields := strings.Fields(cell); strings.HasPrefix(cell, name+" ") && len(fields) >= 5 {
 				got = fields[len(fields)-5:]
 				break
@@ -849,7 +853,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	t.Logf("session summary view:\n%s", view)
 
 	// The summary follows the period like the rows: All adds the older session.
-	press(t, m, "tab")
+	press(t, m, "tab", "tab")
 	pump(t, m, "right", "right")
 	if view := m.View(); !m.logs.sessions || !strings.Contains(view, sessionOld) || !strings.Contains(view, sessionNew) {
 		t.Fatalf("All does not add the older session:\n%s", view)

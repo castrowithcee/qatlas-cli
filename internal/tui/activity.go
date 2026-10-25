@@ -1,6 +1,6 @@
-// The activity heatmap: the days of the invocation log as a grid of weekdays by weeks, one cell per local day,
-// leveled by the number of invokes. The Logs section shows it for the rows its filters keep, the Overview as a
-// coloured grid of the latest weeks (heatmap.go) beside the latest invokes. The counts come from
+// The activity heatmap: the days of the invocation log as a grid of weeks and weekdays, one cell per local day,
+// leveled by the number of invokes. The Logs section shows it for the rows its filters keep as a row per week,
+// the Overview as a coloured grid of the latest weeks (heatmap.go) beside the latest invokes. The counts come from
 // invokelog.DailyActivity on the lines the check read (invokelog.VerifyLines); nothing here reads a log file.
 package tui
 
@@ -94,78 +94,39 @@ func heatWeeks(days []invokelog.DayActivity, weeks int) (kept []invokelog.DayAct
 	return days, offset, total
 }
 
-// heatGrid draws days (consecutive local days) as seven weekday rows of weeks, Monday first, behind a month
-// header when months is set, at most as wide as width. It keeps the latest weeks that fit and returns the days
-// it drew. A day after today has no cell.
-func heatGrid(days []invokelog.DayActivity, today, retentionStart string, width, maxWeeks int, months bool) ([]string, []invokelog.DayActivity) {
-	if len(days) == 0 {
-		return nil, nil
-	}
-	const label = 4
-	weeks := min(maxWeeks, (width-label)/2)
-	if weeks < 1 {
-		return nil, nil
-	}
-	days, offset, total := heatWeeks(days, weeks)
-	levels := invokelog.ActivityLevel(days)
-	g := heatGlyphSet()
-	weekdays, monthNames := heatWeekdayNames(), heatMonthNames()
-	rows := make([][]string, 7)
-	for r := range rows {
-		rows[r] = make([]string, total)
-		for c := range rows[r] {
-			rows[r][c] = " "
-		}
-	}
-	header := make([]byte, 0, label+2*total)
-	header = append(header, strings.Repeat(" ", label)...)
-	lastMonth := ""
-	for i, d := range days {
-		day, _ := time.ParseInLocation(invokelog.DateLayout, d.Date, time.Local)
-		col, row := (offset+i)/7, (offset+i)%7
-		if d.Date <= today {
-			glyph, style := g.cell(d, levels[i], retentionStart)
-			rows[row][col] = style.Render(glyph)
-		}
-		if months && row == 0 {
-			if month := monthNames[day.Month()-1]; month != lastMonth && len(header) <= label+2*col {
-				header = append(header, strings.Repeat(" ", label+2*col-len(header))...)
-				header = append(header, month...)
-				lastMonth = month
-			}
-		}
-	}
-	var lines []string
-	if months {
-		lines = append(lines, styles.hint.Render(strings.TrimRight(string(header), " ")))
-	}
-	for r := range rows {
-		lines = append(lines, styles.hint.Render(fmt.Sprintf("%-3s", weekdays[r]))+" "+strings.Join(rows[r], " "))
-	}
-	return lines, days
-}
-
 // heatTotals is the line under a grid: the invokes, the share that succeeded, and the failed ones.
 func heatTotals(days []invokelog.DayActivity) string {
+	plain := func(_ lipgloss.Style, text string) string { return text }
+	return heatTotalsWith(days, plain)
+}
+
+// heatTotalsStyled is heatTotals with the share that succeeded in the success colour and the failed ones in the
+// failure colour; the numbers and words stay, so the line reads without colour.
+func heatTotalsStyled(days []invokelog.DayActivity) string {
+	return heatTotalsWith(days, func(style lipgloss.Style, text string) string { return style.Render(text) })
+}
+
+func heatTotalsWith(days []invokelog.DayActivity, paint func(lipgloss.Style, string) string) string {
 	var calls, ok int
 	for _, d := range days {
 		calls += d.Calls
 		ok += d.Succeeded()
 	}
-	rate := "-"
+	rate, failed := "-", fmt.Sprint(calls-ok)
 	if calls > 0 {
 		rate = fmt.Sprintf("%d%%", ok*100/calls)
 	}
-	return tr(tHeatTotals, calls, rate, calls-ok)
+	failedStyle := styles.hint
+	if calls > ok {
+		failedStyle = styles.fail
+	}
+	return tr(tHeatTotals, paint(styles.title, fmt.Sprint(calls)), paint(styles.ok, rate), paint(failedStyle, failed))
 }
 
-// heatLegend are the two lines that explain the cells.
-func heatLegend() []string {
+// heatLegendMarks explains the marks that stand in place of a level.
+func heatLegendMarks() string {
 	g := heatGlyphSet()
-	return []string{
-		tr(tOverviewLess) + g.zero + strings.Join(g.levels[:], "") + tr(tOverviewMore) + tr(tHeatLevels),
-		tr(tHeatLegend, g.outside, g.altered, g.gap),
-	}
+	return tr(tHeatLegend, g.outside, g.altered, g.gap)
 }
 
 // localDay is t as a local day.
@@ -208,7 +169,7 @@ func (lv *logView) heatDays() []invokelog.DayLines {
 	return out
 }
 
-// setHeat shows the rows (false) or the heatmap of their days (true), the View field of the bar. A single
+// setHeat shows the rows (false) or the heatmap of their days (true), the tabs of the bar. A single
 // day shows nothing worth a grid, so the heatmap widens it to the retention window; the filters and the other
 // modes stay as they are.
 func (m *Model) setHeat(on bool) tea.Cmd {
@@ -222,25 +183,34 @@ func (m *Model) setHeat(on bool) tea.Cmd {
 	return m.loadLogs()
 }
 
-// logHeatLines draws the heatmap of the rows shown as at most room lines, the totals first so that the
-// smallest terminal keeps them.
+// logHeatLines draws the heatmap of the rows shown as at most room lines: the totals, the weekday header with a
+// row per week, and the legend. A short room keeps the latest weeks and the totals before the legend.
 func (m *Model) logHeatLines(room int) string {
 	from, to := m.heatSpan()
 	today := localDay(m.timeNow())
 	days := invokelog.DailyActivity(m.logs.heatDays(), from, to)
-	width := m.usable(2)
-	grid, drawn := heatGrid(days, today, m.retentionStart(m.timeNow()), width, maxHeatWeeks, true)
-	lines := []string{heatTotals(drawn)}
-	if len(drawn) > 0 {
-		lines[0] += tr(tHeatSpan, drawn[0].Date, min(drawn[len(drawn)-1].Date, today))
+	width := m.logRoom() - 2
+	legend := []string{heatSquareLegend() + styles.hint.Render(tr(tHeatLevels)), styles.hint.Render(heatLegendMarks())}
+	// The totals and the weekday header stand above the weeks, the legend below them.
+	weeks := min(maxHeatWeeks, room-2-len(legend))
+	if weeks < 1 {
+		legend = legend[:0]
+		weeks = min(maxHeatWeeks, room-2)
 	}
-	lines = append(lines, grid...)
-	lines = append(lines, heatLegend()...)
+	grid, drawn := heatWeekRows(days, today, m.retentionStart(m.timeNow()), width, weeks)
+	totals := heatTotalsStyled(drawn)
+	if len(drawn) > 0 {
+		totals += styles.hint.Render(tr(tHeatSpan, drawn[0].Date, min(drawn[len(drawn)-1].Date, today)))
+	}
+	lines := append([]string{totals}, grid...)
+	if len(grid) > 0 {
+		lines = append(lines, legend...)
+	}
 	var b strings.Builder
 	for _, line := range lines[:min(len(lines), max(room, 0))] {
 		b.WriteString("  " + truncateCells(line, width) + "\n")
 	}
-	return b.String()
+	return m.logInside(b.String())
 }
 
 // overviewActivity is what the Overview shows of the log: the latest weeks and the latest invokes. It is
