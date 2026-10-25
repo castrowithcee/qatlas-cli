@@ -1032,7 +1032,7 @@ func TestResizePreservesState(t *testing.T) {
 			t.Fatalf("%dx%d changed the list: screen %v section %v filter %q selected %q", size.width,
 				size.height, m.screen, m.section, m.list.query(), selectedName(t, m))
 		}
-		if size.width >= minimumWidth && !strings.Contains(m.View(), "filter: a") {
+		if size.width >= minimumWidth && !strings.Contains(m.View(), "/ a") {
 			t.Errorf("%dx%d does not show the filter:\n%s", size.width, size.height, m.View())
 		}
 	}

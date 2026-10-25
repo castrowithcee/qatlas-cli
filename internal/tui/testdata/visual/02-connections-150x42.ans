@@ -2,7 +2,7 @@
 [1;38;2;76;154;255m  [0m[38;2;127;147;168m 1 Overview [0m [1;38;2;11;20;29;48;2;76;154;255m 2 Connections [0m [38;2;127;147;168m 3 Activity [0m [38;2;127;147;168m 4 Access [0m [38;2;127;147;168m 5 Library [0m [38;2;127;147;168m 6 Settings [0m
 [38;2;42;60;81m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 [1;38;2;214;226;238mConnections[0m  1/7
-  Group: [1;38;2;214;226;238;48;2;20;51;107m[Provider][0m None    State: [1;38;2;214;226;238;48;2;20;51;107m[All][0m Active Inactive    Sort: [1;38;2;214;226;238;48;2;20;51;107m[Name][0m Provider      [38;2;42;60;81m | [0m[38;2;127;147;168mProvider:    [0mbookstack
+  [38;2;214;226;238;48;2;16;27;38m Group: Provider ▾ [0m    [38;2;214;226;238;48;2;16;27;38m State: All ▾ [0m    [38;2;214;226;238;48;2;16;27;38m Sort: Name ▾ [0m  [38;2;127;147;168;48;2;16;27;38m / search…                  [0m[38;2;42;60;81m | [0m[38;2;127;147;168mProvider:    [0mbookstack
 [38;2;127;147;168m    NAME            STATE   SERVICE  EFFECTS             TOOLS  DESCRIPTION[0m            [38;2;42;60;81m | [0m[38;2;127;147;168mService:     [0mwiki
   ▾ bookstack (1)                                                                      [38;2;42;60;81m | [0m[38;2;127;147;168mBase URL:    [0mhttps://wiki.example.invalid
 [1;38;2;214;226;238;48;2;20;51;107m>   wiki-main       active  wiki     read,create,update  all    Team wiki, read and wr…[0m[38;2;42;60;81m | [0m[38;2;127;147;168mCredential:  [0mwiki-reader

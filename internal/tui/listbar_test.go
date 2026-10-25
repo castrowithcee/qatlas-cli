@@ -23,7 +23,7 @@ func TestFilterBarShapesTheListAndNeverTheConfiguration(t *testing.T) {
 	}
 
 	press(t, m, "tab")
-	if m.barFocus != 1 || !strings.Contains(m.barLine(80), "> Group: [Provider] None") {
+	if m.barFocus != 1 || !strings.Contains(m.barLine(80), ">  Group: Provider ▾") {
 		t.Fatalf("tab did not reach the Group field: bar %d, line %q", m.barFocus, m.barLine(80))
 	}
 	press(t, m, "right")
@@ -97,7 +97,7 @@ func TestFilterBarNarrowShowsTheFocusedField(t *testing.T) {
 		t.Errorf("the bar without focus = %q, want its values", line)
 	}
 	press(t, m, "tab", "tab")
-	if line := m.barLine(m.width); !strings.Contains(line, "> State: [All] Active Inactive") ||
+	if line := m.barLine(m.width); !strings.Contains(line, ">  State: All ▾") ||
 		strings.Contains(line, "Group") {
 		t.Errorf("the focused field = %q", line)
 	}
