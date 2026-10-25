@@ -347,6 +347,10 @@ func findRow(view, text string) string {
 		if edge := strings.IndexAny(line, "│║"); edge >= 0 {
 			side := line[edge:]
 			line = strings.TrimPrefix(strings.TrimPrefix(side[len("│"):], "\x1b[0m"), " ")
+			// The pane beside the frame repeats the name of the marked entry; only the table counts.
+			if end := strings.IndexAny(line, "│║"); end >= 0 {
+				line = line[:end]
+			}
 		}
 		plain := ansiEscape.ReplaceAllString(line, "")
 		if strings.Contains(plain, text) && (strings.HasPrefix(plain, "> ") || strings.HasPrefix(plain, "▌ ") || strings.HasPrefix(plain, "  ")) {

@@ -417,6 +417,7 @@ func (m *Model) clickListRow(i int) tea.Cmd {
 		return nil
 	}
 	m.barFocus = 0
+	m.leaveDetail()
 	m.list.cursor = i
 	if m.list.editing {
 		m.list.stopFilter()
