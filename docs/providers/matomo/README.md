@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # Matomo
@@ -148,6 +148,10 @@ or Super User rights. The profile `live` adds the [live tools](live.md) and the 
 because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights.
+The [insights, transitions, and AI chatbot reads](reports.md#insights-transitions-and-ai-chatbots)
+`matomo.insights.list`, `matomo.transitions.get`, and `matomo.bot-realtime.get` and the
+[database statistics](instance.md#database-statistics) `matomo.database-statistics.get` (target `instance`) are in no
+profile and are offered only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
@@ -191,6 +195,7 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.global-settings.set-keep-url-fragments` | [instance](instance.md) | sets whether URL fragments are kept by default (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-default-currency` | [instance](instance.md) | sets the default currency (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-default-timezone` | [instance](instance.md) | sets the default time zone (Super User, target `instance`; effect `update`) |
+| `matomo.database-statistics.get` | [instance](instance.md#database-statistics) | reads the size of the database by section: general information, server status, and table and report sizes (Super User, target `instance`, only via `tools`) |
 | `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
 | `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
@@ -206,6 +211,9 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
+| `matomo.insights.list` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the notable changes between two periods: insights, movers and shakers, their overviews, or whether a comparison period exists (only via `tools`) |
+| `matomo.transitions.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the previous and following pages, outlinks, downloads, and external referrers of one page (only via `tools`) |
+| `matomo.bot-realtime.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the AI chatbots and the pages they requested within the last minutes; needs Matomo 5.12.0 and the BotTracking plugin (only via `tools`) |
 | `matomo.segments.fields` | [reports](reports.md) | reads the segment fields of a website |
 | `matomo.segments.suggest-values` | [reports](reports.md) | reads frequent values of a segment field |
 | `matomo.visits.list` | [live](live.md) | reads the visit log of one website |

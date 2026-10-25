@@ -231,5 +231,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataSubjectsExport, Handler: capability.Handler(invokeDataSubjectsExport)},
 		capability.Operation{Descriptor: privacySettingsGet, Handler: capability.Handler(invokePrivacySettingsGet)},
 		capability.Operation{Descriptor: complianceGet, Handler: capability.Handler(invokeComplianceGet)},
+		capability.Operation{Descriptor: insightsList, Handler: capability.Handler(invokeInsightsList)},
+		capability.Operation{Descriptor: transitionsGet, Handler: capability.Handler(invokeTransitionsGet)},
+		capability.Operation{Descriptor: botRealtimeGet, Handler: capability.Handler(invokeBotRealtimeGet)},
+		capability.Operation{Descriptor: databaseStatisticsGet, Handler: capability.Handler(invokeDatabaseStatisticsGet)},
 	)
 }

@@ -230,6 +230,10 @@ func with(base answers, extra answers) answers {
 	return merged
 }
 
+// listedReads are the reads that only a connection's tools list offers.
+var listedReads = map[string]bool{"matomo.insights.list": true, "matomo.transitions.get": true,
+	"matomo.bot-realtime.get": true, "matomo.database-statistics.get": true}
+
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
 	metadata, ok := reg.ProviderMetadata(Provider)
@@ -245,12 +249,12 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.users.delete" || tool.ID == "matomo.users.logout" ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename") &&
 			tool.Effect != config.EffectRead
-		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList) {
+		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
 			t.Errorf("tool %+v, want an open read", tool)
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 72 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 76 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
@@ -488,6 +492,7 @@ func TestMessagePatterns(t *testing.T) {
 		"User 'deactivated' doesn't exist.":                                                    "not-found",
 		"User 'not enabled' doesn't exist.":                                                    "not-found",
 		"User 'o'brien' doesn't exist.":                                                        "not-found",
+		"NoDataForAction":                                                                      "not-found",
 		"Username 'tokenx' already exists.":                                                    "",
 		"Ein unbekannter Fehler":                                                               "",
 		"":                                                                                     "",

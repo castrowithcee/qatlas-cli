@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the Matomo report tools: the report catalog, report details, segment fields and suggested values, and reading one report for a period with bounded rows, filters, and archiving limits.
+  Describes the Matomo report tools: the report catalog, report details, segment fields and suggested values, reading one report for a period with bounded rows, filters, and archiving limits, and the insights, transitions, and real-time AI chatbot reads.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # Matomo reports
@@ -82,3 +82,29 @@ no argument for them. `period` and `date` are required: `day`, `week`, `month`, 
 - **Not covered.** Comparisons (`compareDates`, `comparePeriods`, `compareSegments`) are not offered.
 
 Row labels, titles, URLs, search terms, and event names are visitor data and untrusted.
+
+## Insights, transitions, and AI chatbots
+
+Three further reads have no entry in the report catalog. Each is in no profile and is offered only where the `tools`
+list of a connection names it. They need a view right on the website and an `idSite` inside the targets. Rows are
+cut at `limit` (1 to 1000, 100 when omitted) and continued with `next_cursor`, as under
+[Reading a report](#reading-a-report); labels, titles, and URLs are visitor data and untrusted.
+
+- `matomo.insights.list` takes `kind`, one fixed Matomo method of the `Insights` plugin: `insights`,
+  `movers-and-shakers`, their two `-overview` forms over the reports Matomo puts in its overview, and `can-generate`,
+  which tells whether a comparison period exists and takes no website. `insights` and `movers-and-shakers` name the
+  report by its catalog ID in `report`. The comparison is on visits; each kind accepts only the thresholds its
+  Matomo method has and refuses the others. Matomo's tables are cut on the Qatlas side, and a row of an overview
+  carries `report_name`.
+- `matomo.transitions.get` reads the previous pages, following pages, outlinks, downloads, and external referrers of
+  one page, given as a URL or a title in `page_type` and `page`. The text is matched by Matomo against what it stored
+  and is never fetched. Without `parts` the call is `getTransitionsForPageUrl` or `getTransitionsForPageTitle`; with
+  `parts` it is `getTransitionsForAction` and Matomo derives no exits. The instance may allow only short periods for
+  transitions. Matomo Cloud allows 500 requests per 5 minutes; a 429 is `rate-limited` and never repeated. `limit`
+  applies to every list alike.
+- `matomo.bot-realtime.get` takes `kind` `chatbots` or `top-pages` and reads the AI chatbot requests of the last
+  `last_minutes` (1 to 720, Matomo's 30 when omitted). It needs Matomo 5.12.0 and the `BotTracking` plugin; on an
+  older instance it ends as `unsupported-capability` without a Matomo request beyond the version and plugin check.
+
+All three read one period or one table at a time: a date range or `lastN` with `day`, `week`, `month`, or `year`
+(one table per period) is refused for insights and transitions; use `period=range`.
