@@ -217,7 +217,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Errorf("tool %+v, want a read that needs no allow-list", tool)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search", "brave.videos.search"}) {
+	if !reflect.DeepEqual(ids, []string{"brave.images.search", "brave.llm-context.get", "brave.news.search",
+		"brave.videos.search", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -232,8 +233,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
-		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search", "brave.videos.search", "brave.images.search"}) {
-		t.Errorf("profiles = %+v, want the recommended search profile with both tools", metadata.Profiles)
+		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"brave.llm-context.get", "brave.news.search",
+			"brave.web.search", "brave.videos.search", "brave.images.search"}) {
+		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
 	}
 }
 
@@ -504,6 +506,9 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 		{"news listed", config.Resolved{Tools: []string{"brave.news.search"}}, "brave.news.search"},
 		{"both listed", config.Resolved{Tools: []string{"brave.llm-context.get", "brave.news.search", "brave.videos.search", "brave.images.search"}}, "brave.news.search"},
 		{"only llm context", config.Resolved{Tools: []string{"brave.llm-context.get"}}, "brave.llm-context.get"},
+		{"only web", config.Resolved{Tools: []string{"brave.web.search"}}, "brave.web.search"},
+		{"only videos", config.Resolved{Tools: []string{"brave.videos.search"}}, "brave.videos.search"},
+		{"only images", config.Resolved{Tools: []string{"brave.images.search"}}, "brave.images.search"},
 		{"none", config.Resolved{Tools: []string{}}, ""},
 	} {
 		got, ok := probeFor(&tc.resolved)
@@ -514,5 +519,13 @@ func TestProbeFollowsWhatTheConnectionOffers(t *testing.T) {
 	if probes[1].path != "/res/v1/llm/context" || probes[1].query.Get("maximum_number_of_urls") != "1" ||
 		probes[1].query.Get("count") != "1" || probes[1].query.Get("q") != "brave" {
 		t.Errorf("llm context probe = %+v", probes[1])
+	}
+	if probes[2].path != "/res/v1/web/search" || probes[2].query.Get("count") != "1" || probes[2].query.Get("q") != "brave" {
+		t.Errorf("web probe = %+v", probes[2])
+	}
+	for i, path := range map[int]string{3: "/res/v1/videos/search", 4: "/res/v1/images/search"} {
+		if probes[i].path != path || probes[i].query.Get("count") != "1" || probes[i].query.Get("q") != "brave" {
+			t.Errorf("probe %d = %+v", i, probes[i])
+		}
 	}
 }
