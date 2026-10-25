@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Brave Search provider: setup with a Brave API key, plans and the search profile, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the pages of the tool families.
+  Describes the Brave Search provider: setup with a Brave API key, plans and the search and answers profiles, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the pages of the tool families.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -11,11 +11,11 @@ updated: 2026-10-25
 
 Brave Search is a provider for the Brave Search API with one subscription key. It reads the web for agents
 (LLM Context), the web for people (Web Search), news, videos, images, places, and the real-time rich results
-that a web search announces. It changes nothing: every tool is a read, and the connection takes no target,
+that a web search announces, and asks Brave for AI-written answers with citations. It changes nothing: every tool is a read, and the connection takes no target,
 because a key reaches the endpoints of its plan and not a part of an account.
 
 The tools are described per family: [LLM Context](llm-context.md), [web search and rich results](web.md),
-[news](news.md), [videos and images](media.md), and [places](places.md).
+[news](news.md), [videos and images](media.md), [places](places.md), and [Answers](answers.md).
 
 ## Configuration
 
@@ -53,13 +53,16 @@ The profile `search` is the Search plan: `brave.llm-context.get`, `brave.news.se
 `brave.poi-descriptions.get`. It is the recommended profile. Brave names the plan only for Place Search;
 whether a key reaches the other two place endpoints is shown by the call.
 
+The profile `answers` is the Answers plan: `brave.answers.ask` only. It is not recommended, and its tool is
+listed only: a connection reaches it through its `tools` list, never through the `read` effect.
+
 Qatlas manages no subscription, payment, or key.
 
 ## Cost
 
 Brave bills every successful request to the key's plan. Qatlas never repeats a request on its own, so one
 tool call is at most one billed request. Each tool description says so. Current prices are on the Brave
-pricing page. Brave names no plan or price for `brave.pois.get` and `brave.poi-descriptions.get`; their
+pricing page. Answers is billed by searches and tokens, see [Answers](answers.md). Brave names no plan or price for `brave.pois.get` and `brave.poi-descriptions.get`; their
 descriptions say so.
 
 ## Rate limits and quota
@@ -70,7 +73,8 @@ Qatlas reads them after each answer, spaces the next request of the same key by 
 implies, and shows the state in the result as `quota`: a list of `windows` with `window_seconds`, `limit`
 (0 means unlimited), `remaining`, and `reset_seconds`. A result without rate-limit headers has no `quota`.
 
-Without an answer to learn from, requests of one key are spaced by 250 ms; the spacing is per process.
+Without an answer to learn from, requests of one key are spaced by 250 ms; the spacing is per process. After
+an Answers request the next request of the key waits at least 500 ms.
 
 On `429` Qatlas holds the next request for a short window that resets within a minute, and the next call
 waits it out. A window that resets later is a quota: the call ends with `rate-limited` and the message
@@ -82,7 +86,8 @@ and is not read.
 `qatlas connection test` sends one real request to the cheapest endpoint the connection offers: News with
 `q=brave` and `count=1`, otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, Images, or Place Search
 (`q=brave`) with `count=1`, whichever tool the connection allows first. The two endpoints that take place ids
-are not tested, because an id is known only from a search.
+are not tested, because an id is known only from a search, and Answers is never tested, because its cost
+varies.
 Brave has no free key check, so the test spends one billed request. Success proves that the key is valid
 for that endpoint only; it shows neither the plan nor any other endpoint. A `422` is never taken as proof
 of a valid key, because Brave answers it for invalid parameters and for rejected keys alike.
@@ -96,7 +101,7 @@ characters outside inline rules, and values over 2048 characters.
 
 ## Privacy and terms of use
 
-Queries, goggles, and the location arguments go to Brave in the USA. Brave keeps the requests of an account
+Queries, Answers questions, goggles, and the location arguments go to Brave in the USA. Brave keeps the requests of an account
 for up to 90 days; Zero Data Retention exists only on the Enterprise plan. A location is sent only when
 the caller gives it, and Qatlas never derives one.
 
@@ -123,16 +128,16 @@ request values.
 | 400, 422 | `invalid-provider-response` | Brave rejected arguments that Qatlas had accepted, or the key |
 | 429 | `rate-limited` | Rate limit or quota, see above |
 | 502, 503 | `unreachable` | Brave is unavailable |
-| 504, transport timeout | `timeout` | No answer in time (30 seconds) |
+| 504, transport timeout | `timeout` | No answer in time (30 seconds; Answers 55 seconds, the rate-limit wait included) |
 | other 5xx, 3xx | `provider-error` | A redirect is never followed |
 
 Brave documents the mapping of 402 and 403 to a plan or a balance only loosely, so the messages name both
-and claim neither. An unreadable, oversized (over 4 MB), or non-JSON answer is `invalid-provider-response`.
+and claim neither. An unreadable, oversized (over 4 MB; an Answers stream over 8 MiB), or non-JSON answer is `invalid-provider-response`.
 
 ## Boundary
 
-The provider reaches only the nine endpoints of the tool pages. It offers no passthrough of method, path, header, or
-body. Not offered: Answers, Suggest, and Spellcheck.
+The provider reaches only the ten endpoints of the tool pages. It offers no passthrough of method, path, header, or
+body. Not offered: Suggest and Spellcheck.
 
 Left out on purpose:
 
