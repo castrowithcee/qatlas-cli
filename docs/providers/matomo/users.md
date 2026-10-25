@@ -11,8 +11,8 @@ updated: 2026-10-25
 
 The user tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). Four tools
 read; `matomo.users.list`, `matomo.users.get`, and `matomo.users.get-access` carry personal data and the rights of
-administrators. `matomo.users.delete` and `matomo.users.logout` change users. None of the six tools is in a setup
-profile.
+administrators. `matomo.users.delete` and `matomo.users.logout` change users, and three more change roles and
+capabilities. No user tool is in a setup profile.
 
 ## Personal data and what is never returned
 
@@ -89,3 +89,19 @@ confirmation, and the tools take no password argument.
 
 Both report the login and success only after Matomo confirmed. After an unclear result, read the user with
 `matomo.users.get` before repeating.
+
+## Changing roles and capabilities
+
+`matomo.access.set`, `matomo.capabilities.add`, and `matomo.capabilities.remove` change an existing user on up to 100
+websites (`idSites`), all inside the connection's targets; one outside, a repeated ID, or `all` refuses the whole call
+before any request. They need an admin right on every website and no `instance` target. All three are offered only
+where the connection's `tools` list names them, send exactly one request that is never repeated, and report success only
+after Matomo confirmed. After an unclear result, read the access with `matomo.users.get-access` before repeating.
+
+- `matomo.access.set` gives one `role` (`view`, `write`, `admin`) or removes the access (`noaccess`). It replaces every
+  role and capability the user held on those websites; optional `capabilities` are given again with the role.
+- `matomo.capabilities.add` needs a role on every website already; a capability the role includes is not stored.
+- `matomo.capabilities.remove` removes only capabilities given separately; those a role includes stay effective.
+
+Capability IDs come from `matomo.roles.list`; a role name is refused as a capability. Super User rights cannot be
+granted, `anonymous` is refused, and the tools take no password: a personal token needs no password confirmation.
