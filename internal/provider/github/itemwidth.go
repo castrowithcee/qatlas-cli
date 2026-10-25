@@ -42,13 +42,14 @@ const itemPullRequestMembers = `additions deletions changedFiles baseRefName bas
 	`viewerCanEnableAutoMerge viewerCanMergeAsAdmin viewerCanUpdateBranch`
 
 const itemReviewerSelection = `__typename ` +
-	`... on User{login avatarUrl url resourcePath id databaseId name email isSiteAdmin} ` +
+	`... on User{login avatarUrl url resourcePath id databaseId name ` + gateUserEmail + `email` + gateEnd +
+	` isSiteAdmin} ` +
 	`... on Bot{login avatarUrl url resourcePath id databaseId} ` +
 	`... on Mannequin{login avatarUrl url resourcePath id databaseId name email} ` +
-	`... on Team{id databaseId name slug combinedSlug description privacy notificationSetting createdAt ` +
-	`updatedAt url resourcePath} ` +
-	`... on EnterpriseTeam{id fullDatabaseId name slug combinedSlug description privacy notificationSetting ` +
-	`createdAt updatedAt}`
+	gateTeam + `... on Team{id databaseId name slug combinedSlug description privacy notificationSetting ` +
+	`createdAt updatedAt url resourcePath}` + gateEnd + ` ` +
+	gateEnterpriseTeam + `... on EnterpriseTeam{id fullDatabaseId name slug combinedSlug description privacy ` +
+	`notificationSetting createdAt updatedAt}` + gateEnd
 
 // itemIssueFieldSelection selects an issue field value. The union ProjectV2IssueFieldValues takes no field of
 // its own, so the members its types share are asked for through their interfaces.

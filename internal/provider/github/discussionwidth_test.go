@@ -156,7 +156,7 @@ func TestDiscussionToolsCarryTheFullDiscussion(t *testing.T) {
 			}
 			assertJSON(t, json.RawMessage(result), tc.want)
 			last := f.recorded()
-			if document := last[len(last)-1].document; !strings.Contains(document, discussionSelection(tc.options)) {
+			if document := last[len(last)-1].document; !strings.Contains(document, fullDocument(discussionSelection(tc.options))) {
 				t.Errorf("%s query lacks the discussion selection for %d options", tc.tool, tc.options)
 			}
 		})
@@ -212,7 +212,7 @@ func TestDiscussionCommentsCarryTheFullComment(t *testing.T) {
 		`,"reply_count":150,"replies":[`+replyView+`],"replies_truncated":true`)+`],"has_more":false,"repository":"octo-org/example"}`)
 
 	last := f.recorded()
-	if document := last[len(last)-1].document; strings.Count(document, discussionCommentSelection) != 2 {
+	if document := last[len(last)-1].document; strings.Count(document, fullDocument(discussionCommentSelection)) != 2 {
 		t.Errorf("the query lacks the comment selection for a comment and a reply")
 	}
 	var value map[string]any

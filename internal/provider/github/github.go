@@ -1301,11 +1301,12 @@ func (c *Client) graphqlRequest(ctx context.Context, op, document string, variab
 	return nil
 }
 
-// post sends one GraphQL document and returns the undecoded answer.
+// post sends one GraphQL document with the gated parts the token's scopes allow and returns the undecoded
+// answer.
 func (c *Client) post(ctx context.Context, op, document string, variables map[string]any,
 	change bool) (graphQLEnvelope, error) {
 	var envelope graphQLEnvelope
-	payload, err := json.Marshal(map[string]any{"query": document, "variables": variables})
+	payload, err := json.Marshal(map[string]any{"query": c.scoped(ctx, op, document), "variables": variables})
 	if err != nil {
 		return envelope, providerError(op, "the request could not be built")
 	}
@@ -1863,6 +1864,7 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	}
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
+	c.observeScopes(response.Header)
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return c.statusError(op, response, change)

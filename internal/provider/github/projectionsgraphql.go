@@ -76,16 +76,20 @@ func (b *gqlBigInt) text() *string {
 
 // gqlAccountSelection selects an Actor. A member a type lacks is not asked for there and stays out of the view.
 const gqlAccountSelection = `__typename login avatarUrl url resourcePath ` +
-	`... on User{id databaseId name email isSiteAdmin} ... on Bot{id databaseId} ` +
-	`... on Organization{id databaseId name email} ... on Mannequin{id databaseId name email} ` +
-	`... on EnterpriseUserAccount{id name}`
+	`... on User{id databaseId name ` + gateUserEmail + `email` + gateEnd + ` isSiteAdmin} ... on Bot{id databaseId} ` +
+	gateOrganization + `... on Organization{id databaseId name email}` + gateEnd + ` ` +
+	`... on Mannequin{id databaseId name email} ` +
+	gateEnterprise + `... on EnterpriseUserAccount{id name}` + gateEnd
 
 // gqlUserSelection selects a User where the schema names the type itself, such as GitActor.user.
-const gqlUserSelection = `__typename id databaseId login name email avatarUrl url resourcePath isSiteAdmin`
+const gqlUserSelection = `__typename id databaseId login name ` + gateUserEmail + `email` + gateEnd +
+	` avatarUrl url resourcePath isSiteAdmin`
 
 // gqlOrganizationSelection selects an Organization where the schema names the type itself, such as
-// Commit.onBehalfOf; the Actor fragments of gqlAccountSelection do not apply to it.
-const gqlOrganizationSelection = `__typename id databaseId login name email avatarUrl url resourcePath`
+// Commit.onBehalfOf; the Actor fragments of gqlAccountSelection do not apply to it. Without read:org only its
+// type is asked for, because the members GitHub checks on the type itself are not all known.
+const gqlOrganizationSelection = `__typename ` + gateOrganization +
+	`id databaseId login name email avatarUrl url resourcePath` + gateEnd
 
 type gqlAccountRaw struct {
 	Typename     *string `json:"__typename"`

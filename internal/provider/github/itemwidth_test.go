@@ -482,7 +482,7 @@ func TestItemListQueryStaysBelowTheNodeLimit(t *testing.T) {
 
 // itemFragmentBody is the selection of an item without its fragment wrapper.
 func itemFragmentBody() string {
-	return strings.TrimSuffix(strings.SplitN(itemFragment, "ProjectV2Item{", 2)[1], "}")
+	return strings.TrimSuffix(strings.SplitN(fullDocument(itemFragment), "ProjectV2Item{", 2)[1], "}")
 }
 
 func fragmentNodes(t *testing.T, body string) int {
