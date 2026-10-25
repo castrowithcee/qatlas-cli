@@ -33,15 +33,15 @@ func (e *unavailableError) Unwrap() error { return e.UnsupportedError }
 
 // messagePatterns map the English texts Matomo puts in the message of an application error to a class.
 // Matomo translates these texts into the language of the token's user, so another language falls through to
-// invalid-provider-response. The first matching group wins; a pattern is matched on the lower-cased text.
+// invalid-provider-response. The first matching group wins; a pattern is matched on the lower-cased text with
+// every quoted name masked, so a name like 'tokenadmin' cannot pick the class.
 var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
-	{"permission", []string{"you can't access this resource", "requires 'view'", "requires 'write'",
-		"requires 'admin'", "requires 'superuser'", "super user", "not allowed to", "required access level",
+	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
 		"pre-processed segments can only", "does not have access to any sites"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
@@ -80,7 +80,7 @@ func applicationError(op string, data []byte) error {
 }
 
 func classifyMessage(message string) string {
-	lower := strings.ToLower(message)
+	lower := maskQuoted(strings.ToLower(message))
 	for _, group := range messagePatterns {
 		for _, pattern := range group.patterns {
 			if strings.Contains(lower, pattern) {
@@ -89,4 +89,31 @@ func classifyMessage(message string) string {
 		}
 	}
 	return ""
+}
+
+// maskQuoted empties each quoted section and keeps its two quotes. A quote opens only at the start or after a
+// space or one of "(=:#" and closes only before a space, punctuation, or the end, so the apostrophe in
+// "doesn't" or "o'brien" neither opens nor closes a section.
+func maskQuoted(text string) string {
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\'' && (i == 0 || strings.IndexByte(" \t\r\n(=:#", text[i-1]) >= 0) {
+			if end := closingQuote(text, i+1); end >= 0 {
+				out.WriteString("''")
+				i = end
+				continue
+			}
+		}
+		out.WriteByte(text[i])
+	}
+	return out.String()
+}
+
+func closingQuote(text string, from int) int {
+	for j := from; j < len(text); j++ {
+		if text[j] == '\'' && (j+1 == len(text) || strings.IndexByte(" \t\r\n.,;:!?)", text[j+1]) >= 0) {
+			return j
+		}
+	}
+	return -1
 }
