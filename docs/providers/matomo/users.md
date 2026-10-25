@@ -1,0 +1,76 @@
+---
+description: >
+  Describes the Matomo user tools: users and their roles, the access of users to websites, and the roles and capabilities Matomo offers, with the personal data they carry and the account security data they never return.
+type: knowledge
+edit: shared
+created: 2026-10-25
+updated: 2026-10-25
+---
+
+# Matomo users and roles
+
+The user tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). They only
+read; `matomo.users.list`, `matomo.users.get`, and `matomo.users.get-access` carry personal data and the rights of
+administrators, so none of the four tools is in a setup profile.
+
+## Personal data and what is never returned
+
+Logins, email addresses, and the dates of an account are personal data of other people and untrusted text. A user is
+read through an allow-list: `login`, `email`, `date_registered`, `last_seen`, `last_seen_ago`, `superuser_access`,
+`role`, and `capabilities`. Everything else in a Matomo user row is dropped, including members a later release adds.
+Matomo 5 holds no alias for a user.
+
+Data about the security of an account is not returned, whatever the token's rights: the password hash, authentication
+tokens, the two-factor state and secret, the invitation (token, link, expiry, acceptance, status, inviter), the time
+of the last password change, and failed attempts. For the same reason `matomo.users.list` offers no invitation status
+filter (`filter_status`). Matomo itself shows the email address of other users only to Super Users.
+
+## Choosing the method
+
+Each tool chooses its Matomo method from the arguments; the caller never names one.
+
+| Tool | Arguments | Method | Needs |
+| --- | --- | --- | --- |
+| `matomo.users.list` | `idSite` | `getUsersPlusRole` | admin right on the website; without it Matomo shows only the token's own user |
+| | none or `logins` | `getUsers` | an admin right; target `instance` |
+| | `only_logins` | `getUsersLogin` | an admin right; target `instance` |
+| `matomo.users.get` | `login` or `email` | `getUser`, `getUserByEmail` | Super User; target `instance` |
+| | `kind` `exists` | `userExists`, `userEmailExists` | a view right; target `instance` |
+| | `kind` `superusers` | `getUsersHavingSuperUserAccess` | target `instance` |
+| | `kind` `token-superuser` | `hasSuperUserAccess` | target `instance` |
+| `matomo.users.get-access` | `login` | `getSitesAccessForUser` | an admin right; not for Super Users |
+| | `login`, `raw` | `getSitesAccessFromUser` | Super User; target `instance` |
+| | `idSite` | `getUsersAccessFromSite` | admin right on the website |
+| | `idSite`, `access` | `getUsersWithSiteAccess` | admin right on the website |
+| | `access` alone | `getUsersSitesFromAccess` | Super User; target `instance` |
+| `matomo.roles.list` | `section` | `getAvailableRoles`, `getAvailableCapabilities` | an admin right on some website |
+
+A missing right ends as a permission error of Matomo. `idSite` must lie inside the connection's targets and is refused
+before a secret is read; it is never defaulted by a single bound website, because without it `matomo.users.list` and
+`matomo.users.get-access` choose their instance-wide mode.
+
+## Targets
+
+`matomo.users.get` is instance-wide in every kind and is offered only to connections that name `instance`. Even the
+existence check and the Super User check of the token are limited to it, because they let a caller probe the accounts
+and rights of the whole instance. `matomo.users.list` and `matomo.users.get-access` are offered to connections that
+reach websites; their instance-wide modes are refused in the tool, before a secret is read, unless the targets also
+name `instance`. `matomo.roles.list` needs only a website binding.
+
+Access rows of websites outside the targets are dropped one by one: the websites of `getSitesAccessForUser` and
+`getSitesAccessFromUser`, and the websites of `getUsersSitesFromAccess`, where a user left without a website is dropped
+too. With `site/ID` targets these rows are read up to 1000 and filtered here; a user with that many websites is refused
+as an invalid request asking for a narrower `role` or `search`. The roles on a website are shown only for websites inside
+the targets. The instance-wide lists carry no website data.
+
+## Paging
+
+Lists page like other lists. `getUsersPlusRole` and, with every website in scope, `getSitesAccessForUser` page at
+Matomo; the other methods answer in full and are sorted by login and cut on the Qatlas side.
+
+## Roles and capabilities
+
+`matomo.roles.list` returns the roles a user can be given (`view`, `write`, `admin`; not `superuser` or `noaccess`) and
+the capabilities, which plugins extend, with the roles that already include each. Names and descriptions are translated
+by Matomo and untrusted; help addresses are text that is never fetched. The tool returns no personal data, but Matomo
+asks for an admin right for it, so it is not in the `read` profile.

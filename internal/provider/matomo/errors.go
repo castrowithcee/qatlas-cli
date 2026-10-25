@@ -43,11 +43,11 @@ var messagePatterns = []struct {
 	{"permission", []string{"you can't access this resource", "requires 'view'", "requires 'write'",
 		"requires 'admin'", "requires 'superuser'", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
-		"pre-processed segments can only"}},
+		"pre-processed segments can only", "does not have access to any sites"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
 		"not found in the list of available reports", "there is no goal", "requested segment not found",
-		"marked as deleted", "there is no note"}},
+		"marked as deleted", "there is no note", "doesn't exist"}},
 }
 
 // applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
