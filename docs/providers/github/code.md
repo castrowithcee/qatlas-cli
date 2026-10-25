@@ -98,12 +98,7 @@ annotated tag's `message` is untrusted data, cut to at most 4096 characters with
 object's own members, its tagger and its verification, exist only for an annotated tag; a lightweight tag
 reports its Git ref.
 
-Reading contents, a tree, a file's blame, commits, branches, or tags needs no scope for a public repository,
-or the following for a private one:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| the eight tools above | `repo` | Contents: read |
+The token rights are listed under [Repository contents](setup.md#repository-contents-branches-tags-and-commits).
 
 The terminal editor's setup profile `repository-reader` selects the eight; it is not the recommended profile,
 which stays `read`, unchanged.
@@ -120,7 +115,7 @@ which stays `read`, unchanged.
 `github.contents.delete` is listed only because deleting a file the wrong branch relied on cannot be undone;
 `github.files.push` is listed only because several files land in one commit that cannot be undone by halves.
 All four refuse a `path` below `.github/workflows/`, matched without regard to case, which the
-[workflow file tools](actions.md) maintain instead with their own `workflow` token requirement; none of the
+[workflow file tools](actions.md) maintain instead with their own token requirement; none of the
 four ever answers with a file's content, only its path, its blob SHA, and the commit GitHub made.
 
 `github.branches.create` makes the branch from `from`, or, when `from` is left out, from the repository's
@@ -159,14 +154,6 @@ once; a failure while creating a blob, a tree, or a commit leaves the branch exa
 ref update ever moves it, though the object it was creating may still exist as a loose Git object with no
 effect until referenced. The answer names `parent_sha`, the commit the branch was at before the push, and the
 paths written in the order given, never any file's content.
-
-Reading contents needs the tokens above for a private repository, and the same tokens after them are what
-creating a branch, creating, updating, or deleting a file, and pushing several files as one commit need for
-either kind of repository:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.branches.create`, `github.contents.put`, `github.contents.delete`, `github.files.push` | `repo` | Contents: read and write |
 
 The terminal editor's setup profile `repository-writer` (not recommended) selects the read eight plus
 `github.branches.create` and `github.contents.put`; `github.contents.delete` and `github.files.push` are in no
