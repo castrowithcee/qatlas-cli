@@ -1338,6 +1338,7 @@ var textDE = map[textID]string{
 	entryID("provider note"):                               "Provider-Notiz",
 	entryID("configuration"):                               "Konfiguration",
 	tSectionClosedMark:                                     " (zu)",
+	tFormHelpTitle:                                         "Hilfe",
 	entryID("vault setting"):                               "Tresor-Einstellung",
 	entryID("approval"):                                    "Freigabe",
 	entryID("agent token"):                                 "Agent-Token",

@@ -283,7 +283,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		t.Fatalf("cleared default = %q, want none", got)
 	}
 	toggleMark(permissions.selected, "default", true)
-	view := screenOf(m)
+	view := flatText(formView(m))
 	if !strings.Contains(view, "warning: All tables in this SeaTable base are exposed to the agent") {
 		t.Fatalf("wildcard view has no warning:\n%s", view)
 	}

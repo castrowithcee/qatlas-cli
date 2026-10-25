@@ -63,7 +63,8 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "gh")
-	if view := screenOf(m); !strings.Contains(view, "paths       any") {
+	focusField(t, m, pathsLabel)
+	if view := formView(m); !strings.Contains(view, "paths       any") {
 		t.Fatalf("the empty row does not say what it means:\n%s", view)
 	}
 	openPathList(t, m)
@@ -105,15 +106,15 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	}
 
 	// Folded, the row says how many there are and names the first two; unfolded, it lists every one.
-	if view := screenOf(m); !strings.Contains(view, "2 paths:") {
+	if view := formView(m); !strings.Contains(view, "2 paths:") {
 		t.Fatalf("the folded row lacks its short form:\n%s", view)
 	}
 	press(t, m, "right")
-	if view := screenOf(m); !strings.Contains(view, "2 paths\n") || strings.Contains(view, "2 paths:") {
+	if view := formView(m); !strings.Contains(view, "2 paths\n") || strings.Contains(view, "2 paths:") {
 		t.Fatalf("the unfolded row does not list every path:\n%s", view)
 	}
 	press(t, m, "left")
-	if view := screenOf(m); !strings.Contains(view, "2 paths:") {
+	if view := formView(m); !strings.Contains(view, "2 paths:") {
 		t.Fatalf("the row did not fold again:\n%s", view)
 	}
 

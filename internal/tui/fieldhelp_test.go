@@ -101,7 +101,7 @@ func TestFocusedFieldHintIsOneLineAndTheLongFormIsInThePane(t *testing.T) {
 			if strings.Contains(view, "Resize terminal") {
 				t.Fatalf("%dx%d %s: the form was replaced by the resize notice:\n%s", size.w, size.h, credential, view)
 			}
-			for _, want := range []string{"Edit " + credential, "token", "esc leave"} {
+			for _, want := range []string{"Edit credential", credential, "token", "esc leave"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("%dx%d %s: view lacks %q:\n%s", size.w, size.h, credential, want, view)
 				}

@@ -211,9 +211,9 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					}
 					// Only what the workspace frame holds counts: the tab line draws its own marks.
 					inner := holding[0]
-					if i := strings.Index(inner, "│"); i >= 0 {
-						if j := strings.Index(inner[i+len("│"):], "│"); j >= 0 {
-							inner = inner[i+len("│") : i+len("│")+j]
+					for _, part := range strings.Split(inner, "│") {
+						if strings.Contains(part, want) {
+							inner = part
 						}
 					}
 					if !strings.HasSuffix(strings.TrimRight(inner, " "), want) {

@@ -593,6 +593,11 @@ type Model struct {
 	window *[2]int
 	// formCol is the width of the label column of the form being drawn (see labelColumn); 0 outside a draw.
 	formCol int
+	// formFlat draws the rows of a form as one-line fields without a frame, for a form that is too tall to
+	// stand in frames. formBox says the rows being drawn stand in frames; formValueCol and formValueW are where
+	// their value column starts and how wide it is.
+	formFlat, formBox        bool
+	formValueCol, formValueW int
 	// sectionPinned holds the sections the user jumped into, which stay open while the form does even when
 	// nothing in them has a value (see sectionClosed).
 	sectionPinned map[string]bool
@@ -3765,7 +3770,7 @@ func (m *Model) editorView() string {
 			what = tr(tFormNewDefault)
 		}
 		if m.editing != "" {
-			what = tr(tFormEdit, m.editing)
+			what = tr(tFormEdit, noun)
 		} else if m.copyFrom != "" {
 			what = tr(tFormNewFrom, noun, m.copyFrom)
 			if m.termWidth < narrowWidth {
@@ -3777,7 +3782,7 @@ func (m *Model) editorView() string {
 		if m.wizard != nil {
 			b.WriteString(m.setupHeading(false))
 		} else {
-			b.WriteString(styles.title.Render(what) + "\n\n")
+			b.WriteString(m.formTitle(what) + "\n\n")
 		}
 		b.WriteString(m.otherProblems())
 		m.formTop = m.workspaceTop() + strings.Count(b.String(), "\n")
@@ -3851,95 +3856,6 @@ func (m *Model) editorView() string {
 	}
 
 	b.WriteString(m.notes())
-	return b.String()
-}
-
-// formBody draws the rows of the open form. With two or more sections it puts the list of the sections at
-// the left where the terminal has room for it, and a heading above each section where it has not.
-func (m *Model) formBody() string {
-	entries := m.formSections()
-	m.formLeft, m.sectionListWidth = 0, 0
-	if !m.sectionListFits(entries) {
-		return m.formRows(len(entries) >= 2, entries)
-	}
-	list, width := m.sectionList(entries)
-	for i, e := range entries {
-		name := e.name
-		m.addHit(0, m.formTop+i, width, m.formTop+i+1, func() tea.Cmd { return m.clickSection(name) })
-	}
-	full := m.width
-	m.width = full - width - 2
-	m.formLeft, m.sectionListWidth = width+2, width
-	rows := m.formRows(false, entries)
-	m.width = full
-	joined := lipgloss.JoinHorizontal(lipgloss.Top, list, "  ", strings.TrimSuffix(rows, "\n"))
-	return joined + "\n"
-}
-
-// formRows draws the rows of the open form in one label column, each with the hint, warning and problems that
-// belong under it. headings puts the name of a section above its rows; the rows of a closed section are left
-// out.
-func (m *Model) formRows(headings bool, entries []sectionEntry) string {
-	var b strings.Builder
-	m.formCol = m.labelColumn(m.fieldLabels()...)
-	defer func() { m.formCol = 0 }()
-	closed := map[string]bool{}
-	for _, e := range entries {
-		closed[e.name] = e.closed
-	}
-	last := ""
-	for i, f := range m.fields {
-		if f.hidden {
-			continue
-		}
-		outside := m.window != nil && (i < m.window[0] || i > m.window[1])
-		// Headings are the first thing given up when the form is cut to the rows around the focus.
-		if headings && m.window == nil && f.section != "" && f.section != last && !outside {
-			last = f.section
-			name := f.section
-			y := m.formTop + strings.Count(b.String(), "\n")
-			m.addHit(m.formLeft, y, m.formLeft+m.width, y+1, func() tea.Cmd { return m.clickSection(name) })
-			b.WriteString(m.sectionHeading(sectionEntry{f.section, closed[f.section]}) + "\n")
-		}
-		if f.section != "" && closed[f.section] {
-			continue
-		}
-		if outside {
-			if i == m.window[0]-1 || i == m.window[1]+1 {
-				b.WriteString(styles.hint.Render("  …") + "\n")
-			}
-			continue
-		}
-		row := m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus))
-		if !f.readOnly {
-			y, index := m.formTop+strings.Count(b.String(), "\n"), i
-			m.addHit(m.formLeft, y, m.formLeft+m.width, y+strings.Count(row, "\n")+1,
-				func() tea.Cmd { return m.clickField(index) })
-		}
-		b.WriteString(row + "\n")
-		// A read-only field can never be the one focused, so its hint would never show; it explains
-		// itself in its own value instead (see renderField), the way a read-only tool list already does.
-		if i == m.focus && !f.readOnly {
-			if hint := m.fieldHint(f); hint != "" {
-				line := m.hintLine(hint, m.moreBehind(f, hint))
-				m.hitInfoMark(line, m.formTop+strings.Count(b.String(), "\n"), m.formLeft, func() tea.Cmd {
-					m.openInfo()
-					return nil
-				})
-				b.WriteString(line + "\n")
-			}
-		}
-		// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
-		// an idle connection) matters whether or not the field is the one focused, so it always stands.
-		if warning := m.fieldWarning(f); warning != "" {
-			b.WriteString(m.indentedWith(styles.warning, warningLine(warning)) + "\n")
-		}
-		// A refused save names its cause and its resolution under the row it concerns. The symbol, not
-		// only the colour, marks the line as an error.
-		for _, line := range m.fieldProblems(f) {
-			b.WriteString(m.indentedWith(styles.fail, "[!] "+line) + "\n")
-		}
-	}
 	return b.String()
 }
 
@@ -4615,8 +4531,17 @@ func (m *Model) fittedEditorView() string {
 	if m.screen != screenForm || m.viewFits(view) {
 		return view
 	}
-	defer func() { m.window = nil }()
+	defer func() { m.window, m.formFlat = nil, false }()
+	m.formFlat = true
+	if view = m.screenView(); m.viewFits(view) {
+		return view
+	}
 	lo, hi := 0, len(m.fields)-1
+	// Cutting the headings alone, which a window does, may be enough.
+	m.window = &[2]int{lo, hi}
+	if view = m.screenView(); m.viewFits(view) {
+		return view
+	}
 	for lo < m.focus || hi > m.focus {
 		if lo < m.focus {
 			lo++

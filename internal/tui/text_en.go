@@ -1320,6 +1320,7 @@ var textEN = map[textID]string{
 	entryID("provider note"):                               "provider note",
 	entryID("configuration"):                               "configuration",
 	tSectionClosedMark:                                     " (closed)",
+	tFormHelpTitle:                                         "Help",
 	entryID("vault setting"):                               "vault setting",
 	entryID("approval"):                                    "approval",
 	entryID("agent token"):                                 "agent token",

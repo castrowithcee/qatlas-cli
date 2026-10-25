@@ -17,11 +17,27 @@ func dialogRows(view string) (top, bottom, left int, ok bool) {
 	for i, line := range rows {
 		if at := strings.Index(line, "╭─"); at >= 0 && i+1 < len(rows) && strings.Contains(rows[i+1], "│ "+warnMark+" ") {
 			top, left = i, lipgloss.Width(line[:at])
-		} else if at := strings.Index(line, "╰"); at >= 0 && top >= 0 && i > top && lipgloss.Width(line[:at]) == left {
+		} else if top >= 0 && i > top && closesAt(line, left) {
 			return top, i, left, true
 		}
 	}
 	return 0, 0, 0, false
+}
+
+// closesAt reports whether a "╰" stands in the line at the given column; a field or panel behind the dialog may
+// have its own earlier on the same row.
+func closesAt(line string, column int) bool {
+	for at := 0; at < len(line); {
+		i := strings.Index(line[at:], "╰")
+		if i < 0 {
+			return false
+		}
+		if lipgloss.Width(line[:at+i]) == column {
+			return true
+		}
+		at += i + len("╰")
+	}
+	return false
 }
 
 func hasQuestionModal(view string) bool {

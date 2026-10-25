@@ -192,8 +192,8 @@ func (m *Model) providerTableWindow() (int, int) {
 	return m.windowIn(&m.providers.list, header, footer, m.providerTableRow)
 }
 
-// providerValue is how a provider row of the form reads: the name and ID of the provider it holds, in a
-// box that shows it is opened rather than stepped through, cut to what the terminal leaves beside the label.
+// providerValue is how a provider row of the form reads: the name and ID of the provider it holds, cut
+// to what the terminal leaves beside the label; its field ends in the arrow that shows it is opened.
 func (m *Model) providerValue(f field) string {
 	if len(f.choices) == 0 {
 		return emptyValue(wordNone)
@@ -204,10 +204,10 @@ func (m *Model) providerValue(f field) string {
 		text = metadata.Name + " (" + id + ")"
 	}
 	if m.width > 0 {
-		// The label column, the focus marker and the box around the text.
-		text = truncateCells(text, m.width-m.formIndent()-lipgloss.Width("[  ▾ ]"))
+		// The arrow of the field ends the row.
+		text = truncateCells(text, m.valueRoom(f.label)-2)
 	}
-	return "[ " + text + " ▾ ]"
+	return text
 }
 
 // providerHint puts the way into the table in front of what the row decides, so the row says itself how
