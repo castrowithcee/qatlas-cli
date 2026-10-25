@@ -78,7 +78,8 @@ func (t *providerTable) row(id string, width int) string {
 	if id == "" {
 		ids = "-"
 	}
-	return mark + padLine(truncateCells(t.name(id), nameWidth), nameWidth) + "  " + truncateCells(ids, idWidth)
+	return mark + styles.cell.Render(padLine(truncateCells(t.name(id), nameWidth), nameWidth)) + "  " +
+		styles.hint.Render(truncateCells(ids, idWidth))
 }
 
 // openProviderTable opens the table of the focused provider row.

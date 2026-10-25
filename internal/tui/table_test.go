@@ -81,6 +81,14 @@ func tableLines(t *testing.T, m *Model) (string, []string) {
 	t.Helper()
 	lines := strings.Split(screenOf(m), "\n")
 	for i, line := range lines {
+		// The table stands inside its frame where there is one; the cells are measured from its inner edge.
+		line = strings.TrimPrefix(strings.TrimPrefix(line, "│ "), "║ ")
+		if cut := strings.IndexAny(line, "│║"); cut >= 0 {
+			line = line[:cut]
+		}
+		lines[i] = line
+	}
+	for i, line := range lines {
 		if strings.HasPrefix(line, m.entryIndent()+sectionColumns[m.section][0].title) {
 			// Group rows are drawn between the entry rows; the rows returned are those of the entries.
 			var rows []string
@@ -335,13 +343,23 @@ var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // happens to mention the same text for the row itself.
 func findRow(view, text string) string {
 	for _, line := range strings.Split(view, "\n") {
+		// A table inside its frame is measured from the inner edge of the frame.
+		if edge := strings.IndexAny(line, "│║"); edge >= 0 {
+			side := line[edge:]
+			line = strings.TrimPrefix(strings.TrimPrefix(side[len("│"):], "\x1b[0m"), " ")
+		}
 		plain := ansiEscape.ReplaceAllString(line, "")
-		if strings.Contains(plain, text) && (strings.HasPrefix(plain, "> ") || strings.HasPrefix(plain, "  ")) {
+		if strings.Contains(plain, text) && (strings.HasPrefix(plain, "> ") || strings.HasPrefix(plain, "▌ ") || strings.HasPrefix(plain, "  ")) {
 			return line
 		}
 	}
 	return ""
 }
+
+// background matches a background colour in an SGR sequence.
+var background = regexp.MustCompile("\x1b\\[(?:[0-9;]*;)?(?:4[0-7]|10[0-7]|48)[;m]")
+
+func hasBackground(row string) bool { return background.MatchString(row) }
 
 // The marked row of a section list is highlighted the full width of the row under colour, and, without it
 // (NO_COLOR or an ASCII terminal), is still told apart by its leading '>' alone; an unmarked row beside it
@@ -368,11 +386,11 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
 		coloured := screenOf(m)
 		assertViewFits(t, coloured, width, m.height)
-		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the marked row shows no colour: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, marked); !hasBackground(row) || !strings.Contains(row, "▌") {
+			t.Errorf("width %d: the marked row shows no bar and accent mark: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
-			t.Errorf("width %d: the unmarked row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
+		if row := findRow(coloured, alt); hasBackground(row) || strings.Contains(row, "▌") {
+			t.Errorf("width %d: the unmarked row carries the bar, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
 		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces

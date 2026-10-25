@@ -159,7 +159,8 @@ func (m *Model) newPickLevel(p *targetPick, kinds []string, ki int, parent, labe
 	lv := &pickLevel{id: p.nextID, kinds: kinds, ki: ki, parent: parent, label: label,
 		entries: map[string]*pickEntry{}}
 	lv.table = table{rows: map[string][]string{}, columns: []column{
-		{title: columnText("Name")}, {title: columnText("Kind"), optional: true}, {title: "ID"}, {title: columnText("Path"), optional: true},
+		{title: columnText("Name"), tone: toneText}, {title: columnText("Kind"), optional: true, tone: toneDim},
+		{title: "ID", tone: toneDim}, {title: columnText("Path"), optional: true, tone: toneDim},
 	}}
 	lv.list = newFilterList(func(target string) string {
 		return strings.Join(lv.entries[target].cells, " ")

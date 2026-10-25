@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -416,8 +417,9 @@ func (m *Model) row(active bool, text string) string {
 
 // listRow draws one row of a table screen: a section list, the picker, or the provider table. text is
 // already cut to fit beside the marker: long cells are shortened before they ever reach here, never
-// wrapped. The marked row is highlighted the full width of the row, on top of the '>' prefix row already
-// gives it, so NO_COLOR or an ASCII terminal still shows which one it is; every other row is plain.
+// wrapped. The marked row is highlighted the full width of the row, behind a narrow accent mark, which is
+// '>' where colour cannot show the bar, so NO_COLOR or an ASCII terminal still shows which one it is; every
+// other row is plain.
 func (m *Model) listRow(active bool, text string) string {
 	return m.listRowIn(m.usable(0), active, text)
 }
@@ -425,15 +427,25 @@ func (m *Model) listRow(active bool, text string) string {
 // listRowIn is listRow within the first room cells of the workspace.
 func (m *Model) listRowIn(room int, active bool, text string) string {
 	blank, width := m.fitIn(room, "  ")
-	marker := blank
-	if active && len(blank) == 2 {
-		marker = "> "
+	if !active {
+		return blank + padLine(text, width)
 	}
-	line := marker + padLine(text, width)
-	if active {
-		return styles.activeRow.Render(line)
+	body := padLine(text, width)
+	if len(blank) != 2 {
+		// No room for the mark: the bar alone shows the row.
+		return styles.activeRow.Render(keepStyle(blank+body, styles.activeRow))
 	}
-	return line
+	// The cells of the text may reset their own styles, so the bar is set again after each reset.
+	return styles.selMark.Render(selectionMark()) + styles.activeRow.Render(keepStyle(" "+body, styles.activeRow))
+}
+
+// selectionMark leads the marked row: a narrow accent bar where colour shows it, and '>' where it does not,
+// so the selection never depends on colour alone.
+func selectionMark() string {
+	if styles.palette.selection == "" || lipgloss.ColorProfile() == termenv.Ascii {
+		return ">"
+	}
+	return "▌"
 }
 
 // hint is the key line of a screen. Like every other prose line it is wrapped into the terminal instead of

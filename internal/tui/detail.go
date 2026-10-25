@@ -48,7 +48,12 @@ func (m *Model) withPane(lines []string, room int) []string {
 		detail = m.detailLines(name, pane)
 	}
 	for len(lines) < min(len(detail)+1, room) {
-		lines = append(lines, "")
+		// A pane longer than the rows goes on beside the frame, which keeps its sides.
+		blank := ""
+		if m.tableFramed() {
+			blank = panelSide("", m.tableRoom(), m.tableFocused(), "")
+		}
+		lines = append(lines, blank)
 	}
 	if len(detail) > len(lines)-1 && len(lines) > 1 {
 		detail = append(detail[:len(lines)-2], styles.hint.Render("..."))
