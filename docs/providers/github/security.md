@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub security tools: the code scanning, Dependabot, and secret scanning alerts of a repository, the global, repository, and organization security advisories, and code quality findings, with their targets, cuts, and tokens.
+  Describes the GitHub security tools: the code scanning, Dependabot, and secret scanning alerts of a repository, the global, repository, and organization security advisories, and code quality findings, with their targets and cuts.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -45,15 +45,8 @@ has no field for the secret, a snippet, or a comment, not even inside the first 
 GitHub sends can reach a result, an error, or a log. An answer that cannot be read or is too large fails with
 a fixed message that quotes nothing of it.
 
-| Tool | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.code-scanning-alerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Code scanning alerts: read |
-| `github.dependabot-alerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Dependabot alerts: read |
-| `github.secret-scanning-alerts.*` | `repo` or `security_events` | Secret scanning alerts: read |
-
-GitHub answers `not-found` for a repository without the feature enabled or not visible to the token, and code
-scanning answers 403 without GitHub Advanced Security. Sources:
-https://docs.github.com/en/rest/code-scanning/code-scanning,
+The token rights are listed under [Security](setup.md#security).
+Sources: https://docs.github.com/en/rest/code-scanning/code-scanning,
 https://docs.github.com/en/rest/dependabot/alerts,
 https://docs.github.com/en/rest/secret-scanning/secret-scanning, and
 https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens.
@@ -100,16 +93,7 @@ with the account tools. The temporary private fork of a repository advisory is a
 connection's targets keeps only its identifiers (`id`, `node_id`, `full_name`), and the clone token GitHub
 sends with it is never shown.
 
-| Tool | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.global-advisories.*` | none | none |
-| `github.repository-advisories.list` | `repo` or `repository_advisories:read` for a private repository or an unpublished advisory | Repository security advisories: read |
-| `github.organization-advisories.list` | `repo` or `repository_advisories:write`, and an organization owner or security manager | Repository security advisories: write |
-| `github.code-quality-findings.get` | `repo`; `public_repo` for a public repository | Code quality: read |
-
-The organization list needs the write-level permission although it only reads; that is how GitHub documents
-it. GitHub answers the finding read with 403 when code quality is not enabled or the token may not read it,
-and the repository list with `not-found` for a repository the token cannot see. Sources:
+The token rights are listed under [Security](setup.md#security). Sources:
 https://docs.github.com/en/rest/security-advisories/global-advisories,
 https://docs.github.com/en/rest/security-advisories/repository-advisories, and
 https://docs.github.com/en/rest/code-quality/code-quality.

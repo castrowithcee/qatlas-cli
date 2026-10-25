@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub gist tools: listing and reading gists, creating, changing, and deleting them, how targets apply to gists that belong to a user, and the tokens.
+  Describes the GitHub gist tools: listing and reading gists, creating, changing, and deleting them, and how targets apply to gists that belong to a user.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -63,12 +63,4 @@ answer for repeating a delete, so it declares its idempotency as unknown, and a 
 The not-recommended setup profile `gists` ticks the list, the get, the create, and the update;
 `github.gists.delete` stays unticked, and the recommended profile `read` is unchanged.
 
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.gists.list`, `github.gists.get` | `gist` for secret gists; none for public ones | GitHub lists no permission for the reads |
-| `github.gists.create`, `.update`, `.delete` | `gist` | user permission Gists: read and write |
-
-Sources: https://docs.github.com/en/rest/gists/gists and
-https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens;
-the second lists the create, update, and delete routes under the user permission Gists with write access and
-lists no gist read route.
+The token rights are listed under [Gists](setup.md#gists).

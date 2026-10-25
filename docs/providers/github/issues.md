@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub issue tools: issue and comment reads and changes, labels, milestones, sub-issues, issue dependencies, issue types, issue fields, reactions, assigning Copilot to an issue, issue search, and the token each needs.
+  Describes the GitHub issue tools: issue and comment reads and changes, labels, milestones, sub-issues, issue dependencies, issue types, issue fields, reactions, assigning Copilot to an issue, and issue search.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -26,8 +26,7 @@ somebody gave.
 Every issue tool answers GitHub's issue in full without rendered body variants, the pull request member (pull
 requests are refused), and the repository object where the call fixes it. `github.issues.list` reads a page in
 one query: its lists take at most 10 entries per issue (20 labels) below GitHub's node limit, and it cuts the
-body. It reads projects only with `project_details`, which needs `read:project` (classic) or Projects read
-(fine-grained). `projectV2(number:)` and `hovercard` are queries, not answer fields.
+body. It reads projects only with `project_details`; the token rights are listed under [Issues and comments](setup.md#issues-and-comments). `projectV2(number:)` and `hovercard` are queries, not answer fields.
 
 ## Changes
 
@@ -105,15 +104,8 @@ repeated name, checked by GitHub, rather than with the generic "rejected as inva
 is checked before a credential is resolved, and a name or description carrying a control character is
 refused.
 
-GitHub keeps a label under a repository's issues and pull requests rather than under a scope of its own.
-Reading the labels of a repository needs no scope for a public repository, or `repo` on a classic token, or
-Issues: read on a fine-grained token, for a private one; changing them, including the delete which is
-listed-only, needs Issues: read and write instead:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.labels.list`, `github.labels.get` | `repo` (private) or none (public) | Issues: read |
-| `github.labels.create`, `github.labels.update`, `github.labels.delete` | `repo` | Issues: read and write |
+GitHub keeps a label under a repository's issues and pull requests rather than under a scope of its own. The
+token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 ## Milestones
 
@@ -121,8 +113,7 @@ listed-only, needs Issues: read and write instead:
 [labels](#labels) are, by GitHub's `Link` response header. The description of a milestone is untrusted data.
 
 Nothing here creates, changes, or deletes a milestone; `github.issues.update` sets or removes the milestone
-of an existing issue instead, under [Changes](#changes). Reading milestones needs the same token as reading
-[labels](#labels).
+of an existing issue instead, under [Changes](#changes). The token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 ## Sub-issues
 
@@ -142,8 +133,7 @@ REST routes need, in the same request budget as the change. `github.sub-issues.r
 of `after_number` or `before_number`, looked up in the same repository as `sub_issue_number`; this is narrower
 than GitHub's own cross-repository reordering, which Qatlas does not offer a way to name.
 
-Reading the sub-issues of an issue needs the same token as reading [labels](#labels); adding, removing, or
-reprioritizing needs Issues: read and write instead, of every repository a sub-issue names.
+The token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 Source: the official REST documentation (<https://docs.github.com/en/rest/issues/sub-issues>,
 `X-GitHub-Api-Version: 2022-11-28`): List sub-issues, Add a sub-issue, Remove a sub-issue, and Reprioritize a
@@ -172,8 +162,7 @@ the targets the way `github.sub-issues.list` withholds a sub-issue, counted acro
 `github.issue-dependencies.add` and `.remove` resolve the blocking issue's number into its internal identifier
 the way the sub-issue tools do.
 
-Reading the dependencies of an issue needs the same token as reading [labels](#labels); adding or removing
-needs Issues: read and write instead, of every repository a dependency names.
+The token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 Source: the official REST documentation (<https://docs.github.com/en/rest/issues/issue-dependencies>,
 `X-GitHub-Api-Version: 2022-11-28`): List issues blocked by, List issues blocking, and Add and Remove a
@@ -198,10 +187,7 @@ refusing it, so the answer shows the type GitHub kept.
 Defining, enabling, or disabling an organization's issue types (`POST`/`PUT`/`DELETE
 /orgs/{org}/issue-types`) is organization administration, out of this provider's scope; it is not offered.
 
-Reading the issue types of an organization needs `read:org` on a classic token, or, as far as GitHub documents
-it, the organization permission Issue types: read, or Administration: read, on a fine-grained token; setting an
-issue's type through `github.issues.update` needs the same scope as writing an issue: `repo` on a classic
-token, or Issues: read and write on a fine-grained token.
+The token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 Source: the official REST documentation and the OpenAPI description that backs it
 (<https://docs.github.com/en/rest/orgs/issue-types>, <https://github.com/github/rest-api-description>,
@@ -232,10 +218,7 @@ applies as a whole or not at all.
 `update_issue_suggestions` GraphQL feature-flag context, an agent-suggestion workflow of that server's own, not
 a capability GitHub documents as generally available to every token.
 
-Reading the issue fields of a repository or an organization needs `read:org` on a classic token, or, as far as
-GitHub documents it, the organization permission Issue types: read, or Administration: read, on a fine-grained
-token; setting a value needs the same scope as writing an issue: `repo` on a classic token, or Issues: read and
-write on a fine-grained token.
+The token rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 Source: GitHub's public GraphQL reference schema
 (<https://docs.github.com/public/fpt/schema.docs.graphql>, the schema backing
@@ -275,13 +258,7 @@ existing reactions of this `content`, and removes only the one this account left
 reaction of another account is never touched.
 
 GitHub keeps a reaction under the resource it reacts to rather than a scope of its own, so reacting needs the
-same scope as writing that resource. `github.reactions.remove` additionally reads the account behind the
-token, which needs no scope beyond its own identity on either kind of token:
-
-| Kind | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `issue`, `issue_comment` | `repo` | Issues: read and write |
-| `review_comment` | `repo` | Pull requests: read and write |
+same scope as writing that resource; see [Issues and comments](setup.md#issues-and-comments).
 
 ## Copilot assignments
 
@@ -300,13 +277,7 @@ server (MIT, `pkg/github/copilot.go` at commit 85598ba) in one tool per operatio
 tools it does not poll for the pull request the agent opens later.
 
 Both Copilot tools, this one and [`github.copilot-reviews.request`](pull-requests.md#copilot-reviews), need a user
-token, never a GitHub App installation token.
-
-| Tool | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.copilot-assignments.create` | `repo` | Metadata: read; Actions, Contents, Issues, and Pull requests: read and write |
+token, never a GitHub App installation token; the rights are listed under [Issues and comments](setup.md#issues-and-comments).
 
 Sources: <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api> (user
-token only, the fine-grained permissions for the assignment, and the check of Copilot among the repository's
-`suggestedActors`). The docs name no classic scope for the assignment; `repo` is the scope of the issue and pull
-request routes it changes.
+token only, and the check of Copilot among the repository's `suggestedActors`).

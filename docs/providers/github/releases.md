@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub release tools: listing and reading the releases of a repository and the metadata of their assets, creating and updating a release, and deleting one, with their limits and tokens.
+  Describes the GitHub release tools: listing and reading the releases of a repository and the metadata of their assets, creating and updating a release, and deleting one, with their limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -69,9 +69,4 @@ it was cut from stays. It is high risk, on the scale of the
 names it, whatever its `effects`, and no profile a new connection starts with, recommended or not, may select
 it. A release already deleted answers `not-found` naming it, like the other delete tools in this provider.
 
-### Tokens for releases
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.releases.list`, `get`, `github.release-assets.list` | `repo` for a private repository; `public_repo` for a public one | Contents: read |
-| `github.releases.create`, `update`, `delete` | `repo` | Contents: read and write |
+The token rights are listed under [Releases](setup.md#releases).

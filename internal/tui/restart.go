@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +23,8 @@ const (
 	// to stay small than any other input.
 	maxHandoffBytes = 512
 	maxHandoffField = 64
+	// restartSettle is how long a failed replacement waits before the terminal is restored.
+	restartSettle = 100 * time.Millisecond
 )
 
 // Restart is how the editor replaces itself with the program an update installed. A nil Restart disables
@@ -179,7 +182,15 @@ func (m *Model) restartHint() string {
 // restartCommand is the process replacement as a command the event loop runs with the terminal released.
 type restartCommand struct{ run func() error }
 
-func (c *restartCommand) Run() error { return c.run() }
+func (c *restartCommand) Run() error {
+	err := c.run()
+	if err != nil {
+		// Bubble Tea's renderer stops its ticker in a goroutine only after the release returned; restoring
+		// at once lets that late stop hit the restarted ticker, and the screen never redraws again.
+		time.Sleep(restartSettle)
+	}
+	return err
+}
 
 func (*restartCommand) SetStdin(io.Reader)  {}
 func (*restartCommand) SetStdout(io.Writer) {}
