@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -191,7 +192,7 @@ func TestSettingsSubTabsInOrderWithAdvancedBar(t *testing.T) {
 		t.Fatalf("digit 6 opened %v, want General first", m.section.title())
 	}
 	m.screen = screenNav
-	if line := m.subNavLine(); !strings.Contains(line, "[General] | Vault Defaults Transfer Update Self-test") {
+	if line := m.subNavLine(); !strings.Contains(strings.Join(strings.Fields(line), " "), "[General] | Vault Defaults Transfer Update Self-test") {
 		t.Errorf("option bar = %q", line)
 	}
 	m.screen, m.navSub = screenNav, true
@@ -249,5 +250,36 @@ func TestStartViewFromPreferencesOpensThatArea(t *testing.T) {
 	m.Init()
 	if m.section != sectionConnections {
 		t.Errorf("section = %v, want connections", m.section.title())
+	}
+}
+
+// The state row of the vault page is a status mark with its word; the word stays without colour, and the page
+// fits every size.
+func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
+	for _, noColor := range []bool{false, true} {
+		restoreRenderer(t)
+		t.Setenv("NO_COLOR", "")
+		applyColorScheme("dark", "")
+		if noColor {
+			withNoColor(t)
+		}
+		m, _, _ := newModel(t)
+		openVaultSection(t, m)
+		want := "● " + m.vaultStateText()
+		for _, size := range []struct {
+			width, height int
+			shown         bool
+		}{{120, 40, true}, {80, 24, true}, {40, minimumHeight, false}} {
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			view := m.View()
+			assertViewFits(t, view, size.width, size.height)
+			plain := ansi.Strip(view)
+			if size.shown && !strings.Contains(plain, want) {
+				t.Errorf("%dx%d noColor=%v: the vault state is no status mark %q:\n%s", size.width, size.height, noColor, want, plain)
+			}
+			if noColor && plain != view {
+				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
+			}
+		}
 	}
 }

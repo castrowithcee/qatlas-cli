@@ -415,11 +415,13 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, true
 }
 
-// tokenDetailView draws the detail screen of one token: its value, masked until s reveals it, its vorbilder
-// with a warning in words beside every one that covers nothing now, its expiry, and when it was created.
+// tokenDetailView draws the detail screen of one token: its state, its value, masked until s reveals it, its
+// vorbilder with a warning in words beside every one that covers nothing now, its expiry, and when it was
+// created.
 func (m *Model) tokenDetailView() string {
 	name := m.tokenDetail
-	title := m.wrapped(styles.title, "Token "+name) + "\n\n"
+	heading := "Token " + name
+	title := m.wrapped(styles.title, heading) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
 		return title + m.wrapped(styles.fail, tr(tNoteError, unavailable)) + m.keyHint("{back} back · {command} cmds · {help} help")
@@ -427,48 +429,59 @@ func (m *Model) tokenDetailView() string {
 	if !ok {
 		return title + m.wrapped(styles.hint, tr(tTokenGone)) + m.keyHint("{back} back · {command} cmds · {help} help")
 	}
-	var b strings.Builder
-	b.WriteString(title)
-	m.formCol = m.labelColumn("value", vorbilderLabel, expiresLabel, "created")
-	defer func() { m.formCol = 0 }()
-	value, own := strings.Repeat("●", 24)+"  "+tr(tTokenReveal), ""
+	inner, _ := m.detailInner()
+	expired := entry.token.Expired(time.Now())
+	state := statusMark(statusOK, tr(tStatusValid))
+	if expired {
+		state = statusMark(statusFail, tr(tStatusExpired))
+	}
+	fact := func(label, value string, style lipgloss.Style) styledFact {
+		return styledFact{detailFact: detailFact{label: labelText(label), value: value}, style: style}
+	}
+	facts := m.statusFact(state)
+	column := factColumn(append(facts, fact("value", "x", styles.hint), fact(vorbilderLabel, "x", styles.hint),
+		fact(expiresLabel, "x", styles.hint), fact("created", "x", styles.hint)), inner)
+	value := strings.Repeat("●", 24) + "  " + tr(tTokenReveal)
 	if m.tokenValueShown() {
 		if v := m.tokenValue(name); v != "" {
-			value = v + "  " + tr(tTokenHide)
-			if m.formIndent()+lipgloss.Width(value) > m.usable(0) {
+			if column+lipgloss.Width(v)+2+lipgloss.Width(tr(tTokenHide)) <= inner {
+				value = v + "  " + tr(tTokenHide)
+			} else {
 				// Too narrow for the row: the value takes a line of its own, so it is not broken where it
 				// could be copied whole.
-				value, own = tr(tTokenHide), v
+				facts = append(facts, fact("value", tr(tTokenHide), styles.hint),
+					styledFact{detailFact: detailFact{value: v}, flush: true})
+				value = ""
 			}
 		}
 	}
-	b.WriteString(m.formRow(false, "value", value) + "\n")
-	if own != "" {
-		b.WriteString(m.indentedWith(lipgloss.NewStyle(), own) + "\n")
+	if value != "" {
+		facts = append(facts, fact("value", value, lipgloss.NewStyle()))
 	}
 	lapsed := map[string]bool{}
 	for _, model := range entry.lapsed {
 		lapsed[model] = true
 	}
-	models := make([]string, len(entry.token.Models))
 	for i, model := range entry.token.Models {
-		models[i] = model
-		if lapsed[model] {
-			models[i] = styles.warning.Render("⚠ " + model + " (" + tokenLapsedText() + ")")
+		label, style, text := "", lipgloss.NewStyle(), m.logText(model)
+		if i == 0 {
+			label = labelText(vorbilderLabel)
 		}
+		if lapsed[model] {
+			style, text = styles.warning, "⚠ "+text+" ("+tokenLapsedText()+")"
+		}
+		facts = append(facts, styledFact{detailFact: detailFact{label: label, value: text}, style: style})
 	}
-	b.WriteString(m.formRow(false, vorbilderLabel, strings.Join(models, "\n")) + "\n")
 	if entry.checkErr != "" {
-		b.WriteString(m.indentedWith(styles.warning, tr(tTokenCheckFailed, entry.checkErr)) + "\n")
+		facts = append(facts, styledFact{detailFact: detailFact{value: tr(tTokenCheckFailed, entry.checkErr)}, style: styles.warning})
 	}
-	expires := tokenExpiry(entry.token)
-	if entry.token.Expired(time.Now()) {
-		expires += "  " + styles.warning.Render(tr(tTokenExpiredNote))
+	facts = append(facts, fact(expiresLabel, tokenExpiry(entry.token), lipgloss.NewStyle()))
+	if expired {
+		facts = append(facts, styledFact{detailFact: detailFact{value: tr(tTokenExpiredNote)}, style: styles.warning})
 	}
-	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
-	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
-	b.WriteString(m.keyHint("s reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help"))
-	return b.String()
+	facts = append(facts, fact("created", entry.token.Created.Local().Format("2006-01-02 15:04"), lipgloss.NewStyle()))
+	lines := factLinesIn(facts, inner, column, func(s string) string { return s })
+	return m.frameDetail(heading, state, lines) + "\n" + m.keyHint("s reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help")
 }
 
 // tokenRevokeView draws the question asked before a token is revoked.

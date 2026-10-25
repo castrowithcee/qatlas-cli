@@ -2,10 +2,63 @@ package tui
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
+
+// withNoColor makes the rest of the test draw as a terminal with NO_COLOR does.
+func withNoColor(t *testing.T) {
+	t.Helper()
+	restoreRenderer(t)
+	t.Setenv("NO_COLOR", "1")
+	lipgloss.SetColorProfile(termenv.Ascii)
+	applyColorScheme("", "")
+}
+
+// The detail screens of a token and of an open approval keep their state as a mark with its word, and every
+// line in the terminal, at 40x16, the smallest size the screens were served at before, too; without colour nothing carries a colour sequence.
+func TestAccessDetailsKeepTheirStatusWordsAtEverySize(t *testing.T) {
+	for _, noColor := range []bool{false, true} {
+		restoreRenderer(t)
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		t.Setenv("NO_COLOR", "")
+		applyColorScheme("dark", "")
+		if noColor {
+			withNoColor(t)
+		}
+		store, dir, v := newTokenFixture(t)
+		past := time.Now().Add(-time.Hour)
+		fixtureToken(t, v, "ci-valid", nil, "personal")
+		fixtureToken(t, v, "ci-expired", &past, "personal")
+		m := openApprovalModel(t, store, dir)
+		m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		openTokensUnlocked(t, m)
+		for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 16}} {
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			for name, word := range map[string]string{"ci-valid": "valid", "ci-expired": "expired"} {
+				m.tokenDetail, m.screen = name, screenConfirm
+				view := m.View()
+				assertViewFits(t, view, size.width, size.height)
+				plain := ansi.Strip(view)
+				if !strings.Contains(plain, "Token "+name) || !strings.Contains(plain, "● "+word) {
+					t.Errorf("%dx%d %s noColor=%v: the detail lacks its name or its status word:\n%s", size.width, size.height, name, noColor, plain)
+				}
+				if noColor && plain != view {
+					t.Errorf("%dx%d %s: NO_COLOR still emits escape sequences", size.width, size.height, name)
+				}
+			}
+		}
+	}
+}
 
 // Changing the access mode swaps the effects row for the tools row and back; the row of the other mode is
 // not shown, so it cannot be focused.

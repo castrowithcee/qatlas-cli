@@ -251,50 +251,51 @@ func detailTabStrip(active detailTab, focused bool) (string, [][2]int) {
 	return tabStrip(words, int(active), focused)
 }
 
-// tabStrip draws a row of tabs, the active one in brackets and highlighted, and returns the cells each takes,
-// counted from the first cell of the strip. It is the one strip of the detail pane and of the Activity screen.
-func tabStrip(words []string, active int, focused bool) (string, [][2]int) {
-	var b strings.Builder
-	spans := make([][2]int, 0, len(words))
-	x := 0
-	for tab, word := range words {
-		text := " " + word + " "
-		style := styles.hint
-		if tab == active {
-			text = "[" + word + "]"
-			style = styles.active
-			if focused {
-				style = styles.activeRow
-			}
-		}
-		if tab > 0 {
-			b.WriteString(" ")
-			x++
-		}
-		b.WriteString(style.Render(text))
-		spans = append(spans, [2]int{x, x + lipgloss.Width(text)})
-		x += lipgloss.Width(text)
-	}
-	return b.String(), spans
-}
-
 // detailFact is one label and value of the pane; an empty label continues the one above.
 type detailFact struct{ label, value string }
+
+// styledFact is a detailFact whose value has a style of its own.
+type styledFact struct {
+	detailFact
+	// style draws the value; the zero style leaves it plain.
+	style lipgloss.Style
+	// drawn is a finished one-line value (a status mark); it is neither cleaned nor wrapped.
+	drawn string
+	// flush starts the value at the left edge instead of the value column, for text that must not break
+	// where it could be copied whole.
+	flush bool
+}
 
 // factLines draws facts as an aligned list of labels and values in width cells. Labels share one column, so
 // a value that goes on in a second line stands under its first. Values are made safe by clean.
 func factLines(facts []detailFact, width int, clean func(string) string) []string {
+	styled := make([]styledFact, len(facts))
+	for i, f := range facts {
+		styled[i] = styledFact{detailFact: f}
+	}
+	return factLinesIn(styled, width, detailLabelColumn(), clean)
+}
+
+// factLinesIn is factLines with a label column of the given width.
+func factLinesIn(facts []styledFact, width, column int, clean func(string) string) []string {
 	var lines []string
-	column := detailLabelColumn()
 	for _, f := range facts {
-		if f.value == "" {
+		if f.value == "" && f.drawn == "" {
 			continue
 		}
 		prefix := padLine("", column)
 		if f.label != "" {
 			prefix = padLine(wordText(f.label)+":", column)
 		}
+		if f.flush {
+			prefix = ""
+		}
+		if f.drawn != "" {
+			lines = append(lines, styles.hint.Render(prefix)+f.drawn)
+			continue
+		}
 		for i, part := range wrapCellsLines(clean(f.value), max(width-lipgloss.Width(prefix), 1)) {
+			part = f.style.Render(part)
 			if i == 0 {
 				lines = append(lines, styles.hint.Render(prefix)+part)
 				continue
@@ -303,6 +304,51 @@ func factLines(facts []detailFact, width int, clean func(string) string) []strin
 		}
 	}
 	return lines
+}
+
+// factColumn is the width of the label column of facts drawn in width cells: the longest label, a colon and a
+// gap, never more than a third of the width.
+func factColumn(facts []styledFact, width int) int {
+	longest := 0
+	for _, f := range facts {
+		if f.label != "" {
+			longest = max(longest, lipgloss.Width(wordText(f.label)))
+		}
+	}
+	return min(longest+2, max(minLabelColumn, width/3))
+}
+
+// detailInner is the width of the text of a detail screen and whether it stands in a frame: the frame needs
+// the room a framed table needs, and below it the screen keeps the whole width.
+func (m *Model) detailInner() (int, bool) {
+	if m.tableFramed() {
+		return m.usable(0) - 4, true
+	}
+	return m.usable(0), false
+}
+
+// detailChrome is the number of lines a detail screen spends around its text: the frame, or the title and
+// the blank line under it.
+const detailChrome = 2
+
+// statusFact is the state of a detail screen as a row of its own where the frame has the room; without the
+// frame frameDetail puts the mark beside the title.
+func (m *Model) statusFact(mark string) []styledFact {
+	if _, framed := m.detailInner(); !framed {
+		return nil
+	}
+	return []styledFact{{detailFact: detailFact{label: columnText("status")}, drawn: mark}}
+}
+
+// frameDetail draws the lines of a detail screen under its title, in a panel where there is room for the
+// frame and as plain text under the title where there is not. mark is the state of what the screen shows.
+func (m *Model) frameDetail(title, mark string, lines []string) string {
+	inner, framed := m.detailInner()
+	if !framed {
+		// Without the frame the state stands beside the title, so it costs no line.
+		return m.wrapped(styles.title, title) + "  " + mark + "\n\n" + strings.Join(lines, "\n")
+	}
+	return strings.Join(panel(truncateCells(title, inner-2), lines, inner, len(lines), panelOpts{focused: true}), "\n")
 }
 
 // listFacts is a list of values as facts under one label, at most limit of them and then the number left.

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // connectionForm opens the form of a new connection at the given terminal width.
@@ -196,6 +198,49 @@ func TestToolMetadataCarriesTheDescription(t *testing.T) {
 		for _, tool := range metadata.Tools {
 			if tool.ID == d.ID && tool.Description != d.Description {
 				t.Errorf("tool %s: description %q, want %q", d.ID, tool.Description, d.Description)
+			}
+		}
+	}
+}
+
+// The explanation stands as a filled panel with its key in the accent colour, at the size of a modal and at
+// the smallest size, and without colour it is the same text.
+func TestInfoOverlayIsAFilledPanelWithAnAccentKey(t *testing.T) {
+	for _, noColor := range []bool{false, true} {
+		restoreRenderer(t)
+		t.Setenv("NO_COLOR", "")
+		applyColorScheme("dark", "")
+		if noColor {
+			withNoColor(t)
+		}
+		for _, size := range []struct{ width, height int }{{100, 28}, {60, 20}, {40, 16}} {
+			m := connectionForm(t, size.width)
+			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			m.focus = -1
+			for i, f := range m.fields {
+				if f.label == "credential" {
+					m.focus = i
+				}
+			}
+			if m.focus < 0 || !m.openInfo() {
+				t.Fatalf("%dx%d: nothing to explain on the credential row", size.width, size.height)
+			}
+			view := m.View()
+			assertViewFits(t, view, size.width, size.height)
+			plain := ansi.Strip(view)
+			if !strings.Contains(plain, "esc close") {
+				t.Errorf("%dx%d: the overlay does not name its key:\n%s", size.width, size.height, plain)
+			}
+			if noColor && plain != view {
+				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
+			}
+			if !noColor {
+				if !strings.Contains(view, colourOf(styles.footKey)+"esc") {
+					t.Errorf("%dx%d: the key is not in the accent colour:\n%q", size.width, size.height, view)
+				}
+				if !strings.Contains(view, colourOf(lipgloss.NewStyle().Background(styles.palette.panel))) {
+					t.Errorf("%dx%d: the panel is not filled with the panel colour:\n%q", size.width, size.height, view)
+				}
 			}
 		}
 	}

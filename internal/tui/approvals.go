@@ -15,7 +15,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -82,11 +81,24 @@ var approvalFields = []string{
 	approval.FieldFiles, approval.FieldForward, approval.FieldState, approval.FieldActiveUntil,
 }
 
-// approvalRow is one line of the Approvals detail screen. item rows are the entries of a list change,
-// drawn under the field they belong to.
+// approvalRow is one line of the Approvals detail screen: text as plain words, and, split for drawing, the
+// label of its field and the value behind it. item rows are the entries of a list change, drawn under the
+// field they belong to; tone marks what an entry does to the scope: '+' asks for it, '-' drops it, 'k' keeps it.
 type approvalRow struct {
-	text string
-	item bool
+	text         string
+	label, value string
+	item         bool
+	tone         byte
+}
+
+// fieldRow is the row of a field with its value.
+func fieldRow(label, value string) approvalRow {
+	return approvalRow{text: fmt.Sprintf("%-11s %s", label, value), label: label, value: value}
+}
+
+// itemRow is an entry under its field.
+func itemRow(text string, tone byte) approvalRow {
+	return approvalRow{text: text, value: text, item: true, tone: tone}
 }
 
 // approvalDetailRows is the detail screen's text with unchanged entries folded away: see approvalBody.
@@ -127,32 +139,32 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		f, ok := changed[field]
 		switch {
 		case ok && f.IsListChange():
-			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, approvalCounts(f))})
+			rows = append(rows, fieldRow(field, approvalCounts(f)))
 			for _, r := range f.Renamed {
-				rows = append(rows, approvalRow{text: tr(tApprovalRenamedItem, r.Old, r.New), item: true})
+				rows = append(rows, itemRow(tr(tApprovalRenamedItem, r.Old, r.New), 0))
 			}
 			for _, v := range f.Added {
-				rows = append(rows, approvalRow{text: "+ " + v, item: true})
+				rows = append(rows, itemRow("+ "+v, '+'))
 			}
 			for _, v := range f.Removed {
-				rows = append(rows, approvalRow{text: "- " + v, item: true})
+				rows = append(rows, itemRow("- "+v, '-'))
 			}
 			if len(f.Kept) > 0 {
-				rows = append(rows, approvalRow{text: tr(tApprovalUnchangedCount, len(f.Kept)), item: true})
+				rows = append(rows, itemRow(tr(tApprovalUnchangedCount, len(f.Kept)), 'k'))
 				if expanded {
 					for _, v := range f.Kept {
-						rows = append(rows, approvalRow{text: "  " + v, item: true})
+						rows = append(rows, itemRow("  "+v, 'k'))
 					}
 				}
 			}
 		case ok && f.IsRename:
-			rows = append(rows, approvalRow{text: tr(tApprovalFieldRenamed, field, f.Before, f.After)})
+			rows = append(rows, fieldRow(field, tr(tApprovalValueRenamed, f.Before, f.After)))
 		case ok:
-			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s -> %s", field, f.Before, f.After)})
+			rows = append(rows, fieldRow(field, f.Before+" -> "+f.After))
 		case c.New:
-			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, current[field])})
+			rows = append(rows, fieldRow(field, current[field]))
 		default:
-			rows = append(rows, approvalRow{text: tr(tApprovalFieldUnchanged, field)})
+			rows = append(rows, fieldRow(field, tr(tApprovalValueUnchanged)))
 		}
 	}
 	return rows
@@ -201,7 +213,8 @@ func approvalTools(values []string) string {
 // approved now.
 func (m *Model) approvalDetailView() string {
 	name := m.approvalDetail
-	title := m.wrapped(styles.title, tr(tApprovalTitle, name)) + "\n\n"
+	heading := tr(tApprovalTitle, name)
+	title := m.wrapped(styles.title, heading) + "\n\n"
 	report, unavailable := m.approvalsReport()
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
@@ -220,24 +233,47 @@ func (m *Model) approvalDetailView() string {
 		return title + m.wrapped(styles.hint, tr(tApprovalClosed)) +
 			m.keyHint("{back} back · {command} cmds · {help} help")
 	}
-	return m.approvalChangeView(title, *change)
+	return m.approvalChangeView(heading, *change)
+}
+
+// approvalMark is the state of an open change: the mark with its word and, where the frame leaves room, what
+// is open about it.
+func (m *Model) approvalMark(change approval.Change) string {
+	mark := statusMark(statusWarn, tr(tStatusOpen))
+	if _, framed := m.detailInner(); !framed {
+		return mark
+	}
+	return mark + "  " + styles.hint.Render(approvalSummary(change))
+}
+
+// approvalFacts are the rows of the detail screen as facts: the state of the change, where it came from, and
+// one row per field. What a list change newly asks for stands in the colour of a gain and leads with "+", what
+// falls away in the colour of a loss and leads with "-", so the change reads without colour too.
+func (m *Model) approvalFacts(change approval.Change) []styledFact {
+	facts := m.statusFact(m.approvalMark(change))
+	facts = append(facts, m.approvalOriginFacts(change.Connection)...)
+	for _, row := range approvalBody(change, m.approvalExpanded) {
+		f := styledFact{detailFact: detailFact{label: row.label, value: m.logText(row.value)}}
+		switch row.tone {
+		case '+':
+			f.style = styles.ok
+		case '-':
+			f.style = styles.fail
+		case 'k':
+			f.style = styles.hint
+		}
+		facts = append(facts, f)
+	}
+	return facts
 }
 
 // approvalChangeView is the title and body of the detail screen for one change. The whole body is laid out
 // first and shown from m.approvalOffset on, so a scope of any length fits the workspace and only the lines
 // scroll; nothing is cut.
-func (m *Model) approvalChangeView(title string, change approval.Change) string {
-	var lines []string
-	for _, text := range m.approvalOriginLines(change.Connection) {
-		lines = append(lines, strings.Split(m.row(false, text), "\n")...)
-	}
-	for _, row := range approvalBody(change, m.approvalExpanded) {
-		if row.item {
-			lines = append(lines, strings.Split(m.indentedWith(lipgloss.NewStyle(), row.text), "\n")...)
-			continue
-		}
-		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
-	}
+func (m *Model) approvalChangeView(heading string, change approval.Change) string {
+	inner, _ := m.detailInner()
+	facts := m.approvalFacts(change)
+	lines := factLinesIn(facts, inner, factColumn(facts, inner), func(s string) string { return s })
 	keys := "o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "e unchanged · " + keys
@@ -245,7 +281,7 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 			keys = "e fold unchanged · o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 		}
 	}
-	room := m.approvalRoom(title, keys, len(lines))
+	room := m.approvalRoom(keys, len(lines))
 	offset := max(min(m.approvalOffset, len(lines)-room), 0)
 	m.approvalOffset, m.approvalPage = offset, room
 	foot := m.keyHint(keys)
@@ -253,16 +289,16 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 		foot = "\n" + m.wrapped(styles.hint, tr(tApprovalLines, offset+1,
 			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
 	}
-	return title + strings.Join(lines[offset:min(offset+room, len(lines))], "\n") + "\n" + foot
+	return m.frameDetail(heading, m.approvalMark(change), lines[offset:min(offset+room, len(lines))]) + "\n" + foot
 }
 
-// approvalRoom is how many body lines of the detail screen fit under its title and above its keys; when the
+// approvalRoom is how many body lines of the detail screen fit around its frame and above its keys; when the
 // body is longer, one of them goes to the position line and the keys gain the scroll keys.
-func (m *Model) approvalRoom(title, keys string, lines int) int {
-	room := m.height - strings.Count(title, "\n") - strings.Count(m.keyHint(keys), "\n") - 1
+func (m *Model) approvalRoom(keys string, lines int) int {
+	room := m.height - detailChrome - strings.Count(m.keyHint(keys), "\n") - 1
 	if lines > room {
 		longer := m.keyHint("up/down scroll · " + keys)
-		room = m.height - strings.Count(title, "\n") - strings.Count(longer, "\n") - 2
+		room = m.height - detailChrome - strings.Count(longer, "\n") - 2
 	}
 	return max(room, 1)
 }
@@ -555,20 +591,20 @@ func (m *Model) handleApprovalOrigin(msg approvalOriginMsg) {
 	m.approvalOrigin, m.approvalOriginReady = msg.origin, true
 }
 
-// approvalOriginLines is the "source" row of the detail screen, made safe to print; a change made outside
+// approvalOriginFacts is the "source" row of the detail screen, made safe to print; a change made outside
 // qatlas adds a second row that says what that can mean.
-func (m *Model) approvalOriginLines(name string) []string {
+func (m *Model) approvalOriginFacts(name string) []styledFact {
 	if m.approvalOriginFor != name {
 		return nil
 	}
 	if !m.approvalOriginReady {
-		return []string{fmt.Sprintf("%-11s %s", tr(tApprovalSource), tr(tApprovalLookingUp))}
+		return []styledFact{{detailFact: detailFact{label: tr(tApprovalSource), value: tr(tApprovalLookingUp)}}}
 	}
-	lines := []string{fmt.Sprintf("%-11s %s", tr(tApprovalSource), m.logText(m.approvalOrigin.Text()))}
+	facts := []styledFact{{detailFact: detailFact{label: tr(tApprovalSource), value: m.logText(m.approvalOrigin.Text())}}}
 	if m.approvalOrigin.Source == approval.OriginOutside {
-		lines = append(lines, fmt.Sprintf("%-11s %s", "", tr(tApprovalOutsideEdit)))
+		facts = append(facts, styledFact{detailFact: detailFact{value: tr(tApprovalOutsideEdit)}, style: styles.warning})
 	}
-	return lines
+	return facts
 }
 
 // openApprovalLogs opens the Logs section on the connection of the detail screen: every entry about it
