@@ -15,8 +15,8 @@ describes the foundation every Matomo tool shares: connection, targets, availabi
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md),
-[custom dimensions](dimensions.md), [instance settings and reference data](instance.md), and
-[users and roles](users.md).
+[custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
+[users and roles](users.md), and [privacy and data subject requests](privacy.md).
 
 ## Configuration
 
@@ -145,7 +145,10 @@ report catalog, report, and segment field tools as well as `matomo.goals.list`, 
 and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.users.get`,
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md),
-because they carry personal data. The profile `goals` adds `matomo.goals.add`,
+because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+`matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
+profile, because they carry personal data of other people and need admin or Super User rights.
+The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
 no profile, see [goals](goals.md). The profile `segments` adds `matomo.segments.add`, `matomo.segments.update`,
@@ -193,6 +196,10 @@ eight `matomo.global-settings.set-*` tools (target `instance`) are in no profile
 | `matomo.users.get` | [users](users.md) | reads one user, checks a login or email, lists the Super Users, or tells whether the token is a Super User (target `instance`) |
 | `matomo.users.get-access` | [users](users.md) | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
 | `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
+| `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
+| `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
+| `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
+| `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
