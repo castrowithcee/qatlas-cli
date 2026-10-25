@@ -713,6 +713,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 		d := promptDialog{
 			title: tr(tExportPassTitle),
 			input: m.inputLine("  ", e.input.Model),
+			field: true,
 			hint:  tr(tExportPassHint),
 			keys:  "{save} or enter ok · {back} back, nothing written",
 		}
@@ -724,6 +725,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 		return promptDialog{
 			title: tr(tExportFileTitle),
 			input: m.pathLines("  ", &e.input),
+			field: true,
 			hint:  tr(tExportFileHint),
 			keys:  pathKeys(&e.input, "{save} or enter preview · {back} back"),
 		}, true
@@ -773,7 +775,7 @@ func (m *Model) exportLeaveView() string {
 		// F2 does not answer the plain text question; only y does.
 		keys = discard + " · {back} keep editing · {command} cmds · {help} help"
 	}
-	return m.questionText(question{title: title, consequence: why,
+	return m.questionText(question{title: title, consequence: why, danger: true,
 		details: []string{m.indentedWith(styles.warning, tr(tExportLeaveWarn)),
 			m.indented(tr(tTransferNothingWritten))},
 		keys: keys})

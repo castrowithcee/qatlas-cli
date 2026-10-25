@@ -638,6 +638,8 @@ type Model struct {
 	tooSmall bool
 	// footerLog, when set, collects the footer lines a dialog draws, to make its keys clickable.
 	footerLog *[]footerLine
+	// inModal is set while a dialog is drawn as a modal: its text then carries its buttons.
+	inModal bool
 	// screenKeys is the key text the screen drawn last hands to the footer of the frame.
 	screenKeys string
 	// screenPos is the position in the list of the screen drawn last, for the right end of the footer.
@@ -3942,6 +3944,7 @@ func (m *Model) secretPrompt() promptDialog {
 	return promptDialog{
 		title: tr(tFormSecretFor, m.editing, m.secretRole),
 		input: m.inputLine("  ", m.secretInput),
+		field: true,
 		hint:  tr(tFormMaskedGoesInto, where),
 		keys:  "enter store · {back} cancel",
 	}
@@ -3993,7 +3996,7 @@ func (m *Model) leaveView() string {
 		why = tr(tLeaveQuitWhy)
 	}
 	return m.questionText(question{
-		title: title, consequence: why,
+		title: title, consequence: why, danger: true,
 		details: []string{m.indentedWith(styles.warning, warning), m.indented(tr(tLeaveNothingWritten))},
 		keys:    save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help",
 	})
@@ -4967,7 +4970,7 @@ func (m *Model) confirmView() string {
 		}
 		return m.questionText(question{
 			title:       tr(tFormRemoveTheStoredSecretFor, m.editing, m.confirmRole),
-			consequence: consequence, keys: keys,
+			consequence: consequence, keys: keys, danger: true,
 		})
 	}
 	name, _ := m.selected()
@@ -4979,5 +4982,6 @@ func (m *Model) confirmView() string {
 		(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
 		consequence = tr(tFormItsStoredSecretsAreNot)
 	}
-	return m.questionText(question{title: tr(tFormDelete, name), consequence: consequence, keys: keys})
+	return m.questionText(question{title: tr(tFormDelete, name), consequence: consequence, keys: keys, danger: true,
+		labels: map[string]string{"y": tr(tButtonDelete), "n": tr(tButtonCancel)}})
 }
