@@ -138,8 +138,8 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 		t.Fatalf("tool row at %d, cursor %d: want the tool row below the cursor", index, m.picker.cursor)
 	}
 
-	const faint = "\x1b[2m"
 	lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+	faint := "\x1b[" + strings.TrimSuffix(strings.TrimPrefix(styles.hint.Render("x"), "\x1b["), "mx\x1b[0m") + "m"
 	row := m.pickerRow(index)
 	at := strings.Index(row, faint)
 	if at < 0 || !strings.HasPrefix(row[at+len(faint):], "bookstack.pages.list") ||

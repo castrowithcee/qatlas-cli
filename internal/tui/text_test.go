@@ -262,7 +262,7 @@ func TestGermanKeyRows(t *testing.T) {
 			t.Errorf("the key rows lack %q:\n%s", want, view)
 		}
 	}
-	if got := m.fields[5].label; got != "save key" {
+	if got := m.fields[6].label; got != "save key" {
 		t.Errorf("key row label = %q, want the internal key", got)
 	}
 	focusField(t, m, "help key")

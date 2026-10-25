@@ -226,8 +226,8 @@ type logPick struct {
 	list   filterList
 }
 
-func newLogView() *logView {
-	today := time.Now().In(time.Local)
+func newLogView(now time.Time) *logView {
+	today := now.In(time.Local)
 	lv := &logView{
 		day:   today.Format(logDateLayout),
 		from:  today.AddDate(0, 0, -6).Format(logDateLayout),
@@ -899,7 +899,7 @@ func (m *Model) logRowLine(i int, l layout) string {
 	rest := strings.TrimPrefix(line, head)
 	when := clipCells(rest, l.widths[1])
 	tail := strings.TrimPrefix(rest, when)
-	return blank + head + lipgloss.NewStyle().Faint(true).Render(when) + tail
+	return blank + head + styles.hint.Render(when) + tail
 }
 
 // logsFrame is everything of the Logs screen except its rows. The bar stands on one line where it fits and

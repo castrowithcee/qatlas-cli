@@ -1,0 +1,108 @@
+version: 3
+services:
+  wiki:
+    id: 000000000000000000000000a11ce001
+    provider: bookstack
+    base_url: https://wiki.example.invalid
+  code:
+    id: 000000000000000000000000a11ce002
+    provider: github
+  cloud:
+    id: 000000000000000000000000a11ce003
+    provider: nextcloud
+    base_url: https://files.example.invalid
+  tables:
+    id: 000000000000000000000000a11ce004
+    provider: seatable
+    base_url: https://tables.example.invalid
+  crm:
+    id: 000000000000000000000000a11ce005
+    provider: twentycrm
+    base_url: https://crm.example.invalid
+  tasks:
+    id: 000000000000000000000000a11ce006
+    provider: todoist
+  alerts:
+    id: 000000000000000000000000a11ce007
+    provider: telegram
+credentials:
+  wiki-reader:
+    id: 000000000000000000000000a11ce008
+    provider: bookstack
+    type: vault
+  code-reader:
+    id: 000000000000000000000000a11ce009
+    provider: github
+    type: vault
+  cloud-user:
+    id: 000000000000000000000000a11ce00a
+    provider: nextcloud
+    type: vault
+  tables-token:
+    id: 000000000000000000000000a11ce00b
+    provider: seatable
+    type: vault
+  crm-key:
+    id: 000000000000000000000000a11ce00c
+    provider: twentycrm
+    type: vault
+  tasks-token:
+    id: 000000000000000000000000a11ce00d
+    provider: todoist
+    type: vault
+  alerts-bot:
+    id: 000000000000000000000000a11ce00e
+    provider: telegram
+    type: vault
+connections:
+  wiki-main:
+    id: 000000000000000000000000a11ce00f
+    service: wiki
+    credential: wiki-reader
+    description: Team wiki, read and write
+    effects: [read, create, update]
+  code-planning:
+    id: 000000000000000000000000a11ce010
+    service: code
+    credential: code-reader
+    description: Planning repositories
+    target: repos/example-org/planning
+    effects: [read]
+  cloud-files:
+    id: 000000000000000000000000a11ce011
+    service: cloud
+    credential: cloud-user
+    description: Shared project files
+    target: Projects
+    effects: [read, create, update]
+  tables-ops:
+    id: 000000000000000000000000a11ce012
+    service: tables
+    credential: tables-token
+    description: Operations tables
+    targets: ["*"]
+    effects: [read]
+  crm-sales:
+    id: 000000000000000000000000a11ce013
+    service: crm
+    credential: crm-key
+    description: Sales pipeline
+    effects: [read]
+  tasks-personal:
+    id: 000000000000000000000000a11ce014
+    service: tasks
+    credential: tasks-token
+    description: Personal task list
+    targets: ["*"]
+    effects: [read, create, update]
+  alerts-bot:
+    id: 000000000000000000000000a11ce015
+    service: alerts
+    credential: alerts-bot
+    description: Notification channel
+    target: "-1001234567890"
+    effects: [read, create, update]
+defaults:
+  secret_store: vault
+logs:
+  retention_days: 90

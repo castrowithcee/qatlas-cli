@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo user tools: users and their roles, the access of users to websites, and the roles and capabilities Matomo offers, with the personal data they carry and the account security data they never return.
+  Describes the Matomo user tools: users and their roles, the access of users to websites, deleting and logging out users, and the roles and capabilities Matomo offers, with the personal data they carry and the account security data they never return.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -9,9 +9,10 @@ updated: 2026-10-25
 
 # Matomo users and roles
 
-The user tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). They only
+The user tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope). Four tools
 read; `matomo.users.list`, `matomo.users.get`, and `matomo.users.get-access` carry personal data and the rights of
-administrators, so none of the four tools is in a setup profile.
+administrators. `matomo.users.delete` and `matomo.users.logout` change users. None of the six tools is in a setup
+profile.
 
 ## Personal data and what is never returned
 
@@ -74,3 +75,17 @@ Matomo; the other methods answer in full and are sorted by login and cut on the 
 the capabilities, which plugins extend, with the roles that already include each. Names and descriptions are translated
 by Matomo and untrusted; help addresses are text that is never fetched. The tool returns no personal data, but Matomo
 asks for an admin right for it, so it is not in the `read` profile.
+
+## Deleting and logging out users
+
+Both tools need a connection whose targets name `instance`, take one `login` (1 to 100 characters), and send exactly
+one request that is never repeated. `anonymous` is refused before any request. A personal token needs no password
+confirmation, and the tools take no password argument.
+
+- `matomo.users.delete` is offered only where the connection's `tools` list names it. An admin who is not a Super User
+  can delete only a pending user the admin invited; any other login is reported as not found. Matomo does not delete the
+  only Super User and sends an email to the deleting user. Deleting cannot be undone.
+- `matomo.users.logout` needs Super User rights. It ends the web sessions of the user; personal tokens stay valid.
+
+Both report the login and success only after Matomo confirmed. After an unclear result, read the user with
+`matomo.users.get` before repeating.

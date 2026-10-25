@@ -25,7 +25,7 @@ func TestColorSchemeVariants(t *testing.T) {
 	restoreRenderer(t)
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Setenv("NO_COLOR", "")
-	dark, light := buildTheme(true, false), buildTheme(false, false)
+	dark, light := buildTheme(true, false, false), buildTheme(false, false, false)
 	if dark.active.GetForeground() == light.active.GetForeground() {
 		t.Fatal("light and dark themes share a foreground; want one per background")
 	}
@@ -41,7 +41,7 @@ func TestColorSchemeVariants(t *testing.T) {
 	}
 	for _, c := range cases {
 		lipgloss.SetHasDarkBackground(c.detected)
-		applyColorScheme(c.mode)
+		applyColorScheme(c.mode, uiprefs.BackgroundTerminal)
 		if styles.active.GetForeground() != c.want.active.GetForeground() ||
 			styles.warning.GetForeground() != c.want.warning.GetForeground() {
 			t.Errorf("mode %s with detected dark=%v: got the wrong palette", c.mode, c.detected)
@@ -54,7 +54,7 @@ func TestColorSchemeNoColorWins(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Setenv("NO_COLOR", "1")
 	for _, mode := range []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark} {
-		applyColorScheme(mode)
+		applyColorScheme(mode, uiprefs.BackgroundQatlas)
 		for name, st := range map[string]lipgloss.Style{
 			"title": styles.title, "active": styles.active, "ok": styles.ok, "fail": styles.fail,
 			"warning": styles.warning, "focusBorder": styles.focusBorder,
