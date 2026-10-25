@@ -473,10 +473,10 @@ func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyp
 		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
 		coloured := screenOf(m)
 		assertViewFits(t, coloured, width, m.height+1)
-		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
+		if row := findRow(coloured, marked); !hasBackground(row) {
 			t.Errorf("width %d: the marked provider row shows no colour: %q\n%s", width, row, coloured)
 		}
-		if row := findRow(coloured, alt); strings.Contains(row, "\x1b[") {
+		if row := findRow(coloured, alt); hasBackground(row) {
 			t.Errorf("width %d: the unmarked provider row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 

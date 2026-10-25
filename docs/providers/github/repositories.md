@@ -19,8 +19,7 @@ confirmation described under [confirmed changes](README.md#confirmed-changes).
 order unless `order_by` says otherwise, archived ones included. A user's repositories are the ones the user
 owns, not those the user collaborates on: the tool's purpose fixes that binding, so there is no
 `affiliations` or `ownerAffiliations` argument. What the list shows depends on the targets, see
-[owner lists](README.md#owner-lists). The repositories need no scope for public ones, `repo` on a classic
-token for private ones, or access to the repositories on a fine-grained token. `privacy` and `visibility`
+[owner lists](README.md#owner-lists). The token rights are listed under [Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties). `privacy` and `visibility`
 cannot be combined, as GitHub refuses the pair; every filter binds the cursor.
 
 Each entry carries the members of GitHub's GraphQL repository in the one request a call sends. A list or a
@@ -78,15 +77,7 @@ credential is resolved, since this cannot be undone.
 `github.collaborators.list` reads the collaborators of a repository, paged, a cursor bound to the repository
 and its filters.
 
-Creating or forking a repository needs `repo` on a classic token, or Administration: read and write on a
-fine-grained token; deleting one, listed-only, needs `delete_repo` as well on a classic token. Listing
-collaborators needs `repo` on a classic token, or Metadata: read on a fine-grained token:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.repositories.create`, `github.repositories.fork` | `repo` | Administration: read and write |
-| `github.repositories.delete` | `repo` and `delete_repo` | Administration: read and write |
-| `github.collaborators.list` | `repo` | Metadata: read |
+The token rights are listed under [Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties).
 
 The terminal editor's setup profile `repository-admin-reader` (not recommended) selects
 `github.collaborators.list`, `github.rulesets.list`, `github.rulesets.get`, and `github.custom-properties.get`;
@@ -131,19 +122,6 @@ sends the whole definition in one `PUT` that replaces the ruleset as a whole and
 nothing else changes the ruleset between two identical calls; `github.rulesets.create` is not, since a
 repeated call creates a second ruleset.
 
-Reading the rulesets of a repository needs `repo` on a classic token, or Administration: read on a
-fine-grained token; changing them, listed-only, needs Administration: read and write on a fine-grained token
-instead. Reading or changing the rulesets of an organization needs `admin:org` on a classic token; the
-fine-grained equivalent is, as far as GitHub documents it, a single Administration permission of the
-organization, read or read and write:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.rulesets.list`, `github.rulesets.get` (repository) | `repo` | Administration: read |
-| `github.rulesets.create`, `github.rulesets.update`, `github.rulesets.delete` (repository) | `repo` | Administration: read and write |
-| `github.rulesets.list`, `github.rulesets.get` (organization) | `admin:org` | Administration read (organization), as far as GitHub documents it |
-| `github.rulesets.create`, `github.rulesets.update`, `github.rulesets.delete` (organization) | `admin:org` | Administration read and write (organization), as far as GitHub documents it |
-
 ## Custom properties
 
 | Tool | Does |
@@ -171,20 +149,6 @@ answers the definitions GitHub created or replaced. Every field is checked befor
 the exclusive target and argument, the array bounds a JSON schema's `maxItems` cannot enforce by itself, and
 the size of the whole request.
 
-Reading the custom property values of a repository needs Custom properties: read on a fine-grained token, or
-`repo` on a classic token; changing them, listed-only, needs Custom properties: write instead. Reading or
-changing the custom property schema of an organization needs the organization permission Custom properties,
-read or read and write, on a fine-grained token, or, as far as GitHub documents it, `admin:org` on a classic
-token; these fine-grained mappings are stated cautiously, since Qatlas cannot verify them against GitHub
-live:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.custom-properties.get` (repository) | `repo` | Custom properties: read |
-| `github.custom-properties.set` (repository) | `repo` | Custom properties: write |
-| `github.custom-properties.get` (organization) | `admin:org` | Custom properties: read (organization), as far as GitHub documents it |
-| `github.custom-properties.set` (organization) | `admin:org` | Custom properties: read and write (organization), as far as GitHub documents it |
-
 ## Repository merge and branch settings
 
 | Tool | Does |
@@ -209,13 +173,7 @@ settings are not reachable. Giving `allow_merge_commit`, `allow_squash_merge`, a
 the settings the call gave with the values GitHub reports, and carries no `before` value, since the change is
 the only request. A refusal for a missing right names the permission below, never text from GitHub.
 
-The tokens of these two tools follow the [credential rules](actions.md#credential) of the Actions
-administrator:
-
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| `github.repository-settings.get` | `repo` for a private repository | Metadata: read |
-| `github.repository-settings.update` | `repo`, as a repository administrator | Administration: write |
+The token rights are listed under [GitHub Actions](setup.md#github-actions), whose rule for a token of its own they follow.
 
 ## Repository subscriptions
 
@@ -225,8 +183,8 @@ administrator:
 
 The tool belongs to the [notifications](notifications.md#notifications) of the account behind the token and
 follows their rules for confirmation, idempotency, and the setup profile `notifications`. It takes
-`repository` like the other repository tools. The repository subscription is GitHub's watching endpoint and
-its token requirements are left to GitHub's decision per request, classic or fine-grained.
+`repository` like the other repository tools. The repository subscription is GitHub's watching endpoint; see
+[Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties) for its token.
 
 ## Stars
 
@@ -250,9 +208,7 @@ repository's previous state. Before sending either, Qatlas reads whether the rep
 a repository already in the requested state is reported with `changed: false` and nothing further is sent.
 Otherwise the change travels once, as every change here does, and the answer names the state afterward.
 
-Reading the account's starred repositories needs no scope for public ones, `repo` as well for private ones,
-or Starring read access on a fine-grained token. Starring and unstarring need `public_repo` on a classic
-token, `repo` as well for a private repository, or Starring read and write access on a fine-grained token.
+The token rights are listed under [Stars](setup.md#stars).
 
 The terminal editor's setup profile `stars` selects `github.stars.list`, `github.stars.add`, and
 `github.stars.remove`; every star or unstar needs its own confirmation. It is not the recommended profile,

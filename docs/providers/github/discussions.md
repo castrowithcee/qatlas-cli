@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub discussion tools: the categories, discussions, and comments of one repository, how organization discussions are read, and creating discussions and writing comments and replies, with their limits and tokens.
+  Describes the GitHub discussion tools: the categories, discussions, and comments of one repository, how organization discussions are read, and creating discussions and writing comments and replies, with their limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -73,11 +73,6 @@ comment with an error. Deleting is offered only where the connection's `tools` l
 
 The not-recommended setup profile `discussions` ticks the read tools, `github.discussions.create`,
 `github.discussion-comments.create`, and `github.discussion-comments.update`; the delete stays unticked, and
-the recommended profile `read` is unchanged. Reading discussions needs `public_repo` (public repositories) or
-`repo` on a classic token, or Discussions: read on a fine-grained token; creating, changing, and deleting need
-`public_repo` or `repo` on a classic token, or Discussions: read and write on a fine-grained token.
+the recommended profile `read` is unchanged.
 
-| Tools | Classic token | Fine-grained token |
-| --- | --- | --- |
-| the four read tools | `public_repo` or `repo` | Discussions: read |
-| `github.discussions.create`, `github.discussion-comments.create`, `.update`, `.delete` | `public_repo` or `repo` | Discussions: read and write |
+The token rights are listed under [Discussions](setup.md#discussions).

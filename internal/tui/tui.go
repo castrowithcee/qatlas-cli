@@ -4019,41 +4019,69 @@ func (m *Model) listView() string {
 // get the lines that are left, so a list of any length fits the terminal and only the rows scroll.
 func (m *Model) listFrame() (string, string) {
 	var head strings.Builder
-	title := styles.title.Render(m.section.title())
+	framed, room := m.tableFramed(), m.tableRoom()
+	// inside puts a line of the table into the frame, where there is one.
+	inside := func(text string) string {
+		if !framed {
+			return text + "\n"
+		}
+		var b strings.Builder
+		for _, line := range strings.Split(text, "\n") {
+			b.WriteString(panelSide(line, room, m.tableFocused(), "") + "\n")
+		}
+		return b.String()
+	}
+	note := func(style lipgloss.Style, text string) string {
+		if !framed {
+			return m.wrapped(style, text) + "\n"
+		}
+		return inside(render(style, room, text))
+	}
 	total := m.entryTotal()
 	shown, pos := m.entryPosition()
 	filtered := m.list.editing || m.list.query() != ""
-	switch {
-	case filtered:
-		title += fmt.Sprintf("  %d/%d (%d total)", pos, shown, total)
-	case total > 0:
-		title += fmt.Sprintf("  %d/%d", pos, total)
+	if framed {
+		position := ""
+		switch {
+		case filtered:
+			position = fmt.Sprintf("%d/%d (%d total)", pos, shown, total)
+		case total > 0:
+			position = fmt.Sprintf("%d/%d", pos, total)
+		}
+		head.WriteString(panelTop(fmt.Sprintf("%s (%d)", m.section.title(), total), position, room, m.tableFocused()) + "\n")
+	} else {
+		title := styles.title.Render(m.section.title())
+		switch {
+		case filtered:
+			title += fmt.Sprintf("  %d/%d (%d total)", pos, shown, total)
+		case total > 0:
+			title += fmt.Sprintf("  %d/%d", pos, total)
+		}
+		head.WriteString(title + "\n")
 	}
-	head.WriteString(title + "\n")
 	bar := m.listBarShown()
 	switch {
 	case bar:
 		// The search field stands in the line of the bar, so a filter costs no row.
-		head.WriteString(m.barLine(m.listWidth()) + "\n")
+		head.WriteString(inside(m.barLine(room)))
 	case filtered:
-		head.WriteString(m.filterLine(&m.list) + "\n")
-	default:
+		head.WriteString(inside(m.filterLine(&m.list)))
+	case !framed:
 		head.WriteString("\n")
 	}
 	if total > 0 {
 		t := m.listTable()
 		indent := m.entryIndent()
-		_, width := m.listFit(indent)
-		head.WriteString(styles.hint.Render(clipCells(indent+t.header(t.layout(width)), m.listWidth())) + "\n")
+		_, width := m.fitIn(room, indent)
+		head.WriteString(inside(styles.hint.Render(clipCells(indent+t.header(t.layout(width)), room))))
 	}
 	switch {
 	case total == 0 && bar:
-		head.WriteString(m.wrapped(styles.hint, tr(tFormNoEntryMatchesTheFilter)) + "\n")
+		head.WriteString(note(styles.hint, tr(tFormNoEntryMatchesTheFilter)))
 	case total == 0:
-		head.WriteString(m.wrapped(styles.hint, m.emptyHelp()) + "\n")
+		head.WriteString(note(styles.hint, m.emptyHelp()))
 	case shown == 0:
-		head.WriteString(m.wrapped(styles.hint,
-			tr(tFormNoEntryMatchesPressEsc, m.list.query())) + "\n")
+		head.WriteString(note(styles.hint, tr(tFormNoEntryMatchesPressEsc, m.list.query())))
 	}
 
 	back := m.backToSectionsHint()
@@ -4121,7 +4149,32 @@ func (m *Model) listFrame() (string, string) {
 		foot = m.testLine() + idle.String() + foot
 	}
 	foot += m.notes()
+	if framed {
+		foot = panelBottom(room, m.tableFocused()) + foot
+	}
 	return head.String(), foot
+}
+
+// Below these sizes the table of a list screen is drawn without its frame, which costs a row and four cells.
+const (
+	tableFrameMinWidth  = 60
+	tableFrameMinHeight = 16
+)
+
+// tableFramed reports whether the list screen draws its table in a panel.
+func (m *Model) tableFramed() bool {
+	return m.usable(0) >= tableFrameMinWidth && m.height >= tableFrameMinHeight
+}
+
+// tableFocused reports whether the frame of the table shows the focus: the list has it, not the tab line.
+func (m *Model) tableFocused() bool { return m.screen != screenNav }
+
+// tableRoom is the width of the rows of the list screen: what the list leaves, less the frame.
+func (m *Model) tableRoom() int {
+	if m.tableFramed() {
+		return max(m.listWidth()-4, 1)
+	}
+	return m.listWidth()
 }
 
 // findKeys is the key that reviews the renames found, with its separator, where there are any.
@@ -4192,15 +4245,22 @@ func (m *Model) inputLine(prefix string, in textinput.Model) string {
 func (m *Model) listRows() func(i int) string {
 	t := m.listTable()
 	indent := m.entryIndent()
-	_, width := m.listFit(indent)
+	room := m.tableRoom()
+	_, width := m.fitIn(room, indent)
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
 		active := i == m.list.cursor && m.screen != screenNav && m.barFocus == 0
+		var row string
 		if isGroupRow(name) {
-			return m.listRowIn(m.listWidth(), active, m.groups.rowText(name, m.groups.open(name) || m.list.query() != ""))
+			row = m.listRowIn(room, active, m.groups.styledRow(name, m.groups.open(name) || m.list.query() != ""))
+		} else {
+			row = m.listRowIn(room, active, indent[2:]+t.line(t.rows[name], layout))
 		}
-		return m.listRowIn(m.listWidth(), active, indent[2:]+t.line(t.rows[name], layout))
+		if m.tableFramed() {
+			return panelSide(row, room, m.tableFocused(), "")
+		}
+		return row
 	}
 }
 
@@ -4668,17 +4728,31 @@ func domainHint() string { return tr(tDomainHint) }
 // is the first to give way, and a column that only adds detail to the others may be left out of a narrow
 // terminal.
 var sectionColumns = map[section][]column{
-	sectionServices: {{title: "NAME"}, {title: "BASE URL", flex: true}},
-	sectionCredentials: {{title: "NAME"},
-		{title: "STORAGE", optional: true, short: map[string]string{
+	sectionServices: {{title: "NAME", tone: toneText}, {title: "BASE URL", flex: true, tone: toneText}},
+	sectionCredentials: {{title: "NAME", tone: toneText},
+		{title: "STORAGE", optional: true, tone: toneDim, short: map[string]string{
 			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"},
 			shown: func(place string) string { return valueText(storageLabel, place) }},
-		{title: "SECRETS", flex: true}},
-	sectionConnections: {{title: "NAME"}, {title: "STATE", optional: true}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
-		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
-	sectionDefaults:  {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
-	sectionApprovals: {{title: "CONNECTION"}, {title: "CHANGE", flex: true}},
-	sectionTokens:    {{title: "NAME"}, {title: "EXPIRES"}, {title: "VORBILDER", flex: true}},
+		{title: "SECRETS", flex: true, tone: toneText}},
+	sectionConnections: {{title: "NAME", tone: toneText}, {title: "STATE", optional: true, tone: connectionStateTone},
+		{title: "SERVICE", tone: toneText}, {title: "EFFECTS", optional: true, tone: toneDim},
+		{title: "TOOLS", optional: true, tone: toneDim}, {title: "TARGETS", optional: true, tone: toneDim},
+		{title: "DESCRIPTION", flex: true, tone: toneText}},
+	sectionDefaults:  {{title: "PROVIDER OR TOOL", tone: toneText}, {title: "CONNECTION", tone: toneText}},
+	sectionApprovals: {{title: "CONNECTION", tone: toneText}, {title: "CHANGE", flex: true, tone: toneText}},
+	sectionTokens:    {{title: "NAME", tone: toneText}, {title: "EXPIRES", tone: toneDim}, {title: "VORBILDER", flex: true, tone: toneText}},
+}
+
+// connectionStateTone colours the state of a connection: active green, expired red, anything else (disabled)
+// dimmed. The word stays in the cell.
+func connectionStateTone(cell string) lipgloss.Style {
+	switch {
+	case strings.HasPrefix(cell, valueText(stateLabel, stateActive)):
+		return styles.ok
+	case strings.HasPrefix(cell, valueText(stateLabel, expiredText)):
+		return styles.fail
+	}
+	return styles.hint
 }
 
 // listTable is the table of every entry of the section, filtered out or not.

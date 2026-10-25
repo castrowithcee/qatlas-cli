@@ -26,8 +26,6 @@ name. A connection without targets, or whose targets name only owners, is allowe
 repository under the token's own account applies the same guard, see
 [repository lifecycle](repositories.md#repository-lifecycle-and-collaborators).
 
-Reading the account behind the token needs no scope beyond its own identity, classic or fine-grained.
-
 The terminal editor's setup profile `discovery` selects `github.accounts.me`, `github.teams.list`,
 `github.team-members.list`, `github.stars.list`, and the seven [search tools](README.md#search); it changes
 nothing. It is not the recommended profile, which stays `read`, unchanged. The profile `stars` is described
@@ -48,8 +46,7 @@ refused with `invalid-request`, because teams belong to an organization, not a u
 [cursor contract](README.md#cursor-contract), a `github.teams.list` cursor bound to the organization and a
 `github.team-members.list` cursor bound to the organization and the team together.
 
-The team reads need `read:org` on a classic token, or Members read access of the organization on a
-fine-grained one.
+The token rights are listed under [Accounts and search](setup.md#accounts-and-search).
 
 ## Search
 

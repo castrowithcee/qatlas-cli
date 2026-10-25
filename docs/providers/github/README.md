@@ -19,7 +19,7 @@ The tools are sorted into groups; each group has a page: [issues](issues.md), [p
 [projects](projects.md), [Actions](actions.md), [code](code.md), [repositories](repositories.md),
 [releases](releases.md), [security](security.md), [discussions](discussions.md), [gists](gists.md),
 [notifications](notifications.md), and [accounts](accounts.md). The [setup profiles](profiles.md) have their own
-page.
+page. [Set up GitHub](setup.md) leads through creating a token and lists the rights it needs.
 
 ## Configuration
 
@@ -34,25 +34,9 @@ need a server that supports the `query` argument of `ProjectV2.items`.
 `https://api.…` API host and does not end in `/api/v3`, or one that is not even `https`, fails validation
 with `config-invalid` instead of only at the first call.
 
-The credential provides `token`, a personal access token. A read-only setup uses a classic token with
-`read:project` plus `repo` (or `public_repo` for public repositories only), or a fine-grained token with read
-access to issues and to projects. Changes need `project` instead of `read:project`, or write access to issues
-and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
-their own requirements, listed under [GitHub Actions](actions.md#github-actions), and so have the tools of
-[workflow maintenance and Actions administration](actions.md#workflow-maintenance-and-actions-administration), of
-[pull requests](pull-requests.md#tokens-for-pull-requests), and of
-[accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars). A successful `qatlas connection test` shows only that the token
-can read the first project or repository the
-connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
-scope again on each call, so a passing test does not authorize every tool.
-
-GitHub refuses a whole GraphQL query when it asks for a member the token lacks the scope for. Qatlas reads
-the scopes of a classic token from GitHub and leaves such members out of every result instead: a user's email
-without `user:email` or `read:user`, an organization's details beyond its login and addresses without
-`read:org` (where GitHub names the organization itself, everything but its type), team reviewers without
-`read:org` or `read:discussion`, enterprise team reviewers without `read:org` or `read:enterprise`, and
-enterprise user accounts without `read:enterprise`. A token GitHub reports no scopes for, such as a
-fine-grained token, gets none of these members.
+The credential provides `token`, a personal access token. Which kind of token to create, the rights each tool
+group needs, the fields Qatlas leaves out without a scope, and how to test the connection are described in
+[Set up GitHub](setup.md).
 
 ### Targets
 
@@ -153,15 +137,14 @@ for, where the call named one.
 | Code | GitHub's answer |
 | --- | --- |
 | `auth` | HTTP 401: GitHub rejected the token itself, or Qatlas cannot send it; the message adds the next step, checking or renewing the credential with `qatlas credential set <credential> <role>` or in `qatlas tui` |
-| `permission` | HTTP 403, or GraphQL `FORBIDDEN` or `INSUFFICIENT_SCOPES`: GitHub saw the target and refused this token explicitly, for example a classic token without `read:project`, or a fine-grained token on a user-owned project; the message names the target and, as the next step, the scopes or permissions of the token to check |
+| `permission` | HTTP 403, or GraphQL `FORBIDDEN` or `INSUFFICIENT_SCOPES`: GitHub saw the target and refused this token explicitly; the message names the target and, as the next step, the scopes or permissions of the token to check, see [Fixing errors](setup.md#fixing-errors) |
 | `not-found` | HTTP 404 or GraphQL `NOT_FOUND`: the target or a resource inside it does not exist, or the token may not see it |
 | `invalid-request` | the number an issue tool names belongs to a pull request, which issue tools do not handle |
 | `rate-limited` | GitHub asked to wait |
 | `provider-error` | GitHub rejected the request in another way, for example as invalid or in the current state of the resource |
 
-A change GitHub answered with `not-found` was not applied. The Actions and workflow maintenance tools keep
-their own permission messages, listed under [Tokens for Actions](actions.md#tokens-for-actions) and
-[Credential](actions.md#credential).
+A change GitHub answered with `not-found` was not applied. The tools' permission messages and what to do about
+them are listed under [Fixing errors](setup.md#fixing-errors).
 
 ## Owner lists
 
@@ -269,13 +252,6 @@ Search never answers `not-found`: an empty batch, not a refusal, is how GitHub r
 `github.code.search` shares GitHub's separate, lower search rate limit; it and the other search tools report
 GitHub's rate limit as `rate-limited`, naming the wait, through the same [status handling](#errors) as every
 other tool.
-
-### Tokens for search
-
-Repository, code, issue, pull request, and commit search need no scope for public results, or `repo` on a
-classic token, or Contents read access, and for issue and pull request search also Issues or Pull requests
-read access, on a fine-grained token, for private ones; code search also needs Contents read access for
-private repositories. User and organization search need no scope beyond the token's own identity.
 
 ## Confirmed changes
 

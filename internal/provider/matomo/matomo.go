@@ -231,5 +231,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataSubjectsExport, Handler: capability.Handler(invokeDataSubjectsExport)},
 		capability.Operation{Descriptor: privacySettingsGet, Handler: capability.Handler(invokePrivacySettingsGet)},
 		capability.Operation{Descriptor: complianceGet, Handler: capability.Handler(invokeComplianceGet)},
+		capability.Operation{Descriptor: reportsEvolution, Handler: capability.Handler(invokeReportsEvolution)},
+		capability.Operation{Descriptor: distinctCountsGet, Handler: capability.Handler(invokeDistinctCountsGet)},
+		capability.Operation{Descriptor: multiSitesGet, Handler: capability.Handler(invokeMultiSitesGet)},
+		capability.Operation{Descriptor: reportGlossaryList, Handler: capability.Handler(invokeReportGlossaryList)},
 	)
 }
