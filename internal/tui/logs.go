@@ -1004,8 +1004,7 @@ func (m *Model) logsFrame() (string, string) {
 		}
 		foot := keys
 		if shown > 0 && focused && !lv.stats && !lv.heat {
-			foot = withPosition(foot, fmt.Sprintf("%d/%d · %d%%", lv.list.cursor+1, shown,
-				(lv.list.cursor+1)*100/shown), width)
+			m.screenPos = fmt.Sprintf("%d/%d · %d%%", lv.list.cursor+1, shown, (lv.list.cursor+1)*100/shown)
 		}
 		if lv.note != "" && lv.loaded && lv.hasUnchecked() {
 			foot = "\n" + m.wrapped(styles.hint, lv.note) + foot
@@ -1088,20 +1087,6 @@ func (m *Model) logKeys() string {
 		keys = strings.Replace(keys, "{back} back", "{back} clear search", 1)
 	}
 	return keys
-}
-
-// withPosition puts pos at the right end of the first line of a key line, or on a line of its own where
-// that line has no room left for it.
-func withPosition(keys, pos string, width int) string {
-	lines := strings.Split(keys, "\n")
-	if len(lines) < 2 {
-		return keys
-	}
-	if gap := width - lipgloss.Width(lines[1]) - lipgloss.Width(pos); gap >= 2 {
-		lines[1] += strings.Repeat(" ", gap) + styles.hint.Render(pos)
-		return strings.Join(lines, "\n")
-	}
-	return keys + "\n" + styles.hint.Render(truncateCells(pos, width))
 }
 
 // logStats is the summary of the rows the filters and the search keep: the table with a row per group and

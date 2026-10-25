@@ -1,0 +1,140 @@
+package tui
+
+import (
+	"hash/fnv"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Shared building blocks of the screens. Every block returns lines of exactly the requested width in cells,
+// with closed borders at any width; content that does not fit is clipped. Colours come from styles only.
+
+// panelOpts selects the look of a panel.
+type panelOpts struct {
+	focused bool // frame in the focus colour (double frame without colour)
+	fill    bool // content area in the panel colour
+}
+
+// frameChars returns the frame characters: rounded, or double for a focused frame without colour, where the
+// colour of the frame cannot show the focus.
+func frameChars(focused bool) (h, v string, corners [4]string) {
+	if focused && styles.palette.borderFocus == "" {
+		return "═", "║", [4]string{"╔", "╗", "╚", "╝"}
+	}
+	return "─", "│", [4]string{"╭", "╮", "╰", "╯"}
+}
+
+// panel draws a frame of inner content width by rows around lines (width inner+4, height rows+2), with its
+// title in the top border.
+func panel(title string, lines []string, inner, rows int, o panelOpts) []string {
+	inner = max(inner, 0)
+	style := styles.quietBorder
+	if o.focused {
+		style = styles.focusBorder
+	}
+	h, v, c := frameChars(o.focused)
+	label := truncateCells(" "+title+" ", inner+1)
+	if title == "" {
+		label = ""
+	}
+	out := []string{style.Render(c[0]+h) + styles.title.Render(label) +
+		style.Render(strings.Repeat(h, max(inner+1-lipgloss.Width(label), 0))+c[1])}
+	body := lipgloss.NewStyle()
+	if o.fill && styles.palette.panel != "" {
+		body = body.Background(styles.palette.panel)
+	}
+	for i := 0; i < rows; i++ {
+		text := ""
+		if i < len(lines) {
+			text = clipCells(lines[i], inner)
+		}
+		out = append(out, style.Render(v)+body.Render(" "+padLine(text, inner)+" ")+style.Render(v))
+	}
+	return append(out, style.Render(c[2]+strings.Repeat(h, inner+2)+c[3]))
+}
+
+// card is a bordered figure: the label dimmed above a large value. Width is the total width in cells.
+func card(label, value string, width int) []string {
+	inner := max(width-4, 0)
+	lines := []string{styles.hint.Render(truncateCells(label, inner)), styles.title.Render(truncateCells(value, inner))}
+	return panel("", lines, inner, 2, panelOpts{})
+}
+
+type statusKind int
+
+const (
+	statusOK statusKind = iota
+	statusFail
+	statusWarn
+	statusDim
+)
+
+// statusMark is a coloured dot followed by the word; the word stays when there is no colour.
+func statusMark(kind statusKind, word string) string {
+	style := styles.hint
+	switch kind {
+	case statusOK:
+		style = styles.ok
+	case statusFail:
+		style = styles.fail
+	case statusWarn:
+		style = styles.warning
+	}
+	return style.Render("●") + " " + word
+}
+
+type buttonKind int
+
+const (
+	buttonNormal buttonKind = iota
+	buttonPrimary
+	buttonDanger
+)
+
+// button renders a label as a button. The focus shows as "> label <" and reverse video, so it reads without
+// colour; the primary and danger kinds are bold, and filled where there is colour.
+func button(kind buttonKind, label string, focused bool) string {
+	text := "[ " + label + " ]"
+	if focused {
+		text = "> " + label + " <"
+	}
+	style := lipgloss.NewStyle()
+	p := styles.palette
+	switch kind {
+	case buttonPrimary:
+		style = style.Bold(true)
+		if p.accent != "" {
+			style = style.Background(p.accent).Foreground(p.base)
+		}
+	case buttonDanger:
+		style = style.Bold(true)
+		if p.fail != "" {
+			style = style.Background(p.fail).Foreground(p.base)
+		}
+	default:
+		if p.border != "" {
+			style = style.Foreground(p.text)
+		}
+	}
+	if focused {
+		style = style.Bold(true).Reverse(true)
+	}
+	return style.Render(text)
+}
+
+// brandColor is the stable brand colour of a provider name.
+func brandColor(name string) lipgloss.Color {
+	h := fnv.New32a()
+	h.Write([]byte(name))
+	return styles.palette.brand[h.Sum32()%uint32(len(styles.palette.brand))]
+}
+
+// providerMark is the square in the colour of the provider.
+func providerMark(name string) string {
+	style := lipgloss.NewStyle()
+	if c := brandColor(name); c != "" {
+		style = style.Foreground(c)
+	}
+	return style.Render("■")
+}

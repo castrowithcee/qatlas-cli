@@ -273,7 +273,7 @@ func TestTheColumnNamesDoNotScrollAway(t *testing.T) {
 	if !strings.Contains(screenOf(m), ">   tracker-main") {
 		t.Errorf("the last entry is not selected and shown:\n%s", screenOf(m))
 	}
-	assertViewFits(t, screenOf(m), m.width, m.height)
+	assertViewFits(t, screenOf(m), m.width, m.height+1)
 }
 
 // An empty section keeps its help text and draws no column names over nothing.

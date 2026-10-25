@@ -687,7 +687,7 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 		t.Errorf("zero row lacks ~0 tok: %q", line)
 	}
 	for _, op := range []string{"op.old", "op.failed"} {
-		if line := rowLine(t, view, op); !strings.HasSuffix(strings.TrimRight(strings.TrimSuffix(strings.TrimRight(line, " "), "║"), " "), "-") ||
+		if line := rowLine(t, view, op); !strings.HasSuffix(strings.TrimRight(strings.TrimSuffix(strings.TrimRight(line, " "), "│"), " "), "-") ||
 			strings.Contains(line, "tok") {
 			t.Errorf("row %s does not show - for the size: %q", op, line)
 		}

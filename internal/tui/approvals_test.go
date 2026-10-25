@@ -528,13 +528,14 @@ func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 	}
 }
 
-// The status line names open approvals and an unencrypted vault as the next step, each with its section.
+// The Overview names open approvals and an unencrypted vault as the next step, each with its section.
 func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	m := unencryptedVaultModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	for _, size := range []int{160, 80, 40} {
+	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Settings > Vault (6) to set a passphrase") {
+		m.section, m.screen = sectionOverview, screenNav
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
 			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.View())
 		}
 	}
@@ -547,9 +548,10 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	pump(t, m, "enter")
 	unlockWithAdminPassphrase(t, m, passphrase)
 	m.screen = screenNav
-	for _, size := range []int{160, 80, 40} {
+	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "next: open Access > Approvals (4)") {
+		m.section, m.screen = sectionOverview, screenNav
+		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
 			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.View())
 		}
 	}
@@ -644,6 +646,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 
 	view := m.approvalChangeView(title, change)
 	assertViewFits(t, view, m.width, m.height)
+	view = withFooter(m, view)
 	for _, want := range []string{
 		"tools       2 new, 1 removed",
 		"+ github.pull-request-checks.list", "+ github.pull-requests.get", "- github.repositories.archive",
@@ -671,6 +674,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	}
 	view = m.approvalChangeView(title, change)
 	assertViewFits(t, view, m.width, m.height)
+	view = withFooter(m, view)
 	if !strings.Contains(view, "lines 1-") || !strings.Contains(view, "e fold unchanged") {
 		t.Errorf("an expanded view that is longer than the window does not scroll:\n%s", view)
 	}

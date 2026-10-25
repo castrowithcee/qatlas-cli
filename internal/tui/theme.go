@@ -60,6 +60,8 @@ type theme struct {
 	activeRow lipgloss.Style
 	// key is the key of a footer hint (bold); the action after it keeps the plain hint style.
 	key lipgloss.Style
+	// footKey is the key of the footer line: the accent colour, bold.
+	footKey lipgloss.Style
 	// filled says the whole screen carries the base colour (see paintCanvas); never set without colour.
 	filled bool
 }
@@ -82,6 +84,7 @@ func buildTheme(dark, noColor, filled bool) theme {
 			quietBorder: lipgloss.NewStyle().Faint(true),
 			activeRow:   lipgloss.NewStyle().Bold(true).Reverse(true),
 			key:         lipgloss.NewStyle().Bold(true),
+			footKey:     lipgloss.NewStyle().Bold(true),
 		}
 	}
 	p := lightPalette
@@ -100,6 +103,7 @@ func buildTheme(dark, noColor, filled bool) theme {
 		quietBorder: lipgloss.NewStyle().Foreground(p.border),
 		activeRow:   lipgloss.NewStyle().Bold(true).Foreground(p.text).Background(p.selection),
 		key:         lipgloss.NewStyle().Bold(true).Foreground(p.text),
+		footKey:     lipgloss.NewStyle().Bold(true).Foreground(p.accent),
 		filled:      filled,
 	}
 }

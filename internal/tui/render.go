@@ -440,15 +440,29 @@ func (m *Model) listRowIn(room int, active bool, text string) string {
 // being cut off at its right edge.
 func (m *Model) hint(text string) string { return "\n" + m.wrapped(styles.hint, text) }
 
-// keyHint is the key line of a table screen (a section list, the picker, the provider table): groups of
-// keys separated by " · " never split across a wrap, only between groups, and within a group the key (its
-// first word) is bold while the action after it keeps the plain hint style. A single group too wide for the
-// terminal is cut with "..." rather than left to overflow, which only a pathologically narrow terminal
-// should ever trigger.
+// keyHint is the key line of a screen: groups of keys separated by " · ". It hands the line to the footer of
+// the frame (see footerLine) and returns nothing for the workspace; only while a modal dialog is drawn does
+// it return the line itself (see dialogKeyHint).
 func (m *Model) keyHint(text string) string {
 	if strings.Contains(text, "{command} cmds") && !strings.Contains(text, "{info}") && m.infoWorks() {
 		text = strings.Replace(text, "{command} cmds", "{info} info · {command} cmds", 1)
 	}
+	if m.footerLog == nil {
+		// A screen's keys stand in the footer of the frame, not in the workspace. A dialog under a backdrop
+		// leaves the footer as it was.
+		if !m.backdrop {
+			m.screenKeys = text
+		}
+		return ""
+	}
+	return m.dialogKeyHint(text)
+}
+
+// dialogKeyHint is the key line of a modal dialog: groups never split across a wrap, only between groups,
+// and within a group the key (its first word) is bold while the action after it keeps the plain hint style.
+// A single group too wide for the terminal is cut with "...". It stands in the dialog itself, where its
+// keys are buttons.
+func (m *Model) dialogKeyHint(text string) string {
 	if strings.Contains(text, "{info} info") {
 		// The info key is named only where that costs no extra footer line, so no screen needs more rows
 		// for it than it needed before.

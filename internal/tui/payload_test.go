@@ -260,7 +260,7 @@ func TestPayloadFieldsAreAddedAndRemoved(t *testing.T) {
 	if got := len(h.m.payloadRows()); got != 2 {
 		t.Fatalf("ctrl+d removed the field without asking: rows %v", h.m.payloadRows())
 	}
-	if !strings.Contains(h.m.View(), "y remove · n/esc keep") {
+	if !strings.Contains(strings.Join(strings.Fields(h.m.View()), " "), "y remove n/esc keep") {
 		t.Fatalf("the question is not shown:\n%s", h.m.View())
 	}
 	h.m.Update(ctrlD())

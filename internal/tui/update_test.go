@@ -136,7 +136,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 		m := startedWith(t, fake)
 		press(t, m, "u")
 		if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") ||
-			!strings.Contains(screenOf(m), "y update · n/esc cancel") {
+			!strings.Contains(flatText(screenOf(m)), "y update n/esc cancel") {
 			t.Fatalf("u did not ask:\n%s", m.View())
 		}
 		pump(t, m, no)
@@ -238,7 +238,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 		banner        string
 	}{
 		{width: 100, height: 28, banner: fullBanner},
-		{width: 60, height: 24, banner: "Update v0.5.0 · u"},
+		{width: 60, height: 24, banner: "Update available v0.5.0 · u update"},
 		{width: 40, height: minimumHeight, banner: "Update v0.5.0 · u"},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})

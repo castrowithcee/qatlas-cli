@@ -289,7 +289,7 @@ func (m *Model) pane(width, rows int) string {
 	for i, l := range lines {
 		lines[i] = styles.hint.Render(l)
 	}
-	return strings.Join(box(truncateDots(s.title, inner-2), lines, inner, rows, false), "\n")
+	return strings.Join(panel(truncateDots(s.title, inner-2), lines, inner, rows, panelOpts{}), "\n")
 }
 
 // truncateDots cuts text to width cells, ending in "..." when it was cut.
@@ -340,7 +340,7 @@ func (m *Model) infoView() string {
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "")
 	}
-	dialog := box(truncateDots(s.title, inner-2), lines, inner, len(lines), true)
+	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true})
 	background := m.frame(m.workspaceView())
 	return overlay(background, dialog, m.termWidth, m.termHeight)
 }

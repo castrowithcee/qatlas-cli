@@ -211,8 +211,10 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					}
 					// Only what the workspace frame holds counts: the tab line draws its own marks.
 					inner := holding[0]
-					if i, j := strings.Index(inner, "║"), strings.LastIndex(inner, "║"); i >= 0 && j > i {
-						inner = inner[i+len("║") : j]
+					if i := strings.Index(inner, "│"); i >= 0 {
+						if j := strings.Index(inner[i+len("│"):], "│"); j >= 0 {
+							inner = inner[i+len("│") : i+len("│")+j]
+						}
 					}
 					if !strings.HasSuffix(strings.TrimRight(inner, " "), want) {
 						t.Errorf("the cursor is not at the visible end of %q", holding[0])

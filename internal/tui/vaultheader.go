@@ -1,5 +1,5 @@
 // The vault state segment of the header, and 'ctrl+l', which unlocks or locks the vault from anywhere in
-// the editor. See the header itself in tui.go (headerLines, pathLine) and this window's own
+// the editor. See the header itself in layout.go (headerLines) and this window's own
 // admin session in admin.go, which 'ctrl+l' starts or ends alongside the vault itself but never otherwise
 // touches: the two stay independent.
 package tui
@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -33,35 +34,43 @@ func vaultTick() tea.Cmd {
 	return tea.Tick(vaultTickInterval, func(time.Time) tea.Msg { return vaultTickMsg{} })
 }
 
-// vaultHeaderText is the header's vault state segment: symbol and label together, so it reads without
-// colour and under NO_COLOR, plus the admin abbreviation for an encrypted, unlocked vault. "" for a run with
-// no vault configured at all: showing a warning for something that does not exist yet would be
-// misleading.
-func (m *Model) vaultHeaderText() string {
+// vaultHeaderText is the vault state of the header as one text: symbol and word together, so it reads
+// without colour and under NO_COLOR, plus the admin state for an encrypted, unlocked vault. "" for a run
+// with no vault configured at all.
+func (m *Model) vaultHeaderText() string { return strings.Join(m.vaultSegments(), headerSep) }
+
+// vaultSegments are the status marks of the header: the vault, and for an encrypted, unlocked vault the
+// admin session too. None for a run with no vault configured at all: showing a warning for something that
+// does not exist yet would be misleading.
+func (m *Model) vaultSegments() []string {
 	v := m.secrets.Vault()
 	if v == nil {
-		return ""
+		return nil
 	}
 	state, err := v.State()
 	if err != nil {
 		// Neither locked nor unlocked describes a vault whose state cannot even be read; this is closer to
 		// the unencrypted warning than to either of the other two, and keeps the line naming what is wrong
 		// instead of silently showing nothing.
-		return styles.fail.Render(tr(tVaultError, m.redactor.Apply(err.Error())))
+		return []string{statusMark(statusFail, tr(tVaultError, m.redactor.Apply(err.Error())))}
 	}
 	switch {
 	case state == vault.StateUnencrypted:
-		return styles.fail.Render(tr(tVaultUnencrypted))
+		return []string{statusMark(statusWarn, tr(tVaultUnencrypted))}
 	case m.vaultDisplayUnlocked(state):
 		// A vault process elsewhere may hold it open while this window itself has never unlocked it; either
-		// way the admin abbreviation belongs here too, since every unlocked, encrypted vault shows one, and
+		// way the admin state belongs here too, since every unlocked, encrypted vault shows one, and
 		// adminHeaderText already reads "admin off" (or the vault.admin_timeout: 0 text) on its own for a
 		// window that never started a session, since AdminSessionActive is false regardless of why.
-		return styles.ok.Render(tr(tVaultUnlocked)) + " · " + styles.hint.Render(m.adminHeaderText())
+		admin := statusDim
+		if m.cfg.VaultAdminTimeout() > 0 && m.AdminSessionActive() {
+			admin = statusOK
+		}
+		return []string{statusMark(statusOK, tr(tVaultUnlocked)), statusMark(admin, m.adminHeaderText())}
 	case state == vault.StateLocked:
-		return styles.warning.Render(tr(tVaultLocked))
+		return []string{statusMark(statusWarn, tr(tVaultLocked))}
 	}
-	return ""
+	return nil
 }
 
 // vaultUnencrypted reports whether the vault exists without a passphrase, the state the header warns about.

@@ -14,9 +14,9 @@ import (
 func dialogRows(view string, title string) (top, bottom, left int, ok bool) {
 	top = -1
 	for i, line := range strings.Split(view, "\n") {
-		if at := strings.Index(line, "╔═ "+title+" "); at >= 0 {
+		if at := strings.Index(line, "╭─ "+title+" "); at >= 0 {
 			top, left = i, lipgloss.Width(line[:at])
-		} else if at := strings.Index(line, "╚"); at >= 0 && top >= 0 && i > top && lipgloss.Width(line[:at]) == left {
+		} else if at := strings.Index(line, "╰"); at >= 0 && top >= 0 && i > top && lipgloss.Width(line[:at]) == left {
 			return top, i, left, true
 		}
 	}
@@ -46,12 +46,12 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 	if above, below := top, 30-1-bottom; above-below > 1 || below-above > 1 {
 		t.Errorf("modal spans rows %d-%d, not centred in 30 rows", top, bottom)
 	}
-	edge := lines[top][strings.Index(lines[top], "╔"):]
-	width := lipgloss.Width(edge[:strings.Index(edge, "╗")+len("╗")])
+	edge := lines[top][strings.Index(lines[top], "╭"):]
+	width := lipgloss.Width(edge[:strings.Index(edge, "╮")+len("╮")])
 	if right := 100 - left - width; right-left > 1 || left-right > 1 {
 		t.Errorf("modal at column %d with width %d is not centred in 100 columns", left, width)
 	}
-	if !strings.Contains(lines[0], "Qatlas setup") {
+	if !strings.Contains(lines[0], "Qatlas") {
 		t.Errorf("the background header is gone:\n%s", view)
 	}
 	if !strings.Contains(view, "[5 Library]") {
@@ -228,8 +228,8 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 			if !strings.Contains(m.questionView(), tc.consequence) {
 				t.Errorf("consequence %q missing:\n%s", tc.consequence, m.questionView())
 			}
-			if !strings.Contains(lines[len(lines)-1], "help") {
-				t.Errorf("last line is not the key line: %q", lines[len(lines)-1])
+			if footer := m.footerLine(); !strings.Contains(footer, "help") {
+				t.Errorf("the footer is not the key line: %q", footer)
 			}
 			for name, size := range map[string][2]int{"modal": {100, 30}, "fallback": {50, 30}} {
 				sizedModel(m, size[0], size[1])
@@ -269,7 +269,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	sizedModel(m, 100, 30)
 	startRename(t, m, sectionServices, "wiki", "handbook")
 	pump(t, m, "enter")
-	if view := m.View(); !strings.Contains(view, "╔═ Confirm ") {
+	if view := m.View(); !strings.Contains(view, "╭─ Confirm ") {
 		t.Fatalf("a short plan is not a modal:\n%s", view)
 	}
 
@@ -278,7 +278,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	}
 	view := m.View()
 	assertViewFits(t, view, 100, 30)
-	if strings.Contains(view, "╔═ Confirm ") {
+	if strings.Contains(view, "╭─ Confirm ") {
 		t.Fatalf("a plan taller than the screen is a modal:\n%s", view)
 	}
 	if !strings.Contains(view, "connections.c00.service") || strings.Contains(view, "connections.c59.service") {

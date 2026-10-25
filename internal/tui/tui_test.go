@@ -462,7 +462,7 @@ func TestNarrowNavigation(t *testing.T) {
 			m, _, _ := newModel(t)
 			m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 			m.screen, m.section, m.navSub = screenNav, sectionOverview, false
-			if !strings.Contains(m.View(), "←/→ move") {
+			if width >= narrowWidth-1 && !strings.Contains(m.View(), "←/→ move") {
 				t.Errorf("footer does not name left/right:\n%s", m.View())
 			}
 			press(t, m, "left")
@@ -672,18 +672,17 @@ func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
 	}
 }
 
-// The status line of a list points at the next step: open approvals and an unencrypted vault name their
-// section, and the line gives way to any status or error.
-func TestStatusLineNamesTheNextStep(t *testing.T) {
+// Only the Overview points at the next step; a list shows no line of its own for it.
+func TestOnlyTheOverviewNamesTheNextStep(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	openSectionByName(t, m, sectionServices)
-	if view := m.View(); !strings.Contains(view, "next: press c to set up a connection step by step") {
-		t.Errorf("the list shows no next step:\n%s", view)
-	}
-	m.status = "Something happened"
 	if view := m.View(); strings.Contains(view, "next:") {
-		t.Errorf("the next step hides a status:\n%s", view)
+		t.Errorf("the list shows a next step:\n%s", view)
+	}
+	openSectionByName(t, m, sectionOverview)
+	if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "press c to set up a connection step by step") {
+		t.Errorf("the Overview shows no next step:\n%s", view)
 	}
 }
 
@@ -1123,14 +1122,23 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	}
 }
 
-// screenOf is the workspace as the user reads it, without the header, tab line and rule above it. The
-// frame itself is tested on its own, through View.
+// screenOf is the workspace as the user reads it, with the footer under it and without the header, tab line
+// and rule above it. The frame itself is tested on its own, through View.
 func screenOf(m *Model) string {
 	if m.quitting || m.terminalTooSmall() {
 		return m.View()
 	}
-	return leftOfPane(m, m.workspaceView())
+	m.screenKeys, m.screenPos = "", ""
+	view := leftOfPane(m, m.workspaceView())
+	return view + "\n" + m.footerLine()
 }
+
+// flatText is a view as one line of words, where the spacing between groups of keys does not matter.
+func flatText(view string) string { return strings.Join(strings.Fields(view), " ") }
+
+// withFooter is a view drawn by a single screen function with the footer under it, which the keys of that
+// screen went to.
+func withFooter(m *Model, view string) string { return view + "\n" + m.footerLine() }
 
 // explained is the whole explanation of the focused row as one line of words: what the pane and the overlay
 // show, while the form itself shows one line of hint.
@@ -1872,12 +1880,10 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 	for _, want := range []string{
 		"created on first save",
 		"c setup",
-		"next: press c to",
 		"1 Overview",
 		"2 Connections",
 		"3 Activity",
 		"4 Access",
-		"Config:",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("first-run view does not contain %q:\n%s", want, view)

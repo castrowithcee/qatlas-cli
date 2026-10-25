@@ -471,7 +471,7 @@ func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyp
 
 		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
 		coloured := screenOf(m)
-		assertViewFits(t, coloured, width, m.height)
+		assertViewFits(t, coloured, width, m.height+1)
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
 			t.Errorf("width %d: the marked provider row shows no colour: %q\n%s", width, row, coloured)
 		}
@@ -481,7 +481,7 @@ func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyp
 
 		lipgloss.SetColorProfile(3)
 		plain := screenOf(m)
-		assertViewFits(t, plain, width, m.height)
+		assertViewFits(t, plain, width, m.height+1)
 		if strings.Contains(plain, "\x1b") {
 			t.Errorf("width %d: NO_COLOR still emits escape sequences in the provider table:\n%s", width, plain)
 		}
