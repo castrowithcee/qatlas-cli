@@ -148,7 +148,9 @@ or Super User rights. The profile `live` adds the [live tools](live.md) and the 
 because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights.
-The profile `goals` adds `matomo.goals.add`,
+The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
+`matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
+offered only via `tools`. The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
 no profile, see [goals](goals.md). The profile `segments` adds `matomo.segments.add`, `matomo.segments.update`,
@@ -206,6 +208,10 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
+| `matomo.reports.evolution` | [reports](reports.md) | reads how rows of a report develop over periods (only via `tools`) |
+| `matomo.distinct-counts.get` | [reports](reports.md) | reads how many different search engines, social networks, keywords, campaigns, referring websites, AI assistants, or countries a period had (only via `tools`) |
+| `matomo.multi-sites.get` | [reports](reports.md) | reads the comparison of the websites of the token inside the targets (only via `tools`) |
+| `matomo.report-glossary.list` | [reports](reports.md) | reads the explanation of the reports or metrics of a website (only via `tools`) |
 | `matomo.segments.fields` | [reports](reports.md) | reads the segment fields of a website |
 | `matomo.segments.suggest-values` | [reports](reports.md) | reads frequent values of a segment field |
 | `matomo.visits.list` | [live](live.md) | reads the visit log of one website |
