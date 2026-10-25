@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -274,6 +276,27 @@ func visualShots() []visualShot {
 		}},
 		{"48-library-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
 		{"49-library-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"55-export", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			press(t, m, ":")
+			typeText(t, m, "export")
+			pump(t, m, "enter")
+			typeText(t, m, visualPassphrase)
+			pump(t, m, "enter")
+		}},
+		{"57-selftest", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			m.selftest.scenarios = fakeScenarios("alpha")
+			m.selftest.run = func(_ context.Context, o selftest.Options) (*selftest.Report, error) {
+				return fakeReport(o.Scenario), nil
+			}
+			drainSelftest(m, startSelftestCommand(t, m, "selftest alpha"))
+		}},
+		{"58-targets", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			m.list.selectName("code-planning")
+			pump(t, m, "enter")
+			openTargetList(t, m)
+		}},
+		{"59-resize", 39, 11, dark, term, false, overview},
 	}
 }
 

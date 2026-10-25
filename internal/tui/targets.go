@@ -341,17 +341,19 @@ func (m *Model) targetsView() string {
 // and what the provider allows of the list, below them the target being typed or the remove question, the
 // keys and the notes.
 func (m *Model) targetFrame() (string, string) {
+	p := m.dialogPanelOf()
 	metadata := m.targetMetadata()
 	total := len(m.targetList.all)
-	title := tr(tTargetTargets, metadata.Label)
+	position := ""
 	if total > 0 {
-		title += fmt.Sprintf("  %d/%d", m.targetList.cursor+1, total)
+		position = fmt.Sprintf("%d/%d", m.targetList.cursor+1, total)
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, title) + "\n")
-	head.WriteString(m.wrapped(styles.hint, m.providerTargetHint(m.formProvider())) + "\n\n")
+	head.WriteString(p.top(tr(tTargetTargets, metadata.Label), position))
+	head.WriteString(p.text(styles.hint, m.providerTargetHint(m.formProvider())))
+	head.WriteString(p.blank())
 	if total == 0 {
-		head.WriteString(m.wrapped(styles.hint, "("+emptyTargets(metadata)+")") + "\n")
+		head.WriteString(p.text(styles.hint, "("+emptyTargets(metadata)+")"))
 	}
 
 	var foot strings.Builder
@@ -367,28 +369,29 @@ func (m *Model) targetFrame() (string, string) {
 	switch {
 	case m.labelEdit:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(styles.hint, tr(tTargetLabelForLeaveItEmpty, target)) + "\n")
-		foot.WriteString(m.inputLine(tr(tTargetLabel), m.labelInput) + "\n")
+		foot.WriteString(p.blank() + p.text(styles.hint, tr(tTargetLabelForLeaveItEmpty, target)))
+		foot.WriteString(p.styled(m.inputLineIn(p.room, tr(tTargetLabel), m.labelInput)))
 		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetEdit >= 0:
 		label := tr(tTargetNew2)
 		if m.targetEdit < total {
 			label = tr(tTargetEdit)
 		}
-		foot.WriteString("\n" + m.inputLine(label, m.targetInput) + "\n")
+		foot.WriteString(p.blank() + p.styled(m.inputLineIn(p.room, label, m.targetInput)))
 		keys = "enter take · " + save + " · {back} cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
-		foot.WriteString("\n" + m.wrapped(styles.warning, tr(tTargetRemoveFromTheList, target)) + "\n")
+		foot.WriteString(p.blank() + p.text(styles.warning, warnMark+" "+tr(tTargetRemoveFromTheList, target)))
 		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
+	foot.WriteString(p.bottom())
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()
 }
 
 // targetRow draws the target at index i of the list.
 func (m *Model) targetRow(i int) string {
-	return m.row(i == m.targetList.cursor, m.labelled(m.targetList.matches[i], m.targetLabels))
+	return m.dialogPanelOf().row(i == m.targetList.cursor, m.labelled(m.targetList.matches[i], m.targetLabels))
 }
 
 func (m *Model) targetWindow() (int, int) {

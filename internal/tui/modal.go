@@ -293,7 +293,7 @@ func (m *Model) questionText(q question) string {
 		style = styles.warning
 	}
 	var b strings.Builder
-	if m.inModal {
+	if m.inModal || m.inPanel {
 		b.WriteString(m.questionHeading(q.title) + "\n\n")
 	} else {
 		b.WriteString(m.wrapped(styles.title, q.title) + "\n\n")

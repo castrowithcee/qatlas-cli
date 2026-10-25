@@ -430,8 +430,10 @@ func TestImportApprovalQuestion(t *testing.T) {
 			v.pump(answer)
 			v.wantImportStep(importResult)
 			v.wantContains("open      imported connection docs", "nothing else was approved; approve with 'qatlas vault approve'")
-			if strings.Contains(screenOf(m), "approved  ") {
-				t.Errorf("a connection was approved:\n%s", screenOf(m))
+			for _, line := range panelLines(screenOf(m)) {
+				if strings.HasPrefix(line, "approved  ") {
+					t.Errorf("a connection was approved:\n%s", screenOf(m))
+				}
 			}
 			v.pump("enter")
 			if m.screen != screenList {

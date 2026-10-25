@@ -360,21 +360,24 @@ func (m *Model) renameView() string {
 	}
 	apply := m.redactor.Apply
 	if r.plan == nil {
-		return m.wrapped(styles.title, tr(tRenameTitle, kindText(r.kind), apply(r.old))) + "\n\n" +
-			m.inputLine("  ", r.input) + "\n" +
-			m.indented(tr(tRenameNewName)) + "\n" +
+		p := m.dialogPanelOf()
+		return p.top(tr(tRenameTitle, kindText(r.kind), apply(r.old)), "") + p.blank() +
+			p.styled(m.inputLineIn(p.room, "  ", r.input)) + p.hint(tr(tRenameNewName)) + p.bottom() +
 			m.keyHint("enter dry run · {back} cancel") + m.notes()
 	}
-	q := m.renameQuestion()
-	all := q.details
-	notes := m.notes()
 	// What does not fit scrolls between the sentence and the keys; the modal shows the whole plan or, when
 	// that is too tall, leaves the room to this full screen.
-	q.details = nil
-	room := max(m.height-strings.Count(m.questionText(q), "\n")-strings.Count(notes, "\n")-2, 3)
-	r.offset = max(min(r.offset, len(all)-room), 0)
-	q.details = all[r.offset:min(r.offset+room, len(all))]
-	return m.questionText(q) + notes
+	notes := m.notes()
+	text := m.framedText(func() string {
+		q := m.renameQuestion()
+		all := q.details
+		q.details = nil
+		room := max(m.height-strings.Count(m.questionText(q), "\n")-strings.Count(notes, "\n")-2-m.framedChrome(), 3)
+		r.offset = max(min(r.offset, len(all)-room), 0)
+		q.details = all[r.offset:min(r.offset+room, len(all))]
+		return m.questionText(q)
+	})
+	return text + notes
 }
 
 // renameQuestion is the dry run as a question; its details are every line of the plan, one row each.

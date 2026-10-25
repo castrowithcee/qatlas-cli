@@ -223,6 +223,7 @@ func (m *Model) pathsView() string {
 // pathFrame is everything of the path list screen except the paths: above them what the list does, below
 // them the path being typed with its suggestions or the remove question, the keys and the notes.
 func (m *Model) pathFrame() (string, string) {
+	p := m.dialogPanelOf()
 	total := len(m.pathList.all)
 	title, hint, none := tr(tPathPaths), tr(tFormPathsHint), tr(tPathNoneEveryProject)
 	if label := m.fields[m.focus].label; isFilesLabel(label) {
@@ -236,14 +237,16 @@ func (m *Model) pathFrame() (string, string) {
 	if name := m.fieldValue("name"); name != "" {
 		title += tr(tPathOf, name)
 	}
+	position := ""
 	if total > 0 {
-		title += fmt.Sprintf("  %d/%d", m.pathList.cursor+1, total)
+		position = fmt.Sprintf("%d/%d", m.pathList.cursor+1, total)
 	}
 	var head strings.Builder
-	head.WriteString(m.wrapped(styles.title, title) + "\n")
-	head.WriteString(m.wrapped(styles.hint, hint) + "\n\n")
+	head.WriteString(p.top(title, position))
+	head.WriteString(p.text(styles.hint, hint))
+	head.WriteString(p.blank())
 	if total == 0 {
-		head.WriteString(m.wrapped(styles.hint, none) + "\n")
+		head.WriteString(p.text(styles.hint, none))
 	}
 
 	var foot strings.Builder
@@ -256,15 +259,16 @@ func (m *Model) pathFrame() (string, string) {
 		if m.pathEdit < total {
 			label = tr(tPathEditPath)
 		}
-		foot.WriteString("\n" + m.pathLines(label, &m.pathInput))
+		foot.WriteString(p.blank() + p.styled(m.pathLinesIn(p.room, label, &m.pathInput)))
 		keys = pathKeys(&m.pathInput, "enter take · {save} save · {back} cancel entry")
 	case m.pathRemove:
 		path, _ := m.pathList.selected()
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
-		foot.WriteString("\n" + m.wrapped(styles.warning, tr(tPathRemoveFromTheList, quoted)) + "\n")
+		foot.WriteString(p.blank() + p.text(styles.warning, warnMark+" "+tr(tPathRemoveFromTheList, quoted)))
 		keys = "y remove · n/{back} keep · {command} cmds · {help} help"
 	}
+	foot.WriteString(p.bottom())
 	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()
 }
@@ -289,7 +293,7 @@ func (m *Model) pathPrompt() promptDialog {
 
 // pathRow draws the path at index i of the list.
 func (m *Model) pathRow(i int) string {
-	return m.row(i == m.pathList.cursor, m.pathList.matches[i])
+	return m.dialogPanelOf().row(i == m.pathList.cursor, m.pathList.matches[i])
 }
 
 func (m *Model) pathWindow() (int, int) {
