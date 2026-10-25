@@ -29,7 +29,9 @@ followed. Every request is a `POST` to `<base_url>/index.php`.
 The credential provides `token`, a personal authentication token from Matomo under Personal, Security. Create it
 for a Matomo user whose rights match what the connection should reach: the token has the view, write, or admin
 rights of its user per website, or Super User rights. Qatlas does not check them in advance. The token is sent as
-`Authorization: Bearer ...`, never in a URL, a query, or an argument.
+`Authorization: Bearer ...`, never in a URL, a query, or an argument. The credential may also provide the optional
+`password-confirmation`, the Matomo password of the token's user, which only the [raw data
+tools](privacy.md#anonymizing-and-purging-raw-data) send, in the request body.
 
 ```yaml
 services:
@@ -148,8 +150,9 @@ or Super User rights. The profile `live` adds the [live tools](live.md) and the 
 because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
-[erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete` is in no profile either and is offered only
-via `tools`. The
+[erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
+`instance` and the websites), and `matomo.data-purge.run` (target `instance`) are in no profile either and are
+offered only via `tools`. The
 [compliance setters](privacy.md#changing-compliance-policies) `matomo.compliance.set-policy-settings` and
 `matomo.compliance.set-status` (target `instance`) are in no profile either; `matomo.compliance.enforce` is offered
 only via `tools`.
@@ -219,6 +222,8 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
 | `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
 | `matomo.data-subjects.delete` | [privacy](privacy.md) | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
+| `matomo.raw-data.anonymize` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.data-purge.run` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
 | `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
 | `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
 | `matomo.compliance.set-policy-settings` | [privacy](privacy.md#changing-compliance-policies) | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
