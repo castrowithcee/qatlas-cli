@@ -258,10 +258,9 @@ Values that grant access without an account are left out of the file, trash, and
 This provider covers kDrive alone. Infomaniak Mail, CalDAV/CardDAV, and kChat are separate Infomaniak products
 with their own authentication: Mail is read over IMAP with mailbox credentials, CalDAV/CardDAV over WebDAV
 with Basic auth similar to the `nextcloud` provider, and kChat through a Mattermost-style token against its
-own API, none of them the Bearer API token this provider uses. Because every secret role a provider declares
-is mandatory for every one of its connections today, a single `infomaniak` provider spanning all of them
-would force a kDrive-only connection to also declare secret roles it never uses. Each of them can be added
-later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
+own API, none of them the Bearer API token this provider uses. A single `infomaniak` provider spanning all of
+them would give every one of its connections the secret roles of products it never uses. Each of them can be
+added later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
 creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
 requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
 no `none` right, no dropbox creation or change, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics endpoints, no trashed

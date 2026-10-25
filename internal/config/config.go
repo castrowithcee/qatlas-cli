@@ -686,7 +686,7 @@ func (c *Config) Validate() error {
 		// here; which ones it must supply follows from the provider, and whether they are supplied is a
 		// question about the credential store, not about this file.
 		if ok && credOK && cred.Type == CredentialTypeEnv {
-			for _, role := range c.ProviderSecretRoles(service.Provider) {
+			for _, role := range c.RequiredSecretRoles(service.Provider) {
 				if cred.Values[role] == "" {
 					report(problem(SectionConnections, name, "", CodeSecretRoleMissing,
 						"provider %q requires the secret role %q in credential %q", service.Provider, role, conn.Credential).
@@ -1050,7 +1050,7 @@ func (c *Config) ProviderMetadata(provider string) (ProviderMetadata, bool) {
 	return c.providerCatalog().ProviderMetadata(provider)
 }
 
-// ProviderSecretRoles returns the roles one provider requires, in declaration order.
+// ProviderSecretRoles returns the roles one provider defines, optional ones included, in declaration order.
 func (c *Config) ProviderSecretRoles(provider string) []string {
 	metadata, _ := c.ProviderMetadata(provider)
 	roles := make([]string, len(metadata.SecretRoles))
@@ -1058,6 +1058,31 @@ func (c *Config) ProviderSecretRoles(provider string) []string {
 		roles[i] = metadata.SecretRoles[i].Name
 	}
 	return roles
+}
+
+// RequiredSecretRoles returns the roles one provider requires, in declaration order: every role it defines
+// except the optional ones.
+func (c *Config) RequiredSecretRoles(provider string) []string {
+	metadata, _ := c.ProviderMetadata(provider)
+	roles := make([]string, 0, len(metadata.SecretRoles))
+	for _, role := range metadata.SecretRoles {
+		if !role.Optional {
+			roles = append(roles, role.Name)
+		}
+	}
+	return roles
+}
+
+// SecretRoleOptional reports whether provider declares role optional. A role the provider does not define,
+// and every role of an unknown provider, is not optional.
+func (c *Config) SecretRoleOptional(provider, role string) bool {
+	metadata, _ := c.ProviderMetadata(provider)
+	for _, candidate := range metadata.SecretRoles {
+		if candidate.Name == role {
+			return candidate.Optional
+		}
+	}
+	return false
 }
 
 // SecretRoles returns all registered roles in deterministic order.

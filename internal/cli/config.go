@@ -145,9 +145,10 @@ func vaultHandRenames(c *cobra.Command, opts *Options, cfg *config.Config) (foun
 // secretSourceColumns is the stable field order of the source report.
 var secretSourceColumns = []string{"connection", "credential", "role", "source", "checked"}
 
-// secretSources resolves every secret every connection needs and reports the delivering stage. A secret
+// secretSources resolves every secret role of every connection and reports the delivering stage. A secret
 // that no stage delivers is reported as missing rather than aborting the run: the report is the answer to
-// "where does this come from", and it stays useful exactly when something is wrong.
+// "where does this come from", and it stays useful exactly when something is wrong. An optional role that is
+// simply not set is reported as not set, since nothing is wrong with it.
 func secretSources(ctx context.Context, cfg *config.Config, opts *Options) (output.Result, error) {
 	resolver, err := opts.resolver()
 	if err != nil {
@@ -162,8 +163,11 @@ func secretSources(ctx context.Context, cfg *config.Config, opts *Options) (outp
 			return nil, classifyUserError(err)
 		}
 		for _, role := range cfg.ProviderSecretRoles(resolved.Provider) {
-			source, checked := resolver.StatusContext(secret.ForConnection(ctx, resolved), resolved.Credential,
-				resolved.Secrets, role)
+			status := resolver.StatusContext
+			if cfg.SecretRoleOptional(resolved.Provider, role) {
+				status = resolver.OptionalStatusContext
+			}
+			source, checked := status(secret.ForConnection(ctx, resolved), resolved.Credential, resolved.Secrets, role)
 			rows = append(rows, output.Row{
 				"connection": name,
 				"credential": resolved.Credential,
