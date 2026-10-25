@@ -147,7 +147,9 @@ and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.u
 or Super User rights. The profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md),
 because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
-profile, because they carry personal data of other people and need admin or Super User rights.
+profile, because they carry personal data of other people and need admin or Super User rights. The
+[erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete` is in no profile either and is offered only
+via `tools`.
 The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
 `matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
 offered only via `tools`.
@@ -209,6 +211,7 @@ no profile; `matomo.users.delete` (target `instance`) is in no profile either an
 | `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
 | `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
 | `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
+| `matomo.data-subjects.delete` | [privacy](privacy.md) | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
 | `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
 | `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
