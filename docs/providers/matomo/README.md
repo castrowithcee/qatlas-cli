@@ -157,8 +157,9 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `matomo.dimensions.update`; it is not recommended because a new dimension uses a slot for good. The profile
 `sites` adds `matomo.sites.update`, `matomo.site-urls.add`, `matomo.site-urls.set`, and
 `matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
-`matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), and the
-eight `matomo.global-settings.set-*` tools (target `instance`) are in no profile.
+`matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
+eight `matomo.global-settings.set-*` tools (target `instance`), and `matomo.users.logout` (target `instance`) are in
+no profile; `matomo.users.delete` (target `instance`) is in no profile either and is offered only via `tools`.
 
 ## Tools
 
@@ -192,6 +193,8 @@ eight `matomo.global-settings.set-*` tools (target `instance`) are in no profile
 | `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
 | `matomo.users.get` | [users](users.md) | reads one user, checks a login or email, lists the Super Users, or tells whether the token is a Super User (target `instance`) |
 | `matomo.users.get-access` | [users](users.md) | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
+| `matomo.users.delete` | [users](users.md) | deletes a user (admin or Super User, target `instance`; effect `delete`, only via `tools`) |
+| `matomo.users.logout` | [users](users.md) | ends the web sessions of a user (Super User, target `instance`; effect `execute`) |
 | `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |

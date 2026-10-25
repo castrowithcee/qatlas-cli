@@ -18,6 +18,7 @@ const siteManageConnections = `
   sm-single: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1]}
   sm-noinst: {service: matomo, credential: token, tools: [matomo.sites.delete, matomo.sites.get], targets: [site]}
   sm-deleter: {service: matomo, credential: token, tools: [matomo.sites.delete, matomo.sites.get], targets: [site/1, instance]}
+  um-deleter: {service: matomo, credential: token, tools: [matomo.users.delete], targets: [instance]}
   sm-instance: {service: matomo, credential: token, effects: [read, create], targets: [instance]}
 `
 
