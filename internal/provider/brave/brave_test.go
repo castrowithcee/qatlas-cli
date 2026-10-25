@@ -217,7 +217,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Errorf("tool %+v, want a read that needs no allow-list", tool)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"brave.llm-context.get", "brave.news.search", "brave.web.search"}) {
+	if !reflect.DeepEqual(ids, []string{"brave.llm-context.get", "brave.news.search", "brave.rich.get", "brave.web.search"}) {
 		t.Errorf("tools = %v", ids)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -233,7 +233,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "search" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools,
-			[]string{"brave.llm-context.get", "brave.news.search", "brave.web.search"}) {
+			[]string{"brave.llm-context.get", "brave.news.search", "brave.rich.get", "brave.web.search"}) {
 		t.Errorf("profiles = %+v, want the recommended search profile with every tool", metadata.Profiles)
 	}
 }
