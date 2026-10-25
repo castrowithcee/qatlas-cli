@@ -1249,9 +1249,9 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// graphQLError is the part of a GraphQL error this provider inspects. The message is read for
-// classification only and never copied, because GitHub echoes requested names into it. Path names the
-// aliased mutation of a batch the error belongs to.
+// graphQLError is the part of a GraphQL error this provider inspects. Qatlas' own message never copies the
+// text, because GitHub echoes requested names into it; the text reaches the diagnostic only as the
+// provider's own, untrusted account. Path names the aliased mutation of a batch the error belongs to.
 type graphQLError struct {
 	Type       string `json:"type"`
 	Message    string `json:"message"`
@@ -1320,6 +1320,29 @@ func (c *Client) post(ctx context.Context, op, document string, variables map[st
 // NOT_FOUND is its answer for a repository, project, issue, or node it does not hold or does not show to this
 // token, the same answer a REST 404 gives, so both are not-found.
 func (c *Client) graphQLFailure(op string, errs []graphQLError, variables map[string]any,
+	change bool) *provider.Error {
+	failure := c.classifyGraphQL(op, errs, variables, change)
+	failure.Original = graphQLOriginal(errs)
+	return failure
+}
+
+// graphQLOriginal is GitHub's own account of a GraphQL refusal: every error it listed, with the type,
+// the extensions code, the path, and the message, such as the scopes an INSUFFICIENT_SCOPES error names.
+func graphQLOriginal(errs []graphQLError) *provider.Original {
+	original := &provider.Original{}
+	for _, e := range errs {
+		path := make([]string, len(e.Path))
+		for i, element := range e.Path {
+			path[i] = fmt.Sprint(element)
+		}
+		original.Entries = append(original.Entries, provider.OriginalEntry{
+			Type: e.Type, Code: e.Extensions.Code, Path: strings.Join(path, "."), Message: e.Message,
+		})
+	}
+	return original
+}
+
+func (c *Client) classifyGraphQL(op string, errs []graphQLError, variables map[string]any,
 	change bool) *provider.Error {
 	for _, e := range errs {
 		message := strings.ToLower(e.Message)
@@ -1934,8 +1957,8 @@ func capHold(hold time.Duration) time.Duration {
 	return hold
 }
 
-// statusError maps an HTTP status to a stable class. The provider message is read only to recognise a
-// secondary rate limit and is never copied. A server error after a change leaves its outcome open.
+// statusError maps an HTTP status to a stable class. Qatlas' message never copies the provider's text; that
+// text travels apart, in Original. A server error after a change leaves its outcome open.
 func (c *Client) statusError(op string, response *http.Response, change bool) error {
 	err := c.classifyStatus(op, response, change)
 	if change && response.StatusCode >= 500 {
@@ -1952,8 +1975,56 @@ const (
 )
 
 func (c *Client) classifyStatus(op string, response *http.Response, change bool) *provider.Error {
-	status := response.StatusCode
 	snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+	failure := c.classifyAnswer(op, response, snippet, change)
+	failure.Original = restOriginal(response.StatusCode, snippet)
+	return failure
+}
+
+// restOriginal reads GitHub's own account of a REST refusal: the status, the message, the listed errors, and
+// the documentation link. An answer that is not the usual JSON object, such as a proxy's page, is kept as
+// its text. Only the response body is read; no request header ever reaches it.
+func restOriginal(status int, body []byte) *provider.Original {
+	original := &provider.Original{Status: status}
+	var answer struct {
+		Message       string            `json:"message"`
+		Errors        []json.RawMessage `json:"errors"`
+		Documentation string            `json:"documentation_url"`
+	}
+	if err := json.Unmarshal(body, &answer); err != nil {
+		if text := strings.TrimSpace(string(body)); text != "" {
+			original.Entries = []provider.OriginalEntry{{Message: text}}
+		}
+		return original
+	}
+	original.Documentation = answer.Documentation
+	if answer.Message != "" {
+		original.Entries = append(original.Entries, provider.OriginalEntry{Message: answer.Message})
+	}
+	for _, raw := range answer.Errors {
+		var text string
+		if json.Unmarshal(raw, &text) == nil {
+			original.Entries = append(original.Entries, provider.OriginalEntry{Message: text})
+			continue
+		}
+		var item struct {
+			Resource string `json:"resource"`
+			Field    string `json:"field"`
+			Code     string `json:"code"`
+			Message  string `json:"message"`
+		}
+		if json.Unmarshal(raw, &item) != nil {
+			continue
+		}
+		original.Entries = append(original.Entries, provider.OriginalEntry{
+			Code: item.Code, Path: strings.Trim(item.Resource+"."+item.Field, "."), Message: item.Message,
+		})
+	}
+	return original
+}
+
+func (c *Client) classifyAnswer(op string, response *http.Response, snippet []byte, change bool) *provider.Error {
+	status := response.StatusCode
 	retry := retryAfter(response.Header)
 	limited := status == http.StatusTooManyRequests ||
 		strings.TrimSpace(response.Header.Get("X-RateLimit-Remaining")) == "0" ||

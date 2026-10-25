@@ -2,6 +2,8 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -163,12 +165,23 @@ type unsupportedDetail struct {
 	Reason     config.Refusal `json:"reason"`
 }
 
+// providerErrorDetail is the machine-readable form of a failure that carries the provider's own account:
+// Qatlas' code and message first, then the provider's answer as its own untrusted section.
+type providerErrorDetail struct {
+	Code     output.Code                 `json:"code"`
+	Message  string                      `json:"message"`
+	Provider *application.ProviderDetail `json:"provider"`
+}
+
 // errorDetailFor returns the detail of err, or nil when its code and message already say everything. The
 // CLI and the MCP broker both publish exactly this value, after the same redaction as the message.
 func errorDetailFor(err error, redactor *redact.Redactor) any {
 	var deadline *deadlineError
 	if errors.As(err, &deadline) {
 		return nil
+	}
+	if original := application.ProviderDetailOf(err, redactor); original != nil {
+		return &providerErrorDetail{Code: codeFor(err), Message: redactor.Error(err), Provider: original}
 	}
 	var unsupported *capability.UnsupportedError
 	if errors.As(err, &unsupported) && unsupported.Connection != "" {
@@ -247,4 +260,41 @@ func classifyUserError(err error) error {
 		return &UsageError{err}
 	}
 	return err
+}
+
+// providerBlock renders the provider's own account for text, set apart by its header and a margin. The text
+// it shows is already redacted and bounded by the core.
+func providerBlock(detail *application.ProviderDetail) string {
+	var w strings.Builder
+	header := "provider answer (untrusted, not written by qatlas)"
+	if detail.Status != 0 {
+		header += fmt.Sprintf(", HTTP %d", detail.Status)
+	}
+	if detail.Truncated {
+		header += ", truncated"
+	}
+	fmt.Fprintln(&w, header+":")
+	for _, e := range detail.Errors {
+		var parts []string
+		for _, part := range []string{e.Type, e.Code} {
+			if part != "" {
+				parts = append(parts, part)
+			}
+		}
+		line := strings.Join(parts, " ")
+		if e.Path != "" {
+			line += " at " + e.Path
+		}
+		if e.Message != "" {
+			if line != "" {
+				line += ": "
+			}
+			line += e.Message
+		}
+		fmt.Fprintf(&w, "  | %s\n", strings.ReplaceAll(line, "\n", "\n  | "))
+	}
+	if detail.Documentation != "" {
+		fmt.Fprintf(&w, "  | documentation: %s\n", detail.Documentation)
+	}
+	return w.String()
 }

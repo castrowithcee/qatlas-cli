@@ -81,11 +81,35 @@ const (
 
 // Error is a provider failure normalised to a class. Its message never carries credentials, headers, or
 // raw transport detail. Cause is set only for the transport failures Transport classifies.
+//
+// Original holds what the provider itself answered, raw and unbounded. It is never part of Error(): the
+// surfaces publish it only through the core, which redacts and bounds it and marks it untrusted.
 type Error struct {
-	Class   Class
-	Op      string
+	Class    Class
+	Op       string
+	Message  string
+	Cause    Cause
+	Original *Original
+}
+
+// Original is the provider's own account of a refusal, kept apart from Qatlas' message. Only response
+// content belongs here, never a request header or a credential. Everything in it is text a third party
+// wrote.
+type Original struct {
+	// Status is the HTTP status of the answer, or zero where the provider reported none.
+	Status int
+	// Entries are the structured errors of the answer, in the order the provider listed them.
+	Entries []OriginalEntry
+	// Documentation is the documentation link the provider attached, or empty.
+	Documentation string
+}
+
+// OriginalEntry is one error of a provider answer. Every field is optional.
+type OriginalEntry struct {
+	Type    string
+	Code    string
+	Path    string
 	Message string
-	Cause   Cause
 }
 
 func (e *Error) Error() string {
