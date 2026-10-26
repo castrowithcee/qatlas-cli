@@ -278,41 +278,49 @@ func (c *Client) connectWithin(ctx context.Context, op string, timeout time.Dura
 }
 
 // loginFailure normalises a failed LOGIN. A tagged NO or BAD from the server is a rejected login whatever
-// its text says; anything else is a transport failure. The server's own text is never copied.
+// its text says; anything else is a transport failure. The message never carries the server's text; the
+// answer travels separately in Original.
 func loginFailure(op string, err error) error {
 	var imapErr *imap.Error
 	if errors.As(err, &imapErr) {
 		if imapErr.Type == imap.StatusResponseTypeBye {
-			return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Infomaniak Mail closed the connection"}
+			return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Infomaniak Mail closed the connection",
+				Original: imapOriginal(imapErr)}
 		}
 		return &provider.Error{Class: provider.ClassAuth, Op: op,
-			Message: "Infomaniak Mail rejected the mailbox address or password"}
+			Message: "Infomaniak Mail rejected the mailbox address or password", Original: imapOriginal(imapErr)}
 	}
 	return provider.Transport(op, "Infomaniak Mail", err)
 }
 
-// failure normalises a failure after login to a stable class without ever copying the server's text.
+// imapOriginal keeps the server's tagged answer (type, response code, text) apart from Qatlas' message.
+func imapOriginal(e *imap.Error) *provider.Original {
+	return &provider.Original{Entries: []provider.OriginalEntry{{
+		Type: string(e.Type), Code: string(e.Code), Message: e.Text}}}
+}
+
+// failure normalises a failure after login to a stable class. The message never carries the server's text;
+// the answer travels separately in Original.
 func failure(op string, err error) error {
 	var imapErr *imap.Error
 	if !errors.As(err, &imapErr) {
 		return provider.Transport(op, "Infomaniak Mail", err)
 	}
+	e := &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "Infomaniak Mail rejected the operation",
+		Original: imapOriginal(imapErr)}
 	switch {
 	case imapErr.Type == imap.StatusResponseTypeBye:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Infomaniak Mail closed the connection"}
+		e.Class, e.Message = provider.ClassUnreachable, "Infomaniak Mail closed the connection"
 	case imapErr.Code == imap.ResponseCodeNonExistent:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "Infomaniak Mail does not hold this folder or does not show it to this mailbox"}
+		e.Class, e.Message = provider.ClassNotFound, "Infomaniak Mail does not hold this folder or does not show it to this mailbox"
 	case imapErr.Code == imap.ResponseCodeNoPerm, imapErr.Code == imap.ResponseCodeAuthorizationFailed:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this mailbox may not perform this operation"}
+		e.Class, e.Message = provider.ClassPermission, "this mailbox may not perform this operation"
 	case imapErr.Code == imap.ResponseCodeAuthenticationFailed, imapErr.Code == imap.ResponseCodeExpired:
-		return &provider.Error{Class: provider.ClassAuth, Op: op,
-			Message: "Infomaniak Mail rejected the mailbox address or password"}
+		e.Class, e.Message = provider.ClassAuth, "Infomaniak Mail rejected the mailbox address or password"
 	case imapErr.Code == imap.ResponseCodeUnavailable:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Infomaniak Mail is unavailable"}
+		e.Class, e.Message = provider.ClassUnreachable, "Infomaniak Mail is unavailable"
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "Infomaniak Mail rejected the operation"}
+	return e
 }
 
 func providerError(op, message string) error {

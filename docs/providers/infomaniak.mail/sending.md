@@ -28,7 +28,8 @@ over SMTP and then store a copy in the Sent folder.
   that does not offer STARTTLS, or a handshake that fails, ends the call **before** `AUTH`, so no credential
   and no message leaves in plain text. `AUTH PLAIN` (or `AUTH LOGIN` when PLAIN is not offered) follows only
   inside TLS, with the mailbox address and the same mailbox password as the IMAP login; the password stays in
-  the redactor and never appears in an error. No server text is copied into an error.
+  the redactor and never appears in an error. The server's reply is handled as described under
+  [Errors](README.md#errors).
 - **Sender binding.** `From` is the mailbox of the connection and nothing else, and it is also the envelope
   sender (`MAIL FROM`). There is no `from` argument. A connection with sender targets must list its own
   mailbox, otherwise nothing is sent (the narrower reading: the mailbox is the only sender, so the list can
