@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Messages
@@ -29,8 +29,8 @@ and reply keyboards are not offered. The limits are checked before the credentia
 ## Deleting
 
 `telegram.messages.delete` and `.delete-many` (up to 100 messages of one chat) are offered only through a `tools`
-list. Their reach is that of `deleteMessage`: the bot deletes its own messages and, as an administrator, those of
-others; in a private chat also incoming ones. `.delete-many` skips missing or undeletable identifiers silently.
+list. Their reach is that of `deleteMessage`; the bot rights are listed under
+[Sending and editing](setup.md#sending-and-editing). `.delete-many` skips missing or undeletable identifiers silently.
 
 ## Forwarding and copying
 

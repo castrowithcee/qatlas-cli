@@ -333,7 +333,7 @@ func TestTableLayoutPriority(t *testing.T) {
 	}
 }
 
-// ansiEscape matches one Lip Gloss/termenv SGR sequence, so a test can look at a line's text regardless of
+// ansiEscape matches one Lip Gloss SGR sequence, so a test can look at a line's text regardless of
 // the colour profile that rendered it.
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
@@ -374,8 +374,8 @@ func hasBackground(row string) bool { return background.MatchString(row) }
 // stays unshaded under colour. No row is ever wider than the terminal, at any of the widths the
 // design is meant to hold at.
 func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	for _, width := range []int{40, 79, 80, 120} {
 		m := newTableModel(t, width)
@@ -391,7 +391,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 		}
 		marked, alt := entries[0], entries[1]
 
-		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+		setProfile(profile16)
 		coloured := screenOf(m)
 		assertViewFits(t, coloured, width, m.height)
 		if row := findRow(coloured, marked); !hasBackground(row) || !strings.Contains(row, "▌") {
@@ -401,7 +401,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 			t.Errorf("width %d: the unmarked row carries the bar, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
-		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+		setProfile(profileNone)
 		plain := screenOf(m)
 		assertViewFits(t, plain, width, m.height)
 		if strings.Contains(plain, "\x1b") {

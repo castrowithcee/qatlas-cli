@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -413,10 +412,9 @@ func (m *Model) updateExportMode(key tea.KeyMsg) tea.Cmd {
 
 // maskedInput is a focused one-line input that never echoes.
 func maskedInput() textinput.Model {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 	return in
 }

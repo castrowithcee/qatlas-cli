@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -205,7 +204,7 @@ type navBar struct {
 // plainTabs reports whether the active tab cannot be told by its fill: no theme colours, or a terminal that
 // shows none. The brackets mark it then.
 func plainTabs() bool {
-	return styles.palette.accent == "" || lipgloss.ColorProfile() == termenv.Ascii
+	return styles.palette.accent == "" || currentProfile() == profileNone
 }
 
 func (m *Model) navTabs() navBar {

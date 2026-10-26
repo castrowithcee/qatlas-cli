@@ -424,6 +424,8 @@ type VersionExportResult struct {
 }
 
 type exportEntryJSON struct {
+	IDSite          *loose          `json:"idsite"`
+	IDContainerVer  *loose          `json:"idcontainerversion"`
 	IDTag           *loose          `json:"idtag"`
 	IDTrigger       *loose          `json:"idtrigger"`
 	IDVariable      *loose          `json:"idvariable"`
@@ -560,6 +562,39 @@ func triggerIDs(raw json.RawMessage) ([]int, bool) {
 	return ids, true
 }
 
+func (p exportEntryJSON) id() *int {
+	for _, candidate := range []*loose{p.IDTag, p.IDTrigger, p.IDVariable} {
+		if candidate != nil {
+			return candidate.number()
+		}
+	}
+	return nil
+}
+
+// entry converts one tag, trigger, or variable row; ok is false for a member of the wrong shape.
+func (b *exportBudget) entry(parsed exportEntryJSON, id int) (ExportEntry, bool) {
+	entry := ExportEntry{ID: id, Type: parsed.Type.str(maxStringLength), Name: parsed.Name.str(maxStringLength),
+		Description: b.text(parsed.Description.str(maxStepText), maxStepText),
+		FireLimit:   parsed.FireLimit.str(maxStringLength), FireDelay: parsed.FireDelay.number(),
+		Priority: parsed.Priority.number(), StartDate: parsed.StartDate.str(maxStringLength),
+		EndDate: parsed.EndDate.str(maxStringLength), Status: parsed.Status.str(maxStringLength),
+		Created: parsed.Created.str(maxStringLength), Updated: parsed.Updated.str(maxStringLength),
+		CreatedShown: parsed.CreatedShown.str(maxStringLength), UpdatedShown: parsed.UpdatedShown.str(maxStringLength)}
+	if parsed.DefaultValue != nil {
+		entry.DefaultValue = b.text(strings.TrimSpace(parsed.DefaultValue.text), maxStepText)
+	}
+	var ok1, ok2, ok3, ok4, ok5 bool
+	entry.Parameters, ok1 = b.structured(parsed.Parameters)
+	entry.Conditions, ok2 = b.structured(parsed.Conditions)
+	entry.LookupTable, ok3 = b.structured(parsed.LookupTable)
+	entry.FireTriggerIDs, ok4 = triggerIDs(parsed.FireTriggerIDs)
+	entry.BlockTriggerIDs, ok5 = triggerIDs(parsed.BlockTriggerIDs)
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return ExportEntry{}, false
+	}
+	return entry, true
+}
+
 // entries reads the tags, triggers, or variables of an export.
 func (b *exportBudget) entries(raw json.RawMessage) ([]ExportEntry, bool) {
 	out := []ExportEntry{}
@@ -576,14 +611,7 @@ func (b *exportBudget) entries(raw json.RawMessage) ([]ExportEntry, bool) {
 		if json.Unmarshal(row, &parsed) != nil {
 			return nil, false
 		}
-		var idLoose *loose
-		for _, candidate := range []*loose{parsed.IDTag, parsed.IDTrigger, parsed.IDVariable} {
-			if candidate != nil {
-				idLoose = candidate
-				break
-			}
-		}
-		id := idLoose.number()
+		id := parsed.id()
 		if id == nil {
 			return nil, false
 		}
@@ -591,23 +619,8 @@ func (b *exportBudget) entries(raw json.RawMessage) ([]ExportEntry, bool) {
 			b.truncated = true
 			break
 		}
-		entry := ExportEntry{ID: *id, Type: parsed.Type.str(maxStringLength), Name: parsed.Name.str(maxStringLength),
-			Description: b.text(parsed.Description.str(maxStepText), maxStepText),
-			FireLimit:   parsed.FireLimit.str(maxStringLength), FireDelay: parsed.FireDelay.number(),
-			Priority: parsed.Priority.number(), StartDate: parsed.StartDate.str(maxStringLength),
-			EndDate: parsed.EndDate.str(maxStringLength), Status: parsed.Status.str(maxStringLength),
-			Created: parsed.Created.str(maxStringLength), Updated: parsed.Updated.str(maxStringLength),
-			CreatedShown: parsed.CreatedShown.str(maxStringLength), UpdatedShown: parsed.UpdatedShown.str(maxStringLength)}
-		if parsed.DefaultValue != nil {
-			entry.DefaultValue = b.text(strings.TrimSpace(parsed.DefaultValue.text), maxStepText)
-		}
-		var ok1, ok2, ok3, ok4, ok5 bool
-		entry.Parameters, ok1 = b.structured(parsed.Parameters)
-		entry.Conditions, ok2 = b.structured(parsed.Conditions)
-		entry.LookupTable, ok3 = b.structured(parsed.LookupTable)
-		entry.FireTriggerIDs, ok4 = triggerIDs(parsed.FireTriggerIDs)
-		entry.BlockTriggerIDs, ok5 = triggerIDs(parsed.BlockTriggerIDs)
-		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		entry, ok := b.entry(parsed, *id)
+		if !ok {
 			return nil, false
 		}
 		out = append(out, entry)

@@ -8,10 +8,12 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Lexware Office
+
+[Set up Lexware Office](setup.md) leads through creating the API key and lists the rights it needs.
 
 A connection selects the organization associated with one API key at the fixed Lexware gateway. It lists open
 and overdue outgoing invoices and reads invoice details (`read`). The invoice list filters by contact, invoice
@@ -83,8 +85,8 @@ URL to a target.
 `lexware.profile.get` reads the organization, its contract features and tax settings as their own data class;
 the name, email and identifiers of the key creator are never returned. Countries, payment conditions, posting
 categories and print layouts are fixed reference lists; a list longer than its cap is cut and marked
-`truncated`. Print layouts need the Lexware contract scope `INVOICING_PRO`; without it the call fails as a
-missing contract scope.
+`truncated`. The contract features a reference list needs are listed under
+[Rights per tool group](setup.md#rights-per-tool-group).
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing is a separate tool per voucher type: `lexware.invoices.issue`,
@@ -148,8 +150,7 @@ unclear outcome of the write the error says the object may have been created or 
 repeating.
 
 Lexware's public invoice API does not expose update or delete endpoints, so Qatlas does not invent uniform
-CRUD operations. The credential provides `api-key`; local connection effects may restrict that key but
-never extend its Lexware contract or organization rights. A connection selects by `effects` or by a `tools`
+CRUD operations. The credential provides `api-key`. A connection selects by `effects` or by a `tools`
 list naming exactly the tools it offers, for example `[lexware.invoices.get]`. The terminal editor starts a
 new connection on the recommended setup profile `read`, which selects every list and get tool; the profile
 `write` adds the tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.order-confirmations.create`,

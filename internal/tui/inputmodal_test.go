@@ -40,7 +40,7 @@ func TestAdminPassphraseModal(t *testing.T) {
 		t.Fatalf("screen = %v, want the admin dialog", m.screen)
 	}
 	typeText(t, m, wrong)
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Admin passphrase needed to save") || !inModal(view, strings.Repeat("*", len(wrong))) {
 		t.Fatalf("the dialog is no modal with a masked line:\n%s", view)
 	}
@@ -51,7 +51,7 @@ func TestAdminPassphraseModal(t *testing.T) {
 	if m.adminAuth == nil || m.adminAuth.input.Value() != "" {
 		t.Fatal("a wrong passphrase left the dialog closed or the buffer filled")
 	}
-	if view := m.View(); !inModal(view, "error: wrong passphrase") || strings.Contains(view, wrong) {
+	if view := m.render(); !inModal(view, "error: wrong passphrase") || strings.Contains(view, wrong) {
 		t.Fatalf("the error is not in the modal:\n%s", view)
 	}
 	if loaded, err := store.Load(); err == nil && len(loaded.Services) != 0 {
@@ -94,12 +94,12 @@ func TestVaultUnlockModal(t *testing.T) {
 		t.Fatalf("screen = %v, want the unlock dialog", m.screen)
 	}
 	typeText(t, m, "nope-canary")
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Unlock vault") || strings.Contains(view, "nope-canary") {
 		t.Fatalf("the unlock dialog is no masked modal:\n%s", view)
 	}
 	pump(t, m, "enter")
-	if view := m.View(); !inModal(view, "error: wrong passphrase") || m.vaultUnlock.input.Value() != "" {
+	if view := m.render(); !inModal(view, "error: wrong passphrase") || m.vaultUnlock.input.Value() != "" {
 		t.Fatalf("the wrong passphrase is not answered in the modal:\n%s", view)
 	}
 }
@@ -116,7 +116,7 @@ func TestSecretAndOfferModals(t *testing.T) {
 	press(t, m, "enter")
 	typeText(t, m, canary)
 
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Secret for reader.token-id") || strings.Contains(view, canary) ||
 		!inModal(view, strings.Repeat("*", len(canary))) {
 		t.Fatalf("the secret prompt is no masked modal:\n%s", view)
@@ -129,12 +129,12 @@ func TestSecretAndOfferModals(t *testing.T) {
 	m.openVaultOfferFor("Set a passphrase for the vault?", vaultFirstSecretHint(), true, true,
 		func(func(string) (string, error)) tea.Cmd { return nil }, func() tea.Cmd { return nil })
 	typeText(t, m, canary)
-	view = m.View()
+	view = m.render()
 	if !inModal(view, "Set a passphrase for the vault?") || strings.Contains(view, canary) {
 		t.Fatalf("the offer is no masked modal:\n%s", view)
 	}
 	press(t, m, "enter")
-	if view := m.View(); !inModal(view, "Confirm the vault passphrase") || m.vaultOffer.input.Value() != "" {
+	if view := m.render(); !inModal(view, "Confirm the vault passphrase") || m.vaultOffer.input.Value() != "" {
 		t.Fatalf("the confirmation step is not in the modal or kept the entry:\n%s", view)
 	}
 }
@@ -148,7 +148,7 @@ func TestPassphraseDialogsFitBothSizes(t *testing.T) {
 		typeText(t, m, strings.Repeat("x", 90))
 		sizedModel(m, size.w, size.h)
 		m.fail = "wrong passphrase"
-		view := m.View()
+		view := m.render()
 		assertViewFits(t, view, size.w, size.h)
 		if strings.Contains(view, "xxx") {
 			t.Errorf("%dx%d shows the typed text:\n%s", size.w, size.h, view)
@@ -170,7 +170,7 @@ func TestConnectionTestResultModal(t *testing.T) {
 	sizedModel(m, 100, 30)
 	runTest(t, m)
 
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Connection test") || !inModal(view, "[failed] wiki: auth") {
 		t.Fatalf("the result is no modal:\n%s", view)
 	}
@@ -182,8 +182,8 @@ func TestConnectionTestResultModal(t *testing.T) {
 		t.Error("an unrelated key closed the result")
 	}
 	press(t, m, "enter")
-	if m.testClass != "" || strings.Contains(m.View(), "[failed]") {
-		t.Errorf("enter did not close the result:\n%s", m.View())
+	if m.testClass != "" || strings.Contains(m.render(), "[failed]") {
+		t.Errorf("enter did not close the result:\n%s", m.render())
 	}
 }
 
@@ -201,7 +201,7 @@ func TestPathModalCompletes(t *testing.T) {
 	press(t, m, "a")
 	typeText(t, m, filepath.Join(root, "al"))
 
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Add path") || !inModal(view, "alpha") || !inModal(view, "tab complete") {
 		t.Fatalf("the path prompt is no modal with suggestions:\n%s", view)
 	}
@@ -223,18 +223,18 @@ func TestTransferDialogsAreModals(t *testing.T) {
 	v.startExport(testExportVaultPass)
 	v.advance(exportPassphrase, exportEncrypted, "")
 	v.type_(testExportPass)
-	view := m.View()
+	view := m.render()
 	if !inModal(view, "Export passphrase") || strings.Contains(view, testExportPass) ||
 		!strings.Contains(view, "Export: secrets") {
 		t.Fatalf("the export passphrase is no masked modal over the question:\n%s", view)
 	}
 	v.pump("enter")
-	if view := m.View(); !inModal(view, "Confirm the export passphrase") {
+	if view := m.render(); !inModal(view, "Confirm the export passphrase") {
 		t.Fatalf("the confirmation is not in the modal:\n%s", view)
 	}
 	v.type_("different")
 	v.pump("enter")
-	if view := m.View(); !inModal(view, "error: the two passphrases did not match") || m.export.input.Value() != "" {
+	if view := m.render(); !inModal(view, "error: the two passphrases did not match") || m.export.input.Value() != "" {
 		t.Fatalf("the mismatch is not answered in the modal:\n%s", view)
 	}
 	v.assertHidden(testExportPass)
@@ -243,14 +243,14 @@ func TestTransferDialogsAreModals(t *testing.T) {
 	sizedModel(p.m, 100, 30)
 	p.startExport("")
 	p.advance(exportTarget, exportWithout, "")
-	if view := p.m.View(); !inModal(view, "Export: file") || !inModal(view, "esc back") {
+	if view := p.m.render(); !inModal(view, "Export: file") || !inModal(view, "esc back") {
 		t.Fatalf("the export file prompt is no modal:\n%s", view)
 	}
 
 	i := plainImportTarget(t)
 	sizedModel(i.m, 100, 30)
 	i.startImport("")
-	if view := i.m.View(); !inModal(view, "Import: file") {
+	if view := i.m.render(); !inModal(view, "Import: file") {
 		t.Fatalf("the import file prompt is no modal:\n%s", view)
 	}
 }

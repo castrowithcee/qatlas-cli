@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Nextcloud files
@@ -98,8 +98,8 @@ request; a tag already assigned, or not assigned on removal, is a clear error. U
 
 `nextcloud.files.system-tags.create`, `files.system-tags.update`, and `files.system-tags.delete` administer the catalog, need
 `confirm`, and are in no setup profile; `delete` needs a tools list and drops every assignment of the tag on the
-whole instance. The identity's rights stay the bound: a tag hidden from users (`visible` or `assignable` false)
-needs administrator rights. `create` defaults both to true, takes a name of at most 64 characters, and reports
+whole instance. The rights for hidden tags are under [Files](setup.md#files).
+`create` defaults both to true, takes a name of at most 64 characters, and reports
 the new `tag_id` only when Nextcloud names it, otherwise the tag is found with `files.system-tags.list`. `update`
 changes name, `visible`, `assignable`, or `color` (six hex digits), at least one, and cannot clear a color.
 `update` and `delete` read the tag once and treat an invisible tag as missing but, unlike `files.file-tags.add`, act on
@@ -112,8 +112,8 @@ The `nextcloud.files.comments.*` tools read and write the comments of one file b
 target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
 below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
 `confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
-Nextcloud lets an identity change or delete only its own comments. `files.comments.list` is in the `read` and `write`
-profiles, `create` and `update` in none, and `delete` is reachable only through a tools list.
+`files.comments.list` is in the `read` and `write` profiles, `create` and `update` in none, and `delete` is
+reachable only through a tools list.
 
 ## Local files
 

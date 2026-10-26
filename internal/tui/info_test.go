@@ -58,7 +58,7 @@ func TestInfoActsOnASearchOnlyWhileItIsEmpty(t *testing.T) {
 	press(t, m, "backspace", "backspace")
 	press(t, m, "i")
 	if !m.infoOpen {
-		t.Fatalf("i in an empty search opened nothing:\n%s", m.View())
+		t.Fatalf("i in an empty search opened nothing:\n%s", m.render())
 	}
 	press(t, m, "esc")
 	if m.infoOpen || m.screen != screenPicker {
@@ -72,13 +72,13 @@ func TestInfoOverlayShowsTheLongFormAndTheTermAndClosesWithEsc(t *testing.T) {
 	focusField(t, m, "credential")
 	press(t, m, "i")
 	if !m.infoOpen {
-		t.Fatalf("i on the credential row opened nothing:\n%s", m.View())
+		t.Fatalf("i on the credential row opened nothing:\n%s", m.render())
 	}
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(m.render()), " ")
 	for _, want := range []string{"the provider credential this route authenticates with", "Credential: A credential says where",
 		"esc close"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("the overlay lacks %q:\n%s", want, m.View())
+			t.Errorf("the overlay lacks %q:\n%s", want, m.render())
 		}
 	}
 	press(t, m, "x", "enter")
@@ -100,7 +100,7 @@ func TestInfoMarkBelowThePaneWidthAndNoneAbove(t *testing.T) {
 	}{{helpPaneMinWidth - 1, false}, {helpPaneMinWidth, true}, {200, true}} {
 		m := connectionForm(t, tt.width)
 		focusField(t, m, "credential")
-		view := m.View()
+		view := m.render()
 		if got := strings.Contains(view, "(i)"); got == tt.pane {
 			t.Errorf("width %d: mark shown %v, want %v:\n%s", tt.width, got, !tt.pane, view)
 		}
@@ -160,17 +160,17 @@ func TestInfoExplainsTheMarkedEntryOfAPicker(t *testing.T) {
 	if want == "" {
 		t.Fatalf("tool %q has no description to show", choice)
 	}
-	if !strings.Contains(m.View(), "(i)") {
-		t.Errorf("a described tool carries no (i):\n%s", m.View())
+	if !strings.Contains(m.render(), "(i)") {
+		t.Errorf("a described tool carries no (i):\n%s", m.render())
 	}
 	press(t, m, "i")
-	if got := strings.Join(strings.Fields(m.View()), " "); !m.infoOpen || !strings.Contains(got, strings.Fields(want)[0]) {
-		t.Errorf("the overlay does not show the description %q:\n%s", want, m.View())
+	if got := strings.Join(strings.Fields(m.render()), " "); !m.infoOpen || !strings.Contains(got, strings.Fields(want)[0]) {
+		t.Errorf("the overlay does not show the description %q:\n%s", want, m.render())
 	}
 	press(t, m, "esc")
 
 	m.Update(tea.WindowSizeMsg{Width: 150, Height: 40})
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "(i)") || !strings.Contains(strings.Join(strings.Fields(view), " "), strings.Fields(want)[0]) {
 		t.Errorf("the pane does not replace the mark:\n%s", view)
 	}
@@ -181,8 +181,8 @@ func TestInfoOnAListShowsTheTermOfTheArea(t *testing.T) {
 	m, _, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "i")
-	if got := strings.Join(strings.Fields(m.View()), " "); !m.infoOpen || !strings.Contains(got, "Service: A service is one instance") {
-		t.Errorf("i on the services list shows no term:\n%s", m.View())
+	if got := strings.Join(strings.Fields(m.render()), " "); !m.infoOpen || !strings.Contains(got, "Service: A service is one instance") {
+		t.Errorf("i on the services list shows no term:\n%s", m.render())
 	}
 	press(t, m, "esc")
 	if m.infoOpen {
@@ -225,7 +225,7 @@ func TestInfoOverlayIsAFilledPanelWithAnAccentKey(t *testing.T) {
 			if m.focus < 0 || !m.openInfo() {
 				t.Fatalf("%dx%d: nothing to explain on the credential row", size.width, size.height)
 			}
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			plain := ansi.Strip(view)
 			if !strings.Contains(plain, "esc close") {

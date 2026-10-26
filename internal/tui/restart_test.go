@@ -89,8 +89,8 @@ func TestTheNewEditorOpensTheUnlockDialogOnlyForAVaultLockedByTheUpdate(t *testi
 		if m.screen != screenNav {
 			t.Errorf("%s: screen %v, want no dialog", name, m.screen)
 		}
-		if !strings.Contains(m.View(), "qatlas updated from v0.4.0 to v0.5.0") {
-			t.Errorf("%s: the update is not reported:\n%s", name, m.View())
+		if !strings.Contains(m.render(), "qatlas updated from v0.4.0 to v0.5.0") {
+			t.Errorf("%s: the update is not reported:\n%s", name, m.render())
 		}
 	}
 }
