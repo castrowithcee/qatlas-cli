@@ -526,7 +526,7 @@ func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 		t.Errorf("the section does not explain the unencrypted vault:\n%s", screenOf(m))
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "next: open Vault") {
 		t.Errorf("a vault that does not exist yet already gets the unencrypted next step:\n%s", view)
 	}
@@ -539,8 +539,8 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
 		m.section, m.screen = sectionOverview, screenNav
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
-			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.View())
+		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
+			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.render())
 		}
 	}
 
@@ -555,8 +555,8 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
 		m.section, m.screen = sectionOverview, screenNav
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
-			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.View())
+		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
+			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.render())
 		}
 	}
 }
@@ -613,7 +613,7 @@ func TestApprovalsNavigation(t *testing.T) {
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"4", "[Approvals]"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the narrow navigation does not show %q:\n%s", want, view)
@@ -881,7 +881,7 @@ func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
 		}
 		for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 16}} {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			plain := ansi.Strip(view)
 			if !strings.Contains(plain, "Approve personal?") || !strings.Contains(plain, "● open") {

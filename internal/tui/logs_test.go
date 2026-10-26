@@ -144,7 +144,7 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 	f.append("cli", "", "wiki.pages.list", "wiki", "success")
 	m := f.model(true, f.localToday())
 
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: Day ▾", "Date: " + f.localToday() + " ▾",
 		"STATUS", "TIME", "WAY", "CLIENT", "TOOL", "CONNECTION", "RESULT", "DUR.", "codex", "MCP", "CLI",
 		"12ms", "Way: all ▾", "Client: all ▾", "Conn: all ▾", "Result: all ▾", "/ search…"} {
@@ -173,7 +173,7 @@ func TestLogsWithALockedVaultAreUnverified(t *testing.T) {
 	f.append("mcp", "codex", "wiki.pages.get", "wiki", "success")
 	m := f.model(false, f.localToday())
 
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "✓ verified") {
 		t.Errorf("a locked vault shows an entry verified:\n%s", view)
 	}
@@ -204,7 +204,7 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 	// The size column takes room; a wider terminal keeps the unreadable line's label whole.
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 30})
 
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(barLine(view), "✗ altered") {
 		t.Errorf("the bar does not show the day altered:\n%s", view)
 	}
@@ -221,7 +221,7 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 	if m.screen != screenLogDetail {
 		t.Fatalf("enter = screen %v, want the detail", m.screen)
 	}
-	detail := m.View()
+	detail := m.render()
 	for _, want := range []string{"Log entry " + f.localToday(), "✗ altered", "hash chain mismatch after this entry",
 		"does not match its check", "op.hid", "sequence", "2", "wiki", "read", "12ms"} {
 		if !strings.Contains(detail, want) {
@@ -230,7 +230,7 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 	}
 	press(t, m, "esc")
 	press(t, m, "end", "up", "enter")
-	if detail := m.View(); !strings.Contains(detail, "1 entries missing right before this one") {
+	if detail := m.render(); !strings.Contains(detail, "1 entries missing right before this one") {
 		t.Errorf("the gap's detail does not explain it:\n%s", detail)
 	}
 	press(t, m, "esc")
@@ -248,17 +248,17 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	today := f.localToday()
 	m := f.model(true, today)
 
-	if view := m.View(); !strings.Contains(view, "op.new") || strings.Contains(view, "op.old") {
+	if view := m.render(); !strings.Contains(view, "op.new") || strings.Contains(view, "op.old") {
 		t.Errorf("Day shows other days:\n%s", view)
 	}
 	press(t, m, "tab", "tab")
-	if m.logs.focus != logFocusMode || !strings.Contains(m.View(), ">  Mode:") {
-		t.Fatalf("tab = focus %v, want the Mode field marked:\n%s", m.logs.focus, m.View())
+	if m.logs.focus != logFocusMode || !strings.Contains(m.render(), ">  Mode:") {
+		t.Fatalf("tab = focus %v, want the Mode field marked:\n%s", m.logs.focus, m.render())
 	}
 	pump(t, m, "right")
-	if m.logs.mode != logModeRange || !strings.Contains(m.View(), "Mode: Range ▾") ||
-		!strings.Contains(m.View(), "Range: ") {
-		t.Fatalf("right = mode %v, want Range:\n%s", m.logs.mode, m.View())
+	if m.logs.mode != logModeRange || !strings.Contains(m.render(), "Mode: Range ▾") ||
+		!strings.Contains(m.render(), "Range: ") {
+		t.Fatalf("right = mode %v, want Range:\n%s", m.logs.mode, m.render())
 	}
 	press(t, m, "tab", "enter")
 	if m.logs.dialog == nil || len(m.logs.dialog.inputs) != 2 {
@@ -276,14 +276,14 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	clearField(t, m)
 	typeText(t, m, today)
 	pump(t, m, "enter")
-	view := m.View()
+	view := m.render()
 	if m.logs.dialog != nil || !strings.Contains(view, "Range: 2020-01-01.."+today+" ▾") ||
 		!strings.Contains(view, today+" ") || !strings.Contains(view, "op.old") || !strings.Contains(view, "op.new") {
 		t.Fatalf("the range does not show both days with their dates:\n%s", view)
 	}
 	press(t, m, "shift+tab")
 	pump(t, m, "right")
-	if view := m.View(); !strings.Contains(view, "Mode: All ▾") || !strings.Contains(view, "(all recorded days)") ||
+	if view := m.render(); !strings.Contains(view, "Mode: All ▾") || !strings.Contains(view, "(all recorded days)") ||
 		!strings.Contains(view, "op.old") {
 		t.Fatalf("All does not show every day:\n%s", view)
 	}
@@ -294,13 +294,13 @@ func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	clearField(t, m)
 	typeText(t, m, "20-1-1")
 	press(t, m, "enter")
-	if m.logs.dialog == nil || !strings.Contains(m.View(), "YYYY-MM-DD") {
-		t.Fatalf("a malformed date was taken:\n%s", m.View())
+	if m.logs.dialog == nil || !strings.Contains(m.render(), "YYYY-MM-DD") {
+		t.Fatalf("a malformed date was taken:\n%s", m.render())
 	}
 	clearField(t, m)
 	typeText(t, m, "2021-05-05")
 	pump(t, m, "enter")
-	view = m.View()
+	view = m.render()
 	for _, want := range []string{"Date: 2021-05-05 ▾", "No entries for 2021-05-05.", "✓ verified"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the empty day does not show %q:\n%s", want, view)
@@ -319,17 +319,17 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	press(t, m, "f")
-	if m.logs.pick == nil || !strings.Contains(m.View(), "Choose a filter") {
-		t.Fatalf("f did not open the filter dialog:\n%s", m.View())
+	if m.logs.pick == nil || !strings.Contains(m.render(), "Choose a filter") {
+		t.Fatalf("f did not open the filter dialog:\n%s", m.render())
 	}
 	typeText(t, m, "client")
 	press(t, m, "enter")
-	if view := m.View(); !strings.Contains(view, "Filter by client") || !strings.Contains(view, "claude-code") {
+	if view := m.render(); !strings.Contains(view, "Filter by client") || !strings.Contains(view, "claude-code") {
 		t.Fatalf("the client filter does not offer the clients:\n%s", view)
 	}
 	typeText(t, m, "codex")
 	press(t, m, "enter")
-	view := m.View()
+	view := m.render()
 	if m.logs.pick != nil || !strings.Contains(view, "Client: codex ▾") || !strings.Contains(view, "wiki.pages.get") ||
 		strings.Contains(view, "wiki.pages.create") || strings.Contains(view, "chat.send") {
 		t.Fatalf("the client filter does not keep codex alone:\n%s", view)
@@ -345,7 +345,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	press(t, m, "/")
 	typeText(t, m, "denied")
 	press(t, m, "enter")
-	view = m.View()
+	view = m.render()
 	if !strings.Contains(view, "/ denied") || len(m.logs.list.matches) != 1 ||
 		m.logs.row(m.logs.list.matches[0]).values[logFilterTool] != "wiki.pages.create" ||
 		!strings.Contains(view, "wiki.pages.cre") ||
@@ -353,7 +353,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 		t.Fatalf("the search does not keep the denied entry alone:\n%s", view)
 	}
 	press(t, m, "esc")
-	if view := m.View(); !strings.Contains(view, "chat.send") || m.screen != screenLogs {
+	if view := m.render(); !strings.Contains(view, "chat.send") || m.screen != screenLogs {
 		t.Fatalf("esc did not clear the search first:\n%s", view)
 	}
 	press(t, m, "esc")
@@ -422,7 +422,7 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 	m.logs.day = f.localToday()
 	pump(t, m, "3")
 	press(t, m, "enter")
-	for _, view := range []string{m.logDetailView(), func() string { m.screen = screenLogs; return m.View() }()} {
+	for _, view := range []string{m.logDetailView(), func() string { m.screen = screenLogs; return m.render() }()} {
 		if strings.Contains(view, "\x1b[31m") || strings.Contains(view, "\u202e") {
 			t.Errorf("a control sequence from the log reached the screen: %q", view)
 		}
@@ -442,7 +442,7 @@ func TestLogsNarrowLayout(t *testing.T) {
 	m := f.model(true, f.localToday())
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, 60, 20)
 	for _, want := range []string{"Mode: Day ▾", "Date: " + f.localToday() + " ▾", "✓ verified", "github.issues"} {
 		if !strings.Contains(view, want) {
@@ -453,7 +453,7 @@ func TestLogsNarrowLayout(t *testing.T) {
 		t.Errorf("the narrow table keeps the duration:\n%s", view)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
-	if view := m.View(); strings.Contains(view, "Resize terminal") {
+	if view := m.render(); strings.Contains(view, "Resize terminal") {
 		t.Errorf("the smallest terminal cannot show the Logs screen:\n%s", view)
 	}
 }
@@ -484,7 +484,7 @@ func TestLogsLocalDayAcrossUTCMidnight(t *testing.T) {
 		return lines
 	})
 	m := f.model(false, "2026-03-08")
-	view := m.View()
+	view := m.render()
 	for _, op := range []string{"local.day.start", "local.day.end", "(unreadable line)", "retention cut"} {
 		if !strings.Contains(view, op) {
 			t.Errorf("local day misses %s:\n%s", op, view)
@@ -508,7 +508,7 @@ func TestLogsLocalDayAcrossUTCMidnight(t *testing.T) {
 		if row.line.Parsed && row.line.Entry.Operation == "local.day.end" {
 			m.logs.detail = i
 			m.screen = screenLogDetail
-			detail := m.View()
+			detail := m.render()
 			if !strings.Contains(detail, "2026-03-08 23:30:00 -0400") || !strings.Contains(detail, "UTC file") ||
 				!strings.Contains(detail, "2026-03-09") {
 				t.Errorf("detail has wrong date or source:\n%s", detail)
@@ -534,7 +534,7 @@ func TestLogsLocalRangeAcrossDSTFallback(t *testing.T) {
 		{time.Date(2026, 11, 2, 5, 30, 0, 0, time.UTC), "next.local.day"},
 	})
 	m := f.model(false, "2026-11-01")
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"first.one.thirty", "second.one.thirty", "01:30-04", "01:30-05"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("fall day misses %q:\n%s", want, view)
@@ -549,13 +549,13 @@ func TestLogsLocalRangeAcrossDSTFallback(t *testing.T) {
 	m.logs.mode, m.logs.from, m.logs.to = logModeRange, "2026-11-01", "2026-11-02"
 	msg := m.loadLogs()().(logsLoadedMsg)
 	m.handleLogsLoaded(msg)
-	if view := m.View(); !strings.Contains(view, "next.local.day") || !strings.Contains(view, "2026-11-02 00:30-05") {
+	if view := m.render(); !strings.Contains(view, "next.local.day") || !strings.Contains(view, "2026-11-02 00:30-05") {
 		t.Errorf("local range misses next day:\n%s", view)
 	}
 	m.logs.mode = logModeAll
 	msg = m.loadLogs()().(logsLoadedMsg)
 	m.handleLogsLoaded(msg)
-	if view := m.View(); !strings.Contains(view, "first.one.thir") || !strings.Contains(view, "next.local.day") {
+	if view := m.render(); !strings.Contains(view, "first.one.thir") || !strings.Contains(view, "next.local.day") {
 		t.Errorf("All misses recorded days:\n%s", view)
 	}
 }
@@ -577,7 +577,7 @@ func TestLogsLocalDayUsesPreviousUTCFile(t *testing.T) {
 		{time.Date(2026, 3, 8, 18, 45, 0, 0, time.UTC), "next.local.day"},
 	})
 	m := f.model(false, "2026-03-08")
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"local.day.start", "local.day.end", "00:15+0530", "23:45+0530"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("east-of-UTC day misses %q:\n%s", want, view)
@@ -644,7 +644,7 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 	if m.screen != screenList || m.section != sectionTokens {
 		t.Fatalf("4 = screen %v section %v", m.screen, m.section)
 	}
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, noVault) || !strings.Contains(view, "[Tokens]") {
 		t.Errorf("Tokens does not say that there is no vault:\n%s", view)
 	}
@@ -680,7 +680,7 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 	}
 	m := f.model(true, f.localToday())
 
-	view := m.View()
+	view := m.render()
 	if line := rowLine(t, view, "op.sized"); !strings.Contains(line, "~1000 tok") {
 		t.Errorf("sized row lacks ~1000 tok: %q", line)
 	}
@@ -696,7 +696,7 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 	}
 	detail := func(down int) string {
 		press(t, m, "enter")
-		v := m.View()
+		v := m.render()
 		press(t, m, "esc", "down")
 		return v
 	}
@@ -732,7 +732,7 @@ func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	press(t, m, "s")
-	view := m.View()
+	view := m.render()
 	if !m.logs.stats || !strings.Contains(view, "P95") || !strings.Contains(view, "estimated tokens") ||
 		!strings.Contains(view, "wiki.pages.get") || !strings.Contains(view, "chat.send") {
 		t.Fatalf("s did not show the summary:\n%s", view)
@@ -751,7 +751,7 @@ func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
 	press(t, m, "enter")
 	typeText(t, m, "alerts")
 	press(t, m, "enter")
-	view = m.View()
+	view = m.render()
 	if !m.logs.stats || !strings.Contains(view, "chat.send") || strings.Contains(view, "wiki.pages.get") {
 		t.Fatalf("the summary ignores the connection filter:\n%s", view)
 	}
@@ -760,7 +760,7 @@ func TestLogsSummaryFollowsFiltersAndShowsApproximations(t *testing.T) {
 	if m.logs.stats || m.screen != screenLogs {
 		t.Fatalf("esc = stats %v screen %v, want the rows again", m.logs.stats, m.screen)
 	}
-	if view := m.View(); !strings.Contains(view, "chat.send") || strings.Contains(view, "P95") {
+	if view := m.render(); !strings.Contains(view, "chat.send") || strings.Contains(view, "P95") {
 		t.Errorf("the rows did not come back:\n%s", view)
 	}
 }
@@ -772,7 +772,7 @@ func TestLogsSummaryCountsMissingSizesApart(t *testing.T) {
 	mustNoError(t, f.logger.Append(fl))
 	m := f.model(true, f.localToday())
 	press(t, m, "s")
-	line := rowLine(t, m.View(), "op.old")
+	line := rowLine(t, m.render(), "op.old")
 	if strings.Contains(line, "0") && !strings.Contains(line, "-") {
 		t.Errorf("a group without sizes shows 0 instead of -: %q", line)
 	}
@@ -813,7 +813,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	press(t, m, "m")
-	view := m.View()
+	view := m.render()
 	if !m.logs.stats || !m.logs.sessions {
 		t.Fatalf("m did not open the session summary:\n%s", view)
 	}
@@ -855,7 +855,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	// The summary follows the period like the rows: All adds the older session.
 	press(t, m, "tab", "tab")
 	pump(t, m, "right", "right")
-	if view := m.View(); !m.logs.sessions || !strings.Contains(view, sessionOld) || !strings.Contains(view, sessionNew) {
+	if view := m.render(); !m.logs.sessions || !strings.Contains(view, sessionOld) || !strings.Contains(view, sessionNew) {
 		t.Fatalf("All does not add the older session:\n%s", view)
 	}
 
@@ -883,13 +883,13 @@ func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
 	m := f.model(true, f.localToday())
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 18})
 	press(t, m, "m")
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, 60, 18)
 	if !strings.Contains(view, "... ") || !strings.Contains(view, "more") || strings.Contains(view, "wiki.tool111") {
 		t.Fatalf("a long summary does not say what it leaves out:\n%s", view)
 	}
 	press(t, m, "end")
-	view = m.View()
+	view = m.render()
 	assertViewFits(t, view, 60, 18)
 	if !strings.Contains(view, "wiki.tool111") || strings.Contains(view, "more") {
 		t.Errorf("end does not scroll to the last line:\n%s", view)
@@ -899,7 +899,7 @@ func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
 		t.Errorf("home left scroll %d", m.logs.scroll)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
-	assertViewFits(t, m.View(), 40, minimumHeight)
+	assertViewFits(t, m.render(), 40, minimumHeight)
 }
 
 func TestLogsSessionSummaryWithoutSessionsSaysSo(t *testing.T) {
@@ -907,13 +907,13 @@ func TestLogsSessionSummaryWithoutSessionsSaysSo(t *testing.T) {
 	f.append("cli", "", "cli.only", "wiki", "success")
 	m := f.model(true, f.localToday())
 	press(t, m, "m")
-	if view := m.View(); !strings.Contains(view, "No MCP session among the entries shown") {
+	if view := m.render(); !strings.Contains(view, "No MCP session among the entries shown") {
 		t.Errorf("no hint without sessions:\n%s", view)
 	}
 	// A day without any entry keeps the plain empty-log text.
 	m = f.model(true, "2021-05-05")
 	press(t, m, "m")
-	if view := m.View(); !strings.Contains(view, "No entries for 2021-05-05.") {
+	if view := m.render(); !strings.Contains(view, "No entries for 2021-05-05.") {
 		t.Errorf("an empty day lacks its hint in the session summary:\n%s", view)
 	}
 }

@@ -35,7 +35,7 @@ func TestEditorStartsOnTheOverview(t *testing.T) {
 		t.Fatalf("start = screen %v section %v, want the tab line on the Overview", m.screen, m.section)
 	}
 	m.status = "Something happened"
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"[1 Overview]", "Something happened", "Connections", "Next steps"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the Overview does not show %q:\n%s", want, view)
@@ -89,7 +89,7 @@ func assertCard(t *testing.T, m *Model, want overviewItem) {
 	if got == nil || got.value != want.value || got.dim != want.dim {
 		t.Fatalf("tile %q = %+v, want value %q (dim %v)", want.label, got, want.value, want.dim)
 	}
-	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	lines := strings.Split(ansi.Strip(m.render()), "\n")
 	for i, line := range lines {
 		at := strings.Index(line, "│ "+want.label+" ")
 		if at < 0 || i+1 >= len(lines) {
@@ -99,7 +99,7 @@ func assertCard(t *testing.T, m *Model, want overviewItem) {
 			return
 		}
 	}
-	t.Errorf("no card %q over %q:\n%s", want.label, want.value, m.View())
+	t.Errorf("no card %q over %q:\n%s", want.label, want.value, m.render())
 }
 
 // newEnvModel2 is newModel with the secrets the connection walk needs.
@@ -111,9 +111,9 @@ func newEnvModel2(t *testing.T) (*Model, *config.Store, string) {
 // An unencrypted vault is a next step, and enter on it opens Settings > Vault.
 func TestOverviewNamesAnUnencryptedVaultAndEnterOpensIt(t *testing.T) {
 	m := overviewModel(t, unencryptedVaultModel(t))
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(m.render()), " ")
 	if !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
-		t.Fatalf("the Overview names no step for the unencrypted vault:\n%s", m.View())
+		t.Fatalf("the Overview names no step for the unencrypted vault:\n%s", m.render())
 	}
 	if steps := m.nextSteps(); steps[0].target != sectionVault {
 		t.Fatalf("first step = %+v, want the Vault", steps[0])
@@ -125,7 +125,7 @@ func TestOverviewNamesAnUnencryptedVaultAndEnterOpensIt(t *testing.T) {
 			m.overviewCursor = i
 		}
 	}
-	if line := m.View(); !strings.Contains(line, "> open Settings > Vault") {
+	if line := m.render(); !strings.Contains(line, "> open Settings > Vault") {
 		t.Errorf("the selection is not marked without colour:\n%s", line)
 	}
 	press(t, m, "enter")
@@ -145,10 +145,10 @@ func TestOverviewNamesOpenApprovalsAndEnterOpensThem(t *testing.T) {
 	unlockWithAdminPassphrase(t, m, passphrase)
 	overviewModel(t, m)
 
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(m.render()), " ")
 	assertCard(t, m, overviewItem{label: "Approvals", value: "1"})
 	if want := "open Access > Approvals (4)"; !strings.Contains(view, want) {
-		t.Fatalf("the Overview does not show %q:\n%s", want, m.View())
+		t.Fatalf("the Overview does not show %q:\n%s", want, m.render())
 	}
 	for _, label := range []string{"Approvals", "open Access"} {
 		overviewModel(t, m)
@@ -204,7 +204,7 @@ func TestOverviewFitsEverySize(t *testing.T) {
 		m := overviewModel(t, unencryptedVaultModel(t))
 		for _, size := range []struct{ width, height int }{{40, minimumHeight}, {60, 16}, {80, 24}, {200, 60}} {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			if !strings.Contains(view, sectionApprovals.title()) || !strings.Contains(view, sectionConnections.title()) {
 				t.Errorf("%dx%d lacks the counts:\n%s", size.width, size.height, view)

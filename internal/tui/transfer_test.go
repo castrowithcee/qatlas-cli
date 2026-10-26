@@ -30,13 +30,13 @@ func (v *exportViews) pump(keys ...string) {
 	v.t.Helper()
 	for _, k := range keys {
 		pump(v.t, v.m, k)
-		v.views = append(v.views, v.m.View(), screenOf(v.m), v.m.status, v.m.fail)
+		v.views = append(v.views, v.m.render(), screenOf(v.m), v.m.status, v.m.fail)
 	}
 }
 
 func (v *exportViews) type_(text string) {
 	typeText(v.t, v.m, text)
-	v.views = append(v.views, v.m.View(), screenOf(v.m))
+	v.views = append(v.views, v.m.render(), screenOf(v.m))
 }
 
 func (v *exportViews) assertHidden(secrets ...string) {
@@ -98,7 +98,7 @@ func (v *exportViews) startExport(adminPassphrase string) {
 func (v *exportViews) typePath(path string) {
 	clearField(v.t, v.m)
 	v.m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(path), Paste: true})
-	v.views = append(v.views, v.m.View(), screenOf(v.m))
+	v.views = append(v.views, v.m.render(), screenOf(v.m))
 }
 
 // advance walks the questions up to step. kind picks the mode row; path is the file.

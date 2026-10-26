@@ -31,7 +31,7 @@ func TestHelpShowsEveryTopicAndClosesWithEscape(t *testing.T) {
 	topics := helptopics.All()
 	for i, key := range []string{"right", "right", "right"} {
 		topic := topics[i%len(topics)]
-		view := m.View()
+		view := m.render()
 		if !strings.Contains(view, "["+topic.Name+"]") || !strings.Contains(view, firstWords(topic)) {
 			t.Errorf("topic %s is not shown:\n%s", topic.Name, view)
 		}
@@ -77,7 +77,7 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		m.screen = screenNav
 		press(t, m, "?", "right")
-		view := m.View()
+		view := m.render()
 		assertViewFits(t, view, size.width, size.height)
 		if !strings.Contains(view, "lines 1-") {
 			t.Fatalf("%dx%d: the agents topic does not say it scrolls:\n%s", size.width, size.height, view)
@@ -87,7 +87,7 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 			t.Errorf("%dx%d: down twice scrolled to %d", size.width, size.height, m.helpOffset)
 		}
 		press(t, m, "end")
-		view = m.View()
+		view = m.render()
 		assertViewFits(t, view, size.width, size.height)
 		lines := m.helpLines()
 		if !strings.Contains(view, strings.TrimSpace(lines[len(lines)-1])) {
@@ -146,7 +146,7 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 			m.screen = screenNav
 			press(t, m, "?")
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			plain := ansi.Strip(view)
 			framed := strings.Contains(plain, "╭─ Help ") || strings.Contains(plain, "╔═ Help ")
@@ -169,8 +169,8 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 						m.helpOffset = i
 					}
 				}
-				if !strings.Contains(m.View(), colourOf(styles.title)+keysHeading) {
-					t.Errorf("%dx%d: the heading of the keys is not bold:\n%q", size.width, size.height, m.View())
+				if !strings.Contains(m.render(), colourOf(styles.title)+keysHeading) {
+					t.Errorf("%dx%d: the heading of the keys is not bold:\n%q", size.width, size.height, m.render())
 				}
 			}
 			press(t, m, "esc")

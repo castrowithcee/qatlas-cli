@@ -68,7 +68,7 @@ func TestNoColorEmitsNoColourSequence(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.section = sectionOverview
-	view := m.View()
+	view := m.render()
 	for _, seq := range []string{"\x1b[3", "\x1b[4", "38;", "48;"} {
 		if strings.Contains(view, seq) {
 			t.Errorf("NO_COLOR view holds %q", seq)
@@ -85,7 +85,7 @@ func TestQatlasBackgroundCoversEveryCell(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.section = sectionOverview
 	m.Init()
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.render(), "\n")
 	if len(lines) != 24 {
 		t.Fatalf("%d lines, want 24", len(lines))
 	}

@@ -335,8 +335,8 @@ func TestLogDetailAndDialogsGoBackOnlyWithEsc(t *testing.T) {
 	if m.screen != screenLogs {
 		t.Fatalf("esc = screen %v, want the Logs screen", m.screen)
 	}
-	if !strings.Contains(m.View(), "q quit") {
-		t.Errorf("the Logs footer does not name q:\n%s", m.View())
+	if !strings.Contains(m.render(), "q quit") {
+		t.Errorf("the Logs footer does not name q:\n%s", m.render())
 	}
 
 	press(t, m, "/")
