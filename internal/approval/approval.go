@@ -66,6 +66,11 @@ func StateText(disabled bool) string {
 	return stateActive
 }
 
+// OriginText is the origin (base URL) of a scope as a person may read it: credentials in it are masked.
+func OriginText(origin string) string {
+	return config.MaskURL(origin)
+}
+
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
 // a person reads it. It never holds a secret.
 //
@@ -90,6 +95,9 @@ type FieldChange struct {
 	Renamed []Rename
 	// IsRename is true when a single-value field changed from a former ID to the current one.
 	IsRename bool
+	// CredentialsChanged is true when the origin differs only in the parts a display masks (user info, secret
+	// query values): Before and After are then equal as shown, and a person is told that credentials changed.
+	CredentialsChanged bool
 }
 
 // Rename is one list entry that a provider renamed: Old was approved, New is configured now.
@@ -378,7 +386,12 @@ func diff(approved vault.Approval, now vault.Scope, id string, catalog config.Pr
 		fields = append(fields, FieldChange{Field: FieldProvider, Before: before.Provider, After: after.Provider,
 			IsRename: providerRenamed})
 	}
-	add(FieldOrigin, before.Origin, after.Origin)
+	if before.Origin != after.Origin {
+		// The comparison runs on the real values, since a changed password must be approved; only what is shown
+		// is masked.
+		b, a := OriginText(before.Origin), OriginText(after.Origin)
+		fields = append(fields, FieldChange{Field: FieldOrigin, Before: b, After: a, CredentialsChanged: b == a})
+	}
 	// addList records a change of a list field. mode is true when one side is a mode rather than a list, which
 	// stays readable only as before and after, as does a list whose text changed without a different entry.
 	addList := func(field string, mode bool, b, a []string, bText, aText string, renamed ...Rename) {

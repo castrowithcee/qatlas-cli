@@ -438,6 +438,7 @@ var textDE = map[textID]string{
 	tApprovalChanged:                                           "%s geändert",
 	tApprovalRenamedItem:                                       "umbenannt %s -> %s",
 	tApprovalUnchangedCount:                                    "unverändert: %d",
+	tApprovalCredentialsChanged:                                "Zugangsdaten geändert",
 	tApprovalValueRenamed:                                      "umbenannt %s -> %s",
 	tApprovalValueUnchanged:                                    "unverändert",
 	tStatusValid:                                               "gültig",
