@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Infomaniak Mail
@@ -19,6 +19,7 @@ flag, move it, move it to the trash, or remove it for good. Three more confirmed
 folder: create one with attachments, replace one, or remove one for good. Two further confirmed tools send mail
 over SMTP: a new message or reply, and a checked draft. See [Reading](reading.md),
 [Changing a message](changes.md), [Drafts](drafts.md), and [Sending](sending.md).
+[Set up Infomaniak Mail](setup.md) leads through creating a mailbox password and lists the rights it needs.
 
 ## Configuration
 
@@ -28,8 +29,8 @@ Sending uses the fixed SMTP endpoint `mail.infomaniak.com:587` with mandatory ST
 if it is set, it must be `https://mail.infomaniak.com`, and the IMAP host is never taken from it. The
 Infomaniak REST mail API plays no part here.
 
-The credential provides the role `password`: a mailbox password created for the mailbox in the Infomaniak
-Manager. The login name is the mailbox address from the connection's `mailbox/` target.
+The credential provides the role `password`: the mailbox password, see
+[Set up Infomaniak Mail](setup.md). The login name is the mailbox address from the connection's `mailbox/` target.
 
 ```yaml
 services:
@@ -148,7 +149,7 @@ such as a lost connection, has none.
 
 | Class | Cause |
 | --- | --- |
-| `auth` | the mailbox address or password was rejected, or the password is unusable |
+| `auth` | the mailbox address or password was rejected, or the password is unusable; see [Fixing errors](setup.md#fixing-errors) |
 | `permission` | the mailbox may not perform the operation |
 | `not-found` | the mailbox holds no such folder, message, or attachment part, or does not show it; also a message from a sender outside the allow-list |
 | `unreachable` | the server could not be reached, is unavailable, or closed the connection |
