@@ -304,7 +304,7 @@ func invokeMessagesExpunge(ctx context.Context, resolved *config.Resolved, secre
 
 // changeFailure normalises a failure of a changing request. A tagged NO or BAD is a refusal that changed
 // nothing; anything else (a timeout, a dropped connection, an unreadable answer, BYE) leaves the outcome
-// unknown, and the message says so. The server's text is never copied.
+// unknown, and the message says so. failure keeps the server's answer in Original.
 func changeFailure(op string, err error, suffix string) error {
 	var imapErr *imap.Error
 	if errors.As(err, &imapErr) && imapErr.Type != imap.StatusResponseTypeBye {
