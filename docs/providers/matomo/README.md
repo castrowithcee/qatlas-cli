@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo
@@ -31,7 +31,9 @@ for a Matomo user whose rights match what the connection should reach: the token
 rights of its user per website, or Super User rights. Qatlas does not check them in advance. The token is sent as
 `Authorization: Bearer ...`, never in a URL, a query, or an argument. The credential may also provide the optional
 `password-confirmation`, the Matomo password of the token's user, which only the [raw data
-tools](privacy.md#anonymizing-and-purging-raw-data) and the [retention setters](privacy.md#setting-retention-periods) send, in the request body.
+tools](privacy.md#anonymizing-and-purging-raw-data), the [retention setters](privacy.md#setting-retention-periods),
+and the IP anonymization setter with `randomizeConfigId` ([privacy settings](privacy.md#changing-privacy-settings))
+send, in the request body.
 
 ```yaml
 services:
@@ -155,9 +157,11 @@ profile, because they carry personal data of other people and need admin or Supe
 `instance` and the websites), and `matomo.data-purge.run` (target `instance`) are in no profile either and are
 offered only via `tools`. The
 [compliance setters](privacy.md#changing-compliance-policies) `matomo.compliance.set-policy-settings` and
-`matomo.compliance.set-status` (target `instance`) are in no profile either, as are the
-[retention setters](privacy.md#setting-retention-periods), of which the two deleting ones are offered only via `tools`; `matomo.compliance.enforce` is offered
-only via `tools`.
+`matomo.compliance.set-status` (target `instance`) are in no profile either; `matomo.compliance.enforce` is offered
+only via `tools`. The [privacy setters](privacy.md#changing-privacy-settings)
+`matomo.privacy-settings.set-anonymize-ip`, `matomo.do-not-track.enable`, and `matomo.do-not-track.disable` (target
+`instance`) are in no profile. The [retention setters](privacy.md#setting-retention-periods) are in no profile
+and the two deleting ones are offered only via `tools`.
 The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
 `matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
 offered only via `tools`.
@@ -178,8 +182,9 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `sites` adds `matomo.sites.update`, `matomo.site-urls.add`, `matomo.site-urls.set`, and
 `matomo.sites.update-created-time`; it is not recommended because it changes the settings of a website, and
 `matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
-eight `matomo.global-settings.set-*` tools (target `instance`), and `matomo.users.logout` (target `instance`) are in
-no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`, and
+eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#operations)
+`matomo.archive-settings.set`, `matomo.trusted-hosts.set`, and `matomo.branding.set` (all target `instance`), and
+`matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`, and
 `matomo.capabilities.remove` are in no profile either and are offered only via `tools`.
 
 ## Tools
@@ -213,6 +218,9 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.global-settings.set-keep-url-fragments` | [instance](instance.md) | sets whether URL fragments are kept by default (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-default-currency` | [instance](instance.md) | sets the default currency (Super User, target `instance`; effect `update`) |
 | `matomo.global-settings.set-default-timezone` | [instance](instance.md) | sets the default time zone (Super User, target `instance`; effect `update`) |
+| `matomo.archive-settings.set` | [instance](instance.md#operations) | sets browser-triggered archiving and the validity of today's reports (Super User, target `instance`; effect `update`) |
+| `matomo.trusted-hosts.set` | [instance](instance.md#operations) | replaces the trusted hosts; a wrong list locks the instance out (Super User, target `instance`; effect `update`, only via `tools`) |
+| `matomo.branding.set` | [instance](instance.md#operations) | switches the custom logo and favicon on or off (Super User, target `instance`; effect `update`) |
 | `matomo.database-statistics.get` | [instance](instance.md#database-statistics) | reads the size of the database by section: general information, server status, and table and report sizes (Super User, target `instance`, only via `tools`) |
 | `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
@@ -231,6 +239,9 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.raw-data.anonymize` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
 | `matomo.data-purge.run` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
 | `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
+| `matomo.privacy-settings.set-anonymize-ip` | [privacy](privacy.md#changing-privacy-settings) | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
+| `matomo.do-not-track.enable` | [privacy](privacy.md#changing-privacy-settings) | enables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.do-not-track.disable` | [privacy](privacy.md#changing-privacy-settings) | disables Do Not Track support (Super User, target `instance`; effect `update`) |
 | `matomo.privacy-settings.set-delete-logs` | [privacy](privacy.md#setting-retention-periods) | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
 | `matomo.privacy-settings.set-delete-reports` | [privacy](privacy.md#setting-retention-periods) | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
 | `matomo.privacy-settings.set-report-deletion-schedule` | [privacy](privacy.md#setting-retention-periods) | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
@@ -241,6 +252,7 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
 | `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
 | `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
+| `matomo.reports.archive` | [instance](instance.md#operations) | starts the archiving of the reports of a website for a period (Super User, targets `instance` and the website; effect `execute`) |
 | `matomo.reports.evolution` | [reports](reports.md) | reads how rows of a report develop over periods (only via `tools`) |
 | `matomo.distinct-counts.get` | [reports](reports.md) | reads how many different search engines, social networks, keywords, campaigns, referring websites, AI assistants, or countries a period had (only via `tools`) |
 | `matomo.multi-sites.get` | [reports](reports.md) | reads the comparison of the websites of the token inside the targets (only via `tools`) |

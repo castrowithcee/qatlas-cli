@@ -50,6 +50,9 @@ connections:
   pe-purge-nopw: {service: matomo, credential: token, tools: [matomo.data-purge.run], targets: [instance]}
   pe-purge-noinst: {service: matomo, credential: withpw, tools: [matomo.data-purge.run], targets: [site]}
   pe-purge-locked: {service: matomo, credential: locked, tools: [matomo.data-purge.run], targets: [instance]}
+  pp-set: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [instance]}
+  pp-set-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [instance]}
+  pp-set-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [site/1]}
   pe-logs: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-logs], targets: [instance]}
   pe-logs-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-delete-logs], targets: [instance]}
   pe-logs-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-logs], targets: [site]}
