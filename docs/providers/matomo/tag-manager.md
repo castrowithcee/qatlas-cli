@@ -39,6 +39,8 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-triggers.add` | adds a trigger to the draft |
 | `matomo.tag-manager-triggers.update` | replaces name, parameters, conditions, and description of a trigger of the draft |
 | `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
+| `matomo.tag-manager-tags.delete` | deletes a tag from the draft |
+| `matomo.tag-manager-tags.pause` | pauses a tag of the draft |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -110,5 +112,10 @@ the paths of non-live releases are data of the website's owners, and the change 
   unknown trigger type, and a condition with a missing value, an unknown comparison, or an unknown variable; each is
   reported as such and nothing changed. A custom template needs the right to use custom templates.
 - `matomo.tag-manager-triggers.delete` cannot be undone and is offered only via `tools`.
+- The tag tools `matomo.tag-manager-tags.delete` and `matomo.tag-manager-tags.pause` bind to the draft the same way
+  and take only `idSite`, `idContainer`, and `idTag`. Pausing changes the draft only: it takes effect live after a
+  release. Deleting cannot be undone and removes a data path; it is offered only via `tools`. Both need the right to
+  use custom templates for a tag of a custom template; without it the refusal is a permission error. After an unclear
+  result read the tags with `matomo.tag-manager-tags.list` before trying again.
 
-Container changes, importing a version, tags, variables, and publishing a release are not part of these tools.
+Container changes, importing a version, adding, changing, or resuming tags, variables, and publishing a release are not part of these tools.

@@ -176,7 +176,8 @@ The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `m
 `matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
 `matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
 `matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-triggers.add`,
-`matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, `matomo.tag-manager-variables.list`,
+`matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, `matomo.tag-manager-tags.delete`,
+`matomo.tag-manager-tags.pause`, `matomo.tag-manager-variables.list`,
 `matomo.tag-manager-variables.get`, `matomo.tag-manager-variables.list-available`,
 `matomo.tag-manager-references.list`, and `matomo.tag-manager-catalog.list` are in no
 profile and are offered only via `tools`.

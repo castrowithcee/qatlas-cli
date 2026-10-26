@@ -414,10 +414,10 @@ func triggerDraft(ctx context.Context, client *Client, op, tool string, site int
 	return found.Draft.ID, nil
 }
 
-// triggerChange runs the shared steps of the three tools after their arguments are valid: the Nachweis read of the
-// draft, then the one writing request into it.
+// triggerChange runs the shared steps of the trigger and tag change tools after their arguments are valid: the proof
+// read of the draft, then the one writing request into it.
 func triggerChange(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	op, tool, method string, site int, container string, fields url.Values) (int, json.RawMessage, error) {
+	op, tool, method string, site int, container string, fields url.Values, sentOnce string) (int, json.RawMessage, error) {
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return 0, nil, err
@@ -432,7 +432,7 @@ func triggerChange(ctx context.Context, resolved *config.Resolved, secrets *secr
 		params[name] = values
 	}
 	var answer json.RawMessage
-	if err := client.change(ctx, op, tagManagerRequirement(tool), method, params, triggerSentOnce, &answer); err != nil {
+	if err := client.change(ctx, op, tagManagerRequirement(tool), method, params, sentOnce, &answer); err != nil {
 		return 0, nil, err
 	}
 	return draft, answer, nil
@@ -481,7 +481,7 @@ func invokeTagManagerTriggersAdd(ctx context.Context, resolved *config.Resolved,
 		return nil, err
 	}
 	draft, answer, err := triggerChange(ctx, resolved, secrets, red, op, tagManagerTriggersAdd.ID,
-		"TagManager.addContainerTrigger", id, containerID, fields)
+		"TagManager.addContainerTrigger", id, containerID, fields, triggerSentOnce)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +540,7 @@ func invokeTagManagerTriggersUpdate(ctx context.Context, resolved *config.Resolv
 		return nil, err
 	}
 	draft, answer, err := triggerChange(ctx, resolved, secrets, red, op, tagManagerTriggersUpdate.ID,
-		"TagManager.updateContainerTrigger", id, containerID, fields)
+		"TagManager.updateContainerTrigger", id, containerID, fields, triggerSentOnce)
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +576,7 @@ func invokeTagManagerTriggersDelete(ctx context.Context, resolved *config.Resolv
 	}
 	fields := url.Values{"idTrigger": {strconv.Itoa(triggerID)}}
 	draft, answer, err := triggerChange(ctx, resolved, secrets, red, op, tagManagerTriggersDelete.ID,
-		"TagManager.deleteContainerTrigger", id, containerID, fields)
+		"TagManager.deleteContainerTrigger", id, containerID, fields, triggerSentOnce)
 	if err != nil {
 		return nil, err
 	}
