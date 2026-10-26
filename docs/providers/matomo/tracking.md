@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, and e-commerce orders and cart updates through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the parameters that are never sent.
+  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, and content impressions and interactions through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the parameters that are never sent.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -23,6 +23,8 @@ The tracking tools of the [Matomo provider](README.md). The profiles are describ
 | `matomo.tracking.record-goal` | records a conversion of a goal, optionally with revenue (effect `create`) |
 | `matomo.tracking.record-order` | records an e-commerce order with order ID, revenue, amounts, and items (effect `create`) |
 | `matomo.tracking.record-cart-update` | records the current content of a cart (effect `create`) |
+| `matomo.tracking.record-content-impression` | records an impression of a content block with name, piece, and target (effect `create`) |
+| `matomo.tracking.record-content-interaction` | records an interaction such as a click with a content block (effect `create`) |
 
 All tools are offered only where the `tools` list of a connection names them and are in no profile.
 
@@ -53,7 +55,8 @@ arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`, `newVis
 
 Addresses (`url`, `referrer`, `target`) must be http or https addresses of at most 2048 characters; they are
 passed on as text and never fetched. Texts are limited as the tool schema says. Matomo's own limits apply on top.
-The tools do not offer content or media tracking and no bulk tracking.
+The content target is passed on as free text, not checked as an address, and never fetched. The tools offer no media
+tracking and no bulk tracking.
 
 Goals and e-commerce use `matomo.php` with `idgoal`. Matomo resolves a goal ID only within the named website and
 refuses an unknown one as invalid, so no token is needed to check it. An order is a request with an order ID, a cart

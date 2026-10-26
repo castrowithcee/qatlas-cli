@@ -110,7 +110,7 @@ Find your tool group and give the Matomo user the right in the row.
 | Instance version | View on any website |
 | Read websites, JavaScript tracking code, SEO metrics of a host | View on the website (any website for the version and the SEO metrics) |
 | Image tracking code, opt-out code | None in Matomo; Qatlas limits them by the website targets |
-| Record tracking data (page views, events, goals, orders) | None: no token is sent; tracking must be on for the website, and Qatlas limits the tools by the website targets |
+| Record tracking data (page views, events, goals, orders, content) | None: no token is sent; tracking must be on for the website, and Qatlas limits the tools by the website targets |
 | Website settings, tracking failures (list, delete) | Admin on the website |
 | Delete all tracking failures | Admin; a Super User clears the whole table. Target `instance` |
 | Update a website, add or replace alias URLs, set creation dates | Admin on every website named |

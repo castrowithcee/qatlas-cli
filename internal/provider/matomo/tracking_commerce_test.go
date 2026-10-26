@@ -150,7 +150,8 @@ func TestTrackingCommerceRefusesNonFiniteAmountsBeforeAnyRequest(t *testing.T) {
 }
 
 func TestTrackingCommerceFailuresAreClassifiedAndNeverRetried(t *testing.T) {
-	for _, id := range []string{"matomo.tracking.record-goal", "matomo.tracking.record-order", "matomo.tracking.record-cart-update"} {
+	for _, id := range []string{"matomo.tracking.record-goal", "matomo.tracking.record-order", "matomo.tracking.record-cart-update",
+		"matomo.tracking.record-content-impression", "matomo.tracking.record-content-interaction"} {
 		var arguments string
 		for _, tool := range trackingTools {
 			if tool.id == id {
