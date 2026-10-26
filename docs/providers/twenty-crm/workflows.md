@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Twenty CRM: workflows
@@ -23,7 +23,7 @@ updated: 2026-10-23
 ## Controlling workflows
 
 `workflow-versions.activate`, `deactivate` (`update`), `workflow-runs.stop`, and `retry` (`execute`) are
-workspace-wide, need the settings right Workflows and a `tools` entry; no profile ticks them.
+workspace-wide and need a `tools` entry; no profile ticks them. Rights: [Workflows](setup.md#workflows).
 
 - `activate` reads the version first and activates it only if it opens no lasting path to the outside through
   Qatlas: a webhook trigger or a step that can send data out or run code is refused before any change. The
