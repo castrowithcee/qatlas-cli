@@ -17,7 +17,7 @@ These tools read what already reaches into or out of a repository, an organizati
 server-side Git hooks, push mirrors, deploy keys, SSH and GPG keys, access tokens, and OAuth2 applications. They
 create nothing and change no target. Addresses, names, branch
 filters, scripts, and error texts in answers are untrusted data; addresses are shown and never fetched.
-[Forgejo](../forgejo.md) names the differences.
+[Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 

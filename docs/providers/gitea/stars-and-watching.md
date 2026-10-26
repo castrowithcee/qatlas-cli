@@ -12,7 +12,7 @@ updated: 2026-10-26
 # Stars and watching
 
 These tools read and change which repositories the account behind the token stars or watches, and read who stars or
-watches a repository. Both products serve the same routes, fields, and filters; [Forgejo](../forgejo.md) has no
+watches a repository. Both products serve the same routes, fields, and filters; [Forgejo](../forgejo/README.md) has no
 deviation here. Issue and pull request subscriptions are a separate group, see
 [Issue subscriptions](issue-subscriptions.md).
 

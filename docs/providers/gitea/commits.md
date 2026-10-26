@@ -13,7 +13,7 @@ updated: 2026-10-26
 # Commits, comparison, status, and Git objects
 
 [Gitea](README.md) describes the shared configuration, targets, pagination, and errors, and
-[Forgejo](../forgejo.md) lists what differs. Commit messages, author names, paths, blob and note contents, tag
+[Forgejo](../forgejo/README.md) lists what differs. Commit messages, author names, paths, blob and note contents, tag
 messages, and status texts are untrusted data. Names and email addresses in commits are personal data.
 
 | Tool | Effect | Provider |

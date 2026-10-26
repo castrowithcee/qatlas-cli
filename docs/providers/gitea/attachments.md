@@ -56,4 +56,4 @@ connection's targets. The attachments an issue or comment shows in its own `asse
 | `comment-attachments.update` | update | both |
 | `comment-attachments.delete` | delete, listed only | both |
 
-What differs on Forgejo is listed in [Forgejo](../forgejo.md).
+What differs on Forgejo is listed in [Forgejo](../forgejo/README.md).

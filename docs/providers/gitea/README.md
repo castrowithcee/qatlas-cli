@@ -18,7 +18,7 @@ changes the issues of the bound repositories. A connection offers reads by defau
 effect on the connection and a confirmation.
 
 Forgejo runs on the same code and the same rules. Everything below holds for both providers unless a line says
-otherwise; [Forgejo](../forgejo.md) lists only what differs. Where this page says "the instance", it means the Gitea or
+otherwise; [Forgejo](../forgejo/README.md) lists only what differs. Where this page says "the instance", it means the Gitea or
 the Forgejo instance of the connection.
 
 [Set up Gitea](setup.md) leads through creating an access token and lists the token scopes each tool group needs.

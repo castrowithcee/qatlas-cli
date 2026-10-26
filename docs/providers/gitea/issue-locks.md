@@ -11,7 +11,7 @@ updated: 2026-10-26
 # Issue locks
 
 The `issue-locks` tools hold for both providers; Forgejo has them from version 17 (see
-[Forgejo](../forgejo.md)). Every tool takes `repository` (`OWNER/REPO`), checked against the targets before the
+[Forgejo](../forgejo/README.md)). Every tool takes `repository` (`OWNER/REPO`), checked against the targets before the
 secret is resolved; it may be left out when the targets name exactly one repository.
 
 | Tool | Effect | Provider |
