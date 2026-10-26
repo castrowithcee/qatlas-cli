@@ -6,26 +6,27 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Make: scenarios and runs
 
 The scenario tools (`make.scenarios.*`) and run tools (`make.runs.*`) work on the scenarios of the bound team. The
-target rules, the live team check, and the allow-list refusals are in [Scope](README.md#scope); the error classes are in
-[Errors](README.md#errors). Scenario, blueprint, and run values are untrusted data
-([Untrusted data](README.md#untrusted-data)). `make.scenarios.update` is partial: only the fields given are replaced.
+target rules, the live team check, and the allow-list refusals are in [Scope](README.md#scope); the error classes
+are in [Errors](README.md#errors); the token scopes are under [Scenarios and runs](setup.md#scenarios-and-runs).
+Scenario, blueprint, and run values are untrusted data ([Untrusted data](README.md#untrusted-data)).
+`make.scenarios.update` is partial: only the fields given are replaced.
 
 ## Pagination
 
-Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and
-`has_more`. Make's own pagination object (`pg`) echoes the request's offset and limit but reports no total
-count, so `has_more` is a heuristic, not a value Make states: it is true exactly when a page came back full,
-the same convention the SeaTable provider's own offset pagination uses. The descriptors state the fields and
-filters. `include_subfolders` is valid only together with `folder_id`, and on runs `status` and `display_status`
-exclude each other; an invalid filter is refused before any request. Every returned page is still defensively re-filtered against this connection's own team and, for
-runs, organization, and every returned scenario row against the folder and scenario targets, whatever filter
-asked for it, `ids`, `folder_id`, and `deleted` included.
+Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and `has_more`.
+Make's own pagination object (`pg`) echoes the request's offset and limit but reports no total count, so `has_more`
+is a heuristic, not a value Make states: it is true exactly when a page came back full, the same convention the
+SeaTable provider's own offset pagination uses. The descriptors state the fields and filters. `include_subfolders`
+is valid only together with `folder_id`, and on runs `status` and `display_status` exclude each other; an invalid
+filter is refused before any request. Every returned page is still defensively re-filtered against this
+connection's own team and, for runs, organization, and every returned scenario row against the folder and scenario
+targets, whatever filter asked for it, `ids`, `folder_id`, and `deleted` included.
 
 `customProperties` are free objects. One that exceeds the depth, entry, or length limit is left out and marked,
 never cut, because a cut object would pass a partial value off as the whole one.
@@ -100,7 +101,7 @@ Qatlas pages runs by offset; Make's last-based paging (`pg[showLast]`, `pg[last]
 documents no value list for `pg[sortBy]`, so no sort column is offered either, only `sort_dir`.
 
 `make.scenarios.run` starts exactly one new execution of a scenario on demand (`POST
-/scenarios/{id}/run`), needing the `scenarios:read`, `scenarios:write`, and `scenarios:run` scopes together.
+/scenarios/{id}/run`).
 Its `data` argument, when given, is the run's input parameters as a JSON object, up to 64 KiB, nested no
 deeper than 16 levels; unlike `blueprint` and `scheduling` above, Make documents `data` as a plain nested
 object, so this provider sends it as one, unencoded. `callback_url` is never offered as an argument at all:

@@ -16,6 +16,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -525,7 +526,7 @@ func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 		t.Errorf("the section does not explain the unencrypted vault:\n%s", screenOf(m))
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "next: open Vault") {
 		t.Errorf("a vault that does not exist yet already gets the unencrypted next step:\n%s", view)
 	}
@@ -538,8 +539,8 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
 		m.section, m.screen = sectionOverview, screenNav
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
-			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.View())
+		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Settings > Vault (6) to set a passphrase") {
+			t.Errorf("%d columns: the unencrypted vault is not the next step:\n%s", size, m.render())
 		}
 	}
 
@@ -554,8 +555,8 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
 		m.section, m.screen = sectionOverview, screenNav
-		if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
-			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.View())
+		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
+			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.render())
 		}
 	}
 }
@@ -612,7 +613,7 @@ func TestApprovalsNavigation(t *testing.T) {
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"4", "[Approvals]"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the narrow navigation does not show %q:\n%s", want, view)
@@ -880,7 +881,7 @@ func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
 		}
 		for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 16}} {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			plain := ansi.Strip(view)
 			if !strings.Contains(plain, "Approve personal?") || !strings.Contains(plain, "● open") {
@@ -890,5 +891,48 @@ func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
 				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
 			}
 		}
+	}
+}
+
+const (
+	canaryApprovalUser  = "canary-approval-user"
+	canaryApprovalPass  = "canary-approval-pass"
+	canaryApprovalQuery = "canary-approval-query"
+)
+
+// The origin of an approval shows masked, whether it is the whole scope of a new connection or a change; a change
+// of only the masked parts reads as changed credentials in the language of the screen.
+func TestApprovalDetailMasksTheOrigin(t *testing.T) {
+	origin := "https://" + canaryApprovalUser + ":" + canaryApprovalPass + "@wiki.example.invalid/api?token=" +
+		canaryApprovalQuery
+	masked := approval.OriginText(origin)
+	newConnection := approval.Change{New: true, After: vault.Scope{Origin: origin}}
+	credentials := approval.Change{Fields: []approval.FieldChange{
+		{Field: approval.FieldOrigin, Before: masked, After: masked, CredentialsChanged: true}}}
+	host := approval.Change{Fields: []approval.FieldChange{{Field: approval.FieldOrigin, Before: masked,
+		After: strings.Replace(masked, "wiki.", "moved.", 1)}}}
+
+	for lang, want := range map[i18n.Lang]string{i18n.English: "credentials changed", i18n.German: "Zugangsdaten geändert"} {
+		useLanguage(t, lang)
+		rows := approvalDetailRows(credentials)
+		if !containsRow(rows, "origin", want) {
+			t.Errorf("%s: rows lack %q:\n%s", lang, want, strings.Join(rows, "\n"))
+		}
+	}
+	useLanguage(t, i18n.English)
+	for name, change := range map[string]approval.Change{"new": newConnection, "credentials": credentials, "host": host} {
+		text := strings.Join(approvalDetailRows(change), "\n")
+		for _, canary := range []string{canaryApprovalUser, canaryApprovalPass, canaryApprovalQuery} {
+			if strings.Contains(text, canary) {
+				t.Errorf("%s: rows show %q:\n%s", name, canary, text)
+			}
+		}
+	}
+	if rows := approvalDetailRows(newConnection); !containsRow(rows, "origin", "https://***:***@wiki.example.invalid/api?token=***") {
+		t.Errorf("new connection rows lack the masked origin:\n%s", strings.Join(rows, "\n"))
+	}
+	if rows := approvalDetailRows(host); !containsRow(rows, "origin",
+		"https://***:***@wiki.example.invalid/api?token=*** -> https://***:***@moved.example.invalid/api?token=***") {
+		t.Errorf("host change rows lack both masked origins:\n%s", strings.Join(approvalDetailRows(host), "\n"))
 	}
 }

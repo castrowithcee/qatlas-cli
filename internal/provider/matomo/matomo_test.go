@@ -237,7 +237,9 @@ var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.dist
 	"matomo.tag-manager-containers.list": true, "matomo.tag-manager-containers.get": true,
 	"matomo.tag-manager-containers.get-embed-code": true, "matomo.tag-manager-catalog.list": true,
 	"matomo.tag-manager-versions.list": true, "matomo.tag-manager-versions.get": true, "matomo.tag-manager-versions.export": true,
-	"matomo.ldap-users.count": true, "matomo.ldap-users.list": true}
+	"matomo.tag-manager-tags.list": true, "matomo.tag-manager-tags.get": true, "matomo.tag-manager-triggers.list": true,
+	"matomo.tag-manager-triggers.get": true,
+	"matomo.ldap-users.count":         true, "matomo.ldap-users.list": true}
 
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
@@ -261,6 +263,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
 			tool.ID == "matomo.compliance.enforce" || tool.ID == "matomo.archive-settings.set" ||
 			tool.ID == "matomo.trusted-hosts.set" || tool.ID == "matomo.brute-force-ips.unblock" || tool.ID == "matomo.branding.set" || tool.ID == "matomo.reports.archive" ||
+			tool.ID == "matomo.tag-manager-versions.create" || tool.ID == "matomo.tag-manager-versions.update" || tool.ID == "matomo.tag-manager-versions.delete" ||
 			strings.HasPrefix(tool.ID, "matomo.privacy-settings.set-") || strings.HasPrefix(tool.ID, "matomo.do-not-track.")) &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
@@ -268,7 +271,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 126 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 133 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

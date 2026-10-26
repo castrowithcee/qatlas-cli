@@ -303,7 +303,7 @@ const (
 	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
-	minimumHeight = 13
+	minimumHeight = 14
 	// narrowWidth is the width below which the header and long headings take a second line.
 	narrowWidth = 80
 	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
@@ -3661,17 +3661,22 @@ func sectionShortcut(key string) (section, bool) {
 	return areaSections[key[0]-'1'][0], true
 }
 
-// View renders the frame: the configuration path, the sections, and the workspace with the current screen.
+// View is the Bubble Tea entry point; all drawing lives in render.
 func (m *Model) View() string {
-	view := m.renderView()
+	return m.render()
+}
+
+// render draws the frame: the configuration path, the sections, and the workspace with the current screen.
+func (m *Model) render() string {
+	view := m.renderFrame()
 	if !styles.filled || view == "" {
 		return view
 	}
 	return paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
 }
 
-// renderView is the frame before the background of the preference is applied.
-func (m *Model) renderView() string {
+// renderFrame is the frame before the background of the preference is applied.
+func (m *Model) renderFrame() string {
 	if m.quitting {
 		return ""
 	}

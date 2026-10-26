@@ -94,7 +94,7 @@ func TestListShowsStateAndDisabledConnectionStaysTestable(t *testing.T) {
 		return "", nil
 	}
 	openSectionByName(t, m, sectionConnections)
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "STATE") || !strings.Contains(view, "disabled") {
 		t.Errorf("the list has no state column with text:\n%s", view)
 	}

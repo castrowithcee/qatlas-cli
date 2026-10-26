@@ -318,7 +318,7 @@ func visualShots() []visualShot {
 			pump(t, m, "enter")
 			openTargetList(t, m)
 		}},
-		{"59-resize", 39, 11, dark, term, false, overview},
+		{"59-resize", 39, 12, dark, term, false, overview},
 	}
 }
 
@@ -365,7 +365,7 @@ func TestVisualSnapshots(t *testing.T) {
 			lipgloss.SetColorProfile(ps.profile)
 			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme, shot.background)
 			shot.show(t, m)
-			view := m.View()
+			view := m.render()
 			if strings.Contains(view, "\r") {
 				t.Fatal("the view holds a carriage return")
 			}

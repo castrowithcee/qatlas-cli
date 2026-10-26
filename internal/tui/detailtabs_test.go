@@ -175,24 +175,24 @@ func TestDetailTabsAreClickable(t *testing.T) {
 	m := newTableModel(t, 140)
 	openSectionByName(t, m, sectionConnections)
 	m.list.selectName("tracker-issues")
-	m.View()
+	m.render()
 	clickOn(t, m, "Raw")
 	if !m.detailFocused() || m.shownTab() != tabRaw {
 		t.Fatalf("click on Raw = pane %v tab %v", m.detailFocused(), m.shownTab())
 	}
-	m.View()
+	m.render()
 	clickOn(t, m, "Details")
 	if m.shownTab() != tabDetails {
 		t.Fatalf("click on Details shows %v", m.shownTab())
 	}
-	m.View()
+	m.render()
 	// The tab line of the areas has an Overview of its own, so the tab is found in the row of Raw.
 	_, row := cellOf(t, m, "Raw")
 	clickAt(t, m, cellInRow(t, m, row, "Overview"), row)
 	if m.shownTab() != tabOverview || !m.detailFocused() {
 		t.Fatalf("click on Overview = tab %v pane %v", m.shownTab(), m.detailFocused())
 	}
-	m.View()
+	m.render()
 	clickOn(t, m, "tracker-triage")
 	if m.detailFocused() {
 		t.Errorf("a click on a row left the focus on the pane")
@@ -228,7 +228,7 @@ func TestDetailPaneReadsWithoutColourAtItsSmallestSize(t *testing.T) {
 		for _, s := range []section{sectionConnections, sectionServices, sectionCredentials} {
 			openSectionByName(t, m, s)
 			m.list.selectName(shownEntries(m)[0])
-			m.View()
+			m.render()
 			view := screenOf(m)
 			assertViewFits(t, view, size.w, size.h)
 			if !strings.Contains(view, "[Overview]") || strings.Contains(view, "\x1b") {
