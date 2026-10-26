@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager read tools: the containers of a website, one container, the embed code and installation instructions of a release, and the catalog of contexts, environments, and templates, with their rights and limits.
+  Describes the Matomo Tag Manager read tools: the containers of a website, one container, its versions and their export, the tags and triggers of a version, the embed code and installation instructions of a release, and the catalog of contexts, environments, and templates, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -25,6 +25,10 @@ the paths of non-live releases are data of the website's owners.
 | `matomo.tag-manager-versions.list` | reads the saved versions of a container with their releases |
 | `matomo.tag-manager-versions.get` | reads one version of a container, the draft included |
 | `matomo.tag-manager-versions.export` | reads the export of one version: container, version, tags, triggers, and variables |
+| `matomo.tag-manager-tags.list` | reads the tags of a container version, the draft included, with parameters, trigger IDs, and fire settings |
+| `matomo.tag-manager-tags.get` | reads one tag of a container version |
+| `matomo.tag-manager-triggers.list` | reads the triggers of a container version, the draft included, with parameters and conditions |
+| `matomo.tag-manager-triggers.get` | reads one trigger of a container version |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -42,6 +46,13 @@ the paths of non-live releases are data of the website's owners.
 - The export is data for a person to review. Custom HTML, scripts, and addresses in the parameters of tags,
   triggers, and variables are untrusted text: they are cut at limits, never run, and never fetched; `truncated` says
   when anything was cut. The presentation metadata of the templates is not part of it.
+- Tags and triggers are bound by the website, the container, and the version together: Matomo looks them up with
+  `idSite`, `idContainer`, `idContainerVersion`, and the tag or trigger ID, so an ID of another version, container,
+  or website is not found. A listed row that names another website or version is dropped, a single one is refused.
+  The version is required; the ID of the draft is in `matomo.tag-manager-containers.get`. Parameters, conditions,
+  and custom HTML are untrusted text with the same limits as the export; `truncated` says when anything was cut.
+  The lists page in batches, with a cursor bound to the website, container, and version.
+  The template metadata Matomo adds to a row is not returned.
 - `matomo.tag-manager-catalog.list` calls one fixed method per `kind`. The template kinds need a context from `kind`
   `contexts` and return the templates flattened from their categories with their parameters (cut at 100 per template
   and 100 offered values per parameter). `publishable-environments` needs `idSite` and leaves out `live` for a token

@@ -173,7 +173,8 @@ The [insights, transitions, and AI chatbot reads](reports.md#insights-transition
 profile and are offered only via `tools`.
 The [Tag Manager reads](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
-`matomo.tag-manager-versions.export`, and `matomo.tag-manager-catalog.list` are in no profile and are offered only via
+`matomo.tag-manager-versions.export`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
+`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, and `matomo.tag-manager-catalog.list` are in no profile and are offered only via
 `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
@@ -211,7 +212,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers, versions and their export, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers, versions and their export, tags and triggers, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
