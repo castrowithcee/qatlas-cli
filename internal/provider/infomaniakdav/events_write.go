@@ -348,23 +348,28 @@ func (c *Client) mutate(ctx context.Context, op string, kind writeKind, method s
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
 	case status == http.StatusPreconditionFailed:
+		failure := errPrecondition(op, kind.noun)
 		if match == "" {
-			return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
+			failure = &provider.Error{Class: provider.ClassProviderError, Op: op,
 				Message: "a " + kind.noun + " with this id already exists, nothing was written"}
 		}
-		return nil, errPrecondition(op, kind.noun)
+		withOriginal(failure, response)
+		return nil, failure
 	case status == http.StatusForbidden:
-		return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
+		failure := &provider.Error{Class: provider.ClassPermission, Op: op,
 			Message: "this Infomaniak identity may not change this " + kind.collection}
+		withOriginal(failure, response)
+		return nil, failure
 	case status >= 500:
 		failure := statusError(op, status)
 		var providerErr *provider.Error
 		if errors.As(failure, &providerErr) {
 			providerErr.Message += writeUncertain
 		}
+		withOriginal(failure, response)
 		return nil, failure
 	case status >= 300:
-		return nil, statusError(op, status)
+		return nil, statusErrorBody(op, response)
 	case status == http.StatusOK || status == http.StatusNoContent || (status == http.StatusCreated && method == methodPut):
 		return response.Header, nil
 	}

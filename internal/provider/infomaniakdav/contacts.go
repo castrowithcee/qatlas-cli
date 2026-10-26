@@ -239,7 +239,8 @@ func (c *Client) listContacts(ctx context.Context, book, body string, filter dav
 		var failure *provider.Error
 		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
 		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
-			return nil, providerError(op, "Infomaniak rejected the filter, possibly because it does not support a collation")
+			return nil, &provider.Error{Class: provider.ClassProviderError, Op: op, Original: failure.Original,
+				Message: "Infomaniak rejected the filter, possibly because it does not support a collation"}
 		}
 		return nil, err
 	}
