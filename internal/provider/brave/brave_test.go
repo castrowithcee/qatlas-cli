@@ -393,8 +393,10 @@ func TestStatusesMapToClassesWithoutProviderText(t *testing.T) {
 				t.Errorf("HTTP %d: error %q leaks %q", tc.status, err, leak)
 			}
 		}
-		if failed.Original == nil || failed.Original.Status != tc.status || len(failed.Original.Entries) != 0 {
-			t.Errorf("HTTP %d: original = %+v, want the status only", tc.status, failed.Original)
+		if failed.Original == nil || failed.Original.Status != tc.status || len(failed.Original.Entries) != 1 ||
+			failed.Original.Entries[0].Code != "VALIDATION" ||
+			!strings.Contains(failed.Original.Entries[0].Message, detailCanary) {
+			t.Errorf("HTTP %d: original = %+v, want the status and Brave's code and detail", tc.status, failed.Original)
 		}
 	}
 }

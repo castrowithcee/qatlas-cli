@@ -125,8 +125,10 @@ are bounded text that Qatlas never fetches, and strings and lists are cut to lim
 
 ## Errors
 
-The provider body is never copied into a message, because Brave's `error.detail` and `error.meta` may echo
-request values.
+Qatlas' message never carries Brave's text, because `error.detail` and `error.meta` may echo request values.
+Brave's own answer goes along separately as the original in the `provider` field of the error detail (untrusted,
+redacted, and bounded): `error.code`, `error.detail`, and the scalar members of `error.meta`. A body that is not
+JSON is kept as text; an empty one leaves the status.
 
 | Status | Class | Meaning |
 | --- | --- | --- |
