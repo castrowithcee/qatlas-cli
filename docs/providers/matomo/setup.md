@@ -98,8 +98,7 @@ Find your tool group and give the Matomo user the right in the row.
   target in the connection; see [Scope](README.md#scope).
 - **Capabilities** are extra rights a role can hold, for example for Tag Manager. `matomo.roles.list` shows
   them. A capability is added to a user in Matomo's user administration.
-- **Plugin** means the Matomo plugin must be installed and activated. Without it the tools end as
-  `unsupported-capability`.
+- **Plugin**: the Matomo plugin must be installed and activated; without it the tools end as `unsupported-capability`.
 - Unless a row says more, a tool that only reads needs a view right on the website it reads, and a change tool
   needs the right of its row. Tools offered only when a connection's `tools` list names them (for example
   deletes) need the same rights as their group.
@@ -111,6 +110,7 @@ Find your tool group and give the Matomo user the right in the row.
 | Instance version | View on any website |
 | Read websites, JavaScript tracking code, SEO metrics of a host | View on the website (any website for the version and the SEO metrics) |
 | Image tracking code, opt-out code | None in Matomo; Qatlas limits them by the website targets |
+| Record page views, events, searches, downloads and outlinks | None: no token is sent; tracking must be on for the website, and Qatlas limits the tools by the website targets |
 | Website settings, tracking failures (list, delete) | Admin on the website |
 | Delete all tracking failures | Admin; a Super User clears the whole table. Target `instance` |
 | Update a website, add or replace alias URLs, set creation dates | Admin on every website named |
