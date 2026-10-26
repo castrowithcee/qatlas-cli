@@ -74,32 +74,41 @@ func (c *contentFields) store(form url.Values) error {
 	return trackingText(form, "c_t", "contentTarget", c.ContentTarget, maxTrackingURL)
 }
 
-func invokeTrackingRecordContentImpression(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
+func contentImpressionEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		contentFields
 	}
-	return record(ctx, resolved, secrets, red, "record content impression", raw, &args,
-		func() *trackingContext { return &args.trackingContext }, args.store)
+	return &args, &args.trackingContext, args.store
 }
 
-func invokeTrackingRecordContentInteraction(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordContentImpression(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := contentImpressionEntry()
+	return record(ctx, resolved, secrets, red, "record content impression", raw, args,
+		func() *trackingContext { return shared }, extend)
+}
+
+func contentInteractionEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		contentFields
 		Interaction *string `json:"interaction"`
 	}
-	return record(ctx, resolved, secrets, red, "record content interaction", raw, &args,
-		func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			// Without c_i Matomo would count the request as an impression.
-			if err := trackingRequired(form, "c_i", "interaction", args.Interaction, maxTrackingText); err != nil {
-				return err
-			}
-			return args.store(form)
-		})
+	return &args, &args.trackingContext, func(form url.Values) error {
+		// Without c_i Matomo would count the request as an impression.
+		if err := trackingRequired(form, "c_i", "interaction", args.Interaction, maxTrackingText); err != nil {
+			return err
+		}
+		return args.store(form)
+	}
+}
+
+func invokeTrackingRecordContentInteraction(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := contentInteractionEntry()
+	return record(ctx, resolved, secrets, red, "record content interaction", raw, args,
+		func() *trackingContext { return shared }, extend)
 }
 
 func trackingContentOperations() []capability.Operation {
