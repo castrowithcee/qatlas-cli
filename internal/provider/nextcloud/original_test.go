@@ -130,20 +130,6 @@ func TestResourceStatusFailureCarriesNoOriginal(t *testing.T) {
 	}
 }
 
-// The Notes API is no WebDAV: its failed answer is classified as before and carries no original.
-func TestNotesErrorsCarryNoDAVOriginal(t *testing.T) {
-	serve(t, func(*http.Request) (*http.Response, error) {
-		return noteResponse(http.StatusForbidden, nil, sabreErrorBody), nil
-	})
-	_, err := runNote(invokeNotesList, listed("notes/C"), `{}`)
-	if err == nil || classOf(err) != provider.ClassPermission {
-		t.Fatalf("err = %v, want a permission error", err)
-	}
-	if original := originalOf(err); original != nil {
-		t.Errorf("original = %+v, want none", original)
-	}
-}
-
 // The contacts and calendar tools pass the DAV error document of every failing step on.
 func TestContactsAndCalendarErrorsCarryTheOriginal(t *testing.T) {
 	failing := func(status int, body string) func() (*http.Response, error) {

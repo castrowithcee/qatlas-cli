@@ -118,7 +118,7 @@ func (c *Client) ListRemoteShares(ctx context.Context) (*RemoteSharesResult, err
 	data, err := c.ocsGet(ctx, op, remoteShareEndpoint())
 	if err != nil {
 		if isNotFound(err) {
-			return nil, providerError(op, messageFederationOff)
+			return nil, providerErrorFrom(op, messageFederationOff, err)
 		}
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (c *Client) GetRemoteShare(ctx context.Context, op, id string) (*RemoteShar
 	data, err := c.ocsGet(ctx, op, remoteShareEndpoint(id))
 	if err != nil {
 		if isNotFound(err) {
-			return nil, remoteShareNotFound(op)
+			return nil, withOriginalValue(remoteShareNotFound(op), refusedOriginal(err))
 		}
 		return nil, err
 	}

@@ -314,9 +314,10 @@ func deckCommentRefusal(op string, err error, forbidden string) error {
 	}
 	switch {
 	case forbidden != "" && providerErr.Class == provider.ClassPermission:
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: forbidden}
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: forbidden,
+			Original: providerErr.Original}
 	case providerErr.Message == messageNotFound:
-		return deckNotFound(op)
+		return withOriginalValue(deckNotFound(op), providerErr.Original)
 	}
 	return err
 }

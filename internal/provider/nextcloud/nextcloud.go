@@ -1170,25 +1170,26 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	return &Content{Path: path, ContentBase64: base64.StdEncoding.EncodeToString(body), ContentType: bounded(header.Get("Content-Type")), Size: len(body), ETag: bounded(strings.Trim(header.Get("ETag"), `"`))}, nil
 }
 
-// readInline reads the GET of an absolute URL, built from checked segments, up to the inline limit.
-// A failed answer carries no original, for the answer is not WebDAV.
+// readInline reads the GET of an absolute URL, built from checked segments, up to the inline limit. A failed
+// answer is read in the format of the Notes API.
 func (c *Client) readInline(ctx context.Context, op, target, tooLarge string) ([]byte, http.Header, error) {
-	return c.readInlineWith(ctx, op, target, tooLarge, nil)
+	return c.readInlineFrom(ctx, op, target, tooLarge, nil, notesFormat)
 }
 
-// readInlineWith is readInline with extra request headers.
+// readInlineWith is readInline with extra request headers, for a Deck attachment: a failed answer is read in
+// the format of the Deck API.
 func (c *Client) readInlineWith(ctx context.Context, op, target, tooLarge string, extra http.Header) ([]byte, http.Header, error) {
-	return c.readInlineFrom(ctx, op, target, tooLarge, extra, false)
+	return c.readInlineFrom(ctx, op, target, tooLarge, extra, deckFormat)
 }
 
 // readInlineDAV is readInline for a WebDAV resource: a failed answer carries the DAV error body as its original.
 func (c *Client) readInlineDAV(ctx context.Context, op, target, tooLarge string) ([]byte, http.Header, error) {
-	return c.readInlineFrom(ctx, op, target, tooLarge, nil, true)
+	return c.readInlineFrom(ctx, op, target, tooLarge, nil, davFormat)
 }
 
 func (c *Client) readInlineFrom(ctx context.Context, op, target, tooLarge string, extra http.Header,
-	davBody bool) ([]byte, http.Header, error) {
-	response, err := c.sendTo(ctx, op, http.MethodGet, target, nil, "", "", "", extra, davBody)
+	format errorFormat) ([]byte, http.Header, error) {
+	response, err := c.sendTo(ctx, op, http.MethodGet, target, nil, "", "", "", extra, format)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1276,25 +1277,25 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 }
 
 // downloadTo streams the GET of an absolute URL, built from checked segments, into the prepared local file
-// and commits it. It returns the headers of the answer.
+// and commits it. It returns the headers of the answer. A failed answer is read in the format of the Notes API.
 func (c *Client) downloadTo(ctx context.Context, op, target string, download *localfile.Download, done *bool) (http.Header, error) {
-	return c.downloadToWith(ctx, op, target, download, done, nil)
+	return c.downloadFrom(ctx, op, target, download, done, nil, notesFormat)
 }
 
-// downloadToWith is downloadTo with extra request headers. A failed answer carries no original, for the
-// answer is not WebDAV.
+// downloadToWith is downloadTo with extra request headers, for a Deck attachment: a failed answer is read in
+// the format of the Deck API.
 func (c *Client) downloadToWith(ctx context.Context, op, target string, download *localfile.Download, done *bool, extra http.Header) (http.Header, error) {
-	return c.downloadFrom(ctx, op, target, download, done, extra, false)
+	return c.downloadFrom(ctx, op, target, download, done, extra, deckFormat)
 }
 
 // downloadDAVTo is downloadTo for a WebDAV resource: a failed answer carries the DAV error body as its original.
 func (c *Client) downloadDAVTo(ctx context.Context, op, target string, download *localfile.Download,
 	done *bool) (http.Header, error) {
-	return c.downloadFrom(ctx, op, target, download, done, nil, true)
+	return c.downloadFrom(ctx, op, target, download, done, nil, davFormat)
 }
 
 func (c *Client) downloadFrom(ctx context.Context, op, target string, download *localfile.Download, done *bool,
-	extra http.Header, davBody bool) (http.Header, error) {
+	extra http.Header, format errorFormat) (http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1309,10 +1310,7 @@ func (c *Client) downloadFrom(ctx context.Context, op, target string, download *
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		if davBody {
-			return nil, davStatusError(op, response)
-		}
-		return nil, statusError(op, response.StatusCode)
+		return nil, formatStatusError(op, response, format)
 	}
 	if response.ContentLength >= 0 {
 		if err := download.ExpectSize(response.ContentLength); err != nil {
@@ -1432,17 +1430,17 @@ func (c *Client) webdavWith(ctx context.Context, op, method string, rel []string
 // webdavTo sends one request to an absolute URL the calling operation built from the configured origin. A failed
 // answer carries its DAV error body as the original of the error.
 func (c *Client) webdavTo(ctx context.Context, op, method, target string, body io.Reader, condition, value, uncertain string, extra http.Header) (*http.Response, error) {
-	return c.sendTo(ctx, op, method, target, body, condition, value, uncertain, extra, true)
+	return c.sendTo(ctx, op, method, target, body, condition, value, uncertain, extra, davFormat)
 }
 
-// restTo is webdavTo for an answer that is not WebDAV, such as the Notes API: the error carries no original.
+// restTo is webdavTo for the Notes API, whose failed answer is not WebDAV.
 func (c *Client) restTo(ctx context.Context, op, method, target string, body io.Reader,
 	condition, value, uncertain string, extra http.Header) (*http.Response, error) {
-	return c.sendTo(ctx, op, method, target, body, condition, value, uncertain, extra, false)
+	return c.sendTo(ctx, op, method, target, body, condition, value, uncertain, extra, notesFormat)
 }
 
 func (c *Client) sendTo(ctx context.Context, op, method, target string, body io.Reader,
-	condition, value, uncertain string, extra http.Header, davBody bool) (*http.Response, error) {
+	condition, value, uncertain string, extra http.Header, format errorFormat) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1465,16 +1463,10 @@ func (c *Client) sendTo(ctx context.Context, op, method, target string, body io.
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
-		if !davBody {
-			if uncertain != "" {
-				return nil, sentStatusError(op, response.StatusCode, uncertain)
-			}
-			return nil, statusError(op, response.StatusCode)
-		}
 		if uncertain != "" {
-			return nil, sentDAVStatusError(op, response, uncertain)
+			return nil, sentFormatStatusError(op, response, uncertain, format)
 		}
-		return nil, davStatusError(op, response)
+		return nil, formatStatusError(op, response, format)
 	}
 	return response, nil
 }
@@ -1688,7 +1680,7 @@ func isRedirect(status int) bool { return status >= 300 && status < 400 }
 
 // statusError maps an HTTP status to a stable class. The provider body is never read into the message:
 // Nextcloud echoes the request path into it, and the class plus the status is what a caller can act on.
-// It reads no body at all, so an error of a non-WebDAV answer carries no original.
+// It reads no body at all; the callers that hold the answer attach the body as the original (withOriginal).
 func statusError(op string, status int) error {
 	if isRedirect(status) {
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageRedirect}
@@ -1743,30 +1735,79 @@ func statusError(op string, status int) error {
 	}
 }
 
+// errorFormat names how a failed answer of one Nextcloud API carries its own wording. WebDAV answers an
+// error document of Sabre, the other APIs a JSON object whose fields fields maps.
+type errorFormat struct {
+	dav    bool
+	fields provider.OriginalFields
+}
+
+var (
+	// davFormat is the Sabre error document of WebDAV, CalDAV, and CardDAV.
+	davFormat = errorFormat{dav: true}
+	// ocsFormat is the OCS envelope, which repeats the status and the message in its meta.
+	ocsFormat = errorFormat{fields: ocsOriginalFields}
+	// deckFormat is the Deck API answer {"status": 403, "message": "Permission denied"}.
+	deckFormat = errorFormat{fields: provider.OriginalFields{Code: "status", Message: "message"}}
+	// notesFormat is the Notes API, whose documentation names no error body: a plain text is kept as it
+	// is and a JSON object contributes no field.
+	notesFormat = errorFormat{}
+)
+
+// ocsOriginalFields maps the meta of an OCS envelope; its data is never part of an original.
+var ocsOriginalFields = provider.OriginalFields{Code: "ocs.meta.statuscode", Message: "ocs.meta.message"}
+
 // davStatusError is statusError for a failed WebDAV answer. The message stays Qatlas' own; the body of the
 // answer, read bounded, goes apart into the original of the error.
 func davStatusError(op string, response *http.Response) error {
-	return withOriginal(statusError(op, response.StatusCode), response)
+	return withOriginal(statusError(op, response.StatusCode), response, davFormat)
 }
 
 // sentDAVStatusError is sentStatusError for a failed WebDAV answer, with the body as the original.
 func sentDAVStatusError(op string, response *http.Response, hint string) error {
-	return withOriginal(sentStatusError(op, response.StatusCode, hint), response)
+	return withOriginal(sentStatusError(op, response.StatusCode, hint), response, davFormat)
 }
 
-func withOriginal(err error, response *http.Response) error {
+// formatStatusError is davStatusError for the answer of another API, such as OCS, Deck, or Notes.
+func formatStatusError(op string, response *http.Response, format errorFormat) error {
+	return withOriginal(statusError(op, response.StatusCode), response, format)
+}
+
+// sentFormatStatusError is sentDAVStatusError for the answer of another API.
+func sentFormatStatusError(op string, response *http.Response, hint string, format errorFormat) error {
+	return withOriginal(sentStatusError(op, response.StatusCode, hint), response, format)
+}
+
+// withOriginal sets the original of a classified error from the failed answer. A redirect carries only its
+// status, because its body may point at another host.
+func withOriginal(err error, response *http.Response, format errorFormat) error {
+	switch {
+	case isRedirect(response.StatusCode):
+		return withOriginalValue(err, &provider.Original{Status: response.StatusCode})
+	case format.dav:
+		return withOriginalValue(err, dav.ErrorOriginal(response.StatusCode, response.Body))
+	}
+	return withOriginalValue(err, provider.ErrorOriginal(response.StatusCode,
+		provider.ReadErrorBody(response.Body), format.fields))
+}
+
+func withOriginalValue(err error, original *provider.Original) error {
 	var providerErr *provider.Error
 	if !errors.As(err, &providerErr) {
 		return err
 	}
 	changed := *providerErr
-	if isRedirect(response.StatusCode) {
-		// A redirect body may point at another host; only the status is passed on.
-		changed.Original = &provider.Original{Status: response.StatusCode}
-		return &changed
-	}
-	changed.Original = dav.ErrorOriginal(response.StatusCode, response.Body)
+	changed.Original = original
 	return &changed
+}
+
+// refusedOriginal returns the original of a classified error, for a replacement that keeps it.
+func refusedOriginal(err error) *provider.Original {
+	var failure *provider.Error
+	if errors.As(err, &failure) {
+		return failure.Original
+	}
+	return nil
 }
 
 // sentTransportError is transportError for a request that changes a file: whatever ended it, the server may
@@ -1800,12 +1841,7 @@ func providerError(op, message string) error {
 
 // providerErrorFrom is providerError for a message that replaces the one of err: the original of err stays.
 func providerErrorFrom(op, message string, err error) error {
-	replacement := &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
-	var failure *provider.Error
-	if errors.As(err, &failure) {
-		replacement.Original = failure.Original
-	}
-	return replacement
+	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message, Original: refusedOriginal(err)}
 }
 
 func invalidResponse(op, message string) error {
