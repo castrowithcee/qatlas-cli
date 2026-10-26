@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -181,10 +180,9 @@ type vaultUnlockPrompt struct {
 }
 
 func (m *Model) openVaultUnlockPrompt(back screen) {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 
 	m.vaultUnlock = &vaultUnlockPrompt{input: in, back: back}
