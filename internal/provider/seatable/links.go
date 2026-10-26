@@ -414,14 +414,22 @@ func (c *Client) changeOnce(ctx context.Context, op, method, path, token string,
 			Message: "SeaTable returned an invalid response" + uncertain}
 	}
 	if answer.Success != nil && !*answer.Success {
-		return providerError(op, "SeaTable did not apply the change")
+		return notApplied(op, data)
 	}
 	return nil
 }
 
+// notApplied reports a success:false answer. The provider's statement of a 2xx answer is kept as original.
+func notApplied(op string, data []byte) error {
+	failure := providerError(op, "SeaTable did not apply the change").(*provider.Error)
+	failure.Original = provider.ErrorOriginal(http.StatusOK, data, gatewayFields)
+	return failure
+}
+
 // sendOnce sends one request without a retry and returns the bounded answer body. A failure that leaves
 // the result open (timeout, reset, unknown transport failure, 5xx, unreadable answer) carries the
-// uncertain hint. The classify function maps a non-2xx status to an error and never copies provider text.
+// uncertain hint. The classify function maps a non-2xx status to an error without provider text; the bounded
+// body of the answer is attached to it as the original statement.
 func (c *Client) sendOnce(ctx context.Context, op, method, path, token string, body []byte, uncertain string,
 	classify func(op string, status int) error) ([]byte, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
@@ -446,7 +454,7 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path, token string, b
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		failure := classify(op, response.StatusCode)
+		failure := withOriginal(classify(op, response.StatusCode), response.StatusCode, response.Body, gatewayFields)
 		if response.StatusCode >= 500 {
 			var providerErr *provider.Error
 			if errors.As(failure, &providerErr) {

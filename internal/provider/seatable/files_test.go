@@ -326,6 +326,9 @@ func TestUploadReportsAnOpenResultAndNeverRepeats(t *testing.T) {
 			if strings.Contains(err.Error(), bodyCanary) {
 				t.Errorf("the error copies a provider body: %v", err)
 			}
+			if tc.post != http.StatusOK {
+				wantOriginal(t, err, tc.post, bodyCanary)
+			}
 		})
 	}
 }
@@ -503,7 +506,7 @@ func TestDeleteReportsAnOpenResultAndNeverRepeats(t *testing.T) {
 			return jsonResponse(http.StatusOK, `{"_id":"`+rowID+`","Anhang":[`+existingFile+`]}`), nil
 		case assetPath:
 			calls++
-			return jsonResponse(http.StatusBadGateway, `{"error":"`+bodyCanary+`"}`), nil
+			return jsonResponse(http.StatusBadGateway, `{"error_msg":"`+bodyCanary+`"}`), nil
 		}
 		return jsonResponse(http.StatusNotFound, `{}`), nil
 	})
@@ -514,6 +517,7 @@ func TestDeleteReportsAnOpenResultAndNeverRepeats(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "may have been deleted") || strings.Contains(err.Error(), bodyCanary) || calls != 1 {
 		t.Fatalf("err = %v, calls = %d", err, calls)
 	}
+	wantOriginal(t, err, http.StatusBadGateway, bodyCanary)
 }
 
 func TestFileToolDescriptors(t *testing.T) {

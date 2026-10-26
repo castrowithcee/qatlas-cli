@@ -59,9 +59,9 @@ names it.
   the counts and read the rows when they differ.
 - `snapshots.create` asks SeaTable for a snapshot of the whole base of the credential, not of one table, and
   needs `create` and `confirm`. SeaTable creates a snapshot only when the base changed since the last one
-  and at least 10 minutes have passed; otherwise Qatlas reports that rule in its own words and never the
-  provider text. A 5xx answer or a timeout is reported as uncertain: check the snapshots of the base before
-  repeating it.
+  and at least 10 minutes have passed; otherwise Qatlas reports that rule in its own words, and SeaTable's
+  answer goes along as the original statement. A 5xx answer or a timeout is reported as uncertain: check
+  the snapshots of the base before repeating it.
 
 ```sh
 qatlas invoke seatable.base.snapshots.create --connection sales-rw --confirm
