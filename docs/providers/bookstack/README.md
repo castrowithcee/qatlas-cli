@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack
@@ -12,7 +12,8 @@ updated: 2026-10-22
 A connection selects one BookStack instance and one API token. It supports reading (`read`), creating
 (`create`), changing or moving (`update`), and deleting (`delete`) BookStack content. All mutations require
 confirmation. A connection can be bound to shelves, books, chapters, or pages (see [Targets](#targets)). The
-tools are sorted into groups (see [Tool groups](#tool-groups)).
+tools are sorted into groups (see [Tool groups](#tool-groups)). [Set up BookStack](setup.md) leads through
+creating an API token and lists the permissions each tool group needs.
 
 Credentials provide `token-id` and `token-secret`. A connection selects its tools by `effects`, which offers
 every tool of the listed effects, or by a `tools` list, which offers exactly the named tools, for example
@@ -130,7 +131,7 @@ Errors carry a fixed class and never the text BookStack sent.
 | Status | Class |
 | --- | --- |
 | 401 | `auth` |
-| 403 | `permission`: the token's user lacks the BookStack role permission for this action, or the token expired or lacks API access (the connection test reports 403 as `auth`) |
+| 403 | `permission` (the connection test reports 403 as `auth`); see [Fixing errors](setup.md#fixing-errors) |
 | 404 | `not-found` |
 | 429 | `rate-limited` |
 | 422 | `provider-error`, naming at most the invalid argument names, never values |
