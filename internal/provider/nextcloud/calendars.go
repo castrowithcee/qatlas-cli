@@ -377,7 +377,7 @@ func (c *Client) calendarRequest(ctx context.Context, op, method string, segment
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
 			return nil, nil, invalidResponse(op, "Nextcloud answered with an unexpected success status")
 		}
-		return nil, nil, statusError(op, response.StatusCode)
+		return nil, nil, davStatusError(op, response)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil || int64(len(data)) > limit {
@@ -478,7 +478,8 @@ func (c *Client) listEvents(ctx context.Context, calendar, body string, filter d
 		var failure *provider.Error
 		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
 		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
-			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+			return nil, providerErrorFrom(op,
+				"Nextcloud rejected the filter, possibly because it does not support a collation", err)
 		}
 		return nil, err
 	}

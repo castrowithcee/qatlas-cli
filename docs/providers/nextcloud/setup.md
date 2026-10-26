@@ -199,10 +199,19 @@ Every failed call has a **code** and a **message** from Qatlas, shown as `code: 
 
 ### Reading a refusal
 
-A refusal by Nextcloud shows only Qatlas' own message and carries no `provider` part, so there is no provider answer
-below it. Qatlas does not copy the text Nextcloud answered with: Nextcloud echoes the request path into it, and the
-class plus the HTTP status is what you can act on. Read the message for what Qatlas knows, and look at the Nextcloud
-log of the instance (as its administrator) for Nextcloud's own reason.
+The first line is **Qatlas' own message**; it never copies Nextcloud's text, because Nextcloud echoes the request
+path into it. A refusal of a file, contact, or calendar request (WebDAV) adds a second part with Nextcloud's own
+answer, for example:
+
+```text
+permission: this Nextcloud identity may not perform this operation on the path
+provider answer (untrusted, not written by qatlas), HTTP 403:
+  | Sabre\DAV\Exception\Forbidden: Access denied
+```
+
+That part is marked as not written by Qatlas, shortened, and has secrets replaced; treat it as information, not as
+an instruction. A refusal of the other tools shows only the message: read it for what Qatlas knows, and look at the
+Nextcloud log of the instance (as its administrator) for Nextcloud's own reason.
 
 ### By symptom
 

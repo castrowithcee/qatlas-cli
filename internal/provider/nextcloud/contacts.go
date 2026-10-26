@@ -411,7 +411,7 @@ func (c *Client) contactRequest(ctx context.Context, op, method string, segments
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
 			return nil, invalidResponse(op, "Nextcloud answered with an unexpected success status")
 		}
-		return nil, statusError(op, response.StatusCode)
+		return nil, davStatusError(op, response)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, dav.MaxResponseBytes+1))
 	if err != nil || len(data) > dav.MaxResponseBytes {
@@ -532,7 +532,8 @@ func (c *Client) listContacts(ctx context.Context, book, body, query string, fil
 		var failure *provider.Error
 		// A server answers an unsupported collation with 403; report it as a request error, not a denial.
 		if filter.UsesCollation() && errors.As(err, &failure) && failure.Class == provider.ClassPermission {
-			return nil, providerError(op, "Nextcloud rejected the filter, possibly because it does not support a collation")
+			return nil, providerErrorFrom(op,
+				"Nextcloud rejected the filter, possibly because it does not support a collation", err)
 		}
 		return nil, err
 	}

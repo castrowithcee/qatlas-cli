@@ -317,7 +317,8 @@ func (c *Client) GetVersion(ctx context.Context, path string, rel []string, vers
 	if err != nil {
 		return nil, err
 	}
-	body, header, err := c.readInline(ctx, op, c.versionURL(entry.FileID, versionID), "the Nextcloud file version exceeds 4 MiB, use local_path")
+	body, header, err := c.readInlineDAV(ctx, op, c.versionURL(entry.FileID, versionID),
+		"the Nextcloud file version exceeds 4 MiB, use local_path")
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +333,7 @@ func (c *Client) DownloadVersion(ctx context.Context, path string, rel []string,
 	if err != nil {
 		return nil, err
 	}
-	header, err := c.downloadTo(ctx, op, c.versionURL(entry.FileID, versionID), download, done)
+	header, err := c.downloadDAVTo(ctx, op, c.versionURL(entry.FileID, versionID), download, done)
 	if err != nil {
 		return nil, err
 	}
