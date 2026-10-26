@@ -48,6 +48,10 @@ var messagePatterns = []struct {
 	{"config-controlled", []string{"controlled by the config file"}},
 	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
+	// Refusals of the Tag Manager version tools; Matomo changed nothing.
+	{"version-name-in-use", []string{"this name is already in use"}},
+	{"version-not-deletable", []string{"version of a container cannot be deleted",
+		"cannot be deleted as it is published to at least one environment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
 	// A container, environment, or context ID is quoted in double quotes and is not masked; this comes before the
 	// groups below so that an ID like token1 cannot pick the class.
@@ -76,6 +80,12 @@ func applicationError(op string, data []byte) error {
 	switch classifyMessage(message) {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
+	case "version-name-in-use":
+		return &provider.InvalidRequestError{Message: "Matomo refused the name: another version of the container " +
+			"already uses it; nothing was changed"}
+	case "version-not-deletable":
+		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: the draft and a version that is " +
+			"released to an environment cannot be deleted; nothing was changed"}
 	case "missing":
 		return &missingError{}
 	case "password-refused":
