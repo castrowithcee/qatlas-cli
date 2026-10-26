@@ -416,6 +416,19 @@ func trackingRequired(form url.Values, key, argument string, given *string, limi
 	return trackingText(form, key, argument, given, limit)
 }
 
+// trackingTimestamp validates the time override and stores it as cdt.
+func trackingTimestamp(form url.Values, given *int64) error {
+	if given == nil {
+		return nil
+	}
+	now := trackingClock().Unix()
+	if *given < minTrackingTime || *given > now || now-*given >= trackingTimeWindow {
+		return invalidArgument("timestamp must be Unix time in seconds, not in the future and less than 20 years back")
+	}
+	form.Set("cdt", strconv.FormatInt(*given, 10))
+	return nil
+}
+
 // overrides validates the arguments that need the token and returns the form fields they stand for. They stay
 // apart from values so that only trackingAuth can carry them to the body.
 func (c *trackingContext) overrides() (url.Values, error) {
@@ -427,12 +440,8 @@ func (c *trackingContext) overrides() (url.Values, error) {
 		}
 		form.Set("cip", address.String())
 	}
-	if c.Timestamp != nil {
-		now := trackingClock().Unix()
-		if *c.Timestamp < minTrackingTime || *c.Timestamp > now || now-*c.Timestamp >= trackingTimeWindow {
-			return nil, invalidArgument("timestamp must be Unix time in seconds, not in the future and less than 20 years back")
-		}
-		form.Set("cdt", strconv.FormatInt(*c.Timestamp, 10))
+	if err := trackingTimestamp(form, c.Timestamp); err != nil {
+		return nil, err
 	}
 	if c.Country != nil {
 		if !countryPattern.MatchString(*c.Country) {
@@ -635,5 +644,6 @@ func trackingOperations() []capability.Operation {
 		{Descriptor: trackingRecordEvent, Handler: capability.Handler(invokeTrackingRecordEvent)},
 		{Descriptor: trackingRecordSiteSearch, Handler: capability.Handler(invokeTrackingRecordSiteSearch)},
 		{Descriptor: trackingRecordLink, Handler: capability.Handler(invokeTrackingRecordLink)},
+		{Descriptor: trackingRecordBotRequest, Handler: capability.Handler(invokeTrackingRecordBotRequest)},
 	}, append(trackingCommerceOperations(), trackingContentOperations()...)...)
 }

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, and content impressions and interactions through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the overrides of address, time, and location that need the token.
+  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, content impressions and interactions, and requests of AI chatbots through the tracking endpoint, its answers and their limits, the risks of writing raw data, the overrides of address, time, and location that need the token, and the instance check and token use of the chatbot tool.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -25,6 +25,7 @@ The tracking tools of the [Matomo provider](README.md). The profiles are describ
 | `matomo.tracking.record-cart-update` | records the current content of a cart (effect `create`) |
 | `matomo.tracking.record-content-impression` | records an impression of a content block with name, piece, and target (effect `create`) |
 | `matomo.tracking.record-content-interaction` | records an interaction such as a click with a content block (effect `create`) |
+| `matomo.tracking.record-bot-request` | records a request of an AI chatbot that the server of the website saw (effect `create`) |
 
 All tools are offered only where the `tools` list of a connection names them and are in no profile.
 
@@ -33,7 +34,8 @@ All tools are offered only where the `tools` list of a connection names them and
 The tools post once to `matomo.php` below the base URL, not to the reporting API. The parameters go in the form
 body, never in the URL. The endpoint needs no token for the context arguments, so a call without an
 [override](#overrides-of-address-time-and-location) neither reads the credential of the connection nor sends
-`token_auth`. No call sends an `Authorization` header. The connection must still name a credential.
+`token_auth`; the [chatbot tool](#requests-of-ai-chatbots) is the exception and always reads it for its instance
+check. No tracking request sends an `Authorization` header. The connection must still name a credential.
 
 Matomo answers an accepted request with an empty HTTP 204 or an image. That is all the result says:
 `sent` is true and `processingConfirmed` is always false.
@@ -89,3 +91,28 @@ the instance keeps (`delete_logs_older_than`) as HTTP 400.
 
 The overrides forge origin, time, and place of a visit on top of the risks above, and `clientIp` is personal
 data. The token never goes into the URL, a header, a message, or the result, and `cdo` is never sent.
+
+## Requests of AI chatbots
+
+`matomo.tracking.record-bot-request` reports a request that an AI chatbot made to a website and that Matomo
+cannot see through JavaScript. It sends `recMode=1`, so Matomo handles the request as a bot request and never as
+a visit; `recMode=2` and `bots` are never sent. It has none of the visitor, user, or location arguments above.
+
+- Matomo stores the request only when the user agent matches a pattern of Matomo's own list of AI chatbots
+  (`plugins/BotTracking/BotDetector.php`; in 5.14 for example ChatGPT-User, Claude-User, Perplexity-User,
+  MistralAI-User, Gemini-Deep-Research, and Google-NotebookLM). The list changes with the Matomo release. Any other
+  user agent is answered like an accepted request and not stored, so a result of `sent` does not mean that a
+  chatbot was recognised.
+- It stores the website, the time, the name and type of the chatbot, the address, and the given status, bytes,
+  response time, and source, but no visitor ID, IP address, or user ID.
+- Qatlas refuses values that do not fit Matomo's columns before the request, because Matomo writes such a failed
+  record only to its debug log and still reports success.
+- The tool needs Matomo 5.7.0 or newer and the activated plugin `BotTracking`. Before the one tracking request
+  Qatlas checks both through the reporting API of the instance. That check reads the token of the connection and
+  sends it as a bearer header to the reporting API only; the result is held for a few minutes. With an older
+  Matomo or an inactive plugin the call ends as `unsupported-capability` and sends no tracking request.
+- The tracking request itself carries a token only with `timestamp`: then the token of the check is sent as
+  `token_auth` in the body, and without `timestamp` it carries neither `token_auth` nor an `Authorization` header.
+  Matomo accepts a time more than 24 hours back only with a token of at least the Write role (otherwise HTTP 400)
+  and invalidates the archived reports of that past day.
+- Forged bot requests distort the bot reports and cannot be undone through the API; a repeated call counts twice.
