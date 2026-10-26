@@ -1,12 +1,11 @@
 ---
 description: >
-  Describes the SeaTable account provider: the account token and how a person creates it, the one-base target,
-  the snapshot list, the confirmed restore into a new base outside every connection, and the open risks of a
-  broad account token.
+  Describes the SeaTable account provider: its configuration, the one-base target, the snapshot list, and the
+  confirmed restore into a new base outside every connection. Token and rights are in the setup page.
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-26
 ---
 
 # SeaTable account
@@ -15,19 +14,12 @@ This provider lists the snapshots of one SeaTable base and restores one of them.
 REST API, which needs an account token. The SeaTable provider, which works with one base's API token, needs
 no account credential and is unaffected; the two are separate providers with separate connections.
 
-## Account token
+To connect Qatlas, create the token, and see which rights it needs and how to fix errors, read
+[Set up SeaTable account](setup.md).
 
-The credential provides `account-token`. A person creates it; Qatlas never asks for or stores a password.
-The person sends `POST /api2/auth-token/` to the SeaTable server with the account's username and password,
-adding the one-time password where two-factor authentication is on, and stores the returned token in the
-credential (`qatlas credential set`).
+## Configuration
 
-**The token is broad.** It acts as the person who created it and reaches everything that account reaches, far
-beyond one base. Qatlas narrows what a connection exposes through its base target, its `tools` list or `effects`; it does not narrow what the token itself could do. Keep the credential out of connections that
-do not need it, and revoke the token in SeaTable when it is no longer needed.
-
-Open risk: accounts that sign in only through single sign-on may have no username and password to call
-`POST /api2/auth-token/` with; how such an account obtains an account token has not been verified here.
+The credential provides the secret `account-token`.
 
 `base_url` is the SeaTable server, `https://cloud.seatable.io` by default or a self-hosted `https` origin,
 without a path, user, query, or fragment. No redirect is followed.
@@ -106,7 +98,7 @@ SeaTable account for the new base before calling again.
 
 Errors carry a stable class (`auth`, `permission`, `not-found`, `rate-limited`, `timeout`, `unreachable`,
 `invalid-provider-response`, `provider-error`) and never the provider's text or the token. The invoke log
-contains no arguments and no results.
+contains no arguments and no results. Causes and remedies by symptom are in [Fixing errors](setup.md#fixing-errors).
 
 ## API forms
 

@@ -218,7 +218,7 @@ func (m *Model) setupRefresh() {
 		if existing {
 			m.fields[0].hint = tr(tSetupReusesUnchanged, chosen)
 			m.fields[0].detail = tr(tSetupReusesAtUnchangedChooseTo,
-				chosen, m.cfg.Services[chosen].BaseURL, valueText("service", newService))
+				chosen, config.MaskURL(m.cfg.Services[chosen].BaseURL), valueText("service", newService))
 		}
 	case stepCredential:
 		chosen := m.fieldValue("credential")
@@ -753,7 +753,7 @@ func (m *Model) summaryRows() []summaryPair {
 
 	return append([]summaryPair{
 		line("provider", metadata.Name),
-		line("service", fmt.Sprintf("%s %s · %s", plan.service, state(plan.newService), cfg.Services[plan.service].BaseURL)),
+		line("service", fmt.Sprintf("%s %s · %s", plan.service, state(plan.newService), config.MaskURL(cfg.Services[plan.service].BaseURL))),
 		line("credential", fmt.Sprintf("%s %s · %s", plan.credential, state(plan.newCredential), secrets)),
 		line("connection", plan.connection),
 		line(targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
