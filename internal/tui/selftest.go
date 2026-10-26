@@ -281,43 +281,78 @@ func selftestNumber(v float64) string {
 	return fmt.Sprintf("%.2f", v)
 }
 
-// selftestBody is the text under the title: the progress while the run goes on, the outcome after it.
-func (m *Model) selftestBody() []string {
+// selftestBody is the text under the title: the progress while the run goes on, the outcome after it. Each
+// line is drawn for the panel p.
+func (m *Model) selftestBody(p dialogPanel) []string {
 	st := m.st
-	width := m.usable(0)
-	wrap := func(text string) []string { return strings.Split(render(lipgloss.NewStyle(), width, text), "\n") }
+	wrap := func(style lipgloss.Style, text string) []string { return p.textLines(style, text) }
 	switch {
 	case !st.done && st.cancelling:
-		return wrap(tr(tSelftestCancelling))
+		return wrap(styles.warning, tr(tSelftestCancelling))
 	case !st.done:
-		body := wrap(tr(tSelftestRunningBody, st.profile))
-		body = append(body, "")
+		body := wrap(lipgloss.NewStyle(), tr(tSelftestRunningBody, st.profile))
+		body = append(body, p.side(""))
 		for _, l := range st.lines {
-			body = append(body, wrap(l)...)
+			body = append(body, wrap(styles.hint, l)...)
 		}
 		return body
 	}
 	var body []string
 	switch {
 	case st.cancelled:
-		body = wrap(tr(tSelftestCancelled))
+		body = wrap(styles.warning, tr(tSelftestCancelled))
 		if st.failure != "" {
-			body = append(body, wrap(tr(tNoteError, st.failure))...)
+			body = append(body, wrap(styles.fail, tr(tNoteError, st.failure))...)
 		}
 	case st.failure != "":
-		body = wrap(tr(tNoteError, st.failure))
+		body = wrap(styles.fail, tr(tNoteError, st.failure))
 	default:
-		body = wrap(selftestText(st.report))
+		body = m.selftestReport(p, selftestText(st.report))
 	}
 	switch {
 	case st.saved != "":
-		body = append(body, "")
-		body = append(body, wrap(tr(tSelftestSaved, st.saved))...)
+		body = append(body, p.side(""))
+		body = append(body, wrap(styles.ok, tr(tSelftestSaved, st.saved))...)
 	case st.saveErr != "":
-		body = append(body, "")
-		body = append(body, wrap(tr(tSelftestSaveError, st.saveErr))...)
+		body = append(body, p.side(""))
+		body = append(body, wrap(styles.fail, tr(tSelftestSaveError, st.saveErr))...)
 	}
 	return body
+}
+
+// selftestReport draws the text of a report: its headings in bold, the facts above the first group dimmed,
+// and the measurements as they are.
+func (m *Model) selftestReport(p dialogPanel, text string) []string {
+	var body []string
+	grouped := false
+	for i, line := range strings.Split(text, "\n") {
+		style := styles.cell
+		switch {
+		case line == "":
+			grouped = true
+		case strings.HasPrefix(line, " "):
+		case i == 0 || grouped:
+			style = styles.title
+		default:
+			style = styles.hint
+		}
+		body = append(body, p.textLines(style, line)...)
+	}
+	return body
+}
+
+// selftestState is the state of the run as a mark and its word.
+func (m *Model) selftestState() (statusKind, string) {
+	st := m.st
+	switch {
+	case !st.done:
+		return statusDim, tr(tStatusRunning)
+	case st.cancelled:
+		return statusWarn, tr(tStatusCancelled)
+	case st.failure != "":
+		return statusFail, tr(tStatusFailed)
+	}
+	return statusOK, tr(tStatusDone)
 }
 
 func (m *Model) selftestKeys() string {
@@ -334,21 +369,29 @@ func (m *Model) selftestKeys() string {
 }
 
 // selftestFrame is the title above the body and the keys below it, and the lines of body that fit between.
-func (m *Model) selftestFrame() (head, foot string, room int) {
-	head = m.wrapped(styles.title, tr(tSelftestTitle, m.st.scenario)) + "\n\n"
-	foot = m.keyHint(m.selftestKeys())
+func (m *Model) selftestFrame(note string) (head, foot string, room int) {
+	p := m.dialogPanelOf()
+	title := tr(tSelftestTitle, m.st.scenario)
+	kind, word := m.selftestState()
+	if p.framed {
+		head = p.top(title, note) + p.result(kind, word) + p.blank()
+	} else {
+		head = m.wrapped(styles.title, title) + "  " + statusMark(kind, word) + "\n\n"
+	}
+	foot = p.bottom() + m.keyHint(m.selftestKeys())
 	return head, foot, max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 }
 
 func (m *Model) selftestRoom() int {
-	_, _, room := m.selftestFrame()
+	_, _, room := m.selftestFrame("")
 	return room
 }
 
 func (m *Model) selftestView() string {
 	st := m.st
-	head, foot, room := m.selftestFrame()
-	body := m.selftestBody()
+	p := m.dialogPanelOf()
+	head, foot, room := m.selftestFrame("")
+	body := m.selftestBody(p)
 	start := 0
 	if !st.done {
 		// Progress shows its newest lines.
@@ -357,5 +400,9 @@ func (m *Model) selftestView() string {
 		st.offset = max(min(st.offset, len(body)-room), 0)
 		start = st.offset
 	}
-	return head + strings.Join(body[start:min(start+room, len(body))], "\n") + "\n" + foot
+	shown := body[start:min(start+room, len(body))]
+	if p.framed && len(body) > room {
+		head, _, _ = m.selftestFrame(fmt.Sprintf("%d-%d/%d", start+1, start+len(shown), len(body)))
+	}
+	return head + strings.Join(shown, "\n") + "\n" + foot
 }

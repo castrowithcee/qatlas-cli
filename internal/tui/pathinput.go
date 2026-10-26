@@ -241,14 +241,19 @@ func withSeparator(dir string) string {
 // pathLines draws the input behind label and its suggestions, one line each, the marked one with the focus
 // marker.
 func (m *Model) pathLines(label string, p *pathField) string {
-	prefix, width := m.fit(label)
+	return m.pathLinesIn(m.usable(0), label, p)
+}
+
+// pathLinesIn is pathLines within the first room cells of the workspace.
+func (m *Model) pathLinesIn(room int, label string, p *pathField) string {
+	prefix, width := m.fitIn(room, label)
 	in := fitInput(p.Model, width)
 	// The text input pads to its width, so the line is cut back to the room there is.
 	var b strings.Builder
 	b.WriteString(prefix + lipgloss.NewStyle().MaxWidth(width).Render(in.View()) + "\n")
 	suggestions, current := p.shown()
 	for i, suggestion := range suggestions {
-		b.WriteString(m.row(i == current, suggestion) + "\n")
+		b.WriteString(m.rowIn(room, i == current, suggestion) + "\n")
 	}
 	return b.String()
 }

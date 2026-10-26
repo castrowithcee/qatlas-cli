@@ -336,6 +336,7 @@ func (m *Model) migrateResultView() string {
 		title:       tr(tMigrateDeleteTitle),
 		consequence: m.migrateResult,
 		danger:      true,
+		details:     []string{"  " + statusMark(statusOK, tr(tStatusDone))},
 		keys:        "y delete · n/{back} keep the file · {command} cmds · {help} help",
 	})
 }
