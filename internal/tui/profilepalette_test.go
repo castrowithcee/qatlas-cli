@@ -57,3 +57,20 @@ func TestHeatWithSixteenColoursUsesShadeGlyphs(t *testing.T) {
 		t.Errorf("the five levels are not told apart: %v", seen)
 	}
 }
+
+// An unsigned log is unverified on every row; those rows are dimmed while a gap or an altered line keeps its
+// warning, and the word stays in the cell.
+func TestLogStatusToneDimsOnlyUnverified(t *testing.T) {
+	restoreRenderer(t)
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	setTheme(buildTheme(true, false, false))
+	if got, want := colourOf(logStatusTone(logUnverified.label())), colourOf(styles.hint); got != want {
+		t.Errorf("unverified rows are %q, want the dimmed %q", got, want)
+	}
+	if got, want := colourOf(logStatusTone(logAltered.label())), colourOf(styles.fail); got != want {
+		t.Errorf("altered rows are %q, want %q", got, want)
+	}
+	if got, want := colourOf(logStatusTone(logGap.label())), colourOf(styles.warning); got != want {
+		t.Errorf("gap rows are %q, want %q", got, want)
+	}
+}

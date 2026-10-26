@@ -184,10 +184,14 @@ var logColumns = []column{
 	{title: "resp.", optional: true, tone: toneDim}, {title: "dur.", optional: true, right: true, tone: toneText},
 }
 
-// logStatusTone colours the status of a row by what it says; the word stays in the cell.
+// logStatusTone colours the status of a row by what it says; the word stays in the cell. Unverified is the
+// normal state of an unsigned log, so its rows are dimmed and only the summary above them warns.
 func logStatusTone(cell string) lipgloss.Style {
 	for s := logVerified; s <= logAltered; s++ {
 		if cell == s.label() {
+			if s == logUnverified {
+				return styles.hint
+			}
 			return s.style()
 		}
 	}
