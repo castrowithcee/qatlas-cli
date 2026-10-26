@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -14,7 +13,7 @@ import (
 
 func TestPalettesNameEveryRole(t *testing.T) {
 	for name, p := range map[string]palette{"dark": darkPalette, "light": lightPalette} {
-		roles := map[string]lipgloss.Color{
+		roles := map[string]colour{
 			"base": p.base, "surface": p.surface, "panel": p.panel, "border": p.border,
 			"borderFocus": p.borderFocus, "text": p.text, "textDim": p.textDim, "accent": p.accent,
 			"ok": p.ok, "fail": p.fail, "warn": p.warn, "selection": p.selection,
@@ -22,7 +21,7 @@ func TestPalettesNameEveryRole(t *testing.T) {
 		for i, c := range p.heat {
 			roles["heat"+string(rune('0'+i))] = c
 		}
-		seen := map[lipgloss.Color]bool{}
+		seen := map[colour]bool{}
 		for i, c := range p.brand {
 			roles["brand"+string(rune('0'+i))] = c
 			if seen[c] {

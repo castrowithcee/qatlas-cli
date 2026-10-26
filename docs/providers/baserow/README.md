@@ -1,26 +1,24 @@
 ---
 description: >
-  Describes the Baserow provider: database token and base URL, table and database targets, the read tools, row
-  changes, file transfer, link masking and target binding of schema properties, bounds, errors, and API checks.
+  Describes the Baserow provider: credential and base URL, table and database targets, the read tools, row changes, file transfer, link masking and target binding of schema properties, bounds, errors, and API checks.
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-26
 ---
 
 # Baserow
 
-This provider reads tables, fields, and rows of a Baserow instance, Baserow Cloud or self-hosted, with a
-database token, and creates, changes, deletes, and moves single rows of the tables a connection allows. It also uploads files to
-and downloads files from the file fields of those rows.
+This provider reads tables, fields, and rows of a Baserow instance, Baserow Cloud or self-hosted, with a database
+token, and creates, changes, deletes, and moves single rows of the tables a connection allows. It also uploads files
+to and downloads files from the file fields of those rows. [Set up Baserow](setup.md) leads through creating a token
+and lists the rights it needs.
 
 ## Credential and base URL
 
-The credential provides `database-token`: a Baserow database token, created in the account settings under
-database tokens. A token belongs to one workspace and carries the rights `create`, `read`, `update`, and
-`delete` per workspace, database, or table; reading needs `read`, and each row change needs its own right
-(`create`, `update`, or `delete`; a move needs `update`). The token is sent as
-`Authorization: Token ...` and is registered with the redactor.
+The credential provides `database-token`: a Baserow database token. Creating it and the rights each tool group needs
+are described in [Set up Baserow](setup.md). The token is sent as `Authorization: Token ...` and is registered with
+the redactor.
 
 `base_url` is `https://api.baserow.io` by default (Baserow Cloud). A self-hosted instance uses its own `https`
 URL, optionally below an installation path; a URL with `http`, user info, a query, or a fragment is refused
@@ -40,10 +38,10 @@ credentials:
 
 ## Scope
 
-A connection lists what it may read as targets: `table/TABLE_ID` entries, `database/DATABASE_ID` entries,
-or the single entry `*` for every table the token reads. Entries are positive integers without a sign or
-leading zero. A database covers all its tables, also those created later; tables and databases together form
-the allow-list. A listed table does not open its database.
+A connection lists what it may read as targets: `table/TABLE_ID` entries, `database/DATABASE_ID` entries, or the
+single entry `*` for every table the token reads. Entries are positive integers without a sign or leading zero. A
+database covers all its tables, also those created later; tables and databases together form the allow-list. A listed
+table does not open its database.
 
 ```yaml
 connections:
@@ -53,25 +51,24 @@ connections:
     targets: [table/11, database/3]
 ```
 
-A `table_id` outside the targets is refused as an invalid request without naming the table. A listed table
-is checked before the credential is resolved and before any request. A table that is not listed itself is
-proven by one read of the token's table list, which names the table's database; it is refused without any
-request on the table when its database is not listed. That read is made at most once per call and is shared
-with the link checks below. `baserow.tables.list` shows only the tables of the targets when the connection has
-an allow-list. The target limits what Qatlas shows; it does not narrow what the token itself may read, so grant
-the token only the rights the connection needs. Every tool acts on one table or lists tables, so a database
-target reaches all of them.
+A `table_id` outside the targets is refused as an invalid request without naming the table. A listed table is checked
+before the credential is resolved and before any request. A table that is not listed itself is proven by one read of
+the token's table list, which names the table's database; it is refused without any request on the table when its
+database is not listed. That read is made at most once per call and is shared with the link checks below.
+`baserow.tables.list` shows only the tables of the targets when the connection has an allow-list. The target limits
+what Qatlas shows; it does not narrow what the token itself may read; see [Set up Baserow](setup.md). Every tool acts
+on one table or lists tables, so a database target reaches all of them.
 
 ## Choosing targets
 
-The selection lists the databases of the token and the tables of one database, without the connection's
-targets. A database token reads the token's table list, which names no database; databases are therefore derived
-from that list and shown by their ID, not by name.
+The selection lists the databases of the token and the tables of one database, without the connection's targets. A
+database token reads the token's table list, which names no database; databases are therefore derived from that list
+and shown by their ID, not by name.
 
-A URL of the web interface of the form `/database/DATABASE_ID/table/TABLE_ID/...` names a database and a
-table without a request. For Baserow Cloud the web host is `baserow.io`, the API host `api.baserow.io`; for a
-self-hosted instance only the host of the connection's base URL counts, because the web address of an
-installation may differ from its API address. Any other host names nothing.
+A URL of the web interface of the form `/database/DATABASE_ID/table/TABLE_ID/...` names a database and a table without
+a request. For Baserow Cloud the web host is `baserow.io`, the API host `api.baserow.io`; for a self-hosted instance
+only the host of the connection's base URL counts, because the web address of an installation may differ from its API
+address. Any other host names nothing.
 
 ## Tools
 
@@ -95,21 +92,21 @@ installation may differ from its API address. Any other host names nothing.
 The read profile offers the five read tools.
 
 `rows.list` and `rows.search` select columns with `include` and `exclude`. `rows.list` sends the names unchecked;
-`rows.search` checks them against the schema it reads anyway. Link masking applies to the selected columns. Names
-with a comma, with `__`, or with a leading `-` or `+` cannot be selected: such names would need the quoting of
-Baserow's parameters, and Qatlas sends no quoted names. `{link_row_field}__join` is not offered because it reads
-values of other tables through the link.
+`rows.search` checks them against the schema it reads anyway. Link masking applies to the selected columns. Names with
+a comma, with `__`, or with a leading `-` or `+` cannot be selected: such names would need the quoting of Baserow's
+parameters, and Qatlas sends no quoted names. `{link_row_field}__join` is not offered because it reads values of other
+tables through the link.
 
-`rows.get` with `view_id` first reads the table's view list and rejects a view that is not in it; without it the
-call sends one request. `include_metadata` adds `metadata` at no extra request.
+`rows.get` with `view_id` first reads the table's view list and rejects a view that is not in it; without it the call
+sends one request. `include_metadata` adds `metadata` at no extra request.
 
 ## Not offered: row history and comments
 
-Row history (`GET /api/database/rows/table/{table_id}/{row_id}/history/`) and row comments
-(`GET /api/row_comments/{table_id}/{row_id}/`, a premium feature) are not tools. The official API schema
-(Baserow 2.4.0, `/api/schema.json`) lists only JWT (user session) authentication for both endpoints, while the
-row endpoints list JWT and database token. Qatlas does not send a user session, so both stay out until the
-documentation lists the database token for them.
+Row history (`GET /api/database/rows/table/{table_id}/{row_id}/history/`) and row comments (`GET
+/api/row_comments/{table_id}/{row_id}/`, a premium feature) are not tools. The official API schema (Baserow 2.4.0,
+`/api/schema.json`) lists only JWT (user session) authentication for both endpoints, while the row endpoints list JWT
+and database token. Qatlas does not send a user session, so both stay out until the documentation lists the database
+token for them.
 
 ## Searching rows
 
@@ -134,10 +131,10 @@ list is read; a view that is not in it is rejected. The rows request follows las
 
 ## Row changes
 
-Each change takes `table_id` (inside the targets), needs `confirm`, and sends exactly one request. A change is
-never repeated by Qatlas: after a timeout, a connection reset, an unknown transport failure, an HTTP 5xx, or
-an unreadable answer the error says the change may have taken effect, and the row should be read before it is
-tried again. `rows.delete` runs only for a connection whose `tools` list names it.
+Each change takes `table_id` (inside the targets), needs `confirm`, and sends exactly one request. A change is never
+repeated by Qatlas: after a timeout, a connection reset, an unknown transport failure, an HTTP 5xx, or an unreadable
+answer the error says the change may have taken effect, and the row should be read before it is tried again.
+`rows.delete` runs only for a connection whose `tools` list names it.
 
 - `rows.create` takes `fields`, an object of cell values keyed by field name (`{}` creates an empty row), and
   answers the new row like `rows.get`, with links masked.
@@ -153,8 +150,7 @@ based on the schema. A field name that does not exist, a field flagged read-only
 AI) are refused without quoting the name. A link field takes only an array of row IDs (or primary-field
 texts) and only when its other table is inside the targets; with `*` any table is allowed, and a link field
 whose other table cannot be determined is refused. The body is limited to 1 MiB and 500 cells. A missing
-token right is reported as a `permission` error naming the right to grant (`create`, `update`, or `delete`);
-Baserow's own text is never passed on.
+token right is reported as a `permission` error naming the right to grant; Baserow's own text is never passed on.
 
 ## Batch changes
 
@@ -169,17 +165,17 @@ connection whose `tools` list names it.
   for the row.
 - `rows.batch-delete` takes `row_ids`, 1 to 200 distinct IDs, and answers `{"deleted": true, "count": N}`.
 
-More than 200 rows, none, a repeated or non-positive row ID, and a body above 1 MiB are refused before any
-request. Create and update read the table's fields once and check every row like the single-row tools; one
-refused row refuses the whole batch without a change request. An answer whose item count differs from the
-request is an `invalid-provider-response` with the uncertainty message. Baserow applies a batch atomically as
-far as the documentation says; Qatlas does not rely on it and reports the uncertainty after an unclear result.
+More than 200 rows, none, a repeated or non-positive row ID, and a body above 1 MiB are refused before any request.
+Create and update read the table's fields once and check every row like the single-row tools; one refused row refuses
+the whole batch without a change request. An answer whose item count differs from the request is an
+`invalid-provider-response` with the uncertainty message. Baserow applies a batch atomically as far as the
+documentation says; Qatlas does not rely on it and reports the uncertainty after an unclear result.
 
 ## Files
 
-Files are addressed only by table (inside the targets), row, and the name of a field of type `file`; the field
-must exist in the table's schema (one field read), and an upload also needs it to be writable. No message
-quotes a field name.
+Files are addressed only by table (inside the targets), row, and the name of a field of type `file`; the field must
+exist in the table's schema (one field read), and an upload also needs it to be writable. No message quotes a field
+name.
 
 `files.upload` takes `table_id`, `row_id`, `field`, and exactly one source:
 
@@ -189,54 +185,50 @@ quotes a field name.
 - `url`: an `https` URL that Baserow fetches itself (`upload-via-url`); `name` is optional (Baserow derives one
   from the URL).
 
-It needs `confirm` and the token's `update` right. The cell is read first; then one upload request
-(`POST /api/user-files/upload-file/`, or `upload-via-url`) and one row change (`PATCH`) follow that keep the
-files the cell held and append the new one. Neither request is repeated. Baserow has no atomic append, so a
-change to the same cell between the read and the row change is overwritten. A failure of the upload, or an
-unclear result of either request, says that the file may have been uploaded or attached, and a refused row
-change says that the file was uploaded but is not attached (an unattached user file stays on the instance).
-The answer names the stored file (`id`, `name`, `size`, `sha256`) and never the file address. Baserow names
-a stored file `<unique>_<sha256>.<extension>`; for a path or inline upload the hash must equal the SHA-256 Qatlas
-computed, otherwise the file is not attached. The size must equal the size sent.
+It needs `confirm`. The cell is read first; then one upload request (`POST /api/user-files/upload-file/`, or
+`upload-via-url`) and one row change (`PATCH`) follow that keep the files the cell held and append the new one.
+Neither request is repeated. Baserow has no atomic append, so a change to the same cell between the read and the row
+change is overwritten. A failure of the upload, or an unclear result of either request, says that the file may have
+been uploaded or attached, and a refused row change says that the file was uploaded but is not attached (an unattached
+user file stays on the instance). The answer names the stored file (`id`, `name`, `size`, `sha256`) and never the file
+address. Baserow names a stored file `<unique>_<sha256>.<extension>`; for a path or inline upload the hash must equal
+the SHA-256 Qatlas computed, otherwise the file is not attached. The size must equal the size sent.
 
-`files.get` takes `table_id`, `row_id`, `field`, and optionally `name` (the shown name or the stored name) or
-`index`; a cell with exactly one file needs neither, an ambiguous name is refused. The file is chosen from the
-cell as it is now, never from an address in the arguments. Without `local_path` the content comes back as
-`content_base64` up to 4 MiB; with `local_path`, inside a directory released for writing (`files.write`), it
-is streamed to the file and only `id`, `name`, `size`, and `sha256` are returned. An existing file is replaced
-only with confirmation. The download is checked against the announced length and against the SHA-256 in the
-stored name.
+`files.get` takes `table_id`, `row_id`, `field`, and optionally `name` (the shown name or the stored name) or `index`;
+a cell with exactly one file needs neither, an ambiguous name is refused. The file is chosen from the cell as it is
+now, never from an address in the arguments. Without `local_path` the content comes back as `content_base64` up to 4
+MiB; with `local_path`, inside a directory released for writing (`files.write`), it is streamed to the file and only
+`id`, `name`, `size`, and `sha256` are returned. An existing file is replaced only with confirmation. The download is
+checked against the announced length and against the SHA-256 in the stored name.
 
 Transfers of file content have a timeout of 30 minutes; all other requests keep 30 seconds.
 
-Because both tools declare local file access, a connection offers them only when it lists `files` entries
-for their direction (`read` for the upload, `write` for the download), also for inline and `url` transfers.
+Because both tools declare local file access, a connection offers them only when it lists `files` entries for their
+direction (`read` for the upload, `write` for the download), also for inline and `url` transfers.
 
-**File addresses are untrusted.** The address in a cell is used only when it is `https`, has no user info or
-fragment, is on exactly the host (and port) of the connection's base URL, and its path is exactly
-`/media/user_files/<stored name>` (below the installation path, if any) for the file that was picked. The
-download sends no token; Baserow serves stored files under unguessable names, and a signed query, where the
-instance uses one, is kept and never reported. No redirect is followed. A file that the instance serves from
-another host, such as an object store or a CDN, cannot be shown to belong to the instance and is refused; such
-files cannot be downloaded with this tool.
+**File addresses are untrusted.** The address in a cell is used only when it is `https`, has no user info or fragment,
+is on exactly the host (and port) of the connection's base URL, and its path is exactly `/media/user_files/<stored
+name>` (below the installation path, if any) for the file that was picked. The download sends no token; Baserow serves
+stored files under unguessable names, and a signed query, where the instance uses one, is kept and never reported. No
+redirect is followed. A file that the instance serves from another host, such as an object store or a CDN, cannot be
+shown to belong to the instance and is refused; such files cannot be downloaded with this tool.
 
-**`url` uploads.** Only `https` URLs on a public DNS host name are accepted: no user info, no port, no
-fragment, no numeric address (decimal, hexadecimal, or dotted, IPv4 or IPv6), ASCII labels only (internationalised
-names in `xn--` form), at least two labels with an alphabetic top-level label, and none of the names reserved for
-internal use (`localhost`, `local`, `internal`, `intranet`, `lan`, `home`, `corp`, `private`, `test`, `example`,
-`invalid`, `onion`, `arpa`, `alt`, `localdomain`). The URL never appears in a message. This list is syntactic:
-Qatlas does not resolve the name, because Baserow, not Qatlas, fetches the URL. A public name that resolves to a
-private address is stopped by Baserow's own address guard (the `advocate` library in Baserow 2.4.0, which also
-checks redirects), and this holds only as long as the instance does not relax it. Do not release `url` uploads on
-a self-hosted instance whose network an untrusted agent must not reach.
+**`url` uploads.** Only `https` URLs on a public DNS host name are accepted: no user info, no port, no fragment, no
+numeric address (decimal, hexadecimal, or dotted, IPv4 or IPv6), ASCII labels only (internationalised names in `xn--`
+form), at least two labels with an alphabetic top-level label, and none of the names reserved for internal use
+(`localhost`, `local`, `internal`, `intranet`, `lan`, `home`, `corp`, `private`, `test`, `example`, `invalid`,
+`onion`, `arpa`, `alt`, `localdomain`). The URL never appears in a message. This list is syntactic: Qatlas does not
+resolve the name, because Baserow, not Qatlas, fetches the URL. A public name that resolves to a private address is
+stopped by Baserow's own address guard (the `advocate` library in Baserow 2.4.0, which also checks redirects), and
+this holds only as long as the instance does not relax it. Do not release `url` uploads on a self-hosted instance
+whose network an untrusted agent must not reach.
 
 ## Links into other tables
 
-A link field (`link_row`) whose other table is outside the targets gives only the row IDs, as
-`[{"id": 4}]`, without display values. The same applies when the other table cannot be determined (for
-example, it was deleted) and to a link-shaped value whose field is not found. A connection with `*` keeps the
-display values. To decide, `rows.list` and `rows.get` read the table's fields in one extra request, and only
-when a row holds a link-shaped value.
+A link field (`link_row`) whose other table is outside the targets gives only the row IDs, as `[{"id": 4}]`, without
+display values. The same applies when the other table cannot be determined (for example, it was deleted) and to a
+link-shaped value whose field is not found. A connection with `*` keeps the display values. To decide, `rows.list` and
+`rows.get` read the table's fields in one extra request, and only when a row holds a link-shaped value.
 
 `fields.list` follows the same boundary without an extra request. A property that points to a table outside the
 targets is shown only for a connection with `*` or a table inside the targets:
@@ -252,24 +244,24 @@ left out and marked as omitted, not cut.
 
 **Limit:** lookup and formula fields can carry values of other tables, and a lookup of a table outside the
 targets is not masked; such values are passed through as Baserow reports them, and a filter or sort on them discloses
-nothing beyond that. Keep the token's rights and the connection's targets aligned, or avoid such fields in tables the
+nothing beyond that. Keep the token's reach and the connection's targets aligned, or avoid such fields in tables the
 connection exposes. In `rows.list`, `rows.get`, and `rows.search`, file fields carry file names and URLs as data;
 Qatlas fetches a file only with `files.get`, under the rules above.
 
 ## Bounds
 
 Inline file content is limited to 4 MiB in both directions (10 GiB for a local path), a file name to 255 bytes, and a
-cell to 200 files. A response is read up to 4 MiB; a larger one is an `invalid-provider-response`. A row change is refused above 1 MiB. Names are cut at 512 bytes.
-A cell value is bounded: strings at 2048 bytes, arrays and objects at 100 entries, nesting at 6 levels (deeper
-values become `null`). A row has at most 1000 cells, `tables.list` at most 1000 tables, `fields.list` at most
-500 fields with at most 100 options each. Requests to one token share a rate limit.
+cell to 200 files. A response is read up to 4 MiB; a larger one is an `invalid-provider-response`. A row change is
+refused above 1 MiB. Names are cut at 512 bytes. A cell value is bounded: strings at 2048 bytes, arrays and objects at
+100 entries, nesting at 6 levels (deeper values become `null`). A row has at most 1000 cells, `tables.list` at most
+1000 tables, `fields.list` at most 500 fields with at most 100 options each. Requests to one token share a rate limit.
 
 ## Errors
 
 Errors carry a stable class and never the provider's text or the token: `auth`, `permission`, `not-found`,
-`rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and `provider-error`. The invoke log
-contains no arguments and no results. Names, options, and cell values are untrusted data of the provider;
-Qatlas never renders, follows, or executes them.
+`rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and `provider-error`. Causes and remedies by
+symptom are in [Fixing errors](setup.md#fixing-errors). The invoke log contains no arguments and no results. Names,
+options, and cell values are untrusted data of the provider; Qatlas never renders, follows, or executes them.
 
 ## API forms
 

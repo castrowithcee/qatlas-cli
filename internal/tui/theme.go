@@ -13,13 +13,13 @@ import (
 // 16 colours (see paletteOf), because a computed step-down picks muddy neighbours. A palette of a theme without
 // colour is the zero value.
 type palette struct {
-	base, surface, panel   lipgloss.Color
-	border, borderFocus    lipgloss.Color
-	text, textDim          lipgloss.Color
-	accent, ok, fail, warn lipgloss.Color
-	selection              lipgloss.Color
-	heat                   [5]lipgloss.Color // 0 is an empty cell, 4 the strongest
-	brand                  [8]lipgloss.Color // fixed row of provider marks
+	base, surface, panel   colour
+	border, borderFocus    colour
+	text, textDim          colour
+	accent, ok, fail, warn colour
+	selection              colour
+	heat                   [5]colour // 0 is an empty cell, 4 the strongest
+	brand                  [8]colour // fixed row of provider marks
 }
 
 var darkPalette = palette{
@@ -28,8 +28,8 @@ var darkPalette = palette{
 	text: "#d6e2ee", textDim: "#7f93a8",
 	accent: "#4c9aff", ok: "#3fb56b", fail: "#f0525a", warn: "#e7b84c",
 	selection: "#14336b",
-	heat:      [5]lipgloss.Color{"#16222d", "#1f5a3a", "#2a8a50", "#35a95a", "#4fd47a"},
-	brand:     [8]lipgloss.Color{"#f08c3a", "#4c9aff", "#e7b84c", "#2fb5a8", "#a35cf0", "#5fd07f", "#e0629a", "#ef5b5b"},
+	heat:      [5]colour{"#16222d", "#1f5a3a", "#2a8a50", "#35a95a", "#4fd47a"},
+	brand:     [8]colour{"#f08c3a", "#4c9aff", "#e7b84c", "#2fb5a8", "#a35cf0", "#5fd07f", "#e0629a", "#ef5b5b"},
 }
 
 var lightPalette = palette{
@@ -38,8 +38,8 @@ var lightPalette = palette{
 	text: "#14202e", textDim: "#566778",
 	accent: "#1d5fd6", ok: "#1a7f43", fail: "#c62828", warn: "#9a6700",
 	selection: "#cfe0fb",
-	heat:      [5]lipgloss.Color{"#e1e8ef", "#b7e1c4", "#7cc794", "#3fa365", "#1b7a44"},
-	brand:     [8]lipgloss.Color{"#c2570c", "#1d5fd6", "#9a6700", "#0f7f79", "#7b3fc4", "#1a7f43", "#b8346f", "#c62828"},
+	heat:      [5]colour{"#e1e8ef", "#b7e1c4", "#7cc794", "#3fa365", "#1b7a44"},
+	brand:     [8]colour{"#c2570c", "#1d5fd6", "#9a6700", "#0f7f79", "#7b3fc4", "#1a7f43", "#b8346f", "#c62828"},
 }
 
 // The 256-colour palettes name indexes of the xterm cube and ramp, the 16-colour ones the ANSI slots of the
@@ -50,8 +50,8 @@ var darkPalette256 = palette{
 	text: "253", textDim: "246",
 	accent: "75", ok: "71", fail: "203", warn: "179",
 	selection: "24",
-	heat:      [5]lipgloss.Color{"236", "22", "29", "35", "41"},
-	brand:     [8]lipgloss.Color{"208", "75", "179", "37", "135", "78", "168", "203"},
+	heat:      [5]colour{"236", "22", "29", "35", "41"},
+	brand:     [8]colour{"208", "75", "179", "37", "135", "78", "168", "203"},
 }
 
 var lightPalette256 = palette{
@@ -60,8 +60,8 @@ var lightPalette256 = palette{
 	text: "234", textDim: "241",
 	accent: "26", ok: "28", fail: "160", warn: "130",
 	selection: "153",
-	heat:      [5]lipgloss.Color{"254", "151", "114", "71", "28"},
-	brand:     [8]lipgloss.Color{"166", "26", "130", "30", "91", "28", "125", "160"},
+	heat:      [5]colour{"254", "151", "114", "71", "28"},
+	brand:     [8]colour{"166", "26", "130", "30", "91", "28", "125", "160"},
 }
 
 var darkPalette16 = palette{
@@ -70,8 +70,8 @@ var darkPalette16 = palette{
 	text: "15", textDim: "7",
 	accent: "12", ok: "10", fail: "9", warn: "11",
 	selection: "4",
-	heat:      [5]lipgloss.Color{"8", "2", "2", "10", "10"},
-	brand:     [8]lipgloss.Color{"3", "12", "11", "6", "5", "10", "13", "9"},
+	heat:      [5]colour{"8", "2", "2", "10", "10"},
+	brand:     [8]colour{"3", "12", "11", "6", "5", "10", "13", "9"},
 }
 
 var lightPalette16 = palette{
@@ -80,8 +80,8 @@ var lightPalette16 = palette{
 	text: "0", textDim: "8",
 	accent: "4", ok: "2", fail: "1", warn: "3",
 	selection: "7",
-	heat:      [5]lipgloss.Color{"7", "2", "2", "10", "10"},
-	brand:     [8]lipgloss.Color{"3", "4", "3", "6", "5", "2", "5", "1"},
+	heat:      [5]colour{"7", "2", "2", "10", "10"},
+	brand:     [8]colour{"3", "4", "3", "6", "5", "2", "5", "1"},
 }
 
 // paletteOf is the palette of a theme for the colour profile of the terminal.
@@ -157,19 +157,19 @@ func buildTheme(dark, noColor, filled bool) theme {
 	p := paletteOf(dark, currentProfile())
 	return theme{
 		palette:     p,
-		title:       lipgloss.NewStyle().Bold(true).Foreground(p.text),
-		active:      lipgloss.NewStyle().Bold(true).Foreground(p.accent),
-		hint:        lipgloss.NewStyle().Foreground(p.textDim),
-		ok:          lipgloss.NewStyle().Bold(true).Foreground(p.ok),
-		fail:        lipgloss.NewStyle().Bold(true).Foreground(p.fail),
-		warning:     lipgloss.NewStyle().Bold(true).Foreground(p.warn),
-		focusBorder: lipgloss.NewStyle().Foreground(p.borderFocus),
-		quietBorder: lipgloss.NewStyle().Foreground(p.border),
-		activeRow:   lipgloss.NewStyle().Bold(true).Foreground(p.text).Background(p.selection),
-		cell:        lipgloss.NewStyle().Foreground(p.text),
-		selMark:     lipgloss.NewStyle().Bold(true).Foreground(p.accent).Background(p.selection),
-		key:         lipgloss.NewStyle().Bold(true).Foreground(p.text),
-		footKey:     lipgloss.NewStyle().Bold(true).Foreground(p.accent),
+		title:       lipgloss.NewStyle().Bold(true).Foreground(p.text.lip()),
+		active:      lipgloss.NewStyle().Bold(true).Foreground(p.accent.lip()),
+		hint:        lipgloss.NewStyle().Foreground(p.textDim.lip()),
+		ok:          lipgloss.NewStyle().Bold(true).Foreground(p.ok.lip()),
+		fail:        lipgloss.NewStyle().Bold(true).Foreground(p.fail.lip()),
+		warning:     lipgloss.NewStyle().Bold(true).Foreground(p.warn.lip()),
+		focusBorder: lipgloss.NewStyle().Foreground(p.borderFocus.lip()),
+		quietBorder: lipgloss.NewStyle().Foreground(p.border.lip()),
+		activeRow:   lipgloss.NewStyle().Bold(true).Foreground(p.text.lip()).Background(p.selection.lip()),
+		cell:        lipgloss.NewStyle().Foreground(p.text.lip()),
+		selMark:     lipgloss.NewStyle().Bold(true).Foreground(p.accent.lip()).Background(p.selection.lip()),
+		key:         lipgloss.NewStyle().Bold(true).Foreground(p.text.lip()),
+		footKey:     lipgloss.NewStyle().Bold(true).Foreground(p.accent.lip()),
 		filled:      filled,
 	}
 }
