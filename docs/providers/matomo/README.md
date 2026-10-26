@@ -141,13 +141,14 @@ refused. Methods without server paging are cut on the Qatlas side.
 The terminal editor starts a new connection on the setup profile `read`, which selects the version, website,
 report catalog, report, and segment field tools as well as `matomo.goals.list`, `matomo.goals.get`,
 `matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
-`matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.site-settings.get`,
+`matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.opt-out-code.get`, `matomo.site-settings.get`,
 `matomo.consent-manager.detect`, `matomo.dimensions.list`, `matomo.reference-data.list`, and
 `matomo.ip-ranges.expand`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
 and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.users.get`,
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
-or Super User rights. The profile `live` adds the [live tools](live.md) and the [visitor profile tools](visitors.md),
-because they carry personal data. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
+`matomo.tracking-failures.list`, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
@@ -195,6 +196,10 @@ no profile; `matomo.users.delete` (target `instance`), `matomo.access.set`, `mat
 | `matomo.sites.update-created-time` | [sites](sites.md) | sets the creation date of up to 100 websites (effect `update`) |
 | `matomo.site-groups.rename` | [sites](sites.md) | renames a website group instance-wide (Super User, target `instance`; effect `update`) |
 | `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
+| `matomo.opt-out-code.get` | [sites](sites.md#opt-out-code) | reads the opt-out embed code, script or self-contained, as text |
+| `matomo.tracking-failures.list` | [sites](sites.md#tracking-failures) | reads the logged tracking failures inside the targets (admin right; profile `live`) |
+| `matomo.tracking-failures.delete` | [sites](sites.md#tracking-failures) | deletes one tracking failure of a website (admin right; effect `delete`) |
+| `matomo.tracking-failures.delete-all` | [sites](sites.md#tracking-failures) | deletes every tracking failure of the token, beyond the bound websites (admin right, target `instance`; effect `delete`, only via `tools`) |
 | `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
 | `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
 | `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
