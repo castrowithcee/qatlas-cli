@@ -42,7 +42,8 @@ var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
-	// These three come first: their texts also hold words of the groups below, and the third quotes a setting ID.
+	// These come first: their texts also hold words of the groups below, and one quotes a setting ID.
+	{"password-refused", []string{"the current password you entered is not correct", "re-authenticate to confirm"}},
 	{"granular-off", []string{"granular compliance configuration is not enabled"}},
 	{"config-controlled", []string{"controlled by the config file"}},
 	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
@@ -74,6 +75,10 @@ func applicationError(op string, data []byte) error {
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
 	case "missing":
 		return &missingError{}
+	case "password-refused":
+		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op,
+			Message: "Matomo refused the password confirmation; check the secret role " + rolePasswordConfirmation +
+				" of this connection's credential"}}
 	case "granular-off":
 		return &missingError{granular: true}
 	case "config-controlled":

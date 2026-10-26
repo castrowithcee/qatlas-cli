@@ -286,7 +286,7 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	if !m.template.picking {
 		t.Fatal("enter on from existing did not open the picker")
 	}
-	if view := screenOf(m); !strings.Contains(view, "4 total") || !strings.Contains(view, "search:") {
+	if view := screenOf(m); !strings.Contains(view, "4 total") || !strings.Contains(view, "Type to search") {
 		t.Errorf("the picker does not show its count and search:\n%s", view)
 	}
 	typeText(t, m, "gam")

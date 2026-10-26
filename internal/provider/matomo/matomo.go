@@ -88,6 +88,10 @@ func Register(reg *capability.Registry) error {
 			Name: roleToken,
 			Description: "Personal Matomo authentication token, created under Personal, Security; it has the " +
 				"rights of its user per website and is sent as 'Authorization: Bearer ...'",
+		}, {
+			Name: rolePasswordConfirmation, Optional: true,
+			Description: "Matomo password of the token's user; sent only as the password confirmation Matomo asks " +
+				"for on raw data anonymization and data purge, and set only for a connection that offers those tools",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "website",
@@ -237,6 +241,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataSubjectsFind, Handler: capability.Handler(invokeDataSubjectsFind)},
 		capability.Operation{Descriptor: dataSubjectsExport, Handler: capability.Handler(invokeDataSubjectsExport)},
 		capability.Operation{Descriptor: dataSubjectsDelete, Handler: capability.Handler(invokeDataSubjectsDelete)},
+		capability.Operation{Descriptor: rawDataAnonymize, Handler: capability.Handler(invokeRawDataAnonymize)},
+		capability.Operation{Descriptor: dataPurgeRun, Handler: capability.Handler(invokeDataPurgeRun)},
 		capability.Operation{Descriptor: privacySettingsGet, Handler: capability.Handler(invokePrivacySettingsGet)},
 		capability.Operation{Descriptor: complianceGet, Handler: capability.Handler(invokeComplianceGet)},
 		capability.Operation{Descriptor: complianceSetPolicySettings, Handler: capability.Handler(invokeComplianceSetPolicySettings)},

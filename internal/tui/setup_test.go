@@ -134,7 +134,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 		t.Fatalf("screen = %v, want the summary", m.screen)
 	}
 	summary := screenOf(m)
-	for _, want := range []string{"wiki (new)", "reader (new) · system keyring: token-id, token-secret",
+	for _, want := range []string{"wiki ● new", "reader ● new · system keyring: token-id, token-secret",
 		"default: read"} {
 		if !strings.Contains(summary, want) {
 			t.Errorf("summary does not contain %q:\n%s", want, summary)
@@ -205,7 +205,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 		}
 	}
 	press(t, m, "f2", "f2", "f2")
-	if !strings.Contains(screenOf(m), "reader (existing, unchanged)") {
+	if !strings.Contains(screenOf(m), "reader ● existing, unchanged") {
 		t.Errorf("summary does not say the credential is reused:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")

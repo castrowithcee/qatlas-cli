@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Brave Search provider: setup with a Brave API key, plans and the search and answers profiles, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the pages of the tool families.
+  Describes the Brave Search provider: setup with a Brave API key, plans and the search, answers, and autosuggest profiles, cost, rate limits and quota, the billed connection test, goggles, privacy and terms of use, error mapping, limits, and the pages of the tool families.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -11,11 +11,13 @@ updated: 2026-10-25
 
 Brave Search is a provider for the Brave Search API with one subscription key. It reads the web for agents
 (LLM Context), the web for people (Web Search), news, videos, images, places, and the real-time rich results
-that a web search announces, and asks Brave for AI-written answers with citations. It changes nothing: every tool is a read, and the connection takes no target,
-because a key reaches the endpoints of its plan and not a part of an account.
+that a web search announces, asks Brave for AI-written answers with citations, and suggests and corrects queries. It changes nothing:
+every tool is a read, and the connection takes no target, because a key reaches the endpoints of its plan and
+not a part of an account.
 
 The tools are described per family: [LLM Context](llm-context.md), [web search and rich results](web.md),
-[news](news.md), [videos and images](media.md), [places](places.md), and [Answers](answers.md).
+[news](news.md), [videos and images](media.md), [places](places.md), [Answers](answers.md), and
+[suggestions and spellcheck](suggest.md).
 
 ## Configuration
 
@@ -56,13 +58,17 @@ whether a key reaches the other two place endpoints is shown by the call.
 The profile `answers` is the Answers plan: `brave.answers.ask` only. It is not recommended, and its tool is
 listed only: a connection reaches it through its `tools` list, never through the `read` effect.
 
+The profile `autosuggest` is the Autosuggest and Spellcheck plans: `brave.suggestions.list` and
+`brave.spellcheck.check`. It is not recommended.
+
 Qatlas manages no subscription, payment, or key.
 
 ## Cost
 
 Brave bills every successful request to the key's plan. Qatlas never repeats a request on its own, so one
 tool call is at most one billed request. Each tool description says so. Current prices are on the Brave
-pricing page. Answers is billed by searches and tokens, see [Answers](answers.md). Brave names no plan or price for `brave.pois.get` and `brave.poi-descriptions.get`; their
+pricing page. Answers is billed by searches and tokens, see [Answers](answers.md); Suggest and Spellcheck cost a tenth of a
+search request. Brave names no plan or price for `brave.pois.get` and `brave.poi-descriptions.get`; their
 descriptions say so.
 
 ## Rate limits and quota
@@ -83,11 +89,14 @@ and is not read.
 
 ## Connection test
 
-`qatlas connection test` sends one real request to the cheapest endpoint the connection offers: News with
-`q=brave` and `count=1`, otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, Images, or Place Search
+`qatlas connection test` sends one real request to the cheapest endpoint the connection offers: Spellcheck
+with `q=brave`, otherwise Suggest with `q=brave` and `count=1`, otherwise News with `q=brave` and `count=1`,
+otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, Images, or Place Search
 (`q=brave`) with `count=1`, whichever tool the connection allows first. The two endpoints that take place ids
 are not tested, because an id is known only from a search, and Answers is never tested, because its cost
-varies.
+varies. A connection without a `tools` list offers every read, so its test calls Spellcheck; a key without
+the Spellcheck plan then fails the test, and a `tools` list such as the one of a profile avoids that.
+
 Brave has no free key check, so the test spends one billed request. Success proves that the key is valid
 for that endpoint only; it shows neither the plan nor any other endpoint. A `422` is never taken as proof
 of a valid key, because Brave answers it for invalid parameters and for rejected keys alike.
@@ -136,8 +145,8 @@ and claim neither. An unreadable, oversized (over 4 MB; an Answers stream over 8
 
 ## Boundary
 
-The provider reaches only the ten endpoints of the tool pages. It offers no passthrough of method, path, header, or
-body. Not offered: Suggest and Spellcheck.
+The provider reaches only the twelve endpoints of the tool pages. It offers no passthrough of method, path, header, or
+body. The Summarizer endpoint, which Brave no longer documents, is not offered.
 
 Left out on purpose:
 

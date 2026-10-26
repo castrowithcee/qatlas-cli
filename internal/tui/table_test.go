@@ -341,6 +341,8 @@ var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // of the same width, once any colour is stripped) and holds text, so a test can read the row of a known
 // entry without assuming a fixed position, a colour profile, or mistaking a header or hint line that
 // happens to mention the same text for the row itself.
+var trailingEscapes = regexp.MustCompile(`(\x1b\[[0-9;]*m)+$`)
+
 func findRow(view, text string) string {
 	for _, line := range strings.Split(view, "\n") {
 		// A table inside its frame is measured from the inner edge of the frame.
@@ -351,6 +353,8 @@ func findRow(view, text string) string {
 			if end := strings.IndexAny(line, "│║"); end >= 0 {
 				line = line[:end]
 			}
+			// What stands before the closing border is the colour of the border, not of the row.
+			line = trailingEscapes.ReplaceAllString(line, "")
 		}
 		plain := ansiEscape.ReplaceAllString(line, "")
 		if strings.Contains(plain, text) && (strings.HasPrefix(plain, "> ") || strings.HasPrefix(plain, "▌ ") || strings.HasPrefix(plain, "  ")) {

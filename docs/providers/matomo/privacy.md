@@ -59,7 +59,26 @@ foreign website refuses the whole call without naming it. A personal token needs
 takes no password. The answer gives the rows Matomo deleted per storage area (`areas`, ordered by name, cut at 100 with
 `truncated`), and no area when Matomo reports none.
 
-The anonymization of raw data and the data purge are not offered: Matomo asks for a password confirmation there.
+## Anonymizing and purging raw data
+
+`matomo.raw-data.anonymize` and `matomo.data-purge.run` change the stored logs of the instance for good, need Super
+User rights and the target `instance`, are offered only where a connection's `tools` list names them, need `confirm`,
+and send exactly one request that is never repeated after a timeout, a 5xx, or an unreadable answer.
+
+- `matomo.raw-data.anonymize` calls `PrivacyManager.anonymizeSomeRawData` for the explicit `idSites` (1 to 100, all inside
+  the website targets, so the connection needs `instance` and websites; Matomo's `all` is not accepted, and one foreign
+  website refuses the whole call without naming it) and one `date`: a day or a range as `YYYY-MM-DD`, never a relative
+  date. At least one of `anonymizeIp`, `anonymizeLocation`, `anonymizeUserId`, or a column list
+  (`unsetVisitColumns`, `unsetLinkVisitActionColumns`, up to 50 names each) is required; Matomo checks the column
+  names. Matomo only schedules the job and its scheduled task runs it later, so `scheduled` means accepted, not done.
+- `matomo.data-purge.run` calls `PrivacyManager.executeDataPurge`, which takes no argument. It deletes raw logs and
+  report data of the whole instance by the retention periods configured in Matomo, at once; Matomo refuses it when its
+  administrators disabled the purge settings. No tool sets the retention periods.
+
+Matomo asks for the password of the token's user on these two methods even with a token. The credential needs the
+optional secret role `password-confirmation` for it. It is stored and redacted like the token, is never an argument,
+and is sent only on these two methods, in the request body. A connection whose credential lacks it refuses both tools
+before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password.
 
 ## Privacy settings
 
