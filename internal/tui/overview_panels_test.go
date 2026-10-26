@@ -55,7 +55,7 @@ func TestOverviewHeatmapMatchesTheLog(t *testing.T) {
 	var calls []visualCall
 	mustNoError(t, json.Unmarshal(raw, &calls))
 
-	view := m.View()
+	view := m.render()
 	grid, drawn := heatSquares(m.overviewAct.days, localDay(m.timeNow()), m.retentionStart(m.timeNow()), 40, overviewHeatWeeks)
 	levels := invokelog.ActivityLevel(drawn)
 	var total, succeeded int
@@ -87,7 +87,7 @@ func TestOverviewWithoutLogShowsEmptyPanels(t *testing.T) {
 	m := overviewModel(t, mustModel(t))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	deliver(m, m.loadOverviewActivity())
-	view := ansi.Strip(m.View())
+	view := ansi.Strip(m.render())
 	for _, want := range []string{"Recent activity", "Activity", "Connections"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the Overview lacks %q:\n%s", want, view)
@@ -101,7 +101,7 @@ func TestOverviewWithoutLogShowsEmptyPanels(t *testing.T) {
 // Without colour the marks, the result words, and the glyphs of the levels carry the meaning.
 func TestOverviewWithoutColourKeepsMarksAndGlyphs(t *testing.T) {
 	m := demoOverview(t, true, 150, 42)
-	view := m.View()
+	view := m.render()
 	if hasColour(view) {
 		t.Errorf("the view holds a colour sequence:\n%q", view)
 	}
@@ -118,7 +118,7 @@ func TestOverviewWithoutColourKeepsMarksAndGlyphs(t *testing.T) {
 // The smallest terminal keeps the counts and the steps selectable, as lines, inside its size.
 func TestOverviewAtTheSmallestSize(t *testing.T) {
 	m := demoOverview(t, false, minimumWidth, minimumHeight)
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, ansi.Strip(view), minimumWidth, minimumHeight)
 	_, items, _ := m.overviewLines()
 	// The five counts and the one next step that the height leaves room for.
@@ -134,7 +134,7 @@ func TestOverviewAtTheSmallestSize(t *testing.T) {
 		t.Errorf("the smallest Overview keeps frames over the counts:\n%s", ansi.Strip(view))
 	}
 	m.screen, m.overviewCursor = screenList, 2
-	if view := ansi.Strip(m.View()); !strings.Contains(view, "> Credentials") {
+	if view := ansi.Strip(m.render()); !strings.Contains(view, "> Credentials") {
 		t.Errorf("the selection is not marked:\n%s", view)
 	}
 	press(t, m, "enter")
@@ -146,7 +146,7 @@ func TestOverviewAtTheSmallestSize(t *testing.T) {
 // The recent calls and the heatmap stand side by side from 120 cells on, and one above the other below.
 func TestOverviewPanelsStandBesideEachOtherFromTheThreshold(t *testing.T) {
 	wide := demoOverview(t, false, overviewWide, 42)
-	view := wide.View()
+	view := wide.render()
 	recent, heat := lineOf(view, "Recent activity"), lineOf(view, "Activity (")
 	if recent < 0 || recent != heat {
 		t.Errorf("at %d cells the panels stand on lines %d and %d:\n%s", overviewWide, recent, heat, ansi.Strip(view))
@@ -154,7 +154,7 @@ func TestOverviewPanelsStandBesideEachOtherFromTheThreshold(t *testing.T) {
 	assertViewFits(t, ansi.Strip(view), overviewWide, 42)
 
 	narrow := demoOverview(t, false, overviewWide-1, 60)
-	view = narrow.View()
+	view = narrow.render()
 	recent, heat = lineOf(view, "Recent activity"), lineOf(view, "Activity (")
 	if recent < 0 || heat <= recent {
 		t.Errorf("at %d cells the panels stand on lines %d and %d, want the heatmap below:\n%s", overviewWide-1, recent, heat,
@@ -168,12 +168,12 @@ func TestOverviewPanelsStandBesideEachOtherFromTheThreshold(t *testing.T) {
 func TestOverviewCardSelectionAndClick(t *testing.T) {
 	m := demoOverview(t, true, 150, 42)
 	press(t, m, "down")
-	view := ansi.Strip(m.View())
+	view := ansi.Strip(m.render())
 	if !strings.Contains(view, "> Connections") || !strings.Contains(view, "╔") || strings.Count(view, "╔") != 1 {
 		t.Errorf("the selected card is not marked:\n%s", view)
 	}
 	press(t, m, "down")
-	if view := ansi.Strip(m.View()); strings.Contains(view, "> Connections") || !strings.Contains(view, "> Services") {
+	if view := ansi.Strip(m.render()); strings.Contains(view, "> Connections") || !strings.Contains(view, "> Services") {
 		t.Errorf("the mark did not move to Services:\n%s", view)
 	}
 

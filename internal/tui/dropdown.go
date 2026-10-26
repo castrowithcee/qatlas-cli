@@ -21,12 +21,12 @@ func fieldStyle(focused bool) lipgloss.Style {
 	p := styles.palette
 	style := lipgloss.NewStyle()
 	if p.surface != "" {
-		style = style.Background(p.surface).Foreground(p.text)
+		style = style.Background(p.surface.lip()).Foreground(p.text.lip())
 	}
 	if focused {
 		style = style.Bold(true)
 		if p.accent != "" {
-			style = style.Foreground(p.accent)
+			style = style.Foreground(p.accent.lip())
 		}
 	}
 	return style
@@ -66,7 +66,7 @@ func searchField(content string, width int) string {
 	if content == "" {
 		hint := styles.hint
 		if styles.palette.surface != "" {
-			hint = hint.Background(styles.palette.surface)
+			hint = hint.Background(styles.palette.surface.lip())
 		}
 		return hint.Render(padLine(clipCells(" "+tr(tSearchField), width), width))
 	}

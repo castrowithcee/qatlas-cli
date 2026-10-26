@@ -3,7 +3,6 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,10 +32,8 @@ type filterList struct {
 }
 
 func newFilterList(text func(string) string) filterList {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
-	// Static for the same reason as every text field of the editor: nothing threads a blink timer through.
-	in.Cursor.SetMode(cursor.CursorStatic)
 	return filterList{text: text, input: in}
 }
 

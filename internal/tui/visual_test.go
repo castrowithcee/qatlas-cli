@@ -17,8 +17,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
@@ -92,7 +90,7 @@ func visualSetup(t *testing.T, noColor bool) {
 	t.Cleanup(func() { uiLang, time.Local = lang, local })
 	setLanguage(uiprefs.LanguageEnglish)
 	time.Local = time.UTC
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	if noColor {
 		t.Setenv("NO_COLOR", "1")
 	} else {
@@ -325,7 +323,7 @@ func visualShots() []visualShot {
 // visualProfileShot is a snapshot rendered under a forced colour profile of the terminal.
 type visualProfileShot struct {
 	visualShot
-	profile termenv.Profile
+	profile colorProfile
 }
 
 // visualProfileShots are the colour-profile variants of the Overview and the Connections list, numbered 60 to 69.
@@ -334,13 +332,13 @@ func visualProfileShots() []visualProfileShot {
 	overview := func(*testing.T, *Model) {}
 	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
 	return []visualProfileShot{
-		{visualShot{"60-overview-256", 150, 42, dark, term, false, overview}, termenv.ANSI256},
-		{visualShot{"61-connections-256", 150, 42, dark, term, false, connections}, termenv.ANSI256},
-		{visualShot{"62-overview-16", 150, 42, dark, term, false, overview}, termenv.ANSI},
-		{visualShot{"63-connections-16", 150, 42, dark, term, false, connections}, termenv.ANSI},
-		{visualShot{"64-connections-light", 150, 42, uiprefs.ThemeLight, term, false, connections}, termenv.TrueColor},
-		{visualShot{"65-connections-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, connections}, termenv.TrueColor},
-		{visualShot{"66-connections-no-color", 150, 42, dark, term, true, connections}, termenv.TrueColor},
+		{visualShot{"60-overview-256", 150, 42, dark, term, false, overview}, profile256},
+		{visualShot{"61-connections-256", 150, 42, dark, term, false, connections}, profile256},
+		{visualShot{"62-overview-16", 150, 42, dark, term, false, overview}, profile16},
+		{visualShot{"63-connections-16", 150, 42, dark, term, false, connections}, profile16},
+		{visualShot{"64-connections-light", 150, 42, uiprefs.ThemeLight, term, false, connections}, profileTrueColor},
+		{visualShot{"65-connections-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, connections}, profileTrueColor},
+		{visualShot{"66-connections-no-color", 150, 42, dark, term, true, connections}, profileTrueColor},
 	}
 }
 
@@ -355,17 +353,17 @@ func TestVisualSnapshots(t *testing.T) {
 	}
 	shots := make([]visualProfileShot, 0, 64)
 	for _, shot := range visualShots() {
-		shots = append(shots, visualProfileShot{shot, termenv.TrueColor})
+		shots = append(shots, visualProfileShot{shot, profileTrueColor})
 	}
 	shots = append(shots, visualProfileShots()...)
 	for _, ps := range shots {
 		shot := ps.visualShot
 		t.Run(shot.name, func(t *testing.T) {
 			visualSetup(t, shot.noColor)
-			lipgloss.SetColorProfile(ps.profile)
+			setProfile(ps.profile)
 			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme, shot.background)
 			shot.show(t, m)
-			view := m.View()
+			view := m.render()
 			if strings.Contains(view, "\r") {
 				t.Fatal("the view holds a carriage return")
 			}

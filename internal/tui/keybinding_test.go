@@ -55,7 +55,7 @@ func TestInfoExtraKeyWorksOnTextRowsAndFooters(t *testing.T) {
 	if !m.typing() {
 		t.Fatalf("the focused row is not a text row (%q)", m.fields[m.focus].label)
 	}
-	if view := m.View(); !strings.Contains(view, "F3 info") || strings.Contains(view, "i/F3 info") {
+	if view := m.render(); !strings.Contains(view, "F3 info") || strings.Contains(view, "i/F3 info") {
 		t.Fatalf("a text row names only the key that works there:\n%s", view)
 	}
 	press(t, m, "i")
@@ -74,7 +74,7 @@ func TestInfoExtraKeyWorksOnTextRowsAndFooters(t *testing.T) {
 	for m.typing() {
 		press(t, m, "tab")
 	}
-	if view := m.View(); !strings.Contains(view, "i/F3 info") {
+	if view := m.render(); !strings.Contains(view, "i/F3 info") {
 		t.Fatalf("a choice row names both keys:\n%s", view)
 	}
 	press(t, m, "i")
@@ -92,7 +92,7 @@ func TestSettingsBindsKeysAndFootersFollow(t *testing.T) {
 	if m.fail != "" || m.fieldValue("info key") != "f3" {
 		t.Fatalf("info key = %q, fail %q", m.fieldValue("info key"), m.fail)
 	}
-	if view := m.View(); !strings.Contains(view, "i and F3") {
+	if view := m.render(); !strings.Contains(view, "i and F3") {
 		t.Fatalf("the row does not name the binding:\n%s", view)
 	}
 	bindKey(t, m, "save key", "f4")
@@ -107,7 +107,7 @@ func TestSettingsBindsKeysAndFootersFollow(t *testing.T) {
 	if infoExtra != "f3" || keyLabel(actSave) != "F4" {
 		t.Fatalf("keymap not applied: info extra %q, save %q", infoExtra, keyLabel(actSave))
 	}
-	if view := m.View(); !strings.Contains(view, "F4 save") || strings.Contains(view, "F2 save") {
+	if view := m.render(); !strings.Contains(view, "F4 save") || strings.Contains(view, "F2 save") {
 		t.Fatalf("the footer does not show the new save key:\n%s", view)
 	}
 	focusKeyRow(t, m, "save key")

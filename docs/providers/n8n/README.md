@@ -154,7 +154,8 @@ data, are not read.
 
 ## Errors
 
-Errors keep stable classes and never carry the API key or a raw provider response body:
+Errors keep stable classes and never carry the API key. Qatlas' message holds no provider text; n8n's own `message`
+travels apart from it in the `provider` field of the error detail, marked untrusted, redacted, and bounded:
 
 | Class | Cause |
 | --- | --- |

@@ -98,7 +98,7 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	// Draw once more, so the targets are those of the state the event meets.
-	m.View()
+	m.render()
 	if m.infoOpen {
 		if !wheel {
 			m.infoOpen = false
