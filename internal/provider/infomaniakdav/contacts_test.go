@@ -3,6 +3,7 @@ package infomaniakdav
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -258,6 +259,11 @@ func TestContactsListCollationRefusalIsRequestError(t *testing.T) {
 	_, err := listContactsOf(`{"addressbook":"main","property_filters":[{"property":"FN","text":"a","collation":"i;octet"}]}`)
 	if classOf(err) != provider.ClassProviderError || strings.Contains(err.Error(), "canary") {
 		t.Errorf("err = %v", err)
+	}
+	var failure *provider.Error
+	if !errors.As(err, &failure) || failure.Original == nil || failure.Original.Status != 403 ||
+		len(failure.Original.Entries) != 1 || !strings.Contains(failure.Original.Entries[0].Message, bodyCanary) {
+		t.Errorf("the rewritten refusal lost the original answer: %+v", failure)
 	}
 	_, err = listContactsOf(`{"addressbook":"main"}`)
 	if classOf(err) != provider.ClassPermission {

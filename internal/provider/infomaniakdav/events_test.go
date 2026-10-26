@@ -3,6 +3,7 @@ package infomaniakdav
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -391,6 +392,11 @@ func TestEventsListCollationRefusalIsRequestError(t *testing.T) {
 		`,"property_filters":[{"property":"SUMMARY","text":"a","collation":"i;octet"}]}`)
 	if classOf(err) != provider.ClassProviderError || strings.Contains(err.Error(), "canary") {
 		t.Errorf("err = %v", err)
+	}
+	var failure *provider.Error
+	if !errors.As(err, &failure) || failure.Original == nil || failure.Original.Status != 403 ||
+		len(failure.Original.Entries) != 1 || !strings.Contains(failure.Original.Entries[0].Message, bodyCanary) {
+		t.Errorf("the rewritten refusal lost the original answer: %+v", failure)
 	}
 	_, err = listEventsOf(t, []string{"calendar/work"}, allArgs)
 	if classOf(err) != provider.ClassPermission {

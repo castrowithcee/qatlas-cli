@@ -281,8 +281,8 @@ beyond a cap is refused instead of truncated.
 | `invalid-provider-response` | the answer broke the shape, bounds, or path binding above |
 | `provider-error` | every other rejection, including a refused redirect, a failed precondition, and an event that cannot be replaced safely |
 
-The text of an Infomaniak answer never reaches an error message, and neither does the password. Remedies are in
-[Fixing errors](setup.md#fixing-errors).
+The text of an Infomaniak answer never reaches Qatlas' error message, and neither does the password; the answer
+goes apart in the `provider` field of the error detail. Remedies are in [Fixing errors](setup.md#fixing-errors).
 
 ## Untrusted data
 

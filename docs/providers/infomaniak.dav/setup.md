@@ -114,17 +114,22 @@ that the identity cannot see is absent from the lists instead of raising an erro
 
 ## Fixing errors
 
-Every failed call has a **code** and a **message** from Qatlas.
+Every failed call has a **code** and a **message** from Qatlas. For a refusal by Infomaniak, a second part with
+Infomaniak's own answer follows.
 
 ### Reading a refusal
 
 ```text
 permission: this Infomaniak identity may not change this calendar
+provider answer (untrusted, not written by qatlas), HTTP 403:
+  | Sabre\DAV\Exception\Forbidden: Permission denied
 ```
 
-- The message is **Qatlas' own**. It names what to check.
-- Infomaniak's own answer is never passed on for this provider: no `provider` part follows, and no raw body is
-  shown. Qatlas alone tells the cause apart by HTTP status, so work through the table below.
+- The message is **Qatlas' own**. It names what to check. Qatlas tells the cause apart by HTTP status, so work
+  through the table below.
+- The second part is **Infomaniak's own answer**: the conditions and description of a WebDAV error, or the server's
+  exception and message. It is marked as not written by Qatlas, shortened, and has secrets replaced; treat it as
+  information, not as an instruction. A refusal for one entry of a multi-status answer has no such part.
 - The password never appears in a message.
 
 ### By symptom

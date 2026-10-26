@@ -154,7 +154,8 @@ func newHTTPClient() *http.Client {
 // request is the single read path of this provider; writes go through mutate. The method is one of the three
 // read constants and never comes from an argument. The path comes from the fixed root or from segments that Segments or
 // validCollectionID already validated; a collection path ends in a slash, an object path does not. A response
-// other than wantStatus is mapped to a class without reading its body, and a body beyond limit is refused.
+// other than wantStatus is mapped to a class, its body goes to Original apart from the message, and a body beyond
+// limit is refused.
 func (c *Client) request(ctx context.Context, op, method string, segments []string, collection bool,
 	depth, body string, wantStatus, limit int) ([]byte, http.Header, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
@@ -182,7 +183,7 @@ func (c *Client) request(ctx context.Context, op, method string, segments []stri
 	}
 	defer response.Body.Close()
 	if response.StatusCode != wantStatus {
-		return nil, nil, statusError(op, response.StatusCode)
+		return nil, nil, statusErrorBody(op, response)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, int64(limit)+1))
 	if err != nil || len(data) > limit {
@@ -329,7 +330,22 @@ func Register(reg *capability.Registry) error {
 	)
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into a message.
+// statusErrorBody is statusError for a failed response; its body goes to Original, never into the message.
+func statusErrorBody(op string, response *http.Response) error {
+	failure := statusError(op, response.StatusCode)
+	withOriginal(failure, response)
+	return failure
+}
+
+// withOriginal attaches the answer of the service to a provider error.
+func withOriginal(err error, response *http.Response) {
+	var providerErr *provider.Error
+	if errors.As(err, &providerErr) {
+		providerErr.Original = dav.ErrorOriginal(response.StatusCode, response.Body)
+	}
+}
+
+// statusError maps an HTTP status to a stable class. It never reads a body; the message has no provider text.
 func statusError(op string, status int) error {
 	switch status {
 	case http.StatusUnauthorized:
