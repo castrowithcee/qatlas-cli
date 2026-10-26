@@ -78,7 +78,8 @@ and send exactly one request that is never repeated after a timeout, a 5xx, or a
 Matomo asks for the password of the token's user on these two methods even with a token. The credential needs the
 optional secret role `password-confirmation` for it. It is stored and redacted like the token, is never an argument,
 and is sent only on these two methods, in the request body. A connection whose credential lacks it refuses both tools
-before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password.
+before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password; the one
+exception is [`randomizeConfigId`](#changing-privacy-settings).
 
 ## Privacy settings
 
@@ -96,6 +97,23 @@ targets name `instance`. Like the other tools with both a website and an instanc
 to a connection that reaches websites. The settings are an allow-list of what Matomo documents; the options are the
 choices the compliance policies still allow. `tracker_file_name` and `tracker_writable` are shown by Matomo to Super
 Users only. `extra_metadata` appears only when a compliance policy controls a setting.
+
+## Changing privacy settings
+
+Three tools change the global privacy settings; all need Super User rights, a confirmation, and a connection that
+names `instance`, and they change every website of the instance. They are in no profile and send one request that is
+not repeated.
+
+- `matomo.privacy-settings.set-anonymize-ip` calls `setAnonymizeIpSettings` for the global settings only, never for one
+  website. It replaces the global settings completely, so every argument is required; read the settings with
+  `matomo.privacy-settings.get` first. A compliance policy can make Matomo keep a
+  value while it answers success; read the settings afterwards.
+- `matomo.do-not-track.enable` and `matomo.do-not-track.disable` call `activateDoNotTrack` and `deactivateDoNotTrack`.
+  They take no argument.
+
+Matomo asks for the password of the token's user only when `randomizeConfigId` is true. Then the credential needs the
+secret role `password-confirmation`, which is sent in the request body only, and a connection without it refuses the
+call before any request. Every other call, and both Do Not Track tools, never send the password.
 
 ## Compliance policies
 
