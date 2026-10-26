@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Topics and templates
@@ -35,7 +35,7 @@ Both products serve these tools through one code base; the tool IDs carry the pr
 - Template texts are untrusted data. A gitignore `source` and a license `body` are cut at 64 KiB (`truncated` is
   then true), a license `implementation` at 8 KiB. The lists hold at most 1000 entries, a label template at most
   200 labels.
-- `repository-licenses.list` exists on Gitea only; see [Not on Forgejo](../forgejo.md#not-on-forgejo).
+- `repository-licenses.list` exists on Gitea only; see [Not on Forgejo](../forgejo/README.md#not-on-forgejo).
 
 ## Tools
 

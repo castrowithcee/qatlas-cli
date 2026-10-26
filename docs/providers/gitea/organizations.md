@@ -13,7 +13,7 @@ updated: 2026-10-26
 # Organizations
 
 These tools act on organizations themselves. Names, descriptions, and activity texts in answers are untrusted data.
-[Forgejo](../forgejo.md) names the differences.
+[Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 

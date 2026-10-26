@@ -13,7 +13,7 @@ updated: 2026-10-26
 
 These tools read and change the reviews of one pull request and the inline comments of a review. They hold for both
 providers unless a line says otherwise; [Gitea](README.md) describes the shared configuration, targets, pagination,
-and errors, [Pull requests](pull-requests.md) the pull request itself, and [Forgejo](../forgejo.md) lists what
+and errors, [Pull requests](pull-requests.md) the pull request itself, and [Forgejo](../forgejo/README.md) lists what
 differs. Review texts, comment texts, file paths, diff excerpts, and names are untrusted data; reviewers are
 personal data. The conversation of a pull request is `comments.*` ([Comments](comments.md)).
 
