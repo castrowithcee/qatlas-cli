@@ -16,7 +16,7 @@ setup profiles. The tools are sorted into groups; each group has a page: [sites 
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md),
 [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
-[users and roles](users.md), and [privacy and data subject requests](privacy.md).
+[users and roles](users.md), [privacy and data subject requests](privacy.md), and [AI providers](ai-providers.md).
 
 ## Configuration
 
@@ -198,6 +198,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [reports](reports.md) | report catalog, reading reports, evolution, distinct counts, website comparison, glossary, insights, transitions, AI chatbots, segment fields |
 | [live data](live.md) | visit log, live counters, latest visit time |
 | [visitor profiles](visitors.md) | visitor profile, latest visitor ID, first visit of a visitor |
+| [AI providers](ai-providers.md) | AI provider settings without API keys, disconnecting a provider |
 | [goals](goals.md) | reading, creating, replacing, and deleting goals, goal recommendations |
 | [saved segments](segments.md) | reading, creating, replacing, starring, and deleting saved segments |
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
