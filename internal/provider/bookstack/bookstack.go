@@ -1064,11 +1064,25 @@ func transportError(op string, err error, change bool) error {
 	return failure
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is only read for the field names of
-// a validation failure; no provider text reaches the message. forbidden is the class of a 403.
+// originalFields maps BookStack's error answer {"error":{"code","message","validation"}} to an Original;
+// validation maps each field name to its list of texts.
+var originalFields = provider.OriginalFields{
+	Code: "error.code", Message: "error.message", Fields: "error.validation",
+}
+
+// statusError maps an HTTP status to a stable class. The body is read once and not with provider.ReadErrorBody,
+// because a 422 with many fields must keep every field name in the message; the same bytes feed Original,
+// which the core limits. The message takes only those names, no provider text. forbidden is the class of a 403.
 func statusError(op string, resp *http.Response, arguments []string, forbidden provider.Class, change bool) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	status := resp.StatusCode
+	failure := classifyStatus(op, status, body, arguments, forbidden, change)
+	failure.Original = provider.ErrorOriginal(status, body, originalFields)
+	return failure
+}
+
+func classifyStatus(op string, status int, body []byte, arguments []string, forbidden provider.Class,
+	change bool) *provider.Error {
 	switch {
 	case status == http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "BookStack rejected the API token"}
