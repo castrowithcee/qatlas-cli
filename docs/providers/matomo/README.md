@@ -19,6 +19,8 @@ setup profiles. The tools are sorted into groups; each group has a page: [sites 
 [users and roles](users.md), [SMS settings](mobile-messaging.md), [privacy and data subject requests](privacy.md),
 [AI providers](ai-providers.md), and [Tag Manager](tag-manager.md).
 
+To connect Matomo step by step, see [Set up Matomo](setup.md).
+
 ## Configuration
 
 A service needs `base_url`; there is no default, not even for Matomo Cloud. It is the address of the
@@ -224,5 +226,4 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
-fetched. `matomo.version.get` needs a view right on any website; the other tools need one on the website read,
-the goal changes a write right.
+fetched. The rights each tool group needs are listed in [Set up Matomo](setup.md#rights-per-tool-group).

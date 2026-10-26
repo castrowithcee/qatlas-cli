@@ -9,7 +9,8 @@ updated: 2026-10-26
 
 # Matomo SMS settings
 
-The SMS tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
+The SMS tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope); the rights and the plugin are listed in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -18,7 +19,7 @@ The SMS tools of the [Matomo provider](README.md). Targets are described under [
 | `matomo.sms-settings.get` | reads one SMS setting: credentials stored, SMS provider, credit, phone numbers, or delegation (target `instance`; in no profile) |
 | `matomo.sms-phone-numbers.remove` | removes a phone number of the token's user (target `instance`; effect `delete`) |
 | `matomo.sms-credentials.delete` | deletes the stored SMS provider credentials (target `instance`; effect `delete`, only via `tools`) |
-| `matomo.sms-delegation.set` | sets whether regular users manage the SMS credentials (Super User, target `instance`; effect `update`) |
+| `matomo.sms-delegation.set` | sets whether regular users manage the SMS credentials (target `instance`; effect `update`) |
 
 ## Binding
 
@@ -31,15 +32,14 @@ change who may manage credentials.
 
 `matomo.sms-settings.get` reads one section per call with one request. Credentials are never returned; only whether they
 exist and which SMS provider is set. `credit-left` makes the Matomo server ask the SMS provider, so it depends on that
-provider and can fail or be slow. `provider` and `credit-left` need the right to manage credentials, which is a Super
-User right unless management is delegated.
+provider and can fail or be slow.
 
 ## Removing access
 
 `matomo.sms-phone-numbers.remove` removes a number of the token's user and, through Matomo, from scheduled reports that
 name it. It accepts only the form `+` followed by 5 to 30 digits, which is narrower than Matomo's own cleaning of
 spaces and brackets. `matomo.sms-credentials.delete` deletes the stored provider credentials and is offered only where a
-connection's `tools` list names it. `matomo.sms-delegation.set` needs Super User rights. All three send one request
+connection's `tools` list names it. All three send one request
 that is never repeated and need confirmation.
 
 ## Not offered
