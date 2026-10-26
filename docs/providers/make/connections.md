@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Make: connections and credential requests
@@ -16,10 +16,9 @@ Errors follow [Errors](README.md#errors).
 ## Connections
 
 The connection tools address Make connections (stored third-party credentials), not Qatlas connections.
-The `connections-read` profile (`make.connections.list`, `get`, `editable-schema`) needs `connections:read`.
-`make.connections.test` (profile `connections-test`), `make.connections.rename` (profile `connections-manage`), the
-access-list change, and the separately offered `delete`, `create`, and `set-data` additionally need
-`connections:write`; `set-data` additionally needs `connections:read`, which binds the connection first.
+The `connections-read` profile holds `make.connections.list`, `get`, and `editable-schema`;
+`make.connections.test` is in `connections-test` and `make.connections.rename` in `connections-manage`. The token
+scopes are listed under [Connections and credential requests](setup.md#connections-and-credential-requests).
 
 `make.connections.list` always sends the bound team as `teamId`. Its `type` and `types` filters (not together)
 and its `scope_check` are validated locally before any request, with no passthrough. `scope_check` maps
@@ -45,7 +44,7 @@ always did.
 never a value or default.
 
 `make.connections.test` is an `execute` with an outside effect: Make uses the stored credential against the
-third-party service (`POST /connections/{id}/test`, `connections:write`, answer `{"verified":boolean}`). It is
+third-party service (`POST /connections/{id}/test`, answer `{"verified":boolean}`). It is
 `open_world`, needs its own confirmation, sends exactly one POST after the binding read, and is never retried;
 a timeout, a connection reset, a 5xx, or an unreadable answer is reported as uncertain. The result is only
 `verified`; Make reports no message. It sits in its own `connections-test` profile so a token or connection
@@ -64,18 +63,19 @@ ordinary error. With `confirm_scenarios_affected` true it sends `confirmed=true`
 connection stop working. A connection that is not in any scenario is deleted by the first request. Because the
 deletion is final, the tool is in no profile and is offered only when a connection's `tools` list names it.
 
-`make.connection-access.list` (profile `connections-access-read`, `connections:read`) and
-`make.connection-access.set` (profile `connections-access-manage`, `connections:write`, additionally `user:read`) use
+`make.connection-access.list` (profile `connections-access-read`) and
+`make.connection-access.set` (profile `connections-access-manage`) use
 Make's access-list endpoints
 (`GET /teams/{teamId}/connections/{id}/access-list`, `POST .../access-list/users`, and
 `PATCH .../access-list/users/{userId}`; the team is always the bound team and the connection is bound first).
 Make answers them only when its locked connections feature is enabled for the organization (otherwise HTTP
-400), and a change needs the entity manage permission of the token's user on the connection. The list returns
+400); the rights for viewing and changing a list are under
+[Connections and credential requests](setup.md#connections-and-credential-requests). The list returns
 users with name and email, which are personal data of other people and untrusted text, and groups in a list
 of their own; it holds at most 200 users and 200 groups. Make shows a token's user only the members it may
 see, so the list can be partial. `set` takes one `user_id` (already a
 member of the bound team) and a `role` of `admin` or `member`: it first proves the team membership with
-`GET /users/{userId}/user-team-roles/{teamId}` (`user:read`; a
+`GET /users/{userId}/user-team-roles/{teamId}` (a
 missing or other-team role is refused as an invalid request without naming anything, before any change),
 reads the list, sends nothing when the user
 already holds the role, and otherwise sends exactly one `POST` (user not on the list) or `PATCH` (user on the
@@ -98,8 +98,7 @@ to the bound team, for the one request, registered with the redactor, and set in
 field names of the forward credential. A plain field with the same name as a secret field, or with a member
 the tool sets itself, is refused, never overwritten. The plain `fields` argument is not redacted: put no
 secret into it. Because of `secret_ref`, both tools need a tools list entry, the `create` or `update`
-permission, and their own confirmation; they are in no profile. The secret role of the API token needs
-`connections:write` for them (and `connections:read` for `set-data`).
+permission, and their own confirmation; they are in no profile.
 
 - **Create.** `POST /connections?teamId=TEAM` with `accountName` (the `name`, 1 to 128 characters),
   `accountType` (`connection_type`, letters, digits, `.`, `_`, `:`, `-`, at most 100 characters), optional
@@ -131,9 +130,8 @@ A credential request asks a person to enter the secret of a connection or key th
 serves; no secret value is accepted, sent, or returned by these tools. They sit in their own sensitivity class
 (`make-credential-requests`) because the link is a way to enter secrets. A Qatlas connection with a scenario
 allow-list reaches no credential requests (they belong to no scenario), refused locally before any secret is read.
-The `credentialrequests-read` profile (`make.credential-requests.list`, `get`) needs `credential-requests:read`; its
-`credentialrequests-manage` profile (plus `create`, which additionally needs `user:read`) and the separately offered
-`make.credential-requests.delete` need `credential-requests:write`.
+The `credentialrequests-read` profile holds `make.credential-requests.list` and `get`; its
+`credentialrequests-manage` profile adds `create`, and `make.credential-requests.delete` is offered separately.
 
 `list` always sends the bound team as `teamId`; its filters are typed and validated locally (the ids as
 positive integers). `get` and `delete` take
@@ -149,7 +147,7 @@ and `get` never return it, and `create` keeps its narrower summary without the p
 typed, bounded fields only: `name` (1 to 255), optional `description` (at most 512), 1 to 16 `credentials`
 (`app_name` as a Make app name, 1 to 32 `app_modules` names or `*`, optional integer `app_version`,
 `name_override`, `description`), and the required person `provider_user_id`, whose membership in the bound team
-is proven first with `GET /users/{userId}/user-team-roles/{teamId}` (`user:read`; otherwise refused without
+is proven first with `GET /users/{userId}/user-team-roles/{teamId}` (otherwise refused without
 naming anything). No new user is invited. The team is the
 connection's own, never an argument. The answer is the request and `public_link` (https only, at most 2048
 characters, untrusted, never followed); it is the only tool that returns the request link. A repeated call creates a

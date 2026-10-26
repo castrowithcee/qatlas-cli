@@ -1,12 +1,12 @@
 ---
 description: >
-  Describes the Make data store, data structure, and data store record tools: the team binding, the scope
-  contradiction in Make's reference for reading a single store, deleting stores, and the bounds and key rules of
+  Describes the Make data store, data structure, and data store record tools: the team binding, deleting
+  stores, and the bounds and key rules of
   records.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Make: data stores and records
@@ -21,16 +21,8 @@ follow; creating, changing, or deleting a structure is not offered. A Qatlas con
 allow-list reaches none of them: they belong to no scenario, so the narrower reading is refusal, locally and
 before any secret is read.
 
-Make scopes: `datastores:read` for `list` and `get`; `datastores:write` for create, update, and delete, plus
-`datastores:read` for update and delete (the store is read first) and `udts:read` for the structure check of create
-and of an update that names a structure; `udts:read` for the data structure tools.
-
-**Scope contradiction in Make's reference.** The reference lists `organizations:read` as the scope of
-`GET /data-stores/{id}` while every other data store endpoint, including the list, lists `datastores:read`. This
-is most likely a documentation error. Every read of a single store (the `get` tool and the binding read before
-an update or delete) therefore names `datastores:read` and, in the same 403 message, `organizations:read` as the
-scope to add when `datastores:read` is present and the read is still refused. Not verified against a live
-account.
+The token scopes, including the scope Make's reference lists for reading one store, are under
+[Data stores and data structures](setup.md#data-stores-and-data-structures).
 
 Team binding. The teamId of list and create is always the connection's bound team, never an argument. Every
 `datastore_id` and `datastructure_id` is read from Make first and refused as an invalid request, without naming
@@ -66,11 +58,10 @@ reported as uncertain, and a result outside the bound team after the change as a
 ## Data store records
 
 `make.data-store-records.list`, `.create`, `.replace`, `.update`, and `.delete` work on the records of one data
-store of the bound team. Every
-`datastore_id` is read and bound to the bound team first (see [above](#data-stores-and-data-structures)), before the
-list or the one changing request; a store of another team is refused without naming it. A connection with a scenario
-allow-list reaches none of them. Make scopes: `datastores:read` for `list`; `datastores:write` and `datastores:read`
-for create, replace, update, and delete.
+store of the bound team. Every `datastore_id` is read and bound to the bound team first (see
+[above](#data-stores-and-data-structures)), before the list or the one changing request; a store of another team is
+refused without naming it. A connection with a scenario allow-list reaches none of them. The token scopes are in
+the same section of [Set up Make](setup.md#data-stores-and-data-structures).
 
 Make reports the store's specification and `strict` flag with every page of records, and both are returned like
 those of a data structure. `total_count` is Make's own count of the records in the store and `count` stays the
