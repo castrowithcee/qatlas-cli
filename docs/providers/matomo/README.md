@@ -208,8 +208,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 `matomo.archive-settings.set`, `matomo.trusted-hosts.set`, and `matomo.branding.set` (all target `instance`), and
 `matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`,
 `matomo.capabilities.remove`, and the two `matomo.ldap-users.*` tools (target `instance`) are in no profile either and are offered only via `tools`.
-The four [tracking tools](tracking.md) `matomo.tracking.record-page-view`, `matomo.tracking.record-event`,
-`matomo.tracking.record-site-search`, and `matomo.tracking.record-link` are in no profile and are offered only via
+The [tracking tools](tracking.md) are in no profile and are offered only via
 `tools`, because they write raw data that cannot be undone.
 
 ## Tools
@@ -231,7 +230,7 @@ The four [tracking tools](tracking.md) `matomo.tracking.record-page-view`, `mato
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [tracking](tracking.md) | recording page views, events, internal searches, and downloads or outlinks |
+| [tracking](tracking.md) | recording page views, events, internal searches, downloads or outlinks, goal conversions, and e-commerce orders and cart updates |
 | [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers, tags, and variables of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and

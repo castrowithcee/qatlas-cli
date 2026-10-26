@@ -509,10 +509,10 @@ func invokeTrackingRecordLink(ctx context.Context, resolved *config.Resolved, _ 
 }
 
 func trackingOperations() []capability.Operation {
-	return []capability.Operation{
+	return append([]capability.Operation{
 		{Descriptor: trackingRecordPageView, Handler: capability.Handler(invokeTrackingRecordPageView)},
 		{Descriptor: trackingRecordEvent, Handler: capability.Handler(invokeTrackingRecordEvent)},
 		{Descriptor: trackingRecordSiteSearch, Handler: capability.Handler(invokeTrackingRecordSiteSearch)},
 		{Descriptor: trackingRecordLink, Handler: capability.Handler(invokeTrackingRecordLink)},
-	}
+	}, trackingCommerceOperations()...)
 }

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tracking tools: recording page views, events, internal searches, and downloads or outlinks through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the parameters that are never sent.
+  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, and e-commerce orders and cart updates through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the parameters that are never sent.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -20,8 +20,11 @@ The tracking tools of the [Matomo provider](README.md). The profiles are describ
 | `matomo.tracking.record-event` | records an event with category, action, name, and value (effect `create`) |
 | `matomo.tracking.record-site-search` | records an internal search with keyword, category, and result count (effect `create`) |
 | `matomo.tracking.record-link` | records a download or a click on an outgoing link, chosen by `kind` (effect `create`) |
+| `matomo.tracking.record-goal` | records a conversion of a goal, optionally with revenue (effect `create`) |
+| `matomo.tracking.record-order` | records an e-commerce order with order ID, revenue, amounts, and items (effect `create`) |
+| `matomo.tracking.record-cart-update` | records the current content of a cart (effect `create`) |
 
-All four tools are offered only where the `tools` list of a connection names them and are in no profile.
+All tools are offered only where the `tools` list of a connection names them and are in no profile.
 
 ## Endpoint and answer
 
@@ -50,13 +53,20 @@ arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`, `newVis
 
 Addresses (`url`, `referrer`, `target`) must be http or https addresses of at most 2048 characters; they are
 passed on as text and never fetched. Texts are limited as the tool schema says. Matomo's own limits apply on top.
-The tools do not offer e-commerce, goal, content, or media tracking and no bulk tracking.
+The tools do not offer content or media tracking and no bulk tracking.
+
+Goals and e-commerce use `matomo.php` with `idgoal`. Matomo resolves a goal ID only within the named website and
+refuses an unknown one as invalid, so no token is needed to check it. An order is a request with an order ID, a cart
+update one without; Matomo reads the cart items of a request as the full cart and marks items missing from a later
+update as removed. Matomo normally refuses an order ID it already holds for the website, but a queue confirms
+before it checks.
 
 ## Risks
 
 Tracking writes raw data (visits, actions, conversions) that the API cannot undo; only the
 [privacy tools](privacy.md#deleting-visits) remove it, and they may also remove other data. Fabricated requests
-distort every report built on them. `visitorId`, `overrideVisitorId`, and `userId` merge a request into an existing
+distort every report built on them; forged orders, cart updates, and goal revenue distort the e-commerce and goal
+reports and cannot be undone. `visitorId`, `overrideVisitorId`, and `userId` merge a request into an existing
 visitor or take over its identity. `overrideVisitorId` forces the visitor over the other two and needs the
 greatest care. `userId`, `userAgent`, `referrer`, and the texts of events and searches may carry personal data.
 
