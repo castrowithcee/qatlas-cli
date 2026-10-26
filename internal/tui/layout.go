@@ -258,7 +258,7 @@ func (m *Model) tabLine(focus string, items []string, active int) string {
 	b.WriteString(styles.active.Render(focus))
 	fill := styles.active
 	if p := styles.palette; !plainTabs() {
-		fill = lipgloss.NewStyle().Bold(true).Background(p.accent).Foreground(p.base)
+		fill = lipgloss.NewStyle().Bold(true).Background(p.accent.lip()).Foreground(p.base.lip())
 	}
 	for i, item := range items {
 		if i > 0 {

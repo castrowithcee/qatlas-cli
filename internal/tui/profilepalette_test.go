@@ -4,12 +4,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
-func (p palette) roles() []lipgloss.Color {
-	roles := []lipgloss.Color{p.base, p.surface, p.panel, p.border, p.borderFocus, p.text, p.textDim, p.accent,
+func (p palette) roles() []colour {
+	roles := []colour{p.base, p.surface, p.panel, p.border, p.borderFocus, p.text, p.textDim, p.accent,
 		p.ok, p.fail, p.warn, p.selection}
 	roles = append(roles, p.heat[:]...)
 	return append(roles, p.brand[:]...)
