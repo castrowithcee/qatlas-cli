@@ -838,3 +838,50 @@ func TestGuidedConnectionBuildPageKeepsTargetLabels(t *testing.T) {
 		t.Fatalf("label = %q", got)
 	}
 }
+
+// The review summary shows the base URL of a new or reused service without the credentials in it.
+func TestGuidedConnectionSummaryMasksTheBaseURLCredentials(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	const host = "books.example.test"
+	baseURL := "https://user:canary-url-pass@" + host + "/api?token=canary-url-query&page=1"
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load: %v", err)
+	}
+	if err := cfg.SetService("book-old", config.Service{Provider: "book", BaseURL: "https://canary-url-user@" + host}); err != nil {
+		t.Fatalf("SetService: %v", err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	for name, values := range map[string]url.Values{
+		"new service": {"service": {newServiceChoice}, "svcname": {"book-cloud"}, "svcbaseurl": {baseURL}},
+		"reused":      {"service": {"book-old"}},
+	} {
+		values.Set("provider", "book")
+		values.Set("credential", newCredentialChoice)
+		values.Set("credname", "book-reader")
+		values.Set("credstorage", "keyring")
+		values.Set("connname", "book-conn")
+		values.Set("permmode", "default")
+		values.Set("access", "effects")
+		review := s.request(t, http.MethodGet, "/connections/new/review?"+values.Encode(), s.addr, cookie, nil)
+		if review.Code != http.StatusOK {
+			t.Fatalf("%s: GET review status = %d, body: %s", name, review.Code, review.Body.String())
+		}
+		body := review.Body.String()
+		// The hidden field that carries the typed value on to the commit is no summary row.
+		summary := body[:strings.Index(body, `type="hidden"`)]
+		for _, canary := range []string{"canary-url-pass", "canary-url-query", "canary-url-user"} {
+			if strings.Contains(summary, canary) {
+				t.Errorf("%s: the summary shows %q", name, canary)
+			}
+		}
+		if !strings.Contains(summary, "***") {
+			t.Errorf("%s: the summary lacks the mask:\n%s", name, summary)
+		}
+	}
+}
