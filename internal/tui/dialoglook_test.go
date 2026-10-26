@@ -212,7 +212,7 @@ func TestTheSizeHintReadsAtTheSmallestSizeLess(t *testing.T) {
 		view := m.View()
 		checkFits(t, view, minimumWidth-1, minimumHeight-2)
 		plain := ansi.Strip(view)
-		for _, want := range []string{"q quit", warnMark + " Resize terminal", "Need 40x13", "Have 39x11"} {
+		for _, want := range []string{"q quit", warnMark + " Resize terminal", "Need 40x14", "Have 39x12"} {
 			if !strings.Contains(plain, want) {
 				t.Errorf("no %q (no colour %v):\n%s", want, noColor, plain)
 			}

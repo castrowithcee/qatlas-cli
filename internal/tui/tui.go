@@ -303,7 +303,7 @@ const (
 	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
-	minimumHeight = 13
+	minimumHeight = 14
 	// narrowWidth is the width below which the header and long headings take a second line.
 	narrowWidth = 80
 	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
