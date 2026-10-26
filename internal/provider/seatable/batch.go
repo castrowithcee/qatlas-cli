@@ -292,7 +292,7 @@ func (c *Client) batchChange(ctx context.Context, op, method, table string, payl
 	}
 	var success bool
 	if raw, ok := answer["success"]; ok && json.Unmarshal(raw, &success) == nil && !success {
-		return nil, providerError(op, "SeaTable did not apply the change")
+		return nil, notApplied(op, data)
 	}
 	if countField != "" {
 		var n int
@@ -336,7 +336,7 @@ func (c *Client) CreateSnapshot(ctx context.Context) error {
 }
 
 // snapshotStatusError classifies the statuses SeaTable uses to refuse a snapshot by the status alone. The
-// provider text is never read or copied.
+// provider text is not copied into the message; sendOnce attaches it as the original statement.
 func snapshotStatusError(op string, status int) error {
 	switch status {
 	case http.StatusBadRequest, http.StatusConflict, http.StatusUnprocessableEntity:

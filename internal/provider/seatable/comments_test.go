@@ -271,6 +271,7 @@ func TestCommentStatusErrorsDoNotCopyProviderText(t *testing.T) {
 	if classOf(err) != provider.ClassPermission || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("err = %v", err)
 	}
+	wantOriginal(t, err, http.StatusForbidden, bodyCanary)
 }
 
 func TestListCollaboratorsReportsNamesMailsAndAvatar(t *testing.T) {
