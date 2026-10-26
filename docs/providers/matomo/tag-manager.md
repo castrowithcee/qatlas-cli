@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags and triggers of a version, the embed code, and the catalog of contexts, environments, and templates, and creating, renaming, and deleting container versions, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags and triggers of a version, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, and adding, updating, and deleting triggers of the draft, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -13,7 +13,7 @@ The Tag Manager tools of the [Matomo provider](README.md). They need the plugin 
 reports the tools as unsupported. Reading needs a view right on the website, changing a write right, and the instance
 setting that restricts Tag Manager access to a higher role applies on top. Every website tool takes `idSite`, checked against the connection's targets before any
 secret or request. All tools are in no profile and are offered only via `tools`: container names, release logins, and
-the paths of non-live releases are data of the website's owners, and the version tools change saved versions.
+the paths of non-live releases are data of the website's owners, and the change tools alter what a container does.
 
 ## Tools
 
@@ -32,6 +32,9 @@ the paths of non-live releases are data of the website's owners, and the version
 | `matomo.tag-manager-tags.get` | reads one tag of a container version |
 | `matomo.tag-manager-triggers.list` | reads the triggers of a container version, the draft included, with parameters and conditions |
 | `matomo.tag-manager-triggers.get` | reads one trigger of a container version |
+| `matomo.tag-manager-triggers.add` | adds a trigger to the draft |
+| `matomo.tag-manager-triggers.update` | replaces name, parameters, conditions, and description of a trigger of the draft |
+| `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -73,10 +76,28 @@ the paths of non-live releases are data of the website's owners, and the version
   version that is released to an environment, so no live version is removed; the refusal is reported as such and
   nothing changed. It is offered only via `tools`.
 - The change tools send exactly one request after confirmation and never repeat it. After a timeout, a reset, a
-  server error, or an answer that cannot be read, the result is unknown: read the versions with
-  `matomo.tag-manager-versions.list` before trying again. A container and a version are bound by Matomo to `idSite`
+  server error, or an answer that cannot be read, the result is unknown: read the versions (or, for the trigger
+  tools, the triggers with `matomo.tag-manager-triggers.list`) before trying again. A container and a version are bound by Matomo to `idSite`
   (and `idContainer`) before it changes anything, so no prior read is made and an ID of another website is not found.
 - Names and descriptions are untrusted text. A name has 1 to 50 characters (Matomo's API limit), a description up to
   1000.
 
-Container changes, importing a version, and publishing a release are not part of these tools.
+- The trigger tools change the draft only and take no `idContainerVersion`: they read the container once, take the
+  draft from it, and send one request into that version, so a saved version is never altered although Matomo itself
+  would accept it. Without a usable draft the tool refuses before it writes. Triggers collect nothing but decide when
+  tags fire; a trigger is bound to the website, container, and draft together.
+- `matomo.tag-manager-triggers.add` takes `type`, `name`, and optionally `parameters`, `conditions`, and
+  `description`; the type cannot change later. `matomo.tag-manager-triggers.update` replaces everything as given:
+  `parameters`, `conditions`, and `description` are required, an empty object or list clears them, and Matomo
+  resets the parameters that are left out to their defaults. Matomo accepts an update or deletion of an ID the draft
+  does not hold without changing anything.
+- `parameters` and `conditions` are structured and capped: a parameter is a text, a number, a flag, or a list of
+  such values or of rows of them, with at most 100 parameters, 100 list members, 50 cells per row, 50 conditions,
+  16384 bytes per text, and 262144 bytes of text in all. Matomo keeps only the parameters its trigger type defines
+  and checks the rest: the variable a condition names must exist in the draft or be pre-configured.
+- Matomo refuses a name another trigger of the draft uses, a trigger that a tag still uses when it is deleted, an
+  unknown trigger type, and a condition with a missing value, an unknown comparison, or an unknown variable; each is
+  reported as such and nothing changed. A custom template needs the right to use custom templates.
+- `matomo.tag-manager-triggers.delete` cannot be undone and is offered only via `tools`.
+
+Container changes, importing a version, tags, variables, and publishing a release are not part of these tools.

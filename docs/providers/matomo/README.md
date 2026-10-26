@@ -175,7 +175,8 @@ The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `m
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
 `matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
 `matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
-`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, and `matomo.tag-manager-catalog.list` are in no
+`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-triggers.add`,
+`matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, and `matomo.tag-manager-catalog.list` are in no
 profile and are offered only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
@@ -213,7 +214,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers, versions and their export, creating, renaming, and deleting versions, tags and triggers, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers, versions and their export, creating, renaming, and deleting versions, tags and triggers and changing triggers of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
