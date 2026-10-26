@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the package tools of the Gitea and Forgejo providers: listing and reading the packages of a user or an
-  organization and their files, linking a package to a repository and unlinking it, deleting versions for good, their
-  scopes, how packages are bound to the targets, the differences between the products, and the limits.
+  organization and their files, linking a package to a repository and unlinking it, deleting versions for good, how
+  packages are bound to the targets, the differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Packages
@@ -22,11 +22,6 @@ one product. Names, versions, and file names in answers are untrusted data.
 | `packages.link`, `packages.unlink` | update | both |
 | `packages.delete-version` | delete, listed-only | both |
 | `packages.delete` | delete, listed-only | Gitea |
-
-## Scopes
-
-A read presumably needs `read:package` and a change `write:package`. None was checked against a live instance; a
-missing scope shows as `not-found`.
 
 ## Target binding
 

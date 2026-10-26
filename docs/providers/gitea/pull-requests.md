@@ -1,12 +1,12 @@
 ---
 description: >
-  Describes the pull request tools of the Gitea and Forgejo providers: reading, changing, closing, and merging, token
-  scopes, how each tool is bound to the targets, the differences between the products and versions, and the bounds
-  of diffs and lists.
+  Describes the pull request tools of the Gitea and Forgejo providers: reading, changing, closing, and merging, how
+  each tool is bound to the targets, the differences between the products and versions, and the bounds of diffs and
+  lists.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Pull requests
@@ -35,11 +35,6 @@ and the email addresses in commits.
 | `pull-requests.cancel-auto-merge` | update | Gitea, Forgejo |
 | `pull-requests.merge` | update, listed-only | Gitea, Forgejo |
 | `pull-request-branches.update` | update, listed-only | Gitea, Forgejo |
-
-## Scopes
-
-Presumably `read:repository` for the read tools and `write:repository` for the changing tools (the API serves pull requests in the repository route group); none was
-checked against a live instance. A missing scope shows as `not-found`.
 
 ## Target binding
 

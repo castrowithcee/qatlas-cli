@@ -2,11 +2,11 @@
 description: >
   Describes the release and release asset tools of the Gitea and Forgejo providers: reading, creating, changing, and
   deleting the releases of a bound repository and their assets, uploading and downloading asset content through local
-  files, their scopes, how releases and assets are bound, the differences between the products, and the limits.
+  files, how releases and assets are bound, the differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Releases
@@ -14,11 +14,6 @@ updated: 2026-10-22
 The release tools read, create, and change the releases of one repository inside the connection's targets, and delete
 them for good; the release asset tools do the same for the files attached to a release. They hold for Gitea and
 Forgejo alike unless a line names one product. The tag tools are described elsewhere.
-
-## Scopes
-
-The tools presumably need `read:repository` to read and `write:repository` to change, since the API serves releases
-in the repository route group. None was checked against a live instance; a missing scope shows as `not-found`.
 
 ## Target and ID binding
 
@@ -74,14 +69,6 @@ the call is refused as `invalid-request` before any further request, and an asse
   download, and serves the asset of a draft only to a token with write access.
 - `release-assets.delete` removes an asset for good; it is offered only by a connection whose `tools` list names it,
   and is in no setup profile.
-
-The scopes are presumably these; the download address checks `read:repository` itself in the sources of both
-products. None was checked against a live instance.
-
-| Tool | Scope |
-| --- | --- |
-| `release-assets.list`, `release-assets.get`, `release-assets.download` | `read:repository` |
-| `release-assets.upload`, `release-assets.update`, `release-assets.delete` | `write:repository` |
 
 ## Tools
 

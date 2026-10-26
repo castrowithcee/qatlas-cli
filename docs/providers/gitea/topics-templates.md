@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes the topic tools of a repository and the instance-wide topic search, and the read-only gitignore,
-  label, and license templates of Gitea and Forgejo: bindings to the targets, limits, and caps.
+  Describes the topic tools of a repository and the instance-wide topic search, and the read-only gitignore, label,
+  and license templates of Gitea and Forgejo: bindings to the targets, limits, and caps.
 type: knowledge
 edit: shared
 created: 2026-10-24

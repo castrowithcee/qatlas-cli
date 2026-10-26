@@ -1,14 +1,14 @@
 ---
 description: >
   Describes the Actions tools of the Gitea and Forgejo providers: reading workflow runs, jobs, tasks, workflows,
-  artifacts, and job logs, downloading the log archive of a run and the archive of an artifact, cancelling,
-  re-running, approving, and deleting runs, dispatching a workflow, deleting artifacts, the two Actions setup
-  profiles, their scopes, the versions that have each operation, how runs, jobs, and artifacts are bound to the
-  targets, the owner level only Gitea has, and the limits.
+  artifacts, and job logs, downloading the log archive of a run and the archive of an artifact, cancelling, re-
+  running, approving, and deleting runs, dispatching a workflow, deleting artifacts, the two Actions setup profiles,
+  the versions that have each operation, how runs, jobs, and artifacts are bound to the targets, the owner level only
+  Gitea has, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Actions
@@ -17,12 +17,6 @@ The Actions tools observe and operate the workflow runs, jobs, artifacts, and wo
 connection's targets. They hold for Gitea and Forgejo alike unless a line names one product. Secrets and variables are
 described in [Actions administration](actions-admin.md), which also covers the runners and the enabling and
 disabling of workflows.
-
-## Scopes
-
-The tools presumably need `read:repository` to read and `write:repository` to cancel, re-run, approve, dispatch, and delete,
-since the API serves Actions in the repository route group. None was checked against a live instance; a missing
-scope shows as `not-found`.
 
 ## Versions
 
