@@ -104,6 +104,10 @@ func applicationError(op string, data []byte) error {
 			return &provider.InvalidRequestError{Message: "Matomo refused the name: another tag of the container " +
 				"version already uses it; nothing was changed"}
 		}
+		if strings.HasSuffix(op, variableOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another variable of the container " +
+				"version already uses it; nothing was changed"}
+		}
 		if strings.HasSuffix(op, triggerOpSuffix) {
 			return &provider.InvalidRequestError{Message: "Matomo refused the name: another trigger of the container " +
 				"version already uses it; nothing was changed"}

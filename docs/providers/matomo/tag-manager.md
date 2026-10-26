@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, adding, updating, pausing, resuming, and deleting tags of the draft, and creating, updating, and deleting containers, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, adding, updating, pausing, resuming, and deleting tags of the draft, adding, updating, and deleting variables of the draft, and creating, updating, and deleting containers, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -44,6 +44,9 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-tags.add` | adds a tag of the type `Matomo` or `ThemeColor` to the draft |
 | `matomo.tag-manager-tags.update` | replaces name, parameters, trigger IDs, fire settings, and description of a tag of the draft |
 | `matomo.tag-manager-tags.resume` | activates a paused tag of the draft again |
+| `matomo.tag-manager-variables.add` | adds a variable to the draft |
+| `matomo.tag-manager-variables.update` | replaces name, parameters, default value, lookup table, and description of a variable of the draft |
+| `matomo.tag-manager-variables.delete` | deletes a variable from the draft |
 | `matomo.tag-manager-containers.create-default` | creates the default container of a website |
 | `matomo.tag-manager-containers.add` | creates a container with a context, name, and settings |
 | `matomo.tag-manager-containers.update` | replaces name, description, and settings of a container |
@@ -135,7 +138,7 @@ the paths of non-live releases are data of the website's owners, and the change 
   written out (no reference) and equal this connection's base URL (scheme, host, port, and path, ignoring a trailing
   slash) and the selected website. The tool reads the variables of the draft once for it; otherwise it refuses
   without a request to change anything and without naming the other value. `resume` applies the rule to the stored
-  `matomoConfig`. Variables themselves are not changed by these tools.
+  `matomoConfig`. The variable tools hold the variable itself to the same rule.
 - The container tools create a container with its draft and change its name, description, and settings; they save no
   version and publish nothing. `matomo.tag-manager-containers.add` takes a `context` that cannot change later;
   `matomo.tag-manager-containers.update` replaces everything as given, so `description` and the three settings are
@@ -149,5 +152,20 @@ the paths of non-live releases are data of the website's owners, and the change 
   is offered only via `tools`. After an unclear result of a container tool, read the containers with
   `matomo.tag-manager-containers.list`. `matomo.tag-manager-containers.create-default` returns `idContainer` only when
   Matomo reports it.
+- The variable tools bind to the draft like the trigger tools and publish nothing. `add` takes `type`, `name`, and
+  optionally `parameters`, `defaultValue`, `lookupTable`, and `description`; `update` replaces everything as given
+  (all of these but the type are required; an empty object, text, or list clears) and cannot change the type;
+  `delete` takes only the IDs, cannot be undone, and is offered only via `tools`. `parameters` are capped like those
+  of triggers; a lookup row is `matchValue`, `comparison`, and `outValue`, at most 100 rows. Matomo refuses a name
+  another variable of the draft uses; the refusal is reported as such and nothing changed. After an unclear result
+  read the variables with `matomo.tag-manager-variables.list`.
+- The types `CustomJsFunction` and `CustomRequestProcessing` run custom code in the visitors' browsers; the tools
+  refuse them, a fixed list. `add` refuses before any request; `update` reads the stored variable once and refuses one
+  of those types before it changes anything.
+- A variable of the type `MatomoConfiguration` decides where `Matomo` tags send their data, so `add` and `update`
+  accept it only under the rule of the `Matomo` tags above: `matomoUrl` and `idSite` written out and equal to this
+  connection's base URL and the selected website. In addition `setApiUrl` and `customRequestProcessing` must be
+  empty, and `trackingEndpoint`, `trackingEndpointCustom`, `jsEndpoint`, and `jsEndpointCustom` must be plain paths
+  (no scheme, host, reference, or `..`). `update` applies this by the stored type; the refusal names no value.
 
-Importing a version, changing variables, and publishing a release are not part of these tools.
+Importing a version and publishing a release are not part of these tools.
