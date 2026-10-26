@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -45,12 +44,12 @@ func TestPalettesNameEveryRole(t *testing.T) {
 func TestColoursStepDownWithTheProfile(t *testing.T) {
 	restoreRenderer(t)
 	st := buildTheme(true, false, false).active
-	for profile, want := range map[termenv.Profile]string{
-		termenv.TrueColor: "38;2;",
-		termenv.ANSI256:   "38;5;",
-		termenv.ANSI:      "94",
+	for profile, want := range map[colorProfile]string{
+		profileTrueColor: "38;2;",
+		profile256:       "38;5;",
+		profile16:        "94",
 	} {
-		lipgloss.SetColorProfile(profile)
+		setProfile(profile)
 		if out := st.Render("x"); !strings.Contains(out, want) {
 			t.Errorf("profile %v: %q lacks %q", profile, out, want)
 		}
@@ -59,7 +58,7 @@ func TestColoursStepDownWithTheProfile(t *testing.T) {
 
 func TestNoColorEmitsNoColourSequence(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
 	if styles.filled {
@@ -68,7 +67,7 @@ func TestNoColorEmitsNoColourSequence(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.section = sectionOverview
-	view := m.View()
+	view := m.render()
 	for _, seq := range []string{"\x1b[3", "\x1b[4", "38;", "48;"} {
 		if strings.Contains(view, seq) {
 			t.Errorf("NO_COLOR view holds %q", seq)
@@ -78,14 +77,14 @@ func TestNoColorEmitsNoColourSequence(t *testing.T) {
 
 func TestQatlasBackgroundCoversEveryCell(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.section = sectionOverview
 	m.Init()
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.render(), "\n")
 	if len(lines) != 24 {
 		t.Fatalf("%d lines, want 24", len(lines))
 	}
@@ -123,7 +122,7 @@ func TestResetsColour(t *testing.T) {
 
 func TestTerminalBackgroundAddsNoFill(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
 	if styles.filled {

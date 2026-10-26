@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Make
@@ -23,6 +23,8 @@ UI or a direct API call outside Qatlas.
 
 Qatlas creates no permanent access or data paths to the outside (webhooks, invitations, public links); reading,
 pausing, revoking, and deleting remain. Hence no tool creates a hook or invites a person.
+
+The token scopes, how to create the token, and fixing errors are on [Set up Make](setup.md).
 
 Pages by area:
 
@@ -47,19 +49,16 @@ these hosts, plain `https`, without a port, path, user, query, or fragment; Qatl
 before a secret is read, and never falls back to a free-form origin the way a self-hosted provider's base
 URL can be.
 
-The credential provides `api-token`, a Make API token created under the profile avatar, Profile, API, Add
-token. The read profile needs `scenarios:read`; the manage profile's create, update, start, and stop tools
-additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. The scopes of the
-other tool groups are named on their pages. A 403 names the missing scope. A Make token
-belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
-access to, so a token created for a different zone than this connection's own is rejected here the same way
-as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
-team membership. This connection's required team target adds a Qatlas boundary within that access. Make
-also documents optional locked connections with their own access lists; this feature must be enabled for
-the organization; this provider enforces none of them itself and only reads and sets their members through
-the access-list tools. See Make's [Connections API
-reference](https://developers.make.com/api-documentation/api-reference/connections.md) and [connection
-access-list reference](https://developers.make.com/api-documentation/api-reference/connections/access-list.md).
+The credential provides `api-token`, a Make API token; creating it and the scopes each tool group needs are on [Set
+up Make](setup.md). A Make token belongs to exactly one zone: Make's own guidance is to create a separate token for
+each zone a person has access to, so a token created for a different zone than this connection's own is rejected
+here the same way as any other invalid token. The token carries API scopes, while Make also limits resources by the
+user's team membership. This connection's required team target adds a Qatlas boundary within that access. Make also
+documents optional locked connections with their own access lists; this feature must be enabled for the
+organization; this provider enforces none of them itself and only reads and sets their members through the
+access-list tools. See Make's [Connections API
+reference](https://developers.make.com/api-documentation/api-reference/connections.md) and [connection access-list
+reference](https://developers.make.com/api-documentation/api-reference/connections/access-list.md).
 
 ```yaml
 services:
@@ -90,8 +89,7 @@ an optional `organization/ORG_ID`, and optional folders and scenarios. **Organiz
 Configuration errors never quote a configured value. In organization mode every team tool (all tools except
 `make.teams.*`, including `make.team.*` and `make.organization.get`) is refused as an invalid request ("needs a
 team connection") before a secret is read or a request is sent; in team mode the `make.teams.*` tools are
-refused the same way ("needs an organization connection"). The connection test of an organization connection
-reads one team of the organization (`GET /teams`, `teams:read`).
+refused the same way ("needs an organization connection").
 
 ```yaml
 connections:
@@ -158,12 +156,14 @@ a folder target also reaches no hook or hook queue tool.
 
 ## Errors
 
-Errors keep stable classes and never carry the API token or a raw provider response body:
+Errors keep stable classes and never carry the API token. Qatlas' message stays free of provider text; Make's own
+answer (status, `code`, `message`, and each `suberrors` message and name) goes along separately as the original
+statement in the error detail's `provider` field, marked untrusted, redacted, and bounded:
 
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see [Data stores and data structures](data-stores.md#data-stores-and-data-structures)), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools, `organizations:write` for `make.organization.update`, `user:read` for the organization member tool; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the scope(s) needed, listed in [Scopes per tool group](setup.md#scopes-per-tool-group); [Fixing errors](setup.md#fixing-errors) gives the remedy |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |

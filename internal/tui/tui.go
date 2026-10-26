@@ -19,7 +19,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -303,7 +302,7 @@ const (
 	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
-	minimumHeight = 13
+	minimumHeight = 14
 	// narrowWidth is the width below which the header and long headings take a second line.
 	narrowWidth = 80
 	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
@@ -3367,13 +3366,9 @@ func (m *Model) clearMessages() {
 }
 
 func textField(label, value string, readOnly bool) field {
-	in := textinput.New()
+	in := newTextInput()
 	in.SetValue(value)
 	in.Prompt = ""
-	// A static cursor is drawn on every frame the editor already paints. Blinking would need the blink
-	// command threaded through Init, through every focus change and through the timer messages this event
-	// loop drops, and a missed tick would leave the cursor invisible again.
-	in.Cursor.SetMode(cursor.CursorStatic)
 	return field{label: label, kind: fieldText, input: in, readOnly: readOnly}
 }
 
@@ -3661,17 +3656,22 @@ func sectionShortcut(key string) (section, bool) {
 	return areaSections[key[0]-'1'][0], true
 }
 
-// View renders the frame: the configuration path, the sections, and the workspace with the current screen.
+// View is the Bubble Tea entry point; all drawing lives in render.
 func (m *Model) View() string {
-	view := m.renderView()
+	return m.render()
+}
+
+// render draws the frame: the configuration path, the sections, and the workspace with the current screen.
+func (m *Model) render() string {
+	view := m.renderFrame()
 	if !styles.filled || view == "" {
 		return view
 	}
 	return paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
 }
 
-// renderView is the frame before the background of the preference is applied.
-func (m *Model) renderView() string {
+// renderFrame is the frame before the background of the preference is applied.
+func (m *Model) renderFrame() string {
 	if m.quitting {
 		return ""
 	}
@@ -4251,7 +4251,7 @@ func fitInput(in textinput.Model, width int) textinput.Model {
 		// Nothing scrolls, and a width would only pad the line with blanks behind the cursor.
 		return in
 	}
-	in.Width = max(width-1, 1)
+	setInputWidth(&in, max(width-1, 1))
 	pos := in.Position()
 	in.CursorEnd()
 	in.SetCursor(pos)
@@ -4826,7 +4826,7 @@ func (m *Model) cells(name string) []string {
 	case sectionServices:
 		s := m.cfg.Services[name]
 		// Masking comes first so that the log text cannot cut a credential in half and leave a part of it.
-		return []string{name, m.logText(maskURL(s.BaseURL))}
+		return []string{name, m.logText(config.MaskURL(s.BaseURL))}
 	case sectionCredentials:
 		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.

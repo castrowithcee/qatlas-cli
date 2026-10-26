@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -62,9 +61,8 @@ type pathField struct {
 
 // newPathField is an unfocused path input of the given mode.
 func newPathField(mode pathMode) pathField {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
-	in.Cursor.SetMode(cursor.CursorStatic)
 	return pathField{Model: in, mode: mode}
 }
 

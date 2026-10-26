@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -86,15 +85,15 @@ var lightPalette16 = palette{
 }
 
 // paletteOf is the palette of a theme for the colour profile of the terminal.
-func paletteOf(dark bool, profile termenv.Profile) palette {
+func paletteOf(dark bool, profile colorProfile) palette {
 	switch {
-	case profile == termenv.ANSI256 && dark:
+	case profile == profile256 && dark:
 		return darkPalette256
-	case profile == termenv.ANSI256:
+	case profile == profile256:
 		return lightPalette256
-	case profile == termenv.ANSI && dark:
+	case profile == profile16 && dark:
 		return darkPalette16
-	case profile == termenv.ANSI:
+	case profile == profile16:
 		return lightPalette16
 	case dark:
 		return darkPalette
@@ -155,7 +154,7 @@ func buildTheme(dark, noColor, filled bool) theme {
 			footKey:     lipgloss.NewStyle().Bold(true),
 		}
 	}
-	p := paletteOf(dark, lipgloss.ColorProfile())
+	p := paletteOf(dark, currentProfile())
 	return theme{
 		palette:     p,
 		title:       lipgloss.NewStyle().Bold(true).Foreground(p.text),
@@ -196,6 +195,6 @@ func applyColorScheme(mode, background string) {
 	case uiprefs.ThemeDark:
 		setTheme(buildTheme(true, false, filled))
 	default:
-		setTheme(buildTheme(lipgloss.HasDarkBackground(), false, filled))
+		setTheme(buildTheme(hasDarkBackground(), false, filled))
 	}
 }

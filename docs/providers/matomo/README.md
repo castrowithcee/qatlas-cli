@@ -171,10 +171,14 @@ The [insights, transitions, and AI chatbot reads](reports.md#insights-transition
 `matomo.insights.list`, `matomo.transitions.get`, and `matomo.bot-realtime.get` and the
 [database statistics](instance.md#database-statistics) `matomo.database-statistics.get` (target `instance`) are in no
 profile and are offered only via `tools`.
-The [Tag Manager reads](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
+The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
-`matomo.tag-manager-versions.export`, and `matomo.tag-manager-catalog.list` are in no profile and are offered only via
-`tools`.
+`matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
+`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
+`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-variables.list`,
+`matomo.tag-manager-variables.get`, `matomo.tag-manager-variables.list-available`,
+`matomo.tag-manager-references.list`, and `matomo.tag-manager-catalog.list` are in no
+profile and are offered only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
@@ -190,8 +194,8 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
 eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#operations)
 `matomo.archive-settings.set`, `matomo.trusted-hosts.set`, and `matomo.branding.set` (all target `instance`), and
-`matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`, and
-`matomo.capabilities.remove` are in no profile either and are offered only via `tools`.
+`matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`,
+`matomo.capabilities.remove`, and the two `matomo.ldap-users.*` tools (target `instance`) are in no profile either and are offered only via `tools`.
 
 ## Tools
 
@@ -199,7 +203,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | --- | --- |
 | [sites and version](sites.md) | version, websites, tracking and opt-out code, tracking failures, website settings, consent manager, website groups |
 | [instance settings and reference data](instance.md) | global website settings, archiving, trusted hosts, branding, reference lists, IP ranges, database statistics, diagnostics |
-| [users and roles](users.md) | users, their access to websites, roles and capabilities, deleting and logging out users |
+| [users and roles](users.md) | users, their access to websites, roles and capabilities, LDAP user counts and list, deleting and logging out users |
 | [privacy and data subject requests](privacy.md) | finding, exporting, and deleting the visits of one person, privacy settings, retention, compliance policies |
 | [reports](reports.md) | report catalog, reading reports, evolution, distinct counts, website comparison, glossary, insights, transitions, AI chatbots, segment fields |
 | [live data](live.md) | visit log, live counters, latest visit time |
@@ -211,7 +215,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers, versions and their export, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

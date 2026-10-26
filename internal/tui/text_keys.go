@@ -299,6 +299,7 @@ const (
 	tApprovalChanged                         textID = "ApprovalChanged"
 	tApprovalRenamedItem                     textID = "ApprovalRenamedItem"
 	tApprovalUnchangedCount                  textID = "ApprovalUnchangedCount"
+	tApprovalCredentialsChanged              textID = "ApprovalCredentialsChanged"
 	tApprovalValueRenamed                    textID = "ApprovalValueRenamed"
 	tApprovalValueUnchanged                  textID = "ApprovalValueUnchanged"
 	tStatusValid                             textID = "StatusValid"

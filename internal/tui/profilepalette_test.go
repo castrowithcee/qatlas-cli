@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
 func (p palette) roles() []lipgloss.Color {
@@ -21,9 +20,9 @@ func (p palette) roles() []lipgloss.Color {
 func TestPalettesOfLimitedProfilesNameEveryRoleByIndex(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		profile termenv.Profile
+		profile colorProfile
 		limit   int
-	}{{"256 colours", termenv.ANSI256, 256}, {"16 colours", termenv.ANSI, 16}} {
+	}{{"256 colours", profile256, 256}, {"16 colours", profile16, 16}} {
 		for _, dark := range []bool{true, false} {
 			for i, c := range paletteOf(dark, tc.profile).roles() {
 				n, err := strconv.Atoi(string(c))
@@ -33,7 +32,7 @@ func TestPalettesOfLimitedProfilesNameEveryRoleByIndex(t *testing.T) {
 			}
 		}
 	}
-	if paletteOf(true, termenv.TrueColor).base != darkPalette.base || paletteOf(false, termenv.Ascii).base != lightPalette.base {
+	if paletteOf(true, profileTrueColor).base != darkPalette.base || paletteOf(false, profileNone).base != lightPalette.base {
 		t.Error("truecolor and plain profiles must keep the hex palettes")
 	}
 }
@@ -43,7 +42,7 @@ func TestHeatWithSixteenColoursUsesShadeGlyphs(t *testing.T) {
 	restoreRenderer(t)
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("LC_ALL", "en_US.UTF-8")
-	lipgloss.SetColorProfile(termenv.ANSI)
+	setProfile(profile16)
 	setTheme(buildTheme(true, false, false))
 	seen := map[string]bool{}
 	for level := 0; level <= 4; level++ {
@@ -62,7 +61,7 @@ func TestHeatWithSixteenColoursUsesShadeGlyphs(t *testing.T) {
 // warning, and the word stays in the cell.
 func TestLogStatusToneDimsOnlyUnverified(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	setTheme(buildTheme(true, false, false))
 	if got, want := colourOf(logStatusTone(logUnverified.label())), colourOf(styles.hint); got != want {
 		t.Errorf("unverified rows are %q, want the dimmed %q", got, want)

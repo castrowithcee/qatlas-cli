@@ -12,7 +12,7 @@ import (
 )
 
 // frameLines is the frame the editor draws now, without styling, one string per screen row.
-func frameLines(m *Model) []string { return strings.Split(ansi.Strip(m.View()), "\n") }
+func frameLines(m *Model) []string { return strings.Split(ansi.Strip(m.render()), "\n") }
 
 // cellOf finds the first place text stands in the frame, as the column and the row of its first cell. It reads
 // the drawn frame, never the click targets, so a test clicks where a person would look.
@@ -23,7 +23,7 @@ func cellOf(t *testing.T, m *Model, text string) (x, y int) {
 			return ansi.StringWidth(line[:at]), row
 		}
 	}
-	t.Fatalf("the frame shows no %q:\n%s", text, ansi.Strip(m.View()))
+	t.Fatalf("the frame shows no %q:\n%s", text, ansi.Strip(m.render()))
 	return 0, 0
 }
 
@@ -32,7 +32,7 @@ func cellInRow(t *testing.T, m *Model, row int, text string) int {
 	t.Helper()
 	lines := frameLines(m)
 	if row >= len(lines) || !strings.Contains(lines[row], text) {
-		t.Fatalf("row %d shows no %q:\n%s", row, text, ansi.Strip(m.View()))
+		t.Fatalf("row %d shows no %q:\n%s", row, text, ansi.Strip(m.render()))
 	}
 	return ansi.StringWidth(lines[row][:strings.Index(lines[row], text)])
 }
@@ -95,7 +95,7 @@ func TestLibrarySubTabsAreTabsForKeyAndClick(t *testing.T) {
 			if !strings.Contains(line, "[Services]") || !strings.Contains(line, "Credentials") || strings.Contains(line, "Library:") {
 				t.Fatalf("%dx%d: the sub-tabs read %q, want the active one in brackets", size.w, size.h, line)
 			}
-			if noColor && strings.Split(m.View(), "\n")[row] != line {
+			if noColor && strings.Split(m.render(), "\n")[row] != line {
 				t.Errorf("%dx%d: NO_COLOR still emits escape sequences in the sub-tabs", size.w, size.h)
 			}
 			clickAt(t, m, cellInRow(t, m, row, "Credentials"), row)
@@ -160,14 +160,14 @@ func TestClickOnTheFilterBarChoosesAValue(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	clickOn(t, m, "Group: Provider")
 	if m.dd == nil || m.barFocus != 1 {
-		t.Fatalf("the click on Group did not open its list; the bar reads:\n%s", ansi.Strip(m.View()))
+		t.Fatalf("the click on Group did not open its list; the bar reads:\n%s", ansi.Strip(m.render()))
 	}
-	if view := ansi.Strip(m.View()); !strings.Contains(view, "> Provider") || !strings.Contains(view, "  None") {
+	if view := ansi.Strip(m.render()); !strings.Contains(view, "> Provider") || !strings.Contains(view, "  None") {
 		t.Fatalf("the list does not show the values:\n%s", view)
 	}
 	clickOn(t, m, "  None")
 	if m.dd != nil || !m.opts(sectionConnections).flat {
-		t.Fatalf("the click on None left the grouping on; the bar reads:\n%s", ansi.Strip(m.View()))
+		t.Fatalf("the click on None left the grouping on; the bar reads:\n%s", ansi.Strip(m.render()))
 	}
 	clickOn(t, m, "State: All")
 	clickOn(t, m, "  Inactive")
@@ -217,7 +217,7 @@ func TestClickOnASectionOfAFormMovesTheFocus(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	openSectionByName(t, m, sectionConnections)
 	clickOn(t, m, "wiki-docs")
-	m.View()
+	m.render()
 	if m.screen != screenForm || m.sectionListWidth == 0 {
 		t.Fatalf("screen %v, section list width %d; want a connection form with its section list", m.screen, m.sectionListWidth)
 	}
@@ -240,7 +240,7 @@ func TestClickOnASectionHeadingInANarrowTerminal(t *testing.T) {
 	m := sizedModel(groupModel(t), 90, 60)
 	openSectionByName(t, m, sectionConnections)
 	clickOn(t, m, "wiki-docs")
-	m.View()
+	m.render()
 	entries := m.formSections()
 	if m.sectionListWidth != 0 || len(entries) < 2 {
 		t.Fatalf("list width %d, sections %v; want headings in place of the list", m.sectionListWidth, entries)
@@ -265,8 +265,8 @@ func TestClickOnASectionHeadingInANarrowTerminal(t *testing.T) {
 func TestClickOnAnInfoMarkOpensTheExplanation(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	openSectionByName(t, m, sectionGeneral)
-	if !strings.Contains(ansi.Strip(m.View()), "(i)") {
-		t.Fatalf("no info mark on the focused row:\n%s", ansi.Strip(m.View()))
+	if !strings.Contains(ansi.Strip(m.render()), "(i)") {
+		t.Fatalf("no info mark on the focused row:\n%s", ansi.Strip(m.render()))
 	}
 	clickOn(t, m, "(i)")
 	if !m.infoOpen {
@@ -344,7 +344,7 @@ func TestTheWheelScrollsAListAndAForm(t *testing.T) {
 	}
 
 	clickOn(t, m, "wiki-docs")
-	m.View()
+	m.render()
 	if m.screen != screenForm {
 		t.Fatalf("screen %v", m.screen)
 	}
@@ -407,31 +407,31 @@ func TestATooSmallTerminalIgnoresTheMouse(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	x, y := cellOf(t, m, "6 Settings")
 	sizedModel(m, minimumWidth-1, minimumHeight-1)
-	view := m.View()
+	view := m.render()
 	clickAt(t, m, x%(minimumWidth-1), y)
 	clickAt(t, m, 0, 0)
 	if m.section.area() == areaSettings {
 		t.Error("a click in a terminal that is too small switched the area")
 	}
-	if m.View() != view {
+	if m.render() != view {
 		t.Error("a click changed the size notice")
 	}
 
 	// A screen that does not fit the workspace shows the notice, and takes no clicks either.
-	m = sizedModel(groupModel(t), 40, minimumHeight)
-	openSectionByName(t, m, sectionConnections)
-	m.View()
+	m = sizedModel(heatModel(t, activityLog(t)), 40, minimumHeight)
+	m.setLogTab(logTabDetails)
+	m.render()
 	if !m.tooSmall {
-		t.Fatalf("the Connections list fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.View()))
+		t.Fatalf("the Details tab fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.render()))
 	}
-	cursor, area := m.list.cursor, m.section.area()
+	cursor, area, screen := m.list.cursor, m.section.area(), m.screen
 	for row := 0; row < minimumHeight; row++ {
 		for _, x := range []int{0, 3, 12, 30} {
 			clickAt(t, m, x, row)
 			wheelAt(t, m, x, row, tea.MouseButtonWheelDown)
 		}
 	}
-	if m.list.cursor != cursor || m.section.area() != area || m.screen != screenList {
+	if m.list.cursor != cursor || m.section.area() != area || m.screen != screen {
 		t.Errorf("cursor %d area %v screen %v after clicks on the size notice", m.list.cursor, m.section.area(), m.screen)
 	}
 }
@@ -552,7 +552,7 @@ func TestEveryScreenMeetsAClickWithoutPanicking(t *testing.T) {
 				for x := 0; x < size.w; x += 13 {
 					m.Update(mouseEvent(x, y, tea.MouseButtonLeft))
 					m.Update(mouseEvent(x, y, tea.MouseButtonWheelDown))
-					m.View()
+					m.render()
 					if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 						continue
 					}
