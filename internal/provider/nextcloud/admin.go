@@ -83,9 +83,10 @@ func adminFailure(op string, err error) error {
 	}
 	switch {
 	case providerErr.Class == provider.ClassPermission:
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAdminDenied}
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAdminDenied,
+			Original: providerErr.Original}
 	case providerErr.Class == provider.ClassProviderError && providerErr.Message == messageNotFound:
-		return providerError(op, messageAdminAbsent)
+		return providerErrorFrom(op, messageAdminAbsent, err)
 	}
 	return err
 }

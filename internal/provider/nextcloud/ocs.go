@@ -126,9 +126,9 @@ func (c *Client) ocsDo(ctx context.Context, op, method string, request ocsReques
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if uncertain != "" {
-			return nil, nil, sentStatusError(op, response.StatusCode, uncertain)
+			return nil, nil, sentFormatStatusError(op, response, uncertain, ocsFormat)
 		}
-		return nil, nil, statusError(op, response.StatusCode)
+		return nil, nil, formatStatusError(op, response, ocsFormat)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
 	if err != nil || len(raw) > maxBodyBytes {
@@ -146,11 +146,14 @@ func (c *Client) ocsDo(ctx context.Context, op, method string, request ocsReques
 	if !ocsSucceeded(code) || !strings.EqualFold(meta.Status, "ok") {
 		// A version 2 answer repeats its failure in the HTTP status; a body that disagrees with a
 		// successful status is classified by its own code and otherwise refused as unusable.
+		// The envelope is the original of such a refusal; only its meta is read, never its data.
 		if code >= 400 && code < 600 {
+			failure := statusError(op, int(code))
 			if uncertain != "" {
-				return nil, nil, sentStatusError(op, int(code), uncertain)
+				failure = sentStatusError(op, int(code), uncertain)
 			}
-			return nil, nil, statusError(op, int(code))
+			return nil, nil, withOriginalValue(failure, provider.ErrorOriginal(response.StatusCode,
+				raw[:min(len(raw), provider.ErrorBodyLimit)], ocsOriginalFields))
 		}
 		return nil, nil, unclear(invalidResponse(op, "Nextcloud answered with an unexpected OCS status"))
 	}

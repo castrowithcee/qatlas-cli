@@ -91,11 +91,11 @@ func (c *Client) UploadNoteAttachment(ctx context.Context, sel selection, id str
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
 	case status == http.StatusNotFound:
-		return nil, noteNotFound(op)
+		return nil, withOriginal(noteNotFound(op), response, notesFormat)
 	case status == http.StatusInsufficientStorage:
-		return nil, statusError(op, status)
+		return nil, formatStatusError(op, response, notesFormat)
 	case status < 200 || status >= 300:
-		return nil, sentStatusError(op, status, noteKind.uncertain)
+		return nil, sentFormatStatusError(op, response, noteKind.uncertain, notesFormat)
 	}
 	data, err := readLimited(response.Body, maxBodyBytes)
 	var answer struct {

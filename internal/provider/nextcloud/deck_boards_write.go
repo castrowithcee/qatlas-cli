@@ -209,11 +209,13 @@ func (c *Client) deckDo(ctx context.Context, client *http.Client, op, hint, meth
 	defer response.Body.Close()
 	switch {
 	case response.StatusCode == http.StatusForbidden:
-		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageDeckManage}
+		return nil, withOriginal(
+			&provider.Error{Class: provider.ClassPermission, Op: op, Message: messageDeckManage}, response, deckFormat)
 	case response.StatusCode == http.StatusNotFound:
-		return nil, &provider.Error{Class: provider.ClassNotFound, Op: op, Message: messageDeckNotFound}
+		return nil, withOriginal(
+			&provider.Error{Class: provider.ClassNotFound, Op: op, Message: messageDeckNotFound}, response, deckFormat)
 	case response.StatusCode < 200 || response.StatusCode >= 300:
-		return nil, sentStatusError(op, response.StatusCode, hint)
+		return nil, sentFormatStatusError(op, response, hint, deckFormat)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
 	if err != nil || len(raw) > maxBodyBytes {

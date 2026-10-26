@@ -335,7 +335,7 @@ func (c *Client) GetShare(ctx context.Context, id string) (*Share, error) {
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) && providerErr.Message == messageNotFound {
-			return nil, shareNotFound(op)
+			return nil, withOriginalValue(shareNotFound(op), providerErr.Original)
 		}
 		return nil, err
 	}

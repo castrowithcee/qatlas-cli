@@ -83,7 +83,8 @@ file, stat it. A refusal by Nextcloud (4xx) or a redirect is a clear failure.
 
 ## Errors
 
-Qatlas' message of a failed WebDAV request (`files`, `contacts`, `calendar`) names no path and carries no text
-of Nextcloud. What Nextcloud answered goes apart in the `provider` field of the error detail: the HTTP status and
-the error document of the answer (its conditions and the SabreDAV exception and message), marked untrusted,
-redacted, and bounded. A redirect passes on only its status.
+Qatlas' message of a failed request names no path and carries no text of Nextcloud. What Nextcloud answered goes
+apart in the `provider` field of the error detail, marked untrusted, redacted, and bounded: the HTTP status and,
+by API, the error document of WebDAV (`files`, `contacts`, `calendar`; its conditions and the SabreDAV exception and
+message), the status code and message of the OCS answer (never its data), the status and message of Deck, or the
+plain text of Notes. A redirect passes on only its status.

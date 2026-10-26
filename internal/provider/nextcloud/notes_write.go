@@ -333,13 +333,13 @@ func (c *Client) noteSend(ctx context.Context, op, method, id string, change any
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
 	case status == http.StatusPreconditionFailed && len(match) > 0:
-		return nil, objectPrecondition(op, noteKind)
+		return nil, withOriginal(objectPrecondition(op, noteKind), response, notesFormat)
 	case status == http.StatusNotFound && id != "":
-		return nil, noteNotFound(op)
+		return nil, withOriginal(noteNotFound(op), response, notesFormat)
 	case status == http.StatusInsufficientStorage:
-		return nil, statusError(op, status)
+		return nil, formatStatusError(op, response, notesFormat)
 	case status < 200 || status >= 300:
-		return nil, sentStatusError(op, status, noteKind.uncertain)
+		return nil, sentFormatStatusError(op, response, noteKind.uncertain, notesFormat)
 	case method == http.MethodDelete:
 		return nil, nil
 	}

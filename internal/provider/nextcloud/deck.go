@@ -529,10 +529,11 @@ func (c *Client) deckFetch(ctx context.Context, op string, read deckRead, suffix
 		return nil, response.Header, true, nil
 	}
 	if response.StatusCode == http.StatusNotFound {
-		return nil, nil, false, &provider.Error{Class: provider.ClassNotFound, Op: op, Message: messageDeckNotFound}
+		return nil, nil, false, withOriginal(
+			&provider.Error{Class: provider.ClassNotFound, Op: op, Message: messageDeckNotFound}, response, deckFormat)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, nil, false, statusError(op, response.StatusCode)
+		return nil, nil, false, formatStatusError(op, response, deckFormat)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
 	if err != nil || len(body) > maxBodyBytes {
