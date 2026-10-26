@@ -5,7 +5,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -448,7 +447,7 @@ func (m *Model) listRowIn(room int, active bool, text string) string {
 // selectionMark leads the marked row: a narrow accent bar where colour shows it, and '>' where it does not,
 // so the selection never depends on colour alone.
 func selectionMark() string {
-	if styles.palette.selection == "" || lipgloss.ColorProfile() == termenv.Ascii {
+	if styles.palette.selection == "" || currentProfile() == profileNone {
 		return ">"
 	}
 	return "▌"

@@ -281,7 +281,7 @@ func TestGermanScreensFit(t *testing.T) {
 				m := screen.open(t)
 				for _, size := range germanScreenSizes {
 					sizedModel(m, size.w, size.h)
-					assertViewFits(t, m.View(), size.w, size.h)
+					assertViewFits(t, m.render(), size.w, size.h)
 				}
 			})
 		})
@@ -343,7 +343,7 @@ func TestGermanScreensHoldNoEnglishSentence(t *testing.T) {
 				hide(m)
 			}
 			sizedModel(m, 140, 40)
-			view := strings.Join(strings.Fields(m.View()+"\n"+m.status+"\n"+m.fail), " ")
+			view := strings.Join(strings.Fields(m.render()+"\n"+m.status+"\n"+m.fail), " ")
 			for _, id := range ids {
 				if loc := sentences[textID(id)].FindString(view); loc != "" {
 					t.Errorf("the German view of %q holds the English text of %q: %q\n%s", screen.name, id, loc, view)

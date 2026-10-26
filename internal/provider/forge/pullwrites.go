@@ -515,13 +515,14 @@ func headMoved(number int64, expected, current string) error {
 		"accept the current one and call again")
 }
 
-// mergeFailure maps the status of a refused merge to what it means; no provider text enters the message. A
-// conflict reads the pull request again to name the current head.
+// mergeFailure maps the status of a refused merge to what it means; no provider text enters the message, and the
+// original details of the refusal travel with it. A conflict reads the pull request again to name the current head.
 func mergeFailure(ctx context.Context, c *Client, allowed allowlist, path string, number int64, expected string,
 	status int, err error) error {
 	const op = "merge pull request"
 	fail := func(message string) error {
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name + " " + message}
+		return keepOriginal(&provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name + " " +
+			message}, err)
 	}
 	switch status {
 	case http.StatusConflict:
@@ -717,21 +718,22 @@ var pullRequestBranchesUpdate = &tool{
 	},
 }
 
-// branchUpdateFailure names what a refused branch update means; no provider text enters the message.
+// branchUpdateFailure names what a refused branch update means; no provider text enters the message, and the
+// original details of the refusal travel with it.
 func branchUpdateFailure(c *Client, number int64, status int, err error) error {
 	const op = "update pull request branch"
 	name := "pull request " + strconv.FormatInt(number, 10)
 	switch status {
 	case http.StatusConflict:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
-			" could not update the head branch of " + name + " without a conflict; resolve it in the branches"}
+		return keepOriginal(&provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
+			" could not update the head branch of " + name + " without a conflict; resolve it in the branches"}, err)
 	case http.StatusUnprocessableEntity:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
+		return keepOriginal(&provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
 			" rejected the update of the head branch of " + name + ", for example because it is already up to " +
-			"date or the token may not push to it"}
+			"date or the token may not push to it"}, err)
 	case http.StatusRequestEntityTooLarge:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
-			" refused the update of the head branch of " + name + " because the owner's quota is exceeded"}
+		return keepOriginal(&provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
+			" refused the update of the head branch of " + name + " because the owner's quota is exceeded"}, err)
 	}
 	return err
 }

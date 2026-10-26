@@ -24,7 +24,7 @@ const navWidth, navHeight = 140, 40
 func (v *viewSet) see(m *Model) string {
 	v.t.Helper()
 	sizedModel(m, v.w, v.h)
-	view := m.View()
+	view := m.render()
 	sizedModel(m, navWidth, navHeight)
 	assertViewFits(v.t, view, v.w, v.h)
 	v.views = append(v.views, view)

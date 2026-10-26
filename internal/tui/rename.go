@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -56,9 +55,8 @@ func (m *Model) askRename() tea.Cmd {
 		return nil
 	}
 	return m.requireAdmin(func() tea.Cmd {
-		in := textinput.New()
+		in := newTextInput()
 		in.Prompt = ""
-		in.Cursor.SetMode(cursor.CursorStatic)
 		in.SetValue(name)
 		in.Focus()
 		m.rename = &renameState{kind: kind, old: name, input: in}

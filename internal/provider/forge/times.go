@@ -54,11 +54,12 @@ var (
 const timeFilterKeys = `"since":` + issueSchemaTime + `,"before":` + issueSchemaTime
 
 // timesDisabled turns the answer of an instance that has time tracking switched off for the repository into a
-// plain "not available"; the instance's own text never reaches the message.
+// plain "not available"; the instance's own text stays out of the message and travels as the original details.
 func timesDisabled(op string, status int, err error) error {
 	if err != nil && status == http.StatusBadRequest {
-		return provider.Fail(op, "time tracking is not available for this repository; it may be turned off in the "+
-			"repository settings")
+		failure := provider.Fail(op, "time tracking is not available for this repository; it may be turned off in "+
+			"the repository settings")
+		return keepOriginal(failure, err)
 	}
 	return err
 }
