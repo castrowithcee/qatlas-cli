@@ -70,8 +70,9 @@ message number) becomes `@<username>`, `https://t.me/c/<id>/...` becomes `-100<i
 ## Connection
 
 Tool groups only sort tools for display. The base URL must be a plain `https` URL with a host and without user,
-query, or fragment, with no exception for local addresses, and redirects are never followed. Errors never carry
-Telegram's own error text.
+query, or fragment, with no exception for local addresses, and redirects are never followed. Qatlas' error message
+never carries Telegram's error text; Telegram's answer (`description` and `error_code`) goes along separately as
+the original answer in the `provider` field of the error details, marked untrusted, redacted, and bounded.
 
 The credential provides `bot-token`. Connection effects only reduce what Qatlas exposes and executes; they do not
 broaden the bot's rights in Telegram; see [Rights per tool group](setup.md#rights-per-tool-group). A connection may
