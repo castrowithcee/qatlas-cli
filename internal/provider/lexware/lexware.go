@@ -1746,7 +1746,7 @@ func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string,
 	defer response.Body.Close()
 
 	if ok := response.StatusCode == http.StatusOK || (method != http.MethodGet && response.StatusCode >= 200 && response.StatusCode < 300); !ok {
-		failure := statusError(op, resource, response.StatusCode)
+		failure := statusError(op, resource, response.StatusCode, response.Body)
 		if uncertain != "" && response.StatusCode >= 500 {
 			failure.(*provider.Error).Message += uncertain
 		}
@@ -1769,15 +1769,49 @@ func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string,
 const conflictMessage = "Lexware reports a conflict: the object was changed in the meantime; read it again before changing it"
 
 // validationMessage is the fixed text of an HTTP 406. Lexware names the offending fields in the response
-// body, which is never copied.
+// body, which only reaches Original.
 const validationMessage = "Lexware rejected the data as invalid; check the field values against the tool description"
 
-// statusError maps an HTTP status to a stable class. The provider message is never copied: Lexware echoes
-// request detail into it, and the class plus the status is what a caller can act on.
+// statusError maps an HTTP status to a stable class. Qatlas' message never carries the provider text, because
+// Lexware echoes request detail into it; the body goes separately into Original.
 //
 // resource names the single object an operation addresses (a resource* constant) and is empty for lists,
 // creations and the connection test; only a named object can be reported as missing.
-func statusError(op, resource string, status int) error {
+func statusError(op, resource string, status int, body io.Reader) error {
+	failure := classifyStatus(op, resource, status)
+	if e, ok := failure.(*provider.Error); ok {
+		e.Original = lexwareOriginal(status, provider.ReadErrorBody(body))
+	}
+	return failure
+}
+
+// Lexware answers in one of two formats: the regular one with a message and details, and the legacy one
+// of contacts, files and vouchers with an IssueList. Request echoes such as path and traceId are not kept.
+var (
+	regularFields = provider.OriginalFields{
+		Message: "message", List: "details",
+		Item: &provider.OriginalFields{Code: "violation", Path: "field", Message: "message"},
+	}
+	legacyFields = provider.OriginalFields{
+		List: "IssueList",
+		Item: &provider.OriginalFields{Code: "i18nKey", Type: "type", Path: "source"},
+	}
+)
+
+// lexwareOriginal keeps the entries of whichever format the body has; a plain-text body is kept once.
+func lexwareOriginal(status int, body []byte) *provider.Original {
+	original := provider.ErrorOriginal(status, body, regularFields)
+	legacy := provider.ErrorOriginal(status, body, legacyFields)
+	if len(original.Entries) == 1 && len(legacy.Entries) == 1 && original.Entries[0] == legacy.Entries[0] {
+		return original
+	}
+	if json.Valid(body) {
+		original.Entries = append(original.Entries, legacy.Entries...)
+	}
+	return original
+}
+
+func classifyStatus(op, resource string, status int) error {
 	switch status {
 	case http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Lexware rejected the API key"}
