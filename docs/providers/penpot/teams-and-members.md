@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Penpot: teams and members
@@ -24,13 +24,12 @@ team that `teams.create` makes is outside every connection until you add `team/I
   identifiers are personal data and untrusted provider data: the tool has its own sensitivity class,
   `penpot-members`. The role stays derived from the membership flags, which are returned as well.
 - `members.set-role` sets `admin`, `editor`, or `viewer`. The role `owner` is not offered, so ownership cannot be
-  transferred. Penpot refuses a change of the owner and a change without admin rights.
-- `members.remove`: Penpot refuses to remove the token's own account, and an admin cannot remove the owner. The member
-  must belong to the given team; Penpot looks the ID up in that team only.
+  transferred.
+- `members.remove`: the member must belong to the given team; Penpot looks the ID up in that team only.
 - `teams.create` takes a `name` of 1 to 250 characters, none of `.`, `:`, `/`, which Penpot refuses. The new team is
-  owned by the token's account. Penpot limits the teams per account.
+  owned by the token's account.
 - `teams.delete`: Penpot marks the team and its projects and files as deleted and removes them after the deletion
-  delay; only the owner may delete, and the default team is refused.
+  delay. The roles each tool needs are in [Rights per tool group](setup.md#rights-per-tool-group).
 
 Team and member changes affect the whole team, so **a connection with a project or file allow-list refuses all of
 them, and `teams.create`**; `members.list` is still allowed unless the connection is bound to files only. Changes
