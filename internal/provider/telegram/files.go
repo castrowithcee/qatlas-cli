@@ -303,7 +303,10 @@ func (c *Client) openFile(ctx context.Context, op, escapedPath string) (*http.Re
 	}
 	if response.StatusCode != http.StatusOK {
 		defer response.Body.Close()
-		return nil, statusError(op, response.StatusCode)
+		failure := statusError(op, response.StatusCode)
+		body := provider.ReadErrorBody(response.Body)
+		failure.Original = provider.ErrorOriginal(response.StatusCode, body, originalFields)
+		return nil, failure
 	}
 	return response, nil
 }
