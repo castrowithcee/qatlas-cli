@@ -14,7 +14,7 @@ Matomo 5. The API is the same for both, and the token carries the rights of its 
 describes the foundation every Matomo tool shares: connection, targets, availability, errors, paging, and the
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
-[saved segments](segments.md), [annotations](annotations.md),
+[saved segments](segments.md), [annotations](annotations.md), [scheduled reports](scheduled-reports.md),
 [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
 [users and roles](users.md), [SMS settings](mobile-messaging.md), and [privacy and data subject requests](privacy.md).
 
@@ -145,12 +145,13 @@ report catalog, report, and segment field tools as well as `matomo.goals.list`, 
 `matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
 `matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.opt-out-code.get`, `matomo.site-settings.get`,
 `matomo.consent-manager.detect`, `matomo.dimensions.list`, `matomo.reference-data.list`, and
-`matomo.ip-ranges.expand`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
+`matomo.ip-ranges.expand`, `matomo.seo.rank`, and `matomo.js-tracker-install.get-status`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
 and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.users.get`,
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
-`matomo.tracking-failures.list`, because they carry personal data. The tracking failure deletions are in no profile and
-`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+`matomo.tracking-failures.list`, `matomo.ip-locations.get`, `matomo.scheduled-reports.list`, and
+`matomo.scheduled-reports.generate`, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as is `matomo.scheduled-reports.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
@@ -189,115 +190,21 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 
 ## Tools
 
-| Tool | Group | Does |
-| --- | --- | --- |
-| `matomo.version.get` | [sites](sites.md) | reads the instance version and, with `plugin`, whether that plugin is activated |
-| `matomo.sites.list` | [sites](sites.md) | reads websites of the token inside the targets, optionally matching `pattern` |
-| `matomo.sites.get` | [sites](sites.md) | reads one website with its addresses, time zone, currency, and tracking settings |
-| `matomo.sites.add` | [sites](sites.md) | creates a website (Super User, target `instance`; effect `create`) |
-| `matomo.sites.update` | [sites](sites.md) | changes the settings of one website; lists not sent are kept (effect `update`) |
-| `matomo.sites.delete` | [sites](sites.md) | deletes a website and its configuration (Super User, targets `instance` and the website; effect `delete`, only via `tools`) |
-| `matomo.site-urls.add` | [sites](sites.md) | adds alias URLs to a website, an assignment for tracking only (effect `create`) |
-| `matomo.site-urls.set` | [sites](sites.md) | replaces the alias URL list of a website (effect `update`) |
-| `matomo.sites.update-created-time` | [sites](sites.md) | sets the creation date of up to 100 websites (effect `update`) |
-| `matomo.site-groups.rename` | [sites](sites.md) | renames a website group instance-wide (Super User, target `instance`; effect `update`) |
-| `matomo.tracking-code.get` | [sites](sites.md) | reads the JavaScript or image tracking code of a website as text |
-| `matomo.opt-out-code.get` | [sites](sites.md#opt-out-code) | reads the opt-out embed code, script or self-contained, as text |
-| `matomo.tracking-failures.list` | [sites](sites.md#tracking-failures) | reads the logged tracking failures inside the targets (admin right; profile `live`) |
-| `matomo.tracking-failures.delete` | [sites](sites.md#tracking-failures) | deletes one tracking failure of a website (admin right; effect `delete`) |
-| `matomo.tracking-failures.delete-all` | [sites](sites.md#tracking-failures) | deletes every tracking failure of the token, beyond the bound websites (admin right, target `instance`; effect `delete`, only via `tools`) |
-| `matomo.site-settings.get` | [sites](sites.md) | reads the measurable settings of a website (admin right) |
-| `matomo.consent-manager.detect` | [sites](sites.md) | reads the consent manager the Matomo server detects on the website |
-| `matomo.site-groups.list` | [sites](sites.md) | reads website groups and their websites (Super User, target `instance`) |
-| `matomo.global-settings.get` | [instance](instance.md) | reads the global website settings (admin right, target `instance`) |
-| `matomo.global-settings.set-excluded-ips` | [instance](instance.md) | replaces the globally excluded IPs (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-excluded-user-agents` | [instance](instance.md) | replaces the globally excluded user agents (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-excluded-referrers` | [instance](instance.md) | replaces the globally excluded referrers (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-excluded-query-parameters` | [instance](instance.md) | sets the global query parameter exclusion type and list (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-search-parameters` | [instance](instance.md) | replaces the global site search keyword and category parameters (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-keep-url-fragments` | [instance](instance.md) | sets whether URL fragments are kept by default (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-default-currency` | [instance](instance.md) | sets the default currency (Super User, target `instance`; effect `update`) |
-| `matomo.global-settings.set-default-timezone` | [instance](instance.md) | sets the default time zone (Super User, target `instance`; effect `update`) |
-| `matomo.archive-settings.set` | [instance](instance.md#operations) | sets browser-triggered archiving and the validity of today's reports (Super User, target `instance`; effect `update`) |
-| `matomo.trusted-hosts.set` | [instance](instance.md#operations) | replaces the trusted hosts; a wrong list locks the instance out (Super User, target `instance`; effect `update`, only via `tools`) |
-| `matomo.branding.set` | [instance](instance.md#operations) | switches the custom logo and favicon on or off (Super User, target `instance`; effect `update`) |
-| `matomo.database-statistics.get` | [instance](instance.md#database-statistics) | reads the size of the database by section: general information, server status, and table and report sizes (Super User, target `instance`, only via `tools`) |
-| `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
-| `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
-| `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
-| `matomo.users.get` | [users](users.md) | reads one user, checks a login or email, lists the Super Users, or tells whether the token is a Super User (target `instance`) |
-| `matomo.users.get-access` | [users](users.md) | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
-| `matomo.users.delete` | [users](users.md) | deletes a user (admin or Super User, target `instance`; effect `delete`, only via `tools`) |
-| `matomo.users.logout` | [users](users.md) | ends the web sessions of a user (Super User, target `instance`; effect `execute`) |
-| `matomo.access.set` | [users](users.md) | sets or removes the role of a user on websites (admin; effect `update`, only via `tools`) |
-| `matomo.capabilities.add` | [users](users.md) | adds capabilities of a user on websites (admin; effect `update`, only via `tools`) |
-| `matomo.capabilities.remove` | [users](users.md) | removes capabilities of a user on websites (admin; effect `update`, only via `tools`) |
-| `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
-| `matomo.sms-settings.get` | [mobile-messaging](mobile-messaging.md#reading) | reads one SMS setting: credentials stored, SMS provider, credit, phone numbers, or delegation (target `instance`; in no profile) |
-| `matomo.sms-phone-numbers.remove` | [mobile-messaging](mobile-messaging.md#removing-access) | removes a phone number of the token's user (target `instance`; effect `delete`) |
-| `matomo.sms-credentials.delete` | [mobile-messaging](mobile-messaging.md#removing-access) | deletes the stored SMS provider credentials (target `instance`; effect `delete`, only via `tools`) |
-| `matomo.sms-delegation.set` | [mobile-messaging](mobile-messaging.md#removing-access) | sets whether regular users manage the SMS credentials (Super User, target `instance`; effect `update`) |
-| `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
-| `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
-| `matomo.data-subjects.delete` | [privacy](privacy.md) | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
-| `matomo.raw-data.anonymize` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.data-purge.run` | [privacy](privacy.md#anonymizing-and-purging-raw-data) | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
-| `matomo.privacy-settings.get` | [privacy](privacy.md) | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
-| `matomo.privacy-settings.set-anonymize-ip` | [privacy](privacy.md#changing-privacy-settings) | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
-| `matomo.do-not-track.enable` | [privacy](privacy.md#changing-privacy-settings) | enables Do Not Track support (Super User, target `instance`; effect `update`) |
-| `matomo.do-not-track.disable` | [privacy](privacy.md#changing-privacy-settings) | disables Do Not Track support (Super User, target `instance`; effect `update`) |
-| `matomo.privacy-settings.set-delete-logs` | [privacy](privacy.md#setting-retention-periods) | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.privacy-settings.set-delete-reports` | [privacy](privacy.md#setting-retention-periods) | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.privacy-settings.set-report-deletion-schedule` | [privacy](privacy.md#setting-retention-periods) | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
-| `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
-| `matomo.compliance.set-policy-settings` | [privacy](privacy.md#changing-compliance-policies) | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
-| `matomo.compliance.set-status` | [privacy](privacy.md#changing-compliance-policies) | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
-| `matomo.compliance.enforce` | [privacy](privacy.md#changing-compliance-policies) | enforces every toggleable setting of a policy, with final data effects (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
-| `matomo.reports.list` | [reports](reports.md) | reads the report catalog of a website as id, name, and category, with a category overview |
-| `matomo.reports.describe` | [reports](reports.md) | reads the details of one report of the catalog |
-| `matomo.reports.get` | [reports](reports.md) | reads one report of a website for a period, in bounded rows |
-| `matomo.reports.archive` | [instance](instance.md#operations) | starts the archiving of the reports of a website for a period (Super User, targets `instance` and the website; effect `execute`) |
-| `matomo.reports.evolution` | [reports](reports.md) | reads how rows of a report develop over periods (only via `tools`) |
-| `matomo.distinct-counts.get` | [reports](reports.md) | reads how many different search engines, social networks, keywords, campaigns, referring websites, AI assistants, or countries a period had (only via `tools`) |
-| `matomo.multi-sites.get` | [reports](reports.md) | reads the comparison of the websites of the token inside the targets (only via `tools`) |
-| `matomo.report-glossary.list` | [reports](reports.md) | reads the explanation of the reports or metrics of a website (only via `tools`) |
-| `matomo.insights.list` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the notable changes between two periods: insights, movers and shakers, their overviews, or whether a comparison period exists (only via `tools`) |
-| `matomo.transitions.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the previous and following pages, outlinks, downloads, and external referrers of one page (only via `tools`) |
-| `matomo.bot-realtime.get` | [reports](reports.md#insights-transitions-and-ai-chatbots) | reads the AI chatbots and the pages they requested within the last minutes; needs Matomo 5.12.0 and the BotTracking plugin (only via `tools`) |
-| `matomo.segments.fields` | [reports](reports.md) | reads the segment fields of a website |
-| `matomo.segments.suggest-values` | [reports](reports.md) | reads frequent values of a segment field |
-| `matomo.visits.list` | [live](live.md) | reads the visit log of one website |
-| `matomo.live-counters.get` | [live](live.md) | reads visits, actions, visitors, and converted visits of the last minutes |
-| `matomo.visits.get-latest-time` | [live](live.md) | reads the time of the latest visit per website |
-| `matomo.visitors.get-profile` | [visitors](visitors.md) | reads the profile of one visitor, bounded; needs visitor profiles enabled |
-| `matomo.visitors.get-latest-id` | [visitors](visitors.md) | reads the visitor ID of the latest visit, optionally within a segment |
-| `matomo.visits.get-first` | [visitors](visitors.md) | reads the first visit of one visitor without actions; needs visitor profiles enabled |
-| `matomo.goals.list` | [goals](goals.md) | reads the goals of a website |
-| `matomo.goals.get` | [goals](goals.md) | reads one goal |
-| `matomo.goals.add` | [goals](goals.md) | creates a goal (effect `create`) |
-| `matomo.goals.update` | [goals](goals.md) | replaces the definition of a goal (effect `update`) |
-| `matomo.goals.delete` | [goals](goals.md) | deletes a goal and its conversions (effect `delete`, only via `tools`) |
-| `matomo.goal-recommendations.list` | [goals](goals.md) | reads the saved goal recommendations of a website; needs a write right |
-| `matomo.goal-recommendations.scan` | [goals](goals.md) | lets Matomo crawl the website and save goal recommendations, without AI (effect `execute`) |
-| `matomo.goal-recommendations.dismiss` | [goals](goals.md) | dismisses one saved recommendation or all of a website (effect `update`) |
-| `matomo.segments.list` | [segments](segments.md) | reads the saved segments inside the targets |
-| `matomo.segments.get` | [segments](segments.md) | reads one saved segment by its instance-wide ID |
-| `matomo.segments.add` | [segments](segments.md) | saves a segment (effect `create`) |
-| `matomo.segments.update` | [segments](segments.md) | replaces a saved segment (effect `update`) |
-| `matomo.segments.star` | [segments](segments.md) | stars a saved segment; the star belongs to the segment, not the user (effect `update`) |
-| `matomo.segments.unstar` | [segments](segments.md) | removes the star from a saved segment (effect `update`) |
-| `matomo.segments.delete` | [segments](segments.md) | deletes a saved segment, soft delete (effect `delete`, only via `tools`) |
-| `matomo.annotations.list` | [annotations](annotations.md) | reads the annotations of a website in a date range, in batches |
-| `matomo.annotations.get` | [annotations](annotations.md) | reads one annotation of a website |
-| `matomo.annotations.add` | [annotations](annotations.md) | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
-| `matomo.annotations.update` | [annotations](annotations.md) | changes the date, note, or star of an annotation (effect `update`) |
-| `matomo.annotations.count` | [annotations](annotations.md) | counts the annotations of a website per period, with starred counts |
-| `matomo.annotations.delete` | [annotations](annotations.md) | deletes one annotation for good (effect `delete`, only via `tools`) |
-| `matomo.annotations.delete-all` | [annotations](annotations.md) | deletes every annotation of a website; Super User, needs the `instance` target (effect `delete`, only via `tools`) |
-| `matomo.dimensions.list` | [dimensions](dimensions.md) | reads the custom dimensions of a website |
-| `matomo.dimension-options.list` | [dimensions](dimensions.md) | reads the scopes with free slots and the extraction sources; needs a write right |
-| `matomo.dimensions.add` | [dimensions](dimensions.md) | adds a custom dimension, using a slot for good (effect `create`) |
-| `matomo.dimensions.update` | [dimensions](dimensions.md) | changes or pauses a custom dimension; Matomo cannot delete one (effect `update`) |
+| Group | Tools |
+| --- | --- |
+| [sites and version](sites.md) | version, websites, tracking and opt-out code, tracking failures, website settings, consent manager, website groups |
+| [instance settings and reference data](instance.md) | global website settings, archiving, trusted hosts, branding, reference lists, IP ranges, database statistics, diagnostics |
+| [users and roles](users.md) | users, their access to websites, roles and capabilities, deleting and logging out users |
+| [privacy and data subject requests](privacy.md) | finding, exporting, and deleting the visits of one person, privacy settings, retention, compliance policies |
+| [reports](reports.md) | report catalog, reading reports, evolution, distinct counts, website comparison, glossary, insights, transitions, AI chatbots, segment fields |
+| [live data](live.md) | visit log, live counters, latest visit time |
+| [visitor profiles](visitors.md) | visitor profile, latest visitor ID, first visit of a visitor |
+| [goals](goals.md) | reading, creating, replacing, and deleting goals, goal recommendations |
+| [saved segments](segments.md) | reading, creating, replacing, starring, and deleting saved segments |
+| [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
+| [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
+| [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, deleting one |
+| [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

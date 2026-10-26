@@ -11,6 +11,15 @@ updated: 2026-10-26
 
 The SMS tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
 
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.sms-settings.get` | reads one SMS setting: credentials stored, SMS provider, credit, phone numbers, or delegation (target `instance`; in no profile) |
+| `matomo.sms-phone-numbers.remove` | removes a phone number of the token's user (target `instance`; effect `delete`) |
+| `matomo.sms-credentials.delete` | deletes the stored SMS provider credentials (target `instance`; effect `delete`, only via `tools`) |
+| `matomo.sms-delegation.set` | sets whether regular users manage the SMS credentials (Super User, target `instance`; effect `update`) |
+
 ## Binding
 
 The SMS settings belong to the account of the token, or to the instance while management is not delegated, not to a

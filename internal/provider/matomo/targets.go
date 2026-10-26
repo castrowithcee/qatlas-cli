@@ -129,7 +129,7 @@ var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.I
 	dataPurgeRun.ID: true, trackingFailuresDeleteAll.ID: true, archiveSettingsSet.ID: true, trustedHostsSet.ID: true,
 	brandingSet.ID: true, privacySettingsSetAnonymizeIP.ID: true, doNotTrackEnable.ID: true,
 	doNotTrackDisable.ID: true, privacySettingsSetDeleteLogs.ID: true, privacySettingsSetDeleteReports.ID: true,
-	privacySettingsSetReportDeletionSchedule.ID: true, smsSettingsGet.ID: true,
+	privacySettingsSetReportDeletionSchedule.ID: true, bruteForceIPsUnblock.ID: true, smsSettingsGet.ID: true,
 	smsPhoneNumbersRemove.ID: true, smsCredentialsDelete.ID: true, smsDelegationSet.ID: true}
 
 // reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide

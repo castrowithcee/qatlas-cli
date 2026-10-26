@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo visitors
@@ -13,6 +13,14 @@ The visitor tools of the [Matomo provider](README.md). They belong to the live d
 rules: the profile `live` selects them, they pass the same gate as the visit log (one live request at a time
 per instance and token, spaced below the Cloud limit), and visits come back in the shape of
 `matomo.visits.list`. They carry the data classification `matomo-live-personal`.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.visitors.get-profile` | reads the profile of one visitor, bounded; needs visitor profiles enabled |
+| `matomo.visitors.get-latest-id` | reads the visitor ID of the latest visit, optionally within a segment |
+| `matomo.visits.get-first` | reads the first visit of one visitor without actions; needs visitor profiles enabled |
 
 ## Personal data
 
