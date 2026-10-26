@@ -127,15 +127,16 @@ func onReview(allowed allowlist, repository string, number, id int64, op string,
 		})
 }
 
-// reviewRefused maps a 422 of a review change to what it means, without the instance's text: the instance
-// refuses an own pull request, a review that is not pending, and a review without content with the same status.
+// reviewRefused maps a 422 of a review change to what it means, without the instance's text in the message: the
+// instance refuses an own pull request, a review that is not pending, and a review without content with the same
+// status.
 func reviewRefused(c *Client, op string, status int, err error) error {
 	if status != http.StatusUnprocessableEntity {
 		return err
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name + " refused the " +
-		"review; for example the token's user opened the pull request and cannot approve or request changes " +
-		"on it, the review is not pending, or it has neither text nor comments"}
+	return keepOriginal(&provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
+		" refused the review; for example the token's user opened the pull request and cannot approve or " +
+		"request changes on it, the review is not pending, or it has neither text nor comments"}, err)
 }
 
 func checkReviewText(name string, value string) error {
