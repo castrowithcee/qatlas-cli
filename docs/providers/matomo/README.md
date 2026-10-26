@@ -203,7 +203,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [saved segments](segments.md) | reading, creating, replacing, starring, and deleting saved segments |
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
-| [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, deleting one |
+| [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and

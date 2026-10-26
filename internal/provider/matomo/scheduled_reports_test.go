@@ -15,10 +15,11 @@ import (
 )
 
 const reportConnections = `
-  sr-tools: {service: matomo, credential: token, tools: [matomo.scheduled-reports.list, matomo.scheduled-reports.generate, matomo.scheduled-reports.delete], targets: [site/1, site/2]}
-  sr-one: {service: matomo, credential: token, tools: [matomo.scheduled-reports.generate, matomo.scheduled-reports.delete], targets: [site/2]}
-  sr-instance: {service: matomo, credential: token, tools: [matomo.scheduled-reports.generate, matomo.scheduled-reports.delete], targets: [instance]}
+  sr-tools: {service: matomo, credential: token, tools: [matomo.scheduled-reports.list, matomo.scheduled-reports.generate, matomo.scheduled-reports.delete, matomo.scheduled-reports.pause], targets: [site/1, site/2]}
+  sr-one: {service: matomo, credential: token, tools: [matomo.scheduled-reports.generate, matomo.scheduled-reports.delete, matomo.scheduled-reports.pause], targets: [site/2]}
+  sr-instance: {service: matomo, credential: token, tools: [matomo.scheduled-reports.generate, matomo.scheduled-reports.delete, matomo.scheduled-reports.pause], targets: [instance]}
   sr-effects: {service: matomo, credential: token, effects: [read, delete], targets: [site/1, site/2]}
+  sr-update: {service: matomo, credential: token, effects: [read, update], targets: [site/1, site/2]}
 `
 
 func newReportEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
@@ -99,6 +100,7 @@ func TestScheduledReportToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		"matomo.scheduled-reports.list":     {capability.EffectRead, capability.ConfirmationNone, false},
 		"matomo.scheduled-reports.generate": {capability.EffectRead, capability.ConfirmationNone, false},
 		"matomo.scheduled-reports.delete":   {capability.EffectDelete, capability.ConfirmationRequired, true},
+		"matomo.scheduled-reports.pause":    {capability.EffectUpdate, capability.ConfirmationRequired, false},
 	} {
 		d, _, found := reg.Lookup(id)
 		if !found || d.Risk.Effect != want.effect || d.Risk.Confirmation != want.confirm || !d.Risk.OpenWorld ||
@@ -111,7 +113,7 @@ func TestScheduledReportToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		t.Errorf("list sensitivity = %q", list.Risk.DataSensitivity)
 	}
 	// The tools that create, change, or send a report do not exist.
-	for _, id := range []string{"add", "update", "send", "pause"} {
+	for _, id := range []string{"add", "update", "send", "resume"} {
 		if _, _, found := reg.Lookup("matomo.scheduled-reports." + id); found {
 			t.Errorf("matomo.scheduled-reports.%s exists", id)
 		}
@@ -122,7 +124,7 @@ func TestScheduledReportToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		inLive := profile.ID == "live"
 		if strings.Contains(joined, "matomo.scheduled-reports.list") != inLive ||
 			strings.Contains(joined, "matomo.scheduled-reports.generate") != inLive ||
-			strings.Contains(joined, "matomo.scheduled-reports.delete") {
+			strings.Contains(joined, "matomo.scheduled-reports.delete") || strings.Contains(joined, "matomo.scheduled-reports.pause") {
 			t.Errorf("profile %s selects scheduled reports wrongly: %v", profile.ID, profile.Tools)
 		}
 	}
