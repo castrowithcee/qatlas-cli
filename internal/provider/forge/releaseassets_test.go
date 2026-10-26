@@ -408,6 +408,12 @@ func TestReleaseAssetDownloadFollowsNoRedirectAndHoldsTheSize(t *testing.T) {
 			if err == nil || strings.Contains(err.Error(), "storage.example") {
 				t.Errorf("%s %s: %v", p.id, name, err)
 			}
+			if name == "redirect" {
+				// A foreign storage address leaves only the status.
+				if o := originalOf(t, err); o.Status != http.StatusFound || len(o.Entries) != 0 || o.Documentation != "" {
+					t.Errorf("%s: original %+v", p.id, o)
+				}
+			}
 			if entries, _ := os.ReadDir(dirs.write); len(entries) != 0 {
 				t.Errorf("%s %s: files left: %v", p.id, name, entries)
 			}

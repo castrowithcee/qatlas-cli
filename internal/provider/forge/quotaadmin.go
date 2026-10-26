@@ -132,7 +132,7 @@ func (c *Client) quotaAdminAbsent(ctx context.Context, op, path string, original
 	}
 	if _, _, err := send(ctx, c.http, c.limiter, c.product, c.origin+apiPrefix, c.auth, op, quotaAdminUsers,
 		url.Values{"limit": {"1"}}, nil); err == nil {
-		return provider.Fail(op, quotaOffMessage)
+		return keepOriginal(provider.Fail(op, quotaOffMessage), original)
 	}
 	return original
 }
