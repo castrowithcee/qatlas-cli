@@ -15,9 +15,11 @@ describes the foundation every Matomo tool shares: connection, targets, availabi
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md), [scheduled reports](scheduled-reports.md),
-[custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
+[custom alerts](alerts.md), [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
 [users and roles](users.md), [SMS settings](mobile-messaging.md), [privacy and data subject requests](privacy.md),
 [AI providers](ai-providers.md), and [Tag Manager](tag-manager.md).
+
+To connect Matomo step by step, see [Set up Matomo](setup.md).
 
 ## Configuration
 
@@ -151,8 +153,8 @@ and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.u
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
 `matomo.tracking-failures.list`, `matomo.ip-locations.get`, `matomo.scheduled-reports.list`, and
-`matomo.scheduled-reports.generate`, because they carry personal data. The tracking failure deletions are in no profile and
-`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as is `matomo.scheduled-reports.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+`matomo.scheduled-reports.generate`, and the four [alert](alerts.md) read tools, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as are `matomo.scheduled-reports.delete` and `matomo.alerts.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
@@ -174,8 +176,16 @@ profile and are offered only via `tools`.
 The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
 `matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
-`matomo.tag-manager-versions.delete`, and `matomo.tag-manager-catalog.list` are in no profile and are offered only via
-`tools`.
+`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`, `matomo.tag-manager-tags.add`,
+`matomo.tag-manager-tags.update`, `matomo.tag-manager-tags.resume`,
+`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-triggers.add`,
+`matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, `matomo.tag-manager-tags.delete`,
+`matomo.tag-manager-tags.pause`, `matomo.tag-manager-variables.list`,
+`matomo.tag-manager-variables.get`, `matomo.tag-manager-variables.list-available`,
+`matomo.tag-manager-references.list`, `matomo.tag-manager-catalog.list`,
+`matomo.tag-manager-containers.create-default`, `matomo.tag-manager-containers.add`,
+`matomo.tag-manager-containers.update`, and `matomo.tag-manager-containers.delete` are in no
+profile and are offered only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
@@ -211,10 +221,10 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
+| [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers, versions and their export, creating, renaming, and deleting versions, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers and tags of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
-fetched. `matomo.version.get` needs a view right on any website; the other tools need one on the website read,
-the goal changes a write right.
+fetched. The rights each tool group needs are listed in [Set up Matomo](setup.md#rights-per-tool-group).

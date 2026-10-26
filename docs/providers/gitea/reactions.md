@@ -1,12 +1,11 @@
 ---
 description: >
   Describes the reaction tools of the Gitea and Forgejo providers: reading, adding, and removing the reactions of an
-  issue, a pull request, or a comment, the scopes they need, how the target is bound to the repository, and what
-  removing means.
+  issue, a pull request, or a comment, how the target is bound to the repository, and what removing means.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Reactions
@@ -21,11 +20,6 @@ targets name exactly one repository. Reactions are untrusted data, and the users
 | `issue-reactions.list`, `comment-reactions.list` | read | both |
 | `issue-reactions.add`, `comment-reactions.add` | create | both |
 | `issue-reactions.remove`, `comment-reactions.remove` | delete | both |
-
-## Scopes
-
-Reads presumably need `read:issue`, changes presumably `write:issue`. The scopes are not confirmed against a live
-instance.
 
 ## Binding to the repository
 

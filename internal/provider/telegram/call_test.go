@@ -186,3 +186,75 @@ func TestValidateBaseURLMatchesOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestErrorsCarryOriginalAnswer(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		wantMsg string
+		wantCod string
+	}{
+		{"bad request", 400, `{"ok":false,"error_code":400,"description":"Bad Request: ORIG-DESC"}`,
+			"Bad Request: ORIG-DESC", "400"},
+		{"auth", 401, `{"ok":false,"error_code":401,"description":"Unauthorized ORIG-DESC"}`,
+			"Unauthorized ORIG-DESC", "401"},
+		{"permission", 403, `{"ok":false,"error_code":403,"description":"Forbidden ORIG-DESC"}`,
+			"Forbidden ORIG-DESC", "403"},
+		{"conflict", 409, `{"ok":false,"error_code":409,"description":"Conflict ORIG-DESC"}`, "Conflict ORIG-DESC", "409"},
+		{"rate limit", 429, `{"ok":false,"error_code":429,"description":"Too Many ORIG-DESC","parameters":{"retry_after":7}}`,
+			"Too Many ORIG-DESC", "429"},
+		{"migration", 400, `{"ok":false,"error_code":400,"description":"migrated ORIG-DESC",` +
+			`"parameters":{"migrate_to_chat_id":-1009998887776}}`, "migrated ORIG-DESC", "400"},
+		{"server error", 502, `<html>ORIG-DESC</html>`, "<html>ORIG-DESC</html>", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, _ := telegramClient(t, "-1001", roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return response(tt.status, tt.body), nil
+			}))
+			_, err := client.DeleteMessage(context.Background(), 1)
+			var providerErr *provider.Error
+			if !errors.As(err, &providerErr) {
+				t.Fatalf("err = %v, want provider error", err)
+			}
+			original := providerErr.Original
+			if original == nil || original.Status != tt.status || len(original.Entries) != 1 ||
+				original.Entries[0].Message != tt.wantMsg || original.Entries[0].Code != tt.wantCod {
+				t.Fatalf("Original = %+v, want status %d message %q code %q", original, tt.status, tt.wantMsg, tt.wantCod)
+			}
+			for _, leak := range []string{"ORIG-DESC", "9998887776", testToken} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("leak %q: %v / %+v", leak, err, original)
+				}
+			}
+		})
+	}
+}
+
+func TestFileDownloadFailureCarriesOriginal(t *testing.T) {
+	for _, tt := range []struct {
+		name, body, msg string
+	}{
+		{"envelope", `{"ok":false,"error_code":404,"description":"Not Found ORIG-DESC"}`, "Not Found ORIG-DESC"},
+		{"empty", ``, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client, _ := telegramClient(t, "-1001", roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return response(404, tt.body), nil
+			}))
+			_, err := client.openFile(context.Background(), "download file", "a/b")
+			var providerErr *provider.Error
+			if !errors.As(err, &providerErr) || providerErr.Original == nil || providerErr.Original.Status != 404 {
+				t.Fatalf("err = %v, want Original with status 404", err)
+			}
+			entries := providerErr.Original.Entries
+			if tt.msg == "" && len(entries) != 0 || tt.msg != "" && (len(entries) != 1 || entries[0].Message != tt.msg) {
+				t.Fatalf("entries = %+v, want message %q", entries, tt.msg)
+			}
+			if strings.Contains(err.Error(), "ORIG-DESC") {
+				t.Errorf("error leaks provider text: %v", err)
+			}
+		})
+	}
+}

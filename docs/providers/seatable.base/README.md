@@ -68,7 +68,10 @@ These rules hold for every tool; the area pages refer here.
   request (a multi-step tool, one per step) and is never repeated. A timeout, a dropped connection, a 5xx
   answer, or an unreadable answer is reported as uncertain: read the affected objects before repeating the
   change.
-- Errors never carry provider text. An error SeaTable reports is reported in Qatlas's own words.
+- Qatlas's message of an error never carries provider text. What SeaTable answered goes along separately as
+  the original statement in the `provider` field of the error detail (marked untrusted, redacted, bounded).
+  It holds the status and the `error_msg` of the answer, also for a 2xx answer with `success: false`; the
+  answer of the file store behind a signed address holds only the status.
 - Answers are limited to 1 MiB; strings in untrusted entries are shortened to 4096 bytes. Text from the base
   (names, filter terms, comments, history) is untrusted data.
 - Mutations reject system-column names and never select a table outside the allow-list. A view narrows

@@ -239,6 +239,14 @@ func TestStatusClassificationNeverLeaksBodyOrToken(t *testing.T) {
 		if err != nil && (strings.Contains(err.Error(), bodyCanary) || strings.Contains(err.Error(), tokenValue)) {
 			t.Errorf("status %d: error leaked provider body or token: %v", status, err)
 		}
+		var failure *provider.Error
+		if !errors.As(err, &failure) || failure.Original == nil {
+			t.Fatalf("status %d: Original missing: %v", status, err)
+		}
+		if failure.Original.Status != status || len(failure.Original.Entries) != 1 ||
+			failure.Original.Entries[0].Message != bodyCanary+tokenValue {
+			t.Errorf("status %d: Original = %+v", status, failure.Original)
+		}
 		if len(calls) != 1 {
 			t.Errorf("status %d: calls = %d, want 1 (no redirect followed)", status, len(calls))
 		}
@@ -257,5 +265,21 @@ func TestTokenIsRedacted(t *testing.T) {
 		if env.red.Apply("x "+text+" y") == "x "+text+" y" {
 			t.Fatalf("%q was not registered with the redactor", text)
 		}
+	}
+}
+
+func TestStatusErrorKeepsTextBodyAsOriginal(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(400, "  plain "+bodyCanary+"  "), nil
+	})
+	_, err := env.invoke(snapshotsList.ID, "reader", `{}`, false)
+	var failure *provider.Error
+	if !errors.As(err, &failure) || failure.Original == nil {
+		t.Fatalf("Original missing: %v", err)
+	}
+	if failure.Original.Status != 400 || len(failure.Original.Entries) != 1 ||
+		failure.Original.Entries[0].Message != "plain "+bodyCanary || strings.Contains(err.Error(), bodyCanary) {
+		t.Fatalf("Original = %+v, err = %v", failure.Original, err)
 	}
 }

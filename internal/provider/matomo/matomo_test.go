@@ -237,7 +237,11 @@ var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.dist
 	"matomo.tag-manager-containers.list": true, "matomo.tag-manager-containers.get": true,
 	"matomo.tag-manager-containers.get-embed-code": true, "matomo.tag-manager-catalog.list": true,
 	"matomo.tag-manager-versions.list": true, "matomo.tag-manager-versions.get": true, "matomo.tag-manager-versions.export": true,
-	"matomo.ldap-users.count": true, "matomo.ldap-users.list": true}
+	"matomo.tag-manager-tags.list": true, "matomo.tag-manager-tags.get": true, "matomo.tag-manager-triggers.list": true,
+	"matomo.tag-manager-triggers.get": true, "matomo.tag-manager-variables.list": true,
+	"matomo.tag-manager-variables.get": true, "matomo.tag-manager-variables.list-available": true,
+	"matomo.tag-manager-references.list": true,
+	"matomo.ldap-users.count":            true, "matomo.ldap-users.list": true}
 
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
@@ -256,12 +260,15 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
 			tool.ID == "matomo.data-subjects.delete" || tool.ID == "matomo.raw-data.anonymize" || tool.ID == "matomo.data-purge.run" ||
 			strings.HasPrefix(tool.ID, "matomo.tracking-failures.delete") || tool.ID == "matomo.scheduled-reports.delete" || tool.ID == "matomo.scheduled-reports.pause" ||
-			tool.ID == "matomo.ai-providers.disconnect" ||
+			tool.ID == "matomo.ai-providers.disconnect" || tool.ID == "matomo.alerts.delete" ||
 			(strings.HasPrefix(tool.ID, "matomo.sms-") && tool.ID != "matomo.sms-settings.get") ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
 			tool.ID == "matomo.compliance.enforce" || tool.ID == "matomo.archive-settings.set" ||
 			tool.ID == "matomo.trusted-hosts.set" || tool.ID == "matomo.brute-force-ips.unblock" || tool.ID == "matomo.branding.set" || tool.ID == "matomo.reports.archive" ||
 			tool.ID == "matomo.tag-manager-versions.create" || tool.ID == "matomo.tag-manager-versions.update" || tool.ID == "matomo.tag-manager-versions.delete" ||
+			tool.ID == "matomo.tag-manager-containers.create-default" || tool.ID == "matomo.tag-manager-containers.add" || tool.ID == "matomo.tag-manager-containers.update" || tool.ID == "matomo.tag-manager-containers.delete" ||
+			tool.ID == "matomo.tag-manager-triggers.add" || tool.ID == "matomo.tag-manager-triggers.update" || tool.ID == "matomo.tag-manager-triggers.delete" ||
+			strings.HasPrefix(tool.ID, "matomo.tag-manager-tags.") && tool.ID != "matomo.tag-manager-tags.list" && tool.ID != "matomo.tag-manager-tags.get" ||
 			strings.HasPrefix(tool.ID, "matomo.privacy-settings.set-") || strings.HasPrefix(tool.ID, "matomo.do-not-track.")) &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
@@ -269,7 +276,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 129 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 154 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

@@ -1,26 +1,19 @@
 ---
 description: >
-  Describes the Gitea and Forgejo team tools: listing, searching, reading, creating, changing, and deleting the
-  teams of an organization, their members, their repositories, and their activity feeds. It covers the token
-  scopes, how team IDs are bound to the targets by a proof read, the settings that can be changed, differences
-  between the products, and the limits.
+  Describes the Gitea and Forgejo team tools: listing, searching, reading, creating, changing, and deleting the teams
+  of an organization, their members, their repositories, and their activity feeds. It covers how team IDs are bound to
+  the targets by a proof read, the settings that can be changed, differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Teams
 
 These tools act on the teams of an organization and the people in them. Team names, descriptions, and activity
-texts in answers are untrusted data; members and activities are personal data. [Forgejo](../forgejo.md) names the
+texts in answers are untrusted data; members and activities are personal data. [Forgejo](../forgejo/README.md) names the
 differences.
-
-## Scopes
-
-A read needs `read:organization`, a change `write:organization`; `teams.list` without `organization` reads the
-account's own teams and needs `read:user`. The `repository-teams` tools use the repository routes and need
-`read:repository` and `write:repository`.
 
 ## Target binding
 

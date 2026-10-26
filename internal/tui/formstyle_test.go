@@ -41,7 +41,7 @@ func TestFormsStayUsableAtEverySizeAndWithoutColour(t *testing.T) {
 					if m.screen != screenForm && m.screen != screenPicker {
 						t.Fatalf("screen = %v, want the form", m.screen)
 					}
-					view := m.View()
+					view := m.render()
 					if strings.Contains(view, "Resize terminal") {
 						t.Fatalf("the form is replaced by the resize notice:\n%s", view)
 					}
@@ -68,7 +68,7 @@ func TestAFormTooTallForFramesFallsBackWithoutLosingTheFocus(t *testing.T) {
 	m := visualModel(t, fixtures, 80, 24, uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
 	pump(t, m, "2", "enter")
 	for range m.fields {
-		view := ansi.Strip(m.View())
+		view := ansi.Strip(m.render())
 		label := labelText(m.fields[m.focus].label)
 		if strings.Contains(view, "╭") && strings.Contains(view, label+" ") && !strings.Contains(view, "│ ") {
 			t.Fatalf("frames without their rows:\n%s", view)

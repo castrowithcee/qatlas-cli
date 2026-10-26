@@ -15,13 +15,14 @@ The AI provider tools of the [Matomo provider](README.md). Targets are described
 
 | Tool | Does |
 | --- | --- |
-| `matomo.ai-providers.get-settings` | reads the providers, the default, and each connection without its API key (Super User, target `instance`) |
-| `matomo.ai-providers.disconnect` | removes the stored connection of one provider (Super User, target `instance`; effect `delete`, only via `tools`) |
+| `matomo.ai-providers.get-settings` | reads the providers, the default, and each connection without its API key (target `instance`) |
+| `matomo.ai-providers.disconnect` | removes the stored connection of one provider (target `instance`; effect `delete`, only via `tools`) |
 
 ## Availability
 
-Both tools need the Matomo plugin `AIProviders` to be activated and refuse otherwise as an unsupported capability,
-before any plugin method is called. They are in no profile and need a connection whose targets name `instance`.
+Both tools refuse as an unsupported capability when the plugin is not activated, before any plugin method is called.
+The rights and the plugin are listed in [rights per tool group](setup.md#rights-per-tool-group).
+The tools are in no profile and need a connection whose targets name `instance`.
 
 ## Secrets
 

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -379,8 +382,8 @@ func invokeFilesPurge(ctx context.Context, resolved *config.Resolved, secrets *s
 }
 
 // streamResult reads the result of a command that answers with server-sent events: the data of the "end" event.
-// An "error" event is a failure whose text is never read into the message; a stream without a final event
-// leaves the result open.
+// An "error" event is a failure whose message carries no provider text; its payload goes into Original. A stream
+// without a final event leaves the result open.
 func streamResult(op string, data []byte) (json.RawMessage, error) {
 	event, payload := "", []byte(nil)
 	finish := func() (json.RawMessage, error, bool) {
@@ -389,7 +392,10 @@ func streamResult(op string, data []byte) (json.RawMessage, error) {
 		case "end":
 			return json.RawMessage(payload), nil, true
 		case "error":
-			return nil, providerError(op, "Penpot rejected the operation"), true
+			failure := &provider.Error{Class: provider.ClassProviderError, Op: op,
+				Message: "Penpot rejected the operation"}
+			failure.Original = provider.ErrorOriginal(http.StatusOK, eventPayload(payload), originalFields)
+			return nil, failure, true
 		}
 		return nil, nil, false
 	}
@@ -410,4 +416,25 @@ func streamResult(op string, data []byte) (json.RawMessage, error) {
 		return result, err
 	}
 	return nil, invalidResponse(op, "the Penpot event stream ended without a result"+changeUncertain)
+}
+
+// eventPayload turns the transit-JSON payload of an error event into plain JSON by dropping the "~:" keyword
+// marker from keys and string values; other payloads pass through unchanged.
+func eventPayload(payload []byte) []byte {
+	var fields map[string]any
+	if json.Unmarshal(payload, &fields) != nil {
+		return payload
+	}
+	plain := make(map[string]any, len(fields))
+	for key, value := range fields {
+		if text, ok := value.(string); ok {
+			value = strings.TrimPrefix(text, "~:")
+		}
+		plain[strings.TrimPrefix(key, "~:")] = value
+	}
+	out, err := json.Marshal(plain)
+	if err != nil {
+		return payload
+	}
+	return out
 }

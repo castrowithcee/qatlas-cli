@@ -6,19 +6,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Contents
 
 The content tools read the files of a repository at a branch, tag, or commit, download a raw file or a repository
-archive to a local file, read the editor configuration of a path, and write files as commits. [Forgejo](../forgejo.md) names the
+archive to a local file, read the editor configuration of a path, and write files as commits. [Forgejo](../forgejo/README.md) names the
 differences.
-
-## Scopes
-
-The read tools need `read:repository`, the write tools `write:repository` (presumably; not checked against a live
-instance).
 
 ## Target binding
 

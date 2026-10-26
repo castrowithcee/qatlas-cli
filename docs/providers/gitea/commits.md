@@ -1,19 +1,19 @@
 ---
 description: >
-  Describes the commit, comparison, commit status, and Git object tools of the Gitea and Forgejo providers: what
-  they read and change, the token scopes, the repository binding, the argument rules, the differences between the
-  products and versions, and the bounds of diffs, blobs, and lists. Also covers the repository search, languages,
-  activity feed, and repository signing key.
+  Describes the commit, comparison, commit status, and Git object tools of the Gitea and Forgejo providers: what they
+  read and change, the repository binding, the argument rules, the differences between the products and versions, and
+  the bounds of diffs, blobs, and lists. Also covers the repository search, languages, activity feed, and repository
+  signing key.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Commits, comparison, status, and Git objects
 
 [Gitea](README.md) describes the shared configuration, targets, pagination, and errors, and
-[Forgejo](../forgejo.md) lists what differs. Commit messages, author names, paths, blob and note contents, tag
+[Forgejo](../forgejo/README.md) lists what differs. Commit messages, author names, paths, blob and note contents, tag
 messages, and status texts are untrusted data. Names and email addresses in commits are personal data.
 
 | Tool | Effect | Provider |
@@ -27,12 +27,6 @@ messages, and status texts are untrusted data. Names and email addresses in comm
 | `git-notes.set` | update | Forgejo |
 | `git-notes.delete` | delete, listed-only | Forgejo |
 | `repositories.search`, `repository-languages.list`, `repository-activities.list`, `repository-signing-keys.get` | read | Gitea, Forgejo |
-
-## Scopes
-
-Presumably `read:repository` for the reads and `write:repository` for `commit-statuses.create` and
-`git-notes.set|delete` (the API serves them in the repository route group); none was checked against a live
-instance. A missing scope shows as `not-found`.
 
 ## Target binding
 

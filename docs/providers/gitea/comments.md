@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the comment tools shared by the Gitea and Forgejo providers: reading, adding, editing, and deleting
-  comments on the issues and pull requests of a bound repository, the scopes they need, how a comment ID is bound
-  to its repository, the bounds of the lists, and what is deliberately left out.
+  comments on the issues and pull requests of a bound repository, how a comment ID is bound to its repository, the
+  bounds of the lists, and what is deliberately left out.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Comments
@@ -23,11 +23,6 @@ names are untrusted data, and authors are personal data.
 | `comments.create` | create | both |
 | `comments.update` | update | both |
 | `comments.delete` | delete, listed only | both |
-
-## Scopes
-
-Reads presumably need `read:issue`, changes presumably `write:issue`; a change by ID also reads the comment
-first. The scopes are not confirmed against a live instance.
 
 ## Binding a comment ID to its repository
 

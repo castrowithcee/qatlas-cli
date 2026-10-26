@@ -4,13 +4,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Telegram
 
 A connection binds one bot token to its targets (`target` or `targets`). Every changing tool requires
-confirmation; Telegram's own restrictions still apply. Tools are documented per group:
+confirmation; Telegram's own restrictions still apply. How to create the bot and token, add the bot to chats, and
+give it the rights each tool group needs is described in [Set up Telegram](setup.md). Tools are documented per group:
 
 | Group | Page |
 |---|---|
@@ -69,12 +70,13 @@ message number) becomes `@<username>`, `https://t.me/c/<id>/...` becomes `-100<i
 ## Connection
 
 Tool groups only sort tools for display. The base URL must be a plain `https` URL with a host and without user,
-query, or fragment, with no exception for local addresses, and redirects are never followed. Errors never carry
-Telegram's own error text.
+query, or fragment, with no exception for local addresses, and redirects are never followed. Qatlas' error message
+never carries Telegram's error text; Telegram's answer (`description` and `error_code`) goes along separately as
+the original answer in the `provider` field of the error details, marked untrusted, redacted, and bounded.
 
-The credential provides `bot-token`. Connection effects only reduce what Qatlas exposes and executes; they do
-not broaden the bot's provider-side rights. A connection may instead select named tools with a `tools` list.
-Mutations are never retried after an ambiguous network result.
+The credential provides `bot-token`. Connection effects only reduce what Qatlas exposes and executes; they do not
+broaden the bot's rights in Telegram; see [Rights per tool group](setup.md#rights-per-tool-group). A connection may
+instead select named tools with a `tools` list. Mutations are never retried after an ambiguous network result.
 
 ## Local files
 

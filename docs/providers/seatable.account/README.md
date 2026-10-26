@@ -97,8 +97,9 @@ SeaTable account for the new base before calling again.
 ## Errors
 
 Errors carry a stable class (`auth`, `permission`, `not-found`, `rate-limited`, `timeout`, `unreachable`,
-`invalid-provider-response`, `provider-error`) and never the provider's text or the token. The invoke log
-contains no arguments and no results. Causes and remedies by symptom are in [Fixing errors](setup.md#fixing-errors).
+`invalid-provider-response`, `provider-error`). Qatlas' message never carries the provider's text or the token;
+SeaTable's answer (the status and `error_msg`) travels apart from it in the `provider` field of the error detail,
+marked untrusted, redacted, and bounded. The invoke log contains no arguments and no results. Causes and remedies by symptom are in [Fixing errors](setup.md#fixing-errors).
 
 ## API forms
 

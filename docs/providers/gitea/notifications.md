@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Notifications
@@ -23,11 +23,6 @@ the account behind the token, not to a repository, so the targets bind a thread 
 
 Watching a repository and the subscription to an issue are not part of this group; see
 [Stars and watching](stars-and-watching.md) and [Issue subscriptions](issue-subscriptions.md).
-
-## Scopes
-
-Reads presumably need `read:notification`, changes `write:notification`. Binding a thread or a repository also reads
-it, which needs the scope of that read. The scopes are not confirmed against a live instance.
 
 ## Targets
 

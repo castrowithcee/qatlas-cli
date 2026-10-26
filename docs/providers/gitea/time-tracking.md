@@ -2,12 +2,11 @@
 description: >
   Describes the time-tracking tools of the Gitea and Forgejo providers: the tracked times and stopwatches of an issue
   or pull request, the times of a repository and of a user, and the account-wide lists of the token's own times and
-  stopwatches; their scopes, index and row binding, the listed-only tools, how a repository without time tracking
-  shows, and limits.
+  stopwatches; index and row binding, the listed-only tools, how a repository without time tracking shows, and limits.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Time tracking
@@ -15,10 +14,6 @@ updated: 2026-10-23
 The time tools read and book tracked time on the issues and pull requests of a repository inside the connection's
 targets and drive the stopwatches of the token's user. Gitea and Forgejo document the same endpoints and members, so
 nothing here differs between them.
-
-## Scopes
-
-A read presumably needs `read:issue`, a change `write:issue`; none was checked against a live instance.
 
 ## Binding
 

@@ -239,7 +239,7 @@ func matchCommands(list []command, query string) []command {
 
 // openCommandLine shows the command line over the current screen.
 func (m *Model) openCommandLine() {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = "/ "
 	in.Placeholder = tr(tCmdPlaceholder)
 	in.Focus()
@@ -341,7 +341,7 @@ func (m *Model) paletteLines(inner, room int) ([]string, []int) {
 		msg = strings.Split(render(styles.fail, inner, tr(tNoteError, cl.msg)), "\n")
 	}
 	field := cl.input
-	field.Width = max(inner-3, 1)
+	setInputWidth(&field, max(inner-3, 1))
 	lines := []string{surfaceRow(" "+field.View(), inner), ""}
 	index := []int{-1, -1}
 	fixed := len(lines) + 1 + len(foot) + len(msg)

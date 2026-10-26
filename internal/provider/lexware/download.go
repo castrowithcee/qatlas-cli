@@ -226,7 +226,7 @@ func (c *Client) fetchFile(ctx context.Context, op, resource, path, accept strin
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return downloadStatusError(op, resource, response.StatusCode, explicit, draftable)
+		return downloadStatusError(op, resource, response.StatusCode, response.Body, explicit, draftable)
 	}
 	if response.ContentLength > maxDownloadBytes {
 		return providerError(op, tooLargeMessage)
@@ -249,16 +249,21 @@ func (c *Client) fetchFile(ctx context.Context, op, resource, path, accept strin
 // downloadStatusError adds the download-specific statuses to statusError. A draft answers 409, and 406 when
 // the voucher has no document; a 404 for an explicitly requested format may also mean the voucher has no
 // such representation.
-func downloadStatusError(op, resource string, status int, explicit, draftable bool) error {
+func downloadStatusError(op, resource string, status int, body io.Reader, explicit, draftable bool) error {
+	var own *provider.Error
 	switch {
 	case draftable && (status == http.StatusConflict || status == http.StatusNotAcceptable):
-		return providerError(op, notFinalizedMessage)
+		own = providerError(op, notFinalizedMessage).(*provider.Error)
 	case status == http.StatusNotAcceptable && !draftable:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: noFormatMessage}
+		own = &provider.Error{Class: provider.ClassNotFound, Op: op, Message: noFormatMessage}
 	case status == http.StatusNotFound && explicit:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: noFormatMessage}
+		own = &provider.Error{Class: provider.ClassNotFound, Op: op, Message: noFormatMessage}
 	}
-	return statusError(op, resource, status)
+	if own == nil {
+		return statusError(op, resource, status, body)
+	}
+	own.Original = lexwareOriginal(status, provider.ReadErrorBody(body))
+	return own
 }
 
 // transferError reports a failed transfer without any provider text. A local file problem keeps its own

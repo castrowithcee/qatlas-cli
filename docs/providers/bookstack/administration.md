@@ -49,8 +49,8 @@ without sending the change, when
 
 If the guest role cannot be determined (for example the role list cannot be read, no role has
 the system name `public`, or the confirmation differs), the change is refused as well.
-The refusals never name the other target or relay provider text. The guest lookup is made once per call and not
-cached beyond it.
+The refusals never name the other target and their message has no text of BookStack; its answer to the failed
+role read goes separately as the original answer. The guest lookup is made once per call and not cached beyond it.
 
 The tool requires confirmation and a tool allow list, is idempotent, is part of no profile, and sends exactly
 one `PUT` without retry; after a timeout or a 5xx answer the result is reported as uncertain. On a connection

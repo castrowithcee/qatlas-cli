@@ -495,7 +495,7 @@ func (c *Client) postUpload(ctx context.Context, op string, link *url.URL, paren
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		failure := statusError(op, response.StatusCode)
+		failure := statusErrorBody(op, response.StatusCode, response.Body, uploadFields)
 		if response.StatusCode >= 500 {
 			return storedFile{}, appendHint(failure, fileUncertain)
 		}
@@ -541,7 +541,8 @@ func (c *Client) DownloadFile(ctx context.Context, input FileInput, download *lo
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, statusError(op, response.StatusCode)
+		// The download address belongs to the file store: only the status is kept.
+		return nil, statusErrorBody(op, response.StatusCode, nil, provider.OriginalFields{})
 	}
 	if download != nil {
 		if response.ContentLength >= 0 {

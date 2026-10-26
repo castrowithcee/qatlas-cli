@@ -126,10 +126,11 @@ func Register(reg *capability.Registry) error {
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
 				"and locations, the live counters, the time of the latest visit, visitor profiles, the location of IP addresses, the tracking failures " +
-				"with the requests that failed, and the scheduled reports with their recipients and their rendered text; changes nothing",
+				"with the requests that failed, the scheduled reports with their recipients and their rendered text, and the custom alerts with their recipients; changes nothing",
 			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
 				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID,
-				ipLocationsGet.ID, scheduledReportsList.ID, scheduledReportsGenerate.ID),
+				ipLocationsGet.ID, scheduledReportsList.ID, scheduledReportsGenerate.ID, alertsList.ID, alertsGet.ID,
+				alertsGetPastValues.ID, alertsListTriggered.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
@@ -183,6 +184,9 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	if err := reg.Register(Provider, smsOperations()...); err != nil {
+		return err
+	}
+	if err := reg.Register(Provider, alertsOperations()...); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
@@ -291,8 +295,28 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: tagManagerVersionsList, Handler: capability.Handler(invokeTagManagerVersionsList)},
 		capability.Operation{Descriptor: tagManagerVersionsGet, Handler: capability.Handler(invokeTagManagerVersionsGet)},
 		capability.Operation{Descriptor: tagManagerVersionsExport, Handler: capability.Handler(invokeTagManagerVersionsExport)},
+		capability.Operation{Descriptor: tagManagerTagsList, Handler: capability.Handler(invokeTagManagerTagsList)},
+		capability.Operation{Descriptor: tagManagerTagsGet, Handler: capability.Handler(invokeTagManagerTagsGet)},
+		capability.Operation{Descriptor: tagManagerTriggersList, Handler: capability.Handler(invokeTagManagerTriggersList)},
+		capability.Operation{Descriptor: tagManagerTriggersGet, Handler: capability.Handler(invokeTagManagerTriggersGet)},
+		capability.Operation{Descriptor: tagManagerVariablesList, Handler: capability.Handler(invokeTagManagerVariablesList)},
+		capability.Operation{Descriptor: tagManagerVariablesGet, Handler: capability.Handler(invokeTagManagerVariablesGet)},
+		capability.Operation{Descriptor: tagManagerVariablesListAvailable, Handler: capability.Handler(invokeTagManagerVariablesListAvailable)},
+		capability.Operation{Descriptor: tagManagerReferencesList, Handler: capability.Handler(invokeTagManagerReferencesList)},
 		capability.Operation{Descriptor: tagManagerVersionsCreate, Handler: capability.Handler(invokeTagManagerVersionsCreate)},
 		capability.Operation{Descriptor: tagManagerVersionsUpdate, Handler: capability.Handler(invokeTagManagerVersionsUpdate)},
 		capability.Operation{Descriptor: tagManagerVersionsDelete, Handler: capability.Handler(invokeTagManagerVersionsDelete)},
+		capability.Operation{Descriptor: tagManagerTriggersAdd, Handler: capability.Handler(invokeTagManagerTriggersAdd)},
+		capability.Operation{Descriptor: tagManagerTriggersUpdate, Handler: capability.Handler(invokeTagManagerTriggersUpdate)},
+		capability.Operation{Descriptor: tagManagerTriggersDelete, Handler: capability.Handler(invokeTagManagerTriggersDelete)},
+		capability.Operation{Descriptor: tagManagerTagsAdd, Handler: capability.Handler(invokeTagManagerTagsAdd)},
+		capability.Operation{Descriptor: tagManagerTagsUpdate, Handler: capability.Handler(invokeTagManagerTagsUpdate)},
+		capability.Operation{Descriptor: tagManagerTagsResume, Handler: capability.Handler(invokeTagManagerTagsResume)},
+		capability.Operation{Descriptor: tagManagerContainersCreateDefault, Handler: capability.Handler(invokeTagManagerContainersCreateDefault)},
+		capability.Operation{Descriptor: tagManagerContainersAdd, Handler: capability.Handler(invokeTagManagerContainersAdd)},
+		capability.Operation{Descriptor: tagManagerContainersUpdate, Handler: capability.Handler(invokeTagManagerContainersUpdate)},
+		capability.Operation{Descriptor: tagManagerContainersDelete, Handler: capability.Handler(invokeTagManagerContainersDelete)},
+		capability.Operation{Descriptor: tagManagerTagsDelete, Handler: capability.Handler(invokeTagManagerTagsDelete)},
+		capability.Operation{Descriptor: tagManagerTagsPause, Handler: capability.Handler(invokeTagManagerTagsPause)},
 	)
 }

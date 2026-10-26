@@ -472,5 +472,6 @@ func (c *Client) linkRequest(ctx context.Context, op, method, path string, body 
 	case "asynchronous":
 		return env, statusPending, nil
 	}
-	return nil, "", invalidResponse(op, "Infomaniak reported an error for a response with an HTTP success status"+uncertain)
+	return nil, "", env.unsuccessful(op,
+		"Infomaniak reported an error for a response with an HTTP success status"+uncertain)
 }

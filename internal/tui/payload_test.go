@@ -51,7 +51,7 @@ func newPayloadHarness(t *testing.T, withVault bool) *payloadHarness {
 
 // see records everything the screen and the messages show at this point.
 func (h *payloadHarness) see() {
-	h.views = append(h.views, h.m.View(), h.m.status, h.m.fail)
+	h.views = append(h.views, h.m.render(), h.m.status, h.m.fail)
 }
 
 func (h *payloadHarness) press(t *testing.T, keys ...string) {
@@ -260,8 +260,8 @@ func TestPayloadFieldsAreAddedAndRemoved(t *testing.T) {
 	if got := len(h.m.payloadRows()); got != 2 {
 		t.Fatalf("ctrl+d removed the field without asking: rows %v", h.m.payloadRows())
 	}
-	if !strings.Contains(strings.Join(strings.Fields(h.m.View()), " "), "y remove n/esc keep") {
-		t.Fatalf("the question is not shown:\n%s", h.m.View())
+	if !strings.Contains(strings.Join(strings.Fields(h.m.render()), " "), "y remove n/esc keep") {
+		t.Fatalf("the question is not shown:\n%s", h.m.render())
 	}
 	h.m.Update(ctrlD())
 	h.press(t, "esc")
@@ -370,7 +370,7 @@ func TestPayloadSecretIsNotSavedWithoutTheAdminSession(t *testing.T) {
 		t.Fatal("a cancelled admin check still stored a value")
 	}
 	// An encrypted vault binds the release, so no weaker-binding note.
-	if strings.Contains(m.View(), "no encrypted vault binds") {
+	if strings.Contains(m.render(), "no encrypted vault binds") {
 		t.Error("the weak-binding note shows although the vault is encrypted")
 	}
 
@@ -462,8 +462,8 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 	// In the payload form itself.
 	openSectionByName(t, h.m, sectionCredentials)
 	pump(t, h.m, "s")
-	if !strings.Contains(h.m.View(), "no encrypted vault binds this release") {
-		t.Errorf("the payload form does not say the binding is weaker:\n%s", h.m.View())
+	if !strings.Contains(h.m.render(), "no encrypted vault binds this release") {
+		t.Errorf("the payload form does not say the binding is weaker:\n%s", h.m.render())
 	}
 
 	// And where forward_secrets is ticked, in the form and in the picker.
@@ -486,12 +486,12 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 	}
 	h.m.applyFocus()
 	press(t, h.m, "enter")
-	if !strings.Contains(h.m.View(), "no encrypted vault binds this release") {
-		t.Errorf("the picker does not say the binding is weaker:\n%s", h.m.View())
+	if !strings.Contains(h.m.render(), "no encrypted vault binds this release") {
+		t.Errorf("the picker does not say the binding is weaker:\n%s", h.m.render())
 	}
 	press(t, h.m, " ", "enter")
-	if !strings.Contains(h.m.View(), "no encrypted vault binds this release") {
-		t.Errorf("the connection form does not say the binding is weaker:\n%s", h.m.View())
+	if !strings.Contains(h.m.render(), "no encrypted vault binds this release") {
+		t.Errorf("the connection form does not say the binding is weaker:\n%s", h.m.render())
 	}
 }
 
@@ -566,7 +566,7 @@ func TestSavingAPayloadSecretLeavesItsConnectionsOpen(t *testing.T) {
 	if !strings.Contains(m.status, "personal") || !strings.Contains(m.status, "Approvals") {
 		t.Errorf("status = %q, want it to name the connection waiting in Approvals", m.status)
 	}
-	if strings.Contains(m.View()+m.status, canaryPayload) {
+	if strings.Contains(m.render()+m.status, canaryPayload) {
 		t.Error("the value appeared on screen")
 	}
 }
@@ -584,20 +584,20 @@ func TestPayloadSecretListAndFormFitNarrowTerminals(t *testing.T) {
 		h.m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 
 		openSectionByName(t, h.m, sectionCredentials)
-		assertViewFits(t, h.m.View(), width, 30)
+		assertViewFits(t, h.m.render(), width, 30)
 		pump(t, h.m, "enter")
 		if !h.m.isPayloadForm() {
 			t.Fatalf("width %d: enter did not open the payload form", width)
 		}
-		assertViewFits(t, h.m.View(), width, 30)
+		assertViewFits(t, h.m.render(), width, 30)
 		for range h.m.fields {
 			press(t, h.m, "tab")
-			assertViewFits(t, h.m.View(), width, 30)
+			assertViewFits(t, h.m.render(), width, 30)
 		}
 		press(t, h.m, "esc", "s")
-		assertViewFits(t, h.m.View(), width, 30)
-		if !strings.Contains(h.m.View(), "payload secret") {
-			t.Errorf("width %d: the form does not say what it is:\n%s", width, h.m.View())
+		assertViewFits(t, h.m.render(), width, 30)
+		if !strings.Contains(h.m.render(), "payload secret") {
+			t.Errorf("width %d: the form does not say what it is:\n%s", width, h.m.render())
 		}
 	}
 }
@@ -616,8 +616,8 @@ func TestPayloadSecretCanBeDeleted(t *testing.T) {
 		t.Fatalf("screen = %v, want the list", h.m.screen)
 	}
 	press(t, h.m, "d")
-	if !strings.Contains(h.m.View(), "billing <field>") {
-		t.Errorf("the delete question does not say how to remove the stored values:\n%s", h.m.View())
+	if !strings.Contains(h.m.render(), "billing <field>") {
+		t.Errorf("the delete question does not say how to remove the stored values:\n%s", h.m.render())
 	}
 	pump(t, h.m, "y")
 	loaded, err := loadTestConfig(t, h.path)

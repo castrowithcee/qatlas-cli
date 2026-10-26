@@ -1,12 +1,12 @@
 ---
 description: >
-  Describes the n8n user and security audit tools: their profiles, the owner-only and instance-wide gate,
+  Describes the n8n user and security audit tools: their profiles, the instance-wide gate,
   personal-data handling, assignable roles, the explicit choice every user deletion needs, and the bounds of
   the audit report.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n users and security audit
@@ -33,8 +33,7 @@ security detail and is not returned, for security reasons. Qatlas creates no
 permanent access or data paths to the outside (webhooks, invitations, public links); reading, pausing,
 revoking, and deleting remain, so no tool invites a user.
 
-- **Owner-only and instance-wide.** n8n offers these endpoints to the instance owner only, so a 403 is
-  reported as an owner, license, or API key scope error, without telling which. Every user tool is refused
+- **Instance-wide.** The rights are in [rights per tool group](setup.md#rights-per-tool-group). Every user tool is refused
   locally on a connection with any `project/` or `workflow/` target (`requireInstanceScope`), before a secret
   is read and before any request.
 - **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
@@ -52,8 +51,7 @@ revoking, and deleting remain, so no tool invites a user.
 ## Security audit
 
 `n8n.audit.generate` is instance-wide (refused locally on a connection with any `project/` or `workflow/`
-target, before a secret is read) and needs the owner or admin role; a 403 is reported as a scope, license, or
-role error without telling which. It only reads and computes, so it is effect `read`, safe, and needs no
+target, before a secret is read); the rights are in [rights per tool group](setup.md#rights-per-tool-group). It only reads and computes, so it is effect `read`, safe, and needs no
 confirmation. `days_abandoned_workflow` is limited to 1 to 3650, and `categories` to distinct values of
 `credentials`, `database`, `nodes`, `filesystem`, `instance`; no other audit parameter exists. The result
 holds at most 5 reports, each with at most 50 sections and at most 50 locations per section. A section's

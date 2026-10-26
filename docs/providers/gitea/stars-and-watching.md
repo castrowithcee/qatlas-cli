@@ -1,18 +1,18 @@
 ---
 description: >
   Describes the star and watch tools of the Gitea and Forgejo providers: the starred and watched repositories of an
-  account, starring and watching a repository, and the stargazers and watchers of a repository. It covers the token
-  scopes, the binding to the targets, the personal-data rules, and the limits.
+  account, starring and watching a repository, and the stargazers and watchers of a repository. It covers the binding
+  to the targets, the personal-data rules, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Stars and watching
 
 These tools read and change which repositories the account behind the token stars or watches, and read who stars or
-watches a repository. Both products serve the same routes, fields, and filters; [Forgejo](../forgejo.md) has no
+watches a repository. Both products serve the same routes, fields, and filters; [Forgejo](../forgejo/README.md) has no
 deviation here. Issue and pull request subscriptions are a separate group, see
 [Issue subscriptions](issue-subscriptions.md).
 
@@ -24,12 +24,6 @@ deviation here. Issue and pull request subscriptions are a separate group, see
 | `repository-subscriptions.get` | read | both |
 | `repository-subscriptions.set`, `repository-subscriptions.delete` | update | both |
 | `subscriptions.list` | read | both |
-
-## Scopes
-
-Reads presumably need `read:repository` for the stargazers, watchers, and the watch state of a repository and
-`read:user` for the lists of an account; changes presumably need `write:repository` for watching and `write:user`
-for starring. The scopes are not confirmed against a live instance.
 
 ## Target binding
 

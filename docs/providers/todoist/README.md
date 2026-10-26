@@ -263,7 +263,7 @@ filters only and carries no command. Todoist counts it against its stricter Sync
 
 ## Errors and plans
 
-Errors keep stable classes and never carry the token, a provider body, or a URL with its query:
+Errors keep stable classes; the message carries no token, Todoist text, or URL query ([answer](setup.md#fixing-errors)):
 
 | Class | Cause |
 | --- | --- |
