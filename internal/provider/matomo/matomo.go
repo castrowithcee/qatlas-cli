@@ -125,10 +125,11 @@ func Register(reg *capability.Registry) error {
 			// separate choice and not part of the recommended start.
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
-				"and locations, the live counters, the time of the latest visit, visitor profiles, and the tracking failures " +
-				"with the requests that failed; changes nothing",
+				"and locations, the live counters, the time of the latest visit, visitor profiles, the tracking failures " +
+				"with the requests that failed, and the scheduled reports with their recipients and their rendered text; changes nothing",
 			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
-				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID),
+				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID,
+				scheduledReportsList.ID, scheduledReportsGenerate.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
@@ -266,5 +267,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trackingFailuresDelete, Handler: capability.Handler(invokeTrackingFailuresDelete)},
 		capability.Operation{Descriptor: trackingFailuresDeleteAll, Handler: capability.Handler(invokeTrackingFailuresDeleteAll)},
 		capability.Operation{Descriptor: optOutCodeGet, Handler: capability.Handler(invokeOptOutCodeGet)},
+		capability.Operation{Descriptor: scheduledReportsList, Handler: capability.Handler(invokeScheduledReportsList)},
+		capability.Operation{Descriptor: scheduledReportsGenerate, Handler: capability.Handler(invokeScheduledReportsGenerate)},
+		capability.Operation{Descriptor: scheduledReportsDelete, Handler: capability.Handler(invokeScheduledReportsDelete)},
 	)
 }

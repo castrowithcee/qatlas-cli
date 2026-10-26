@@ -410,7 +410,7 @@ func TestInstanceOnlyBindingOffersNoWebsiteTool(t *testing.T) {
 	if got := offered("instance"); !slices.Equal(got, []string{"matomo.compliance.get", "matomo.global-settings.get", "matomo.site-groups.list", "matomo.users.get", "matomo.version.get"}) {
 		t.Errorf("instance connection offers %v", got)
 	}
-	for connection, want := range map[string]int{"open": 37, "general": 37, "one": 37, "mixed": 41} {
+	for connection, want := range map[string]int{"open": 39, "general": 39, "one": 39, "mixed": 43} {
 		got := offered(connection)
 		if len(got) != want || slices.Contains(got, "matomo.site-groups.list") != (connection == "mixed") {
 			t.Errorf("connection %s offers %v", connection, got)
