@@ -406,7 +406,7 @@ func (c *Client) collectionSend(ctx context.Context, op, method string, segments
 		return 0, nil, providerError(op, message)
 	}
 	if status < 200 || status >= 300 {
-		return 0, nil, sentStatusError(op, status, hint)
+		return 0, nil, sentDAVStatusError(op, response, hint)
 	}
 	if status != http.StatusMultiStatus {
 		return status, nil, nil

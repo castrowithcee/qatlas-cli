@@ -339,8 +339,8 @@ func invokeCalendarTrashChange(ctx context.Context, resolved *config.Resolved, s
 		calendarTrashUncertain, extra)
 	if err != nil {
 		if method == methodMove && refusedAsConflict(err) {
-			return nil, providerError(op, "Nextcloud refused to restore the entry, an object with this name may "+
-				"exist again, nothing was changed")
+			return nil, providerErrorFrom(op, "Nextcloud refused to restore the entry, an object with this name may "+
+				"exist again, nothing was changed", err)
 		}
 		return nil, err
 	}

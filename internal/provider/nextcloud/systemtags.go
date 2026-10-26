@@ -389,9 +389,9 @@ func (c *Client) changeFileTag(ctx context.Context, op, method, done string, inp
 		if errors.As(err, &providerErr) {
 			switch {
 			case method == http.MethodPut && providerErr.Message == statusError(op, http.StatusConflict).(*provider.Error).Message:
-				return nil, providerError(op, messageTagAssigned)
+				return nil, providerErrorFrom(op, messageTagAssigned, err)
 			case method == http.MethodDelete && providerErr.Message == messageNotFound:
-				return nil, providerError(op, messageTagNotOnFile)
+				return nil, providerErrorFrom(op, messageTagNotOnFile, err)
 			}
 		}
 		return nil, err

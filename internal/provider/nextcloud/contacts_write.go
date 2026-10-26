@@ -347,7 +347,7 @@ func (c *Client) contactCurrent(ctx context.Context, op, book, id, etag string) 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
 			return nil, invalidResponse(op, "Nextcloud answered with an unexpected success status")
 		}
-		return nil, statusError(op, response.StatusCode)
+		return nil, davStatusError(op, response)
 	}
 	if served := response.Header.Get("ETag"); served != "" && dav.ETagOf(served) != etag {
 		return nil, objectPrecondition(op, contactKind)
@@ -391,7 +391,7 @@ func (c *Client) contactSend(ctx context.Context, op, method, book, id, match, b
 	case status == http.StatusForbidden:
 		return nil, contactReadOnly(op)
 	case status < 200 || status >= 300:
-		return nil, sentStatusError(op, status, contactKind.uncertain)
+		return nil, sentDAVStatusError(op, response, contactKind.uncertain)
 	case status == http.StatusNoContent, status == http.StatusOK, status == http.StatusCreated && method == http.MethodPut:
 		return response.Header, nil
 	}

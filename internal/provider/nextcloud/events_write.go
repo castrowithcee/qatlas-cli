@@ -417,7 +417,7 @@ func (c *Client) objectSend(ctx context.Context, op string, kind objectKind, met
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
 			Message: "this Nextcloud identity may not change this " + kind.noun + ", nothing was changed"}
 	case status < 200 || status >= 300:
-		return nil, sentStatusError(op, status, kind.uncertain)
+		return nil, sentDAVStatusError(op, response, kind.uncertain)
 	case status == http.StatusNoContent, status == http.StatusOK, status == http.StatusCreated && method == http.MethodPut:
 		return response.Header, nil
 	}
