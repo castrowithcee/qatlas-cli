@@ -1137,9 +1137,9 @@ func (c *Client) changeWith(ctx context.Context, op, uncertain, method, path str
 	return nil
 }
 
-// responseError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
-// request and record detail into it, and the class plus the status is what a caller can act on. A 429
-// holds the rate limit of the key for the time Twenty asks for.
+// responseError maps an HTTP status to a stable class. The provider message never reaches Error(): Twenty
+// echoes request and record detail into it, so the body goes only into Original. A 429 holds the rate limit
+// of the key for the time Twenty asks for.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
 	return c.responseErrorWith(op, response, defaultStatusTexts)
 }
@@ -1152,11 +1152,15 @@ var defaultStatusTexts = provider.StatusTexts{
 	NotFound: "this Twenty workspace does not hold this record or object",
 }
 
+// restErrorFields maps Twenty's REST error body {"statusCode","error","messages":[…],"code"} to an Original: one
+// entry with the error name and code, then one entry per message.
+var restErrorFields = provider.OriginalFields{Type: "error", Code: "code", List: "messages"}
+
 func (c *Client) responseErrorWith(op string, response *http.Response, texts provider.StatusTexts) *provider.Error {
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, texts)
+	return provider.ClassifyStatusBody(op, response.StatusCode, texts, response.Body, restErrorFields)
 }
 
 func providerError(op, message string) error {

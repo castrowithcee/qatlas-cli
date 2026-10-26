@@ -575,12 +575,15 @@ func (c *Client) downloadFile(ctx context.Context, op, link string, result *Atta
 	case response.StatusCode >= 300 && response.StatusCode < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: errExternalStorage}
 	case response.StatusCode != http.StatusOK:
-		return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		// The address may point to external storage, whose answer is not Twenty's: only the status is kept.
+		failure := provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
 			Subject:    "Twenty",
 			Auth:       "Twenty refused to serve this file",
 			Permission: "Twenty refused to serve this file",
 			NotFound:   "Twenty no longer serves this file",
 		})
+		failure.Original = &provider.Original{Status: response.StatusCode}
+		return failure
 	}
 	if download != nil {
 		if response.ContentLength >= 0 {
