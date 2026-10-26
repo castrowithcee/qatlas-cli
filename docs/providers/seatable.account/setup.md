@@ -46,7 +46,7 @@ Qatlas never asks for or stores your password.
    ```
 
 2. Request the token. For another server, replace the address. If two-factor authentication is on for your
-   account, add the header `-H "X-SEAFILE-OTP: 123456"` with the current six-digit code:
+   account, add the header `-H "X-SEAFILE-OTP: <six-digit code>"` with the current six-digit code:
 
    ```sh
    curl -sS -X POST https://cloud.seatable.io/api2/auth-token/ \
