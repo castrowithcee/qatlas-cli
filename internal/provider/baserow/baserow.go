@@ -30,7 +30,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -163,7 +162,13 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return nil
 }
 
-// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
+// baserowOriginal maps Baserow's error answer: {"error": CODE, "detail": TEXT}, where detail is an object
+// of field name to [{"error": TEXT, "code": CODE}] for request validation errors.
+var baserowOriginal = provider.OriginalFields{Code: "error", Message: "detail", Fields: "detail",
+	Item: &provider.OriginalFields{Code: "code", Message: "error"}}
+
+// responseError maps an HTTP status to a stable class; the message never holds the provider body, which goes
+// separately into Original.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
 	return c.responseErrorFor(op, response, "read")
 }
@@ -171,17 +176,16 @@ func (c *Client) responseError(op string, response *http.Response) *provider.Err
 // responseErrorFor is responseError for an operation that needs the given token right: read, create, update, or
 // delete. A forbidden answer names that right, never the provider's text.
 func (c *Client) responseErrorFor(op string, response *http.Response, right string) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	return provider.ClassifyStatusBody(op, response.StatusCode, provider.StatusTexts{
 		Subject: "Baserow",
 		Auth:    "Baserow rejected the database token",
 		Permission: "this database token may not " + right + " this resource; check its " + right +
 			" right for the table",
 		NotFound: "Baserow does not hold this resource or does not show it to this token",
-	})
+	}, response.Body, baserowOriginal)
 }
 
 func providerError(op, message string) error {

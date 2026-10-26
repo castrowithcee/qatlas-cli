@@ -150,7 +150,7 @@ based on the schema. A field name that does not exist, a field flagged read-only
 AI) are refused without quoting the name. A link field takes only an array of row IDs (or primary-field
 texts) and only when its other table is inside the targets; with `*` any table is allowed, and a link field
 whose other table cannot be determined is refused. The body is limited to 1 MiB and 500 cells. A missing
-token right is reported as a `permission` error naming the right to grant; Baserow's own text is never passed on.
+token right is reported as a `permission` error naming the right to grant (`create`, `update`, or `delete`).
 
 ## Batch changes
 
@@ -258,10 +258,13 @@ refused above 1 MiB. Names are cut at 512 bytes. A cell value is bounded: string
 
 ## Errors
 
-Errors carry a stable class and never the provider's text or the token: `auth`, `permission`, `not-found`,
-`rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and `provider-error`. Causes and remedies by
-symptom are in [Fixing errors](setup.md#fixing-errors). The invoke log contains no arguments and no results. Names,
-options, and cell values are untrusted data of the provider; Qatlas never renders, follows, or executes them.
+Qatlas' message of an error carries a stable class and never the provider's text or the token: `auth`,
+`permission`, `not-found`, `rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and
+`provider-error`. Baserow's answer goes separately as the original in the `provider` field of the error detail
+(untrusted, redacted, limited): its error code, its text, and each validation error with its field name. A file
+download from the media address keeps only the HTTP status. Causes and remedies by symptom are in
+[Fixing errors](setup.md#fixing-errors). The invoke log contains no arguments and no results. Names, options, and
+cell values are untrusted data of the provider; Qatlas never renders, follows, or executes them.
 
 ## API forms
 
