@@ -35,8 +35,8 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type call struct {
-	method, host, path, rawQuery, auth, accept, contentType string
-	form                                                    url.Values
+	method, host, path, rawQuery, auth, accept, contentType, body string
+	form                                                          url.Values
 }
 
 func (c call) api() string { return c.form.Get("method") }
@@ -91,7 +91,7 @@ func serve(t *testing.T, calls *[]call, handler func(call) (*http.Response, erro
 		form, _ := url.ParseQuery(string(data))
 		entry := call{method: r.Method, host: r.URL.Host, path: r.URL.Path, rawQuery: r.URL.RawQuery,
 			auth: r.Header.Get("Authorization"), accept: r.Header.Get("Accept"),
-			contentType: r.Header.Get("Content-Type"), form: form}
+			contentType: r.Header.Get("Content-Type"), body: string(data), form: form}
 		*calls = append(*calls, entry)
 		if r.URL.Host != apiHost {
 			return nil, errors.New("unexpected host " + r.URL.Host)
@@ -277,7 +277,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 167 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 168 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

@@ -665,5 +665,5 @@ func trackingOperations() []capability.Operation {
 		{Descriptor: trackingRecordSiteSearch, Handler: capability.Handler(invokeTrackingRecordSiteSearch)},
 		{Descriptor: trackingRecordLink, Handler: capability.Handler(invokeTrackingRecordLink)},
 		{Descriptor: trackingRecordBotRequest, Handler: capability.Handler(invokeTrackingRecordBotRequest)},
-	}, append(trackingCommerceOperations(), trackingContentOperations()...)...)
+	}, append(append(trackingCommerceOperations(), trackingContentOperations()...), trackingBatchOperations()...)...)
 }
