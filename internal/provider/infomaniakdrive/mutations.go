@@ -413,7 +413,8 @@ func (c *Client) changeWith(ctx context.Context, op, method, path string, body a
 	case "asynchronous":
 		result.Status = statusPending
 	default:
-		return nil, invalidResponse(op, "Infomaniak reported an error for a response with an HTTP success status"+uncertain)
+		return nil, env.unsuccessful(op,
+			"Infomaniak reported an error for a response with an HTTP success status"+uncertain)
 	}
 	var action actionJSON
 	if json.Unmarshal(env.Data, &action) == nil && action.CancelID != "" {

@@ -512,9 +512,14 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			cfg := bookstackConfig(t, server.URL)
 
 			code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.list", "--config", cfg)
+			// The first line is Qatlas' own message; BookStack's answer follows as a separate part.
 			cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr), "qatlas: ")
-			if code != exitRuntime || stdout != "" || !strings.HasPrefix(cliDiagnostic, "auth: ") ||
-				!strings.HasSuffix(cliDiagnostic, step) {
+			message, answer, _ := strings.Cut(cliDiagnostic, "\n")
+			if !strings.HasPrefix(answer, "provider answer (untrusted, not written by qatlas), HTTP 401:") {
+				t.Errorf("stderr = %q, want the provider answer part", stderr)
+			}
+			if code != exitRuntime || stdout != "" || !strings.HasPrefix(message, "auth: ") ||
+				!strings.HasSuffix(message, step) {
 				t.Fatalf("CLI exit=%d stdout=%q stderr=%q, want auth with the next step", code, stdout, stderr)
 			}
 
@@ -534,7 +539,7 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			}
 			decodeRaw(t, result.Structured, &detail)
 			if !result.IsError || result.Content[0].Text != cliDiagnostic || detail.Code != output.CodeAuth ||
-				string(detail.Code)+": "+detail.Message != cliDiagnostic {
+				string(detail.Code)+": "+detail.Message != message {
 				t.Fatalf("MCP result = %+v, want the CLI diagnosis %q", result, cliDiagnostic)
 			}
 

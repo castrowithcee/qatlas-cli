@@ -362,11 +362,11 @@ func invokeImportsGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	return mapObject(importsGet, fields), nil
 }
 
-// importRejected replaces the 422 message of BookStack, which would carry validation texts, by a fixed one.
+// importRejected replaces the 422 message by a fixed one; the validation texts of BookStack stay in Original.
 func importRejected(err error, message string) error {
 	var perr *provider.Error
 	if errors.As(err, &perr) && strings.Contains(perr.Message, "HTTP 422") {
-		return &provider.Error{Class: provider.ClassProviderError, Op: perr.Op, Message: message}
+		return &provider.Error{Class: provider.ClassProviderError, Op: perr.Op, Message: message, Original: perr.Original}
 	}
 	return err
 }

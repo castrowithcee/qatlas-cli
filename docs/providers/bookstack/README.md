@@ -126,7 +126,9 @@ chapter needs a book or shelf target), but the target then points at nothing.
 
 ## Errors
 
-Errors carry a fixed class and never the text BookStack sent.
+Errors carry a fixed class and a message of Qatlas without text from BookStack. BookStack's own answer (its
+error code and message and its validation texts per field) goes separately as the original answer in the field
+`provider` of the error details: untrusted, redacted, and limited.
 
 | Status | Class |
 | --- | --- |

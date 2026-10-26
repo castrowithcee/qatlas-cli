@@ -74,12 +74,14 @@ func (c *Client) guestRole(ctx context.Context) (guestRole, error) {
 	return guestRole{id: id, members: members}, nil
 }
 
-// guestRoleFailure keeps the class of a failed request and replaces its message.
+// guestRoleFailure keeps the class and the original answer of a failed request and replaces its message.
 func guestRoleFailure(op string, cause error) error {
 	class := provider.ClassProviderError
+	var original *provider.Original
 	var failure *provider.Error
 	if errors.As(cause, &failure) {
 		class = failure.Class
+		original = failure.Original
 	}
-	return &provider.Error{Class: class, Op: op, Message: guestUnavailable}
+	return &provider.Error{Class: class, Op: op, Message: guestUnavailable, Original: original}
 }
