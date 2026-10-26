@@ -191,8 +191,8 @@ of a website, and the annotation deletions are in no profile. The profile `dimen
 `matomo.sites.add` (target `instance`) `matomo.sites.delete`, `matomo.site-groups.rename` (target `instance`), the
 eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#operations)
 `matomo.archive-settings.set`, `matomo.trusted-hosts.set`, and `matomo.branding.set` (all target `instance`), and
-`matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`, and
-`matomo.capabilities.remove` are in no profile either and are offered only via `tools`.
+`matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`,
+`matomo.capabilities.remove`, and the two `matomo.ldap-users.*` tools (target `instance`) are in no profile either and are offered only via `tools`.
 
 ## Tools
 
@@ -200,7 +200,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | --- | --- |
 | [sites and version](sites.md) | version, websites, tracking and opt-out code, tracking failures, website settings, consent manager, website groups |
 | [instance settings and reference data](instance.md) | global website settings, archiving, trusted hosts, branding, reference lists, IP ranges, database statistics, diagnostics |
-| [users and roles](users.md) | users, their access to websites, roles and capabilities, deleting and logging out users |
+| [users and roles](users.md) | users, their access to websites, roles and capabilities, LDAP user counts and list, deleting and logging out users |
 | [privacy and data subject requests](privacy.md) | finding, exporting, and deleting the visits of one person, privacy settings, retention, compliance policies |
 | [reports](reports.md) | report catalog, reading reports, evolution, distinct counts, website comparison, glossary, insights, transitions, AI chatbots, segment fields |
 | [live data](live.md) | visit log, live counters, latest visit time |

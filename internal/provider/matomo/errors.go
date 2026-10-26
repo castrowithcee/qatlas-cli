@@ -47,6 +47,8 @@ var messagePatterns = []struct {
 	{"granular-off", []string{"granular compliance configuration is not enabled"}},
 	{"config-controlled", []string{"controlled by the config file"}},
 	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
+	{"invalid-filter", []string{"invalid filter."}},
+	{"ldap-unreachable", []string{"could not connect to the ldap server", "could not connect to any of the"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	// Refusals of the Tag Manager version tools; Matomo changed nothing.
 	{"version-name-in-use", []string{"this name is already in use"}},
@@ -86,6 +88,11 @@ func applicationError(op string, data []byte) error {
 	case "version-not-deletable":
 		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: the draft and a version that is " +
 			"released to an environment cannot be deleted; nothing was changed"}
+	case "invalid-filter":
+		return &provider.InvalidRequestError{Message: "Matomo refused the LDAP filter as invalid"}
+	case "ldap-unreachable":
+		return &answeredError{&provider.Error{Class: provider.ClassProviderError, Op: op,
+			Message: "Matomo could not connect to its LDAP server; check the LoginLdap server configuration"}}
 	case "missing":
 		return &missingError{}
 	case "password-refused":

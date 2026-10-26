@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -134,22 +136,27 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 	}
 }
 
-// TestDisplayBaseURLStripsAccessValues confirms that a service base_url carrying userinfo or a query
-// string never reaches the browser overview with those values intact.
-func TestDisplayBaseURLStripsAccessValues(t *testing.T) {
-	got := displayBaseURL("https://synthetic-user:synthetic-pass@wiki.example.invalid/path?token=synthetic-token#frag")
-	if strings.Contains(got, "synthetic-user") || strings.Contains(got, "synthetic-pass") {
-		t.Fatalf("displayBaseURL leaked userinfo: %q", got)
+// TestOverviewMasksTheAccessValuesOfAServiceBaseURL confirms that a service base_url carrying userinfo or
+// secret query values reaches the browser overview with those values replaced.
+func TestOverviewMasksTheAccessValuesOfAServiceBaseURL(t *testing.T) {
+	const host = "wiki.example.invalid"
+	cfg := &config.Config{Services: map[string]config.Service{
+		"wiki": {Provider: "bookstack", BaseURL: "https://synthetic-user:synthetic-pass@" + host + "/path?token=synthetic-token&page=1"},
+		"user": {Provider: "bookstack", BaseURL: "https://synthetic-user@" + host + "/path"},
+	}}
+	overview := buildOverview(capability.NewRegistry(), cfg)
+	got := map[string]string{}
+	for _, row := range overview.Services {
+		got[row.Name] = row.BaseURL
 	}
-	if strings.Contains(got, "synthetic-token") || strings.Contains(got, "?") {
-		t.Fatalf("displayBaseURL leaked query: %q", got)
+	want := map[string]string{
+		"wiki": "https://***:***@wiki.example.invalid/path?token=***&page=1",
+		"user": "https://***@wiki.example.invalid/path",
 	}
-	if strings.Contains(got, "#") {
-		t.Fatalf("displayBaseURL leaked fragment: %q", got)
-	}
-	want := "https://wiki.example.invalid/path"
-	if got != want {
-		t.Fatalf("displayBaseURL = %q, want %q", got, want)
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("overview base URL of %s = %q, want %q", name, got[name], w)
+		}
 	}
 }
 
