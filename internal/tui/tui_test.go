@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -647,11 +646,11 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 // The tab line reads without colour: brackets mark the active tab, the focus marker the tab line itself, and
 // a terminal too narrow for the names keeps the active tab whole.
 func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 	ascii := before
-	ascii = 3 // termenv.Ascii
-	lipgloss.SetColorProfile(ascii)
+	ascii = profileNone
+	setProfile(ascii)
 
 	m, _, _ := newModel(t)
 	for _, width := range []int{40, 60, 80, 160} {
@@ -954,8 +953,8 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 
 // Colour only supports what markers, prefixes and borders already say.
 func TestTheScreenReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	m, _, _ := newModel(t)
 	m.tester = func(context.Context, string) (provider.Class, error) { return provider.ClassOK, nil }
@@ -966,13 +965,13 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 
 	colour := before
-	colour = 2 // termenv.ANSI
-	lipgloss.SetColorProfile(colour)
+	colour = profile16
+	setProfile(colour)
 	if view := m.render(); !strings.Contains(view, "\x1b[") {
 		t.Fatalf("a colour terminal got no colour:\n%s", view)
 	}
-	colour = 3 // termenv.Ascii
-	lipgloss.SetColorProfile(colour)
+	colour = profileNone
+	setProfile(colour)
 
 	view := m.render()
 	if strings.Contains(view, "\x1b") {
@@ -1496,7 +1495,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 
 	// The frame of the field pads its line, so the cursor cell shows only as the reverse video it is drawn in.
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.ANSI)
+	setProfile(profile16)
 	m, _, _ := newModel(t)
 	noPane(m)
 	openSectionByName(t, m, sectionServices)

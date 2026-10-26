@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 )
@@ -272,18 +271,18 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 }
 
 func TestTheBannerReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	m := startedWith(t, newerRelease())
 	colour := before
-	colour = 2 // termenv.ANSI
-	lipgloss.SetColorProfile(colour)
+	colour = profile16
+	setProfile(colour)
 	if line := strings.Split(m.render(), "\n")[0]; !strings.Contains(line, "\x1b[") {
 		t.Errorf("a colour terminal got a plain banner: %q", line)
 	}
-	colour = 3 // termenv.Ascii
-	lipgloss.SetColorProfile(colour)
+	colour = profileNone
+	setProfile(colour)
 	view := m.render()
 	if strings.Contains(view, "\x1b") {
 		t.Errorf("a terminal without colour got escape sequences:\n%q", view)

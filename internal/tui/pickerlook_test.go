@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
 // lookScreen builds one picker or setup screen on the model of its test.
@@ -90,8 +88,8 @@ func lookScreens() []lookScreen {
 // where its frame appears, with and without colour: nothing is wider or taller than the terminal, no
 // escape sequence is left without colour, and the marked row still leads with '>'.
 func TestPickerAndSetupScreensFitEverySizeAndReadWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	usual := [][2]int{{40, minimumHeight}, {59, 15}, {60, 16}, {80, 24}, {150, 42}}
 	for _, screen := range lookScreens() {
@@ -103,14 +101,14 @@ func TestPickerAndSetupScreensFitEverySizeAndReadWithoutColour(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%dx%d", screen.name, size[0], size[1]), func(t *testing.T) {
 				m := screen.open(t)
 				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-				for _, profile := range []termenv.Profile{termenv.Ascii, termenv.ANSI} {
-					lipgloss.SetColorProfile(profile)
+				for _, profile := range []colorProfile{profileNone, profile16} {
+					setProfile(profile)
 					view := screenOf(m)
 					if strings.Contains(view, "Resize terminal") {
 						t.Fatalf("the screen is replaced by the resize notice:\n%s", view)
 					}
 					assertViewFits(t, view, size[0], size[1])
-					if profile == termenv.Ascii {
+					if profile == profileNone {
 						if strings.Contains(view, "\x1b") {
 							t.Errorf("without colour the screen still emits escape sequences:\n%s", view)
 						}
@@ -124,8 +122,8 @@ func TestPickerAndSetupScreensFitEverySizeAndReadWithoutColour(t *testing.T) {
 // A ticked entry shows its tick in the colour of success where there is colour, and the characters alone
 // tell it from an unticked one where there is none.
 func TestTickedEntriesShowAColouredTickAndReadWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	m := lookScreens()[1].open(t)
 	// The screen has ticked the effect row of "read"; unfold the first group to see tool rows.
@@ -148,14 +146,14 @@ func TestTickedEntriesShowAColouredTickAndReadWithoutColour(t *testing.T) {
 		t.Fatalf("no ticked and unticked tool row on screen: %v", m.picker.matches)
 	}
 
-	lipgloss.SetColorProfile(termenv.ANSI)
+	setProfile(profile16)
 	if row := m.pickerRowText(ticked); !strings.Contains(row, styles.ok.Render("[x]")) {
 		t.Errorf("the ticked row has no coloured tick: %q", row)
 	}
 	if row := m.pickerRowText(open); strings.Contains(row, styles.ok.Render("[x]")) || !strings.Contains(row, "[ ]") {
 		t.Errorf("the unticked row reads like a ticked one: %q", row)
 	}
-	lipgloss.SetColorProfile(termenv.Ascii)
+	setProfile(profileNone)
 	if row := m.pickerRowText(ticked); strings.Contains(row, "\x1b") || !strings.Contains(row, "[x] ") {
 		t.Errorf("without colour the tick is not plain text: %q", row)
 	}
