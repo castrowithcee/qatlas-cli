@@ -175,8 +175,8 @@ func (c *Client) do(client *http.Client, op string, req *http.Request, accept st
 	info := parseRate(response.Header)
 	c.pace(info)
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		response.Body.Close()
-		return nil, info, c.refusal(op, response.StatusCode, info)
+		defer response.Body.Close()
+		return nil, info, c.refusal(op, response.StatusCode, info, response.Body)
 	}
 	return response, info, nil
 }
@@ -311,13 +311,18 @@ func (c *Client) pace(info rateInfo) {
 	}
 }
 
-// refusal maps an HTTP status to a stable class. It never reads the body: error.detail and error.meta are
-// Brave's text and may echo request values. Only what Brave answers differently from the common mapping is
-// decided here; the rest goes through provider.ClassifyStatus. The mapping of 402 and 403 to a plan or a
+// errorFields maps Brave's error body to an Original: error.code, error.detail, and the scalars of error.meta.
+// The message of a refusal never carries them, because they may echo request values.
+var errorFields = provider.OriginalFields{Code: "error.code", Message: "error.detail", Fields: "error.meta"}
+
+// refusal maps an HTTP status to a stable class. The body only fills Original, never the message. Only what
+// Brave answers differently from the common mapping is decided here; the rest goes through
+// provider.ClassifyStatus. The mapping of 402 and 403 to a plan or a
 // balance is not documented, so those messages name both possibilities and claim neither.
-func (c *Client) refusal(op string, status int, info rateInfo) *provider.Error {
+func (c *Client) refusal(op string, status int, info rateInfo, body io.Reader) *provider.Error {
+	original := provider.ErrorOriginal(status, provider.ReadErrorBody(body), errorFields)
 	failed := func(class provider.Class, message string) *provider.Error {
-		return &provider.Error{Class: class, Op: op, Message: message, Original: &provider.Original{Status: status}}
+		return &provider.Error{Class: class, Op: op, Message: message, Original: original}
 	}
 	switch status {
 	case http.StatusPaymentRequired:
@@ -341,7 +346,7 @@ func (c *Client) refusal(op string, status int, info rateInfo) *provider.Error {
 		Permission: "Brave refused this key for the endpoint; its plan may not include it",
 		NotFound:   "Brave did not find the endpoint; the plan of this key may not include it",
 	})
-	mapped.Original = &provider.Original{Status: status}
+	mapped.Original = original
 	return mapped
 }
 
