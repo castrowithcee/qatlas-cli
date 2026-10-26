@@ -314,5 +314,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: tagManagerContainersDelete, Handler: capability.Handler(invokeTagManagerContainersDelete)},
 		capability.Operation{Descriptor: tagManagerTagsDelete, Handler: capability.Handler(invokeTagManagerTagsDelete)},
 		capability.Operation{Descriptor: tagManagerTagsPause, Handler: capability.Handler(invokeTagManagerTagsPause)},
+		capability.Operation{Descriptor: tagManagerVariablesAdd, Handler: capability.Handler(invokeTagManagerVariablesAdd)},
+		capability.Operation{Descriptor: tagManagerVariablesUpdate, Handler: capability.Handler(invokeTagManagerVariablesUpdate)},
+		capability.Operation{Descriptor: tagManagerVariablesDelete, Handler: capability.Handler(invokeTagManagerVariablesDelete)},
 	)
 }

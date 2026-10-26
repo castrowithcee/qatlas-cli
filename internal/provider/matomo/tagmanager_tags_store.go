@@ -438,14 +438,20 @@ func checkTrackingTarget(ctx context.Context, client *Client, op, tool, baseURL 
 	if !ok {
 		return invalid
 	}
+	if !trackingTargetMatches(baseURL, site, stored) {
+		return refused
+	}
+	return nil
+}
+
+// trackingTargetMatches reports whether the parameters of a configuration variable hold the base address and the
+// website as written-out values.
+func trackingTargetMatches(baseURL string, site int, stored map[string]any) bool {
 	want, valid := normalizeInstanceURL(baseURL)
 	given, isText := literalText(stored["matomoUrl"])
 	got, normal := normalizeInstanceURL(given)
 	idSite, isNumber := literalText(stored["idSite"])
-	if !valid || !isText || !normal || got != want || !isNumber || idSite != strconv.Itoa(site) {
-		return refused
-	}
-	return nil
+	return valid && isText && normal && got == want && isNumber && idSite == strconv.Itoa(site)
 }
 
 func looseText(l *loose) string {
