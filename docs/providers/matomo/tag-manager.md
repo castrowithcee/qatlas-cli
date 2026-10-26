@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, and creating, updating, and deleting containers, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, deleting and pausing tags of the draft, and creating, updating, and deleting containers, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -39,6 +39,8 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-triggers.add` | adds a trigger to the draft |
 | `matomo.tag-manager-triggers.update` | replaces name, parameters, conditions, and description of a trigger of the draft |
 | `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
+| `matomo.tag-manager-tags.delete` | deletes a tag from the draft |
+| `matomo.tag-manager-tags.pause` | pauses a tag of the draft |
 | `matomo.tag-manager-containers.create-default` | creates the default container of a website |
 | `matomo.tag-manager-containers.add` | creates a container with a context, name, and settings |
 | `matomo.tag-manager-containers.update` | replaces name, description, and settings of a container |
@@ -114,6 +116,11 @@ the paths of non-live releases are data of the website's owners, and the change 
   unknown trigger type, and a condition with a missing value, an unknown comparison, or an unknown variable; each is
   reported as such and nothing changed. A custom template needs the right to use custom templates.
 - `matomo.tag-manager-triggers.delete` cannot be undone and is offered only via `tools`.
+- The tag tools `matomo.tag-manager-tags.delete` and `matomo.tag-manager-tags.pause` bind to the draft the same way
+  and take only `idSite`, `idContainer`, and `idTag`. Pausing changes the draft only: it takes effect live after a
+  release. Deleting cannot be undone and removes a data path; it is offered only via `tools`. Both need the right to
+  use custom templates for a tag of a custom template; without it the refusal is a permission error. After an unclear
+  result read the tags with `matomo.tag-manager-tags.list` before trying again.
 
 - The container tools create a container with its draft and change its name, description, and settings; they save no
   version and publish nothing. `matomo.tag-manager-containers.add` takes a `context` that cannot change later;
@@ -129,4 +136,5 @@ the paths of non-live releases are data of the website's owners, and the change 
   `matomo.tag-manager-containers.list`. `matomo.tag-manager-containers.create-default` returns `idContainer` only when
   Matomo reports it.
 
-Importing a version, tags, variables, and publishing a release are not part of these tools.
+Importing a version, adding, changing, or resuming tags, variables, and publishing a release are not part of these
+tools.
