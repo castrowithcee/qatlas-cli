@@ -1,11 +1,11 @@
 ---
 description: >
   Describes the instance-wide tools shared by the Gitea and Forgejo providers: the settings, signing keys, NodeInfo,
-  and the rendering of Markdown and markup, with their scopes, bounds, and product differences.
+  and the rendering of Markdown and markup, with bounds, and product differences.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Instance-wide tools
@@ -37,8 +37,6 @@ the HTML is never executed or followed. NodeInfo `metadata` is free-form and bou
 | `settings.get`, `signing-keys.get` | read | both |
 | `markdown.render`, `markup.render` | read | both |
 | `nodeinfo.get` | read | Forgejo |
-
-Scopes: presumably `read:misc` for all of them.
 
 ## Gitea
 

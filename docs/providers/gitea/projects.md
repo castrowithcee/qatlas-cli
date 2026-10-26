@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the project board tools of the Gitea provider: projects, their columns, and the issues in a column on the
-  repository, organization, and user level; the Gitea version they need, their scopes, target and ID binding, the
-  user level, issue binding, and limits.
+  repository, organization, and user level; the Gitea version they need, target and ID binding, the user level, issue
+  binding, and limits.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Projects
@@ -19,11 +19,6 @@ untrusted data. Deleting a project or a column is offered only by a connection w
 is in no setup profile.
 
 [Gitea](README.md) describes the shared configuration, targets, pagination, and errors.
-
-## Scopes
-
-A read presumably needs `read:issue` (and `read:repository` or `read:organization` for the owner's projects), a
-change the matching `write:` scope; none was checked against a live instance.
 
 ## Levels and targets
 

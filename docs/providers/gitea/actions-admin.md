@@ -1,13 +1,13 @@
 ---
 description: >
   Describes the Actions administration tools of the Gitea and Forgejo providers: the secrets and variables of a
-  repository, an organization, or the user behind the token, how the level is bound to the targets, how a secret
-  value reaches the instance only by reference and never comes back, the runners and the jobs waiting for one, the
-  enabling and disabling of workflows, the listed-only tools, their scopes, and the product differences.
+  repository, an organization, or the user behind the token, how the level is bound to the targets, how a secret value
+  reaches the instance only by reference and never comes back, the runners and the jobs waiting for one, the enabling
+  and disabling of workflows, the listed-only tools, and the product differences.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Actions administration
@@ -16,12 +16,6 @@ These tools manage what workflows run with and where: the Actions secrets and va
 jobs waiting for a runner of a repository, an organization, or the user behind the token, and the state of a
 workflow of a repository. They hold for Gitea and Forgejo alike unless a line names one product. Reading and
 operating runs is described in [Actions](actions.md).
-
-## Scopes
-
-A read presumably needs the `read:` scope and a change the `write:` scope of the level's category: `repository` for
-a repository, `organization` for an organization, `user` for the user level. None was checked against a live
-instance; a missing scope shows as `not-found`.
 
 ## Levels and binding
 

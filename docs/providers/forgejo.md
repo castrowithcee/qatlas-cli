@@ -32,7 +32,7 @@ count as their number.
 ## Tokens
 
 Forgejo requires at least one scope on every token, also for reading public repositories; the scopes per tool group
-are in the table of the Gitea page. Forgejo 15 and later also issues tokens bound to single repositories, limited to
+are in [Set up Gitea](gitea/setup.md#rights-per-tool-group). Forgejo 15 and later also issues tokens bound to single repositories, limited to
 the `repository` and `issue` categories, and tokens restricted to public resources. Both answer HTTP 404 instead of
 403 for what they do not reach; Qatlas reports it as `not-found` like any refusal. A repository-bound token is an
 additional depth of defense: the targets of the connection stay the boundary.

@@ -91,6 +91,10 @@ func applicationError(op string, data []byte) error {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
 	case "version-name-in-use":
+		if strings.HasSuffix(op, tagOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another tag of the container " +
+				"version already uses it; nothing was changed"}
+		}
 		if strings.HasSuffix(op, triggerOpSuffix) {
 			return &provider.InvalidRequestError{Message: "Matomo refused the name: another trigger of the container " +
 				"version already uses it; nothing was changed"}

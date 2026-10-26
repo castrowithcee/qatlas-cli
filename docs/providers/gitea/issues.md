@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the issue tools shared by the Gitea and Forgejo providers: reading, creating, changing, closing, and
-  deleting issues, due dates, timelines, issue templates, and the issue configuration, with their scopes, target
-  binding, bounds, and product differences.
+  deleting issues, due dates, timelines, issue templates, and the issue configuration, with target binding, bounds,
+  and product differences.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Issues
@@ -50,15 +50,6 @@ The body of an issue and the text of a timeline event are cut at 64 KiB.
 | `issues.create` | create | both |
 | `issues.update`, `issues.close`, `issues.reopen`, `issue-deadlines.set` | update | both |
 | `issues.delete` | delete, listed only | both |
-
-## Scopes
-
-| Tools | Scope |
-| --- | --- |
-| `issues.list`, `issues.get`, `issue-timeline.list` | `read:issue` |
-| `issues.search` | presumably `read:issue`, and possibly `read:repository` |
-| `issues.create`, `issues.update`, `issues.close`, `issues.reopen`, `issues.delete`, `issue-deadlines.set` | `write:issue`; a change also reads the issue first, which needs `read:issue` |
-| `issue-templates.list`, `issue-config.get`, `issue-config.validate` | presumably `read:repository` |
 
 ## Gitea
 

@@ -174,7 +174,8 @@ profile and are offered only via `tools`.
 The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
 `matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
-`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
+`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`, `matomo.tag-manager-tags.add`,
+`matomo.tag-manager-tags.update`, `matomo.tag-manager-tags.resume`,
 `matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-triggers.add`,
 `matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, `matomo.tag-manager-tags.delete`,
 `matomo.tag-manager-tags.pause`, `matomo.tag-manager-variables.list`,
@@ -220,7 +221,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers of the draft, deleting and pausing tags of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers and tags of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

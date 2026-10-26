@@ -1,13 +1,13 @@
 ---
 description: >
   Describes the attachment tools of the Gitea and Forgejo providers: listing, reading, uploading, renaming, deleting,
-  and downloading the attachments of an issue, a pull request, or a comment; their scopes, how the owner and the
-  attachment are bound to the repository, the local-file rules of upload and download, the listed-only tools, and
-  the product differences.
+  and downloading the attachments of an issue, a pull request, or a comment; how the owner and the attachment are
+  bound to the repository, the local-file rules of upload and download, the listed-only tools, and the product
+  differences.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Attachments
@@ -15,11 +15,6 @@ updated: 2026-10-23
 The attachment tools act on the files attached to an issue or pull request (`issue-attachments.*`, addressed by
 `number`) or to a comment (`comment-attachments.*`, addressed by the comment `id`) of a repository inside the
 connection's targets. The attachments an issue or comment shows in its own `assets` member are the same objects.
-
-## Scopes
-
-A read presumably needs `read:issue` (and `read:repository`), a change presumably `write:issue`; the download address
-checks `read:repository` itself. None was checked against a live instance.
 
 ## Binding
 
