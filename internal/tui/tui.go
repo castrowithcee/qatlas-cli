@@ -19,7 +19,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -3367,13 +3366,9 @@ func (m *Model) clearMessages() {
 }
 
 func textField(label, value string, readOnly bool) field {
-	in := textinput.New()
+	in := newTextInput()
 	in.SetValue(value)
 	in.Prompt = ""
-	// A static cursor is drawn on every frame the editor already paints. Blinking would need the blink
-	// command threaded through Init, through every focus change and through the timer messages this event
-	// loop drops, and a missed tick would leave the cursor invisible again.
-	in.Cursor.SetMode(cursor.CursorStatic)
 	return field{label: label, kind: fieldText, input: in, readOnly: readOnly}
 }
 
@@ -4256,7 +4251,7 @@ func fitInput(in textinput.Model, width int) textinput.Model {
 		// Nothing scrolls, and a width would only pad the line with blanks behind the cursor.
 		return in
 	}
-	in.Width = max(width-1, 1)
+	setInputWidth(&in, max(width-1, 1))
 	pos := in.Position()
 	in.CursorEnd()
 	in.SetCursor(pos)
