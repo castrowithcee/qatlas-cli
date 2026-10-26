@@ -4,15 +4,15 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack imports
 
 The group `imports` uploads BookStack ZIP exports, shows what BookStack detected in them, and imports them as a
-book, chapter, or page. BookStack requires the role permission `content-import` for the token's user. Imports
-belong to that user, and importing a book creates a new book, so the five tools are instance-wide and refused on
-a connection with targets, before any secret is read. None of them is part of a profile.
+book, chapter, or page. Imports
+belong to the token's user, and importing a book creates a new book, so the five tools are instance-wide and refused on
+a connection with targets, before any secret is read. None of them is part of a profile. The token rights are listed under [Imports](setup.md#imports).
 
 `bookstack.imports.list` lists the pending imports (`limit`, `offset`, `sort`, `filters`). `bookstack.imports.get` returns the
 same fields for one `id` plus `details`, a reduced form of what BookStack found in the ZIP: counts, at most 25
