@@ -251,6 +251,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.users.delete" || tool.ID == "matomo.users.logout" ||
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
 			tool.ID == "matomo.data-subjects.delete" || tool.ID == "matomo.raw-data.anonymize" || tool.ID == "matomo.data-purge.run" ||
+			strings.HasPrefix(tool.ID, "matomo.tracking-failures.delete") ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
 			tool.ID == "matomo.compliance.enforce") &&
 			tool.Effect != config.EffectRead
@@ -259,7 +260,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 89 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 22 || len(metadata.Tools) != 93 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
