@@ -429,3 +429,39 @@ func TestApproveRecordsConnectionID(t *testing.T) {
 		t.Errorf("wiki-write ConnectionID = %q, want none", got)
 	}
 }
+
+// The origin of a change is kept masked, and a change of only the masked parts is marked as changed credentials
+// without being missed: the real values still differ.
+func TestPendingMasksTheOriginOfAChange(t *testing.T) {
+	const pass, pass2, query = "canary-core-pass", "canary-core-pass-2", "canary-core-query"
+	origin := func(p, host string) string {
+		return "https://user:" + p + "@" + host + "/api?token=" + query
+	}
+	cfg, v := fixture(t)
+	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: origin(pass, "wiki.example.test")}
+	if _, _, err := Approve(context.Background(), cfg, v, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: origin(pass2, "wiki.example.test")}
+	report, err := Pending(cfg, v)
+	if err != nil || len(report.Open) != 2 {
+		t.Fatalf("Pending() = %+v, %v, want both connections open after a password change", report, err)
+	}
+	want := []FieldChange{{Field: FieldOrigin, Before: "https://***:***@wiki.example.test/api?token=***",
+		After: "https://***:***@wiki.example.test/api?token=***", CredentialsChanged: true}}
+	if got := report.Open[0].Fields; !reflect.DeepEqual(got, want) {
+		t.Errorf("Pending() fields after a password change = %+v, want %+v", got, want)
+	}
+
+	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: origin(pass2, "moved.example.test")}
+	report, err = Pending(cfg, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []FieldChange{{Field: FieldOrigin, Before: "https://***:***@wiki.example.test/api?token=***",
+		After: "https://***:***@moved.example.test/api?token=***"}}
+	if got := report.Open[0].Fields; !reflect.DeepEqual(got, want) {
+		t.Errorf("Pending() fields after a host change = %+v, want %+v", got, want)
+	}
+}
