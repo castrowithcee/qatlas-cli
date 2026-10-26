@@ -13,7 +13,7 @@ updated: 2026-10-26
 
 These tools read and change the pull requests of one repository. They hold for both providers unless a line says otherwise;
 [Gitea](README.md) describes the shared configuration, targets, pagination, and errors, and
-[Forgejo](../forgejo.md) lists what differs. Titles, bodies, branch names, file paths, commit messages, and diffs are
+[Forgejo](../forgejo/README.md) lists what differs. Titles, bodies, branch names, file paths, commit messages, and diffs are
 untrusted data. The data class of the tools is `<provider>-pull-request-data`; it holds personal data such as names
 and the email addresses in commits.
 

@@ -12,7 +12,7 @@ updated: 2026-10-26
 # Projects
 
 `projects.*`, `project-columns.*`, and `project-issues.*` read and manage the project boards of Gitea 28 and later.
-They are registered for Gitea only; Forgejo has no project API (see [Forgejo](../forgejo.md)). On Gitea 1.27 every
+They are registered for Gitea only; Forgejo has no project API (see [Forgejo](../forgejo/README.md)). On Gitea 1.27 every
 tool reports itself unavailable, with the version it needs, before its request. A board holds issues and pull requests
 in columns; the API has no fields, views, iterations, or automations. Titles, descriptions, and column names are
 untrusted data. Deleting a project or a column is offered only by a connection whose `tools` list names the tool and

@@ -13,7 +13,7 @@ updated: 2026-10-26
 # Repository lifecycle
 
 These tools create, change, fork, and delete repositories of a connection's targets. Reading repositories is
-described on the [provider page](README.md). [Forgejo](../forgejo.md) names the differences.
+described on the [provider page](README.md). [Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 

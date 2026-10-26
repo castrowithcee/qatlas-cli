@@ -15,7 +15,7 @@ updated: 2026-10-26
 These tools read the profiles of users, their activity, and who follows whom, and change which users the account
 behind the token follows, blocks, and how it appears (settings, avatar, email addresses). Names, profile texts, and
 locations in answers are untrusted personal data; profile addresses (`website`, `avatar_url`) are shown and never
-fetched. [Forgejo](../forgejo.md) names the differences.
+fetched. [Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 
