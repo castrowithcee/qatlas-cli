@@ -156,7 +156,7 @@ func TestDialogScreensFramedAtSizeAndPlainAtTheSmallest(t *testing.T) {
 					applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
 					m := sc.open(t)
 					m.Update(tea.WindowSizeMsg{Width: size.w, Height: size.h})
-					view := m.View()
+					view := m.render()
 					checkFits(t, view, size.w, size.h)
 					plain := ansi.Strip(view)
 					// The placeholder of a text input carries its own grey, which the terminal drops with NO_COLOR.
@@ -193,7 +193,7 @@ func TestResultsCarryTheirColourAndWord(t *testing.T) {
 			setProfile(profileTrueColor)
 			m := tc.open(t)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-			view := m.View()
+			view := m.render()
 			if !strings.Contains(view, styles.ok.Render("●")+" "+tc.word) && !strings.Contains(view, styles.fail.Render("●")+" "+tc.word) {
 				t.Errorf("no mark and word %q:\n%s", tc.word, view)
 			}
@@ -208,7 +208,7 @@ func TestTheSizeHintReadsAtTheSmallestSizeLess(t *testing.T) {
 		applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: minimumWidth - 1, Height: minimumHeight - 2})
-		view := m.View()
+		view := m.render()
 		checkFits(t, view, minimumWidth-1, minimumHeight-2)
 		plain := ansi.Strip(view)
 		for _, want := range []string{"q quit", warnMark + " Resize terminal", "Need 40x14", "Have 39x12"} {

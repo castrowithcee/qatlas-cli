@@ -57,7 +57,7 @@ func TestFooterIsTheLastLineAtEverySize(t *testing.T) {
 					m := vc.m
 					m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 					m.section, m.screen = sectionServices, scr
-					view := m.View()
+					view := m.render()
 					assertViewFits(t, view, size.width, size.height)
 					lines := strings.Split(view, "\n")
 					if len(lines) != size.height {
@@ -80,7 +80,7 @@ func TestFooterIsTheLastLineAtEverySize(t *testing.T) {
 func TestBelowTheSmallestSizeTheResizeNoticeStands(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight - 1})
-	if view := m.View(); !strings.Contains(view, tr(tResizeTitle)) {
+	if view := m.render(); !strings.Contains(view, tr(tResizeTitle)) {
 		t.Errorf("no resize notice at %dx%d:\n%s", minimumWidth, minimumHeight-1, view)
 	}
 }
@@ -115,7 +115,7 @@ func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
 					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: height})
 					m.section, m.screen = s, screenNav
 					m.status = tr(tCancelled)
-					view := m.View()
+					view := m.render()
 					if strings.Contains(view, tr(tResizeTitle)) {
 						t.Fatalf("the resize notice at %dx%d:\n%s", minimumWidth, height, view)
 					}
@@ -127,7 +127,7 @@ func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
 						return
 					}
 					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
-					if view := m.View(); !strings.Contains(view, tr(tResizeTitle)) {
+					if view := m.render(); !strings.Contains(view, tr(tResizeTitle)) {
 						t.Errorf("the section fits %dx%d now, so it is no exception:\n%s", minimumWidth, minimumHeight, view)
 					}
 				})
@@ -185,7 +185,7 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 			if unlocked.height != workspaceRows(unlocked) {
 				t.Errorf("width %d, %s: workspace height %d, want %d", width, step.name, unlocked.height, workspaceRows(unlocked))
 			}
-			view := unlocked.View()
+			view := unlocked.render()
 			if lines := strings.Split(view, "\n"); len(lines) != 30 || !strings.Contains(lines[29], tr(tHeaderHelp)) {
 				t.Errorf("width %d, %s: the footer is not the last line:\n%s", width, step.name, view)
 			}
@@ -248,11 +248,11 @@ func TestStatusAndErrorStayVisible(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		openSectionByName(t, m, sectionServices)
 		m.status = "saved"
-		if view := m.View(); !strings.Contains(view, "saved") {
+		if view := m.render(); !strings.Contains(view, "saved") {
 			t.Errorf("%dx%d: the status is gone:\n%s", size.width, size.height, view)
 		}
 		m.status, m.fail = "", "something failed"
-		view := m.View()
+		view := m.render()
 		if flat := flatText(view); !strings.Contains(flat, "something failed") {
 			t.Errorf("%dx%d: the error is gone:\n%s", size.width, size.height, view)
 		}
@@ -289,7 +289,7 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 220, Height: 30})
 	m.section, m.screen = sectionServices, screenList
-	view := m.View()
+	view := m.render()
 	lines := strings.Split(view, "\n")
 	header, tabs, footer := lines[0], lines[1], lines[len(lines)-1]
 	for name, line := range map[string]string{"header": header, "tab line": tabs, "footer": footer} {

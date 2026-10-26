@@ -44,7 +44,7 @@ func TestAccessDetailsKeepTheirStatusWordsAtEverySize(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 			for name, word := range map[string]string{"ci-valid": "valid", "ci-expired": "expired"} {
 				m.tokenDetail, m.screen = name, screenConfirm
-				view := m.View()
+				view := m.render()
 				assertViewFits(t, view, size.width, size.height)
 				plain := ansi.Strip(view)
 				if !strings.Contains(plain, "Token "+name) || !strings.Contains(plain, "● "+word) {

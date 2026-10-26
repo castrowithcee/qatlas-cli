@@ -38,7 +38,7 @@ func TestDropdownKeysOpenChooseAndCancel(t *testing.T) {
 	if m.dd == nil || m.barFocus != 1 {
 		t.Fatalf("enter did not open the list of the Group field")
 	}
-	if view := ansi.Strip(m.View()); !strings.Contains(view, "> Provider") || !strings.Contains(view, "  None") {
+	if view := ansi.Strip(m.render()); !strings.Contains(view, "> Provider") || !strings.Contains(view, "  None") {
 		t.Fatalf("the list does not show the values:\n%s", view)
 	}
 	press(t, m, "esc")
@@ -104,9 +104,9 @@ func TestDropdownAtTheSmallestSize(t *testing.T) {
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "tab", "tab", "enter")
 	if m.dd == nil {
-		t.Fatalf("enter did not open the list at 40x13:\n%s", m.View())
+		t.Fatalf("enter did not open the list at 40x13:\n%s", m.render())
 	}
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, minimumWidth, minimumHeight)
 	if plain := ansi.Strip(view); !strings.Contains(plain, "Sort: Name ▾") || !strings.Contains(plain, "Provider") {
 		t.Fatalf("the open list is not usable at 40x13:\n%s", plain)
@@ -129,7 +129,7 @@ func TestDropdownReadsWithoutColour(t *testing.T) {
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)
 	press(t, m, "tab", "enter")
-	view := m.View()
+	view := m.render()
 	if hasColour(view) {
 		t.Errorf("the view carries a colour under NO_COLOR:\n%q", view)
 	}

@@ -363,7 +363,7 @@ func TestVisualSnapshots(t *testing.T) {
 			setProfile(ps.profile)
 			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme, shot.background)
 			shot.show(t, m)
-			view := m.View()
+			view := m.render()
 			if strings.Contains(view, "\r") {
 				t.Fatal("the view holds a carriage return")
 			}

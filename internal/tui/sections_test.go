@@ -210,9 +210,9 @@ func TestSectionedFormsFitEverySize(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		for _, size := range []struct{ w, h int }{{40, 14}, {80, 24}, {160, 40}} {
 			m := connectionFormModel(t, size.w, size.h)
-			assertViewFits(t, m.View(), size.w, size.h)
+			assertViewFits(t, m.render(), size.w, size.h)
 			press(t, m, "pgdown", "pgdown", "pgdown", "pgdown", "pgdown")
-			assertViewFits(t, m.View(), size.w, size.h)
+			assertViewFits(t, m.render(), size.w, size.h)
 		}
 	})
 }
