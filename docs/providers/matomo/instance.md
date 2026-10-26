@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tools for instance-wide website settings and reference data: global settings, operations (archiving, trusted hosts, branding), reference lists, IP range expansion, and the database statistics.
+  Describes the Matomo tools for instance-wide website settings and reference data: global settings, operations (archiving, trusted hosts, branding), reference lists, IP range expansion, diagnostics, and the database statistics.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -79,6 +79,22 @@ measurable type pass on as Matomo describes them and are cut to text above 16384
 Matomo checks no right for it, so the tool is offered to connections that reach websites and is in the `read` profile.
 Qatlas accepts only an IP address or CIDR notation (IPv4 or IPv6, up to 64 characters) and refuses wildcards, dashes,
 and zones before any request. A range Matomo cannot read is an invalid request.
+
+## Diagnostics
+
+All four need a connection that reaches websites, except `matomo.brute-force-ips.unblock`, which needs the target
+`instance`. Qatlas never fetches an address from an argument or an answer.
+
+- `matomo.seo.rank` needs a view right on some website. Matomo asks external SEO services about the host, so the
+  host leaves the instance. Qatlas sends only the lower-case host of an `http(s)` URL or host name; credentials,
+  other schemes, paths without a scheme, and non-ASCII names are refused.
+- `matomo.ip-locations.get` is in the `live` profile because address and location can be personal data. The address
+  is required, so Matomo never falls back to the address of the request. `provider` is an ID such as `default`.
+- `matomo.js-tracker-install.get-status` only reads the result of a test started elsewhere; the start method is not
+  offered, because Matomo would fetch a caller URL. `idSite` follows the site targets.
+- `matomo.brute-force-ips.unblock` lifts every current block at once, takes no argument, and needs Super User rights.
+  It is in no profile, is offered only where the `tools` list of the connection names it, and sends one request that
+  is never repeated. Matomo asks for no `passwordConfirmation` here.
 
 ## Database statistics
 

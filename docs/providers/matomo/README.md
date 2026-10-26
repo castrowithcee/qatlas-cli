@@ -143,11 +143,11 @@ report catalog, report, and segment field tools as well as `matomo.goals.list`, 
 `matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
 `matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.opt-out-code.get`, `matomo.site-settings.get`,
 `matomo.consent-manager.detect`, `matomo.dimensions.list`, `matomo.reference-data.list`, and
-`matomo.ip-ranges.expand`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
+`matomo.ip-ranges.expand`, `matomo.seo.rank`, and `matomo.js-tracker-install.get-status`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
 and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.users.get`,
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
-`matomo.tracking-failures.list`, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.list`, and `matomo.ip-locations.get`, because they carry personal data. The tracking failure deletions are in no profile and
 `matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
@@ -219,6 +219,10 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | `matomo.database-statistics.get` | [instance](instance.md#database-statistics) | reads the size of the database by section: general information, server status, and table and report sizes (Super User, target `instance`, only via `tools`) |
 | `matomo.reference-data.list` | [instance](instance.md) | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | [instance](instance.md) | reads the lowest and highest address of an IP range |
+| `matomo.seo.rank` | [instance](instance.md#diagnostics) | reads SEO metrics of a host, which Matomo asks external services for |
+| `matomo.ip-locations.get` | [instance](instance.md#diagnostics) | reads the location of an IP address from Matomo's geolocation (profile `live`) |
+| `matomo.js-tracker-install.get-status` | [instance](instance.md#diagnostics) | reads whether a JavaScript tracker install test succeeded for a website |
+| `matomo.brute-force-ips.unblock` | [instance](instance.md#diagnostics) | lifts all brute-force blocks (Super User, target `instance`; effect `update`, only via `tools`) |
 | `matomo.users.list` | [users](users.md) | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
 | `matomo.users.get` | [users](users.md) | reads one user, checks a login or email, lists the Super Users, or tells whether the token is a Super User (target `instance`) |
 | `matomo.users.get-access` | [users](users.md) | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
