@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes the Gitea and Forgejo label tools: the labels of a repository and of an organization, their token
-  scopes, target and ID binding, differences between the products, and limits.
+  Describes the Gitea and Forgejo label tools: the labels of a repository and of an organization, their target and ID
+  binding, differences between the products, and limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Labels
@@ -13,12 +13,6 @@ updated: 2026-10-22
 `labels.*` act on the labels of one repository, `org-labels.*` on those of one organization. Both read, create, and
 change labels; deleting is offered only by a connection whose `tools` list names the tool and is in no setup
 profile. Names and descriptions are untrusted data.
-
-## Scopes
-
-Presumably `read:issue` or `write:issue` for `labels.*` and `read:organization` or `write:organization` for
-`org-labels.*`, following the route groups of the API; none was checked against a live instance. A change also reads
-the label first.
 
 ## Targets and IDs
 

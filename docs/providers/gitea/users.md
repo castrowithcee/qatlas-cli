@@ -2,13 +2,12 @@
 description: >
   Describes the Gitea and Forgejo user tools: searching and reading users, their activity feeds and contribution
   heatmaps, followers, following, and follows, and the settings, avatar, email addresses, and blocked users of the
-  account behind the token. It covers the token scopes, how views of other people and of the
-  account behind the token are bound to the targets, the personal-data rules, differences between the products, and
-  the limits.
+  account behind the token. It covers how views of other people and of the account behind the token are bound to the
+  targets, the personal-data rules, differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Users
@@ -16,13 +15,7 @@ updated: 2026-10-24
 These tools read the profiles of users, their activity, and who follows whom, and change which users the account
 behind the token follows, blocks, and how it appears (settings, avatar, email addresses). Names, profile texts, and
 locations in answers are untrusted personal data; profile addresses (`website`, `avatar_url`) are shown and never
-fetched. [Forgejo](../forgejo.md) names the differences.
-
-## Scopes
-
-A read needs `read:user`; the changes (`user-follows.*`, `user-settings.update`, `user-avatars.*`,
-`user-emails.delete`, `user-blocks.add`, `user-blocks.remove`) need `write:user`. Both products serve all routes in
-the `user` category. Gitea refuses `user-settings.*` and `user-emails.*` to a token limited to public resources.
+fetched. [Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 

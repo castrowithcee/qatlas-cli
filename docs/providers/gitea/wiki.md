@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes the wiki tools of the Gitea and Forgejo providers: scopes, repository binding, page names, text content
-  and its cap, a disabled wiki, revisions, and the listed-only deletion.
+  Describes the wiki tools of the Gitea and Forgejo providers: repository binding, page names, text content and its
+  cap, a disabled wiki, revisions, and the listed-only deletion.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Wiki
@@ -13,11 +13,6 @@ updated: 2026-10-24
 Both products serve these tools through one code base. `wiki-pages.list`, `.get`, `.create`, `.update`, and
 `.delete` and `wiki-revisions.list` take `repository` and are bound to the connection's targets like every
 repository tool. The Git repository behind the wiki and the repository settings of the wiki are not covered here.
-
-## Scopes
-
-A read needs `read:repository`, a change `write:repository`; the wiki routes sit in the repository route group of
-the API.
 
 ## Page names
 

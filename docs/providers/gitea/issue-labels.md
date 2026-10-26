@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the issue-label tools of the Gitea and Forgejo providers: reading, adding, replacing, removing, and
-  clearing the labels of an issue or pull request, the scopes they need, how label IDs are bound to the repository
-  and its organization, and the differences between the two products.
+  clearing the labels of an issue or pull request, how label IDs are bound to the repository and its organization, and
+  the differences between the two products.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Issue labels
@@ -22,12 +22,6 @@ group.
 | `issue-labels.replace` | update | both |
 | `issue-labels.remove` | update | both |
 | `issue-labels.clear` | update | both |
-
-## Scopes
-
-Presumably `read:issue` for the read and `write:issue` for a change. The proof reads described below presumably
-need `read:issue` and `read:organization`; none of this was checked against a live instance. A missing scope shows
-as `not-found`.
 
 ## Targets and label IDs
 

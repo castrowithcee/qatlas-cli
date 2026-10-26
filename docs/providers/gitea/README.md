@@ -1,13 +1,13 @@
 ---
 description: >
-  Describes the Gitea provider as a whole and what Gitea and Forgejo share: the access token and the base URL, token
-  scopes, the users, organizations, and repositories as targets, the account and repository tools, the version check
-  and the connection test, pagination, errors and limits, the bounds of results, the excluded operations, and the
-  setup profile. The tool groups are described on their own pages.
+  Describes the Gitea provider as a whole and what Gitea and Forgejo share: the access token and the base URL, the
+  users, organizations, and repositories as targets, the account and repository tools, the version check and the
+  connection test, pagination, errors and limits, the bounds of results, the excluded operations, and the setup
+  profile. The tool groups are described on their own pages.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Gitea
@@ -18,8 +18,10 @@ changes the issues of the bound repositories. A connection offers reads by defau
 effect on the connection and a confirmation.
 
 Forgejo runs on the same code and the same rules. Everything below holds for both providers unless a line says
-otherwise; [Forgejo](../forgejo.md) lists only what differs. Where this page says "the instance", it means the Gitea or
+otherwise; [Forgejo](../forgejo/README.md) lists only what differs. Where this page says "the instance", it means the Gitea or
 the Forgejo instance of the connection.
+
+[Set up Gitea](setup.md) leads through creating an access token and lists the token scopes each tool group needs.
 
 ## Configuration
 
@@ -53,25 +55,6 @@ connections:
     targets:
       - orgs/acme
 ```
-
-### Token scopes
-
-Gitea and Forgejo scope a token by category, `read:` or `write:`: `activitypub`, `admin`, `issue`, `misc`,
-`notification`, `organization`, `package`, `repository`, and `user`. A read needs the `read:` scope of its category,
-a change the `write:` scope. The scope of a tool group follows from the route group the API serves it in; none was
-checked against a live instance, and a missing scope shows as `not-found` (see Errors). The page of each tool group
-names its scopes.
-
-| Tools | Scope |
-| --- | --- |
-| `accounts.me` | `read:user` |
-| `repositories.get` | `read:repository` |
-| `repositories.list` | `read:repository`; the token's own repositories and a user's also `read:user`, an organization's also `read:organization` |
-| `repositories.search` | `read:repository` |
-| `version.get` | none |
-| target selection | `read:user` for the account, `read:organization` for its organizations |
-
-A token with these scopes is the upper bound; the targets narrow a connection further, never the token.
 
 ## Targets
 
@@ -119,7 +102,7 @@ product and version fail-closed, then reads with the token:
 
 A tool that needs a newer version than the product minimum reports itself unavailable before its request and names
 the version it needs. The version is held in the process for a short time per instance and product and read only
-for such tools. A passing test proves the product, the version, and one read; scopes and targets are decided per
+for such tools. A passing test proves the product, the version, and one read; the token's rights and the targets are decided per
 call.
 
 ## Pagination
@@ -137,7 +120,7 @@ wrappers, and commit lists add `X-HasMore`, `X-Page`, `X-PageCount`, and `X-PerP
 | Class | Answer |
 | --- | --- |
 | `auth` | HTTP 401: the token is rejected or expired |
-| `not-found` | HTTP 403 or 404, with one message for both: the resource may not exist, or the token's scopes, its repository binding, or its public-only restriction do not reach it. Neither proves that a resource exists. |
+| `not-found` | HTTP 403 or 404, with one message for both: the resource may not exist, or the token does not reach it. Neither proves that a resource exists; [Set up Gitea](setup.md#fixing-errors) separates the causes. |
 | `rate-limited` | HTTP 429; the wait of `Retry-After` holds the next request, at most one minute |
 | `unreachable` | HTTP 503 or a connection that fails |
 | `provider-error` | a redirect (not followed), another status, or a product or version mismatch |
@@ -247,7 +230,7 @@ restrict agent use and traffic; check their terms before pointing a connection a
 
 - Gitea 1.27 and the numbering from 28 serve the same fields for the tools here. A tool or switch that needs a later
   version, such as the project tools, is refused before its request on an older instance.
-- Tokens cannot be bound to repositories, so the targets are the only narrowing besides the scopes.
+- Tokens cannot be bound to repositories, so the targets are the only narrowing of a connection to repositories.
 - The user object carries `type`.
 - `repositories.list` has no `order_by`.
 - `repositories.update` takes `projects_mode`, `has_code`, `allow_manual_merge`, `autodetect_manual_merge`, and

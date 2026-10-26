@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n variables and tags
@@ -51,7 +51,7 @@ A variable is a key with a plain-text value, either bound to a project or global
 - **Create** answers with the key and scope only: n8n reports no ID; `list` finds it. A repeated call may be
   refused as a key conflict.
 - **Delete** cannot be undone.
-- **403.** Reported as a license (`feat:variables`), scope, or role error, without telling which.
+- **403.** Reported as `permission`; the rights are in [rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tags
 
@@ -64,4 +64,4 @@ A tag is an instance-wide label.
 - **Fields.** `name` is 1 to 24 characters without control characters; `tag_id` is validated as a single path
   segment. Names are returned capped, as untrusted data. Tags on workflows are not managed here.
 - **Delete** cannot be undone and removes the tag from every workflow that carries it.
-- **403.** Reported as an API key scope or role error, without telling which.
+- **403.** Reported as `permission`; the rights are in [rights per tool group](setup.md#rights-per-tool-group).

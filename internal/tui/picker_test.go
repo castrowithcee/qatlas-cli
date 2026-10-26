@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -430,8 +429,8 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 // unshaded under colour. No row is ever wider than the terminal, at any of the widths the design is
 // meant to hold at.
 func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	for _, width := range []int{40, 79, 80, 120} {
 		m, _, _ := newModel(t)
@@ -445,12 +444,12 @@ func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *
 		}
 		marked, alt := names[0], names[1]
 
-		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+		setProfile(profileNone)
 		if view := screenOf(m); !strings.Contains(view, "Type to search") {
 			t.Errorf("width %d: the empty picker shows no 'Type to search' placeholder:\n%s", width, view)
 		}
 
-		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+		setProfile(profile16)
 		coloured := screenOf(m)
 		assertViewFits(t, coloured, width, m.height+1)
 		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
@@ -460,7 +459,7 @@ func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *
 			t.Errorf("width %d: the unmarked picker row carries colour, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
-		lipgloss.SetColorProfile(3)
+		setProfile(profileNone)
 		plain := screenOf(m)
 		assertViewFits(t, plain, width, m.height+1)
 		if strings.Contains(plain, "\x1b") {

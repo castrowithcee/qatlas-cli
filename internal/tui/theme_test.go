@@ -6,16 +6,14 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 func TestPalettesNameEveryRole(t *testing.T) {
 	for name, p := range map[string]palette{"dark": darkPalette, "light": lightPalette} {
-		roles := map[string]lipgloss.Color{
+		roles := map[string]colour{
 			"base": p.base, "surface": p.surface, "panel": p.panel, "border": p.border,
 			"borderFocus": p.borderFocus, "text": p.text, "textDim": p.textDim, "accent": p.accent,
 			"ok": p.ok, "fail": p.fail, "warn": p.warn, "selection": p.selection,
@@ -23,7 +21,7 @@ func TestPalettesNameEveryRole(t *testing.T) {
 		for i, c := range p.heat {
 			roles["heat"+string(rune('0'+i))] = c
 		}
-		seen := map[lipgloss.Color]bool{}
+		seen := map[colour]bool{}
 		for i, c := range p.brand {
 			roles["brand"+string(rune('0'+i))] = c
 			if seen[c] {
@@ -45,12 +43,12 @@ func TestPalettesNameEveryRole(t *testing.T) {
 func TestColoursStepDownWithTheProfile(t *testing.T) {
 	restoreRenderer(t)
 	st := buildTheme(true, false, false).active
-	for profile, want := range map[termenv.Profile]string{
-		termenv.TrueColor: "38;2;",
-		termenv.ANSI256:   "38;5;",
-		termenv.ANSI:      "94",
+	for profile, want := range map[colorProfile]string{
+		profileTrueColor: "38;2;",
+		profile256:       "38;5;",
+		profile16:        "94",
 	} {
-		lipgloss.SetColorProfile(profile)
+		setProfile(profile)
 		if out := st.Render("x"); !strings.Contains(out, want) {
 			t.Errorf("profile %v: %q lacks %q", profile, out, want)
 		}
@@ -59,7 +57,7 @@ func TestColoursStepDownWithTheProfile(t *testing.T) {
 
 func TestNoColorEmitsNoColourSequence(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
 	if styles.filled {
@@ -78,7 +76,7 @@ func TestNoColorEmitsNoColourSequence(t *testing.T) {
 
 func TestQatlasBackgroundCoversEveryCell(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
 	m, _, _ := newModel(t)
@@ -123,7 +121,7 @@ func TestResetsColour(t *testing.T) {
 
 func TestTerminalBackgroundAddsNoFill(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
 	if styles.filled {

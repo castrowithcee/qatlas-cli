@@ -2,6 +2,7 @@ package matomo
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -42,6 +43,11 @@ var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
+	// Refusals of the Tag Manager trigger tools; Matomo changed nothing. They come first because some quote a
+	// name or type the caller chose in double quotes, which is not masked.
+	{"trigger-in-use", []string{"this trigger cannot be deleted as it is used in a tag"}},
+	{"condition-invalid", []string{"in the condition at position", "missing value for array key",
+		`the comparison "`}},
 	// These come first: their texts also hold words of the groups below, and one quotes a setting ID.
 	{"password-refused", []string{"the current password you entered is not correct", "re-authenticate to confirm"}},
 	{"granular-off", []string{"granular compliance configuration is not enabled"}},
@@ -58,17 +64,24 @@ var messagePatterns = []struct {
 	// A container, environment, or context ID is quoted in double quotes and is not masked; this comes before the
 	// groups below so that an ID like token1 cannot pick the class.
 	{"not-found", []string{`" does not exist`, `the context "`}},
+	// The trigger type of the trigger tools; the "trigger at position" text of a tag is a not-found above.
+	{"unsupported-type", []string{`the trigger "`}},
 	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
-		"pre-processed segments can only", "does not have access to any sites"}},
+		"pre-processed segments can only", "does not have access to any sites",
+		"can only be created or edited by", "you are not the owner of the alert"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
 		"not found in the list of available reports", "there is no goal", "requested segment not found",
 		"marked as deleted", "there is no note", "couldn't be found", "doesn't exist", "invalid compliance", "nodataforaction"}},
 }
 
+// envelopeFields reads the message of Matomo's {"result":"error"} form into an Original.
+var envelopeFields = provider.OriginalFields{Message: "message"}
+
 // applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
-// any other answer. The message text is only matched, never copied.
+// any other answer. The message text is matched to choose the class and never copied into the Qatlas message;
+// a class that reaches the caller as a provider error carries it apart as Original.
 func applicationError(op string, data []byte) error {
 	var answer struct {
 		Result  string          `json:"result"`
@@ -79,44 +92,68 @@ func applicationError(op string, data []byte) error {
 	}
 	var message string
 	_ = json.Unmarshal(answer.Message, &message)
+	original := provider.ErrorOriginal(http.StatusOK, data, envelopeFields)
+	answered := func(class provider.Class, text string) error {
+		return &answeredError{&provider.Error{Class: class, Op: op, Message: text, Original: original}}
+	}
 	switch classifyMessage(message) {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
 	case "version-name-in-use":
+		if strings.HasSuffix(op, tagOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another tag of the container " +
+				"version already uses it; nothing was changed"}
+		}
+		if strings.HasSuffix(op, variableOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another variable of the container " +
+				"version already uses it; nothing was changed"}
+		}
+		if strings.HasSuffix(op, triggerOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another trigger of the container " +
+				"version already uses it; nothing was changed"}
+		}
 		return &provider.InvalidRequestError{Message: "Matomo refused the name: another version of the container " +
 			"already uses it; nothing was changed"}
+	case "trigger-in-use":
+		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: a tag of the container version " +
+			"still uses the trigger; nothing was changed"}
+	case "condition-invalid":
+		return &provider.InvalidRequestError{Message: "Matomo refused a condition: a value is missing, the " +
+			"comparison is not supported, or the variable it names is unknown in the container version; nothing was changed"}
+	case "unsupported-type":
+		return &provider.InvalidRequestError{Message: "Matomo refused the trigger type as not " +
+			"supported; nothing was changed"}
 	case "version-not-deletable":
 		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: the draft and a version that is " +
 			"released to an environment cannot be deleted; nothing was changed"}
 	case "invalid-filter":
 		return &provider.InvalidRequestError{Message: "Matomo refused the LDAP filter as invalid"}
 	case "ldap-unreachable":
-		return &answeredError{&provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Matomo could not connect to its LDAP server; check the LoginLdap server configuration"}}
+		return answered(provider.ClassProviderError,
+			"Matomo could not connect to its LDAP server; check the LoginLdap server configuration")
 	case "missing":
 		return &missingError{}
 	case "password-refused":
-		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op,
-			Message: "Matomo refused the password confirmation; check the secret role " + rolePasswordConfirmation +
-				" of this connection's credential"}}
+		return answered(provider.ClassAuth, "Matomo refused the password confirmation; check the secret role "+
+			rolePasswordConfirmation+" of this connection's credential")
 	case "granular-off":
 		return &missingError{granular: true}
 	case "config-controlled":
-		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "the compliance policy is controlled by the Matomo configuration file and cannot be changed " +
-				"through the API; change it there"}}
+		return answered(provider.ClassPermission, "the compliance policy is controlled by the Matomo "+
+			"configuration file and cannot be changed through the API; change it there")
 	case "unknown-setting":
 		return &provider.InvalidRequestError{Message: "Matomo refused a setting ID: it is unknown for this policy or cannot be toggled"}
 	case "auth":
-		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op, Message: "Matomo rejected the token"}}
+		return answered(provider.ClassAuth, "Matomo rejected the token")
 	case "permission":
-		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this token may not use the requested website or function; check its rights for the website"}}
+		return answered(provider.ClassPermission,
+			"this token may not use the requested website or function; check its rights for the website")
 	case "not-found":
-		return &answeredError{&provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "Matomo does not hold this resource or does not show it to this token"}}
+		return answered(provider.ClassNotFound, "Matomo does not hold this resource or does not show it to this token")
 	}
-	return provider.InvalidResponse(op, "Matomo reported an error this provider does not recognise")
+	failure := provider.InvalidResponse(op, "Matomo reported an error this provider does not recognise")
+	failure.Original = original
+	return failure
 }
 
 func classifyMessage(message string) string {

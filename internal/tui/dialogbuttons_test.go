@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 )
 
 // openDeleteQuestion opens the delete question of the connection "docs" in a modal-sized terminal.
@@ -48,7 +47,7 @@ func TestClickOnCancelCancelsTheQuestion(t *testing.T) {
 // Only a question that destroys something draws its answer as the danger button.
 func TestOnlyDestructiveQuestionsHaveADangerButton(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme("dark", "")
 	danger := button(buttonDanger, "Delete", false)
@@ -67,7 +66,7 @@ func TestOnlyDestructiveQuestionsHaveADangerButton(t *testing.T) {
 
 func TestDialogsReadWithoutColour(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("dark", "")
 
@@ -96,7 +95,7 @@ func TestDialogsReadWithoutColour(t *testing.T) {
 // The secret field is a surface and shows the mask, never the typed value.
 func TestSecretFieldIsMaskedOnItsSurface(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme("dark", "")
 	m, _ := startServiceForm(t)
@@ -104,7 +103,7 @@ func TestSecretFieldIsMaskedOnItsSurface(t *testing.T) {
 	m.screen, m.secretInput = screenSecret, maskedInput()
 	m.secretInput.SetValue("canary-secret")
 	view := m.render()
-	surface := lipgloss.NewStyle().Background(styles.palette.surface).Render("x")
+	surface := lipgloss.NewStyle().Background(styles.palette.surface.lip()).Render("x")
 	if !strings.Contains(view, surface[:strings.Index(surface, "x")]) {
 		t.Errorf("the field has no surface:\n%s", view)
 	}

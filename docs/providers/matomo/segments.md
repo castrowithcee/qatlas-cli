@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo saved-segment tools: reading, creating, replacing, starring, and deleting segments, the binding of an instance-wide segment ID to the connection's targets, the checked definition, and the rights and configuration limits Matomo enforces.
+  Describes the Matomo saved-segment tools: reading, creating, replacing, starring, and deleting segments, the binding of an instance-wide segment ID to the connection's targets, the checked definition, and the checks Matomo enforces.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -11,7 +11,8 @@ updated: 2026-10-26
 
 The saved-segment tools of the [Matomo provider](README.md). The segment fields a definition can use come from
 `matomo.segments.fields`, see [reports](reports.md). The profiles are described under
-[Setup profiles](README.md#setup-profiles). All seven tools need the SegmentEditor plugin.
+[Setup profiles](README.md#setup-profiles). The rights, settings, and plugin are listed in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -38,7 +39,7 @@ segment belongs to; `0` stands for all websites.
   read the segment once with `SegmentEditor.get` before anything else; a segment outside the targets, a missing one,
   and a deleted one all end as `not-found` without naming the website or the target.
 - `matomo.segments.add` and `matomo.segments.update` write for all websites (`idSite` 0) only on such a wide
-  connection; Matomo additionally requires the Super User right. `idSite` is checked before the secret is read.
+  connection. `idSite` is checked before the secret is read.
 
 ## Tool behavior
 
@@ -66,17 +67,9 @@ field of the website (for all websites, of the instance) as `matomo.segments.fie
 list is refused with `invalid-request` before the change, without quoting it. Matomo checks the whole expression
 again, and an expression it rejects also ends as `invalid-request`.
 
-## Rights and configuration
+## Failures and confirmation
 
 Qatlas does not check rights; the answers of Matomo decide and end as `permission`.
-
-- Creating a segment needs the access level of the instance setting `adding_segment_requires_access` in the
-  `[General]` section (`view` by default) on the website; for all websites it needs the Super User right, and
-  `allow_adding_segments_for_all_websites = 0` switches these segments off.
-- Editing needs the creator or a Super User; a segment for all websites needs a Super User.
-- `enabledAllUsers` needs a Super User. `autoArchive` needs browser-triggered archiving to be switched off
-  (`enable_browser_archiving_triggering = 0`) and, for all websites, the Super User right; without
-  `autoArchive` Matomo requires `enable_create_realtime_segments = 1`.
 
 Both changes are confirmed by the caller and sent exactly once. After an unclear result (no answer in time, a reset
 connection, an answer Qatlas cannot read) the error says the change may have been applied and is never repeated;
@@ -89,12 +82,9 @@ deletes it. All three read the segment once with `SegmentEditor.get` and bind it
 `matomo.segments.update`; a segment Qatlas cannot reach is not found, without quoting any value.
 
 - The star is a property of the segment, not of the user: Matomo stores one flag and the login that set it, so
-  everyone who sees the segment sees the star. Starring and unstarring need the same right as editing (the creator
-  or a Super User; a segment for all websites needs a Super User). Both are idempotent and are in the `segments`
-  profile.
+  everyone who sees the segment sees the star. Both are idempotent and are in the `segments` profile.
 - Deleting only marks the segment as deleted. It disappears for every user and from every report that uses it, and
   Matomo cleans up its stored data later; the tool cannot restore it, and a segment created again gets a new ID.
-  Deleting needs the creator or a Super User (a segment for all websites needs a Super User). The tool is offered
-  only where a connection's `tools` list names it and is in no profile.
+  The tool is offered only where a connection's `tools` list names it and is in no profile.
 
 Each change is confirmed and sent once; after an unclear result it is never repeated, see above.

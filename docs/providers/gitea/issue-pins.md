@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Issue pins
@@ -17,11 +17,6 @@ targets before the secret is resolved; it may be left out when the targets name 
 | --- | --- | --- |
 | `issue-pins.list`, `issue-pins.check-allowed` | read | both |
 | `issue-pins.pin`, `issue-pins.unpin`, `issue-pins.move` | update | both |
-
-## Scopes
-
-Reads presumably need `read:issue`, changes presumably `write:issue`. The scopes are not confirmed against a live
-instance.
 
 ## Reading
 

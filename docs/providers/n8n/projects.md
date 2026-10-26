@@ -1,11 +1,11 @@
 ---
 description: >
   Describes the n8n project and project member tools: their profiles, allow-list binding, the sequence n8n
-  runs when deleting a project, and the license and role boundary of the project routes.
+  runs when deleting a project, and the project routes it calls.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n projects and project members
@@ -28,8 +28,7 @@ These are in neither the workflow profiles nor each other, and the member profil
 ## Projects
 
 The tools call only the project routes of the Public API; folders are not offered. Members are covered
-below. The routes and their scopes (`project:list`, `project:create`, `project:update`, `project:delete`) are
-those of n8n-io/n8n at commit `191a22e`.
+below. The routes are those of n8n-io/n8n at commit `191a22e`.
 
 **Allow-list.** The project allow-list (`project/PROJECT_ID`) applies as follows:
 
@@ -71,16 +70,12 @@ leave the project partly emptied. Qatlas therefore reports every provider reject
 current state before repeating it". Because the Public API offers no transfer, the contract chosen here is
 the only one it allows: a delete always deletes, and there is no argument to move content first.
 
-**License and role.** All project routes carry `@Licensed(PROJECT_ROLE_ADMIN)`; `create` also needs the
-global `project:create` scope. n8n answers 403 for a missing license (the license middleware), a missing API
-key scope, and a role that may not manage projects, and this provider does not read the response body, so
-every 403 of a project tool is reported as class `permission` with a message that names all three possible
-causes (license, API key scope, role).
+**Rights.** Every 403 of a project tool is reported as class `permission`; the rights are in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Project members
 
-The member tools call only the member routes of the Public API, as of n8n-io/n8n at the same commit
-(scopes `user:list` and `project:manageMembers`).
+The member tools call only the member routes of the Public API, as of n8n-io/n8n at the same commit.
 
 - **Binding.** Like `projects.update`, every member tool, `list` included, accepts only a `project_id` of the
   project allow-list. Without a `project/PROJECT_ID` target, with a project outside it, with a workflow
@@ -93,6 +88,4 @@ The member tools call only the member routes of the Public API, as of n8n-io/n8n
 - **Output.** `list` returns the members' personal data n8n documents, each text at most 256 characters and
   untrusted, with the data sensitivity `n8n-project-members` (personal data). Entries beyond `limit`
   (default 100) are cut and flagged `truncated`.
-- **403.** n8n answers 403 for a missing Projects license, a missing API key scope, and a role that may not
-  manage members, and the body is not read, so every 403 is the neutral message "license or role missing",
-  class `permission`.
+- **403.** Reported as class `permission`; the rights are in [rights per tool group](setup.md#rights-per-tool-group).

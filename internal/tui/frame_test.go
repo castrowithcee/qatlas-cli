@@ -10,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 )
@@ -280,12 +279,12 @@ func hasColour(text string) bool {
 // Without colour the header, the tab line and the footer read as text: the active tab stays marked, the
 // vault state keeps its word, and the keys keep their names.
 func TestFrameReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
+	before := currentProfile()
 	prior := styles
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("", "")
-	lipgloss.SetColorProfile(termenv.ANSI256)
+	setProfile(profile256)
 
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 220, Height: 30})

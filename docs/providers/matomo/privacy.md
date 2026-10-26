@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo privacy tools: finding, exporting, and deleting the visits of one person, reading the privacy settings, and reading and changing the compliance policies, with their rights, targets, caps, and the data they leave out.
+  Describes the Matomo privacy tools: finding, exporting, and deleting the visits of one person, reading the privacy settings, and reading and changing the compliance policies, with their targets, caps, and the data they leave out.
 type: knowledge
 edit: shared
 created: 2026-10-25
@@ -9,9 +9,9 @@ updated: 2026-10-26
 
 # Matomo privacy and data subject requests
 
-The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
-`matomo.data-subjects.find` and `matomo.data-subjects.export` carry personal data of other people and need admin
-rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
+The privacy tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope); the
+rights and plugins are listed in [rights per tool group](setup.md#rights-per-tool-group).
+`matomo.data-subjects.find` and `matomo.data-subjects.export` carry personal data of other people.
 `matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits), and the
 [compliance setters](#changing-compliance-policies) change the policies. None of these tools is in a setup profile.
 
@@ -19,28 +19,28 @@ rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super Use
 
 | Tool | Does |
 | --- | --- |
-| `matomo.data-subjects.find` | finds the visits of one person on a website by a segment (admin right; Live plugin) |
-| `matomo.data-subjects.export` | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
-| `matomo.data-subjects.delete` | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
-| `matomo.raw-data.anonymize` | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.data-purge.run` | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
-| `matomo.privacy-settings.get` | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
-| `matomo.privacy-settings.set-anonymize-ip` | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
-| `matomo.do-not-track.enable` | enables Do Not Track support (Super User, target `instance`; effect `update`) |
-| `matomo.do-not-track.disable` | disables Do Not Track support (Super User, target `instance`; effect `update`) |
-| `matomo.privacy-settings.set-delete-logs` | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.privacy-settings.set-delete-reports` | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
-| `matomo.privacy-settings.set-report-deletion-schedule` | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
-| `matomo.compliance.get` | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
-| `matomo.compliance.set-policy-settings` | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
-| `matomo.compliance.set-status` | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
-| `matomo.compliance.enforce` | enforces every toggleable setting of a policy, with final data effects (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
+| `matomo.data-subjects.find` | finds the visits of one person on a website by a segment |
+| `matomo.data-subjects.export` | exports the data of found visits in batches of at most 25, capped at 256 KiB |
+| `matomo.data-subjects.delete` | deletes for good the data of found visits (effect `delete`, only via `tools`) |
+| `matomo.raw-data.anonymize` | schedules the anonymization of the logs of listed websites for a date range (targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.data-purge.run` | runs the configured data purge now (target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
+| `matomo.privacy-settings.get` | reads the anonymization settings of a website or the instance, or the columns that can be anonymized |
+| `matomo.privacy-settings.set-anonymize-ip` | replaces the global IP anonymization settings (target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
+| `matomo.do-not-track.enable` | enables Do Not Track support (target `instance`; effect `update`) |
+| `matomo.do-not-track.disable` | disables Do Not Track support (target `instance`; effect `update`) |
+| `matomo.privacy-settings.set-delete-logs` | sets whether and after how many days the scheduled purge deletes raw logs (target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-delete-reports` | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-report-deletion-schedule` | sets the minimum days between scheduled deletion runs (target `instance`, role `password-confirmation`; effect `update`) |
+| `matomo.compliance.get` | reads the compliance policies and a policy's status or settings (target `instance`) |
+| `matomo.compliance.set-policy-settings` | enforces or releases single settings of a compliance policy (target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
+| `matomo.compliance.set-status` | switches the older whole-policy switch (target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
+| `matomo.compliance.enforce` | enforces every toggleable setting of a policy, with final data effects (target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
 
 ## Finding and exporting a person
 
 `matomo.data-subjects.find` calls `PrivacyManager.findDataSubjects` for one `idSite`; the `segment` decides who is
-found, for example `visitorId==...` or `userId==...`. It needs an admin right on the website and the plugin `Live`;
-without the plugin the tool ends as `unsupported-capability`, because Matomo would answer an empty list. Matomo also
+found, for example `visitorId==...` or `userId==...`. Without the plugin `Live`
+the tool ends as `unsupported-capability`, because Matomo would answer an empty list. Matomo also
 answers an empty list, not an error, for a website whose visits log or visitor profile is disabled. The answer holds the
 visit IDs with the reduced columns Matomo keeps (identity, device, browser, location); the icon columns are paths,
 returned as text and never fetched. Matomo returns at most 401 visits: a list that reaches it sets
@@ -49,8 +49,7 @@ returned as text and never fetched. Matomo returns at most 401 visits: a list th
 website ID, is dropped. The segment is untrusted text of 1 to 2048 bytes without control characters.
 
 `matomo.data-subjects.export` calls `PrivacyManager.exportDataSubjects` with the visits of `find`, given as `visits`
-entries of `idSite` and `idVisit` (`id_site` and `id_visit` of `find`). It needs an admin right on every website of the
-list. Every `idSite` is checked against the targets before a secret is read or Matomo is contacted, and the refusal
+entries of `idSite` and `idVisit` (`id_site` and `id_visit` of `find`). Every `idSite` is checked against the targets before a secret is read or Matomo is contacted, and the refusal
 names neither the website nor a target. The answer is Matomo's export: one table per log table and plugin, with the
 columns Matomo returns.
 
@@ -74,16 +73,15 @@ Both tools carry the data classification `matomo-data-subjects`.
 `matomo.data-subjects.delete` calls `PrivacyManager.deleteDataSubjects` with the visits of `find`, given as `visits`
 entries of `idSite` and `idVisit`, at most 401 and without repeats. It cannot be undone, is offered only where a
 connection's `tools` list names it, needs `confirm`, sends exactly one request, and never repeats it after a timeout, a
-5xx, or an unreadable answer; the error says so, and `find` shows the state before the call is repeated. It needs an
-admin right on every website of the list. Every `idSite` is checked against the targets before a secret is read; one
+5xx, or an unreadable answer; the error says so, and `find` shows the state before the call is repeated. Every `idSite` is checked against the targets before a secret is read; one
 foreign website refuses the whole call without naming it. A personal token needs no password confirmation, so the tool
 takes no password. The answer gives the rows Matomo deleted per storage area (`areas`, ordered by name, cut at 100 with
 `truncated`), and no area when Matomo reports none.
 
 ## Anonymizing and purging raw data
 
-`matomo.raw-data.anonymize` and `matomo.data-purge.run` change the stored logs of the instance for good, need Super
-User rights and the target `instance`, are offered only where a connection's `tools` list names them, need `confirm`,
+`matomo.raw-data.anonymize` and `matomo.data-purge.run` change the stored logs of the instance for good, need
+the target `instance`, are offered only where a connection's `tools` list names them, need `confirm`,
 and send exactly one request that is never repeated after a timeout, a 5xx, or an unreadable answer.
 
 - `matomo.raw-data.anonymize` calls `PrivacyManager.anonymizeSomeRawData` for the explicit `idSites` (1 to 100, all inside
@@ -108,7 +106,7 @@ exception is [`randomizeConfigId`](#changing-privacy-settings).
 
 `matomo.privacy-settings.set-delete-logs`, `matomo.privacy-settings.set-delete-reports`, and
 `matomo.privacy-settings.set-report-deletion-schedule` call `PrivacyManager.setDeleteLogsSettings`,
-`setDeleteReportsSettings`, and `setScheduleReportDeletionSettings`. They need Super User rights, the target
+`setDeleteReportsSettings`, and `setScheduleReportDeletionSettings`. They need the target
 `instance`, `confirm`, and the password role described above, and send exactly one request that is never repeated
 after an unclear result. The first two make the scheduled purge delete raw logs or reports for good from then on, so
 they are offered only where a connection's `tools` list names them and are in no profile; the schedule setter is not
@@ -123,12 +121,12 @@ Matomo keeps the stored log age unchanged when a compliance policy forbids setti
 
 `matomo.privacy-settings.get` chooses its Matomo method from `section`:
 
-| `section` | `idSite` | Method | Needs |
+| `section` | `idSite` | Method | Target |
 | --- | --- | --- | --- |
-| `settings` (default) | given | `getAnonymisationSettings` | admin right on the website |
-| `settings` | none | `getAnonymisationSettings` | Super User; target `instance` |
-| `visit-columns` | none | `getAvailableVisitColumnsToAnonymize` | Super User; target `instance` |
-| `action-columns` | none | `getAvailableLinkVisitActionColumnsToAnonymize` | Super User; target `instance` |
+| `settings` (default) | given | `getAnonymisationSettings` | the website |
+| `settings` | none | `getAnonymisationSettings` | `instance` |
+| `visit-columns` | none | `getAvailableVisitColumnsToAnonymize` | `instance` |
+| `action-columns` | none | `getAvailableLinkVisitActionColumnsToAnonymize` | `instance` |
 
 `idSite` with a column section is refused. Without `idSite` the mode is refused before a secret is read unless the
 targets name `instance`. Like the other tools with both a website and an instance-wide mode, the tool is offered only
@@ -138,7 +136,7 @@ Users only. `extra_metadata` appears only when a compliance policy controls a se
 
 ## Changing privacy settings
 
-Three tools change the global privacy settings; all need Super User rights, a confirmation, and a connection that
+Three tools change the global privacy settings; all need a confirmation, and a connection that
 names `instance`, and they change every website of the instance. They are in no profile and send one request that is
 not repeated.
 
@@ -155,7 +153,7 @@ call before any request. Every other call, and both Do Not Track tools, never se
 
 ## Compliance policies
 
-`matomo.compliance.get` is offered only to connections that name `instance`; every kind needs Super User rights.
+`matomo.compliance.get` is offered only to connections that name `instance`.
 
 | `kind` | Method | Arguments |
 | --- | --- | --- |
@@ -169,7 +167,7 @@ call before any request. Every other call, and both Do Not Track tools, never se
 
 ## Changing compliance policies
 
-Three tools change the compliance state; all need Super User rights, a confirmation, and a connection that names
+Three tools change the compliance state; all need a confirmation, and a connection that names
 `instance`, also for one website, because a change for a website can rewrite the state of the instance and of every
 other website. They take `policy` and `idSite` or `all_sites` like `matomo.compliance.get`, never ask for a password
 (Matomo requires one only for session tokens), and send one request that is not repeated. A policy that Matomo's

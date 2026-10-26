@@ -302,6 +302,7 @@ func TestSearchAnswerAndErrorsAreBounded(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("error = %v, want a class without provider text", err)
 	}
+	wantOriginal(t, err, http.StatusBadRequest, bodyCanary)
 
 	serveSearch(t, `[{"_id":"a"},{"_id":"b"}]`)
 	c, _ = client(t, "Kunden")

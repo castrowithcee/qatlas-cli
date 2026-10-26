@@ -11,7 +11,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -81,10 +80,9 @@ func (m *Model) requireAdmin(action func() tea.Cmd) tea.Cmd {
 // wrong passphrase causes (see handleAdminVerified), so a retry never moves the fallback to the dialog
 // itself.
 func (m *Model) openAdminPrompt(locked bool, back screen, action func() tea.Cmd) {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 
 	m.adminAuth = &adminAuth{input: in, locked: locked, back: back, action: action}

@@ -3,12 +3,12 @@ description: >
   Describes the Gitea and Forgejo tools for existing accesses: reading and deleting webhooks of a repository, an
   organization, or the account behind the token, reading and resetting server-side Git hooks, reading, syncing, and
   deleting push mirrors, and reading and deleting deploy keys, SSH and GPG keys, access token metadata, and OAuth2
-  applications. It covers the token scopes, the binding to the targets, who the instance serves, what is never
-  shown, and why nothing creates or changes an access.
+  applications. It covers the binding to the targets, who the instance serves, what is never shown, and why nothing
+  creates or changes an access.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Accesses
@@ -17,28 +17,7 @@ These tools read what already reaches into or out of a repository, an organizati
 server-side Git hooks, push mirrors, deploy keys, SSH and GPG keys, access tokens, and OAuth2 applications. They
 create nothing and change no target. Addresses, names, branch
 filters, scripts, and error texts in answers are untrusted data; addresses are shown and never fetched.
-[Forgejo](../forgejo.md) names the differences.
-
-## Scopes and who is served
-
-Both products serve the routes in these categories; every tool needs the matching `read:` scope, a change or
-execution the `write:` scope.
-
-| Tools | Scope | The instance serves |
-| --- | --- | --- |
-| `webhooks.*` of a repository | `repository` | repository administrators, while webhooks are enabled |
-| `webhooks.*` of an organization | `organization` | organization owners, while webhooks are enabled |
-| `webhooks.*` of the account | `user` | the account, while webhooks are enabled; Gitea: no public-only token |
-| `git-hooks.*` | `repository` | repository administrators allowed to edit Git hooks, while Git hooks are enabled |
-| `push-mirrors.*` | `repository` | repository administrators |
-| `deploy-keys.*` | `repository` | repository administrators |
-| `user-keys.*`, `user-gpg-keys.*`, `oauth2-apps.*` | `user` | the account; Gitea: no public-only token |
-| `user-keys.list`, `user-gpg-keys.list` with `username` | `user` | any reader the instance lets see the user |
-| `access-tokens.list` (Forgejo) | `user` | the account itself |
-| `access-tokens.get-current`, `.delete-current` (Gitea) | none | any valid token |
-
-An instance that does not serve a caller answers 403 or 404, reported as `not-found`. The push mirror tools also
-fail while the instance has mirroring switched off.
+[Forgejo](../forgejo/README.md) names the differences.
 
 ## Target binding
 

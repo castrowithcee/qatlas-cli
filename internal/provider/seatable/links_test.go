@@ -332,6 +332,9 @@ func TestLinkMutationsSendOneRequestAndReportUncertainty(t *testing.T) {
 		if got := strings.Contains(err.Error(), "may have taken effect"); got != tt.uncertain {
 			t.Errorf("%s: uncertainty = %v, want %v (%v)", tt.name, got, tt.uncertain, err)
 		}
+		if tt.name != "unreadable answer" && tt.name != "gateway timeout" {
+			wantOriginal(t, err, tt.status, providerCanary)
+		}
 	}
 
 	t.Run("timeout and reset", func(t *testing.T) {

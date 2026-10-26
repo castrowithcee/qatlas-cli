@@ -629,7 +629,14 @@ func (c *Client) download(ctx context.Context, op string, link *url.URL, file ce
 	return result, nil
 }
 
+// mediaStatusError keeps only the status as Original: the media address is foreign storage.
 func mediaStatusError(op string, status int) error {
+	failure := mediaStatusFailure(op, status)
+	failure.Original = &provider.Original{Status: status}
+	return failure
+}
+
+func mediaStatusFailure(op string, status int) *provider.Error {
 	switch {
 	case status == http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: "Baserow no longer serves this file"}

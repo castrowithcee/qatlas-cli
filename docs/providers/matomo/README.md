@@ -15,9 +15,11 @@ describes the foundation every Matomo tool shares: connection, targets, availabi
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md), [scheduled reports](scheduled-reports.md),
-[custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
+[custom alerts](alerts.md), [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
 [users and roles](users.md), [SMS settings](mobile-messaging.md), [privacy and data subject requests](privacy.md),
 [AI providers](ai-providers.md), and [Tag Manager](tag-manager.md).
+
+To connect Matomo step by step, see [Set up Matomo](setup.md).
 
 ## Configuration
 
@@ -110,7 +112,11 @@ without further requests. There is no method matrix for Matomo 5.0 to 5.14; the 
 Matomo reports application errors as HTTP 200 with `{"result":"error","message":"..."}`, not as 401 or 403. Qatlas
 reads the message of that answer only to choose a class: authentication (`auth`), missing right (`permission`),
 unknown object (`not-found`), and a missing method, module, or inactive plugin (`unsupported-capability`). Any
-other message is `invalid-provider-response`. The message is never copied into a Qatlas error.
+other message is `invalid-provider-response`. The message never enters Qatlas' own error message. Matomo's answer
+goes apart as the original answer in the `provider` field of the error detail (untrusted, redacted, limited): for
+`auth`, `permission`, `not-found`, `provider-error`, and `invalid-provider-response` errors the message of an
+application error, and for an HTTP status other than 200 the message of the same form or the text of a non-JSON
+answer. A refused segment or name, an LDAP filter, or a setting ID and a missing method carry no original answer.
 
 Matomo translates its messages into the language of the token's user. The patterns are English; a token whose
 user uses another interface language reports unrecognised errors as `invalid-provider-response`.
@@ -151,8 +157,8 @@ and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.u
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
 `matomo.tracking-failures.list`, `matomo.ip-locations.get`, `matomo.scheduled-reports.list`, and
-`matomo.scheduled-reports.generate`, because they carry personal data. The tracking failure deletions are in no profile and
-`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as is `matomo.scheduled-reports.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+`matomo.scheduled-reports.generate`, and the four [alert](alerts.md) read tools, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as are `matomo.scheduled-reports.delete` and `matomo.alerts.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
@@ -174,8 +180,16 @@ profile and are offered only via `tools`.
 The [Tag Manager tools](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
 `matomo.tag-manager-containers.get-embed-code`, `matomo.tag-manager-versions.list`, `matomo.tag-manager-versions.get`,
 `matomo.tag-manager-versions.export`, `matomo.tag-manager-versions.create`, `matomo.tag-manager-versions.update`,
-`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`,
-`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, and `matomo.tag-manager-catalog.list` are in no
+`matomo.tag-manager-versions.delete`, `matomo.tag-manager-tags.list`, `matomo.tag-manager-tags.get`, `matomo.tag-manager-tags.add`,
+`matomo.tag-manager-tags.update`, `matomo.tag-manager-tags.resume`,
+`matomo.tag-manager-triggers.list`, `matomo.tag-manager-triggers.get`, `matomo.tag-manager-triggers.add`,
+`matomo.tag-manager-triggers.update`, `matomo.tag-manager-triggers.delete`, `matomo.tag-manager-tags.delete`,
+`matomo.tag-manager-tags.pause`, `matomo.tag-manager-variables.list`,
+`matomo.tag-manager-variables.get`, `matomo.tag-manager-variables.add`, `matomo.tag-manager-variables.update`,
+`matomo.tag-manager-variables.delete`, `matomo.tag-manager-variables.list-available`,
+`matomo.tag-manager-references.list`, `matomo.tag-manager-catalog.list`,
+`matomo.tag-manager-containers.create-default`, `matomo.tag-manager-containers.add`,
+`matomo.tag-manager-containers.update`, and `matomo.tag-manager-containers.delete` are in no
 profile and are offered only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
@@ -212,10 +226,10 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
+| [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
-| [Tag Manager](tag-manager.md) | containers, versions and their export, creating, renaming, and deleting versions, tags and triggers, embed code and installation steps, catalog of contexts, environments, and templates |
+| [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers, tags, and variables of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
-fetched. `matomo.version.get` needs a view right on any website; the other tools need one on the website read,
-the goal changes a write right.
+fetched. The rights each tool group needs are listed in [Set up Matomo](setup.md#rights-per-tool-group).

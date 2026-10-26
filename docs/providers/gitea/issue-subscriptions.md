@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Issue subscriptions
@@ -18,11 +18,6 @@ Watching a whole repository is not part of this group.
 | --- | --- | --- |
 | `issue-subscriptions.list`, `issue-subscriptions.check` | read | both |
 | `issue-subscriptions.add`, `issue-subscriptions.remove` | update | both |
-
-## Scopes
-
-Reads presumably need `read:issue`, changes presumably `write:issue`. The scopes are not confirmed against a live
-instance.
 
 ## Reading
 

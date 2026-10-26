@@ -1,20 +1,19 @@
 ---
 description: >
-  Describes the instance administration tools of the Gitea and Forgejo providers: the runners of the whole
-  instance, the jobs waiting for a runner, the instance-wide lists of workflow runs, workflow jobs, and packages,
-  the binding to connections without targets, the scope, the listed-only deletion of a runner, and the product
-  differences.
+  Describes the instance administration tools of the Gitea and Forgejo providers: the runners of the whole instance,
+  the jobs waiting for a runner, the instance-wide lists of workflow runs, workflow jobs, and packages, the binding to
+  connections without targets, the listed-only deletion of a runner, and the product differences.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Instance administration
 
 These tools act as an instance administrator on data of the whole instance, not of an owner or repository. They
 hold for Gitea and Forgejo alike unless a line names one product. Forgejo also administers its quota groups and
-rules; see [Quota administration](../forgejo.md#quota-administration).
+rules; see [Quota administration](../forgejo/README.md#quota-administration).
 
 | Tool | Effect | Provider |
 | --- | --- | --- |
@@ -25,11 +24,7 @@ rules; see [Quota administration](../forgejo.md#quota-administration).
 | `admin-runners.update` | update | Gitea |
 | `admin-runners.delete` | delete, listed only | both |
 
-## Scope and binding
-
-The routes live below `/admin`, so the token needs the `read:admin` scope for a read and the `write:admin` scope
-for a change, and its user must be an instance administrator. None was checked against a live instance; a token
-without the right is refused by the instance, and a missing scope or right shows as `not-found`.
+## Binding
 
 Every tool is instance-wide and therefore reachable only by a connection without targets. A connection with
 targets refuses the call as `invalid-request` before the credential is resolved and before any request; the

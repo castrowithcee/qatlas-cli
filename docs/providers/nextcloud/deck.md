@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Nextcloud Deck
@@ -24,8 +24,8 @@ is checked against the targets again. Deleted boards, stacks, and cards are neve
 not reported.
 
 Every change needs `confirm` and sends one request after at most two reads. `deck.boards.create` needs the general
-`deck` target. Board, stack, label, and sharing changes refuse without the manage right; card changes leave the edit
-right to Deck. `deck.cards.update` refuses a card changed since its `last_modified`; an archived card can only be
+`deck` target. The rights a change needs are under [Deck](setup.md#deck).
+`deck.cards.update` refuses a card changed since its `last_modified`; an archived card can only be
 restored. Cards take only the board's labels and user members; `deck.acl.*` shares with users and groups only and
 refuses team and owner entries. Comments work on active cards only; update and delete reach only own comments among
 the newest 100. Deck deletes boards, cards, and attachments softly, with no Qatlas restore; a deleted stack takes its

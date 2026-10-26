@@ -6,17 +6,23 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Penpot
 
 This provider reads teams, projects, files, and pages of a Penpot instance, Penpot Cloud or self-hosted, with an
-access token, creates, renames, deletes, and moves projects and files, creates and restores file snapshots, restores and permanently deletes deleted files, reads and manages the comments of a file, adds images to a file, exports and imports files as `.penpot` archives, and manages the webhooks, members, and existence of teams. It edits no file content beyond restoring a snapshot and adding images.
+access token, creates, renames, deletes, and moves projects and files, creates and restores file snapshots,
+restores and permanently deletes deleted files, reads and manages the comments of a file, adds images to a file,
+exports and imports files as `.penpot` archives, and manages the webhooks, members, and existence of teams. It
+edits no file content beyond restoring a snapshot and adding images.
 
 **Beta.** Penpot's backend RPC interface (`POST /api/rpc/command/<name>`) is documented only by its sources and
 carries no stability promise. A command or a field can change with a Penpot release; the forms used here are listed
 in [API forms](api-forms.md) and were not tried against a live instance.
+
+To connect Qatlas to Penpot, see [Set up Penpot](setup.md): creating the token, adding it to Qatlas, the team role each
+tool group needs, and fixing errors.
 
 Pages by area:
 
@@ -26,14 +32,16 @@ Pages by area:
 - [Comments](comments.md)
 - [Webhooks](webhooks.md)
 - [Teams and members](teams-and-members.md)
+- [Set up Penpot](setup.md): token, roles, and fixing errors
 - [API forms](api-forms.md): the RPC forms and the assumptions behind them
 
 ## Credential and base URL
 
-The credential provides `access-token`: a Penpot access token, created in the profile's access tokens. The instance
-needs the `access-tokens` flag enabled (Penpot Cloud has it; a self-hosted instance sets it in its configuration).
-The token is sent as `Authorization: Token ...` and is registered with the redactor. **The token has no scopes**: it
-acts for every team of its account. Qatlas narrows a connection through its targets, its `tools` list or `effects`; it does not narrow the token.
+The credential provides `access-token`: a Penpot access token; [Set up Penpot](setup.md#create-a-token) shows how
+to create it. The instance needs the `access-tokens` flag enabled (Penpot Cloud has it; a self-hosted instance sets
+it in its configuration). The token is sent as `Authorization: Token ...` and is registered with the redactor.
+**The token has no scopes**: it acts for every team of its account. Qatlas narrows a connection through its
+targets, its `tools` list or `effects`; it does not narrow the token.
 
 `base_url` is `https://design.penpot.app` by default. A self-hosted instance uses its own `https` URL, optionally
 below an installation path; a URL with `http`, user info, a query, or a fragment is refused before any secret is
@@ -140,10 +148,12 @@ without a usable id gives nothing; reading a URL sends no request.
 ## Profiles and permissions
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
-through the connection's `effects` or `tools` list, and so are the project and file tools. `penpot.comments.delete`,
-`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.set-role`, `penpot.members.remove`, `penpot.teams.create`, and `penpot.teams.delete` are offered only
-when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
-Reads use POST but are idempotent and safe.
+through the connection's `effects` or `tools` list, and so are the project and file tools.
+`penpot.comments.delete`, `penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`,
+`penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.set-role`, `penpot.members.remove`,
+`penpot.teams.create`, and `penpot.teams.delete` are offered only when the `tools` list names them. Every tool
+names its command itself; there is no `command` argument, no free path, method, or body. Reads use POST but are
+idempotent and safe.
 
 ## Changes
 
@@ -155,14 +165,17 @@ after reads only. The pages of the areas name where this rule differs or is exte
 
 ## Bounds
 
-The commands document no pagination; every list is cut on the client: 100 teams, 100 webhooks, 200 members, 1000 projects, 1000 files, 500 threads, 200 comments of a thread. A
-response is read up to 16 MiB; a larger one is an `invalid-provider-response`. Names are cut at 256 bytes. Targets
-hold at most 20 teams and 200 projects. Requests to one token share a rate limit.
+The commands document no pagination; every list is cut on the client: 100 teams, 100 webhooks, 200 members, 1000
+projects, 1000 files, 500 threads, 200 comments of a thread. A response is read up to 16 MiB; a larger one is an
+`invalid-provider-response`. Names are cut at 256 bytes. Targets hold at most 20 teams and 200 projects. Requests
+to one token share a rate limit.
 
 ## Errors
 
-Errors carry a stable class and never the provider's text or the token: `auth`, `permission`, `not-found`,
-`rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and `provider-error`. A 401 or 403 adds the hint
-to check that the token is valid and that the `access-tokens` flag is enabled on the instance. The invoke log
-contains no arguments and no results. Names and page contents are untrusted data of the provider; Qatlas never
-renders, follows, or executes them.
+Errors carry a stable class and Qatlas' own message, never the token: `auth`, `permission`, `not-found`,
+`rate-limited`, `timeout`, `unreachable`, `invalid-provider-response`, and `provider-error`. The message carries no
+text of Penpot. A refusal by Penpot adds Penpot's answer apart from it, as untrusted data: the HTTP status and the
+`type`, `code`, and `hint` of its error body, or the text of an answer that is not structured. How to read it and
+what to do per symptom: [Fixing errors](setup.md#fixing-errors). The invoke log contains no arguments and no
+results. Names and page contents are untrusted data of the provider; Qatlas never renders, follows, or executes
+them.

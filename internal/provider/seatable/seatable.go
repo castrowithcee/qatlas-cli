@@ -1614,7 +1614,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, tok
 	c.observeRateLimit(response.Header)
 
 	if response.StatusCode != http.StatusOK {
-		return statusError(op, response.StatusCode)
+		return statusErrorBody(op, response.StatusCode, response.Body, gatewayFields)
 	}
 	if failure := provider.ReadJSON(op, "SeaTable", response.Body, limit, out); failure != nil {
 		return failure
@@ -1640,7 +1640,7 @@ func (c *Client) change(ctx context.Context, op, method, path, token string, bod
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(op, response.StatusCode)
+		return statusErrorBody(op, response.StatusCode, response.Body, gatewayFields)
 	}
 	read, err := io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || read > maxResponseBytes {
@@ -1667,8 +1667,29 @@ func (c *Client) observeRateLimit(header http.Header) {
 	c.limiter.HoldFor(hold)
 }
 
-// statusError maps an HTTP status to a stable class. The provider message is never copied: SeaTable
-// echoes request and base detail into it, and the class plus the status is what a caller can act on.
+// gatewayFields names the scalar of a SeaTable error answer that is kept as the original statement.
+var gatewayFields = provider.OriginalFields{Message: "error_msg"}
+
+// uploadFields names the scalar of an error answer of the SeaTable file server.
+var uploadFields = provider.OriginalFields{Message: "error"}
+
+// statusErrorBody classifies a failed answer like statusError and keeps what the provider said about it,
+// read from the bounded body, as the original statement. The message stays Qatlas' own.
+func statusErrorBody(op string, status int, body io.Reader, fields provider.OriginalFields) error {
+	return withOriginal(statusError(op, status), status, body, fields)
+}
+
+// withOriginal sets the original statement of err from the bounded body of the failed answer.
+func withOriginal(err error, status int, body io.Reader, fields provider.OriginalFields) error {
+	if failure, ok := err.(*provider.Error); ok {
+		failure.Original = provider.ErrorOriginal(status, provider.ReadErrorBody(body), fields)
+	}
+	return err
+}
+
+// statusError maps an HTTP status to a stable class. The provider message is never copied into the
+// message: SeaTable echoes request and base detail into it, and the class plus the status is what a caller
+// can act on. The provider's own words travel separately as the original statement.
 func statusError(op string, status int) error {
 	switch status {
 	case http.StatusUnauthorized:

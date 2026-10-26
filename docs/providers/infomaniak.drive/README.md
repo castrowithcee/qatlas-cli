@@ -211,7 +211,11 @@ content; Qatlas follows at most one such redirect, only to an `https` location, 
 
 ## Errors
 
-Errors keep stable classes and never carry the token or a raw provider response body:
+Errors keep stable classes and never carry the token. Qatlas' message holds no Infomaniak text. Infomaniak's
+answer goes separately as original details in the `provider` part of the error (untrusted, redacted, and
+limited): the HTTP status, its `error.code` and `error.description`, and each `error.errors` entry with its
+`code` and `description`. A download that Infomaniak redirected to its storage keeps only the status. The same
+details come with an answer that has a success status but reports an error.
 
 | Class | Cause |
 | --- | --- |

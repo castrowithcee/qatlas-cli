@@ -10,6 +10,7 @@ updated: 2026-10-26
 # Matomo live data
 
 The live tools of the [Matomo provider](README.md); they are selected by the profile `live`, see [Setup profiles](README.md#setup-profiles).
+The rights and plugins are listed in [rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -19,9 +20,8 @@ The live tools of the [Matomo provider](README.md); they are selected by the pro
 | `matomo.live-counters.get` | reads visits, actions, visitors, and converted visits of the last minutes |
 | `matomo.visits.get-latest-time` | reads the time of the latest visit per website |
 
-The live tools read `Live.getLastVisitsDetails`, `Live.getCounters`, and `Live.getMostRecentVisitsDateTime`. They
-need a view right on the website, and `matomo.visits.list` a visits log that is not disabled for it; otherwise
-Matomo answers with an error that ends as `unsupported-capability` or `permission`.
+The live tools read `Live.getLastVisitsDetails`, `Live.getCounters`, and `Live.getMostRecentVisitsDateTime`. A
+missing right or a disabled visits log for `matomo.visits.list` ends as `unsupported-capability` or `permission`.
 
 **Personal data.** A visit holds the visitor ID, fingerprint, IP address, user ID, and the location of a person.
 All three tools carry the data classification `matomo-live-personal`, also the counters, because a `segment` can

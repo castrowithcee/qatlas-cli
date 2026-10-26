@@ -40,6 +40,10 @@ per rate, tax conditions and the recipient's contact person, so future revenue a
 The schedule reports interval, next and last execution, execution status and whether the last execution failed;
 the provider's error text of a failed execution is never shown.
 
+Qatlas' error messages carry no Lexware text. The answer of Lexware to a failed request, in its regular or legacy
+format, goes separately as the original answer in the `provider` field of the error detail (untrusted, redacted
+and limited); request echoes such as the path and trace id are left out.
+
 `lexware.documents.download` writes the final document of a finalized sales voucher and
 `lexware.files.download` the original file of a bookkeeping voucher to `local_path`. Both are offered only to a
 connection that releases a directory under `files.write`, replace an existing file only with confirmation, stop
@@ -54,7 +58,7 @@ confirmation). Both are offered only to a connection that releases a directory u
 request without a retry. The upload type is fixed to `voucher`. Lexware recognizes duplicates by checksum and
 then reports the identifiers that already exist; a new voucher has the status `blank` until the text
 recognition has finished. After an unclear outcome the error says that the file may have been uploaded or
-attached. An unaccepted file (HTTP 406) is reported without the provider's text.
+attached. An unaccepted file (HTTP 406) is reported with Qatlas' own message.
 
 `lexware.vouchers.create` records a bookkeeping voucher with the fixed status `unchecked` (`create`, always with
 confirmation) and sends exactly one request without a retry. It takes only the schema fields: type, number,
@@ -119,7 +123,7 @@ and tax rate together) and takes `delivery_terms`. Only `lexware.quotations.crea
 confirmations, credit notes and delivery notes; a dunning requires it (an invoice or down payment invoice) and is
 refused locally without it. Lexware allows at most one credit note per invoice, and the open amount of the
 invoice shrinks only when the credit note is finalized. Lexware refuses a predecessor that cannot be followed up,
-for example a quotation with optional positions, and the error says so without the provider's text. Besides
+for example a quotation with optional positions, and the error says so in Qatlas' own message. Besides
 `custom` and `text`, positions may have the type `service` or `material` and then reference an article by its
 `id`; they carry quantity, unit and price like `custom`. Quotations, order confirmations and invoices accept the
 optional `payment_conditions` (label, duration, optional discount); all accept `print_layout_id`. Every
@@ -145,7 +149,7 @@ refuses the write and the error reports a conflict; Qatlas never overwrites it a
 object again and repeat the change deliberately. A contact update can add a role but not remove one, cannot
 turn a person into a company or the reverse, and refuses a contact that holds several entries in one of those
 lists before writing anything, because Lexware would drop the extra entries. A rejection of the data
-(HTTP 406) is reported without the provider's text. A failed read before the write changes nothing. After an
+(HTTP 406) is reported with Qatlas' own message. A failed read before the write changes nothing. After an
 unclear outcome of the write the error says the object may have been created or changed; read it before
 repeating.
 

@@ -321,7 +321,9 @@ type dashboardTabTarget struct {
 func notFoundLike(op string, err error, texts provider.StatusTexts) error {
 	var failure *provider.Error
 	if errors.As(err, &failure) && failure.Class == provider.ClassNotFound {
-		return provider.ClassifyStatus(op, http.StatusNotFound, texts)
+		hidden := provider.ClassifyStatus(op, http.StatusNotFound, texts)
+		hidden.Original = failure.Original
+		return hidden
 	}
 	return err
 }

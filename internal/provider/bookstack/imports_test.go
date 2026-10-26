@@ -3,6 +3,7 @@ package bookstack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 const importSecretPath = "uploads/imports/secret-storage-path.zip"
@@ -291,6 +293,17 @@ func TestImportsUploadRejectionCarriesNoProviderText(t *testing.T) {
 	}
 	if got := len(server.sent()); got != 1 {
 		t.Errorf("upload requests = %d, want 1", got)
+	}
+	var perr *provider.Error
+	if !errors.As(err, &perr) || perr.Original == nil || perr.Original.Status != 422 {
+		t.Fatalf("original = %+v", perr)
+	}
+	want := []provider.OriginalEntry{
+		{Message: "SECRET provider text"},
+		{Path: "file", Message: "SECRET zip text"},
+	}
+	if !reflect.DeepEqual(perr.Original.Entries, want) {
+		t.Errorf("entries = %+v, want %+v", perr.Original.Entries, want)
 	}
 }
 
