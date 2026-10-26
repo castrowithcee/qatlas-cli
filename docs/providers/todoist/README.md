@@ -263,7 +263,9 @@ filters only and carries no command. Todoist counts it against its stricter Sync
 
 ## Errors and plans
 
-Errors keep stable classes and never carry the token, a provider body, or a URL with its query:
+Errors keep stable classes. Qatlas' message never carries the token, Todoist's text, or a URL with its query.
+Todoist's answer (status, `error_tag`, `error_code`, `error`, and the argument of `error_extra`) goes
+separately as the `provider` original of the error detail: marked untrusted, redacted, and bounded.
 
 | Class | Cause |
 | --- | --- |
