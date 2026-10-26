@@ -20,8 +20,8 @@ const maxTrackingAnswer = 4096
 
 // neverSentParameters are tracking parameters that override what Matomo derives itself or need the token. The
 // general form path refuses a form that holds one; only trackingAuth sets the overrides and the token, and cdo
-// is never sent.
-var neverSentParameters = []string{"cip", "cdt", "cdo", "country", "region", "city", "lat", "long", "token_auth"}
+// is never sent. bots would make Matomo track a bot as a visit.
+var neverSentParameters = []string{"cip", "cdt", "cdo", "country", "region", "city", "lat", "long", "token_auth", "bots"}
 
 // overrideParameters are the neverSentParameters that trackingAuth may carry besides the token.
 var overrideParameters = map[string]bool{"cip": true, "cdt": true, "country": true, "region": true, "city": true,

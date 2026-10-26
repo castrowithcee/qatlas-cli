@@ -20,8 +20,8 @@ import (
 // The tracker answers an empty 204 or, for an image request, a 43 byte GIF; every other answer is unclear.
 
 const trackingConnections = `
-  trk: {service: matomo, credential: token, tools: [matomo.tracking.record-page-view, matomo.tracking.record-event, matomo.tracking.record-site-search, matomo.tracking.record-link, matomo.tracking.record-goal, matomo.tracking.record-order, matomo.tracking.record-cart-update, matomo.tracking.record-content-impression, matomo.tracking.record-content-interaction], targets: [site]}
-  trk-two: {service: matomo, credential: token, tools: [matomo.tracking.record-page-view, matomo.tracking.record-event, matomo.tracking.record-site-search, matomo.tracking.record-link, matomo.tracking.record-goal, matomo.tracking.record-order, matomo.tracking.record-cart-update, matomo.tracking.record-content-impression, matomo.tracking.record-content-interaction], targets: [site/2]}
+  trk: {service: matomo, credential: token, tools: [matomo.tracking.record-page-view, matomo.tracking.record-event, matomo.tracking.record-site-search, matomo.tracking.record-link, matomo.tracking.record-goal, matomo.tracking.record-order, matomo.tracking.record-cart-update, matomo.tracking.record-content-impression, matomo.tracking.record-content-interaction, matomo.tracking.record-bot-request], targets: [site]}
+  trk-two: {service: matomo, credential: token, tools: [matomo.tracking.record-page-view, matomo.tracking.record-event, matomo.tracking.record-site-search, matomo.tracking.record-link, matomo.tracking.record-goal, matomo.tracking.record-order, matomo.tracking.record-cart-update, matomo.tracking.record-content-impression, matomo.tracking.record-content-interaction, matomo.tracking.record-bot-request], targets: [site/2]}
   trk-effects: {service: matomo, credential: token, effects: [read, create], targets: [site]}
 `
 
