@@ -275,6 +275,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trackingFailuresList, Handler: capability.Handler(invokeTrackingFailuresList)},
 		capability.Operation{Descriptor: trackingFailuresDelete, Handler: capability.Handler(invokeTrackingFailuresDelete)},
 		capability.Operation{Descriptor: trackingFailuresDeleteAll, Handler: capability.Handler(invokeTrackingFailuresDeleteAll)},
+		capability.Operation{Descriptor: aiProvidersGetSettings, Handler: capability.Handler(invokeAIProvidersGetSettings)},
+		capability.Operation{Descriptor: aiProvidersDisconnect, Handler: capability.Handler(invokeAIProvidersDisconnect)},
 		capability.Operation{Descriptor: optOutCodeGet, Handler: capability.Handler(invokeOptOutCodeGet)},
 		capability.Operation{Descriptor: scheduledReportsList, Handler: capability.Handler(invokeScheduledReportsList)},
 		capability.Operation{Descriptor: scheduledReportsGenerate, Handler: capability.Handler(invokeScheduledReportsGenerate)},
