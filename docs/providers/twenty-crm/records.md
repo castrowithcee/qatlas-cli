@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Twenty CRM: records
@@ -12,9 +12,10 @@ updated: 2026-10-22
 ## Reading records
 
 `records.list` and `records.get` (`read`) read the records of any reachable object, standard or custom, by its
-singular API name. Qatlas takes the REST path of an object only from the workspace catalog, never from an
-argument. A list returns one page without filters (see [Filtering and counting records](#filtering-and-counting-records) for conditions), with an opaque `next_cursor`, sorted by one field or `field.subfield` of a composite field.
-Relation, array, and rich-text fields cannot be sorted by.
+singular API name. Qatlas takes the REST path of an object only from the workspace catalog, never from an argument.
+A list returns one page without filters (see [Filtering and counting records](#filtering-and-counting-records) for
+conditions), with an opaque `next_cursor`, sorted by one field or `field.subfield` of a composite field. Relation,
+array, and rich-text fields cannot be sorted by.
 
 - Qatlas checks `fields` and `order_by` against the response shape of the object in the workspace document,
   so an unknown field is refused before any record is read, and the refusal does not name it.
@@ -82,7 +83,8 @@ every field from the workspace catalog and builds the request body from the chec
 
 ## Batches
 
-`records.batch-create`, `records.batch-update`, and `records.batch-delete` act on one reachable object in one confirmed request that Qatlas sends once; no profile ticks them.
+`records.batch-create`, `records.batch-update`, and `records.batch-delete` act on one reachable object in one
+confirmed request that Qatlas sends once; no profile ticks them.
 
 - `batch-create` takes a list of records; each is checked like a `create`, and one refused record refuses the
   batch before anything is written. With `upsert` Twenty matches the entries against existing records by the
@@ -110,8 +112,8 @@ identifiers are distinct UUIDs of that object.
 - `records.merge` takes the arguments of the preview and merges for real: the other records are deleted and
   their relations are moved to the remaining record. Whether the deleted records can be restored is not
   promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it.
-- Results are untrusted records; a merge answer must name one of the given records, and a 403 points to the
-  object permissions of the role of the key.
+- Results are untrusted records; a merge answer must name one of the given records (rights:
+  [Companies and records](setup.md#companies-and-records)).
 
 ## Deleting and restoring
 
@@ -127,7 +129,7 @@ Companies and records of any reachable object share one trash contract:
 `records.delete`, `records.restore`, and `records.destroy` each act on one record of one reachable object,
 identified by its UUID, and send one fixed route; no argument switches `delete` to permanent deletion or adds
 a filter, so there is no deletion or restore by filter. A refused object is rejected before the secret is
-read, and the answer must name the requested record. A 403 on `delete` and `destroy` points to the right of
-the role of the key (Delete Records, Destroy Records); Twenty's own text is never shown. `delete` and
+read, and the answer must name the requested record. Twenty's own text is never shown (rights:
+[Companies and records](setup.md#companies-and-records)). `delete` and
 `destroy`, for companies and records, are offered only by a connection whose `tools` list names them;
 a connection that selects by `effects` does not admit them. No profile ticks them or `records.restore`.

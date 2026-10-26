@@ -770,7 +770,7 @@ func TestStorageRowNamesThePlatformKeyringWhole(t *testing.T) {
 				press(t, m, "i")
 				if !m.infoOpen || !strings.Contains(m.infoShown.long, "environment variables suit CI and containers") ||
 					!strings.Contains(m.infoShown.long, label) {
-					t.Errorf("i does not show the long form:\n%s", m.View())
+					t.Errorf("i does not show the long form:\n%s", m.render())
 				}
 			})
 		}

@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -283,7 +281,7 @@ func paletteModel(t *testing.T, w, h int) *Model {
 
 func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 	m := paletteModel(t, 150, 42)
-	view := ansi.Strip(m.View())
+	view := ansi.Strip(m.render())
 	for _, want := range []string{"Command Palette", "/ search or run a command...", "Open Connections (2)", "close"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("palette lacks %q:\n%s", want, view)
@@ -317,7 +315,7 @@ func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 		t.Errorf("palette width %d, want 1..60", width)
 	}
 	press(t, m, "c", "o", "n")
-	view = ansi.Strip(m.View())
+	view = ansi.Strip(m.render())
 	if strings.Contains(view, "search or run a command") || !strings.Contains(view, "/ con") {
 		t.Errorf("typed text not in the field:\n%s", view)
 	}
@@ -330,7 +328,7 @@ func TestPaletteScrollKeepsTheCursorVisible(t *testing.T) {
 		press(t, m, "down")
 	}
 	last := matchCommands(m.commands(), "")[n-1]
-	view := ansi.Strip(m.View())
+	view := ansi.Strip(m.render())
 	found := false
 	for _, l := range strings.Split(view, "\n") {
 		if strings.Contains(l, "> ") && strings.Contains(l, last.name) {
@@ -351,14 +349,14 @@ func TestPaletteClickRunsTheEntry(t *testing.T) {
 }
 
 func TestPaletteReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
+	before := currentProfile()
 	prior := styles
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("", "")
-	lipgloss.SetColorProfile(termenv.Ascii)
+	setProfile(profileNone)
 	m := paletteModel(t, 150, 42)
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "\x1b[") {
 		t.Errorf("colour sequence in the palette: %q", view)
 	}
@@ -368,10 +366,10 @@ func TestPaletteReadsWithoutColour(t *testing.T) {
 }
 
 func TestPaletteStaysUsableAtTheSmallestSize(t *testing.T) {
-	m := paletteModel(t, 40, 13)
-	view := ansi.Strip(m.View())
+	m := paletteModel(t, 40, minimumHeight)
+	view := ansi.Strip(m.render())
 	if !strings.Contains(view, "> ") {
-		t.Fatalf("no cursor at 40x13:\n%s", view)
+		t.Fatalf("no cursor at 40x%d:\n%s", minimumHeight, view)
 	}
 	press(t, m, "h", "e", "l", "p", "enter")
 	if m.screen != screenHelp {

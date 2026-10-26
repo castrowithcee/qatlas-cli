@@ -1,10 +1,12 @@
 ---
 description: >
-  Describes the Nextcloud provider: connection, tool IDs, https and redirect rule, tool groups, targets, choosing targets, and unclear outcomes. Tool groups are described on separate pages for files, shares, Deck, Talk, calendar, contacts, notes, account, and administration.
+  Describes the Nextcloud provider: connection, tool IDs, configuration (https and redirect rule, credential),
+  tool groups, targets, choosing targets, and unclear outcomes. Tool groups are described on separate pages for
+  files, shares, Deck, Talk, calendar, contacts, notes, account, and administration.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Nextcloud
@@ -12,8 +14,16 @@ updated: 2026-10-23
 A connection binds one identity to typed targets (see [Targets](#targets)). In a tool ID such as `nextcloud.deck.cards.get`,
 the second segment is the Nextcloud service and at the same time the tool group.
 
+[Set up Nextcloud](setup.md) leads through creating an app password and lists the rights, roles, and apps each tool
+group needs.
+
+## Configuration
+
 The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
 is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
+
+Credentials provide `user-id` and a revocable `app-password`. The connection test reads the bound folder (or the
+Files root) and each bound calendar; it reports no metadata.
 
 ## Tool groups
 
@@ -47,9 +57,8 @@ literal single segments without `%`, `\`, or control characters. The single fiel
 `targets`, names the root folder (`Reports`, `Team/Reports`, `/`); one whose first segment is a kind name (such as
 `calendar/2026`) is refused as ambiguous: write `folder/PATH`.
 
-Credentials provide `user-id` and a revocable `app-password`. The connection test reads the bound folder (or the
-Files root) and each bound calendar; it reports no metadata. Connection effects independently hide and block
-operations; the identity's WebDAV rights stay the ceiling. A connection may instead select named tools with a `tools`
+Connection effects independently hide and block operations; the rights of the identity are listed in
+[Set up Nextcloud](setup.md#rights-per-tool-group). A connection may instead select named tools with a `tools`
 list, for example `[nextcloud.files.files.list, nextcloud.files.files.stat]` for metadata without file content, and
 then offers exactly those. File content is base64 and never written to audit records. A tool is offered only to a
 binding that holds the kind its call checks; tools that create a calendar, address book, board, or conversation need

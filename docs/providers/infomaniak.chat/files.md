@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat files
@@ -24,3 +24,5 @@ The files tools of the [Infomaniak kChat provider](README.md). The effects and t
   `.download` (released directories, fixed size limits, no partial file, content never returned). The upload's
   multipart body holds only `channel_id` and the file; kChat cannot list or remove an upload no message holds,
   so it stays. A download redirect, for example to storage, is a `provider-error`.
+
+The token rights are listed under [Files](setup.md#files).

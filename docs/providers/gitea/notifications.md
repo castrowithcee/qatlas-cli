@@ -48,8 +48,8 @@ it, which needs the scope of that read. The scopes are not confirmed against a l
   names them offers them, and no setup profile does.
 - `to-status` is `read`, `unread`, or `pinned`; `read` when left out. `status-types` and `last_read_at` narrow a
   bulk marking. Without `last_read_at` a repeat can reach threads that changed in between.
-- The answer of the instance is discarded unread. Exactly one request is sent after the evidence reads. None is
-  repeated after a timeout, an abort, or a 5xx answer; the error then says the change may have been applied.
+- A successful answer of the instance is discarded unread. Exactly one request is sent after the evidence reads. None
+  is repeated after a timeout, an abort, or a 5xx answer; the error then says the change may have been applied.
 
 ## Differences
 
