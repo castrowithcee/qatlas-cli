@@ -24,9 +24,11 @@ func successorScript(t *testing.T, dir, body string) string {
 	path := filepath.Join(dir, "qatlas")
 	script := "#!/bin/sh\n" +
 		"echo \"$@\" > " + filepath.Join(dir, "args") + "\n" +
+		// Read the handover before the pid appears: once it does, a test may end this shell, and a child
+		// started later would outlive it.
+		"cat <&3 > " + filepath.Join(dir, "snapshot") + "\n" +
 		"echo $$ > " + filepath.Join(dir, "pid.tmp") + "\n" +
 		"mv " + filepath.Join(dir, "pid.tmp") + " " + filepath.Join(dir, "pid") + "\n" +
-		"cat <&3 > " + filepath.Join(dir, "snapshot") + "\n" +
 		body + "\n"
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatal(err)

@@ -140,8 +140,11 @@ the messages afterwards. No free IMAP command, section, host, or search string c
 
 ## Errors
 
-Errors keep stable classes. The text an IMAP or SMTP server answers with never reaches an error message, and
-neither does the password.
+Errors keep stable classes. Qatlas' message never carries the text an IMAP or SMTP server answers with, and
+neither does it carry the password. The server's answer (IMAP response type, response code, and text, or the
+SMTP reply code and text) travels apart from the message as the provider's original statement: in the error
+detail it is the `provider` field, marked untrusted, redacted, and bounded. A failure without a server answer,
+such as a lost connection, has none.
 
 | Class | Cause |
 | --- | --- |
