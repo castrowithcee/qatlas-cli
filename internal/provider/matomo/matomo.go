@@ -276,5 +276,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scheduledReportsList, Handler: capability.Handler(invokeScheduledReportsList)},
 		capability.Operation{Descriptor: scheduledReportsGenerate, Handler: capability.Handler(invokeScheduledReportsGenerate)},
 		capability.Operation{Descriptor: scheduledReportsDelete, Handler: capability.Handler(invokeScheduledReportsDelete)},
+		capability.Operation{Descriptor: scheduledReportsPause, Handler: capability.Handler(invokeScheduledReportsPause)},
 	)
 }

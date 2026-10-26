@@ -297,32 +297,43 @@ func reportIDOf(given *int) (int, error) {
 	return *given, nil
 }
 
+// scheduledReportNotFound is the answer for a report that is absent or lies outside the targets; it does not tell which.
+func scheduledReportNotFound(op string) error {
+	return &provider.Error{Class: provider.ClassNotFound, Op: op,
+		Message: "Matomo has no scheduled report with this ID inside the targets of this connection"}
+}
+
 // fetchScheduledReport is the proving read of a report: one getReports request with its ID. A report of a
 // website outside the targets is not found, and the answer does not tell whether it exists.
 func (c *Client) fetchScheduledReport(ctx context.Context, op string, req requirement, id int) (ScheduledReport, error) {
+	report, _, err := c.fetchScheduledReportRow(ctx, op, req, id)
+	return report, err
+}
+
+// fetchScheduledReportRow is fetchScheduledReport that also hands back the proven row as Matomo gave it.
+func (c *Client) fetchScheduledReportRow(ctx context.Context, op string, req requirement, id int) (ScheduledReport,
+	json.RawMessage, error) {
 	var rows []json.RawMessage
 	params := url.Values{"idReport": {strconv.Itoa(id)}}
 	if err := c.call(ctx, op, req, "ScheduledReports.getReports", params, &rows); err != nil {
-		return ScheduledReport{}, err
+		return ScheduledReport{}, nil, err
 	}
-	notFound := &provider.Error{Class: provider.ClassNotFound, Op: op,
-		Message: "Matomo has no scheduled report with this ID inside the targets of this connection"}
 	if len(rows) == 0 {
-		return ScheduledReport{}, notFound
+		return ScheduledReport{}, nil, scheduledReportNotFound(op)
 	}
 	if len(rows) != 1 || !bytes.HasPrefix(bytes.TrimSpace(rows[0]), []byte("{")) {
-		return ScheduledReport{}, provider.InvalidResponse(op, "Matomo returned an invalid scheduled report")
+		return ScheduledReport{}, nil, provider.InvalidResponse(op, "Matomo returned an invalid scheduled report")
 	}
 	var stored storedReportJSON
 	if json.Unmarshal(rows[0], &stored) != nil {
-		return ScheduledReport{}, provider.InvalidResponse(op, "Matomo returned an invalid scheduled report")
+		return ScheduledReport{}, nil, provider.InvalidResponse(op, "Matomo returned an invalid scheduled report")
 	}
 	report, ok := stored.report()
 	if !ok || report.IDReport != id {
-		return ScheduledReport{}, provider.InvalidResponse(op, "Matomo returned another scheduled report than asked for")
+		return ScheduledReport{}, nil, provider.InvalidResponse(op, "Matomo returned another scheduled report than asked for")
 	}
 	if !c.scope.allows(report.IDSite) {
-		return ScheduledReport{}, notFound
+		return ScheduledReport{}, nil, scheduledReportNotFound(op)
 	}
-	return report, nil
+	return report, rows[0], nil
 }
