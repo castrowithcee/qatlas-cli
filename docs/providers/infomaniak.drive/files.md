@@ -8,7 +8,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Infomaniak kDrive files
@@ -94,7 +94,7 @@ never which entries a page holds, so it does not change the cursor binding.
   to check or to repeat the same upload; read the folder first.
 - An upload session's `upload_url` comes from Infomaniak and is only used when it is `https` on an
   `infomaniak.com` host.
-- A 403, for example because the plan does not allow it, is reported as `permission`.
+- A 403 is reported as `permission`; see [Fixing errors](setup.md#fixing-errors).
 
 ## Download
 

@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kDrive sharing
@@ -35,8 +35,8 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
   plus its `link`. `links.get` answers `not-found` for a file without a link.
 - A change sends exactly one request after the ownership check and is never repeated. After a timeout, a
   dropped connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the link before trying again. `asynchronous` is a
-  `pending` change. A 403, for example because the drive's plan does not allow share links, is
-  reported as `permission`.
+  `pending` change. A 403 is reported as `permission`; see
+  [Fixing errors](setup.md#fixing-errors).
 
 ## Dropbox
 
@@ -59,9 +59,8 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
   them as `parents`, as for the file entries: a path names folders outside the targets.
 - The deletion sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
   connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the
-  dropbox before trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan
-  does not include dropboxes, is reported as `permission`, and a provider failure as `provider-error`; neither is
-  retried.
+  dropbox before trying again. `asynchronous` is a `pending` change. A 403 is reported as `permission`, see
+  [Fixing errors](setup.md#fixing-errors), and a provider failure as `provider-error`; neither is retried.
 
 ## Access
 
@@ -98,5 +97,5 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
   unclear outcome.
 - A change sends exactly one request after the checks and is never repeated. After a timeout, a dropped connection,
   a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the access before
-  trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan or the rights of
-  the token's user do not allow sharing, is reported as `permission`.
+  trying again. `asynchronous` is a `pending` change. A 403 is reported as `permission`; see
+  [Fixing errors](setup.md#fixing-errors).
