@@ -79,7 +79,7 @@ func TestTrackingToolsAreListedOnlyNonIdempotentConfirmedAndInNoProfile(t *testi
 				}
 			}
 		}
-		for _, name := range []string{"cip", "cdt", "cdo", "country", "region", "city", "lat", "long", "token_auth", "token"} {
+		for _, name := range []string{"cip", "cdt", "cdo", "lat", "long", "token_auth", "token"} {
 			if strings.Contains(string(d.InputSchema), `"`+name+`"`) {
 				t.Errorf("%s offers %s", tool.id, name)
 			}
@@ -284,7 +284,7 @@ func TestTrackingRefusesInvalidArgumentsBeforeAnyRequest(t *testing.T) {
 		"partial time":      `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","hour":3}`,
 		"token_auth":        `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","token_auth":"x"}`,
 		"cip":               `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","cip":"203.0.113.1"}`,
-		"country":           `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","country":"de"}`,
+		"cdo":               `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","cdo":5}`,
 		"nul in text":       `{"idSite":1,"url":"https://example.org/","category":"C\u0000","action":"A"}`,
 		"dimension key":     `{"idSite":1,"url":"https://example.org/","category":"C","action":"A","dimensions":{"x":"y"}}`,
 		"too long category": `{"idSite":1,"url":"https://example.org/","category":"` + strings.Repeat("a", 513) + `","action":"A"}`,
@@ -310,7 +310,7 @@ func TestTrackingSenderNeverSendsForbiddenParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range neverSentParameters {
-		if err := sender.send(context.Background(), "test", 1, url.Values{name: {"x"}}); err == nil {
+		if err := sender.send(context.Background(), "test", 1, url.Values{name: {"x"}}, nil); err == nil {
 			t.Errorf("parameter %s was sent", name)
 		}
 	}
