@@ -5,8 +5,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // The values of the filter bar change what the list shows and in which order, and leave the configuration
@@ -124,9 +122,9 @@ func TestDetailPaneAppearsAtItsMinimumWidth(t *testing.T) {
 // The pane holds the facts of the marked entry and no secret value, and text from the configuration reaches
 // it without control characters.
 func TestDetailPaneIsSafe(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3)
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	setProfile(profileNone)
+	t.Cleanup(func() { setProfile(before) })
 
 	m := newTableModel(t, 140)
 	conn := m.cfg.Connections["tracker-issues"]

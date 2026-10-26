@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -839,7 +838,7 @@ func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
 	m := openApprovalModel(t, store, dir)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	applyColorScheme("dark", "")
 	view := m.approvalChangeView("Approve gh?", toolsChange())

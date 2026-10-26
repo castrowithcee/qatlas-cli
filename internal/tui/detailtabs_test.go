@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -80,9 +79,9 @@ func TestServicesTableAndFilterTextHoldNoURLCredential(t *testing.T) {
 
 // The raw tab shows the entry as written, but never a secret value and never a control character.
 func TestDetailRawHoldsNoSecretAndNoControlCharacter(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3)
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	setProfile(profileNone)
+	t.Cleanup(func() { setProfile(before) })
 
 	m := rawModel(t)
 	canaries := []string{canaryUser, canaryURLPass, canaryQuery, canaryOption, canaryVault, "canary env", "secret value"}
@@ -202,11 +201,11 @@ func TestDetailTabsAreClickable(t *testing.T) {
 // Without colour the shown tab stands in brackets and the focused pane has the double frame; the pane fits
 // at the smallest size that has one, in each of the three lists.
 func TestDetailPaneReadsWithoutColourAtItsSmallestSize(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3)
+	before := currentProfile()
+	setProfile(profileNone)
 	saved := styles
 	setTheme(buildTheme(true, true, false))
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(saved) })
+	t.Cleanup(func() { setProfile(before); setTheme(saved) })
 
 	// The smallest height that has a pane in all three lists is the one that frames their tables.
 	smallest := tableFrameMinHeight

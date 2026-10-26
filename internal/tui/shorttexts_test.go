@@ -115,8 +115,8 @@ func TestTheToolPickerShowsTheTitleNotTheDescription(t *testing.T) {
 // On a row that is not active the ID and what follows it are faint, the title is not; the active row is
 // highlighted as every other picker row is, and with no colour the same text is all there is.
 func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	reg := wikiRegistry(t)
 	m, _ := toolsModel(t, reg, nil)
@@ -138,7 +138,7 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 		t.Fatalf("tool row at %d, cursor %d: want the tool row below the cursor", index, m.picker.cursor)
 	}
 
-	lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+	setProfile(profile16)
 	faint := "\x1b[" + strings.TrimSuffix(strings.TrimPrefix(styles.hint.Render("x"), "\x1b["), "mx\x1b[0m") + "m"
 	row := m.pickerRowText(index)
 	at := strings.Index(row, faint)
@@ -146,7 +146,7 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 		strings.Index(row, "List BookStack pages") > at {
 		t.Errorf("the inactive row does not dim from the ID on: %q", row)
 	}
-	lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+	setProfile(profileNone)
 	if row := m.pickerRowText(index); strings.Contains(row, "\x1b[") ||
 		!strings.Contains(row, "List BookStack pages  bookstack.pages.list  read") {
 		t.Errorf("without colour the row is not plain readable text: %q", row)
@@ -155,7 +155,7 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 	for m.picker.cursor != index {
 		press(t, m, "down")
 	}
-	lipgloss.SetColorProfile(2)
+	setProfile(profile16)
 	if row := m.pickerRowText(index); !strings.Contains(row, "\x1b[") || strings.Contains(row, faint) {
 		t.Errorf("the active row is not highlighted as the other picker rows are: %q", row)
 	}

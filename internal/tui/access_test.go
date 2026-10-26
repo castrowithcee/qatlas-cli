@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -20,7 +18,7 @@ func withNoColor(t *testing.T) {
 	t.Helper()
 	restoreRenderer(t)
 	t.Setenv("NO_COLOR", "1")
-	lipgloss.SetColorProfile(termenv.Ascii)
+	setProfile(profileNone)
 	applyColorScheme("", "")
 }
 
@@ -29,7 +27,7 @@ func withNoColor(t *testing.T) {
 func TestAccessDetailsKeepTheirStatusWordsAtEverySize(t *testing.T) {
 	for _, noColor := range []bool{false, true} {
 		restoreRenderer(t)
-		lipgloss.SetColorProfile(termenv.TrueColor)
+		setProfile(profileTrueColor)
 		t.Setenv("NO_COLOR", "")
 		applyColorScheme("dark", "")
 		if noColor {

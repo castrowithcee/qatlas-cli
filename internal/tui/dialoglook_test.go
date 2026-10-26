@@ -10,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/selftest"
@@ -191,7 +190,7 @@ func TestResultsCarryTheirColourAndWord(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			visualSetup(t, false)
 			applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
-			lipgloss.SetColorProfile(termenv.TrueColor)
+			setProfile(profileTrueColor)
 			m := tc.open(t)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 			view := m.View()

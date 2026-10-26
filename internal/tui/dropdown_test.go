@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 )
 
 // configBytes is the content of the configuration file, or a marker where it does not exist yet.
@@ -120,12 +119,12 @@ func TestDropdownAtTheSmallestSize(t *testing.T) {
 
 // Without colour the focus reads from the marker, and the field and its list carry no colour sequence.
 func TestDropdownReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
+	before := currentProfile()
 	prior := styles
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("", "")
-	lipgloss.SetColorProfile(termenv.ANSI256)
+	setProfile(profile256)
 
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)
