@@ -48,7 +48,7 @@ func heatBlock(level, n int) string {
 		}
 		return styles.hint.Render(mark)
 	}
-	return lipgloss.NewStyle().Foreground(styles.palette.heat[level]).Render(strings.Repeat("■", n))
+	return lipgloss.NewStyle().Foreground(styles.palette.heat[level].lip()).Render(strings.Repeat("■", n))
 }
 
 // heatCell is the n-cell mark of one day: a day the check flagged or one outside the retention shows that

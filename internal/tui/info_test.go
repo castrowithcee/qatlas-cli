@@ -238,7 +238,7 @@ func TestInfoOverlayIsAFilledPanelWithAnAccentKey(t *testing.T) {
 				if !strings.Contains(view, colourOf(styles.footKey)+"esc") {
 					t.Errorf("%dx%d: the key is not in the accent colour:\n%q", size.width, size.height, view)
 				}
-				if !strings.Contains(view, colourOf(lipgloss.NewStyle().Background(styles.palette.panel))) {
+				if !strings.Contains(view, colourOf(lipgloss.NewStyle().Background(styles.palette.panel.lip()))) {
 					t.Errorf("%dx%d: the panel is not filled with the panel colour:\n%q", size.width, size.height, view)
 				}
 			}
