@@ -251,10 +251,12 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.users.delete" || tool.ID == "matomo.users.logout" ||
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
 			tool.ID == "matomo.data-subjects.delete" || tool.ID == "matomo.raw-data.anonymize" || tool.ID == "matomo.data-purge.run" ||
-			strings.HasPrefix(tool.ID, "matomo.tracking-failures.delete") || tool.ID == "matomo.ai-providers.disconnect" ||
+			strings.HasPrefix(tool.ID, "matomo.tracking-failures.delete") || tool.ID == "matomo.scheduled-reports.delete" || tool.ID == "matomo.scheduled-reports.pause" ||
+			tool.ID == "matomo.ai-providers.disconnect" ||
+			(strings.HasPrefix(tool.ID, "matomo.sms-") && tool.ID != "matomo.sms-settings.get") ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
 			tool.ID == "matomo.compliance.enforce" || tool.ID == "matomo.archive-settings.set" ||
-			tool.ID == "matomo.trusted-hosts.set" || tool.ID == "matomo.branding.set" || tool.ID == "matomo.reports.archive" ||
+			tool.ID == "matomo.trusted-hosts.set" || tool.ID == "matomo.brute-force-ips.unblock" || tool.ID == "matomo.branding.set" || tool.ID == "matomo.reports.archive" ||
 			strings.HasPrefix(tool.ID, "matomo.privacy-settings.set-") || strings.HasPrefix(tool.ID, "matomo.do-not-track.")) &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
@@ -262,7 +264,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 22 || len(metadata.Tools) != 105 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 117 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

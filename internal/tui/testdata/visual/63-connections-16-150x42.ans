@@ -1,0 +1,42 @@
+[1;97mQatlas[0m  [1;92m●[0m vault unlocked  [37m●[0m admin off  [37mconfig.yaml[0m                                                                                   [37m[?] help[0m  [37m[:] cmd[0m
+[1;94m  [0m[37m 1 Overview [0m [1;30;104m 2 Connections [0m [37m 3 Activity [0m [37m 4 Access [0m [37m 5 Library [0m [37m 6 Settings [0m
+[90m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+[94m╭─[0m[1;97m Connections (7) [0m[94m───────────────────────────────────────────────────────────────[0m[37m 1/7 [0m[94m─╮[0m [90m╭─[0m[1;97m[0m[90m─────────────────────────────────────────────────────────╮[0m
+[94m│[0m   [97;40m Group: Provider ▾ [0m    [97;40m State: All ▾ [0m    [97;40m Sort: Name ▾ [0m  [37;40m / search…                [0m [94m│[0m [90m│[0m [1;97mwiki-main[0m                                       [1;92m●[0m active [90m│[0m
+[94m│[0m [37m    NAME            STATE   SERVICE  EFFECTS             TOOLS  DESCRIPTION[0m           [94m│[0m [90m│[0m [37mbookstack[0m                                                [90m│[0m
+[94m│[0m   [37m▾ [0m[33m■[0m [1;94mbookstack[0m[37m (1)[0m                                                                   [94m│[0m [90m│[0m                                                          [90m│[0m
+[94m│[0m [1;94;44m▌[0m[1;97;44m   [97mwiki-main[0m[1;97;44m       [1;92mactive[0m[1;97;44m  [97mwiki[0m[1;97;44m     [37mread,create,update[0m[1;97;44m  [37mall[0m[1;97;44m    [97mTeam wiki, read and …[0m[1;97;44m[0m [94m│[0m [90m│[0m [1;94m[Overview][0m [37m Details [0m [37m Raw [0m                               [90m│[0m
+[94m│[0m   [37m▾ [0m[93m■[0m [1;94mgithub[0m[37m (1)[0m                                                                      [94m│[0m [90m│[0m                                                          [90m│[0m
+[94m│[0m     [97mcode-planning[0m   [1;92mactive[0m  [97mcode[0m     [37mread[0m                [37mall[0m    [97mPlanning repositories[0m [94m│[0m [90m│[0m [37mProvider:     [0mbookstack                                  [90m│[0m
+[94m│[0m   [37m▾ [0m[94m■[0m [1;94mnextcloud[0m[37m (1)[0m                                                                   [94m│[0m [90m│[0m [37mService:      [0mwiki                                       [90m│[0m
+[94m│[0m     [97mcloud-files[0m     [1;92mactive[0m  [97mcloud[0m    [37mread,create,update[0m  [37mall[0m    [97mShared project files[0m  [94m│[0m [90m│[0m [37mBase URL:     [0mhttps://wiki.example.invalid               [90m│[0m
+[94m│[0m   [37m▾ [0m[91m■[0m [1;94mseatable.base[0m[37m (1)[0m                                                               [94m│[0m [90m│[0m [37mCredential:   [0mwiki-reader                                [90m│[0m
+[94m│[0m     [97mtables-ops[0m      [1;92mactive[0m  [97mtables[0m   [37mread[0m                [37mall[0m    [97mOperations tables[0m     [94m│[0m [90m│[0m [37mState:        [0mactive                                     [90m│[0m
+[94m│[0m   [37m▾ [0m[95m■[0m [1;94mtelegram[0m[37m (1)[0m                                                                    [94m│[0m [90m│[0m [37mEffects:      [0mread,create,update                         [90m│[0m
+[94m│[0m     [97malerts-bot[0m      [1;92mactive[0m  [97malerts[0m   [37mread,create,update[0m  [37mall[0m    [97mNotification channel[0m  [94m│[0m [90m│[0m [37mTools:        [0mall                                        [90m│[0m
+[94m│[0m   [37m▾ [0m[36m■[0m [1;94mtodoist[0m[37m (1)[0m                                                                     [94m│[0m [90m│[0m [37mDescription:  [0mTeam wiki, read and write                  [90m│[0m
+[94m│[0m     [97mtasks-personal[0m  [1;92mactive[0m  [97mtasks[0m    [37mread,create,update[0m  [37mall[0m    [97mPersonal task list[0m    [94m│[0m [90m│[0m                                                          [90m│[0m
+[94m│[0m   [37m▾ [0m[92m■[0m [1;94mtwenty-crm[0m[37m (1)[0m                                                                  [94m│[0m [90m│[0m                                                          [90m│[0m
+[94m│[0m     [97mcrm-sales[0m       [1;92mactive[0m  [97mcrm[0m      [37mread[0m                [37mall[0m    [97mSales pipeline[0m        [94m│[0m [90m│[0m                                                          [90m│[0m
+[94m╰───────────────────────────────────────────────────────────────────────────────────────╯[0m [90m╰──────────────────────────────────────────────────────────╯[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;94m/[0m[37m filter[0m  [1;94mn[0m[37m new[0m  [1;94mp[0m[37m duplicate[0m  [1;94menter[0m[37m edit/fold[0m  [1;94mr[0m[37m rename[0m  [1;94md[0m[37m delete[0m  [1;94mt[0m[37m test[0m  [1;94mc[0m[37m setup[0m  [1;94m1-6/esc[0m[37m areas[0m  [1;94mctrl+l[0m[37m lock vault[0m  [1;94mi[0m[37m info[0m  [1;94m:[0m[37m cmds[0m  [1;94m?[0m[37m help[0m  [1;94mq[0m[37m quit[0m
