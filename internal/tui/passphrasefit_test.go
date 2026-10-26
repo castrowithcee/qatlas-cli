@@ -34,7 +34,7 @@ func TestPassphraseDialogsFitMinimumSize(t *testing.T) {
 				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
 				open(m)
 				sizedModel(m, minimumWidth, minimumHeight)
-				view := m.View()
+				view := m.render()
 				if strings.Contains(view, "Resize terminal") || strings.Contains(view, "Terminal vergrößern") {
 					t.Fatalf("resize hint at %dx%d:\n%s", minimumWidth, minimumHeight, view)
 				}
@@ -74,7 +74,7 @@ func TestTransferPassphraseDialogsFitMinimumSize(t *testing.T) {
 				m, _, _ := newModel(t)
 				open(m)
 				sizedModel(m, minimumWidth, minimumHeight)
-				view := m.View()
+				view := m.render()
 				if strings.Contains(view, "Resize terminal") || strings.Contains(view, "Terminal vergrößern") {
 					t.Fatalf("resize hint at %dx%d:\n%s", minimumWidth, minimumHeight, view)
 				}

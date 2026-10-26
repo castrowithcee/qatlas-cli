@@ -134,7 +134,7 @@ func TestChoosingTheLanguageRebuildsTheScreen(t *testing.T) {
 	sizedModel(m, 100, 30)
 	openSectionByName(t, m, sectionGeneral)
 	focusField(t, m, langLabel)
-	if view := m.View(); !strings.Contains(view, "Settings") || !strings.Contains(view, "General settings") {
+	if view := m.render(); !strings.Contains(view, "Settings") || !strings.Contains(view, "General settings") {
 		t.Fatalf("the English screen lacks its words:\n%s", view)
 	}
 	press(t, m, "right") // deutsch
@@ -142,7 +142,7 @@ func TestChoosingTheLanguageRebuildsTheScreen(t *testing.T) {
 	if m.fail != "" || m.screen != screenForm {
 		t.Fatalf("saving: fail %q screen %v", m.fail, m.screen)
 	}
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"Einstellungen", "Allgemeine Einstellungen", "Sprache", "Gespeichert", "Übersicht"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the German screen lacks %q:\n%s", want, view)
@@ -158,7 +158,7 @@ func TestChoosingTheLanguageRebuildsTheScreen(t *testing.T) {
 	focusField(t, m, langLabel)
 	press(t, m, "left")
 	pump(t, m, "f2")
-	if view := m.View(); !strings.Contains(view, "General settings") || strings.Contains(view, "Einstellungen") {
+	if view := m.render(); !strings.Contains(view, "General settings") || strings.Contains(view, "Einstellungen") {
 		t.Errorf("English did not come back:\n%s", view)
 	}
 }
@@ -167,7 +167,7 @@ func TestChoosingTheLanguageRebuildsTheScreen(t *testing.T) {
 func TestGermanFrameTexts(t *testing.T) {
 	useLanguage(t, i18n.German)
 	m := overviewModel(t, unencryptedVaultModel(t))
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"Übersicht", "Zugriff", "Bibliothek", "Einstellungen", "Tresor", "Nächste Schritte", "Ende", "Befehle", "Hilfe"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the German Overview lacks %q:\n%s", want, view)
@@ -192,11 +192,11 @@ func TestFramesFitInGerman(t *testing.T) {
 				m := overviewModel(t, unencryptedVaultModel(t))
 				return sizedModel(m, size.w, size.h)
 			}
-			assertViewFits(t, fresh().View(), size.w, size.h)
+			assertViewFits(t, fresh().render(), size.w, size.h)
 			for _, s := range []section{sectionGeneral, sectionVault, sectionTransfer, sectionUpdate, sectionSelftest, sectionApprovals, sectionServices} {
 				m := fresh()
 				openSectionByName(t, m, s)
-				assertViewFits(t, m.View(), size.w, size.h)
+				assertViewFits(t, m.render(), size.w, size.h)
 			}
 			// The leave question and the lock question.
 			m := fresh()
@@ -206,10 +206,10 @@ func TestFramesFitInGerman(t *testing.T) {
 			if m.screen != screenLeave {
 				t.Fatalf("%dx%d: esc = screen %v, want the leave question", size.w, size.h, m.screen)
 			}
-			assertViewFits(t, m.View(), size.w, size.h)
+			assertViewFits(t, m.render(), size.w, size.h)
 			m = fresh()
 			m.openVaultLockConfirm(screenNav)
-			assertViewFits(t, m.View(), size.w, size.h)
+			assertViewFits(t, m.render(), size.w, size.h)
 		}
 	})
 }
@@ -225,12 +225,12 @@ func TestCommandPaletteFitsInGerman(t *testing.T) {
 			if m.screen != screenCommand {
 				t.Fatalf("':' opened screen %v", m.screen)
 			}
-			assertViewFits(t, m.View(), size.w, size.h)
+			assertViewFits(t, m.render(), size.w, size.h)
 		}
 		m := overviewModel(t, unencryptedVaultModel(t))
 		sizedModel(m, 80, 24)
 		press(t, m, ":")
-		view := m.View()
+		view := m.render()
 		want, name := "Command Palette", "go overview"
 		if uiLang == i18n.German {
 			want = "Befehlspalette"
@@ -258,7 +258,7 @@ func TestGermanKeyRows(t *testing.T) {
 	sizedModel(m, 100, 40)
 	openSectionByName(t, m, sectionGeneral)
 	m.enterSection(secKeys)
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"Speichertaste", "Hilfetaste", "Befehlstaste", "Sperrtaste", "Info-Taste", "F2 (Standard)", "nur i (keine zweite Taste)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the key rows lack %q:\n%s", want, view)
@@ -268,26 +268,26 @@ func TestGermanKeyRows(t *testing.T) {
 		t.Errorf("key row label = %q, want the internal key", got)
 	}
 	focusField(t, m, "help key")
-	view = m.View()
+	view = m.render()
 	if !strings.Contains(view, "öffnet die Hilfe; enter belegt neu") || !strings.Contains(view, "r Standard") {
 		t.Errorf("the focused key row lacks its hint or footer:\n%s", view)
 	}
 	press(t, m, "enter")
-	view = m.View()
+	view = m.render()
 	if !strings.Contains(view, "Neue Taste für Hilfe drücken") || !strings.Contains(view, "neue Taste drücken") {
 		t.Errorf("the capture lacks its status or footer:\n%s", view)
 	}
 	press(t, m, "esc")
-	if !strings.Contains(m.View(), "Taste beibehalten") {
-		t.Errorf("cancelling lacks its status:\n%s", m.View())
+	if !strings.Contains(m.render(), "Taste beibehalten") {
+		t.Errorf("cancelling lacks its status:\n%s", m.render())
 	}
 	// The capture status is a second note, which the smallest terminal has no row for: there the form asks for
 	// one row more, so that a capture cannot start in a screen the terminal replaces by the resize notice.
 	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {60, 16}, {80, 24}, {140, 40}} {
 		sizedModel(m, size.w, size.h)
-		assertViewFits(t, m.View(), size.w, size.h)
+		assertViewFits(t, m.render(), size.w, size.h)
 		press(t, m, "enter")
-		assertViewFits(t, m.View(), size.w, size.h)
+		assertViewFits(t, m.render(), size.w, size.h)
 		press(t, m, "esc")
 	}
 }

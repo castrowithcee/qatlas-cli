@@ -55,7 +55,7 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 		t.Fatalf("screen = %v, want the confirmation", m.screen)
 	}
 
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, 100, 30)
 	if !strings.Contains(view, `Delete "wiki"?`) || !strings.Contains(view, "y remove") {
 		t.Fatalf("the question or its keys are missing:\n%s", view)
@@ -98,7 +98,7 @@ func TestModalBackgroundDoesNotChangeScrollState(t *testing.T) {
 	m.export.rows.offset = huge
 	m.screen, m.leaveFrom = screenLeave, screenTransfer
 
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "warning: the export is not finished") {
 		t.Fatalf("the leave question is not shown:\n%s", view)
 	}
@@ -121,7 +121,7 @@ func TestQuestionTakesTheWholeWorkspaceBelowTheModalSize(t *testing.T) {
 		sizedModel(m, size.width, size.height)
 		openSectionByName(t, m, sectionServices)
 		press(t, m, "d")
-		view := m.View()
+		view := m.render()
 		assertViewFits(t, view, size.width, size.height)
 		if _, _, _, ok := dialogRows(view); ok {
 			t.Errorf("%dx%d shows a modal:\n%s", size.width, size.height, view)
@@ -255,7 +255,7 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 			}
 			for name, size := range map[string][2]int{"modal": {100, 30}, "fallback": {50, 30}} {
 				sizedModel(m, size[0], size[1])
-				view := ansi.Strip(m.View())
+				view := ansi.Strip(m.render())
 				rows := strings.Split(view, "\n")
 				find := func(needle string, from int) int {
 					for i := max(from, 0); i < len(rows); i++ {
@@ -289,14 +289,14 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	sizedModel(m, 100, 30)
 	startRename(t, m, sectionServices, "wiki", "handbook")
 	pump(t, m, "enter")
-	if view := m.View(); !hasQuestionModal(view) {
+	if view := m.render(); !hasQuestionModal(view) {
 		t.Fatalf("a short plan is not a modal:\n%s", view)
 	}
 
 	for i := 0; i < 60; i++ {
 		m.rename.plan.References = append(m.rename.plan.References, fmt.Sprintf("connections.c%02d.service", i))
 	}
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, 100, 30)
 	if hasQuestionModal(view) {
 		t.Fatalf("a plan taller than the screen is a modal:\n%s", view)
@@ -310,7 +310,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 		}
 	}
 	press(t, m, "end")
-	view = m.View()
+	view = m.render()
 	if !strings.Contains(view, "connections.c59.service") || strings.Contains(view, "connections.c00.service") {
 		t.Errorf("end did not scroll to the last line:\n%s", view)
 	}
@@ -320,7 +320,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 		t.Errorf("up moved the offset from %d to %d", end, m.rename.offset)
 	}
 	press(t, m, "home")
-	if m.rename.offset != 0 || !strings.Contains(m.View(), "connections.c00.service") {
+	if m.rename.offset != 0 || !strings.Contains(m.render(), "connections.c00.service") {
 		t.Errorf("home did not return to the first line, offset %d", m.rename.offset)
 	}
 }

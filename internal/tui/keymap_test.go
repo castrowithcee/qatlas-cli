@@ -44,7 +44,7 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(flatText(view), "ctrl+k cmds ctrl+g help") || strings.Contains(view, "? help") || strings.Contains(view, ": cmds") {
 		t.Fatalf("the footer does not follow the keymap:\n%s", view)
 	}
@@ -65,8 +65,8 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	if m.screen != screenHelp {
 		t.Fatalf("the new help key left screen %v", m.screen)
 	}
-	if !strings.Contains(m.View(), "esc/ctrl+g close") {
-		t.Errorf("the help footer does not follow the keymap:\n%s", m.View())
+	if !strings.Contains(m.render(), "esc/ctrl+g close") {
+		t.Errorf("the help footer does not follow the keymap:\n%s", m.render())
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
 	if m.screen == screenHelp {
@@ -74,7 +74,7 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	}
 
 	press(t, m, "5", "n")
-	if view := m.View(); !strings.Contains(view, "F5 save") || strings.Contains(view, "F2 save") {
+	if view := m.render(); !strings.Contains(view, "F5 save") || strings.Contains(view, "F2 save") {
 		t.Fatalf("the form footer does not follow the save key:\n%s", view)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyF2})
