@@ -294,6 +294,8 @@ func (c *Client) putFile(ctx context.Context, op, link string, size int64, sourc
 		Permission: "Twenty refused the upload address; it may have expired",
 		NotFound:   "Twenty no longer knows this upload",
 	})
+	// The upload address may point to external storage, whose answer is not Twenty's: only the status is kept.
+	failure.Original = &provider.Original{Status: response.StatusCode}
 	if response.StatusCode >= 500 {
 		failure.Message += uncertain
 	} else {
