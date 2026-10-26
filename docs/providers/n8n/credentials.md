@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n credentials
@@ -81,4 +81,4 @@ without a field for it, so a stored value never reaches a result or an error, wh
   role `credential:owner`) to be in the allow-list; a credential only shared into an allowed project, or without
   a role, is refused before the changing request. The binding search before the one changing request only
   reads. Results are the credential metadata, or `deleted` and `transferred` flags; never a stored value.
-- **403.** Reported as a license, scope, or role error, without telling which.
+- **403.** Reported as `permission`; the rights are in [rights per tool group](setup.md#rights-per-tool-group).

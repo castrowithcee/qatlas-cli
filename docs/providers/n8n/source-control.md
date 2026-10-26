@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n source control
@@ -15,8 +15,7 @@ contract of every change is in [workflows.md](workflows.md#changes-and-their-ret
 
 The tools never set up or change the connection to the repository, and do not touch environments or
 promotions. They are instance-wide (refused locally on a connection with any `project/` or `workflow/` target,
-before a secret is read) and need the Enterprise source control feature plus the matching API key scope; a
-403 is reported as a license, scope, or role error without telling which.
+before a secret is read). The rights are in [rights per tool group](setup.md#rights-per-tool-group).
 
 Profile `sourcecontrol-read` holds `n8n.source-control.status`, in none of the other profiles.
 `n8n.source-control.pull` and `n8n.source-control.push` are in no profile and offered only by a `tools` list.

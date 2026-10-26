@@ -1,19 +1,20 @@
 ---
 description: >
-  Describes the n8n provider as a whole: Public API key setup, the project and workflow allow-lists and their
+  Describes the n8n provider as a whole: configuration, the project and workflow allow-lists and their
   live project-membership check, target choosing, the rules every tool group shares (profiles, tool-list-only
   tools), version and plan boundaries, error classes, untrusted data, and what the provider does not do.
   Tool groups have their own pages.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n
 
 n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). Its tools are grouped, each
-group on its own page; this page holds what applies to all of them.
+group on its own page; this page holds what applies to all of them. To connect n8n step by step, see
+[Set up n8n](setup.md).
 
 | Page | Covers |
 | --- | --- |
@@ -34,11 +35,8 @@ generic configuration validator, which leaves `http` open so a local test server
 provider requires `https` unconditionally, the same rule GitHub Enterprise Server, Nextcloud, SeaTable, and
 Twenty apply to their own self-hosted origin: n8n documents no local-only `http` exception of its own.
 
-The credential provides `api-key`, a Public API key created under Settings, n8n API, Create an API key. On an
-Enterprise plan that key may itself be scoped to a subset of resources and actions; that scope is a further
-ceiling this connection's own targets and effects narrow, never widen. The n8n Public API is not
-available on a free trial; upgrading to a paid plan is a prerequisite this provider cannot detect ahead of a
-failed request.
+The credential provides `api-key`, a Public API key. Creating it, its scopes, and the plan it needs are in
+[Set up n8n](setup.md); the key is a ceiling this connection's own targets and effects narrow, never widen.
 
 ```yaml
 services:
@@ -142,8 +140,8 @@ are out of this milestone's scope. `activateWorkflow` additionally accepts an op
 and `description` to activate a specific saved version; this provider does not offer them and always
 activates the latest version, the same effect as omitting them.
 
-The Projects feature, and therefore a project allow-list's live membership check, needs an Enterprise plan;
-see "Scope" above for what happens when an instance or Public API version never reports it.
+A project allow-list's live membership check depends on the instance reporting a workflow's project; see "Scope"
+above for what happens when it never does. The plan it needs is in [rights per tool group](setup.md#rights-per-tool-group).
 
 `n8n.workflows.get` never returns a credential's value: n8n's own Public API does not put one in a workflow
 response either, only a referenced credential's `id` and `name` per node, which is what a person editing the
@@ -160,7 +158,7 @@ travels apart from it in the `provider` field of the error detail, marked untrus
 | Class | Cause |
 | --- | --- |
 | `auth` | n8n rejected the API key |
-| `permission` | this API key may not perform the operation; check its scopes under Settings, n8n API. For a project tool: the Projects license, the API key's project scope, or the owner's role |
+| `permission` | this API key may not perform the operation; the rights are in [rights per tool group](setup.md#rights-per-tool-group) |
 | `not-found` | n8n does not hold the resource, does not show it to this key, or this instance's Public API version does not have the endpoint |
 | `rate-limited` | n8n rate-limited the request; n8n documents no fixed budget of its own, so Qatlas applies no proactive spacing and instead holds its own limiter for whatever `Retry-After` n8n names |
 | `timeout` | n8n did not answer in time |

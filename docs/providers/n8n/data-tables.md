@@ -6,14 +6,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # n8n data tables, columns, and rows
 
 Configuration, targets, error classes, and cross-group limits are in [README.md](README.md); the retry
-contract of every change is in [workflows.md](workflows.md#changes-and-their-retry-contract). A 403 of any
-tool here is reported as a license, scope, or role error, without telling which.
+contract of every change is in [workflows.md](workflows.md#changes-and-their-retry-contract). The rights are in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Profiles
 
