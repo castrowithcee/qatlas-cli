@@ -16,7 +16,7 @@ setup profiles. The tools are sorted into groups; each group has a page: [sites 
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md),
 [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
-[users and roles](users.md), and [privacy and data subject requests](privacy.md).
+[users and roles](users.md), [SMS settings](mobile-messaging.md), and [privacy and data subject requests](privacy.md).
 
 ## Configuration
 
@@ -233,6 +233,10 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | `matomo.capabilities.add` | [users](users.md) | adds capabilities of a user on websites (admin; effect `update`, only via `tools`) |
 | `matomo.capabilities.remove` | [users](users.md) | removes capabilities of a user on websites (admin; effect `update`, only via `tools`) |
 | `matomo.roles.list` | [users](users.md) | reads the roles and capabilities Matomo offers (admin right on some website) |
+| `matomo.sms-settings.get` | [mobile-messaging](mobile-messaging.md#reading) | reads one SMS setting: credentials stored, SMS provider, credit, phone numbers, or delegation (target `instance`; in no profile) |
+| `matomo.sms-phone-numbers.remove` | [mobile-messaging](mobile-messaging.md#removing-access) | removes a phone number of the token's user (target `instance`; effect `delete`) |
+| `matomo.sms-credentials.delete` | [mobile-messaging](mobile-messaging.md#removing-access) | deletes the stored SMS provider credentials (target `instance`; effect `delete`, only via `tools`) |
+| `matomo.sms-delegation.set` | [mobile-messaging](mobile-messaging.md#removing-access) | sets whether regular users manage the SMS credentials (Super User, target `instance`; effect `update`) |
 | `matomo.data-subjects.find` | [privacy](privacy.md) | finds the visits of one person on a website by a segment (admin right; Live plugin) |
 | `matomo.data-subjects.export` | [privacy](privacy.md) | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
 | `matomo.data-subjects.delete` | [privacy](privacy.md) | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
