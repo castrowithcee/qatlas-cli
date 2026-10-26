@@ -8,7 +8,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Infomaniak kDrive
@@ -29,15 +29,18 @@ deletes it with a separate, confirmed tool that likewise needs an explicit tools
 to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
 
+[Set up Infomaniak kDrive](setup.md) leads through creating an API token and lists the rights it needs.
+
 ## Configuration
 
 The service is always the official API root `https://api.infomaniak.com`, which the terminal editor fills in
 and which applies when `base_url` is left out. Qatlas refuses any other URL before a secret is read.
 
-The credential provides `token`, an Infomaniak API token created in the Infomaniak Manager under Account
-settings, API tokens. That token can reach every Infomaniak account and every kDrive its owner administers,
-which matters for a person who holds one Infomaniak login but manages kDrive for several customers: the
-connection target, not the token, decides which single account is reachable.
+The credential provides `token`, an Infomaniak API token. How to create it, the scope and kDrive rights each
+tool group needs, and how to test the connection are described in [Set up Infomaniak kDrive](setup.md). That
+token can reach every Infomaniak account and every kDrive its owner administers, which matters for a person who
+holds one Infomaniak login but manages kDrive for several customers: the connection target, not the token,
+decides which single account is reachable.
 
 ```yaml
 services:
@@ -96,8 +99,8 @@ inside, folders marked as having children, each with the path of the listed fold
 folder one extra read of that folder with its parents per page, no path if the chain is unclear). It works on a
 draft connection. A connection with exactly one `account` target lists the drives of that account directly,
 without loading the account list; with none or several, drives are chosen below an account. The account list
-reads the accounts endpoint and needs a token that may read accounts; otherwise the read fails with a rights
-error and the account ID or a kDrive URL is entered instead. Names are untrusted. Account and drive lists are paged
+reads the accounts endpoint; without the right for it, which [Set up Infomaniak kDrive](setup.md#drives-and-the-account)
+lists, the account ID or a kDrive URL is entered instead. Names are untrusted. Account and drive lists are paged
 by number, `files` by the folder cursor. It never searches on the server.
 
 A URL on `kdrive.infomaniak.com` or `ksuite.infomaniak.com` is turned into `drive/DRIVE_ID` (on
@@ -213,7 +216,7 @@ Errors keep stable classes and never carry the token or a raw provider response 
 | Class | Cause |
 | --- | --- |
 | `auth` | Infomaniak rejected the API token |
-| `permission` | this token may not perform the operation, or the account's rights refuse it; for a change this includes a drive plan that does not allow it, which Infomaniak reports as a refusal without a separate class |
+| `permission` | this token may not perform the operation, or the account's rights refuse it; for a change this includes a drive plan that does not allow it, which Infomaniak reports as a refusal without a separate class; see [Fixing errors](setup.md#fixing-errors) |
 | `not-found` | Infomaniak does not hold the resource, or does not show it to this token |
 | `rate-limited` | Infomaniak rate-limited the request; it allows at most 60 requests per minute per token, and Qatlas already paces its own requests to stay under that limit on its own |
 | `timeout` | Infomaniak did not answer in time |

@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Infomaniak kDrive trash
@@ -27,5 +27,5 @@ in the [tool overview](README.md#tools); the other changes are described in [fil
 - The same rules as for the other changes apply: the drive goes through the checks under [Scope](README.md#scope) before the one
   request, `files.trash` proves its `file_id` like any object, the four other trash tools act on the whole drive, a refusal names no foreign value, an unclear outcome is reported
   and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports
-  one. A trash change never reports an entry. A 403, for example because the plan does not allow trash
-  handling, is reported as `permission`.
+  one. A trash change never reports an entry. A 403 is reported as `permission`; see
+  [Fixing errors](setup.md#fixing-errors).

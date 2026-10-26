@@ -38,8 +38,8 @@ func otherContainerRow(id, name string, site int) string {
 }
 
 const tagManagerConnections = `
-  tm-all: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list], targets: [site]}
-  tm-one: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list], targets: [site/2]}
+  tm-all: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export], targets: [site]}
+  tm-one: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export], targets: [site/2]}
   tm-instance: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-catalog.list], targets: [instance]}
 `
 
@@ -319,34 +319,50 @@ var tagManagerTools = []struct{ id, arguments string }{
 	{"matomo.tag-manager-containers.get", `{"idSite":1,"idContainer":"6OMh6taM"}`},
 	{"matomo.tag-manager-containers.get-embed-code", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live"}`},
 	{"matomo.tag-manager-catalog.list", `{"kind":"publishable-environments","idSite":1}`},
+	{"matomo.tag-manager-versions.list", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+	{"matomo.tag-manager-versions.get", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+	{"matomo.tag-manager-versions.export", `{"idSite":1,"idContainer":"6OMh6taM"}`},
 }
 
 func TestTagManagerToolsRefuseBadArgumentsBeforeSecretAndRequest(t *testing.T) {
 	for name, tc := range map[string]struct{ tool, connection, arguments string }{
-		"foreign website":          {"matomo.tag-manager-containers.list", "tm-one", `{"idSite":1}`},
-		"foreign website get":      {"matomo.tag-manager-containers.get", "tm-one", `{"idSite":1,"idContainer":"6OMh6taM"}`},
-		"foreign website embed":    {"matomo.tag-manager-containers.get-embed-code", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","environment":"live"}`},
-		"foreign website catalog":  {"matomo.tag-manager-catalog.list", "tm-one", `{"kind":"publishable-environments","idSite":1}`},
-		"no website":               {"matomo.tag-manager-containers.list", "tm-all", `{}`},
-		"bad site":                 {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":0}`},
-		"bad limit":                {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":1,"limit":101}`},
-		"missing container":        {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1}`},
-		"long container":           {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1,"idContainer":"123456789"}`},
-		"container with markup":    {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1,"idContainer":"a\"b"}`},
-		"missing environment":      {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM"}`},
-		"short environment":        {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"a"}`},
-		"environment with dash":    {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"a-b"}`},
-		"unknown form":             {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","form":"x"}`},
-		"framework without steps":  {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","jsFramework":"react"}`},
-		"unknown framework":        {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","form":"install-instructions","jsFramework":"vue"}`},
-		"unknown kind":             {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tags"}`},
-		"missing kind":             {"matomo.tag-manager-catalog.list", "tm-all", `{}`},
-		"types without context":    {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tag-types"}`},
-		"bad context":              {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tag-types","idContext":"Web;"}`},
-		"context for contexts":     {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"contexts","idContext":"web"}`},
-		"site for contexts":        {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"contexts","idSite":1}`},
-		"publishable without site": {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"publishable-environments"}`},
-		"extra argument":           {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":1,"method":"TagManager.deleteContainer"}`},
+		"foreign website":            {"matomo.tag-manager-containers.list", "tm-one", `{"idSite":1}`},
+		"foreign website get":        {"matomo.tag-manager-containers.get", "tm-one", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+		"foreign website embed":      {"matomo.tag-manager-containers.get-embed-code", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","environment":"live"}`},
+		"foreign website catalog":    {"matomo.tag-manager-catalog.list", "tm-one", `{"kind":"publishable-environments","idSite":1}`},
+		"no website":                 {"matomo.tag-manager-containers.list", "tm-all", `{}`},
+		"bad site":                   {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":0}`},
+		"bad limit":                  {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":1,"limit":101}`},
+		"missing container":          {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1}`},
+		"long container":             {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1,"idContainer":"123456789"}`},
+		"container with markup":      {"matomo.tag-manager-containers.get", "tm-all", `{"idSite":1,"idContainer":"a\"b"}`},
+		"missing environment":        {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+		"short environment":          {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"a"}`},
+		"environment with dash":      {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"a-b"}`},
+		"unknown form":               {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","form":"x"}`},
+		"framework without steps":    {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","jsFramework":"react"}`},
+		"unknown framework":          {"matomo.tag-manager-containers.get-embed-code", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","environment":"live","form":"install-instructions","jsFramework":"vue"}`},
+		"unknown kind":               {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tags"}`},
+		"missing kind":               {"matomo.tag-manager-catalog.list", "tm-all", `{}`},
+		"types without context":      {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tag-types"}`},
+		"bad context":                {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"tag-types","idContext":"Web;"}`},
+		"context for contexts":       {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"contexts","idContext":"web"}`},
+		"site for contexts":          {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"contexts","idSite":1}`},
+		"publishable without site":   {"matomo.tag-manager-catalog.list", "tm-all", `{"kind":"publishable-environments"}`},
+		"foreign website versions":   {"matomo.tag-manager-versions.list", "tm-one", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+		"foreign website version":    {"matomo.tag-manager-versions.get", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+		"foreign website export":     {"matomo.tag-manager-versions.export", "tm-one", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+		"no website export":          {"matomo.tag-manager-versions.export", "tm-all", `{"idContainer":"6OMh6taM"}`},
+		"versions without container": {"matomo.tag-manager-versions.list", "tm-all", `{"idSite":1}`},
+		"export bad container":       {"matomo.tag-manager-versions.export", "tm-all", `{"idSite":1,"idContainer":"a b"}`},
+		"get without version":        {"matomo.tag-manager-versions.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+		"get version zero":           {"matomo.tag-manager-versions.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":0}`},
+		"get version text":           {"matomo.tag-manager-versions.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":"7"}`},
+		"export version negative":    {"matomo.tag-manager-versions.export", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":-1}`},
+		"export version too large":   {"matomo.tag-manager-versions.export", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":2147483648}`},
+		"versions bad limit":         {"matomo.tag-manager-versions.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","limit":0,"cursor":"!"}`},
+		"export extra argument":      {"matomo.tag-manager-versions.export", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","method":"TagManager.deleteContainerVersion"}`},
+		"extra argument":             {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":1,"method":"TagManager.deleteContainer"}`},
 	} {
 		var calls []call
 		env := newTagManagerEnvironment(t, &calls, tagManagerAnswers(answers{}).handler(t))
@@ -466,6 +482,9 @@ func TestTagManagerToolsSendBearerAndNoForbiddenParameterAndAreListedOnly(t *tes
 		"TagManager.getContainer":                                  func(call) *http.Response { return ok(containerRow) },
 		"TagManager.getContainerEmbedCode":                         func(call) *http.Response { return ok(`{"value":"x"}`) },
 		"TagManager.getAvailableEnvironmentsWithPublishCapability": func(call) *http.Response { return ok(`[]`) },
+		"TagManager.getContainerVersions":                          func(call) *http.Response { return ok(`[]`) },
+		"TagManager.getContainerVersion":                           func(call) *http.Response { return ok(versionRow) },
+		"TagManager.exportContainerVersion":                        func(call) *http.Response { return ok(versionExportRow) },
 	}).handler(t))
 	for _, tool := range tagManagerTools {
 		if _, err := env.invoke(tool.id, "tm-all", tool.arguments); err != nil {
