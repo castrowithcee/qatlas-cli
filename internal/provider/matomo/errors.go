@@ -47,6 +47,8 @@ var messagePatterns = []struct {
 	{"granular-off", []string{"granular compliance configuration is not enabled"}},
 	{"config-controlled", []string{"controlled by the config file"}},
 	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
+	{"invalid-filter", []string{"invalid filter."}},
+	{"ldap-unreachable", []string{"could not connect to the ldap server", "could not connect to any of the"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
 	// A container, environment, or context ID is quoted in double quotes and is not masked; this comes before the
@@ -76,6 +78,11 @@ func applicationError(op string, data []byte) error {
 	switch classifyMessage(message) {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
+	case "invalid-filter":
+		return &provider.InvalidRequestError{Message: "Matomo refused the LDAP filter as invalid"}
+	case "ldap-unreachable":
+		return &answeredError{&provider.Error{Class: provider.ClassProviderError, Op: op,
+			Message: "Matomo could not connect to its LDAP server; check the LoginLdap server configuration"}}
 	case "missing":
 		return &missingError{}
 	case "password-refused":
