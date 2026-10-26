@@ -50,6 +50,18 @@ connections:
   pe-purge-nopw: {service: matomo, credential: token, tools: [matomo.data-purge.run], targets: [instance]}
   pe-purge-noinst: {service: matomo, credential: withpw, tools: [matomo.data-purge.run], targets: [site]}
   pe-purge-locked: {service: matomo, credential: locked, tools: [matomo.data-purge.run], targets: [instance]}
+  pp-set: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [instance]}
+  pp-set-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [instance]}
+  pp-set-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-anonymize-ip, matomo.do-not-track.enable, matomo.do-not-track.disable], targets: [site/1]}
+  pe-logs: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-logs], targets: [instance]}
+  pe-logs-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-delete-logs], targets: [instance]}
+  pe-logs-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-logs], targets: [site]}
+  pe-reports: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-reports], targets: [instance]}
+  pe-reports-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-delete-reports], targets: [instance]}
+  pe-reports-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-delete-reports], targets: [site]}
+  pe-sched: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-report-deletion-schedule], targets: [instance]}
+  pe-sched-nopw: {service: matomo, credential: token, tools: [matomo.privacy-settings.set-report-deletion-schedule], targets: [instance]}
+  pe-sched-noinst: {service: matomo, credential: withpw, tools: [matomo.privacy-settings.set-report-deletion-schedule], targets: [site]}
   pe-effects: {service: matomo, credential: withpw, effects: [read, update, delete, execute], targets: [site, instance]}
 `
 
@@ -104,6 +116,9 @@ var eraseCases = []struct{ id, method, connection, args string }{
 	{"matomo.data-subjects.delete", "PrivacyManager.deleteDataSubjects", "pe-delete", deleteArgs},
 	{"matomo.raw-data.anonymize", "PrivacyManager.anonymizeSomeRawData", "pe-anon", anonymizeArgs},
 	{"matomo.data-purge.run", "PrivacyManager.executeDataPurge", "pe-purge", `{}`},
+	{"matomo.privacy-settings.set-delete-logs", "PrivacyManager.setDeleteLogsSettings", "pe-logs", deleteLogsArgs},
+	{"matomo.privacy-settings.set-delete-reports", "PrivacyManager.setDeleteReportsSettings", "pe-reports", deleteReportsArgs},
+	{"matomo.privacy-settings.set-report-deletion-schedule", "PrivacyManager.setScheduleReportDeletionSettings", "pe-sched", scheduleArgs},
 }
 
 func TestEraseToolsAreListedOnlyAndInNoProfile(t *testing.T) {
@@ -139,6 +154,9 @@ func TestEraseToolsAreNotOfferedByEffectsAlone(t *testing.T) {
 		env := newEraseEnvironment(t, &calls, eraseAnswers(c.method, func(call) *http.Response {
 			return ok(`{"result":"success","message":"ok"}`)
 		}).handler(t))
+		if c.id == "matomo.privacy-settings.set-report-deletion-schedule" {
+			continue // not listed-only
+		}
 		if _, err := env.change(c.id, "pe-effects", c.args); err == nil {
 			t.Errorf("%s: an effects connection offered it", c.id)
 		}

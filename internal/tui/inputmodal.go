@@ -68,7 +68,16 @@ func (m *Model) surfaced(input string) string {
 
 // promptView is a dialog as a whole screen, with the notes every editor screen ends in.
 func (m *Model) promptView(d promptDialog) string {
-	return m.promptText(d, true) + m.notes()
+	return m.promptScreenText(d) + m.notes()
+}
+
+// promptScreenText is a dialog as a whole screen: in a panel under its title where the workspace has the room
+// for one, and as the title above the text elsewhere.
+func (m *Model) promptScreenText(d promptDialog) string {
+	if !m.tableFramed() {
+		return m.promptText(d, true)
+	}
+	return m.framedTitled(d.title, func() string { return m.promptText(d, false) })
 }
 
 // promptNotes are the notes a modal shows inside itself: what is still running and the last error. Nothing

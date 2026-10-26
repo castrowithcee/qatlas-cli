@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -613,23 +615,23 @@ func (m *Model) exportRowWindow() (int, int) {
 
 func (m *Model) exportRow(i int) string {
 	e := m.export
+	p := m.dialogPanelOf()
 	key := e.rows.matches[i]
 	box := "[ ] "
 	if e.marks[key] {
 		box = "[x] "
 	}
-	_, width := m.fit("  ")
-	return m.listRow(i == e.rows.cursor, truncateCells(box+m.exportRowText(key), width))
+	return p.tableRow(i == e.rows.cursor, truncateCells(box+m.exportRowText(key), p.cells()))
 }
 
 func (m *Model) exportSelectFrame() (string, string) {
-	head := m.wrapped(styles.title, tr(tExportSelectTitle)) + "\n" +
-		m.wrapped(styles.hint, tr(tExportSelectHint)) + "\n"
+	p := m.dialogPanelOf()
+	head := p.top(tr(tExportSelectTitle), "") + p.text(styles.hint, tr(tExportSelectHint))
 	if m.export.marks[exportAll] {
-		head += m.wrapped(styles.hint, tr(tExportAllTicked)) + "\n"
+		head += p.text(styles.hint, tr(tExportAllTicked))
 	}
-	head += "\n"
-	return head, "\n" + m.keyHint("up/down move · space tick · {save} or enter next · {back} cancel · {command} cmds · {help} help") + m.notes()
+	head += p.blank()
+	return head, p.closing() + m.keyHint("up/down move · space tick · {save} or enter next · {back} cancel · {command} cmds · {help} help") + m.notes()
 }
 
 // exportTyping reports whether the export reads text now.
@@ -667,29 +669,31 @@ func (m *Model) exportView() string {
 		return b.String() + foot
 	case exportMode:
 		reason := e.secretsReason
+		p := m.dialogPanelOf()
 		var b strings.Builder
-		b.WriteString(m.wrapped(styles.title, tr(tExportSecretsTitle)) + "\n\n")
+		b.WriteString(p.top(tr(tExportSecretsTitle), "") + p.blank())
 		for i, row := range exportModeRows() {
 			text := row
 			blocked := i > 0 && reason != ""
 			if blocked {
 				text += tr(tExportNotPossible)
 			}
-			line := m.listRow(i == e.modeCursor, truncateCells(text, m.usable(2)))
+			line := p.tableRow(i == e.modeCursor, truncateCells(text, p.cells()))
 			if blocked && i != e.modeCursor {
 				line = styles.hint.Render(line)
 			}
 			b.WriteString(line + "\n")
 		}
+		note := p.hint(tr(tExportSecretsNote))
 		if reason != "" {
-			b.WriteString("\n" + m.indented(reason) + "\n")
-		} else {
-			b.WriteString("\n" + m.indented(tr(tExportSecretsNote)) + "\n")
+			note = p.hint(reason)
 		}
+		b.WriteString(p.blank() + note + p.bottom())
 		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
 	case exportPlainConfirm:
-		return m.wrapped(styles.title, tr(tExportPlainTitle)) + "\n\n" +
-			m.indentedWith(styles.warning, tr(tExportPlainWarn)) + "\n" +
+		p := m.dialogPanelOf()
+		return p.top(tr(tExportPlainTitle), "") + p.blank() +
+			p.text(styles.warning, warnMark+" "+tr(tExportPlainWarn)) + p.bottom() +
 			m.keyHint("y write unencrypted · n/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
 	}
 	title, question, keys := tr(tExportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
@@ -699,7 +703,7 @@ func (m *Model) exportView() string {
 	if e.writing {
 		keys = tr(tWorkWritingWait)
 	}
-	return m.linesView(title, question, keys, e.lines, &e.offset)
+	return m.linesView(title, question, keys, e.lines, &e.offset, e.step == exportResult)
 }
 
 // exportPrompt is the one-line dialog the export is at, if it is at one.
@@ -738,26 +742,76 @@ func isWarningLine(line string) bool {
 	return strings.HasPrefix(line, strings.Fields(tr(tExLineWarning))[0])
 }
 
-// linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, between a title
-// and the question and keys of the step. A line that starts with "warning" is drawn as one.
-func (m *Model) linesView(title, question, keys string, lines []string, offset *int) string {
-	head := m.wrapped(styles.title, title) + "\n\n"
-	foot := "\n"
+// linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, in a panel under
+// its title and above the question and keys of the step. A line that starts with "warning" is drawn as one,
+// with its mark; a finished step opens with its state.
+func (m *Model) linesView(title, question, keys string, lines []string, offset *int, done bool) string {
+	p := m.dialogPanelOf()
+	var body []string
+	warned := false
+	for _, line := range lines {
+		if isWarningLine(line) {
+			warned = true
+		}
+		body = append(body, m.reportLines(p, line)...)
+	}
+	kind, word := statusOK, tr(tStatusDone)
+	if warned {
+		kind, word = statusWarn, tr(tStatusDoneWarn)
+	}
+	headOf := func(note string) string {
+		switch {
+		case done && p.framed:
+			return p.top(title, note) + p.result(kind, word) + p.blank()
+		case done:
+			return m.wrapped(styles.title, title) + "  " + statusMark(kind, word) + "\n\n"
+		case p.framed:
+			return p.top(title, note) + p.blank()
+		}
+		return p.top(title, "") + "\n"
+	}
+	head := headOf("")
+	foot := p.closing()
 	if question != "" {
 		foot += m.wrapped(styles.hint, question)
 	}
 	foot += m.keyHint(keys) + m.notes()
-	var body []string
-	for _, line := range lines {
-		style := styles.hint
-		if isWarningLine(line) {
-			style = styles.warning
-		}
-		body = append(body, strings.Split(m.wrapped(style, line), "\n")...)
-	}
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 3)
 	*offset = max(min(*offset, len(body)-room), 0)
-	return head + strings.Join(body[*offset:min(*offset+room, len(body))], "\n") + foot
+	shown := body[*offset:min(*offset+room, len(body))]
+	if p.framed && len(body) > room {
+		head = headOf(fmt.Sprintf("%d-%d/%d", *offset+1, *offset+len(shown), len(body)))
+	}
+	return head + strings.Join(shown, "\n") + "\n" + foot
+}
+
+// reportLines draws one line of a report: its label dimmed and its value plain, a warning with its mark and
+// colour. A line that does not fit continues on the next row; the lead keeps the columns of the labels.
+func (m *Model) reportLines(p dialogPanel, line string) []string {
+	warn := isWarningLine(line)
+	lead := "  "
+	if warn {
+		lead = styles.warning.Render(warnMark) + " "
+	}
+	var out []string
+	for i, piece := range strings.Split(render(lipgloss.NewStyle(), max(p.room-2, 1), line), "\n") {
+		text := piece
+		switch {
+		case warn:
+			text = styles.warning.Render(piece)
+		case i == 0 && !strings.HasPrefix(piece, " "):
+			label, value, _ := strings.Cut(piece, " ")
+			text = styles.hint.Render(label) + styles.cell.Render(" "+value)
+		default:
+			text = styles.cell.Render(piece)
+		}
+		prefix := lead
+		if i > 0 {
+			prefix = "  "
+		}
+		out = append(out, p.side(prefix+text))
+	}
+	return out
 }
 
 // exportLeaveView is the leave question over an unfinished export.

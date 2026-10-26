@@ -4,12 +4,25 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo goals
 
 The goal tools of the [Matomo provider](README.md). The profiles are described under [Setup profiles](README.md#setup-profiles).
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.goals.list` | reads the goals of a website |
+| `matomo.goals.get` | reads one goal |
+| `matomo.goals.add` | creates a goal (effect `create`) |
+| `matomo.goals.update` | replaces the definition of a goal (effect `update`) |
+| `matomo.goals.delete` | deletes a goal and its conversions (effect `delete`, only via `tools`) |
+| `matomo.goal-recommendations.list` | reads the saved goal recommendations of a website; needs a write right |
+| `matomo.goal-recommendations.scan` | lets Matomo crawl the website and save goal recommendations, without AI (effect `execute`) |
+| `matomo.goal-recommendations.dismiss` | dismisses one saved recommendation or all of a website (effect `update`) |
 
 Goals are per website; `idGoal` counts per website, and the ecommerce values `ecommerceOrder` and
 `ecommerceAbandonedCart` are no goals of these tools. Goal reports are read with the report tools. All five tools

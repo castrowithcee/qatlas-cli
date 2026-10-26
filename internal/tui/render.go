@@ -397,8 +397,11 @@ func (m *Model) formRow(active bool, label, value string) string {
 // row draws one line of a list. A line that does not fit is continued under its own entry instead of being
 // cut off at the right edge: the list is where the source of every secret role stands, and that is the part
 // that falls off first.
-func (m *Model) row(active bool, text string) string {
-	blank, width := m.fit("  ")
+func (m *Model) row(active bool, text string) string { return m.rowIn(m.usable(0), active, text) }
+
+// rowIn is row within the first room cells of the workspace.
+func (m *Model) rowIn(room int, active bool, text string) string {
+	blank, width := m.fitIn(room, "  ")
 	marker := blank
 	if active && len(blank) == 2 {
 		marker = "> "

@@ -293,7 +293,8 @@ func (m *Model) findingsView() string {
 	if s == nil {
 		return ""
 	}
-	head := m.wrapped(styles.title, tr(tFindTitle)) + "\n\n"
+	p := m.dialogPanelOf()
+	head := p.top(tr(tFindTitle), fmt.Sprintf("%d/%d", s.cursor+1, len(s.items))) + p.blank()
 	f := s.items[s.cursor]
 	keys := "up/down choose"
 	switch {
@@ -303,13 +304,17 @@ func (m *Model) findingsView() string {
 		keys += " · enter " + f.action()
 	}
 	keys += " · {back} back · {command} cmds · {help} help"
-	foot := "\n" + m.wrapped(styles.hint, m.findingDetail(f)) + m.keyHint(keys) + m.notes()
+	foot := m.wrapped(styles.hint, m.findingDetail(f))
+	if p.framed {
+		foot = p.blank() + p.text(styles.hint, m.findingDetail(f)) + p.bottom()
+	}
+	foot += m.keyHint(keys) + m.notes()
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 	start := max(min(s.cursor-room/2, len(s.items)-room), 0)
 	end := min(start+room, len(s.items))
 	rows := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		rows = append(rows, m.row(i == s.cursor, m.findingRow(s.items[i])))
+		rows = append(rows, p.row(i == s.cursor, m.findingRow(s.items[i])))
 	}
-	return head + strings.Join(rows, "\n") + foot
+	return head + strings.Join(rows, "\n") + "\n" + foot
 }

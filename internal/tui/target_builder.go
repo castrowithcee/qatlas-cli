@@ -474,6 +474,7 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 
 // addFrame is everything of the add menu or the builder except its rows.
 func (m *Model) addFrame() (string, string) {
+	p := m.dialogPanelOf()
 	a := m.targetAdd
 	metadata := m.targetMetadata()
 	save := "{save} save"
@@ -484,16 +485,16 @@ func (m *Model) addFrame() (string, string) {
 	label := tr(tTargetFilterOrType)
 	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · {back} cancel entry"
 	if a.kind < 0 {
-		head.WriteString(m.wrapped(styles.title, tr(tTargetAddA, metadata.Label)) + "\n")
+		head.WriteString(p.top(tr(tTargetAddA, metadata.Label), ""))
 		hint := tr(tTargetBuildANewTargetStep)
 		if len(a.known) > 0 {
 			hint = tr(tTargetTakeATargetAnotherConnection, m.formService(), hint)
 		}
-		head.WriteString(m.wrapped(styles.hint, hint) + "\n")
+		head.WriteString(p.text(styles.hint, hint))
 	} else {
 		kind := metadata.Kinds[a.kind]
 		ask := m.addAsk()
-		head.WriteString(m.wrapped(styles.title, tr(tTargetNew, kind.Name, ask)) + "\n")
+		head.WriteString(p.top(tr(tTargetNew, kind.Name, ask), ""))
 		so := strings.Join(a.chosen, "/")
 		if so != "" {
 			so += "/"
@@ -502,26 +503,26 @@ func (m *Model) addFrame() (string, string) {
 		for _, form := range a.forms {
 			forms = append(forms, strings.Join(form, "/"))
 		}
-		head.WriteString(m.wrapped(styles.hint, tr(tTargetSoFarForms, so, strings.Join(forms, ", "))) + "\n")
+		head.WriteString(p.text(styles.hint, tr(tTargetSoFarForms, so, strings.Join(forms, ", "))))
 		label = tr(tTargetValue)
 		keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} step back"
 		if len(a.history) <= 1 {
 			keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} cancel entry"
 		}
 	}
-	head.WriteString(m.searchLine(&a.choices, label) + "\n")
+	head.WriteString(p.styled(m.searchLineIn(p.room, &a.choices, label)))
 	if len(a.choices.matches) == 0 {
-		head.WriteString(m.wrapped(styles.hint, tr(tTargetNothingToChooseTypeA)) + "\n")
+		head.WriteString(p.text(styles.hint, tr(tTargetNothingToChooseTypeA)))
 	}
 	if a.choices.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
-	return head.String(), m.keyHint(keys) + m.notes()
+	return head.String(), p.bottom() + m.keyHint(keys) + m.notes()
 }
 
 func (m *Model) addRow(i int) string {
 	a := m.targetAdd
-	return m.row(i == a.choices.cursor, a.text[a.choices.matches[i]])
+	return m.dialogPanelOf().row(i == a.choices.cursor, a.text[a.choices.matches[i]])
 }
 
 func (m *Model) addWindow() (int, int) {

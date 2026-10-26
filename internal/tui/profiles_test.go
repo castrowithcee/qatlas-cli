@@ -162,7 +162,7 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 	if m.screen != screenConfirm {
 		t.Fatalf("a change by hand was replaced without asking: screen %v", m.screen)
 	}
-	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	view := strings.Join(strings.Fields(strings.Join(panelLines(screenOf(m)), "\n")), " ")
 	for _, want := range []string{"Replace the access and tool ticks with profile send?",
 		"selects tools telegram.messages.send (effects create)"} {
 		if !strings.Contains(view, want) {

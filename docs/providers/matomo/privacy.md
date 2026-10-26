@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo privacy and data subject requests
@@ -14,6 +14,27 @@ The privacy tools of the [Matomo provider](README.md). Targets are described und
 rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
 `matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits), and the
 [compliance setters](#changing-compliance-policies) change the policies. None of these tools is in a setup profile.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.data-subjects.find` | finds the visits of one person on a website by a segment (admin right; Live plugin) |
+| `matomo.data-subjects.export` | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
+| `matomo.data-subjects.delete` | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
+| `matomo.raw-data.anonymize` | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.data-purge.run` | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
+| `matomo.privacy-settings.get` | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
+| `matomo.privacy-settings.set-anonymize-ip` | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
+| `matomo.do-not-track.enable` | enables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.do-not-track.disable` | disables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.privacy-settings.set-delete-logs` | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-delete-reports` | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-report-deletion-schedule` | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
+| `matomo.compliance.get` | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
+| `matomo.compliance.set-policy-settings` | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
+| `matomo.compliance.set-status` | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
+| `matomo.compliance.enforce` | enforces every toggleable setting of a policy, with final data effects (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
 
 ## Finding and exporting a person
 
@@ -73,12 +94,30 @@ and send exactly one request that is never repeated after a timeout, a 5xx, or a
   names. Matomo only schedules the job and its scheduled task runs it later, so `scheduled` means accepted, not done.
 - `matomo.data-purge.run` calls `PrivacyManager.executeDataPurge`, which takes no argument. It deletes raw logs and
   report data of the whole instance by the retention periods configured in Matomo, at once; Matomo refuses it when its
-  administrators disabled the purge settings. No tool sets the retention periods.
+  administrators disabled the purge settings. The [retention setters](#setting-retention-periods) set those periods.
 
-Matomo asks for the password of the token's user on these two methods even with a token. The credential needs the
+Matomo asks for the password of the token's user on these methods and the retention setters even with a
+token. The credential needs the
 optional secret role `password-confirmation` for it. It is stored and redacted like the token, is never an argument,
-and is sent only on these two methods, in the request body. A connection whose credential lacks it refuses both tools
-before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password.
+and is sent only on these methods, in the request body. A connection whose credential lacks it refuses these tools
+before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password; the one
+exception is [`randomizeConfigId`](#changing-privacy-settings).
+
+
+## Setting retention periods
+
+`matomo.privacy-settings.set-delete-logs`, `matomo.privacy-settings.set-delete-reports`, and
+`matomo.privacy-settings.set-report-deletion-schedule` call `PrivacyManager.setDeleteLogsSettings`,
+`setDeleteReportsSettings`, and `setScheduleReportDeletionSettings`. They need Super User rights, the target
+`instance`, `confirm`, and the password role described above, and send exactly one request that is never repeated
+after an unclear result. The first two make the scheduled purge delete raw logs or reports for good from then on, so
+they are offered only where a connection's `tools` list names them and are in no profile; the schedule setter is not
+listed-only.
+
+Every argument is required: Matomo resets an omitted one to its default, so each call states the whole state. No
+Qatlas tool reads the current purge settings, so check them in Matomo first. The age of logs is in days, the age of
+reports in periods (months); Matomo itself raises an age below 1 or 2 to the minimum, which Qatlas refuses instead.
+Matomo keeps the stored log age unchanged when a compliance policy forbids setting it, and still answers success.
 
 ## Privacy settings
 
@@ -96,6 +135,23 @@ targets name `instance`. Like the other tools with both a website and an instanc
 to a connection that reaches websites. The settings are an allow-list of what Matomo documents; the options are the
 choices the compliance policies still allow. `tracker_file_name` and `tracker_writable` are shown by Matomo to Super
 Users only. `extra_metadata` appears only when a compliance policy controls a setting.
+
+## Changing privacy settings
+
+Three tools change the global privacy settings; all need Super User rights, a confirmation, and a connection that
+names `instance`, and they change every website of the instance. They are in no profile and send one request that is
+not repeated.
+
+- `matomo.privacy-settings.set-anonymize-ip` calls `setAnonymizeIpSettings` for the global settings only, never for one
+  website. It replaces the global settings completely, so every argument is required; read the settings with
+  `matomo.privacy-settings.get` first. A compliance policy can make Matomo keep a
+  value while it answers success; read the settings afterwards.
+- `matomo.do-not-track.enable` and `matomo.do-not-track.disable` call `activateDoNotTrack` and `deactivateDoNotTrack`.
+  They take no argument.
+
+Matomo asks for the password of the token's user only when `randomizeConfigId` is true. Then the credential needs the
+secret role `password-confirmation`, which is sent in the request body only, and a connection without it refuses the
+call before any request. Every other call, and both Do Not Track tools, never send the password.
 
 ## Compliance policies
 
