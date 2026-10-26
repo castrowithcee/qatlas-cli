@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -296,6 +298,49 @@ func visualShots() []visualShot {
 		}},
 		{"48-library-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
 		{"49-library-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"55-export", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			press(t, m, ":")
+			typeText(t, m, "export")
+			pump(t, m, "enter")
+			typeText(t, m, visualPassphrase)
+			pump(t, m, "enter")
+		}},
+		{"57-selftest", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			m.selftest.scenarios = fakeScenarios("alpha")
+			m.selftest.run = func(_ context.Context, o selftest.Options) (*selftest.Report, error) {
+				return fakeReport(o.Scenario), nil
+			}
+			drainSelftest(m, startSelftestCommand(t, m, "selftest alpha"))
+		}},
+		{"58-targets", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+			connections(t, m)
+			m.list.selectName("code-planning")
+			pump(t, m, "enter")
+			openTargetList(t, m)
+		}},
+		{"59-resize", 39, 11, dark, term, false, overview},
+	}
+}
+
+// visualProfileShot is a snapshot rendered under a forced colour profile of the terminal.
+type visualProfileShot struct {
+	visualShot
+	profile termenv.Profile
+}
+
+// visualProfileShots are the colour-profile variants of the Overview and the Connections list, numbered 60 to 69.
+func visualProfileShots() []visualProfileShot {
+	dark, term := uiprefs.ThemeDark, uiprefs.BackgroundTerminal
+	overview := func(*testing.T, *Model) {}
+	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	return []visualProfileShot{
+		{visualShot{"60-overview-256", 150, 42, dark, term, false, overview}, termenv.ANSI256},
+		{visualShot{"61-connections-256", 150, 42, dark, term, false, connections}, termenv.ANSI256},
+		{visualShot{"62-overview-16", 150, 42, dark, term, false, overview}, termenv.ANSI},
+		{visualShot{"63-connections-16", 150, 42, dark, term, false, connections}, termenv.ANSI},
+		{visualShot{"64-connections-light", 150, 42, uiprefs.ThemeLight, term, false, connections}, termenv.TrueColor},
+		{visualShot{"65-connections-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, connections}, termenv.TrueColor},
+		{visualShot{"66-connections-no-color", 150, 42, dark, term, true, connections}, termenv.TrueColor},
 	}
 }
 
@@ -308,9 +353,16 @@ func TestVisualSnapshots(t *testing.T) {
 		mustNoError(t, err)
 		mustNoError(t, os.MkdirAll(htmlDir, 0o755))
 	}
+	shots := make([]visualProfileShot, 0, 64)
 	for _, shot := range visualShots() {
+		shots = append(shots, visualProfileShot{shot, termenv.TrueColor})
+	}
+	shots = append(shots, visualProfileShots()...)
+	for _, ps := range shots {
+		shot := ps.visualShot
 		t.Run(shot.name, func(t *testing.T) {
 			visualSetup(t, shot.noColor)
+			lipgloss.SetColorProfile(ps.profile)
 			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme, shot.background)
 			shot.show(t, m)
 			view := m.View()
@@ -487,7 +539,7 @@ func ansiToHTML(view, title string, pal htmlPalette) string {
 	var b strings.Builder
 	b.WriteString("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>" + html.EscapeString(title) + "</title>\n")
 	b.WriteString("<style>body{margin:0;padding:16px;background:" + pal.page + "}" +
-		"pre{margin:0;display:inline-block;white-space:pre;font:14px/1.2 'DejaVu Sans Mono','Menlo','Consolas',monospace;" +
+		"pre{margin:0;display:inline-block;white-space:pre;font:14px/normal 'DejaVu Sans Mono','Menlo','Consolas',monospace;" +
 		"color:" + pal.fore + ";background:" + pal.back + "}</style></head><body><pre>")
 	var state sgrState
 	var text strings.Builder

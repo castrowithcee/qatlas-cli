@@ -76,6 +76,7 @@ const (
 	tNoteError                               textID = "NoteError"
 	tResizeTitle                             textID = "ResizeTitle"
 	tResizeNeed                              textID = "ResizeNeed"
+	tResizeNow                               textID = "ResizeNow"
 	tResizeLine                              textID = "ResizeLine"
 	tResizeWayLeave                          textID = "ResizeWayLeave"
 	tLeaveNew                                textID = "LeaveNew"
@@ -986,4 +987,9 @@ const (
 	tFormHelpTitle                           textID = "FormHelpTitle"
 	tMouseHint                               textID = "MouseHint"
 	tMouseDetail                             textID = "MouseDetail"
+	tStatusDone                              textID = "StatusDone"
+	tStatusDoneWarn                          textID = "StatusDoneWarn"
+	tStatusFailed                            textID = "StatusFailed"
+	tStatusRunning                           textID = "StatusRunning"
+	tStatusCancelled                         textID = "StatusCancelled"
 )

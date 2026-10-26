@@ -4,12 +4,29 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo reports
 
 The report and segment tools of the [Matomo provider](README.md). Paging follows [Paging](README.md#paging).
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.reports.list` | reads the report catalog of a website as id, name, and category, with a category overview |
+| `matomo.reports.describe` | reads the details of one report of the catalog |
+| `matomo.reports.get` | reads one report of a website for a period, in bounded rows |
+| `matomo.reports.evolution` | reads how rows of a report develop over periods (only via `tools`) |
+| `matomo.distinct-counts.get` | reads how many different search engines, social networks, keywords, campaigns, referring websites, AI assistants, or countries a period had (only via `tools`) |
+| `matomo.multi-sites.get` | reads the comparison of the websites of the token inside the targets (only via `tools`) |
+| `matomo.report-glossary.list` | reads the explanation of the reports or metrics of a website (only via `tools`) |
+| `matomo.insights.list` | reads the notable changes between two periods: insights, movers and shakers, their overviews, or whether a comparison period exists (only via `tools`) |
+| `matomo.transitions.get` | reads the previous and following pages, outlinks, downloads, and external referrers of one page (only via `tools`) |
+| `matomo.bot-realtime.get` | reads the AI chatbots and the pages they requested within the last minutes; needs Matomo 5.12.0 and the BotTracking plugin (only via `tools`) |
+| `matomo.segments.fields` | reads the segment fields of a website |
+| `matomo.segments.suggest-values` | reads frequent values of a segment field |
 
 ## Report catalog
 

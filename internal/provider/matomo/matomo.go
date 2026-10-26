@@ -75,7 +75,7 @@ func Register(reg *capability.Registry) error {
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
 		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
 		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID, referenceDataList.ID, ipRangesExpand.ID,
-		optOutCodeGet.ID}
+		optOutCodeGet.ID, seoRank.ID, jsTrackerInstallGetStatus.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -125,11 +125,11 @@ func Register(reg *capability.Registry) error {
 			// separate choice and not part of the recommended start.
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
-				"and locations, the live counters, the time of the latest visit, visitor profiles, the tracking failures " +
+				"and locations, the live counters, the time of the latest visit, visitor profiles, the location of IP addresses, the tracking failures " +
 				"with the requests that failed, and the scheduled reports with their recipients and their rendered text; changes nothing",
 			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
 				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID,
-				scheduledReportsList.ID, scheduledReportsGenerate.ID),
+				ipLocationsGet.ID, scheduledReportsList.ID, scheduledReportsGenerate.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
@@ -177,6 +177,9 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	if err := reg.Register(Provider, privacySetOperations()...); err != nil {
+		return err
+	}
+	if err := reg.Register(Provider, diagnosticsOperations()...); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
@@ -251,6 +254,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: rawDataAnonymize, Handler: capability.Handler(invokeRawDataAnonymize)},
 		capability.Operation{Descriptor: dataPurgeRun, Handler: capability.Handler(invokeDataPurgeRun)},
 		capability.Operation{Descriptor: privacySettingsGet, Handler: capability.Handler(invokePrivacySettingsGet)},
+		capability.Operation{Descriptor: privacySettingsSetDeleteLogs, Handler: capability.Handler(invokePrivacySettingsSetDeleteLogs)},
+		capability.Operation{Descriptor: privacySettingsSetDeleteReports, Handler: capability.Handler(invokePrivacySettingsSetDeleteReports)},
+		capability.Operation{Descriptor: privacySettingsSetReportDeletionSchedule, Handler: capability.Handler(invokePrivacySettingsSetReportDeletionSchedule)},
 		capability.Operation{Descriptor: complianceGet, Handler: capability.Handler(invokeComplianceGet)},
 		capability.Operation{Descriptor: complianceSetPolicySettings, Handler: capability.Handler(invokeComplianceSetPolicySettings)},
 		capability.Operation{Descriptor: complianceEnforce, Handler: capability.Handler(invokeComplianceEnforce)},

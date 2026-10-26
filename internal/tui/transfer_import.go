@@ -695,12 +695,13 @@ func (m *Model) importView() string {
 	}
 	switch e.step {
 	case importMode:
+		p := m.dialogPanelOf()
 		var b strings.Builder
-		b.WriteString(m.wrapped(styles.title, tr(tImportModeTitle)) + "\n\n")
+		b.WriteString(p.top(tr(tImportModeTitle), "") + p.blank())
 		for i, row := range importModeRows {
-			b.WriteString(m.listRow(i == e.modeCursor, truncateCells(tr(row.text), m.usable(2))) + "\n")
+			b.WriteString(p.tableRow(i == e.modeCursor, truncateCells(tr(row.text), p.cells())) + "\n")
 		}
-		b.WriteString("\n" + m.indented(tr(tImportModeNote)) + "\n")
+		b.WriteString(p.blank() + p.hint(tr(tImportModeNote)) + p.bottom())
 		return b.String() + m.importKeys("up/down move · {save} or enter preview · {back} back · {command} cmds · {help} help") + m.notes()
 	}
 	title, question, keys := tr(tImportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
@@ -728,7 +729,8 @@ func (m *Model) importView() string {
 	if e.working != "" {
 		keys = workingWait(e.working)
 	}
-	return m.linesView(title, question, keys, lines, &e.offset)
+	return m.linesView(title, question, keys, lines, &e.offset,
+		e.step == importResult || e.step == importApprove || e.step == importDelete)
 }
 
 // importPrompt is the one-line dialog the import is at, if it is at one.

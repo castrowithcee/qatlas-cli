@@ -4,12 +4,20 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo live data
 
 The live tools of the [Matomo provider](README.md); they are selected by the profile `live`, see [Setup profiles](README.md#setup-profiles).
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.visits.list` | reads the visit log of one website |
+| `matomo.live-counters.get` | reads visits, actions, visitors, and converted visits of the last minutes |
+| `matomo.visits.get-latest-time` | reads the time of the latest visit per website |
 
 The live tools read `Live.getLastVisitsDetails`, `Live.getCounters`, and `Live.getMostRecentVisitsDateTime`. They
 need a view right on the website, and `matomo.visits.list` a visits log that is not disabled for it; otherwise

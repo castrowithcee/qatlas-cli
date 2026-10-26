@@ -1,0 +1,42 @@
+[1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                                   [2m[?] help[0m  [2m[:] cmd[0m
+[1m  [0m[2m 1 Overview [0m [1m[2 Connections][0m [2m 3 Activity [0m [2m 4 Access [0m [2m 5 Library [0m [2m 6 Settings [0m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+╔═[1m Connections (7) [0m═══════════════════════════════════════════════════════════════[2m 1/7 [0m═╗ [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────╮[0m
+║    Group: Provider ▾      State: All ▾      Sort: Name ▾   [2m / search…                [0m ║ [2m│[0m [1mwiki-main[0m                                       [1m●[0m active [2m│[0m
+║ [2m    NAME            STATE   SERVICE  EFFECTS             TOOLS  DESCRIPTION[0m           ║ [2m│[0m [2mbookstack[0m                                                [2m│[0m
+║   [2m▾ [0m■ [1mbookstack[0m[2m (1)[0m                                                                   ║ [2m│[0m                                                          [2m│[0m
+║ [1;7m>[0m[1;7m   wiki-main       [1mactive[0m[1;7m  wiki     [2mread,create,update[0m[1;7m  [2mall[0m[1;7m    Team wiki, read and …[0m ║ [2m│[0m [1m[Overview][0m [2m Details [0m [2m Raw [0m                               [2m│[0m
+║   [2m▾ [0m■ [1mgithub[0m[2m (1)[0m                                                                      ║ [2m│[0m                                                          [2m│[0m
+║     code-planning   [1mactive[0m  code     [2mread[0m                [2mall[0m    Planning repositories ║ [2m│[0m [2mProvider:     [0mbookstack                                  [2m│[0m
+║   [2m▾ [0m■ [1mnextcloud[0m[2m (1)[0m                                                                   ║ [2m│[0m [2mService:      [0mwiki                                       [2m│[0m
+║     cloud-files     [1mactive[0m  cloud    [2mread,create,update[0m  [2mall[0m    Shared project files  ║ [2m│[0m [2mBase URL:     [0mhttps://wiki.example.invalid               [2m│[0m
+║   [2m▾ [0m■ [1mseatable.base[0m[2m (1)[0m                                                               ║ [2m│[0m [2mCredential:   [0mwiki-reader                                [2m│[0m
+║     tables-ops      [1mactive[0m  tables   [2mread[0m                [2mall[0m    Operations tables     ║ [2m│[0m [2mState:        [0mactive                                     [2m│[0m
+║   [2m▾ [0m■ [1mtelegram[0m[2m (1)[0m                                                                    ║ [2m│[0m [2mEffects:      [0mread,create,update                         [2m│[0m
+║     alerts-bot      [1mactive[0m  alerts   [2mread,create,update[0m  [2mall[0m    Notification channel  ║ [2m│[0m [2mTools:        [0mall                                        [2m│[0m
+║   [2m▾ [0m■ [1mtodoist[0m[2m (1)[0m                                                                     ║ [2m│[0m [2mDescription:  [0mTeam wiki, read and write                  [2m│[0m
+║     tasks-personal  [1mactive[0m  tasks    [2mread,create,update[0m  [2mall[0m    Personal task list    ║ [2m│[0m                                                          [2m│[0m
+║   [2m▾ [0m■ [1mtwenty-crm[0m[2m (1)[0m                                                                  ║ [2m│[0m                                                          [2m│[0m
+║     crm-sales       [1mactive[0m  crm      [2mread[0m                [2mall[0m    Sales pipeline        ║ [2m│[0m                                                          [2m│[0m
+╚═══════════════════════════════════════════════════════════════════════════════════════╝ [2m╰──────────────────────────────────────────────────────────╯[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1m/[0m[2m filter[0m  [1mn[0m[2m new[0m  [1mp[0m[2m duplicate[0m  [1menter[0m[2m edit/fold[0m  [1mr[0m[2m rename[0m  [1md[0m[2m delete[0m  [1mt[0m[2m test[0m  [1mc[0m[2m setup[0m  [1m1-6/esc[0m[2m areas[0m  [1mctrl+l[0m[2m lock vault[0m  [1mi[0m[2m info[0m  [1m:[0m[2m cmds[0m  [1m?[0m[2m help[0m  [1mq[0m[2m quit[0m

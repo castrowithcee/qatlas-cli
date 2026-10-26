@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -248,11 +249,21 @@ func (m *Model) updateView() string {
 	if m.restart != nil {
 		after = tr(tUpdateAfterRestart)
 	}
+	// The closing advice stands on a line of its own: a sentence about other running processes, present on one
+	// machine and missing on another, would otherwise move where it wraps.
+	text, advice := strings.TrimSpace(m.updateText), ""
+	if i := strings.LastIndex(text, ". "); i >= 0 {
+		text, advice = text[:i+1], strings.TrimSpace(text[i+2:])
+	}
+	details := []string{m.wrapped(lipgloss.NewStyle(), text)}
+	if advice != "" {
+		details = append(details, m.wrapped(lipgloss.NewStyle(), advice))
+	}
+	details = append(details, "", m.wrapped(lipgloss.NewStyle(), after))
 	return m.questionText(question{
 		title:       tr(tUpdateQuestion, m.release.Latest),
 		consequence: tr(tUpdateConsequence),
-		details: []string{m.wrapped(lipgloss.NewStyle(), m.updateText), "",
-			m.wrapped(lipgloss.NewStyle(), after)},
-		keys: "y update · n/{back} cancel · {command} cmds · {help} help",
+		details:     details,
+		keys:        "y update · n/{back} cancel · {command} cmds · {help} help",
 	})
 }

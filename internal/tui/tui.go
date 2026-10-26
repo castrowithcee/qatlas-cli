@@ -650,6 +650,8 @@ type Model struct {
 	footerLog *[]footerLine
 	// inModal is set while a dialog is drawn as a modal: its text then carries its buttons.
 	inModal bool
+	// inPanel is set while a question is drawn for the inside of a frame (see framedText).
+	inPanel bool
 	// screenKeys is the key text the screen drawn last hands to the footer of the frame.
 	screenKeys string
 	// screenPos is the position in the list of the screen drawn last, for the right end of the footer.
@@ -3753,9 +3755,9 @@ func (m *Model) editorView() string {
 	case screenSelftest:
 		return m.selftestView()
 	case screenUpdate:
-		return m.updateView() + m.notes()
+		return m.framedText(m.updateView) + m.notes()
 	case screenRestart:
-		return m.restartView() + m.notes()
+		return m.framedText(m.restartView) + m.notes()
 	case screenTargets:
 		return m.targetsView()
 	case screenPaths:
@@ -3867,13 +3869,13 @@ func (m *Model) editorView() string {
 		b.WriteString(m.keyHint(keys))
 	case screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock:
 		d, _ := m.prompt()
-		b.WriteString(m.promptText(d, true))
+		b.WriteString(m.promptScreenText(d))
 	case screenConfirm:
-		b.WriteString(m.confirmView())
+		b.WriteString(m.framedQuestion(m.confirmView))
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
-		b.WriteString(m.leaveView())
+		b.WriteString(m.framedText(m.leaveView))
 	}
 
 	b.WriteString(m.notes())
@@ -4234,7 +4236,12 @@ func (m *Model) filterLine(l *filterList) string { return m.searchLine(l, tr(tFo
 
 // searchLine shows the filter of l behind the given label.
 func (m *Model) searchLine(l *filterList, label string) string {
-	prefix, width := m.fit(label)
+	return m.searchLineIn(m.usable(0), l, label)
+}
+
+// searchLineIn is searchLine within the first room cells of the workspace.
+func (m *Model) searchLineIn(room int, l *filterList, label string) string {
+	prefix, width := m.fitIn(room, label)
 	l.input.Placeholder = tr(tLogSearchPlaceholder)
 	if !l.editing {
 		return prefix + truncateCells(l.query(), width)
@@ -4260,7 +4267,12 @@ func fitInput(in textinput.Model, width int) textinput.Model {
 
 // inputLine draws in behind prefix on one line of the room the terminal leaves.
 func (m *Model) inputLine(prefix string, in textinput.Model) string {
-	prefix, width := m.fit(prefix)
+	return m.inputLineIn(m.usable(0), prefix, in)
+}
+
+// inputLineIn is inputLine within the first room cells of the workspace.
+func (m *Model) inputLineIn(room int, prefix string, in textinput.Model) string {
+	prefix, width := m.fitIn(room, prefix)
 	return prefix + fitInput(in, width).View()
 }
 
@@ -4529,7 +4541,13 @@ func (m *Model) resizeView() string {
 	if m.screen != screenNav && m.screen != screenList {
 		way = "{back} leave"
 	}
-	lines := []string{footerKeys(way), tr(tResizeTitle), tr(tResizeNeed, minimumWidth, minimumHeight)}
+	// The way out comes first, so it is the last thing a terminal of a single row loses.
+	lines := []string{
+		styles.key.Render(footerKeys(way)),
+		styles.warning.Render(warnMark + " " + tr(tResizeTitle)),
+		styles.hint.Render("  " + tr(tResizeNeed, minimumWidth, minimumHeight)),
+		styles.hint.Render("  " + tr(tResizeNow, m.termWidth, m.termHeight)),
+	}
 	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 

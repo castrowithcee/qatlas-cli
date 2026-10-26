@@ -142,7 +142,24 @@ func (v *exportViews) advance(step exportStep, kind exportKind, path string) {
 
 // unwrapped is a view with its line breaks removed. A long path is wrapped into the width, never cut:
 // the wrap only breaks the line, it adds no indent and no filler, so the path reads whole again without them.
-func unwrapped(view string) string { return strings.ReplaceAll(view, "\n", "") }
+func unwrapped(view string) string { return strings.Join(panelLines(view), "") }
+
+// panelLines are the lines of a view with the frame of a panel and the lead of its report lines taken off,
+// so the text reads as it does without the frame. Lines outside a panel stay as they are.
+func panelLines(view string) []string {
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		for _, side := range []string{"│", "║"} {
+			if body, ok := strings.CutPrefix(line, side+" "); ok {
+				body = strings.TrimRight(body, " ")
+				body = strings.TrimSuffix(body, side)
+				body = strings.TrimRight(body, " ")
+				lines[i] = strings.TrimPrefix(body, "  ")
+			}
+		}
+	}
+	return lines
+}
 
 func TestExportWithoutSecretsWritesTheFileAfterThePreview(t *testing.T) {
 	v, path := plainExportModel(t)

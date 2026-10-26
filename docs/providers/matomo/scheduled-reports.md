@@ -12,6 +12,14 @@ updated: 2026-10-26
 The scheduled-report tools of the [Matomo provider](README.md). The profiles are described under
 [Setup profiles](README.md#setup-profiles). All three tools need the ScheduledReports plugin.
 
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.scheduled-reports.list` | reads the scheduled e-mail reports inside the targets with their recipients (profile `live`) |
+| `matomo.scheduled-reports.generate` | renders one scheduled report as html, csv, or tsv text, sent to no one (profile `live`) |
+| `matomo.scheduled-reports.delete` | deletes one scheduled report (creator or Super User; effect `delete`, only via `tools`) |
+
 A scheduled report is an e-mail report that Matomo renders and sends on a schedule. Its `idReport` counts for the
 whole instance, and a report belongs to one website. Tools that create, change, or send a report do not exist,
 because sending is a permanent path of data to recipients outside Matomo. Qatlas reads, renders as text, and deletes.
