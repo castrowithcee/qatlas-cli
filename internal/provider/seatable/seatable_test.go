@@ -835,7 +835,7 @@ func TestProviderStatusesAreClassified(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
 			serveBase(t, func(*http.Request) (*http.Response, error) {
-				return jsonResponse(tt.status, `{"error_message":"`+bodyCanary+`"}`), nil
+				return jsonResponse(tt.status, `{"error_msg":"`+bodyCanary+`"}`), nil
 			})
 			c, _ := client(t, "Kunden")
 			_, err := c.ListRows(context.Background(), ListOptions{})
@@ -848,6 +848,7 @@ func TestProviderStatusesAreClassified(t *testing.T) {
 			if strings.Contains(err.Error(), bodyCanary) {
 				t.Errorf("the error carries the provider body: %v", err)
 			}
+			wantOriginal(t, err, tt.status, bodyCanary)
 		})
 	}
 

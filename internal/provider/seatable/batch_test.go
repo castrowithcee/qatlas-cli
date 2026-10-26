@@ -264,6 +264,9 @@ func TestBatchChangesSendOneRequestAndReportUncertainty(t *testing.T) {
 		if got := strings.Contains(err.Error(), "may have taken effect"); got != tt.uncertain {
 			t.Errorf("%s: uncertainty = %v, want %v (%v)", tt.name, got, tt.uncertain, err)
 		}
+		if tt.name != "unreadable answer" && tt.name != "gateway timeout" {
+			wantOriginal(t, err, tt.status, providerCanary)
+		}
 	}
 	for _, failure := range []error{context.DeadlineExceeded, errors.New("connection reset by peer")} {
 		requests := 0
@@ -298,6 +301,7 @@ func TestSnapshotSendsOneRequestAndClassifiesTheRefusal(t *testing.T) {
 			strings.Contains(err.Error(), "may have been created") || len(*calls) != 1 {
 			t.Errorf("status %d: err = %v, calls = %d", status, err, len(*calls))
 		}
+		wantOriginal(t, err, status, providerCanary)
 	}
 	calls = serveBatch(t, http.StatusForbidden, `{}`)
 	if err := linksClient(t, "Kunden").CreateSnapshot(ctx); classOf(err) != provider.ClassPermission || len(*calls) != 1 {
