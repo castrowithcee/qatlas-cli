@@ -39,6 +39,18 @@ func TestErrorOriginalFormats(t *testing.T) {
 		{"json array is dropped", `["a"]`, OriginalFields{Message: "message"}, Original{Status: 422}},
 		{"plain text", "  <html>Bad Gateway</html>\n", OriginalFields{Message: "message"},
 			Original{Status: 422, Entries: []OriginalEntry{{Message: "<html>Bad Gateway</html>"}}}},
+		{"keyed objects", `{"error":"ERROR_REQUEST_BODY_VALIDATION","detail":{"name":[{"error":"Required.","code":"required"}]}}`,
+			OriginalFields{Message: "error", Fields: "detail", Item: &OriginalFields{Code: "code", Message: "error"}},
+			Original{Status: 422, Entries: []OriginalEntry{
+				{Message: "ERROR_REQUEST_BODY_VALIDATION"}, {Path: "name", Code: "required", Message: "Required."}}}},
+		{"keyed detail string", `{"error":"E","detail":"Bad"}`,
+			OriginalFields{Message: "detail", Code: "error", Fields: "detail", Item: &OriginalFields{Message: "error"}},
+			Original{Status: 422, Entries: []OriginalEntry{{Code: "E", Message: "Bad"}}}},
+		{"keyed texts sorted", `{"error":{"code":422,"message":"Invalid","validation":{"tags.0.name":["c"],"name":["a","b"],"x":"d","n":{"k":"v"}}}}`,
+			OriginalFields{Message: "error.message", Fields: "error.validation"},
+			Original{Status: 422, Entries: []OriginalEntry{{Message: "Invalid"},
+				{Path: "name", Message: "a"}, {Path: "name", Message: "b"},
+				{Path: "tags.0.name", Message: "c"}, {Path: "x", Message: "d"}}}},
 		{"empty", " \n", OriginalFields{Message: "message"}, Original{Status: 422}},
 	}
 	for _, tt := range tests {
