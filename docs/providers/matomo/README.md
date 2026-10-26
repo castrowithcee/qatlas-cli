@@ -145,11 +145,11 @@ report catalog, report, and segment field tools as well as `matomo.goals.list`, 
 `matomo.segments.list`, `matomo.segments.get`, `matomo.annotations.list`, `matomo.annotations.get`,
 `matomo.annotations.count`, `matomo.tracking-code.get`, `matomo.opt-out-code.get`, `matomo.site-settings.get`,
 `matomo.consent-manager.detect`, `matomo.dimensions.list`, `matomo.reference-data.list`, and
-`matomo.ip-ranges.expand`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
+`matomo.ip-ranges.expand`, `matomo.seo.rank`, and `matomo.js-tracker-install.get-status`; `matomo.site-groups.list` and `matomo.global-settings.get` need the `instance` target
 and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.users.get`,
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
-`matomo.tracking-failures.list`, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.list`, and `matomo.ip-locations.get`, because they carry personal data. The tracking failure deletions are in no profile and
 `matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
@@ -192,7 +192,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | Group | Tools |
 | --- | --- |
 | [sites and version](sites.md) | version, websites, tracking and opt-out code, tracking failures, website settings, consent manager, website groups |
-| [instance settings and reference data](instance.md) | global website settings, archiving, trusted hosts, branding, reference lists, IP ranges, database statistics |
+| [instance settings and reference data](instance.md) | global website settings, archiving, trusted hosts, branding, reference lists, IP ranges, database statistics, diagnostics |
 | [users and roles](users.md) | users, their access to websites, roles and capabilities, deleting and logging out users |
 | [privacy and data subject requests](privacy.md) | finding, exporting, and deleting the visits of one person, privacy settings, retention, compliance policies |
 | [reports](reports.md) | report catalog, reading reports, evolution, distinct counts, website comparison, glossary, insights, transitions, AI chatbots, segment fields |

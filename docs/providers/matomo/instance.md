@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tools for instance-wide website settings and reference data: global settings, operations (archiving, trusted hosts, branding), reference lists, IP range expansion, and the database statistics.
+  Describes the Matomo tools for instance-wide website settings and reference data: global settings, operations (archiving, trusted hosts, branding), reference lists, IP range expansion, diagnostics, and the database statistics.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -31,6 +31,10 @@ The instance tools of the [Matomo provider](README.md). Targets are described un
 | `matomo.reference-data.list` | reads currencies, time zones, measurable types, and country codes |
 | `matomo.ip-ranges.expand` | reads the lowest and highest address of an IP range |
 | `matomo.reports.archive` | starts the archiving of the reports of a website for a period (Super User, targets `instance` and the website; effect `execute`) |
+| `matomo.seo.rank` | reads SEO metrics of a host, which Matomo asks external services for |
+| `matomo.ip-locations.get` | reads the location of an IP address from Matomo's geolocation (profile `live`) |
+| `matomo.js-tracker-install.get-status` | reads whether a JavaScript tracker install test succeeded for a website |
+| `matomo.brute-force-ips.unblock` | lifts all brute-force blocks (Super User, target `instance`; effect `update`, only via `tools`) |
 
 ## Global settings
 
@@ -100,6 +104,22 @@ measurable type pass on as Matomo describes them and are cut to text above 16384
 Matomo checks no right for it, so the tool is offered to connections that reach websites and is in the `read` profile.
 Qatlas accepts only an IP address or CIDR notation (IPv4 or IPv6, up to 64 characters) and refuses wildcards, dashes,
 and zones before any request. A range Matomo cannot read is an invalid request.
+
+## Diagnostics
+
+All four need a connection that reaches websites, except `matomo.brute-force-ips.unblock`, which needs the target
+`instance`. Qatlas never fetches an address from an argument or an answer.
+
+- `matomo.seo.rank` needs a view right on some website. Matomo asks external SEO services about the host, so the
+  host leaves the instance. Qatlas sends only the lower-case host of an `http(s)` URL or host name; credentials,
+  other schemes, paths without a scheme, and non-ASCII names are refused.
+- `matomo.ip-locations.get` is in the `live` profile because address and location can be personal data. The address
+  is required, so Matomo never falls back to the address of the request. `provider` is an ID such as `default`.
+- `matomo.js-tracker-install.get-status` only reads the result of a test started elsewhere; the start method is not
+  offered, because Matomo would fetch a caller URL. `idSite` follows the site targets.
+- `matomo.brute-force-ips.unblock` lifts every current block at once, takes no argument, and needs Super User rights.
+  It is in no profile, is offered only where the `tools` list of the connection names it, and sends one request that
+  is never repeated. Matomo asks for no `passwordConfirmation` here.
 
 ## Database statistics
 
