@@ -94,9 +94,11 @@ func (v *exportViews) startExport(adminPassphrase string) {
 	}
 }
 
+// typePath pastes the path as one event: typing it would redraw the screen once per character.
 func (v *exportViews) typePath(path string) {
 	clearField(v.t, v.m)
-	v.type_(path)
+	v.m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(path), Paste: true})
+	v.views = append(v.views, v.m.View(), screenOf(v.m))
 }
 
 // advance walks the questions up to step. kind picks the mode row; path is the file.

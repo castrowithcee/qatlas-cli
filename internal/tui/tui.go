@@ -2207,7 +2207,11 @@ func (m *Model) toolText(id string) string {
 		if tool.ID != id {
 			continue
 		}
-		text := m.toolLead(id) + id + "  " + string(tool.Effect)
+		lead := ""
+		if tool.Title != "" {
+			lead = tool.Title + "  "
+		}
+		text := lead + id + "  " + string(tool.Effect)
 		if tool.RequiresToolAllowList {
 			text += "  " + tr(tFormListedOnly)
 		}
@@ -2223,17 +2227,6 @@ func (m *Model) toolText(id string) string {
 		return text
 	}
 	return id + "  " + tr(tFormNotRegistered)
-}
-
-// toolLead is the title of a tool and the gap after it, "" for a tool without a title.
-func (m *Model) toolLead(id string) string {
-	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
-	for _, tool := range metadata.Tools {
-		if tool.ID == id && tool.Title != "" {
-			return tool.Title + "  "
-		}
-	}
-	return ""
 }
 
 // formProvider is the provider the form belongs to: the provider row of a connection form, or the provider
@@ -4430,7 +4423,8 @@ func (m *Model) pickerRowText(i int) string {
 		if !active && m.fields[m.focus].label == toolListLabel {
 			// The ID and what follows it stand faint on rows that are not active; they stay text, so nothing
 			// depends on the faint style. A row without a title is faint from the ID on as well.
-			lead := clipCells(rest, lipgloss.Width(m.toolLead(choice)))
+			// rest is toolText: the title and its gap come before the ID.
+			lead := rest[:max(strings.Index(rest, choice), 0)]
 			text += lead + styles.hint.Render(strings.TrimPrefix(rest, lead))
 		} else {
 			text += rest

@@ -23,13 +23,18 @@ func toggleTool(t *testing.T, m *Model, id string) {
 	tick(t, m, toolListLabel, id)
 }
 
-// tick ticks or unticks one value of a multiselect row in its picker, found by typing it.
+// tick ticks or unticks one value of a multiselect row in its picker. It types the value only when the picker
+// does not show it yet, since every key press redraws the screen.
 func tick(t *testing.T, m *Model, label, value string) {
 	t.Helper()
 	focusField(t, m, label)
 	press(t, m, "/")
-	typeText(t, m, value)
-	m.picker.selectName(value)
+	if !m.picker.selectName(value) {
+		typeText(t, m, value)
+		if !m.picker.selectName(value) {
+			t.Fatalf("the %s picker does not show %q", label, value)
+		}
+	}
 	press(t, m, " ", "enter")
 	if m.screen != screenForm {
 		t.Fatalf("the %s picker did not close: screen %v", label, m.screen)
