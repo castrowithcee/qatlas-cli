@@ -112,7 +112,11 @@ without further requests. There is no method matrix for Matomo 5.0 to 5.14; the 
 Matomo reports application errors as HTTP 200 with `{"result":"error","message":"..."}`, not as 401 or 403. Qatlas
 reads the message of that answer only to choose a class: authentication (`auth`), missing right (`permission`),
 unknown object (`not-found`), and a missing method, module, or inactive plugin (`unsupported-capability`). Any
-other message is `invalid-provider-response`. The message is never copied into a Qatlas error.
+other message is `invalid-provider-response`. The message never enters Qatlas' own error message. Matomo's answer
+goes apart as the original answer in the `provider` field of the error detail (untrusted, redacted, limited): for
+`auth`, `permission`, `not-found`, `provider-error`, and `invalid-provider-response` errors the message of an
+application error, and for an HTTP status other than 200 the message of the same form or the text of a non-JSON
+answer. A refused segment or name, an LDAP filter, or a setting ID and a missing method carry no original answer.
 
 Matomo translates its messages into the language of the token's user. The patterns are English; a token whose
 user uses another interface language reports unrecognised errors as `invalid-provider-response`.

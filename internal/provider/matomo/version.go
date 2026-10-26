@@ -128,7 +128,8 @@ func (c *Client) instance(ctx context.Context, op string, force bool) (instanceI
 		if errors.As(err, &answered) && answered.failure.Class == provider.ClassPermission {
 			// This read needs a view right on some website; without a usable token Matomo answers the same.
 			return instanceInfo{}, &provider.Error{Class: provider.ClassAuth, Op: op,
-				Message: "Matomo rejected the token or the token has no view access to any website"}
+				Message:  "Matomo rejected the token or the token has no view access to any website",
+				Original: answered.failure.Original}
 		}
 		return instanceInfo{}, err
 	}
