@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, adding, updating, pausing, resuming, and deleting tags of the draft, adding, updating, and deleting variables of the draft, and creating, updating, and deleting containers, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, deleting, and publishing container versions, adding, updating, and deleting triggers of the draft, adding, updating, pausing, resuming, and deleting tags of the draft, adding, updating, and deleting variables of the draft, and creating, updating, and deleting containers, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -10,10 +10,11 @@ updated: 2026-10-26
 # Matomo Tag Manager
 
 The Tag Manager tools of the [Matomo provider](README.md). They need the plugin TagManager; an instance without it
-reports the tools as unsupported. Reading needs a view right on the website, changing a write right, and the instance
-setting that restricts Tag Manager access to a higher role applies on top. Every website tool takes `idSite`, checked against the connection's targets before any
+reports the tools as unsupported. Reading needs a view right on the website, changing a write right (publishing more,
+see [Publishing](#publishing)), and the instance setting that restricts Tag Manager access to a higher role applies on top. Every website tool takes `idSite`, checked against the connection's targets before any
 secret or request. All tools are in no profile and are offered only via `tools`: container names, release logins, and
-the paths of non-live releases are data of the website's owners, and the change tools alter what a container does.
+the paths of non-live releases are data of the website's owners, the change tools alter what a container does, and
+publishing changes the script that visitors run.
 
 ## Tools
 
@@ -51,6 +52,7 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-containers.add` | creates a container with a context, name, and settings |
 | `matomo.tag-manager-containers.update` | replaces name, description, and settings of a container |
 | `matomo.tag-manager-containers.delete` | deletes a container with everything in it |
+| `matomo.tag-manager-versions.publish` | checks a saved version and releases it to an environment |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -90,7 +92,7 @@ the paths of non-live releases are data of the website's owners, and the change 
 
 - A version is a snapshot of the draft. `matomo.tag-manager-versions.create` copies the draft (or the version given
   as `idContainerVersion`) into a new revision; the draft keeps its content and nothing is released to an
-  environment. The tools change the draft's name and the saved versions only; they never change tags, triggers, or
+  environment. These tools change the draft's name and the saved versions only; they never change tags, triggers, or
   variables and never publish. Matomo refuses a name that another version of the container already uses; the refusal is reported as
   such and nothing changed.
 - `matomo.tag-manager-versions.update` replaces name and description as given, so `description` is required and an
@@ -98,10 +100,10 @@ the paths of non-live releases are data of the website's owners, and the change 
 - `matomo.tag-manager-versions.delete` is idempotent in effect and cannot be undone. Matomo refuses the draft and a
   version that is released to an environment, so no live version is removed; the refusal is reported as such and
   nothing changed. It is offered only via `tools`.
-- The change tools send exactly one request after confirmation and never repeat it. After a timeout, a reset, a
-  server error, or an answer that cannot be read, the result is unknown: read the versions (or, for the trigger
+- The change tools send exactly one request after confirmation and never repeat it; `publish` reads the export once
+  before and once after it (see [Publishing](#publishing)). After a timeout, a reset, a server error, or an answer that cannot be read, the result is unknown: read the versions (or, for the trigger
   and tag tools, the triggers or tags with `matomo.tag-manager-triggers.list` or `matomo.tag-manager-tags.list`) before trying again. A container and a version are bound by Matomo to `idSite`
-  (and `idContainer`) before it changes anything, so no prior read is made and an ID of another website is not found.
+  (and `idContainer`) before it changes anything, so an ID of another website is not found.
 - Names and descriptions are untrusted text. A name has 1 to 50 characters (Matomo's API limit), a description up to
   1000.
 
@@ -168,4 +170,43 @@ the paths of non-live releases are data of the website's owners, and the change 
   empty, and `trackingEndpoint`, `trackingEndpointCustom`, `jsEndpoint`, and `jsEndpointCustom` must be plain paths
   (no scheme, host, reference, or `..`). `update` applies this by the stored type; the refusal names no value.
 
-Importing a version and publishing a release are not part of these tools.
+## Publishing
+
+`matomo.tag-manager-versions.publish` releases a saved version to an environment. Matomo then rewrites the container
+script of that environment, and the visitors of every website that embeds it run the new script on their next page
+load. Every environment is such a script, so every publication is checked; `preview` belongs to Matomo's preview mode,
+is no environment of this method, and is refused before any request.
+
+- Rights: a write right; for `live` the capability `tagmanager_publish_live_container`; for another environment that
+  capability or `tagmanager_use_custom_templates` (Matomo's own rule). `publishable-environments` of
+  `matomo.tag-manager-catalog.list` shows which environments a token may publish to.
+- The check reads the export of the version and refuses before the write request, quoting no provider text, when:
+  - the version is the draft (revision 0), which can change between the check and the release; save it with
+    `matomo.tag-manager-versions.create` and publish that version;
+  - the export cannot be checked completely: it exceeds a limit of the export (see `truncated`), names no matching
+    revision, or names a type in another form than a plain text;
+  - a tag has another type than `Matomo` or `ThemeColor`: `ThemeColor` loads and sends nothing, and the address of
+    `Matomo` is checked below, while other tag types, `CustomHtml` and `CustomImage` included, can run or load code
+    or send data to another address, and a plugin can add more;
+  - a variable or trigger has a type outside the plugin's own templates, or a variable is `CustomJsFunction` or
+    `CustomRequestProcessing`, which run code from their parameters. A plugin can add templates with code of their
+    own, so an unknown type cannot be checked;
+  - a variable of type `MatomoConfiguration` loads the tracker from or sends to another address than the connection's
+    base URL: `matomoUrl` must be the base URL with `https`, the same host and installation path, and at most a
+    closing slash; a protocol-relative or other address, or one built from another variable, is refused. Its
+    `idSite` must be the `idSite` of the call and `jsEndpoint` and `trackingEndpoint` one of Matomo's own files (not
+    `custom`). The rules the variable tools apply to such a variable hold as well. Every such variable of the
+    version is checked, used or not;
+  - a `Matomo` tag does not name exactly one `MatomoConfiguration` variable of the version as `{{name}}` (compared
+    without regard to case, as Matomo's database may).
+- Matomo itself refuses an unknown environment, a missing right, or a version of another container or website; the
+  refusal is reported as such and nothing was published.
+- A saved version is not locked: Matomo lets a user with a write right change the tags, triggers, and variables of
+  any version that is not released to `live`, and one with the right to publish there any version. A change made
+  between the check and the release is therefore not prevented and is published with it. After the release the
+  export is read once more, never a second time, and compared with the checked one in all its content, dates
+  included. A difference, or a re-read that fails or cannot be checked completely, is an error that says the
+  version was published. The re-read makes a change visible; it neither prevents it nor undoes the release. A
+  publication is idempotent in effect and replaces the environment's previous release.
+
+Importing a version and the preview mode are not part of these tools.

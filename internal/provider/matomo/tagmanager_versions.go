@@ -421,6 +421,8 @@ type VersionExportResult struct {
 	Triggers           []ExportEntry    `json:"triggers"`
 	Variables          []ExportEntry    `json:"variables"`
 	Truncated          bool             `json:"truncated,omitempty"`
+	// inexactTypes marks an entry whose type is no plain text as the plugin compares it.
+	inexactTypes bool
 }
 
 type exportEntryJSON struct {
@@ -461,8 +463,9 @@ type exportJSON struct {
 
 // exportBudget bounds the untrusted content of one export. It only shortens; it never interprets a text.
 type exportBudget struct {
-	remaining int
-	truncated bool
+	remaining    int
+	truncated    bool
+	inexactTypes bool
 }
 
 func (b *exportBudget) text(value string, limit int) string {
@@ -619,6 +622,9 @@ func (b *exportBudget) entries(raw json.RawMessage) ([]ExportEntry, bool) {
 			b.truncated = true
 			break
 		}
+		if parsed.Type == nil || parsed.Type.str(maxStringLength) != parsed.Type.text {
+			b.inexactTypes = true
+		}
 		entry, ok := b.entry(parsed, *id)
 		if !ok {
 			return nil, false
@@ -655,13 +661,18 @@ func invokeTagManagerVersionsExport(ctx context.Context, resolved *config.Resolv
 	if err != nil {
 		return nil, err
 	}
+	return client.exportVersion(ctx, op, tagManagerRequirement(tagManagerVersionsExport.ID), id, containerID, versionID)
+}
+
+// exportVersion reads the export of a version, the draft when version is 0, bound to the website and container.
+func (c *Client) exportVersion(ctx context.Context, op string, req requirement, id int, containerID string,
+	versionID int) (*VersionExportResult, error) {
 	var answer json.RawMessage
 	params := url.Values{"idSite": {strconv.Itoa(id)}, "idContainer": {containerID}}
 	if versionID != 0 {
 		params.Set("idContainerVersion", strconv.Itoa(versionID))
 	}
-	if err := client.call(ctx, op, tagManagerRequirement(tagManagerVersionsExport.ID),
-		"TagManager.exportContainerVersion", params, &answer); err != nil {
+	if err := c.call(ctx, op, req, "TagManager.exportContainerVersion", params, &answer); err != nil {
 		return nil, err
 	}
 	var row exportJSON
@@ -697,6 +708,6 @@ func invokeTagManagerVersionsExport(ctx context.Context, resolved *config.Resolv
 	if !ok1 || !ok2 || !ok3 {
 		return nil, provider.InvalidResponse(op, "Matomo returned an invalid container export")
 	}
-	result.Truncated = budget.truncated
+	result.Truncated, result.inexactTypes = budget.truncated, budget.inexactTypes
 	return result, nil
 }
