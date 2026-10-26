@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, and content impressions and interactions through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the parameters that are never sent.
+  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, and content impressions and interactions through the tracking endpoint, its answers and their limits, the risks of writing raw data, and the overrides of address, time, and location that need the token.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -31,14 +31,17 @@ All tools are offered only where the `tools` list of a connection names them and
 ## Endpoint and answer
 
 The tools post once to `matomo.php` below the base URL, not to the reporting API. The parameters go in the form
-body, never in the URL. The endpoint needs no token for them, so the tools neither read the credential of the
-connection nor send `token_auth` or an `Authorization` header. The connection must still name a credential.
+body, never in the URL. The endpoint needs no token for the context arguments, so a call without an
+[override](#overrides-of-address-time-and-location) neither reads the credential of the connection nor sends
+`token_auth`. No call sends an `Authorization` header. The connection must still name a credential.
 
 Matomo answers an accepted request with an empty HTTP 204 or an image. That is all the result says:
 `sent` is true and `processingConfirmed` is always false.
 
 - An unknown website is refused as HTTP 400 (`invalid-request`; Matomo uses the same status for an invalid
-  parameter), and switched-off tracking as HTTP 503 (`unreachable`). Nothing was recorded in both cases.
+  parameter, for an override without a valid token of at least the Write role, and for a `timestamp` older than the
+  raw data the instance keeps), and switched-off tracking as HTTP 503 (`unreachable`). Nothing was recorded in
+  both cases.
 - Many invalid parameters are answered with 204 all the same, and a queue (QueuedTracking) confirms the request
   before it processes it. A recorded request can be found with `matomo.visits.list` and the live plugin.
 - A timeout, a reset connection, an HTTP 5xx, or an answer that is neither 204 nor an image leaves the outcome
@@ -46,9 +49,9 @@ Matomo answers an accepted request with an empty HTTP 204 or an image. That is a
 
 ## Visitor, context, and limits
 
-Matomo takes the address of the visitor from the sender, so every request comes from the host that runs Qatlas,
-and the user agent is `qatlas-cli` unless `userAgent` is given. The tools offer the context of a visit as
-arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`, `newVisit`, `language`,
+Without an override Matomo takes the address of the visitor from the sender, so the request comes from the host
+that runs Qatlas, and the user agent is `qatlas-cli` unless `userAgent` is given. The tools offer the context of a
+visit as arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`, `newVisit`, `language`,
 `screenResolution`, `userAgent`, the local time (`hour`, `minute`, `second`, only together), `campaignName`,
 `campaignKeyword`, `visitCount`, `firstVisitTime`, `previousVisitTime`, and `dimensions` for custom dimensions
 (see [custom dimensions](dimensions.md)). The page view also takes `performance` timings and `generationTime`.
@@ -73,8 +76,16 @@ reports and cannot be undone. `visitorId`, `overrideVisitorId`, and `userId` mer
 visitor or take over its identity. `overrideVisitorId` forces the visitor over the other two and needs the
 greatest care. `userId`, `userAgent`, `referrer`, and the texts of events and searches may carry personal data.
 
-## Never sent
+## Overrides of address, time, and location
 
-The tools offer no way to set the visitor's address (`cip`), the request time (`cdt`, `cdo`), the location
-(`country`, `region`, `city`, `lat`, `long`), or `token_auth`; the sender refuses a request that carries one.
-These parameters override what Matomo derives itself and need a token.
+`clientIp`, `timestamp`, `country`, `region`, `city`, `latitude`, and `longitude` replace what Matomo derives
+itself. They are shared by all tools. If at least one is set, Qatlas reads the token of the connection and sends
+it as `token_auth` in the request body, after the website and the arguments are checked; otherwise it reads no
+secret. Matomo accepts the overrides only from a Super User or a user with at least the Write role for the
+website, unless the instance sets `tracking_requests_require_authentication=0`; then it accepts them from anyone.
+`timestamp` is Unix time in seconds, not in the future and less than 20 years back, because Matomo records a
+request with such a time at the time it arrives, silently. Matomo refuses a `timestamp` older than the raw data
+the instance keeps (`delete_logs_older_than`) as HTTP 400.
+
+The overrides forge origin, time, and place of a visit on top of the risks above, and `clientIp` is personal
+data. The token never goes into the URL, a header, a message, or the result, and `cdo` is never sent.

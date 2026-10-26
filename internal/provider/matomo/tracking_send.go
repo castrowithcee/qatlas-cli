@@ -18,13 +18,25 @@ import (
 // maxTrackingAnswer bounds what is read of a tracker answer: the GIF Matomo returns has 43 bytes.
 const maxTrackingAnswer = 4096
 
-// neverSentParameters are tracking parameters that override what Matomo derives itself or need the token: the
-// visitor's address, time, and location. No tool offers them and the sender refuses a form that holds one.
+// neverSentParameters are tracking parameters that override what Matomo derives itself or need the token. The
+// general form path refuses a form that holds one; only trackingAuth sets the overrides and the token, and cdo
+// is never sent.
 var neverSentParameters = []string{"cip", "cdt", "cdo", "country", "region", "city", "lat", "long", "token_auth"}
 
-// trackingSender posts to the tracking endpoint of one connection. It holds no secret: the endpoint takes
-// no token for the parameters the tools offer, so the credential is never resolved and no Authorization header
-// is sent. It shares the transport and the base URL rules of Client.
+// overrideParameters are the neverSentParameters that trackingAuth may carry besides the token.
+var overrideParameters = map[string]bool{"cip": true, "cdt": true, "country": true, "region": true, "city": true,
+	"lat": true, "long": true}
+
+// trackingAuth is the one way an override and the token reach the body: the validated overrides and the token
+// that lets Matomo accept them. It exists only when at least one override is set.
+type trackingAuth struct {
+	token     string
+	overrides url.Values
+}
+
+// trackingSender posts to the tracking endpoint of one connection. It holds no secret: a request without
+// overrides needs no token, and one with overrides gets the token per call through trackingAuth, in the body
+// only and never as an Authorization header. It shares the transport and the base URL rules of Client.
 type trackingSender struct {
 	origin  string
 	http    *http.Client
@@ -56,7 +68,7 @@ func randomValue() string {
 // send posts the form once to matomo.php. Only an empty 204 or a GIF counts as sent; that proves no
 // processing, because Matomo answers many invalid parameters the same way and a queue confirms before it
 // processes. It never retries.
-func (s *trackingSender) send(ctx context.Context, op string, site int, params url.Values) error {
+func (s *trackingSender) send(ctx context.Context, op string, site int, params url.Values, auth *trackingAuth) error {
 	form := url.Values{}
 	for name, values := range params {
 		form[name] = values
@@ -65,6 +77,18 @@ func (s *trackingSender) send(ctx context.Context, op string, site int, params u
 		if _, found := form[name]; found {
 			return provider.Fail(op, "the request carries a parameter this provider never sends")
 		}
+	}
+	if auth != nil {
+		if auth.token == "" || len(auth.overrides) == 0 {
+			return provider.Fail(op, "the request carries a token without an override")
+		}
+		for name, values := range auth.overrides {
+			if !overrideParameters[name] || len(values) != 1 {
+				return provider.Fail(op, "the request carries a parameter this provider never sends")
+			}
+			form[name] = values
+		}
+		form.Set("token_auth", auth.token)
 	}
 	form.Set("idsite", strconv.Itoa(site))
 	form.Set("rec", "1")
@@ -96,15 +120,23 @@ func (s *trackingSender) send(ctx context.Context, op string, site int, params u
 		}
 		return nil
 	}
-	return s.failure(op, response)
+	return s.failure(op, response, auth != nil)
 }
 
 // failure maps an HTTP status of the tracker to a class; the body is never read into the message.
-func (s *trackingSender) failure(op string, response *http.Response) error {
+func (s *trackingSender) failure(op string, response *http.Response, withToken bool) error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxTrackingAnswer))
 	switch response.StatusCode {
 	case http.StatusBadRequest:
 		// Matomo uses 400 for an unknown website and for an invalid request parameter; nothing was recorded.
+		// It answers 400 as well when an override comes without a valid token of the Write role or better, and
+		// when cdt is older than the raw data the instance keeps.
+		if withToken {
+			return &provider.InvalidRequestError{Message: "the Matomo tracker refused the request as invalid: the " +
+				"website ID is unknown to the tracker, a parameter is invalid, the token does not have at least " +
+				"the Write role for the website, or the timestamp is older than the raw data the instance keeps; " +
+				"nothing was recorded"}
+		}
 		return &provider.InvalidRequestError{Message: "the Matomo tracker refused the request as invalid: the " +
 			"website ID is unknown to the tracker or a parameter is invalid; nothing was recorded"}
 	case http.StatusTooManyRequests:
@@ -117,10 +149,15 @@ func (s *trackingSender) failure(op string, response *http.Response) error {
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op,
 			Message: "the Matomo tracker is unavailable: tracking is switched off or the instance is in maintenance; nothing was recorded"}
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	texts := provider.StatusTexts{
 		Subject:    subject,
-		Auth:       "the Matomo tracking endpoint asked for authentication, which this tool never sends",
+		Auth:       "the Matomo tracking endpoint asked for authentication, which this tool sends only with an override",
 		Permission: "the Matomo tracking endpoint refused the request",
 		NotFound:   "matomo.php was not found below the base URL of this connection",
-	})
+	}
+	if withToken {
+		texts.Auth = "the Matomo tracking endpoint refused the token; the overrides need at least the Write role for the website"
+		texts.Permission = texts.Auth
+	}
+	return provider.ClassifyStatus(op, response.StatusCode, texts)
 }

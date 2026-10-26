@@ -74,24 +74,24 @@ func (c *contentFields) store(form url.Values) error {
 	return trackingText(form, "c_t", "contentTarget", c.ContentTarget, maxTrackingURL)
 }
 
-func invokeTrackingRecordContentImpression(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordContentImpression(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		contentFields
 	}
-	return record(ctx, resolved, "record content impression", raw, &args,
+	return record(ctx, resolved, secrets, red, "record content impression", raw, &args,
 		func() *trackingContext { return &args.trackingContext }, args.store)
 }
 
-func invokeTrackingRecordContentInteraction(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordContentInteraction(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		contentFields
 		Interaction *string `json:"interaction"`
 	}
-	return record(ctx, resolved, "record content interaction", raw, &args,
+	return record(ctx, resolved, secrets, red, "record content interaction", raw, &args,
 		func() *trackingContext { return &args.trackingContext },
 		func(form url.Values) error {
 			// Without c_i Matomo would count the request as an impression.

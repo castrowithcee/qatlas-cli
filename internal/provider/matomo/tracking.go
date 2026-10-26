@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -40,7 +43,16 @@ var (
 	languagePatternRe      = regexp.MustCompile(`^[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8}){0,3}$`)
 	resolutionPattern      = regexp.MustCompile(`^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$`)
 	dimensionPattern       = regexp.MustCompile(`^[1-9][0-9]{0,5}$`)
+	countryPattern         = regexp.MustCompile(`^[A-Za-z]{2}$`)
+	regionPattern          = regexp.MustCompile(`^[A-Za-z0-9]{1,3}$`)
 )
+
+// trackingClock is the clock that bounds timestamp; tests replace it.
+var trackingClock = time.Now
+
+// Matomo ignores a cdt that lies in the future or 20 years or more back and records the request at the time it
+// arrives, so the tool refuses both instead.
+const trackingTimeWindow = 20 * 365 * 86400
 
 const trackingContextSchema = `"url":{"type":"string","minLength":1,"maxLength":2048},` +
 	`"referrer":{"type":"string","minLength":1,"maxLength":2048},` +
@@ -60,6 +72,12 @@ const trackingContextSchema = `"url":{"type":"string","minLength":1,"maxLength":
 	`"visitCount":{"type":"integer","minimum":1,"maximum":2147483647},` +
 	`"firstVisitTime":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
 	`"previousVisitTime":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
+	`"clientIp":{"type":"string","minLength":2,"maxLength":45},` +
+	`"timestamp":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
+	`"country":{"type":"string","pattern":"^[A-Za-z]{2}$","maxLength":2},` +
+	`"region":{"type":"string","pattern":"^[A-Za-z0-9]{1,3}$","maxLength":3},` +
+	`"city":{"type":"string","minLength":1,"maxLength":255},` +
+	`"latitude":{"type":"number","minimum":-90,"maximum":90},"longitude":{"type":"number","minimum":-180,"maximum":180},` +
 	`"dimensions":{"type":"object","maxProperties":20,"propertyNames":{"pattern":"^[1-9][0-9]{0,5}$"},` +
 	`"additionalProperties":{"type":"string","maxLength":255}}`
 
@@ -68,14 +86,21 @@ const trackingOutputSchema = `{"type":"object","properties":{"idSite":{"type":"i
 	`"required":["idSite","sent","processingConfirmed","message"],"additionalProperties":false}`
 
 const trackingNote = "Sends one request to the tracking endpoint matomo.php of the website's Matomo and never " +
-	"retries. The endpoint needs no token and the tool sends none; the visitor is the Qatlas host, whose address " +
-	"Matomo records because the address, the time, and the location cannot be set, and whose user agent is " +
-	"qatlas-cli unless userAgent is given. Success means only that Matomo accepted the request " +
+	"retries. Without clientIp, timestamp, country, region, city, latitude, and longitude the endpoint needs no " +
+	"token and the tool reads no secret; the visitor is then the Qatlas host, whose address Matomo records, " +
+	"and whose user agent is qatlas-cli unless userAgent is given. With any of those seven the connection's token " +
+	"is read and sent as token_auth in the request body, and Matomo accepts the override only for a token with at " +
+	"least the Write role for the website, unless the instance sets tracking_requests_require_authentication=0 " +
+	"(then it accepts them from anyone); Matomo ignores a timestamp that is in the future or 20 years back, and " +
+	"refuses one older than the raw data it keeps (delete_logs_older_than). " +
+	"Success means only that Matomo accepted the request " +
 	"(HTTP 204 or an image): it does not confirm processing, because Matomo answers many invalid parameters the " +
-	"same way and a queue confirms before it processes; an unknown website is refused as HTTP 400 and switched-off " +
+	"same way and a queue confirms before it processes; an unknown website, a missing or too weak token for an " +
+	"override, and a timestamp that is too old are refused as HTTP 400 and switched-off " +
 	"tracking as 503. It writes raw data (visits, actions, conversions) that no API call can undo and fakes visits " +
-	"that reports then count; visitorId, overrideVisitorId, and userId merge or take over visitor identities, and " +
-	"userId, userAgent, referrer, and the texts may carry personal data. Not idempotent: a repeated call is counted " +
+	"that reports then count; the overrides additionally forge the origin, time, and place of a visit; " +
+	"visitorId, overrideVisitorId, and userId merge or take over visitor identities, and " +
+	"userId, clientIp, userAgent, referrer, and the texts may carry personal data. Not idempotent: a repeated call is counted " +
 	"twice. The website must be inside the connection's targets"
 
 func trackingRisk() capability.Risk {
@@ -111,6 +136,17 @@ func trackingContextArguments() []capability.Argument {
 		{Name: "visitCount", Description: "Number of visits of the visitor so far (_idvc), at least 1"},
 		{Name: "firstVisitTime", Description: "Unix time in seconds of the visitor's first visit (_idts)"},
 		{Name: "previousVisitTime", Description: "Unix time in seconds of the visitor's previous visit (_viewts)"},
+		{Name: "clientIp", Description: "WARNING: overrides the visitor's IP address (cip), an IPv4 or IPv6 address; " +
+			"personal data. Needs the token (role Write); setting any of the seven override arguments sends it"},
+		{Name: "timestamp", Description: "Overrides the time of the request (cdt) as Unix time in seconds, not in the " +
+			"future and less than 20 years back; Matomo refuses a time older than the raw data it keeps"},
+		{Name: "country", Description: "Overrides the visitor's country (country) as a two-letter ISO 3166-1 code, " +
+			"such as de; sent in lower case; needs the token"},
+		{Name: "region", Description: "Overrides the visitor's region (region) as a code of 1 to 3 letters or digits, " +
+			"such as BY; needs the token"},
+		{Name: "city", Description: "Overrides the visitor's city (city), up to 255 characters; needs the token"},
+		{Name: "latitude", Description: "Overrides the visitor's latitude (lat), -90 to 90 degrees; needs the token"},
+		{Name: "longitude", Description: "Overrides the visitor's longitude (long), -180 to 180 degrees; needs the token"},
 		{Name: "dimensions", Description: "Values of custom dimensions of the visit or the action, keyed by dimension " +
 			"ID from matomo.dimensions.list as a number, at most 20, each up to 255 characters (dimension1, dimension2, ...)"},
 	}
@@ -245,6 +281,13 @@ type trackingContext struct {
 	FirstVisitTime    *int64            `json:"firstVisitTime"`
 	PreviousVisitTime *int64            `json:"previousVisitTime"`
 	Dimensions        map[string]string `json:"dimensions"`
+	ClientIP          *string           `json:"clientIp"`
+	Timestamp         *int64            `json:"timestamp"`
+	Country           *string           `json:"country"`
+	Region            *string           `json:"region"`
+	City              *string           `json:"city"`
+	Latitude          *float64          `json:"latitude"`
+	Longitude         *float64          `json:"longitude"`
 }
 
 // trackingText validates an optional text and stores it. A blank text is refused: Matomo ignores it silently.
@@ -373,9 +416,75 @@ func trackingRequired(form url.Values, key, argument string, given *string, limi
 	return trackingText(form, key, argument, given, limit)
 }
 
-// record validates the arguments, settles the website before any I/O, and sends the one request.
-func record(ctx context.Context, resolved *config.Resolved, op string, raw json.RawMessage, args any,
-	shared func() *trackingContext, extend func(url.Values) error) (any, error) {
+// overrides validates the arguments that need the token and returns the form fields they stand for. They stay
+// apart from values so that only trackingAuth can carry them to the body.
+func (c *trackingContext) overrides() (url.Values, error) {
+	form := url.Values{}
+	if c.ClientIP != nil {
+		address, err := netip.ParseAddr(*c.ClientIP)
+		if err != nil || address.Zone() != "" || len(*c.ClientIP) > 45 {
+			return nil, invalidArgument("clientIp must be an IPv4 or IPv6 address")
+		}
+		form.Set("cip", address.String())
+	}
+	if c.Timestamp != nil {
+		now := trackingClock().Unix()
+		if *c.Timestamp < minTrackingTime || *c.Timestamp > now || now-*c.Timestamp >= trackingTimeWindow {
+			return nil, invalidArgument("timestamp must be Unix time in seconds, not in the future and less than 20 years back")
+		}
+		form.Set("cdt", strconv.FormatInt(*c.Timestamp, 10))
+	}
+	if c.Country != nil {
+		if !countryPattern.MatchString(*c.Country) {
+			return nil, invalidArgument("country must be a two-letter code")
+		}
+		form.Set("country", strings.ToLower(*c.Country))
+	}
+	if err := trackingPattern(form, "region", "region", c.Region, regionPattern); err != nil {
+		return nil, err
+	}
+	if err := trackingText(form, "city", "city", c.City, maxTrackingShort); err != nil {
+		return nil, err
+	}
+	for _, coordinate := range []struct {
+		key, name string
+		given     *float64
+		limit     float64
+	}{{"lat", "latitude", c.Latitude, 90}, {"long", "longitude", c.Longitude, 180}} {
+		if coordinate.given == nil {
+			continue
+		}
+		if math.IsNaN(*coordinate.given) || *coordinate.given < -coordinate.limit || *coordinate.given > coordinate.limit {
+			return nil, invalidArgument(coordinate.name + " must be a finite number within its range")
+		}
+		form.Set(coordinate.key, strconv.FormatFloat(*coordinate.given, 'f', -1, 64))
+	}
+	return form, nil
+}
+
+// trackingToken resolves the token for a request with overrides and registers it for redaction before use.
+func trackingToken(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	op string) (string, error) {
+	if secrets == nil {
+		return "", provider.Fail(op, "no credential resolver was configured")
+	}
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleToken)
+	if err != nil {
+		return "", err
+	}
+	if !provider.ValidHeaderToken(value.Secret) {
+		return "", &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the Matomo token is unusable"}
+	}
+	if red != nil {
+		red.Add(value.Secret)
+	}
+	return value.Secret, nil
+}
+
+// record validates the arguments, settles the website before any I/O, reads the token only when an override
+// needs it, and sends the one request.
+func record(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	op string, raw json.RawMessage, args any, shared func() *trackingContext, extend func(url.Values) error) (any, error) {
 	if err := decodeArguments(raw, args); err != nil {
 		return nil, err
 	}
@@ -388,6 +497,10 @@ func record(ctx context.Context, resolved *config.Resolved, op string, raw json.
 	if err != nil {
 		return nil, err
 	}
+	overrides, err := common.overrides()
+	if err != nil {
+		return nil, err
+	}
 	if err := extend(form); err != nil {
 		return nil, err
 	}
@@ -395,20 +508,28 @@ func record(ctx context.Context, resolved *config.Resolved, op string, raw json.
 	if err != nil {
 		return nil, err
 	}
-	if err := uncertainChange(sender.send(ctx, op, site, form), trackingSentOnce); err != nil {
+	var auth *trackingAuth
+	if len(overrides) > 0 {
+		token, err := trackingToken(ctx, resolved, secrets, red, op)
+		if err != nil {
+			return nil, err
+		}
+		auth = &trackingAuth{token: token, overrides: overrides}
+	}
+	if err := uncertainChange(sender.send(ctx, op, site, form, auth), trackingSentOnce); err != nil {
 		return nil, err
 	}
 	return &TrackingSent{IDSite: site, Sent: true, Message: trackingSent}, nil
 }
 
-func invokeTrackingRecordPageView(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordPageView(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		Performance    map[string]*int `json:"performance"`
 		GenerationTime *int            `json:"generationTime"`
 	}
-	return record(ctx, resolved, "record page view", raw, &args, func() *trackingContext { return &args.trackingContext },
+	return record(ctx, resolved, secrets, red, "record page view", raw, &args, func() *trackingContext { return &args.trackingContext },
 		func(form url.Values) error {
 			timings := map[string]string{"network": "pf_net", "server": "pf_srv", "transfer": "pf_tfr",
 				"domProcessing": "pf_dm1", "domCompletion": "pf_dm2", "onLoad": "pf_onl"}
@@ -432,8 +553,8 @@ func invokeTrackingRecordPageView(ctx context.Context, resolved *config.Resolved
 		})
 }
 
-func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		Category *string  `json:"category"`
@@ -441,7 +562,7 @@ func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, _
 		Name     *string  `json:"name"`
 		Value    *float64 `json:"value"`
 	}
-	return record(ctx, resolved, "record event", raw, &args, func() *trackingContext { return &args.trackingContext },
+	return record(ctx, resolved, secrets, red, "record event", raw, &args, func() *trackingContext { return &args.trackingContext },
 		func(form url.Values) error {
 			if err := trackingRequired(form, "e_c", "category", args.Category, maxTrackingText); err != nil {
 				return err
@@ -462,15 +583,15 @@ func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, _
 		})
 }
 
-func invokeTrackingRecordSiteSearch(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordSiteSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		Keyword     *string `json:"keyword"`
 		Category    *string `json:"category"`
 		ResultCount *int    `json:"resultCount"`
 	}
-	return record(ctx, resolved, "record site search", raw, &args, func() *trackingContext { return &args.trackingContext },
+	return record(ctx, resolved, secrets, red, "record site search", raw, &args, func() *trackingContext { return &args.trackingContext },
 		func(form url.Values) error {
 			if err := trackingRequired(form, "search", "keyword", args.Keyword, maxTrackingText); err != nil {
 				return err
@@ -488,14 +609,14 @@ func invokeTrackingRecordSiteSearch(ctx context.Context, resolved *config.Resolv
 		})
 }
 
-func invokeTrackingRecordLink(ctx context.Context, resolved *config.Resolved, _ *secret.Resolver,
-	_ *redact.Redactor, raw json.RawMessage) (any, error) {
+func invokeTrackingRecordLink(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var args struct {
 		trackingContext
 		Kind   *string `json:"kind"`
 		Target *string `json:"target"`
 	}
-	return record(ctx, resolved, "record link", raw, &args, func() *trackingContext { return &args.trackingContext },
+	return record(ctx, resolved, secrets, red, "record link", raw, &args, func() *trackingContext { return &args.trackingContext },
 		func(form url.Values) error {
 			if args.Kind == nil || (*args.Kind != "download" && *args.Kind != "outlink") {
 				return invalidArgument("kind must be download or outlink")
