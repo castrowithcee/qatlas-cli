@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/smtp"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,8 +85,14 @@ func (a loginAuth) Next(challenge []byte, more bool) ([]byte, error) {
 	return nil, errors.New("unexpected challenge")
 }
 
-// smtpFailure normalises a failure of the submission. A reply code decides the class and the server's text is
-// never copied; step says what was refused. suffix always ends the message.
+// smtpOriginal keeps the server's reply code and text apart from Qatlas' message.
+func smtpOriginal(r *textproto.Error) *provider.Original {
+	return &provider.Original{Entries: []provider.OriginalEntry{{Code: strconv.Itoa(r.Code), Message: r.Msg}}}
+}
+
+// smtpFailure normalises a failure of the submission. A reply code decides the class; the message never
+// carries the server's text, which travels separately in Original. step says what was refused. suffix always
+// ends the message.
 func smtpFailure(op string, err error, step, suffix string) error {
 	var reply *textproto.Error
 	if errors.As(err, &reply) {
@@ -99,7 +106,8 @@ func smtpFailure(op string, err error, step, suffix string) error {
 		default:
 			class, message = provider.ClassProviderError, "Infomaniak Mail refused "+step
 		}
-		return &provider.Error{Class: class, Op: op, Message: message + suffix}
+		return &provider.Error{Class: class, Op: op, Message: message + suffix,
+			Original: smtpOriginal(reply)}
 	}
 	failed := provider.Transport(op, "Infomaniak Mail", err)
 	failed.Message += suffix
@@ -179,7 +187,8 @@ func (c *Client) smtpSend(ctx context.Context, op string, msg *outgoing, timeout
 				return smtpFailure(op, err, "the message", maybeSent)
 			}
 			return &provider.Error{Class: provider.ClassProviderError, Op: op,
-				Message: "Infomaniak Mail refused the message after receiving it; the message was not sent"}
+				Message:  "Infomaniak Mail refused the message after receiving it; the message was not sent",
+				Original: smtpOriginal(reply)}
 		}
 		return smtpFailure(op, err, "the message", maybeSent)
 	}
