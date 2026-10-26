@@ -551,7 +551,9 @@ func (c *Client) command(ctx context.Context, op, kind string, args map[string]a
 	if err := json.Unmarshal(status, &detail); err != nil {
 		return invalidChange(op, true)
 	}
-	return commandError(op, detail)
+	failure := commandError(op, detail)
+	failure.Original = provider.ErrorOriginal(detail.HTTPCode, status, errorOriginal)
+	return failure
 }
 
 // newCommandUUID returns a random version 4 UUID for one Sync command.
@@ -655,8 +657,13 @@ func newRequestID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
-// errorJSON is the part of a Todoist error body this provider inspects. It is read for classification only
-// and never copied, because Todoist may echo request values into it.
+// errorOriginal names the scalar fields of a Todoist error object that travel as the provider's own answer.
+// The rest of error_extra stays out, because Todoist may echo request values into it.
+var errorOriginal = provider.OriginalFields{Message: "error", Code: "error_code", Type: "error_tag",
+	Path: "error_extra.argument"}
+
+// errorJSON is the part of a Todoist error body this provider inspects for classification. Qatlas' message
+// never copies it; the answer travels separately in Original.
 type errorJSON struct {
 	Tag      string `json:"error_tag"`
 	Error    string `json:"error"`
@@ -679,8 +686,15 @@ const (
 // permission failure with a message of its own, apart from a rejected token, a rate limit, and a missing
 // resource.
 func (c *Client) statusError(op string, response *http.Response, change bool) *provider.Error {
+	body := provider.ReadErrorBody(response.Body)
+	failure := c.classifyStatus(op, response, change, body)
+	failure.Original = provider.ErrorOriginal(response.StatusCode, body, errorOriginal)
+	return failure
+}
+
+// classifyStatus picks the class and Qatlas' own message from the status and the already read error body.
+func (c *Client) classifyStatus(op string, response *http.Response, change bool, snippet []byte) *provider.Error {
 	status := response.StatusCode
-	snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	var detail errorJSON
 	_ = json.Unmarshal(snippet, &detail)
 
