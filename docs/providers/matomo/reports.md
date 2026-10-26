@@ -9,7 +9,8 @@ updated: 2026-10-26
 
 # Matomo reports
 
-The report and segment tools of the [Matomo provider](README.md). Paging follows [Paging](README.md#paging).
+The report and segment tools of the [Matomo provider](README.md). Paging follows [Paging](README.md#paging); the rights and plugins are listed in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -24,7 +25,7 @@ The report and segment tools of the [Matomo provider](README.md). Paging follows
 | `matomo.report-glossary.list` | reads the explanation of the reports or metrics of a website (only via `tools`) |
 | `matomo.insights.list` | reads the notable changes between two periods: insights, movers and shakers, their overviews, or whether a comparison period exists (only via `tools`) |
 | `matomo.transitions.get` | reads the previous and following pages, outlinks, downloads, and external referrers of one page (only via `tools`) |
-| `matomo.bot-realtime.get` | reads the AI chatbots and the pages they requested within the last minutes; needs Matomo 5.12.0 and the BotTracking plugin (only via `tools`) |
+| `matomo.bot-realtime.get` | reads the AI chatbots and the pages they requested within the last minutes (only via `tools`) |
 | `matomo.segments.fields` | reads the segment fields of a website |
 | `matomo.segments.suggest-values` | reads frequent values of a segment field |
 
@@ -129,7 +130,7 @@ their answers can be large, and archiving them on demand can be slow.
 ## Insights, transitions, and AI chatbots
 
 Three further reads have no entry in the report catalog. Each is in no profile and is offered only where the `tools`
-list of a connection names it. They need a view right on the website and an `idSite` inside the targets. Rows are
+list of a connection names it. They need an `idSite` inside the targets. Rows are
 cut at `limit` (1 to 1000, 100 when omitted) and continued with `next_cursor`, as under
 [Reading a report](#reading-a-report); labels, titles, and URLs are visitor data and untrusted.
 
@@ -146,7 +147,7 @@ cut at `limit` (1 to 1000, 100 when omitted) and continued with `next_cursor`, a
   transitions. Matomo Cloud allows 500 requests per 5 minutes; a 429 is `rate-limited` and never repeated. `limit`
   applies to every list alike.
 - `matomo.bot-realtime.get` takes `kind` `chatbots` or `top-pages` and reads the AI chatbot requests of the last
-  `last_minutes` (1 to 720, Matomo's 30 when omitted). It needs Matomo 5.12.0 and the `BotTracking` plugin; on an
+  `last_minutes` (1 to 720, Matomo's 30 when omitted). It needs Matomo 5.12.0 and its plugin; on an
   older instance it ends as `unsupported-capability` without a Matomo request beyond the version and plugin check.
 
 All three read one period or one table at a time: a date range or `lastN` with `day`, `week`, `month`, or `year`
