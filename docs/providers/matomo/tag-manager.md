@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, and adding, updating, and deleting triggers of the draft, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, deleting and pausing tags of the draft, and creating, updating, and deleting containers, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -41,6 +41,10 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
 | `matomo.tag-manager-tags.delete` | deletes a tag from the draft |
 | `matomo.tag-manager-tags.pause` | pauses a tag of the draft |
+| `matomo.tag-manager-containers.create-default` | creates the default container of a website |
+| `matomo.tag-manager-containers.add` | creates a container with a context, name, and settings |
+| `matomo.tag-manager-containers.update` | replaces name, description, and settings of a container |
+| `matomo.tag-manager-containers.delete` | deletes a container with everything in it |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -118,4 +122,19 @@ the paths of non-live releases are data of the website's owners, and the change 
   use custom templates for a tag of a custom template; without it the refusal is a permission error. After an unclear
   result read the tags with `matomo.tag-manager-tags.list` before trying again.
 
-Container changes, importing a version, adding, changing, or resuming tags, variables, and publishing a release are not part of these tools.
+- The container tools create a container with its draft and change its name, description, and settings; they save no
+  version and publish nothing. `matomo.tag-manager-containers.add` takes a `context` that cannot change later;
+  `matomo.tag-manager-containers.update` replaces everything as given, so `description` and the three settings are
+  required and an empty `description` clears it. `ignoreGtmDataLayer` and `activelySyncGtmDataLayer` act only after a
+  later publication of a version. Updating and deleting need the right to publish in addition to the write right.
+- `matomo.tag-manager-containers.update` and `matomo.tag-manager-containers.delete` read the container once before
+  the request, so an ID the website does not hold is refused as not found before anything changes. A container name has
+  1 to 50 characters, a description up to 1000.
+- `matomo.tag-manager-containers.delete` removes all versions, releases, tags, triggers, and variables and cannot be
+  undone. When the container was live, its container script disappears from the website and its tags stop running. It
+  is offered only via `tools`. After an unclear result of a container tool, read the containers with
+  `matomo.tag-manager-containers.list`. `matomo.tag-manager-containers.create-default` returns `idContainer` only when
+  Matomo reports it.
+
+Importing a version, adding, changing, or resuming tags, variables, and publishing a release are not part of these
+tools.
