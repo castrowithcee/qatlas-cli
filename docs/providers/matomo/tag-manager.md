@@ -22,6 +22,9 @@ the paths of non-live releases are data of the website's owners.
 | `matomo.tag-manager-containers.list` | reads the containers of a website with their draft, versions, and releases |
 | `matomo.tag-manager-containers.get` | reads one container of a website |
 | `matomo.tag-manager-containers.get-embed-code` | reads the embed snippet or the installation steps of a container release |
+| `matomo.tag-manager-versions.list` | reads the saved versions of a container with their releases |
+| `matomo.tag-manager-versions.get` | reads one version of a container, the draft included |
+| `matomo.tag-manager-versions.export` | reads the export of one version: container, version, tags, triggers, and variables |
 | `matomo.tag-manager-catalog.list` | reads contexts, environments, fire limits, comparisons, and the tag, trigger, and variable templates |
 
 - A container belongs to one website: the container ID is looked up with `idSite`, so the ID of another website is
@@ -32,6 +35,13 @@ the paths of non-live releases are data of the website's owners.
   are untrusted: they are cut at a limit, never run, and never fetched. The snippet exists for the web context only;
   a mobile container answers with an empty snippet, and its location is in the description of the step. The
   environment is any ID of `matomo.tag-manager-catalog.list` with `kind` `environments`.
+- A version is bound by the website and the container together: Matomo looks it up with `idSite`, `idContainer`, and
+  the version ID, so an ID of another container or website is not found, and a row that names another one is dropped
+  or refused. The list leaves out the draft; `matomo.tag-manager-versions.get` reads it by ID, and
+  `matomo.tag-manager-versions.export` exports it when no version is given.
+- The export is data for a person to review. Custom HTML, scripts, and addresses in the parameters of tags,
+  triggers, and variables are untrusted text: they are cut at limits, never run, and never fetched; `truncated` says
+  when anything was cut. The presentation metadata of the templates is not part of it.
 - `matomo.tag-manager-catalog.list` calls one fixed method per `kind`. The template kinds need a context from `kind`
   `contexts` and return the templates flattened from their categories with their parameters (cut at 100 per template
   and 100 offered values per parameter). `publishable-environments` needs `idSite` and leaves out `live` for a token
