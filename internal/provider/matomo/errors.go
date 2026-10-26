@@ -68,7 +68,7 @@ var messagePatterns = []struct {
 	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
 		"pre-processed segments can only", "does not have access to any sites",
-		"can only be created or edited by"}},
+		"can only be created or edited by", "you are not the owner of the alert"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
 		"not found in the list of available reports", "there is no goal", "requested segment not found",

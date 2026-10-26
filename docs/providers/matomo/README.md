@@ -15,7 +15,7 @@ describes the foundation every Matomo tool shares: connection, targets, availabi
 setup profiles. The tools are sorted into groups; each group has a page: [sites and version](sites.md),
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md), [scheduled reports](scheduled-reports.md),
-[custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
+[custom alerts](alerts.md), [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
 [users and roles](users.md), [SMS settings](mobile-messaging.md), [privacy and data subject requests](privacy.md),
 [AI providers](ai-providers.md), and [Tag Manager](tag-manager.md).
 
@@ -151,8 +151,8 @@ and are in no profile. The [user tools](users.md) `matomo.users.list`, `matomo.u
 `matomo.users.get-access`, and `matomo.roles.list` are in no profile, because they carry personal data and need admin
 or Super User rights. The profile `live` adds the [live tools](live.md), the [visitor profile tools](visitors.md), and
 `matomo.tracking-failures.list`, `matomo.ip-locations.get`, `matomo.scheduled-reports.list`, and
-`matomo.scheduled-reports.generate`, because they carry personal data. The tracking failure deletions are in no profile and
-`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as is `matomo.scheduled-reports.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
+`matomo.scheduled-reports.generate`, and the four [alert](alerts.md) read tools, because they carry personal data. The tracking failure deletions are in no profile and
+`matomo.tracking-failures.delete-all` (target `instance`) is offered only via `tools`, as are `matomo.scheduled-reports.delete` and `matomo.alerts.delete`. The [privacy tools](privacy.md) `matomo.data-subjects.find`,
 `matomo.data-subjects.export`, `matomo.privacy-settings.get`, and `matomo.compliance.get` (target `instance`) are in no
 profile, because they carry personal data of other people and need admin or Super User rights. The
 [erasure tool](privacy.md#deleting-visits) `matomo.data-subjects.delete`, `matomo.raw-data.anonymize` (targets
@@ -218,6 +218,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
+| [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 | [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, and deleting versions, tags, triggers, and variables and where they are used, changing triggers of the draft, deleting and pausing tags of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
 

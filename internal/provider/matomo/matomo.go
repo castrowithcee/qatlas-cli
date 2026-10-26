@@ -126,10 +126,11 @@ func Register(reg *capability.Registry) error {
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
 				"and locations, the live counters, the time of the latest visit, visitor profiles, the location of IP addresses, the tracking failures " +
-				"with the requests that failed, and the scheduled reports with their recipients and their rendered text; changes nothing",
+				"with the requests that failed, the scheduled reports with their recipients and their rendered text, and the custom alerts with their recipients; changes nothing",
 			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
 				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID,
-				ipLocationsGet.ID, scheduledReportsList.ID, scheduledReportsGenerate.ID),
+				ipLocationsGet.ID, scheduledReportsList.ID, scheduledReportsGenerate.ID, alertsList.ID, alertsGet.ID,
+				alertsGetPastValues.ID, alertsListTriggered.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
@@ -183,6 +184,9 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	if err := reg.Register(Provider, smsOperations()...); err != nil {
+		return err
+	}
+	if err := reg.Register(Provider, alertsOperations()...); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
