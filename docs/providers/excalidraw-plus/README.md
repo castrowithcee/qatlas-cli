@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-02
-updated: 2026-10-03
+updated: 2026-10-26
 ---
 
 # Excalidraw+
@@ -22,12 +22,13 @@ the trash.
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
 
+[Set up Excalidraw+](setup.md) leads through creating the API key, the rights it needs, and fixing errors.
+
 ## Credential and base URL
 
-The credential provides `api-key`: a workspace API key from the workspace settings. A key belongs to one workspace and
-carries the right `read`, `full`, or routes, and an expiry date; reading needs `read` or the routes for collections and
-scenes. It is sent as `Authorization: Bearer ...` and registered with the redactor. Qatlas does not narrow the key;
-it narrows a connection through its targets, its `tools` list or `effects`.
+The credential provides `api-key`: a workspace API key from the workspace settings. A key belongs to one workspace.
+It is sent as `Authorization: Bearer ...` and registered with the redactor. Qatlas does not narrow the key; it narrows
+a connection through its targets, its `tools` list or `effects`.
 
 `base_url` is `https://api.excalidraw.com`, the only accepted value: any other host, `http`, a port, path, user info,
 query, or fragment is refused before a secret is read. Redirects are never followed.
@@ -256,8 +257,8 @@ until `X-RateLimit-Reset`, for at most 60 seconds.
 
 | Class | Cause |
 | --- | --- |
-| `auth` | the key was rejected (401) or is unusable |
-| `permission` | the key may not read this (403): it needs `read` or the matching routes and must not be expired |
+| `auth` | the key was rejected (401) or is unusable; see [Fixing errors](setup.md#fixing-errors) |
+| `permission` | the key may not perform this (403); see [Fixing errors](setup.md#fixing-errors) |
 | `not-found` | Excalidraw+ does not hold the scene or does not show it to this key |
 | `rate-limited` | Excalidraw+ answered 429 |
 | `timeout`, `unreachable` | no answer in time, or the service is unavailable |
@@ -271,8 +272,7 @@ original statement in the `provider` field of the error detail, marked untrusted
 ## Boundary
 
 The response shapes follow the API reference's pages for collections, scenes, users, logs, scene content, and rate
-limiting. Error bodies and the identifier format are not documented there. The behaviour of `collectionId=private` for
-personal keys is not relied on. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}` (`name`, `pinned`,
+limiting. Error bodies and the identifier format are not documented there. The bodies of `POST /scenes` and `PATCH /scenes/{sceneId}` (`name`, `pinned`,
 `collectionId`) follow the API reference; the effect of a repeated request is not documented.
 
 The content endpoints follow the API reference pages for scene content and its schema: `PATCH` takes a partial scene
@@ -283,7 +283,7 @@ replaces everything, forces editors to reload, and recomputes `sceneVersion`; bo
 `{statusCode, error, message}`. Not documented, and therefore assumed: that a patch element must be complete, that
 the server rejects or ignores a stale version without an error (Qatlas detects it from the answer), the defaults
 Qatlas fills for omitted element fields, the accepted `source` value, a size limit, and the effect of a repeated
-request. The local limits (100 and 500 elements, 2000 text characters, 200 points, 1 MiB) are Qatlas choices.
+request.
 
 The delete endpoints follow the API reference (`DELETE` of a scene or collection is a soft deletion into the trash).
 Assumed: the paths `DELETE /scenes/{id}` and `DELETE /collections/{id}`, that any 2xx counts (the body is dropped), that
@@ -293,8 +293,7 @@ the scenes of a deleted collection leave with it, whether the default collection
 For users, `PATCH` takes `name`, `picture`, `role`, `workspaceTeams`, and `preferences` and does not change the e-mail
 address; `DELETE` removes the user and its workspace data. Assumed: the identifier format (narrowed to the local rule),
 the meaning of the `workspaceTeams` keys, whether a team write replaces or merges (so no team write is offered), whether
-a workspace owner can be removed or demoted, and the effect of a repeated request. No live call has been made against
-any endpoint.
+a workspace owner can be removed or demoted, and the effect of a repeated request.
 
 Metadata the read tools leave out: `previewUrl`, since the API does not show whether the preview address works without
 an API key, so it counts as an access value; `readOnlyLinks[]` and `sharedSlidesLinks[]`, since share links grant access
