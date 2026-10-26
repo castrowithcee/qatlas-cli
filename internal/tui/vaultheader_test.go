@@ -14,7 +14,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -158,12 +157,12 @@ func TestVaultHeaderAdminAbbreviationWithOnlyTheVaultProcessUnlocked(t *testing.
 	}
 }
 
-// Neither symbol nor word is colour alone: with NO_COLOR (termenv.Ascii, what SetColorProfile(3) also
+// Neither symbol nor word is colour alone: with NO_COLOR (profileNone, what SetColorProfile(3) also
 // produces) the header still names every state in plain words, and emits no escape sequence.
 func TestVaultHeaderReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
-	lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
+	setProfile(profileNone)
 
 	for _, tt := range []struct {
 		name  string
